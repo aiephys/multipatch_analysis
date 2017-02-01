@@ -318,6 +318,10 @@ if len(errs) > 0:
         traceback.print_exception(*exc)
         print("")
 
+if len(expts) == 0:
+    print("No experiments loaded; bailing out.")
+    sys.exit(-1)
+
 expt_ids = {e.expt_id:e for e in expts}
 expts.sort(key=lambda expt: expt.expt_id)
 
