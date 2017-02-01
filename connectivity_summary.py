@@ -15,6 +15,7 @@ import re, sys, traceback
 
 
 ALL_CRE_TYPES = ['sst', 'pvalb', 'tlx3', 'sim1', 'rorb']
+ALL_LABELS = ['biocytin', 'af488', 'cascade_blue']
 
 # read exported file
 
@@ -114,12 +115,21 @@ class Experiment(object):
             except Exception as exc:
                 raise Exception("Error parsing %s for experiment %s." % (ch.lines[0], self.expt_id)) from exc
             
-        # gather a list of all cre types
+        # gather lists of all labels and cre types
         cre_types = set()
+        labels = set()
         for cell in self.cells.values():
-            cre_types |= set(cell.labels.keys())
-        cre_types.discard('biocytin')
-        self.cre_types = list(cre_types)
+            cre_types |= set(cell.labels.keys()) & set(ALL_CRE_TYPES)
+            labels |= set(cell.labels.keys()) & set(ALL_LABELS)
+        self.cre_types = sorted(list(cre_types), key=lambda x: ALL_CRE_TYPES.index(x))
+        self.labels = sorted(list(labels), key=lambda x: ALL_LABELS.index(x))
+        
+        # make sure all cells have information for all labels
+        for cell in self.cells.values():
+            for label in labels:
+                assert label in cell.labels
+            for cre in cre_types:
+                assert cre in cell.labels
                 
     def parse_labeling(self, entry):
         """
@@ -144,11 +154,11 @@ class Experiment(object):
             
             parts = re.split('\s+', line)
             
-            # first part is cre type and a colon
+            # first part is label / cre type and a colon
             assert parts[0].endswith(':')
             cre = parts[0][:-1]
-            if not (cre == 'biocytin' or cre in ALL_CRE_TYPES):
-                raise Exception("Invalid cre type: %s" % cre)
+            if not (cre in ALL_LABELS or cre in ALL_CRE_TYPES):
+                raise Exception("Invalid label or cre type: %s" % cre)
             
             # parse the remainder of the line
             if len(parts[1:]) == 1 and parts[1].strip() == '?':
@@ -168,7 +178,7 @@ class Experiment(object):
                 
                 assert cre not in cell.labels
                 cell.labels[cre] = positive
-
+        
     def parse_qc(self, entry):
         """Parse cell quality control. Looks like:
         
@@ -322,8 +332,20 @@ if len(expts) == 0:
     print("No experiments loaded; bailing out.")
     sys.exit(-1)
 
+
+
 expt_ids = {e.expt_id:e for e in expts}
 expts.sort(key=lambda expt: expt.expt_id)
+
+# sanity check: all experiments should have cre and fl labels
+for expt in expts:
+    # make sure we have at least one non-biocytin label and one cre label
+    if len(expt.cre_types) < 1:
+        print("Warning: Experiment %s has no cre-type labels" % expt.expt_id)
+    if len(expt.labels) < 1 or expt.labels == ['biocytin']:
+        print("Warning: Experiment %s has no fluorescent labels" % expt.expt_id)
+        
+
 
 # Generate summary of experiments
 print("----------------------------------------------------------")
