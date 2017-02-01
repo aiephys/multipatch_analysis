@@ -331,9 +331,9 @@ print("")
 
 
 # Generate a summary of connectivity
-print("-----------------------")
-print("     Connectivity")
-print("-----------------------")
+print("-------------------------------------------------------------")
+print("     Connectivity  (# connected/probed, % connectivity)")
+print("-------------------------------------------------------------")
 summary = {}
 for expt in expts:
     for k,v in expt.summary().items():
@@ -342,16 +342,21 @@ for expt in expts:
         summary[k][0] += v[0]
         summary[k][1] += v[1]
 
-totals = []    
+totals = []
 for k,v in summary.items():
     totals.append((k[0], k[1], v[0], v[0]+v[1], 100*v[0]/(v[0]+v[1])))
     
+colsize = max([len(t[0]) + len(t[1]) for t in totals]) + 8
 totals.sort(key=lambda x: (x[4], x[3]), reverse=True)
 for tot in totals:
+    pad = " " * (colsize - (len(tot[0]) + len(tot[1]) + 3))
+    fields = list(tot)
+    fields.insert(2, pad)
+    fields = tuple(fields)
     try:
-        print("%s → %s   \t:\t%d/%d\t%0.2f%%" % tot) 
+        print("%s → %s%s\t:\t%d/%d\t%0.2f%%" % fields)
     except UnicodeEncodeError:
-        print("%s - %s   \t:\t%d/%d\t%0.2f%%" % tot) 
+        print("%s - %s%s\t:\t%d/%d\t%0.2f%%" % fields)
 
 print("\nTotal:  \t%d/%d\t%0.2f%%" % (tot_connected, tot_connected+tot_probed, 100*tot_connected/(tot_connected+tot_probed)))
 print("")
