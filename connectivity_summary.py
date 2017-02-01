@@ -22,8 +22,14 @@ ALL_CRE_TYPES = ['sst', 'pvalb', 'tlx3', 'sim1', 'rorb']
 #pasha = open('/home/luke/mnt/mp2/data/Pasha/connection_analysis', 'r').readlines()
 #alex = open('/home/luke/mnt/mp3/data/Alex/connection analysis', 'r').readlines()
 #lines = steph + pasha + alex
-lines = open(sys.argv[1], 'r').readlines()
 
+if len(sys.argv) < 2:
+    print("Usage:   python3 connectivity_summary.py file1 file2 ...")
+    sys.exit(-1)
+
+lines = []
+for f in sys.argv[1:]:
+    lines.extend(open(f, 'r').readlines())
 
 # first parse indentation to generate a hierarchy of strings
 # Note: summary was exported in plain text mode, which can be difficult to parse.
@@ -313,6 +319,7 @@ if len(errs) > 0:
         print("")
 
 expt_ids = {e.expt_id:e for e in expts}
+expts.sort(key=lambda expt: expt.expt_id)
 
 # Generate summary of experiments
 print("----------------------------------------------------------")
