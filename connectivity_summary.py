@@ -15,7 +15,7 @@ of total connections detected / probed for each cell type pair.
 from __future__ import print_function, division
 import os, re, sys, traceback, glob, json, warnings
 import numpy as np
-
+import pyqtgraph as pg
 
 ALL_CRE_TYPES = ['sst', 'pvalb', 'tlx3', 'sim1', 'rorb']
 ALL_LABELS = ['biocytin', 'af488', 'cascade_blue']
@@ -102,6 +102,7 @@ class Experiment(object):
             self.cells = {x:Cell(self,x) for x in range(1,9)}
             self.connections = []
             self._summary = None
+            self._view = None
         except Exception as exc:
             Exception("Error parsing experiment: %s\n%s" % (self, exc.message))
         
@@ -323,6 +324,23 @@ class Experiment(object):
     def __repr__(self):
         return "<Experiment %s (%s:%d)>" % (self.expt_id, self.entry.file, self.entry.lineno)
 
+    def show(self):
+        if self._view is None:
+            pg.mkQApp()
+            self._view_widget = pg.GraphicsLayoutWidget()
+            self._view = self._view_widget.addViewBox(0, 0)
+            v = self._view
+            pos = np.array([self.cells[i].position[:2] for i in sorted(self.cells.keys())])
+            if len(self.connections) == 0:
+                adj = np.empty((0,2), dtype='int')
+            else:
+                adj = np.array(self.connections) - 1
+            print(pos)
+            print(adj)
+            self._graph = pg.GraphItem(pos=pos, adj=adj, size=30)
+            v.addItem(self._graph)
+        self._view_widget.show()
+        
         
 class Cell(object):
     def __init__(self, expt, cell_id):
