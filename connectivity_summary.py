@@ -333,14 +333,25 @@ class Experiment(object):
             self._view_widget = pg.GraphicsLayoutWidget()
             self._view = self._view_widget.addViewBox(0, 0)
             v = self._view
-            pos = np.array([self.cells[i].position[:2] for i in sorted(self.cells.keys())])
+            cell_ids = sorted(self.cells.keys())
+            pos = np.array([self.cells[i].position[:2] for i in cell_ids])
             if len(self.connections) == 0:
                 adj = np.empty((0,2), dtype='int')
             else:
                 adj = np.array(self.connections) - 1
+            colors = []
+            for cid in cell_ids:
+                cell = self.cells[cid]
+                color = [0, 0, 0]
+                for i,cre in enumerate(self.cre_types):
+                    if cell.labels[cre] == '+':
+                        color[i] = 255
+                colors.append(color)
+            brushes = [pg.mkBrush(c) for c in colors]
             print(pos)
             print(adj)
-            self._graph = pg.GraphItem(pos=pos, adj=adj, size=30)
+            print(colors)
+            self._graph = pg.GraphItem(pos=pos, adj=adj, size=30, symbolBrush=brushes)
             v.addItem(self._graph)
         self._view_widget.show()
         
