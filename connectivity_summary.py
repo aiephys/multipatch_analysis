@@ -104,7 +104,7 @@ class Experiment(object):
             self._summary = None
             self._view = None
         except Exception as exc:
-            Exception("Error parsing experiment: %s\n%s" % (self, exc.message))
+            Exception("Error parsing experiment: %s\n%s" % (self, exc.args[0]))
         
         for ch in entry.children:
             try:
@@ -119,7 +119,7 @@ class Experiment(object):
                 else:
                     raise Exception("Invalid experiment entry %s" % ch.lines[0])
             except Exception as exc:
-                Exception("Error parsing %s for experiment: %s\n%s" % (ch.lines[0], self, exc.message))
+                Exception("Error parsing %s for experiment: %s\n%s" % (ch.lines[0], self, exc.args[0]))
             
         # gather lists of all labels and cre types
         cre_types = set()
@@ -141,7 +141,7 @@ class Experiment(object):
         try:
             self.load_cell_positions()
         except Exception as exc:
-            print("Warning: Could not load cell positions for %s:\n    %s" % (self, exc.message))
+            print("Warning: Could not load cell positions for %s:\n    %s" % (self, exc.args[0]))
                 
     def parse_labeling(self, entry):
         """
@@ -456,12 +456,12 @@ print("----------------------------------------------------------")
 
 tot_probed = 0
 tot_connected = 0
-for expt in expts:
+for i,expt in enumerate(expts):
     n_p = expt.n_connections_probed
     n_c = expt.n_connections
     tot_probed += n_p
     tot_connected += n_c
-    print("%s:  \t%d\t%d\t%s" % (expt.expt_id, n_p, n_c, ', '.join(expt.cre_types)))
+    print("%d: %s:  \t%d\t%d\t%s" % (i, expt.expt_id, n_p, n_c, ', '.join(expt.cre_types)))
 print("")
 
 
@@ -486,14 +486,14 @@ with warnings.catch_warnings():  # we expect warnings when nanmean is called on 
         totals.append((k[0], k[1], v[0], v[0]+v[1], 100*v[0]/(v[0]+v[1]), np.nanmean(v[2])*1e6, np.nanmean(v[3])*1e6, np.nanmean(v[2]+v[3])*1e6))
     
 colsize = max([len(t[0]) + len(t[1]) for t in totals]) + 8
-totals.sort(key=lambda x: (x[4], x[3]), reverse=True)
+totals.sort(key=lambda x: (x[4], x[3], x[0], x[1]), reverse=True)
 for tot in totals:
     pad = " " * (colsize - (len(tot[0]) + len(tot[1]) + 3))
     fields = list(tot)
     fields.insert(2, pad)
     fields = tuple(fields)
     try:
-        print("%s → %s%s\t:\t%d/%d\t%0.2f%%\t%0.2f\t%0.2f\t%0.2f" % fields)
+        print(u"%s → %s%s\t:\t%d/%d\t%0.2f%%\t%0.2f\t%0.2f\t%0.2f" % fields)
     except UnicodeEncodeError:
         print("%s - %s%s\t:\t%d/%d\t%0.2f%%\t%0.2f\t%0.2f\t%0.2f" % fields)
 
