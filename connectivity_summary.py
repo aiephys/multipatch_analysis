@@ -138,7 +138,10 @@ class Experiment(object):
                 assert cre in cell.labels
                 
         # read cell positions from mosaic files
-        self.load_cell_positions()
+        try:
+            self.load_cell_positions()
+        except Exception as exc:
+            print("Warning: Could not load cell positions for %s:\n    %s" % (self, exc.message))
                 
     def parse_labeling(self, entry):
         """
