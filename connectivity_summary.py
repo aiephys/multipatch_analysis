@@ -513,14 +513,18 @@ print("----------------------------------------------------------")
 
 tot_probed = 0
 tot_connected = 0
+ages = []
 for i,expt in enumerate(expts):
     n_p = expt.n_connections_probed
     n_c = expt.n_connections
     tot_probed += n_p
     tot_connected += n_c
+    ages.append(expt.age)
     print("%d: %s:  \t%d\t%d\t%d\t%s" % (i, expt.expt_id, n_p, n_c, expt.age, ', '.join(expt.cre_types)))
 print("")
 
+print("Mean age: %0.1f" % np.mean(ages))
+print("")
 
 # Generate a summary of connectivity
 print("-------------------------------------------------------------")
