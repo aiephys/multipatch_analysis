@@ -1,0 +1,7 @@
+Requirements:
+
+* scientific python stack (Anaconda recommended)
+* pip install pyqtgraph
+* pip install pg8000
+* git clone http://stash.corp.alleninstitute.org/scm/inf/allensdk_internal.git
+

@@ -13,9 +13,12 @@ of total connections detected / probed for each cell type pair.
 
 """
 from __future__ import print_function, division
-import os, re, sys, traceback, glob, json, warnings
+import os, re, sys, traceback, glob, json, warnings, datetime
 import numpy as np
 import pyqtgraph as pg
+import pyqtgraph.configfile
+import allensdk_internal.core.lims_utilities as lims
+
 
 ALL_CRE_TYPES = ['sst', 'pvalb', 'tlx3', 'sim1', 'rorb']
 ALL_LABELS = ['biocytin', 'af488', 'cascade_blue']
@@ -96,13 +99,16 @@ for f in sys.argv[1:]:
 
 class Experiment(object):
     def __init__(self, entry):
+        self.entry = entry
+        self.connections = []
+        self._summary = None
+        self._view = None
+        self._slice_info = None
+        self._lims_record = None
+
         try:
-            self.entry = entry
             self.expt_id = entry.lines[0]
             self.cells = {x:Cell(self,x) for x in range(1,9)}
-            self.connections = []
-            self._summary = None
-            self._view = None
         except Exception as exc:
             Exception("Error parsing experiment: %s\n%s" % (self, exc.args[0]))
         
@@ -143,6 +149,9 @@ class Experiment(object):
         except Exception as exc:
             print("Warning: Could not load cell positions for %s:\n    %s" % (self, exc.args[0]))
                 
+        # pull donor/specimen info from LIMS
+        self.age
+
     def parse_labeling(self, entry):
         """
         "Labeling" section should look like:
@@ -305,8 +314,8 @@ class Experiment(object):
             if len(mosaicfiles) == 1:
                 sitefile = os.path.join(self.path, mosaicfiles[0])
         if not os.path.isfile(sitefile):
-            print(os.listdir(self.path))
-            print(os.listdir(os.path.split(self.path)[0]))
+            # print(os.listdir(self.path))
+            # print(os.listdir(os.path.split(self.path)[0]))
             raise Exception("No site mosaic found for %s" % self)
         return sitefile
         
@@ -326,6 +335,54 @@ class Experiment(object):
     
     def __repr__(self):
         return "<Experiment %s (%s:%d)>" % (self.expt_id, self.entry.file, self.entry.lineno)
+
+    @property
+    def slice_info(self):
+        if self._slice_info is None:
+            index = os.path.join(os.path.split(self.path)[0], '.index')
+            if not os.path.isfile(index):
+                raise TypeError("Cannot find index file (%s) for experiment %s" % (index, self))
+            self._slice_info = pg.configfile.readConfigFile(index)['.']
+        return self._slice_info
+
+    @property
+    def specimen_id(self):
+        return self.slice_info['specimen_ID']
+
+    @property
+    def age(self):
+        age = self.lims_record.get('days', 0)
+        if age == 0:
+            raise Exception("Donor age not set in LIMS for specimen %s" % self.specimen_id)
+            # data not entered in to lims
+            age = (self.date - self.birth_date).days
+        return age
+
+    @property
+    def birth_date(self):
+        bd = self.lims_record['date_of_birth']
+        return datetime.date(bd.year, bd.month, bd.day)
+
+    @property
+    def lims_record(self):
+        if self._lims_record is None:
+            sid = self.specimen_id
+            q = """
+                select d.date_of_birth, ages.days from donors d
+                join specimens sp on sp.donor_id = d.id
+                join ages on ages.id = d.age_id
+                where sp.name  = '%s'
+                limit 2""" % sid
+            r = lims.query(q)
+            if len(r) != 1:
+                raise Exception("LIMS lookup for specimen %s returned %d results" % (sid, len(r)))
+            self._lims_record = r[0]
+        return self._lims_record
+
+    @property
+    def date(self):
+        y,m,d = self.expt_id.split('-')[0].split('.')
+        return datetime.date(int(y), int(m), int(d))
 
     def show(self):
         if self._view is None:
@@ -451,7 +508,7 @@ for expt in expts:
 
 # Generate summary of experiments
 print("----------------------------------------------------------")
-print("  Experiment Summary  (# probed, # connected, cre types)")
+print("  Experiment Summary  (# probed, # connected, age, cre types)")
 print("----------------------------------------------------------")
 
 tot_probed = 0
@@ -461,7 +518,7 @@ for i,expt in enumerate(expts):
     n_c = expt.n_connections
     tot_probed += n_p
     tot_connected += n_c
-    print("%d: %s:  \t%d\t%d\t%s" % (i, expt.expt_id, n_p, n_c, ', '.join(expt.cre_types)))
+    print("%d: %s:  \t%d\t%d\t%d\t%s" % (i, expt.expt_id, n_p, n_c, expt.age, ', '.join(expt.cre_types)))
 print("")
 
 
