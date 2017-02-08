@@ -347,7 +347,7 @@ class Experiment(object):
 
     @property
     def specimen_id(self):
-        return self.slice_info['specimen_ID']
+        return self.slice_info['specimen_ID'].strip()
 
     @property
     def age(self):
