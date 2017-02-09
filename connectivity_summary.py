@@ -138,11 +138,13 @@ class Experiment(object):
             Labeling:
                 sim1: 1+ 2- 3x 4x+ 5+? 6?
                 biocytin: ...
+                af488: 1+ 2+ 3x 4- 5? 6+
+                cascade_blue: ...
                 
         This example has the following interpretation:
         
-            1+   Cell 1 is reporter-positive
-            2-   Cell 2 is reporter-negative    
+            1+   Cell 1 is reporter-positive and dye filled
+            2-   Cell 2 is reporter-negative and dye filled   
             3x   Cell 3 type cannot be determined (no pipette tip found)
             4x+  Cell 4 was not dye filled, but pipette tip appears to be touching cre-positive cell
             5+?  Cell 5 looks like cre-positive, but image is somewhat unclear
