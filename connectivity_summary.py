@@ -1,3 +1,4 @@
+# *-* coding: utf-8 *-*
 """
 I have a summary of ALM multipatch experiments stored on workflowy and exported to expt_summary.txt.
 
@@ -11,7 +12,12 @@ The purpose of this script is to parse the exported file and return a summary
 of total connections detected / probed for each cell type pair.
 
 """
-import re, sys, traceback
+from __future__ import print_function, division
+import os, re, sys, traceback, glob, json, warnings, datetime
+import numpy as np
+import pyqtgraph as pg
+import pyqtgraph.configfile
+import allensdk_internal.core.lims_utilities as lims
 
 
 ALL_CRE_TYPES = ['sst', 'pvalb', 'tlx3', 'sim1', 'rorb']
@@ -28,20 +34,19 @@ if len(sys.argv) < 2:
     print("Usage:   python3 connectivity_summary.py file1 file2 ...")
     sys.exit(-1)
 
-lines = []
-for f in sys.argv[1:]:
-    lines.extend(open(f, 'r').readlines())
 
 # first parse indentation to generate a hierarchy of strings
 # Note: summary was exported in plain text mode, which can be difficult to parse.
 # Might want to switch to XML if this becomes an issue.
 
 class Entry(object):
-    def __init__(self, line, parent):
+    def __init__(self, line, parent, file, lineno):
         self.indentation = indentation(line)
         self.lines = []
         self.add_line(line)
         self.parent = parent
+        self.file = file
+        self.lineno = lineno
         self.children = []
         if parent is not None:
             parent.add_child(self)
@@ -64,26 +69,29 @@ def indentation(line):
     return len(line) - len(line.lstrip('- '))
 
 
-root = Entry('', None)
+root = Entry('', None, None, None)
 root.indentation = -1
 current = root
 
-for line in lines:
-    if line.lstrip().startswith('#'):
-        continue
-    
-    if line.strip() == '':
-        continue
-    ind = indentation(line)
-    if ind > current.indentation:
-        ch = Entry(line, parent=current)
-        current = ch
-    else:
-        while current.indentation > ind:
-            current = current.parent
-        ch = Entry(line, parent=current.parent)
-        current = ch
-        continue
+for f in sys.argv[1:]:
+    lines = open(f, 'r').readlines()
+
+    for i,line in enumerate(lines):
+        if line.lstrip().startswith('#'):
+            continue
+        
+        if line.strip() == '':
+            continue
+        ind = indentation(line)
+        if ind > current.indentation:
+            ch = Entry(line, parent=current, file=f, lineno=i)
+            current = ch
+        else:
+            while current.indentation > ind:
+                current = current.parent
+            ch = Entry(line, parent=current.parent, file=f, lineno=i)
+            current = ch
+            continue
 
         
 
@@ -91,14 +99,18 @@ for line in lines:
 
 class Experiment(object):
     def __init__(self, entry):
+        self.entry = entry
+        self.connections = []
+        self._summary = None
+        self._view = None
+        self._slice_info = None
+        self._lims_record = None
+
         try:
-            self.entry = entry
             self.expt_id = entry.lines[0]
             self.cells = {x:Cell(self,x) for x in range(1,9)}
-            self.connections = []
-            self._summary = None
         except Exception as exc:
-            raise Exception("Error parsing experiment: %s" % entry.lines) from exc
+            Exception("Error parsing experiment: %s\n%s" % (self, exc.args[0]))
         
         for ch in entry.children:
             try:
@@ -113,7 +125,7 @@ class Experiment(object):
                 else:
                     raise Exception("Invalid experiment entry %s" % ch.lines[0])
             except Exception as exc:
-                raise Exception("Error parsing %s for experiment %s." % (ch.lines[0], self.expt_id)) from exc
+                Exception("Error parsing %s for experiment: %s\n%s" % (ch.lines[0], self, exc.args[0]))
             
         # gather lists of all labels and cre types
         cre_types = set()
@@ -131,6 +143,15 @@ class Experiment(object):
             for cre in cre_types:
                 assert cre in cell.labels
                 
+        # read cell positions from mosaic files
+        try:
+            self.load_cell_positions()
+        except Exception as exc:
+            print("Warning: Could not load cell positions for %s:\n    %s" % (self, exc.args[0]))
+                
+        # pull donor/specimen info from LIMS
+        self.age
+
     def parse_labeling(self, entry):
         """
         "Labeling" section should look like:
@@ -227,7 +248,7 @@ class Experiment(object):
         
         Looks like:
         
-            {(pre_type, post_type): [connected, unconnected], ...}
+            {(pre_type, post_type): [connected, unconnected, cdist, udist], ...}
         """
         if self._summary is None:
             csum = {}
@@ -249,11 +270,13 @@ class Experiment(object):
                         continue
                     typ = (ci.cre_type, cj.cre_type)
                     if typ not in csum:
-                        csum[typ] = [0, 0]
+                        csum[typ] = [0, 0, [], []]
                     if (i, j) in self.connections:
                         csum[typ][0] += 1
+                        csum[typ][2].append(ci.distance(cj))
                     else:
                         csum[typ][1] += 1
+                        csum[typ][3].append(ci.distance(cj))
             self._summary = csum
         return self._summary
     
@@ -265,6 +288,132 @@ class Experiment(object):
     def n_connections(self):
         return sum([x[0] for x in self.summary().values()])
         
+    def load_cell_positions(self):
+        """Load cell positions from external file.
+        """
+        sitefile = self.mosaic_file
+        mosaic = json.load(open(sitefile))
+        marker_items = [i for i in mosaic['items'] if i['type'] == 'MarkersCanvasItem']
+        if len(marker_items) == 0:
+            raise TypeError("No cell markers found in site mosaic file %s" % sitefile)
+        elif len(marker_items) > 1:
+            raise TypeError("Multiple marker items found in site mosaic file %s" % sitefile)
+        cells = marker_items[0]['markers']
+        for name, pos in cells:
+            m = re.match("\D+(\d+)", name)
+            cid = int(m.group(1))
+            self.cells[cid].position = pos
+
+    @property
+    def mosaic_file(self):
+        """Path to site mosaic file
+        """
+        sitefile = os.path.join(self.path, "site.mosaic")
+        if not os.path.isfile(sitefile):
+            sitefile = os.path.join(os.path.split(self.path)[0], "site.mosaic")
+        if not os.path.isfile(sitefile):
+            mosaicfiles = [f for f in os.listdir(self.path) if f.endswith('.mosaic')]
+            if len(mosaicfiles) == 1:
+                sitefile = os.path.join(self.path, mosaicfiles[0])
+        if not os.path.isfile(sitefile):
+            # print(os.listdir(self.path))
+            # print(os.listdir(os.path.split(self.path)[0]))
+            raise Exception("No site mosaic found for %s" % self)
+        return sitefile
+        
+    @property
+    def path(self):
+        """Filesystem path to the root of this experiment.
+        """
+        date, slice, site = self.expt_id.split('-')
+        root = os.path.dirname(self.entry.file)
+        path = os.path.join(root, date+"_000", "slice_%03d"%int(slice), "site_%03d"%int(site))
+        if os.path.isdir(path):
+            return path
+        path = os.path.join(root, 'V1', date+"_000", "slice_%03d"%int(slice), "site_%03d"%int(site))
+        if os.path.isdir(path):
+            return path
+        raise Exception("Cannot find filesystem path for experiment %s" % self)
+    
+    def __repr__(self):
+        return "<Experiment %s (%s:%d)>" % (self.expt_id, self.entry.file, self.entry.lineno)
+
+    @property
+    def slice_info(self):
+        if self._slice_info is None:
+            index = os.path.join(os.path.split(self.path)[0], '.index')
+            if not os.path.isfile(index):
+                raise TypeError("Cannot find index file (%s) for experiment %s" % (index, self))
+            self._slice_info = pg.configfile.readConfigFile(index)['.']
+        return self._slice_info
+
+    @property
+    def specimen_id(self):
+        return self.slice_info['specimen_ID'].strip()
+
+    @property
+    def age(self):
+        age = self.lims_record.get('days', 0)
+        if age == 0:
+            raise Exception("Donor age not set in LIMS for specimen %s" % self.specimen_id)
+            # data not entered in to lims
+            age = (self.date - self.birth_date).days
+        return age
+
+    @property
+    def birth_date(self):
+        bd = self.lims_record['date_of_birth']
+        return datetime.date(bd.year, bd.month, bd.day)
+
+    @property
+    def lims_record(self):
+        if self._lims_record is None:
+            sid = self.specimen_id
+            q = """
+                select d.date_of_birth, ages.days from donors d
+                join specimens sp on sp.donor_id = d.id
+                join ages on ages.id = d.age_id
+                where sp.name  = '%s'
+                limit 2""" % sid
+            r = lims.query(q)
+            if len(r) != 1:
+                raise Exception("LIMS lookup for specimen %s returned %d results" % (sid, len(r)))
+            self._lims_record = r[0]
+        return self._lims_record
+
+    @property
+    def date(self):
+        y,m,d = self.expt_id.split('-')[0].split('.')
+        return datetime.date(int(y), int(m), int(d))
+
+    def show(self):
+        if self._view is None:
+            pg.mkQApp()
+            self._view_widget = pg.GraphicsLayoutWidget()
+            self._view = self._view_widget.addViewBox(0, 0)
+            v = self._view
+            cell_ids = sorted(self.cells.keys())
+            pos = np.array([self.cells[i].position[:2] for i in cell_ids])
+            if len(self.connections) == 0:
+                adj = np.empty((0,2), dtype='int')
+            else:
+                adj = np.array(self.connections) - 1
+            colors = []
+            for cid in cell_ids:
+                cell = self.cells[cid]
+                color = [0, 0, 0]
+                for i,cre in enumerate(self.cre_types):
+                    if cell.labels[cre] == '+':
+                        color[i] = 255
+                colors.append(color)
+            brushes = [pg.mkBrush(c) for c in colors]
+            print(pos)
+            print(adj)
+            print(colors)
+            self._graph = pg.GraphItem(pos=pos, adj=adj, size=30, symbolBrush=brushes)
+            v.addItem(self._graph)
+        self._view_widget.show()
+        
         
 class Cell(object):
     def __init__(self, expt, cell_id):
@@ -274,6 +423,7 @@ class Cell(object):
         self.holding_qc = None
         self.spiking_qc = None
         self.labels = {}
+        self.position = None
     
     @property
     def pass_qc(self):
@@ -308,6 +458,15 @@ class Cell(object):
                     continue
                 ct = default
         return ct
+
+    def distance(self, cell):
+        """Return distance between cells, or nan if positions are not defined.
+        """
+        p1 = self.position
+        p2 = cell.position
+        if p1 is None or p2 is None:
+            return np.nan
+        return ((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2 + (p1[2]-p2[2])**2)**0.5
 
     def __repr__(self):
         return "<Cell %s:%d>" % (self.expt.expt_id, self.cell_id)
@@ -351,47 +510,55 @@ for expt in expts:
 
 # Generate summary of experiments
 print("----------------------------------------------------------")
-print("  Experiment Summary  (# probed, # connected, cre types)")
+print("  Experiment Summary  (# probed, # connected, age, cre types)")
 print("----------------------------------------------------------")
 
 tot_probed = 0
 tot_connected = 0
-for expt in expts:
+ages = []
+for i,expt in enumerate(expts):
     n_p = expt.n_connections_probed
     n_c = expt.n_connections
     tot_probed += n_p
     tot_connected += n_c
-    print("%s:  \t%d\t%d\t%s" % (expt.expt_id, n_p, n_c, ', '.join(expt.cre_types)))
+    ages.append(expt.age)
+    print("%d: %s:  \t%d\t%d\t%d\t%s" % (i, expt.expt_id, n_p, n_c, expt.age, ', '.join(expt.cre_types)))
 print("")
 
+print("Mean age: %0.1f" % np.mean(ages))
+print("")
 
 # Generate a summary of connectivity
 print("-------------------------------------------------------------")
-print("     Connectivity  (# connected/probed, % connectivity)")
+print("     Connectivity  (# connected/probed, % connectivity, cdist, udist, adist)")
 print("-------------------------------------------------------------")
 summary = {}
 for expt in expts:
     for k,v in expt.summary().items():
         if k not in summary:
-            summary[k] = [0, 0]
+            summary[k] = [0, 0, [], []]
         summary[k][0] += v[0]
         summary[k][1] += v[1]
+        summary[k][2].extend(v[2])
+        summary[k][3].extend(v[3])
 
-totals = []
-for k,v in summary.items():
-    totals.append((k[0], k[1], v[0], v[0]+v[1], 100*v[0]/(v[0]+v[1])))
+with warnings.catch_warnings():  # we expect warnings when nanmean is called on an empty list
+    warnings.simplefilter("ignore")
+    totals = []
+    for k,v in summary.items():
+        totals.append((k[0], k[1], v[0], v[0]+v[1], 100*v[0]/(v[0]+v[1]), np.nanmean(v[2])*1e6, np.nanmean(v[3])*1e6, np.nanmean(v[2]+v[3])*1e6))
     
 colsize = max([len(t[0]) + len(t[1]) for t in totals]) + 8
-totals.sort(key=lambda x: (x[4], x[3]), reverse=True)
+totals.sort(key=lambda x: (x[4], x[3], x[0], x[1]), reverse=True)
 for tot in totals:
     pad = " " * (colsize - (len(tot[0]) + len(tot[1]) + 3))
     fields = list(tot)
     fields.insert(2, pad)
     fields = tuple(fields)
     try:
-        print("%s → %s%s\t:\t%d/%d\t%0.2f%%" % fields)
+        print(u"%s → %s%s\t:\t%d/%d\t%0.2f%%\t%0.2f\t%0.2f\t%0.2f" % fields)
     except UnicodeEncodeError:
-        print("%s - %s%s\t:\t%d/%d\t%0.2f%%" % fields)
+        print("%s - %s%s\t:\t%d/%d\t%0.2f%%\t%0.2f\t%0.2f\t%0.2f" % fields)
 
 print("\nTotal:  \t%d/%d\t%0.2f%%" % (tot_connected, tot_connected+tot_probed, 100*tot_connected/(tot_connected+tot_probed)))
 print("")
