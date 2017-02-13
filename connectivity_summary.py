@@ -447,7 +447,29 @@ class Cell(object):
         default = 'unknown'
         ct = None
         for label,pos in self.labels.items():
-            if label == 'biocytin':
+            if label in ALL_LABELS:
+                continue
+            if pos == '+':
+                if ct not in (None, default):
+                    raise Exception("%s has multiple labels!" % self)
+                ct = label
+            elif pos == '-':
+                if ct is not None:
+                    continue
+                ct = default
+        return ct
+
+    @property
+    def label_type(self):
+        """fluorescent type string for this cell.
+        
+        If the cell is reporter-negative then cre_type is 'unk'.
+        If the cell has ambiguous or missing data then cre_type is None.
+        """
+        default = 'unknown'
+        ct = None
+        for label,pos in self.labels.items():
+            if label in ALL_CRE_TYPES or label == 'biocytin':
                 continue
             if pos == '+':
                 if ct not in (None, default):
