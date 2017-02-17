@@ -234,11 +234,11 @@ class Experiment(object):
         if len(entry.children) == 0 or entry.children[0].lines[0] == 'None':
             return
         for con in entry.children:
-            m = re.match(r'(\d+)\s*->\s*(\d+)(.*)', con.lines[0].strip())
+            m = re.match(r'(\d+)\s*->\s*(\d+)\s*(\??)\s*(.*)', con.lines[0].strip())
             if m is None:
                 raise Exception("Invalid connection: %s" % con.lines[0])
             
-            if m.groups()[2].strip() == '?':
+            if m.groups()[2] == '?':
                 # ignore questionable connections
                 continue
             self.connections.append((int(m.groups()[0]), int(m.groups()[1])))
