@@ -13,7 +13,7 @@ of total connections detected / probed for each cell type pair.
 
 """
 from __future__ import print_function, division
-import os, re, sys, traceback, glob, json, warnings, datetime
+import os, re, sys, traceback, glob, json, warnings, datetime, argparse
 import numpy as np
 import pyqtgraph as pg
 import pyqtgraph.configfile
@@ -23,6 +23,21 @@ import allensdk_internal.core.lims_utilities as lims
 ALL_CRE_TYPES = ['sst', 'pvalb', 'tlx3', 'sim1', 'rorb']
 ALL_LABELS = ['biocytin', 'af488', 'cascade_blue']
 
+
+def arg_to_date(arg):
+    if arg is None:
+        return None
+    parts = re.split('\D+', arg)
+    return datetime.date(*map(int, parts))
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--start', type=arg_to_date)
+parser.add_argument('--stop', type=arg_to_date)
+parser.add_argument('files', nargs='+')
+args = parser.parse_args(sys.argv[1:])
+
+
+
 # read exported file
 
 #steph = open('/home/luke/mnt/mp1/Steph/DataSummary', 'r').readlines()
@@ -30,9 +45,6 @@ ALL_LABELS = ['biocytin', 'af488', 'cascade_blue']
 #alex = open('/home/luke/mnt/mp3/data/Alex/connection analysis', 'r').readlines()
 #lines = steph + pasha + alex
 
-if len(sys.argv) < 2:
-    print("Usage:   python3 connectivity_summary.py file1 file2 ...")
-    sys.exit(-1)
 
 
 # first parse indentation to generate a hierarchy of strings
@@ -73,7 +85,7 @@ root = Entry('', None, None, None)
 root.indentation = -1
 current = root
 
-for f in sys.argv[1:]:
+for f in args.files:
     lines = open(f, 'r').readlines()
 
     for i,line in enumerate(lines):
@@ -495,13 +507,24 @@ class Cell(object):
 
         
 # Parse experiment data
+start_skip = []
+stop_skip = []
 expts = []
 errs = []
 for entry in root.children:
     try:
-        expts.append(Experiment(entry))
+        expt = Experiment(entry)
     except Exception as exc:
         errs.append((entry, sys.exc_info()))
+    
+    # filter experiments by start/stop dates
+    if args.start is not None and expt.date < args.start:
+        start_skip.append(expt)
+    elif args.stop is not None and expt.date > args.stop:
+        stop_skip.append(expt)
+    else:
+        expts.append(expt)
+
 
 if len(errs) > 0:
     print("Errors loading %d experiments:" % len(errs))
@@ -535,6 +558,8 @@ print("----------------------------------------------------------")
 print("  Experiment Summary  (# probed, # connected, age, cre types)")
 print("----------------------------------------------------------")
 
+if len(start_skip) > 0:
+    print("[ skipped %d earlier experiments ]" % len(start_skip))
 tot_probed = 0
 tot_connected = 0
 ages = []
@@ -545,6 +570,8 @@ for i,expt in enumerate(expts):
     tot_connected += n_c
     ages.append(expt.age)
     print("%d: %s:  \t%d\t%d\t%d\t%s" % (i, expt.expt_id, n_p, n_c, expt.age, ', '.join(expt.cre_types)))
+if len(stop_skip) > 0:
+    print("[ skipped %d later experiments ]" % len(stop_skip))
 print("")
 
 print("Mean age: %0.1f" % np.mean(ages))
