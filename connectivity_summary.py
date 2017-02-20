@@ -33,6 +33,7 @@ def arg_to_date(arg):
 parser = argparse.ArgumentParser()
 parser.add_argument('--start', type=arg_to_date)
 parser.add_argument('--stop', type=arg_to_date)
+parser.add_argument('--list-stims', action='store_true', default=False, dest='list_stims')
 parser.add_argument('files', nargs='+')
 args = parser.parse_args(sys.argv[1:])
 
@@ -360,6 +361,18 @@ class Experiment(object):
         return self._slice_info
 
     @property
+    def nwb_file(self):
+        p = self.path
+        files = glob.glob(os.path.join(p, '*.nwb'))
+        if len(files) == 0:
+            files = glob.glob(os.path.join(p, '*.NWB'))
+        if len(files) == 0:
+            raise Exception("No NWB file found for %s" % self)
+        elif len(files) > 1:
+            raise Exception("Multiple NWB files found for %s" % self)
+        return files[0]
+
+    @property
     def specimen_id(self):
         return self.slice_info['specimen_ID'].strip()
 
@@ -569,7 +582,39 @@ for i,expt in enumerate(expts):
     tot_probed += n_p
     tot_connected += n_c
     ages.append(expt.age)
-    print("%d: %s:  \t%d\t%d\t%d\t%s" % (i, expt.expt_id, n_p, n_c, expt.age, ', '.join(expt.cre_types)))
+    
+    fmt = "%d: %s:  \t%d\t%d\t%d\t%s"
+    fmt_args = [i, expt.expt_id, n_p, n_c, expt.age, ', '.join(expt.cre_types)]
+    
+    # get list of stimuli
+    if args.list_stims:
+        from neuroanalysis.miesnwb import MiesNwb
+        nwb = MiesNwb(expt.nwb_file)
+        stims = []
+        for srec in nwb.contents:
+            stim = srec.recordings[0].meta['stim_name']
+            if stim.startswith('PulseTrain_'):
+                stim = stim[11:]
+            if stim.endswith('_DA_0'):
+                stim = stim[:-5]
+            if stim not in stims:
+                stims.append(stim)
+        nwb.close()
+        
+        # sort by frequency
+        def freq(stim):
+            m = re.match('(.*)(\d+)Hz', stim)
+            if m is None:
+                return (0, 0)
+            else:
+                return (len(m.groups()[0]), int(m.groups()[1]))
+        stims.sort(key=freq)
+        
+        fmt += "\t%s"
+        fmt_args.append(', '.join(stims))
+    
+    print(fmt % tuple(fmt_args))
+
 if len(stop_skip) > 0:
     print("[ skipped %d later experiments ]" % len(stop_skip))
 print("")
