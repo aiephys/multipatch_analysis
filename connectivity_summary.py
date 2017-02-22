@@ -118,6 +118,7 @@ class Experiment(object):
         self._view = None
         self._slice_info = None
         self._lims_record = None
+        self._site_path = None
 
         try:
             self.expt_id = entry.lines[0]
@@ -135,10 +136,18 @@ class Experiment(object):
                     self.parse_connections(ch)
                 elif ch.lines[0] == 'Conditions':
                     continue
+                elif ch.lines[0].startswith('Region '):
+                    self.region = ch.lines[0][7:]
+                elif ch.lines[0].startswith('Site path '):
+                    p = os.path.abspath(os.path.join(os.path.dirname(self.entry.file), ch.lines[0][10:]))
+                    if not os.path.isdir(p):
+                        raise Exception("Invalid site path: %s" % p)
+                    self._site_path = p
                 else:
-                    raise Exception("Invalid experiment entry %s" % ch.lines[0])
+                    raise Exception('Invalid experiment entry "%s"' % ch.lines[0])
+                
             except Exception as exc:
-                Exception("Error parsing %s for experiment: %s\n%s" % (ch.lines[0], self, exc.args[0]))
+                raise Exception("Error parsing %s for experiment: %s\n%s" % (ch.lines[0], self, exc.args[0]))
             
         # gather lists of all labels and cre types
         cre_types = set()
@@ -164,6 +173,8 @@ class Experiment(object):
                 
         # pull donor/specimen info from LIMS
         self.age
+        # check for a single NWB file
+        self.nwb_file
 
     def parse_labeling(self, entry):
         """
@@ -338,15 +349,21 @@ class Experiment(object):
     def path(self):
         """Filesystem path to the root of this experiment.
         """
-        date, slice, site = self.expt_id.split('-')
-        root = os.path.dirname(self.entry.file)
-        path = os.path.join(root, date+"_000", "slice_%03d"%int(slice), "site_%03d"%int(site))
-        if os.path.isdir(path):
-            return path
-        path = os.path.join(root, 'V1', date+"_000", "slice_%03d"%int(slice), "site_%03d"%int(site))
-        if os.path.isdir(path):
-            return path
-        raise Exception("Cannot find filesystem path for experiment %s" % self)
+        if self._site_path is None:
+            date, slice, site = self.expt_id.split('-')
+            root = os.path.dirname(self.entry.file)
+            paths = [
+                os.path.join(root, date+"_000", "slice_%03d"%int(slice), "site_%03d"%int(site)),
+                os.path.join(root, 'V1', date+"_000", "slice_%03d"%int(slice), "site_%03d"%int(site)),
+                os.path.join(root, 'ALM', date+"_000", "slice_%03d"%int(slice), "site_%03d"%int(site)),
+            ]
+            for path in paths:
+                if os.path.isdir(path):
+                    self._site_path = path
+                    break
+            if self._site_path is None:
+                raise Exception("Cannot find filesystem path for experiment %s. Attempted paths:\n%s" % (self, "\n".join(paths)))
+        return self._site_path
     
     def __repr__(self):
         return "<Experiment %s (%s:%d)>" % (self.expt_id, self.entry.file, self.entry.lineno)
@@ -529,6 +546,7 @@ for entry in root.children:
         expt = Experiment(entry)
     except Exception as exc:
         errs.append((entry, sys.exc_info()))
+        continue
     
     # filter experiments by start/stop dates
     if args.start is not None and expt.date < args.start:
@@ -567,8 +585,11 @@ for expt in expts:
 
 
 # Generate summary of experiments
+fields = ['# probed', '# connected', 'age', 'cre types']
+if args.list_stims:
+    fields.append('stim sets')
 print("----------------------------------------------------------")
-print("  Experiment Summary  (# probed, # connected, age, cre types)")
+print("  Experiment Summary  (%s)" % ', '.join(fields))
 print("----------------------------------------------------------")
 
 if len(start_skip) > 0:
