@@ -13,7 +13,7 @@ of total connections detected / probed for each cell type pair.
 
 """
 from __future__ import print_function, division
-import os, re, sys, traceback, glob, json, warnings, datetime
+import os, re, sys, traceback, glob, json, warnings, datetime, argparse
 import numpy as np
 import pyqtgraph as pg
 import pyqtgraph.configfile
@@ -23,6 +23,22 @@ import allensdk_internal.core.lims_utilities as lims
 ALL_CRE_TYPES = ['sst', 'pvalb', 'tlx3', 'sim1', 'rorb', 'vip', 'ntsr1', 'chrna2', 'rbp4', 'chat', 'ctgf', 'ndnf', 'glt25d2', 'htr3a', 'nos1', ]
 ALL_LABELS = ['biocytin', 'af488', 'cascade_blue']
 
+
+def arg_to_date(arg):
+    if arg is None:
+        return None
+    parts = re.split('\D+', arg)
+    return datetime.date(*map(int, parts))
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--start', type=arg_to_date)
+parser.add_argument('--stop', type=arg_to_date)
+parser.add_argument('--list-stims', action='store_true', default=False, dest='list_stims')
+parser.add_argument('files', nargs='+')
+args = parser.parse_args(sys.argv[1:])
+
+
+
 # read exported file
 
 #steph = open('/home/luke/mnt/mp1/Steph/DataSummary', 'r').readlines()
@@ -30,9 +46,6 @@ ALL_LABELS = ['biocytin', 'af488', 'cascade_blue']
 #alex = open('/home/luke/mnt/mp3/data/Alex/connection analysis', 'r').readlines()
 #lines = steph + pasha + alex
 
-if len(sys.argv) < 2:
-    print("Usage:   python3 connectivity_summary.py file1 file2 ...")
-    sys.exit(-1)
 
 
 # first parse indentation to generate a hierarchy of strings
@@ -73,7 +86,7 @@ root = Entry('', None, None, None)
 root.indentation = -1
 current = root
 
-for f in sys.argv[1:]:
+for f in args.files:
     lines = open(f, 'r').readlines()
 
     for i,line in enumerate(lines):
@@ -105,6 +118,7 @@ class Experiment(object):
         self._view = None
         self._slice_info = None
         self._lims_record = None
+        self._site_path = None
 
         try:
             self.expt_id = entry.lines[0]
@@ -122,10 +136,18 @@ class Experiment(object):
                     self.parse_connections(ch)
                 elif ch.lines[0] == 'Conditions':
                     continue
+                elif ch.lines[0].startswith('Region '):
+                    self.region = ch.lines[0][7:]
+                elif ch.lines[0].startswith('Site path '):
+                    p = os.path.abspath(os.path.join(os.path.dirname(self.entry.file), ch.lines[0][10:]))
+                    if not os.path.isdir(p):
+                        raise Exception("Invalid site path: %s" % p)
+                    self._site_path = p
                 else:
-                    raise Exception("Invalid experiment entry %s" % ch.lines[0])
+                    raise Exception('Invalid experiment entry "%s"' % ch.lines[0])
+                
             except Exception as exc:
-                Exception("Error parsing %s for experiment: %s\n%s" % (ch.lines[0], self, exc.args[0]))
+                raise Exception("Error parsing %s for experiment: %s\n%s" % (ch.lines[0], self, exc.args[0]))
             
         # gather lists of all labels and cre types
         cre_types = set()
@@ -151,6 +173,8 @@ class Experiment(object):
                 
         # pull donor/specimen info from LIMS
         self.age
+        # check for a single NWB file
+        self.nwb_file
 
     def parse_labeling(self, entry):
         """
@@ -234,11 +258,11 @@ class Experiment(object):
         if len(entry.children) == 0 or entry.children[0].lines[0] == 'None':
             return
         for con in entry.children:
-            m = re.match(r'(\d+)\s*->\s*(\d+)(.*)', con.lines[0].strip())
+            m = re.match(r'(\d+)\s*->\s*(\d+)\s*(\??)\s*(.*)', con.lines[0].strip())
             if m is None:
                 raise Exception("Invalid connection: %s" % con.lines[0])
             
-            if m.groups()[2].strip() == '?':
+            if m.groups()[2] == '?':
                 # ignore questionable connections
                 continue
             self.connections.append((int(m.groups()[0]), int(m.groups()[1])))
@@ -325,15 +349,21 @@ class Experiment(object):
     def path(self):
         """Filesystem path to the root of this experiment.
         """
-        date, slice, site = self.expt_id.split('-')
-        root = os.path.dirname(self.entry.file)
-        path = os.path.join(root, date+"_000", "slice_%03d"%int(slice), "site_%03d"%int(site))
-        if os.path.isdir(path):
-            return path
-        path = os.path.join(root, 'V1', date+"_000", "slice_%03d"%int(slice), "site_%03d"%int(site))
-        if os.path.isdir(path):
-            return path
-        raise Exception("Cannot find filesystem path for experiment %s" % self)
+        if self._site_path is None:
+            date, slice, site = self.expt_id.split('-')
+            root = os.path.dirname(self.entry.file)
+            paths = [
+                os.path.join(root, date+"_000", "slice_%03d"%int(slice), "site_%03d"%int(site)),
+                os.path.join(root, 'V1', date+"_000", "slice_%03d"%int(slice), "site_%03d"%int(site)),
+                os.path.join(root, 'ALM', date+"_000", "slice_%03d"%int(slice), "site_%03d"%int(site)),
+            ]
+            for path in paths:
+                if os.path.isdir(path):
+                    self._site_path = path
+                    break
+            if self._site_path is None:
+                raise Exception("Cannot find filesystem path for experiment %s. Attempted paths:\n%s" % (self, "\n".join(paths)))
+        return self._site_path
     
     def __repr__(self):
         return "<Experiment %s (%s:%d)>" % (self.expt_id, self.entry.file, self.entry.lineno)
@@ -346,6 +376,18 @@ class Experiment(object):
                 raise TypeError("Cannot find index file (%s) for experiment %s" % (index, self))
             self._slice_info = pg.configfile.readConfigFile(index)['.']
         return self._slice_info
+
+    @property
+    def nwb_file(self):
+        p = self.path
+        files = glob.glob(os.path.join(p, '*.nwb'))
+        if len(files) == 0:
+            files = glob.glob(os.path.join(p, '*.NWB'))
+        if len(files) == 0:
+            raise Exception("No NWB file found for %s" % self)
+        elif len(files) > 1:
+            raise Exception("Multiple NWB files found for %s" % self)
+        return files[0]
 
     @property
     def specimen_id(self):
@@ -495,13 +537,25 @@ class Cell(object):
 
         
 # Parse experiment data
+start_skip = []
+stop_skip = []
 expts = []
 errs = []
 for entry in root.children:
     try:
-        expts.append(Experiment(entry))
+        expt = Experiment(entry)
     except Exception as exc:
         errs.append((entry, sys.exc_info()))
+        continue
+    
+    # filter experiments by start/stop dates
+    if args.start is not None and expt.date < args.start:
+        start_skip.append(expt)
+    elif args.stop is not None and expt.date > args.stop:
+        stop_skip.append(expt)
+    else:
+        expts.append(expt)
+
 
 if len(errs) > 0:
     print("Errors loading %d experiments:" % len(errs))
@@ -531,10 +585,15 @@ for expt in expts:
 
 
 # Generate summary of experiments
+fields = ['# probed', '# connected', 'age', 'cre types']
+if args.list_stims:
+    fields.append('stim sets')
 print("----------------------------------------------------------")
-print("  Experiment Summary  (# probed, # connected, age, cre types)")
+print("  Experiment Summary  (%s)" % ', '.join(fields))
 print("----------------------------------------------------------")
 
+if len(start_skip) > 0:
+    print("[ skipped %d earlier experiments ]" % len(start_skip))
 tot_probed = 0
 tot_connected = 0
 ages = []
@@ -544,7 +603,41 @@ for i,expt in enumerate(expts):
     tot_probed += n_p
     tot_connected += n_c
     ages.append(expt.age)
-    print("%d: %s:  \t%d\t%d\t%d\t%s" % (i, expt.expt_id, n_p, n_c, expt.age, ', '.join(expt.cre_types)))
+    
+    fmt = "%d: %s:  \t%d\t%d\t%d\t%s"
+    fmt_args = [i, expt.expt_id, n_p, n_c, expt.age, ', '.join(expt.cre_types)]
+    
+    # get list of stimuli
+    if args.list_stims:
+        from neuroanalysis.miesnwb import MiesNwb
+        nwb = MiesNwb(expt.nwb_file)
+        stims = []
+        for srec in nwb.contents:
+            stim = srec.recordings[0].meta['stim_name']
+            if stim.startswith('PulseTrain_'):
+                stim = stim[11:]
+            if stim.endswith('_DA_0'):
+                stim = stim[:-5]
+            if stim not in stims:
+                stims.append(stim)
+        nwb.close()
+        
+        # sort by frequency
+        def freq(stim):
+            m = re.match('(.*)(\d+)Hz', stim)
+            if m is None:
+                return (0, 0)
+            else:
+                return (len(m.groups()[0]), int(m.groups()[1]))
+        stims.sort(key=freq)
+        
+        fmt += "\t%s"
+        fmt_args.append(', '.join(stims))
+    
+    print(fmt % tuple(fmt_args))
+
+if len(stop_skip) > 0:
+    print("[ skipped %d later experiments ]" % len(stop_skip))
 print("")
 
 print("Mean age: %0.1f" % np.mean(ages))
