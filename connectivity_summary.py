@@ -119,6 +119,7 @@ class Experiment(object):
         self._slice_info = None
         self._lims_record = None
         self._site_path = None
+        self._probed = None
 
         try:
             self.expt_id = entry.lines[0]
@@ -276,6 +277,26 @@ class Experiment(object):
         """
         if self._summary is None:
             csum = {}
+            for i, j in self.connections_probed:
+                ci, cj = self.cells[i], self.cells[j]
+                typ = (ci.cre_type, cj.cre_type)
+                if typ not in csum:
+                    csum[typ] = [0, 0, [], []]
+                if (i, j) in self.connections:
+                    csum[typ][0] += 1
+                    csum[typ][2].append(ci.distance(cj))
+                else:
+                    csum[typ][1] += 1
+                    csum[typ][3].append(ci.distance(cj))
+            self._summary = csum
+        return self._summary
+    
+    @property
+    def connections_probed(self):
+        """A list of probed connections (pre_cell, post_cell) that passed QC.
+        """
+        if self._probed is None:
+            probed = []
             for i,ci in self.cells.items():
                 for j,cj in self.cells.items():
                     if i == j:
@@ -292,21 +313,13 @@ class Experiment(object):
                         #if (i, j) in self.connections:
                             #print("    --> connected!")
                         continue
-                    typ = (ci.cre_type, cj.cre_type)
-                    if typ not in csum:
-                        csum[typ] = [0, 0, [], []]
-                    if (i, j) in self.connections:
-                        csum[typ][0] += 1
-                        csum[typ][2].append(ci.distance(cj))
-                    else:
-                        csum[typ][1] += 1
-                        csum[typ][3].append(ci.distance(cj))
-            self._summary = csum
-        return self._summary
+                    probed.append((i, j))
+            self._probed = probed
+        return self._probed
     
     @property
     def n_connections_probed(self):
-        return sum([x[0]+x[1] for x in self.summary().values()])
+        return len(self.connections_probed)
 
     @property
     def n_connections(self):
@@ -535,10 +548,59 @@ class Cell(object):
     def __repr__(self):
         return "<Cell %s:%d>" % (self.expt.expt_id, self.cell_id)
 
+
+class ExperimentList(object):
+    def __init__(self, expts):
+        self._expts = expts
+        self.start_skip = []
+        self.stop_skip = []
         
+    def select(self, start=None, stop=None, region=None):
+        expts = []
+        start_skip = []
+        stop_skip = []
+        for ex in self._expts:
+            # filter experiments by start/stop dates
+            if args.start is not None and expt.date < args.start:
+                continue
+            elif args.stop is not None and expt.date > args.stop:
+                continue
+            else:
+                expts.append(ex)
+    
+        el = ExperimentList(expts)
+        el.start_skip = self.start_skip + start_skip
+        el.stop_skip = stop_skip + self.stop_skip
+        return el
+    
+    def __getitem__(self, item):
+        return self._expts[item]
+    
+    def __len__(self):
+        return len(self._expts)
+    
+    def __iter__(self):
+        return self._expts.__iter__()
+    
+    def append(self, expt):
+        self._expts.append(expt)
+
+    def sort(self, *args, **kwds):
+        self._expts.sort(*args, **kwds)
+
+    def distance_plot(self, pre_type, post_type):
+        pts = []
+        for expt in expts:
+            conn = expt.summary().get((pre_type, post_type))
+            if conn is None:
+                continue
+            
+        plt = pg.plot()
+        
+            
+    
+    
 # Parse experiment data
-start_skip = []
-stop_skip = []
 expts = []
 errs = []
 for entry in root.children:
@@ -548,13 +610,12 @@ for entry in root.children:
         errs.append((entry, sys.exc_info()))
         continue
     
-    # filter experiments by start/stop dates
-    if args.start is not None and expt.date < args.start:
-        start_skip.append(expt)
-    elif args.stop is not None and expt.date > args.stop:
-        stop_skip.append(expt)
-    else:
-        expts.append(expt)
+    expts.append(expt)
+
+all_expts = ExperimentList(expts)
+
+expts = all_expts.select(start=args.start, stop=args.stop)
+
 
 
 if len(errs) > 0:
@@ -592,7 +653,7 @@ print("----------------------------------------------------------")
 print("  Experiment Summary  (%s)" % ', '.join(fields))
 print("----------------------------------------------------------")
 
-if len(start_skip) > 0:
+if len(expts.start_skip) > 0:
     print("[ skipped %d earlier experiments ]" % len(start_skip))
 tot_probed = 0
 tot_connected = 0
@@ -636,7 +697,7 @@ for i,expt in enumerate(expts):
     
     print(fmt % tuple(fmt_args))
 
-if len(stop_skip) > 0:
+if len(expts.stop_skip) > 0:
     print("[ skipped %d later experiments ]" % len(stop_skip))
 print("")
 
