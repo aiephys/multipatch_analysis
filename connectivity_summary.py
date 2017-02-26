@@ -13,8 +13,9 @@ of total connections detected / probed for each cell type pair.
 
 """
 from __future__ import print_function, division
-import os, re, sys, traceback, glob, json, warnings, datetime, argparse
+import os, re, sys, traceback, glob, json, warnings, datetime, argparse, pickle
 import numpy as np
+import scipy.optimize, scipy.stats
 import pyqtgraph as pg
 import pyqtgraph.configfile
 import allensdk_internal.core.lims_utilities as lims
@@ -30,12 +31,6 @@ def arg_to_date(arg):
     parts = re.split('\D+', arg)
     return datetime.date(*map(int, parts))
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--start', type=arg_to_date)
-parser.add_argument('--stop', type=arg_to_date)
-parser.add_argument('--list-stims', action='store_true', default=False, dest='list_stims')
-parser.add_argument('files', nargs='+')
-args = parser.parse_args(sys.argv[1:])
 
 
 
@@ -82,31 +77,6 @@ def indentation(line):
     return len(line) - len(line.lstrip('- '))
 
 
-root = Entry('', None, None, None)
-root.indentation = -1
-current = root
-
-for f in args.files:
-    lines = open(f, 'r').readlines()
-
-    for i,line in enumerate(lines):
-        if line.lstrip().startswith('#'):
-            continue
-        
-        if line.strip() == '':
-            continue
-        ind = indentation(line)
-        if ind > current.indentation:
-            ch = Entry(line, parent=current, file=f, lineno=i)
-            current = ch
-        else:
-            while current.indentation > ind:
-                current = current.parent
-            ch = Entry(line, parent=current.parent, file=f, lineno=i)
-            current = ch
-            continue
-
-        
 
 # Now go through each experiment and read cell type / connectivity data
 
@@ -114,6 +84,7 @@ class Experiment(object):
     def __init__(self, entry):
         self.entry = entry
         self.connections = []
+        self._region = None
         self._summary = None
         self._view = None
         self._slice_info = None
@@ -138,7 +109,7 @@ class Experiment(object):
                 elif ch.lines[0] == 'Conditions':
                     continue
                 elif ch.lines[0].startswith('Region '):
-                    self.region = ch.lines[0][7:]
+                    self._region = ch.lines[0][7:]
                 elif ch.lines[0].startswith('Site path '):
                     p = os.path.abspath(os.path.join(os.path.dirname(self.entry.file), ch.lines[0][10:]))
                     if not os.path.isdir(p):
@@ -290,6 +261,10 @@ class Experiment(object):
                     csum[typ][3].append(ci.distance(cj))
             self._summary = csum
         return self._summary
+    
+    @property
+    def region(self):
+        return 'V1' if (not hasattr(self, '_region') or self._region is None) else self._region
     
     @property
     def connections_probed(self):
@@ -550,20 +525,80 @@ class Cell(object):
 
 
 class ExperimentList(object):
-    def __init__(self, expts):
+    def __init__(self, expts=None):
+        if expts is None:
+            expts = []
         self._expts = expts
         self.start_skip = []
         self.stop_skip = []
-        
+
+    def load(self, filename):
+        if filename.endswith('.pkl'):
+            self._load_pickle(filename)
+        else:
+            self._load_text(filename)
+
+    def _load_pickle(self, filename):
+        el = pickle.load(open(filename))
+        self._expts.extend(el._expts)
+        self.sort()
+    
+    def _load_text(self, filename):
+        root = Entry('', None, None, None)
+        root.indentation = -1
+        current = root
+
+        lines = open(filename, 'r').readlines()
+
+        for i,line in enumerate(lines):
+            if line.lstrip().startswith('#'):
+                continue
+            
+            if line.strip() == '':
+                continue
+            ind = indentation(line)
+            if ind > current.indentation:
+                ch = Entry(line, parent=current, file=f, lineno=i)
+                current = ch
+            else:
+                while current.indentation > ind:
+                    current = current.parent
+                ch = Entry(line, parent=current.parent, file=f, lineno=i)
+                current = ch
+                continue
+            
+        # Parse experiment data
+        errs = []
+        for entry in root.children:
+            try:
+                expt = Experiment(entry)
+            except Exception as exc:
+                errs.append((entry, sys.exc_info()))
+                continue
+            
+            self._expts.append(expt)
+
+        if len(errs) > 0:
+            print("Errors loading %d experiments:" % len(errs))
+            for entry, exc in errs:
+                print("=======================")
+                print("\n".join(entry.lines))
+                traceback.print_exception(*exc)
+                print("")
+
+        self.sort()
+
     def select(self, start=None, stop=None, region=None):
         expts = []
         start_skip = []
         stop_skip = []
         for ex in self._expts:
             # filter experiments by start/stop dates
-            if args.start is not None and expt.date < args.start:
+            if args.start is not None and ex.date < args.start:
                 continue
-            elif args.stop is not None and expt.date > args.stop:
+            elif args.stop is not None and ex.date > args.stop:
+                continue
+            elif args.region is not None and ex.region != args.region:
                 continue
             else:
                 expts.append(ex)
@@ -585,197 +620,291 @@ class ExperimentList(object):
     def append(self, expt):
         self._expts.append(expt)
 
-    def sort(self, *args, **kwds):
-        self._expts.sort(*args, **kwds)
+    def sort(self, key=lambda expt: expt.expt_id, **kwds):
+        self._expts.sort(key=key, **kwds)
 
-    def distance_plot(self, pre_type, post_type):
-        pts = []
+    def check(self):
+        # sanity check: all experiments should have cre and fl labels
         for expt in expts:
-            conn = expt.summary().get((pre_type, post_type))
-            if conn is None:
-                continue
+            # make sure we have at least one non-biocytin label and one cre label
+            if len(expt.cre_types) < 1:
+                print("Warning: Experiment %s has no cre-type labels" % expt.expt_id)
+            if len(expt.labels) < 1 or expt.labels == ['biocytin']:
+                print("Warning: Experiment %s has no fluorescent labels" % expt.expt_id)
+            if expt.region is None:
+                print("Warning: Experiment %s has no region" % expt.expt_id)
+    
+    def distance_plot(self, pre_type, post_type, plot=None, color=(100, 100, 255)):
+        # get all connected and unconnected distances for pre->post
+        probed = []
+        connected = []
+        for expt in self:
+            for i,j in expt.connections_probed:
+                ci, cj = expt.cells[i], expt.cells[j]
+                if ci.cre_type != pre_type or cj.cre_type != post_type:
+                    continue
+                dist = ci.distance(cj)
+                probed.append(dist)
+                connected.append((i, j) in expt.connections)
+        connected = np.array(connected).astype(float)
+        probed = np.array(probed)
+        pts = np.vstack([probed, connected]).T
+
+        # scatter points a bit
+        conn = pts[:,1] == 1
+        unconn = pts[:,1] == 0
+        cscat = pg.pseudoScatter(pts[:,0][conn], spacing=10e-6, bidir=False)
+        uscat = pg.pseudoScatter(pts[:,0][unconn], spacing=10e-6, bidir=False)
+        pts[:,1][conn] -= cscat * 0.2 / cscat.max()
+        pts[:,1][unconn] -= uscat * 0.2 / uscat.max()
+
+        # scatter plot connections probed
+        if plot is None:
+            plot = pg.plot()
             
-        plt = pg.plot()
+        plot.setLabels(bottom=('distance', 'm'), left='connection probability')
+            
+        color2 = color + (100,)
+        scatter = plot.plot(pts[:,0], pts[:,1], pen=None, symbol='o', labels={'bottom': ('distance', 'm')}, symbolBrush=color2, symbolPen=None)
+
+        # use a sliding window to plot the proportion of connections found along with a 95% confidence interval
+        # for connection probability
+        def binomial_ci(p, n, alpha=0.05 ):
+            """
+            Two-sided confidence interval for a binomial test.
+
+            If after n trials we obtain p successes, find c such that
+
+            P(k/n < p/n; theta = c) = alpha
+
+            where k/N is the proportion of successes in the set of trials,
+            and theta is the success probability for each trial. 
+            
+            Source: http://stackoverflow.com/questions/13059011/is-there-any-python-function-library-for-calculate-binomial-confidence-intervals
+            """
+            upper_fn = lambda c: scipy.stats.binom.cdf(p, n, c) - alpha
+            lower_fn = lambda c: scipy.stats.binom.cdf(p, n, c) - (1.0 - alpha)
+            return scipy.optimize.bisect(lower_fn, 0, 1), scipy.optimize.bisect(upper_fn, 0, 1)
         
+        window = 40e-6
+        spacing = window / 4.0
+        xvals = np.arange(window / 2.0, 500e-6, spacing)
+        upper = []
+        lower = []
+        prop = []
+        ci_xvals = []
+        for x in xvals:
+            minx = x - window / 2.0
+            maxx = x + window / 2.0
+            # select points inside this window
+            mask = (probed >= minx) & (probed <= maxx)
+            pts_in_window = connected[mask]
+            # compute stats for window
+            n_probed = pts_in_window.shape[0]
+            n_conn = pts_in_window.sum()
+            if n_probed == 0:
+                prop.append(np.nan)
+            else:
+                prop.append(n_conn / n_probed)
+                ci = binomial_ci(n_conn, n_probed)
+                lower.append(ci[0])
+                upper.append(ci[1])
+                ci_xvals.append(x)
+        
+        # plot connection probability and confidence intervals
+        color2 = [c / 3.0 for c in color]
+        mid_curve = plot.plot(xvals, prop, pen=color, antialias=True)
+        upper_curve = plot.plot(ci_xvals, upper, pen=color2, antialias=True)
+        lower_curve = plot.plot(ci_xvals, lower, pen=color2, antialias=True)
+        upper_curve.setVisible(False)
+        lower_curve.setVisible(False)
+        color2 = color + (50,)
+        fill = pg.FillBetweenItem(upper_curve, lower_curve, brush=color2)
+        fill.setZValue(-10)
+        plot.addItem(fill, ignoreBounds=True)
+        
+        return scatter, mid_curve, lower_curve, upper_curve, fill 
+
+    def n_connections_probed(self):
+        """Return (total_probed, total_connected) for all experiments in this list.
+        """
+        tot_probed = 0
+        tot_connected = 0
+        for expt in self:
+            tot_probed += expt.n_connections_probed
+            tot_connected += expt.n_connections
+        return tot_probed, tot_connected
+        
+    def print_expt_summary(self, list_stims=False):
+        fields = ['# probed', '# connected', 'age', 'cre types']
+        if list_stims:
+            fields.append('stim sets')
+        print("----------------------------------------------------------")
+        print("  Experiment Summary  (%s)" % ', '.join(fields))
+        print("----------------------------------------------------------")
+
+        if len(self.start_skip) > 0:
+            print("[ skipped %d earlier experiments ]" % len(self.start_skip))
+        tot_probed = 0
+        tot_connected = 0
+        ages = []
+        for i,expt in enumerate(self):
+            n_p = expt.n_connections_probed
+            n_c = expt.n_connections
+            tot_probed += n_p
+            tot_connected += n_c
+            ages.append(expt.age)
             
-    
-    
-# Parse experiment data
-expts = []
-errs = []
-for entry in root.children:
-    try:
-        expt = Experiment(entry)
-    except Exception as exc:
-        errs.append((entry, sys.exc_info()))
-        continue
-    
-    expts.append(expt)
+            fmt = "%d: %s:  \t%d\t%d\t%d\t%s"
+            fmt_args = [i, expt.expt_id, n_p, n_c, expt.age, ', '.join(expt.cre_types)]
+            
+            # get list of stimuli
+            if list_stims:
+                from neuroanalysis.miesnwb import MiesNwb
+                nwb = MiesNwb(expt.nwb_file)
+                stims = []
+                for srec in nwb.contents:
+                    stim = srec.recordings[0].meta['stim_name']
+                    if stim.startswith('PulseTrain_'):
+                        stim = stim[11:]
+                    if stim.endswith('_DA_0'):
+                        stim = stim[:-5]
+                    if stim not in stims:
+                        stims.append(stim)
+                nwb.close()
+                
+                # sort by frequency
+                def freq(stim):
+                    m = re.match('(.*)(\d+)Hz', stim)
+                    if m is None:
+                        return (0, 0)
+                    else:
+                        return (len(m.groups()[0]), int(m.groups()[1]))
+                stims.sort(key=freq)
+                
+                fmt += "\t%s"
+                fmt_args.append(', '.join(stims))
+            
+            print(fmt % tuple(fmt_args))
 
-all_expts = ExperimentList(expts)
-
-expts = all_expts.select(start=args.start, stop=args.stop)
-
-
-
-if len(errs) > 0:
-    print("Errors loading %d experiments:" % len(errs))
-    for entry, exc in errs:
-        print("=======================")
-        print("\n".join(entry.lines))
-        traceback.print_exception(*exc)
+        if len(self.stop_skip) > 0:
+            print("[ skipped %d later experiments ]" % len(self.stop_skip))
         print("")
 
-if len(expts) == 0:
-    print("No experiments loaded; bailing out.")
-    sys.exit(-1)
-
-
-
-expt_ids = {e.expt_id:e for e in expts}
-expts.sort(key=lambda expt: expt.expt_id)
-
-# sanity check: all experiments should have cre and fl labels
-for expt in expts:
-    # make sure we have at least one non-biocytin label and one cre label
-    if len(expt.cre_types) < 1:
-        print("Warning: Experiment %s has no cre-type labels" % expt.expt_id)
-    if len(expt.labels) < 1 or expt.labels == ['biocytin']:
-        print("Warning: Experiment %s has no fluorescent labels" % expt.expt_id)
+        print("Mean age: %0.1f" % np.mean(ages))
+        print("")
         
-
-
-# Generate summary of experiments
-fields = ['# probed', '# connected', 'age', 'cre types']
-if args.list_stims:
-    fields.append('stim sets')
-print("----------------------------------------------------------")
-print("  Experiment Summary  (%s)" % ', '.join(fields))
-print("----------------------------------------------------------")
-
-if len(expts.start_skip) > 0:
-    print("[ skipped %d earlier experiments ]" % len(start_skip))
-tot_probed = 0
-tot_connected = 0
-ages = []
-for i,expt in enumerate(expts):
-    n_p = expt.n_connections_probed
-    n_c = expt.n_connections
-    tot_probed += n_p
-    tot_connected += n_c
-    ages.append(expt.age)
-    
-    fmt = "%d: %s:  \t%d\t%d\t%d\t%s"
-    fmt_args = [i, expt.expt_id, n_p, n_c, expt.age, ', '.join(expt.cre_types)]
-    
-    # get list of stimuli
-    if args.list_stims:
-        from neuroanalysis.miesnwb import MiesNwb
-        nwb = MiesNwb(expt.nwb_file)
-        stims = []
-        for srec in nwb.contents:
-            stim = srec.recordings[0].meta['stim_name']
-            if stim.startswith('PulseTrain_'):
-                stim = stim[11:]
-            if stim.endswith('_DA_0'):
-                stim = stim[:-5]
-            if stim not in stims:
-                stims.append(stim)
-        nwb.close()
+    def print_connectivity_summary(self):
+        print("-------------------------------------------------------------")
+        print("     Connectivity  (# connected/probed, % connectivity, cdist, udist, adist)")
+        print("-------------------------------------------------------------")
         
-        # sort by frequency
-        def freq(stim):
-            m = re.match('(.*)(\d+)Hz', stim)
-            if m is None:
-                return (0, 0)
-            else:
-                return (len(m.groups()[0]), int(m.groups()[1]))
-        stims.sort(key=freq)
+        tot_probed, tot_connected = self.n_connections_probed()
         
-        fmt += "\t%s"
-        fmt_args.append(', '.join(stims))
+        summary = {}
+        for expt in self:
+            for k,v in expt.summary().items():
+                if k not in summary:
+                    summary[k] = [0, 0, [], []]
+                summary[k][0] += v[0]
+                summary[k][1] += v[1]
+                summary[k][2].extend(v[2])
+                summary[k][3].extend(v[3])
+
+        with warnings.catch_warnings():  # we expect warnings when nanmean is called on an empty list
+            warnings.simplefilter("ignore")
+            totals = []
+            for k,v in summary.items():
+                totals.append((k[0], k[1], v[0], v[0]+v[1], 100*v[0]/(v[0]+v[1]), np.nanmean(v[2])*1e6, np.nanmean(v[3])*1e6, np.nanmean(v[2]+v[3])*1e6))
+            
+        colsize = max([len(t[0]) + len(t[1]) for t in totals]) + 8
+        totals.sort(key=lambda x: (x[4], x[3], x[0], x[1]), reverse=True)
+        for tot in totals:
+            pad = " " * (colsize - (len(tot[0]) + len(tot[1]) + 3))
+            fields = list(tot)
+            fields.insert(2, pad)
+            fields = tuple(fields)
+            try:
+                print(u"%s → %s%s\t:\t%d/%d\t%0.2f%%\t%0.2f\t%0.2f\t%0.2f" % fields)
+            except UnicodeEncodeError:
+                print("%s - %s%s\t:\t%d/%d\t%0.2f%%\t%0.2f\t%0.2f\t%0.2f" % fields)
+
+        print("\nTotal:  \t%d/%d\t%0.2f%%" % (tot_connected, tot_connected+tot_probed, 100*tot_connected/(tot_connected+tot_probed)))
+        print("")
+
+    def print_label_summary(self):
+        print("-----------------------")
+        print("       Labeling")
+        print("-----------------------")
+
+        n_qc_passed = 0
+        n_dye_passed = 0
+        n_qc_and_biocytin_passed = 0
+        n_dye_and_biocytin_passed = 0
+
+        for expt in self:
+            for cell in expt.cells.values():
+                biocytin = cell.labels.get('biocytin', None)
+                if biocytin is None:
+                    # ignore cells with no biocytin data
+                    continue
+                biocytin = (biocytin == '+')
+                if cell.pass_qc:
+                    n_qc_passed += 1
+                    if biocytin:
+                        n_qc_and_biocytin_passed += 1
+                if cell.cre_type is not None:
+                    n_dye_passed += 1
+                    if biocytin:
+                        n_dye_and_biocytin_passed += 1
+
+        dye_biocytin_percent = 100*n_dye_and_biocytin_passed/n_dye_passed if n_dye_passed > 0 else 0
+        print("%0.2f (%d/%d) of dye-filled cells had a biocytin fill" % (dye_biocytin_percent, n_dye_and_biocytin_passed, n_dye_passed))
+
+        qc_biocytin_percent = 100*n_qc_and_biocytin_passed/n_qc_passed if n_qc_passed > 0 else 0
+        print("%0.2f (%d/%d) of qc-passed cells had a biocytin fill" % (qc_biocytin_percent, n_qc_and_biocytin_passed, n_qc_passed))
+
+        print("")
+
+            
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--region', type=str)
+    parser.add_argument('--start', type=arg_to_date)
+    parser.add_argument('--stop', type=arg_to_date)
+    parser.add_argument('--list-stims', action='store_true', default=False, dest='list_stims')
+    parser.add_argument('files', nargs='+')
+    args = parser.parse_args(sys.argv[1:])
+
+    all_expts = ExperimentList()
+
+    for f in args.files:
+        all_expts.load(f)
+
+    if len(all_expts) == 0:
+        print("No experiments loaded; bailing out.")
+        sys.exit(-1)
+
+    expts = all_expts.select(start=args.start, stop=args.stop, region=args.region)
+
+    if len(expts) == 0:
+        print("No experiments selected; bailing out.")
+        sys.exit(-1)
+
+    expts.check()
     
-    print(fmt % tuple(fmt_args))
 
-if len(expts.stop_skip) > 0:
-    print("[ skipped %d later experiments ]" % len(stop_skip))
-print("")
+    # Generate summary of experiments
+    expts.print_expt_summary(args.list_stims)
 
-print("Mean age: %0.1f" % np.mean(ages))
-print("")
+    # Generate a summary of connectivity
+    expts.print_connectivity_summary()
 
-# Generate a summary of connectivity
-print("-------------------------------------------------------------")
-print("     Connectivity  (# connected/probed, % connectivity, cdist, udist, adist)")
-print("-------------------------------------------------------------")
-summary = {}
-for expt in expts:
-    for k,v in expt.summary().items():
-        if k not in summary:
-            summary[k] = [0, 0, [], []]
-        summary[k][0] += v[0]
-        summary[k][1] += v[1]
-        summary[k][2].extend(v[2])
-        summary[k][3].extend(v[3])
-
-with warnings.catch_warnings():  # we expect warnings when nanmean is called on an empty list
-    warnings.simplefilter("ignore")
-    totals = []
-    for k,v in summary.items():
-        totals.append((k[0], k[1], v[0], v[0]+v[1], 100*v[0]/(v[0]+v[1]), np.nanmean(v[2])*1e6, np.nanmean(v[3])*1e6, np.nanmean(v[2]+v[3])*1e6))
-    
-colsize = max([len(t[0]) + len(t[1]) for t in totals]) + 8
-totals.sort(key=lambda x: (x[4], x[3], x[0], x[1]), reverse=True)
-for tot in totals:
-    pad = " " * (colsize - (len(tot[0]) + len(tot[1]) + 3))
-    fields = list(tot)
-    fields.insert(2, pad)
-    fields = tuple(fields)
-    try:
-        print(u"%s → %s%s\t:\t%d/%d\t%0.2f%%\t%0.2f\t%0.2f\t%0.2f" % fields)
-    except UnicodeEncodeError:
-        print("%s - %s%s\t:\t%d/%d\t%0.2f%%\t%0.2f\t%0.2f\t%0.2f" % fields)
-
-print("\nTotal:  \t%d/%d\t%0.2f%%" % (tot_connected, tot_connected+tot_probed, 100*tot_connected/(tot_connected+tot_probed)))
-print("")
+    # Print extra information about labeling
+    expts.print_label_summary()
 
 
-
-print("-----------------------")
-print("       Labeling")
-print("-----------------------")
-
-n_qc_passed = 0
-n_dye_passed = 0
-n_qc_and_biocytin_passed = 0
-n_dye_and_biocytin_passed = 0
-
-for expt in expts:
-    for cell in expt.cells.values():
-        biocytin = cell.labels.get('biocytin', None)
-        if biocytin is None:
-            # ignore cells with no biocytin data
-            continue
-        biocytin = (biocytin == '+')
-        if cell.pass_qc:
-            n_qc_passed += 1
-            if biocytin:
-                n_qc_and_biocytin_passed += 1
-        if cell.cre_type is not None:
-            n_dye_passed += 1
-            if biocytin:
-                n_dye_and_biocytin_passed += 1
-
-dye_biocytin_percent = 100*n_dye_and_biocytin_passed/n_dye_passed if n_dye_passed > 0 else 0
-print("%0.2f (%d/%d) of dye-filled cells had a biocytin fill" % (dye_biocytin_percent, n_dye_and_biocytin_passed, n_dye_passed))
-
-qc_biocytin_percent = 100*n_qc_and_biocytin_passed/n_qc_passed if n_qc_passed > 0 else 0
-print("%0.2f (%d/%d) of qc-passed cells had a biocytin fill" % (qc_biocytin_percent, n_qc_and_biocytin_passed, n_qc_passed))
-
-print("")
-
-
-
-
-
-
+    p = pg.plot()
+    expts.distance_plot('sim1', 'sim1', plot=p, color=(0, 0, 255))
+    expts.distance_plot('tlx3', 'tlx3', plot=p, color=(200, 200, 0))
+    expts.distance_plot('pvalb', 'pvalb', plot=p, color=(200, 0, 200))
