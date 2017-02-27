@@ -725,6 +725,64 @@ class ExperimentList(object):
         
         return scatter, mid_curve, lower_curve, upper_curve, fill 
 
+    def matrix(self, rows, cols, size=50):
+        w = pg.GraphicsLayoutWidget()
+        v = w.addViewBox()
+        v.setAspectLocked()
+        v.invertY()
+        
+        colormap = pg.ColorMap(
+            [0, 0.01, 0.03, 0.1, 0.3, 1.0],
+            [(0,0,0), (0,0,50), (100,0,0), (255,100,0), (255,255,100), (255,255,255)],
+        )
+        default = (50, 50, 50)
+        
+        summary = self.connectivity_summary()
+        
+        w.matrix_items = []
+        
+        for i,row in enumerate(rows):
+            txt = pg.QtGui.QGraphicsTextItem(row)
+            br = txt.boundingRect()
+            txt.setPos(-br.width() - 10, i * size + size/2. - br.center().y())
+            txt.setDefaultTextColor(pg.mkColor('w'))
+            v.addItem(txt)
+            w.matrix_items.append(txt)
+        
+        for i,col in enumerate(cols):
+            txt = pg.QtGui.QGraphicsTextItem(col)
+            br = txt.boundingRect()
+            txt.setPos(i * size + size/2 - br.center().x(), -br.height() - 10)
+            txt.setDefaultTextColor(pg.mkColor('w'))
+            v.addItem(txt)
+            w.matrix_items.append(txt)
+        
+        for i,row in enumerate(rows):
+            for j,col in enumerate(cols):
+                if (row, col) in summary:
+                    conn, uconn, cdist, udist = summary[(row, col)]
+                    color = colormap.map(conn/(conn + uconn))
+                else:
+                    conn, uconn = 0, 0
+                    color = default
+                x = j * size
+                y = i * size
+                rect = pg.QtGui.QGraphicsRectItem(x, y, size, size)
+                rect.setBrush(pg.mkBrush(color))
+                rect.setZValue(-10)
+                w.matrix_items.append(rect)
+                v.addItem(rect)
+                
+                txt = pg.QtGui.QGraphicsTextItem("%d/%d" % (conn, conn+uconn))
+                br = txt.boundingRect()
+                txt.setPos(x + size/2 - br.center().x(), y + size/2 - br.center().y())
+                c = 'w' if sum(color) < 300 else 'k'
+                txt.setDefaultTextColor(pg.mkColor(c))
+                v.addItem(txt)
+                w.matrix_items.append(txt)
+        w.show()
+        self.matrix_widget = w
+
     def n_connections_probed(self):
         """Return (total_probed, total_connected) for all experiments in this list.
         """
@@ -793,14 +851,8 @@ class ExperimentList(object):
 
         print("Mean age: %0.1f" % np.mean(ages))
         print("")
-        
-    def print_connectivity_summary(self):
-        print("-------------------------------------------------------------")
-        print("     Connectivity  (# connected/probed, % connectivity, cdist, udist, adist)")
-        print("-------------------------------------------------------------")
-        
-        tot_probed, tot_connected = self.n_connections_probed()
-        
+
+    def connectivity_summary(self):
         summary = {}
         for expt in self:
             for k,v in expt.summary().items():
@@ -810,6 +862,16 @@ class ExperimentList(object):
                 summary[k][1] += v[1]
                 summary[k][2].extend(v[2])
                 summary[k][3].extend(v[3])
+        return summary
+        
+    def print_connectivity_summary(self):
+        print("-------------------------------------------------------------")
+        print("     Connectivity  (# connected/probed, % connectivity, cdist, udist, adist)")
+        print("-------------------------------------------------------------")
+        
+        tot_probed, tot_connected = self.n_connections_probed()
+        
+        summary = self.connectivity_summary()
 
         with warnings.catch_warnings():  # we expect warnings when nanmean is called on an empty list
             warnings.simplefilter("ignore")
@@ -866,6 +928,7 @@ class ExperimentList(object):
 
         print("")
 
+
             
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -908,3 +971,6 @@ if __name__ == '__main__':
     expts.distance_plot('sim1', 'sim1', plot=p, color=(0, 0, 255))
     expts.distance_plot('tlx3', 'tlx3', plot=p, color=(200, 200, 0))
     expts.distance_plot('pvalb', 'pvalb', plot=p, color=(200, 0, 200))
+
+    types = ['sim1', 'tlx3', 'pvalb', 'sst', 'vip']
+    expts.matrix(types, types)
