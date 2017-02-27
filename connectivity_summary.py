@@ -653,10 +653,12 @@ class ExperimentList(object):
         # scatter points a bit
         conn = pts[:,1] == 1
         unconn = pts[:,1] == 0
-        cscat = pg.pseudoScatter(pts[:,0][conn], spacing=10e-6, bidir=False)
-        uscat = pg.pseudoScatter(pts[:,0][unconn], spacing=10e-6, bidir=False)
-        pts[:,1][conn] -= cscat * 0.2 / cscat.max()
-        pts[:,1][unconn] -= uscat * 0.2 / uscat.max()
+        if np.any(conn):
+            cscat = pg.pseudoScatter(pts[:,0][conn], spacing=10e-6, bidir=False)
+            pts[:,1][conn] -= cscat * 0.2 / cscat.max()
+        if np.any(unconn):
+            uscat = pg.pseudoScatter(pts[:,0][unconn], spacing=10e-6, bidir=False)
+            pts[:,1][unconn] -= uscat * 0.2 / uscat.max()
 
         # scatter plot connections probed
         if plot is None:
@@ -972,5 +974,5 @@ if __name__ == '__main__':
     expts.distance_plot('tlx3', 'tlx3', plot=p, color=(200, 200, 0))
     expts.distance_plot('pvalb', 'pvalb', plot=p, color=(200, 0, 200))
 
-    types = ['sim1', 'tlx3', 'pvalb', 'sst', 'vip']
+    types = ['unknown', 'sim1', 'tlx3', 'pvalb', 'sst', 'vip']
     expts.matrix(types, types)
