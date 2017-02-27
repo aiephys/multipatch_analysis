@@ -735,9 +735,9 @@ class ExperimentList(object):
         
         colormap = pg.ColorMap(
             [0, 0.01, 0.03, 0.1, 0.3, 1.0],
-            [(0,0,0), (0,0,50), (100,0,0), (255,100,0), (255,255,100), (255,255,255)],
+            [(0,0,100), (80,0,80), (140,0,0), (255,100,0), (255,255,100), (255,255,255)],
         )
-        default = (50, 50, 50)
+        default = (0, 0, 0)
         
         summary = self.connectivity_summary()
         
@@ -779,9 +779,20 @@ class ExperimentList(object):
                 br = txt.boundingRect()
                 txt.setPos(x + size/2 - br.center().x(), y + size/2 - br.center().y())
                 c = 'w' if sum(color) < 300 else 'k'
+                if conn == uconn == 0:
+                    c = 0.3
                 txt.setDefaultTextColor(pg.mkColor(c))
                 v.addItem(txt)
                 w.matrix_items.append(txt)
+                
+        # colormap is logarithmic; remap to linear for legend
+        colors = colormap.color
+        x = np.linspace(0, 1, len(colors))
+        cmap2 = pg.ColorMap(x, colors)
+        legend = pg.GradientLegend([25, 300], [-20, -30])
+        legend.setGradient(cmap2.getGradient())
+        legend.setLabels({'%d'%int(a*100):b for a,b in zip(colormap.pos, x)})
+        v.addItem(legend)
         w.show()
         self.matrix_widget = w
 
@@ -975,4 +986,5 @@ if __name__ == '__main__':
     expts.distance_plot('pvalb', 'pvalb', plot=p, color=(200, 0, 200))
 
     types = ['unknown', 'sim1', 'tlx3', 'pvalb', 'sst', 'vip']
+    #types = ['sim1', 'unknown']
     expts.matrix(types, types)
