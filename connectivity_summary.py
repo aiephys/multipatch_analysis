@@ -83,7 +83,7 @@ def indentation(line):
 class Experiment(object):
     def __init__(self, entry):
         self.entry = entry
-        self.connections = []
+        self._connections = []
         self._region = None
         self._summary = None
         self._view = None
@@ -91,6 +91,7 @@ class Experiment(object):
         self._lims_record = None
         self._site_path = None
         self._probed = None
+        self._sweep_summary = None
 
         try:
             self.expt_id = entry.lines[0]
@@ -147,6 +148,69 @@ class Experiment(object):
         self.age
         # check for a single NWB file
         self.nwb_file
+
+    @property
+    def connections(self):
+        """A list of connections found in this experiment.
+        
+        Each item in the list is a tuple containing the pre- and postsynaptic cell IDs::
+        
+            [(pre_cell_id, post_cell_id), ...]
+        """
+        return self._connections
+
+    @property
+    def sweep_summary(self):
+        """A structure providing basic metadata on all sweeps collected in this
+        experiment::
+        
+            [{dev_1: [stim_name, clamp_mode, holding_current, holding_potential], ...}, ...]
+        """
+        if self._sweep_summary is None:
+            sweeps = []
+            from neuroanalysis.miesnwb import MiesNwb
+            nwb = MiesNwb(self.nwb_file)
+            for srec in nwb.contents:
+                sweep = {}
+                for dev in srec.devices:
+                    rec = srec[dev]
+                    sweep[dev] = rec.meta['stim_name'], rec.clamp_mode, rec.holding_current, rec.holding_potential
+                sweeps.append(sweep)
+            nwb.close()
+            self._sweep_summary = sweeps
+        return self._sweep_summary
+
+    def list_stims(self):
+        """Open NWB file and return a list of stim set names.
+        """
+        stims = []
+        for sweep in self.sweep_summary:
+            for dev,info in sweep.items():
+                stim = info[0]
+                if stim not in stims:
+                    stims.append(stim)
+
+        # Shorten stim names
+        stims = [self._short_stim_name(stim) for stim in stims]
+        
+        # sort by frequency
+        def freq(stim):
+            m = re.match('(.*)(\d+)Hz', stim)
+            if m is None:
+                return (0, 0)
+            else:
+                return (len(m.groups()[0]), int(m.groups()[1]))
+        stims.sort(key=freq)
+        
+        return stims
+
+    @staticmethod
+    def _short_stim_name(stim):
+        if stim.startswith('PulseTrain_'):
+            stim = stim[11:]
+        if stim.endswith('_DA_0'):
+            stim = stim[:-5]
+        return stim
 
     def parse_labeling(self, entry):
         """
@@ -237,7 +301,7 @@ class Experiment(object):
             if m.groups()[2] == '?':
                 # ignore questionable connections
                 continue
-            self.connections.append((int(m.groups()[0]), int(m.groups()[1])))
+            self._connections.append((int(m.groups()[0]), int(m.groups()[1])))
 
     def summary(self):
         """Return a structure summarizing (non)connectivity in the experiment.
@@ -655,10 +719,16 @@ class ExperimentList(object):
         unconn = pts[:,1] == 0
         if np.any(conn):
             cscat = pg.pseudoScatter(pts[:,0][conn], spacing=10e-6, bidir=False)
-            pts[:,1][conn] -= cscat * 0.2 / cscat.max()
+            mx = abs(cscat).max()
+            if mx != 0:
+                cscat = cscat * 0.2 / mx
+            pts[:,1][conn] -= cscat
         if np.any(unconn):
             uscat = pg.pseudoScatter(pts[:,0][unconn], spacing=10e-6, bidir=False)
-            pts[:,1][unconn] -= uscat * 0.2 / uscat.max()
+            mx = abs(uscat).max()
+            if mx != 0:
+                uscat = uscat * 0.2 / mx
+            pts[:,1][unconn] -= uscat
 
         # scatter plot connections probed
         if plot is None:
@@ -831,27 +901,7 @@ class ExperimentList(object):
             
             # get list of stimuli
             if list_stims:
-                from neuroanalysis.miesnwb import MiesNwb
-                nwb = MiesNwb(expt.nwb_file)
-                stims = []
-                for srec in nwb.contents:
-                    stim = srec.recordings[0].meta['stim_name']
-                    if stim.startswith('PulseTrain_'):
-                        stim = stim[11:]
-                    if stim.endswith('_DA_0'):
-                        stim = stim[:-5]
-                    if stim not in stims:
-                        stims.append(stim)
-                nwb.close()
-                
-                # sort by frequency
-                def freq(stim):
-                    m = re.match('(.*)(\d+)Hz', stim)
-                    if m is None:
-                        return (0, 0)
-                    else:
-                        return (len(m.groups()[0]), int(m.groups()[1]))
-                stims.sort(key=freq)
+                stims = expt.list_stims()
                 
                 fmt += "\t%s"
                 fmt_args.append(', '.join(stims))
@@ -941,7 +991,45 @@ class ExperimentList(object):
 
         print("")
 
-
+    def print_connection_summary(self, list_stims=False):
+        print("-----------------------")
+        print("       Connections")
+        print("-----------------------")
+        
+        for expt in self:
+            for pre_id, post_id in expt.connections:
+                c1, c2 = expt.cells[pre_id], expt.cells[post_id]
+                
+                stims = set()
+                if list_stims:
+                    for sweep in expt.sweep_summary:
+                        # NOTE the -1 here converts from cell ID to headstage ID.
+                        # Eventually this mapping should be recorded explicitly.
+                        info1 = sweep.get(pre_id-1)
+                        info2 = sweep.get(post_id-1)
+                        
+                        if info1 is None or info2 is None:
+                            continue
+                        stim_name = expt._short_stim_name(info1[0])
+                        mode = info2[1]
+                        holding = 5 * np.round(info2[3] * 1000 / 5.0)
+                        stim = '%s %s %dmV' % (mode, stim_name, int(holding))
+                        stims.add(stim)
+                    print(u"%s %d→%d: \t%s → %s" % (expt.expt_id, pre_id, post_id, c1.cre_type, c2.cre_type))
+                    if len(stims)  == 0:
+                        print('no sweeps: %d %d\n' % (pre_id, post_id))
+                        import pprint
+                        pprint.pprint(expt.sweep_summary)
+                              
+                    else:
+                        stims = '\n'.join(['    '+s for s in stims])
+                        print(stims)
+                    
+                
+                else:
+                    print(u"%s %d→%d: \t%s → %s" % (expt.expt_id, pre_id, post_id, c1.cre_type, c2.cre_type))
+        
+        print("")
             
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -970,8 +1058,11 @@ if __name__ == '__main__':
     expts.check()
     
 
-    # Generate summary of experiments
+    # Print list of experiments
     expts.print_expt_summary(args.list_stims)
+
+    # Print list of connections found
+    expts.print_connection_summary(args.list_stims)
 
     # Generate a summary of connectivity
     expts.print_connectivity_summary()
