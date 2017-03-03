@@ -404,10 +404,12 @@ class Experiment(object):
         if self._site_path is None:
             date, slice, site = self.expt_id.split('-')
             root = os.path.dirname(self.entry.file)
+            if '_' not in date:
+                date += '_000'
             paths = [
-                os.path.join(root, date+"_000", "slice_%03d"%int(slice), "site_%03d"%int(site)),
-                os.path.join(root, 'V1', date+"_000", "slice_%03d"%int(slice), "site_%03d"%int(site)),
-                os.path.join(root, 'ALM', date+"_000", "slice_%03d"%int(slice), "site_%03d"%int(site)),
+                os.path.join(root, date, "slice_%03d"%int(slice), "site_%03d"%int(site)),
+                os.path.join(root, 'V1', date, "slice_%03d"%int(slice), "site_%03d"%int(site)),
+                os.path.join(root, 'ALM', date, "slice_%03d"%int(slice), "site_%03d"%int(site)),
             ]
             for path in paths:
                 if os.path.isdir(path):
