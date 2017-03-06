@@ -1015,7 +1015,7 @@ class ExperimentList(object):
                         holding = 5 * np.round(info2[3] * 1000 / 5.0)
                         stim = '%s %s %dmV' % (mode, stim_name, int(holding))
                         stims.add(stim)
-                    print(u"%s %d→%d: \t%s → %s" % (expt.expt_id, pre_id, post_id, c1.cre_type, c2.cre_type))
+                    print(u"%s %d->%d: \t%s -> %s" % (expt.expt_id, pre_id, post_id, c1.cre_type, c2.cre_type))
                     if len(stims)  == 0:
                         print('no sweeps: %d %d\n' % (pre_id, post_id))
                         import pprint
@@ -1027,7 +1027,7 @@ class ExperimentList(object):
                     
                 
                 else:
-                    print(u"%s %d→%d: \t%s → %s" % (expt.expt_id, pre_id, post_id, c1.cre_type, c2.cre_type))
+                    print(u"%s %d->%d: \t%s -> %s" % (expt.expt_id, pre_id, post_id, c1.cre_type, c2.cre_type))
         
         print("")
             
