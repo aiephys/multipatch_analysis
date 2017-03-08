@@ -92,9 +92,12 @@ class Experiment(object):
         self._site_path = None
         self._probed = None
         self._sweep_summary = None
+        self._mosaic_file = None
+        self._nwb_file = None
+        self._stim_list = None
 
         try:
-            self.expt_id = entry.lines[0]
+            self.expt_id = self.id_from_entry(entry)
             self.cells = {x:Cell(self,x) for x in range(1,9)}
         except Exception as exc:
             Exception("Error parsing experiment: %s\n%s" % (self, exc.args[0]))
@@ -149,6 +152,10 @@ class Experiment(object):
         # check for a single NWB file
         self.nwb_file
 
+    @staticmethod
+    def id_from_entry(entry):
+        return (entry.file, entry.lines[0])
+
     @property
     def connections(self):
         """A list of connections found in this experiment.
@@ -183,31 +190,36 @@ class Experiment(object):
     def list_stims(self):
         """Open NWB file and return a list of stim set names.
         """
-        stims = []
-        for sweep in self.sweep_summary:
-            for dev,info in sweep.items():
-                stim = info[0]
-                if stim not in stims:
-                    stims.append(stim)
+        if self._stim_list is None:
+            stims = []
+            for sweep in self.sweep_summary:
+                for dev,info in sweep.items():
+                    stim = info[0]
+                    if stim not in stims:
+                        stims.append(stim)
 
-        # Shorten stim names
-        stims = [self._short_stim_name(stim) for stim in stims]
-        
-        # sort by frequency
-        def freq(stim):
-            m = re.match('(.*)(\d+)Hz', stim)
-            if m is None:
-                return (0, 0)
-            else:
-                return (len(m.groups()[0]), int(m.groups()[1]))
-        stims.sort(key=freq)
-        
-        return stims
+            # Shorten stim names
+            stims = [self._short_stim_name(stim) for stim in stims]
+            
+            # sort by frequency
+            def freq(stim):
+                m = re.match('(.*)(\d+)Hz', stim)
+                if m is None:
+                    return (0, 0)
+                else:
+                    return (len(m.groups()[0]), int(m.groups()[1]))
+            stims.sort(key=freq)
+            
+            self._stim_list = stims
+       
+        return self._stim_list
 
     @staticmethod
     def _short_stim_name(stim):
         if stim.startswith('PulseTrain_'):
             stim = stim[11:]
+        elif stim.startswith('SPulseTrain_'):
+            stim = stim[12:]
         if stim.endswith('_DA_0'):
             stim = stim[:-5]
         return stim
@@ -384,26 +396,28 @@ class Experiment(object):
     def mosaic_file(self):
         """Path to site mosaic file
         """
-        sitefile = os.path.join(self.path, "site.mosaic")
-        if not os.path.isfile(sitefile):
-            sitefile = os.path.join(os.path.split(self.path)[0], "site.mosaic")
-        if not os.path.isfile(sitefile):
-            mosaicfiles = [f for f in os.listdir(self.path) if f.endswith('.mosaic')]
-            if len(mosaicfiles) == 1:
-                sitefile = os.path.join(self.path, mosaicfiles[0])
-        if not os.path.isfile(sitefile):
-            # print(os.listdir(self.path))
-            # print(os.listdir(os.path.split(self.path)[0]))
-            raise Exception("No site mosaic found for %s" % self)
-        return sitefile
+        if self._mosaic_file is None:
+            sitefile = os.path.join(self.path, "site.mosaic")
+            if not os.path.isfile(sitefile):
+                sitefile = os.path.join(os.path.split(self.path)[0], "site.mosaic")
+            if not os.path.isfile(sitefile):
+                mosaicfiles = [f for f in os.listdir(self.path) if f.endswith('.mosaic')]
+                if len(mosaicfiles) == 1:
+                    sitefile = os.path.join(self.path, mosaicfiles[0])
+            if not os.path.isfile(sitefile):
+                # print(os.listdir(self.path))
+                # print(os.listdir(os.path.split(self.path)[0]))
+                raise Exception("No site mosaic found for %s" % self)
+            self._mosaic_file = sitefile
+        return self._mosaic_file
         
     @property
     def path(self):
         """Filesystem path to the root of this experiment.
         """
         if self._site_path is None:
-            date, slice, site = self.expt_id.split('-')
-            root = os.path.dirname(self.entry.file)
+            date, slice, site = self.expt_id[1].split('-')
+            root = os.path.dirname(self.expt_id[0])
             if '_' not in date:
                 date += '_000'
             paths = [
@@ -420,7 +434,7 @@ class Experiment(object):
         return self._site_path
     
     def __repr__(self):
-        return "<Experiment %s (%s:%d)>" % (self.expt_id, self.entry.file, self.entry.lineno)
+        return "<Experiment %s (%s:%d)>" % (self.expt_id[1], self.expt_id[0], self.entry.lineno)
 
     @property
     def slice_info(self):
@@ -433,15 +447,17 @@ class Experiment(object):
 
     @property
     def nwb_file(self):
-        p = self.path
-        files = glob.glob(os.path.join(p, '*.nwb'))
-        if len(files) == 0:
-            files = glob.glob(os.path.join(p, '*.NWB'))
-        if len(files) == 0:
-            raise Exception("No NWB file found for %s" % self)
-        elif len(files) > 1:
-            raise Exception("Multiple NWB files found for %s" % self)
-        return files[0]
+        if self._nwb_file is None:
+            p = self.path
+            files = glob.glob(os.path.join(p, '*.nwb'))
+            if len(files) == 0:
+                files = glob.glob(os.path.join(p, '*.NWB'))
+            if len(files) == 0:
+                raise Exception("No NWB file found for %s" % self)
+            elif len(files) > 1:
+                raise Exception("Multiple NWB files found for %s" % self)
+            self._nwb_file = files[0]
+        return self._nwb_file
 
     @property
     def specimen_id(self):
@@ -479,7 +495,7 @@ class Experiment(object):
 
     @property
     def date(self):
-        y,m,d = self.expt_id.split('-')[0].split('.')
+        y,m,d = self.expt_id[1].split('-')[0].split('.')
         return datetime.date(int(y), int(m), int(d))
 
     def show(self):
@@ -591,12 +607,22 @@ class Cell(object):
 
 
 class ExperimentList(object):
-    def __init__(self, expts=None):
-        if expts is None:
-            expts = []
-        self._expts = expts
+    def __init__(self, expts=None, cache=None):
+        self._cache = cache
+        self._expts = []
+        self._expts_by_id = {}
         self.start_skip = []
         self.stop_skip = []
+        
+        if expts is not None:
+            for expt in expts:
+                self._add_experiment(expt)
+        if cache is not None:
+            try:
+                self.load(cache)
+            except Exception:
+                sys.excepthook(*sys.exc_info())
+                print('Error reading cache file "%s". (exception printed above)' % cache)
 
     def load(self, filename):
         if filename.endswith('.pkl'):
@@ -606,7 +632,8 @@ class ExperimentList(object):
 
     def _load_pickle(self, filename):
         el = pickle.load(open(filename))
-        self._expts.extend(el._expts)
+        for expt in el._expts:
+            self._add_experiment(expt)
         self.sort()
     
     def _load_text(self, filename):
@@ -635,14 +662,20 @@ class ExperimentList(object):
             
         # Parse experiment data
         errs = []
+        cached = 0
         for entry in root.children:
             try:
+                expt_id = Experiment.id_from_entry(entry)
+                if expt_id in self._expts_by_id:
+                    # Already have this experiment cached
+                    cached += 1
+                    continue
                 expt = Experiment(entry)
             except Exception as exc:
                 errs.append((entry, sys.exc_info()))
                 continue
             
-            self._expts.append(expt)
+            self._add_experiment(expt)
 
         if len(errs) > 0:
             print("Errors loading %d experiments:" % len(errs))
@@ -651,8 +684,19 @@ class ExperimentList(object):
                 print("\n".join(entry.lines))
                 traceback.print_exception(*exc)
                 print("")
+        if cached > 0:
+            print("Skipped loading %d experiments (already cached)" % cached)
 
         self.sort()
+
+    def _add_experiment(self, expt):
+        self._expts.append(expt)
+        self._expts_by_id[expt.expt_id] = expt
+
+    def write_cache(self):
+        if self._cache is None:
+            raise Exception("ExperimentList has no cache file; cannot write cache.")
+        pickle.dump(self, open(self._cache, 'w'))
 
     def select(self, start=None, stop=None, region=None):
         expts = []
@@ -675,6 +719,7 @@ class ExperimentList(object):
         return el
     
     def __getitem__(self, item):
+        
         return self._expts[item]
     
     def __len__(self):
@@ -686,7 +731,7 @@ class ExperimentList(object):
     def append(self, expt):
         self._expts.append(expt)
 
-    def sort(self, key=lambda expt: expt.expt_id, **kwds):
+    def sort(self, key=lambda expt: expt.expt_id[1], **kwds):
         self._expts.sort(key=key, **kwds)
 
     def check(self):
@@ -694,11 +739,11 @@ class ExperimentList(object):
         for expt in expts:
             # make sure we have at least one non-biocytin label and one cre label
             if len(expt.cre_types) < 1:
-                print("Warning: Experiment %s has no cre-type labels" % expt.expt_id)
+                print("Warning: Experiment %s has no cre-type labels" % str(expt.expt_id))
             if len(expt.labels) < 1 or expt.labels == ['biocytin']:
-                print("Warning: Experiment %s has no fluorescent labels" % expt.expt_id)
+                print("Warning: Experiment %s has no fluorescent labels" % str(expt.expt_id))
             if expt.region is None:
-                print("Warning: Experiment %s has no region" % expt.expt_id)
+                print("Warning: Experiment %s has no region" % str(expt.expt_id))
     
     def distance_plot(self, pre_type, post_type, plot=None, color=(100, 100, 255)):
         # get all connected and unconnected distances for pre->post
@@ -899,7 +944,7 @@ class ExperimentList(object):
             ages.append(expt.age)
             
             fmt = "%d: %s:  \t%d\t%d\t%d\t%s"
-            fmt_args = [i, expt.expt_id, n_p, n_c, expt.age, ', '.join(expt.cre_types)]
+            fmt_args = [i, expt.expt_id[1], n_p, n_c, expt.age, ', '.join(expt.cre_types)]
             
             # get list of stimuli
             if list_stims:
@@ -1017,7 +1062,7 @@ class ExperimentList(object):
                         holding = 5 * np.round(info2[3] * 1000 / 5.0)
                         stim = '%s %s %dmV' % (mode, stim_name, int(holding))
                         stims.add(stim)
-                    print(u"%s %d->%d: \t%s -> %s" % (expt.expt_id, pre_id, post_id, c1.cre_type, c2.cre_type))
+                    print(u"%s %d->%d: \t%s -> %s" % (expt.expt_id[1], pre_id, post_id, c1.cre_type, c2.cre_type))
                     if len(stims)  == 0:
                         print('no sweeps: %d %d\n' % (pre_id, post_id))
                         import pprint
@@ -1029,7 +1074,7 @@ class ExperimentList(object):
                     
                 
                 else:
-                    print(u"%s %d->%d: \t%s -> %s" % (expt.expt_id, pre_id, post_id, c1.cre_type, c2.cre_type))
+                    print(u"%s %d->%d: \t%s -> %s" % (expt.expt_id[1], pre_id, post_id, c1.cre_type, c2.cre_type))
         
         print("")
             
@@ -1042,7 +1087,8 @@ if __name__ == '__main__':
     parser.add_argument('files', nargs='+')
     args = parser.parse_args(sys.argv[1:])
 
-    all_expts = ExperimentList()
+    cache_file = 'expts_cache.pkl'
+    all_expts = ExperimentList(cache=cache_file)
 
     for f in args.files:
         all_expts.load(f)
@@ -1081,3 +1127,7 @@ if __name__ == '__main__':
     types = ['unknown', 'sim1', 'tlx3', 'pvalb', 'sst', 'vip']
     #types = ['sim1', 'unknown']
     expts.matrix(types, types)
+    
+    # cache everything!
+    all_expts.write_cache()
+    
