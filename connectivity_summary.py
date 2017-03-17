@@ -53,7 +53,7 @@ class Entry(object):
         self.lines = []
         self.add_line(line)
         self.parent = parent
-        self.file = file
+        self.file = None if file is None else os.path.abspath(file)
         self.lineno = lineno
         self.children = []
         if parent is not None:
@@ -607,7 +607,9 @@ class Cell(object):
 
 
 class ExperimentList(object):
+    
     def __init__(self, expts=None, cache=None):
+        self._cache_version = 1
         self._cache = cache
         self._expts = []
         self._expts_by_id = {}
@@ -632,6 +634,10 @@ class ExperimentList(object):
 
     def _load_pickle(self, filename):
         el = pickle.load(open(filename))
+        ver = getattr(el, '_cache_version', None)
+        if ver != self._cache_version:
+            print("Ignoring cache file %s due to incompatible version (%s != %s)" % (filename, ver, self._cache_version))
+            return
         for expt in el._expts:
             self._add_experiment(expt)
         self.sort()
@@ -1086,7 +1092,7 @@ if __name__ == '__main__':
     parser.add_argument('--start', type=arg_to_date)
     parser.add_argument('--stop', type=arg_to_date)
     parser.add_argument('--list-stims', action='store_true', default=False, dest='list_stims')
-    parser.add_argument('files', nargs='*')
+    parser.add_argument('files', nargs='*', type=os.path.abspath)
     args = parser.parse_args(sys.argv[1:])
 
     cache_file = 'expts_cache.pkl'
