@@ -495,7 +495,7 @@ class Experiment(object):
 
     @property
     def date(self):
-        y,m,d = self.expt_id[1].split('-')[0].split('.')
+        y,m,d = self.expt_id[1].split('-')[0].split('_')[0].split('.')
         return datetime.date(int(y), int(m), int(d))
 
     def show(self):
