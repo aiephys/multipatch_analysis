@@ -698,17 +698,19 @@ class ExperimentList(object):
             raise Exception("ExperimentList has no cache file; cannot write cache.")
         pickle.dump(self, open(self._cache, 'w'))
 
-    def select(self, start=None, stop=None, region=None):
+    def select(self, start=None, stop=None, region=None, source_files=None):
         expts = []
         start_skip = []
         stop_skip = []
         for ex in self._expts:
             # filter experiments by start/stop dates
-            if args.start is not None and ex.date < args.start:
+            if start is not None and ex.date < start:
                 continue
-            elif args.stop is not None and ex.date > args.stop:
+            elif stop is not None and ex.date > stop:
                 continue
-            elif args.region is not None and ex.region != args.region:
+            elif region is not None and ex.region != region:
+                continue
+            elif source_files is not None and ex.expt_id[0] not in source_files:
                 continue
             else:
                 expts.append(ex)
@@ -1084,7 +1086,7 @@ if __name__ == '__main__':
     parser.add_argument('--start', type=arg_to_date)
     parser.add_argument('--stop', type=arg_to_date)
     parser.add_argument('--list-stims', action='store_true', default=False, dest='list_stims')
-    parser.add_argument('files', nargs='+')
+    parser.add_argument('files', nargs='*')
     args = parser.parse_args(sys.argv[1:])
 
     cache_file = 'expts_cache.pkl'
@@ -1098,6 +1100,8 @@ if __name__ == '__main__':
         sys.exit(-1)
 
     expts = all_expts.select(start=args.start, stop=args.stop, region=args.region)
+    if len(args.files) > 0:
+        expts = expts.select(source_files=args.files)
 
     if len(expts) == 0:
         print("No experiments selected; bailing out.")
