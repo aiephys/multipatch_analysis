@@ -320,7 +320,13 @@ class Experiment(object):
         
         Looks like:
         
-            {(pre_type, post_type): [connected, unconnected, cdist, udist], ...}
+            {(pre_type, post_type): {
+                'connected': n, 
+                'unconnected': m, 
+                'cdist': [...], 
+                'udist': [...]
+                }, 
+            ...}
         """
         if self._summary is None:
             csum = {}
@@ -328,13 +334,13 @@ class Experiment(object):
                 ci, cj = self.cells[i], self.cells[j]
                 typ = (ci.cre_type, cj.cre_type)
                 if typ not in csum:
-                    csum[typ] = [0, 0, [], []]
+                    csum[typ] = {'connected': 0, 'unconnected': 0, 'cdist':[], 'udist':[]}
                 if (i, j) in self.connections:
-                    csum[typ][0] += 1
-                    csum[typ][2].append(ci.distance(cj))
+                    csum[typ]['connected'] += 1
+                    csum[typ]['cdist'].append(ci.distance(cj))
                 else:
-                    csum[typ][1] += 1
-                    csum[typ][3].append(ci.distance(cj))
+                    csum[typ]['unconnected'] += 1
+                    csum[typ]['udist'].append(ci.distance(cj))
             self._summary = csum
         return self._summary
     
@@ -374,7 +380,7 @@ class Experiment(object):
 
     @property
     def n_connections(self):
-        return sum([x[0] for x in self.summary().values()])
+        return sum([x['connected'] for x in self.summary().values()])
         
     def load_cell_positions(self):
         """Load cell positions from external file.
@@ -609,7 +615,7 @@ class Cell(object):
 class ExperimentList(object):
     
     def __init__(self, expts=None, cache=None):
-        self._cache_version = 1
+        self._cache_version = 2
         self._cache = cache
         self._expts = []
         self._expts_by_id = {}
@@ -887,7 +893,8 @@ class ExperimentList(object):
         for i,row in enumerate(rows):
             for j,col in enumerate(cols):
                 if (row, col) in summary:
-                    conn, uconn, cdist, udist = summary[(row, col)]
+                    conn = summary[(row, col)]['connected']
+                    uconn = summary[(row, col)]['unconnected']
                     color = colormap.map(conn/(conn + uconn))
                 else:
                     conn, uconn = 0, 0
@@ -975,11 +982,11 @@ class ExperimentList(object):
         for expt in self:
             for k,v in expt.summary().items():
                 if k not in summary:
-                    summary[k] = [0, 0, [], []]
-                summary[k][0] += v[0]
-                summary[k][1] += v[1]
-                summary[k][2].extend(v[2])
-                summary[k][3].extend(v[3])
+                    summary[k] = {'connected':0, 'unconnected':0, 'cdist':[], 'udist':[]}
+                summary[k]['connected'] += v['connected']
+                summary[k]['unconnected'] += v['unconnected']
+                summary[k]['cdist'].extend(v['cdist'])
+                summary[k]['udist'].extend(v['udist'])
         return summary
         
     def print_connectivity_summary(self):
@@ -995,7 +1002,17 @@ class ExperimentList(object):
             warnings.simplefilter("ignore")
             totals = []
             for k,v in summary.items():
-                totals.append((k[0], k[1], v[0], v[0]+v[1], 100*v[0]/(v[0]+v[1]), np.nanmean(v[2])*1e6, np.nanmean(v[3])*1e6, np.nanmean(v[2]+v[3])*1e6))
+                probed = v['connected'] + v['unconnected']
+                totals.append((
+                    k[0],                        # pre type
+                    k[1],                        # post type
+                    v['connected'],              # n connected
+                    probed,                      # n probed
+                    100*v['connected']/probed,   # % connected
+                    np.nanmean(v['cdist'])*1e6,  # avg cdist
+                    np.nanmean(v['udist'])*1e6,  # avg udist
+                    np.nanmean(v['cdist']+v['udist'])*1e6   # avg dist
+                ))
             
         colsize = max([len(t[0]) + len(t[1]) for t in totals]) + 8
         totals.sort(key=lambda x: (x[4], x[3], x[0], x[1]), reverse=True)
@@ -1009,7 +1026,7 @@ class ExperimentList(object):
             except UnicodeEncodeError:
                 print("%s - %s%s\t:\t%d/%d\t%0.2f%%\t%0.2f\t%0.2f\t%0.2f" % fields)
 
-        print("\nTotal:  \t%d/%d\t%0.2f%%" % (tot_connected, tot_connected+tot_probed, 100*tot_connected/(tot_connected+tot_probed)))
+        print("\nTotal:  \t%d/%d\t%0.2f%%" % (tot_connected, tot_probed, 100*tot_connected/(tot_connected+tot_probed)))
         print("")
 
     def print_label_summary(self):
