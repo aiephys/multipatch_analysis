@@ -237,13 +237,17 @@ class PairView(QtGui.QWidget):
             
         # display fit parameters in table
         events = []
-        for i,f in enumerate(fits):
+        for i,f in enumerate(fits + [global_fit]):
             if f is None:
                 continue
-            spt = [s[i]['peak_index'] * dt for s in spikes]
-            vals = OrderedDict([('id', i), ('spike_time', np.mean(spt)), ('spike_stdev', np.std(spt))])
+            if i >= len(fits):
+                vals = OrderedDict([('id', 'avg'), ('spike_time', np.nan), ('spike_stdev', np.nan)])
+            else:
+                spt = [s[i]['peak_index'] * dt for s in spikes]
+                vals = OrderedDict([('id', i), ('spike_time', np.mean(spt)), ('spike_stdev', np.std(spt))])
             vals.update(OrderedDict([(k,f.best_values[k]) for k in f.params.keys()]))
             events.append(vals)
+            
         self.current_event_set = (pre, post, events, sweeps)
         self.event_set_list.setCurrentRow(0)
         self.event_set_selected()
@@ -294,7 +298,7 @@ class PairView(QtGui.QWidget):
             self.event_table.setData(sel.event_set[2])
     
     def fit_clicked(self):
-        from ...synaptic_release import ReleaseModel
+        from synaptic_release import ReleaseModel
         
         self.fit_plot.clear()
         self.fit_plot.show()
@@ -303,7 +307,7 @@ class PairView(QtGui.QWidget):
         self.fit_plot.set_shape(n_sets, 1)
         l = self.fit_plot[0, 0].legend
         if l is not None:
-            l.setParentItem(None)
+            l.scene.removeItem(l)
             self.fit_plot[0, 0].legend = None
         self.fit_plot[0, 0].addLegend()
         
@@ -312,8 +316,9 @@ class PairView(QtGui.QWidget):
         
         spike_sets = []
         for i,evset in enumerate(self.event_sets):
-            x = np.array([ev['spike_time'] for ev in evset[2]])
-            y = np.array([ev['amp'] for ev in evset[2]])
+            evset = evset[2][:-1]  # select events, skip last row (average)
+            x = np.array([ev['spike_time'] for ev in evset])
+            y = np.array([ev['amp'] for ev in evset])
             x -= x[0]
             x *= 1000
             y /= y[0]
