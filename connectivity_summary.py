@@ -1069,32 +1069,36 @@ class ExperimentList(object):
         print("-----------------------")
         
         for expt in self:
+
             for pre_id, post_id in expt.connections:
                 c1, c2 = expt.cells[pre_id], expt.cells[post_id]
-                
-                stims = set()
+                stims = {}
                 if list_stims:
                     for sweep in expt.sweep_summary:
                         # NOTE the -1 here converts from cell ID to headstage ID.
                         # Eventually this mapping should be recorded explicitly.
                         info1 = sweep.get(pre_id-1)
                         info2 = sweep.get(post_id-1)
-                        
+
                         if info1 is None or info2 is None:
                             continue
                         stim_name = expt._short_stim_name(info1[0])
                         mode = info2[1]
                         holding = 5 * np.round(info2[3] * 1000 / 5.0)
-                        stim = '%s %s %dmV' % (mode, stim_name, int(holding))
-                        stims.add(stim)
+                        stim = (mode, stim_name, int(holding))
+                        if stim not in stims:
+                            stims[stim] = 1
+                        else:
+                            stims[stim] += 1
                     print(u"%d->%d: \t%s -> %s\t%s" % (pre_id, post_id, c1.cre_type, c2.cre_type, expt.expt_id))
-                    if len(stims)  == 0:
+                    if len(stims) == 0:
                         print('no sweeps: %d %d\n' % (pre_id, post_id))
                         import pprint
                         pprint.pprint(expt.sweep_summary)
                               
                     else:
-                        stims = '\n'.join(['    '+s for s in stims])
+
+                        stims = '\n'.join(["%s %s %dmV %d"%(s+(n,)) for s,n in stims.items()])
                         print(stims)
                     
                 
