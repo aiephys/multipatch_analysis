@@ -944,7 +944,7 @@ class ExperimentList(object):
         for expt in self:
             for pre_id, post_id in expt.connections:
                 c1, c2 = expt.cells[pre_id], expt.cells[post_id]
-                connection_type = '%s-%s' % (c1.cre_type, c2.cre_type)
+                connection_type = '%s->%s' % (c1.cre_type, c2.cre_type)
                 if connection_type not in connectionSweepSummary:
                     connectionSweepSummary[connection_type] = {}
                     index = 0
@@ -1140,21 +1140,20 @@ class ExperimentList(object):
 
         print("")
 
-    def print_connection_sweep_summary(self, list_stims=False):
+    def print_connection_sweep_summary(self, list_stims=False, sweep_threshold=5):
         print("-----------------------")
         print("  Connection: ")
-        print("                 Stimulus Set:    #connections w/ > 5 sweeps")
+        print("             Stimulus Set: # connections w/ > %d sweeps" % sweep_threshold)
         print("-----------------------")
         connection_sweep_summary = self.connection_stim_summary(list_stims)
         connection_types = connection_sweep_summary.keys()
-        sweep_threshold = 5
         for connection_type in connection_types:
             print("\n%s:" % connection_type)
             stim_sets = connection_sweep_summary[connection_type].keys()
             for stim_set in stim_sets:
                 num_connections = sum(connections >= sweep_threshold for connections in connection_sweep_summary[connection_type][stim_set])
                 if num_connections:
-                    print("\t%s: %d" % (' '.join([str(s) for s in stim_set]), num_connections))
+                   print("\t%s:\t%d" % (' '.join([str(s) for s in stim_set]), num_connections))
 
 
 
@@ -1163,7 +1162,11 @@ if __name__ == '__main__':
     parser.add_argument('--region', type=str)
     parser.add_argument('--start', type=arg_to_date)
     parser.add_argument('--stop', type=arg_to_date)
-    parser.add_argument('--list-stims', action='store_true', default=False, dest='list_stims')
+    parser.add_argument('--list-stims', action='store_true', default=False, dest='list_stims',
+                        help='print a list of each connection and the stimulus sets acquired')
+    parser.add_argument('--sweep-threshold', type=int, action='store', default=5, dest='sweep_threshold',
+                        help='Combined with --list-stims, for each connection type, prints the number of connections'
+                             '' 'for which there are >= sweep_threshold number of each stimulus set')
     parser.add_argument('files', nargs='*', type=os.path.abspath)
     args = parser.parse_args(sys.argv[1:])
 
@@ -1195,7 +1198,7 @@ if __name__ == '__main__':
     expts.print_connection_summary(args.list_stims)
 
     # Print stimulus summary for each connection type
-    expts.print_connection_sweep_summary(args.list_stims)
+    expts.print_connection_sweep_summary(args.list_stims, args.sweep_threshold)
 
     # Generate a summary of connectivity
     expts.print_connectivity_summary()
