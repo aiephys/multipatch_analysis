@@ -214,39 +214,6 @@ class Experiment(object):
        
         return self._stim_list
 
-    def _connection_stim_summary(self, list_stims=False):
-        connections = {}
-        for expt in self:
-            for pre_id, post_id in expt.connections:
-                c1, c2 = expt.cells[pre_id], expt.cells[post_id]
-                connection_type = '%s-%s' % (c1.cre_type, c2.cre_type)
-                if connection_type not in connections:
-                    connections[connection_type] = {}
-                    index = 0
-                else:
-                    index += 1
-                if list_stims:
-                    for sweep in expt.sweep_summary:
-                        # NOTE the -1 here converts from cell ID to headstage ID.
-                        # Eventually this mapping should be recorded explicitly.
-                        info1 = sweep.get(pre_id - 1)
-                        info2 = sweep.get(post_id - 1)
-
-                        if info1 is None or info2 is None:
-                            continue
-                        stim_name = expt._short_stim_name(info1[0])
-                        mode = info2[1]
-                        holding = 5 * np.round(info2[3] * 1000 / 5.0)
-                        stim = (mode, stim_name, int(holding))
-                        if stim not in connections[connection_type]:
-                            connections[connection_type][stim] = []
-                            connections[connection_type][stim].append(1)
-                        elif len(connections[connection_type][stim]) - 1 < index:
-                            connections[connection_type][stim].append(1)
-                        else:
-                            connections[connection_type][stim][index] += 1
-
-        return connections
 
     @staticmethod
     def _short_stim_name(stim):
@@ -971,6 +938,40 @@ class ExperimentList(object):
             tot_probed += expt.n_connections_probed
             tot_connected += expt.n_connections
         return tot_probed, tot_connected
+
+    def connection_stim_summary(self, list_stims=False):
+        connectionSweepSummary = {}
+        for expt in self:
+            for pre_id, post_id in expt.connections:
+                c1, c2 = expt.cells[pre_id], expt.cells[post_id]
+                connection_type = '%s-%s' % (c1.cre_type, c2.cre_type)
+                if connection_type not in connectionSweepSummary:
+                    connectionSweepSummary[connection_type] = {}
+                    index = 0
+                else:
+                    index += 1
+                if list_stims:
+                    for sweep in expt.sweep_summary:
+                        # NOTE the -1 here converts from cell ID to headstage ID.
+                        # Eventually this mapping should be recorded explicitly.
+                        info1 = sweep.get(pre_id - 1)
+                        info2 = sweep.get(post_id - 1)
+
+                        if info1 is None or info2 is None:
+                            continue
+                        stim_name = expt._short_stim_name(info1[0])
+                        mode = info2[1]
+                        holding = 5 * np.round(info2[3] * 1000 / 5.0)
+                        stim = (mode, stim_name, int(holding))
+                        if stim not in connectionSweepSummary[connection_type]:
+                            connectionSweepSummary[connection_type][stim] = []
+                            connectionSweepSummary[connection_type][stim].append(1)
+                        elif len(connectionSweepSummary[connection_type][stim]) - 1 < index:
+                            connectionSweepSummary[connection_type][stim].append(1)
+                        else:
+                            connectionSweepSummary[connection_type][stim][index] += 1
+
+        return connectionSweepSummary
         
     def print_expt_summary(self, list_stims=False):
         fields = ['# probed', '# connected', 'age', 'cre types']
@@ -1101,22 +1102,17 @@ class ExperimentList(object):
         print("-----------------------")
         print("       Connections")
         print("-----------------------")
-        connections = {}
         for expt in self:
             for pre_id, post_id in expt.connections:
                 c1, c2 = expt.cells[pre_id], expt.cells[post_id]
-                connection_type = '%s-%s' % (c1.cre_type, c2.cre_type)
-                if connection_type not in connections:
-                    connections[connection_type] = {}
-                    index = 0
-                else:
-                    index += 1
+
+                stims = {}
                 if list_stims:
                     for sweep in expt.sweep_summary:
                         # NOTE the -1 here converts from cell ID to headstage ID.
                         # Eventually this mapping should be recorded explicitly.
-                        info1 = sweep.get(pre_id-1)
-                        info2 = sweep.get(post_id-1)
+                        info1 = sweep.get(pre_id - 1)
+                        info2 = sweep.get(post_id - 1)
 
                         if info1 is None or info2 is None:
                             continue
@@ -1124,13 +1120,10 @@ class ExperimentList(object):
                         mode = info2[1]
                         holding = 5 * np.round(info2[3] * 1000 / 5.0)
                         stim = (mode, stim_name, int(holding))
-                        if stim not in connections[connection_type]:
-                            connections[connection_type][stim] = []
-                            connections[connection_type][stim].append(1)
-                        elif len(connections[connection_type][stim])-1 < index:
-                            connections[connection_type][stim].append(1)
+                        if stim not in stims:
+                                stims[stim] = 1
                         else:
-                            connections[connection_type][stim][index] += 1
+                                stims[stim] += 1
                     print(u"%d->%d: \t%s -> %s\t%s" % (pre_id, post_id, c1.cre_type, c2.cre_type, expt.expt_id))
                     if len(stims) == 0:
                         print('no sweeps: %d %d\n' % (pre_id, post_id))
@@ -1138,13 +1131,31 @@ class ExperimentList(object):
                         pprint.pprint(expt.sweep_summary)
 
                     else:
+                        stims = '\n'.join(["%s %s %dmV, %d sweeps"% (s+(n,)) for s,n in stims.items()])
+                        print(stims)
 
-                        # stims = '\n'.join(["%s %s %dmV %d"%(s+(n,)) for s,n in stims.items()])
-                        # print(stims)
 
                 else:
                     print(u"%d->%d: \t%s -> %s\t%s" % (pre_id, post_id, c1.cre_type, c2.cre_type, expt.expt_id))
+
         print("")
+
+    def print_connection_sweep_summary(self, list_stims=False):
+        print("-----------------------")
+        print("  Connection: ")
+        print("                 Stimulus Set:    #connections w/ > 5 sweeps")
+        print("-----------------------")
+        connection_sweep_summary = self.connection_stim_summary(list_stims)
+        connection_types = connection_sweep_summary.keys()
+        sweep_threshold = 5
+        for connection_type in connection_types:
+            print("\n%s:" % connection_type)
+            stim_sets = connection_sweep_summary[connection_type].keys()
+            for stim_set in stim_sets:
+                num_connections = sum(connections >= sweep_threshold for connections in connection_sweep_summary[connection_type][stim_set])
+                if num_connections:
+                    print("\t%s: %d" % (' '.join([str(s) for s in stim_set]), num_connections))
+
 
 
 if __name__ == '__main__':
@@ -1182,6 +1193,9 @@ if __name__ == '__main__':
 
     # Print list of connections found
     expts.print_connection_summary(args.list_stims)
+
+    # Print stimulus summary for each connection type
+    expts.print_connection_sweep_summary(args.list_stims)
 
     # Generate a summary of connectivity
     expts.print_connectivity_summary()
