@@ -1084,6 +1084,24 @@ class ExperimentList(object):
 
 
 class MatrixItem(pg.QtGui.QGraphicsItemGroup):
+    """GraphicsItem displaying a table with column / row labels and text in
+    each cell.
+    
+    Parameters
+    ----------
+    text : 2d array or nested lists
+        Strings to display inside each cell
+    fgcolor : 2d array or nested lists
+        Text colors for each cell
+    bgcolor : 2d array or nested lists
+        Background colors for each cell
+    rows : 1d array or list
+        Strings to display as row header
+    cols : 1d array or list
+        Strings to display as col header
+    size : float
+        Width of each cell
+    """
     def __init__(self, text, fgcolor, bgcolor, rows, cols, size=50):
         pg.QtGui.QGraphicsItemGroup.__init__(self)
         
@@ -1119,7 +1137,8 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
     
     def boundingRect(self):
         return self._bounding_rect
-            
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--region', type=str)
