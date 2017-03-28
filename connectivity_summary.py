@@ -1077,16 +1077,25 @@ class ExperimentList(object):
 
         print("")
 
-    def print_connection_summary(self, list_stims=False):
-        print("-----------------------")
-        print("       Connections")
-        print("-----------------------")
+    def connection_summary(self, list_stims=False):
+        """Return a structure that contains summary information for each connection found.
+
+            [{'cells': (pre, post), 'expt': expt}, ...]
+
+        If *list_stims* is True, then each connection dict also includes a 'stims' key:
+
+            'stims': {(clamp_mode, stim_name, holding): n_sweeps}
+        """
+        summary = []
         for expt in self:
             for pre_id, post_id in expt.connections:
-                c1, c2 = expt.cells[pre_id], expt.cells[post_id]
 
-                stims = {}
+                c1, c2 = expt.cells[pre_id], expt.cells[post_id]
+                conn_info = {'cells': (c1, c2), 'expt': expt}
+                summary.append(conn_info)
+
                 if list_stims:
+                    stims = {}
                     for sweep in expt.sweep_summary:
                         # NOTE the -1 here converts from cell ID to headstage ID.
                         # Eventually this mapping should be recorded explicitly.
@@ -1103,19 +1112,30 @@ class ExperimentList(object):
                                 stims[stim] = 1
                         else:
                                 stims[stim] += 1
-                    print(u"%d->%d: \t%s -> %s\t%s" % (pre_id, post_id, c1.cre_type, c2.cre_type, expt.expt_id))
-                    if len(stims) == 0:
-                        print('no sweeps: %d %d\n' % (pre_id, post_id))
-                        import pprint
-                        pprint.pprint(expt.sweep_summary)
+                    conn_info['stims'] = stims
+        return summary
 
-                    else:
-                        stims = '\n'.join(["%s %s %dmV, %d sweeps"% (s+(n,)) for s,n in stims.items()])
-                        print(stims)
-
+    def print_connection_summary(self, list_stims=False):
+        print("-----------------------")
+        print("       Connections")
+        print("-----------------------")
+        conns = self.connection_summary(list_stims=list_stims)
+        for conn in conns:
+            c1, c2 = conn['cells']
+            expt = conn['expt']
+            if 'stims' in conn:
+                print(u"%d->%d: \t%s -> %s\t%s" % (c1.cell_id, c2.cell_id, c1.cre_type, c2.cre_type, expt.expt_id))
+                stims = conn['stims']
+                if len(stims) == 0:
+                    print('no sweeps: %d %d\n' % (c1.cell_id, c2.cell_id))
+                    import pprint
+                    pprint.pprint(expt.sweep_summary)
 
                 else:
-                    print(u"%d->%d: \t%s -> %s\t%s" % (pre_id, post_id, c1.cre_type, c2.cre_type, expt.expt_id))
+                    stims = '\n'.join(["%s %s %dmV, %d sweeps"% (s+(n,)) for s,n in stims.items()])
+                    print(stims)
+            else:
+                print(u"%d->%d: \t%s -> %s\t%s" % (c1.cell_id, c2.cell_id, c1.cre_type, c2.cre_type, expt.expt_id))
 
         print("")
 
