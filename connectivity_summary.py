@@ -214,6 +214,7 @@ class Experiment(object):
        
         return self._stim_list
 
+
     @staticmethod
     def _short_stim_name(stim):
         if stim.startswith('PulseTrain_'):
@@ -916,6 +917,24 @@ class ExperimentList(object):
             tot_probed += expt.n_connections_probed
             tot_connected += expt.n_connections
         return tot_probed, tot_connected
+
+    def connection_stim_summary(self):
+        """Return a structure that contains stimulus summary information for each connection type.
+
+            {(pre_type, post_type): {(clamp_mode, freq, holding): [n1_sweeps, n2_sweeps,...]}}
+
+        """
+        conn_info = self.connection_summary(list_stims=True)
+        connection_sweep_summary = {}
+        for conn in conn_info:
+            c1, c2 = conn["cells"]
+            connection_type = (c1.cre_type, c2.cre_type)
+            conn_type_info = connection_sweep_summary.setdefault(connection_type, {})
+            for stim, n_sweeps in conn["stims"].items():
+                conn_type_info.setdefault(stim, [])
+                conn_type_info[stim].append(n_sweeps)
+
+        return connection_sweep_summary
         
     def print_expt_summary(self, list_stims=False):
         fields = ['# probed', '# connected', 'age', 'cre types']
@@ -1042,46 +1061,82 @@ class ExperimentList(object):
 
         print("")
 
-    def print_connection_summary(self, list_stims=False):
-        print("-----------------------")
-        print("       Connections")
-        print("-----------------------")
-        
+    def connection_summary(self, list_stims=False):
+        """Return a structure that contains summary information for each connection found.
+
+            [{'cells': (pre, post), 'expt': expt}, ...]
+
+        If *list_stims* is True, then each connection dict also includes a 'stims' key:
+
+            'stims': {(clamp_mode, stim_name, holding): n_sweeps}
+        """
+        summary = []
         for expt in self:
             for pre_id, post_id in expt.connections:
+
                 c1, c2 = expt.cells[pre_id], expt.cells[post_id]
-                
-                stims = set()
+                conn_info = {'cells': (c1, c2), 'expt': expt}
+                summary.append(conn_info)
+
                 if list_stims:
+                    stims = {}
                     for sweep in expt.sweep_summary:
                         # NOTE the -1 here converts from cell ID to headstage ID.
                         # Eventually this mapping should be recorded explicitly.
-                        info1 = sweep.get(pre_id-1)
-                        info2 = sweep.get(post_id-1)
-                        
+                        info1 = sweep.get(pre_id - 1)
+                        info2 = sweep.get(post_id - 1)
+
                         if info1 is None or info2 is None:
                             continue
                         stim_name = expt._short_stim_name(info1[0])
                         mode = info2[1]
                         holding = 5 * np.round(info2[3] * 1000 / 5.0)
-                        stim = '%s %s %dmV' % (mode, stim_name, int(holding))
-                        stims.add(stim)
-                    print(u"%d->%d: \t%s -> %s\t%s" % (pre_id, post_id, c1.cre_type, c2.cre_type, expt.expt_id))
-                    if len(stims)  == 0:
-                        print('no sweeps: %d %d\n' % (pre_id, post_id))
-                        import pprint
-                        pprint.pprint(expt.sweep_summary)
-                              
-                    else:
-                        stims = '\n'.join(['    '+s for s in stims])
-                        print(stims)
-                    
-                
+                        stim = (mode, stim_name, int(holding))
+                        if stim not in stims:
+                                stims[stim] = 1
+                        else:
+                                stims[stim] += 1
+                    conn_info['stims'] = stims
+        return summary
+
+    def print_connection_summary(self, list_stims=False):
+        print("-----------------------")
+        print("       Connections")
+        print("-----------------------")
+        conns = self.connection_summary(list_stims=list_stims)
+        for conn in conns:
+            c1, c2 = conn['cells']
+            expt = conn['expt']
+            if 'stims' in conn:
+                print(u"%d->%d: \t%s -> %s\t%s" % (c1.cell_id, c2.cell_id, c1.cre_type, c2.cre_type, expt.expt_id))
+                stims = conn['stims']
+                if len(stims) == 0:
+                    print('no sweeps: %d %d\n' % (c1.cell_id, c2.cell_id))
+                    import pprint
+                    pprint.pprint(expt.sweep_summary)
+
                 else:
-                    print(u"%d->%d: \t%s -> %s\t%s" % (pre_id, post_id, c1.cre_type, c2.cre_type, expt.expt_id))
-        
+                    stims = '\n'.join(["%s %s %dmV, %d sweeps"% (s+(n,)) for s,n in stims.items()])
+                    print(stims)
+            else:
+                print(u"%d->%d: \t%s -> %s\t%s" % (c1.cell_id, c2.cell_id, c1.cre_type, c2.cre_type, expt.expt_id))
+
         print("")
 
+    def print_connection_sweep_summary(self, sweep_threshold=5):
+        print("-----------------------")
+        print("  Connection: ")
+        print("             Stimulus Set: # connections w/ > %d sweeps" % sweep_threshold)
+        print("-----------------------")
+        connection_sweep_summary = self.connection_stim_summary()
+        connection_types = connection_sweep_summary.keys()
+        for connection_type in connection_types:
+            print("\n%s->%s:" % connection_type)
+            stim_sets = connection_sweep_summary[connection_type].keys()
+            for stim_set in stim_sets:
+                num_connections = sum(connections >= sweep_threshold for connections in connection_sweep_summary[connection_type][stim_set])
+                if num_connections:
+                   print("\t%s:\t%d" % (' '.join([str(s) for s in stim_set]), num_connections))
 
 class MatrixItem(pg.QtGui.QGraphicsItemGroup):
     """GraphicsItem displaying a table with column / row labels and text in
@@ -1144,7 +1199,11 @@ if __name__ == '__main__':
     parser.add_argument('--region', type=str)
     parser.add_argument('--start', type=arg_to_date)
     parser.add_argument('--stop', type=arg_to_date)
-    parser.add_argument('--list-stims', action='store_true', default=False, dest='list_stims')
+    parser.add_argument('--list-stims', action='store_true', default=False, dest='list_stims',
+                        help='print a list of each connection and the stimulus sets acquired')
+    parser.add_argument('--sweep-threshold', type=int, action='store', default=5, dest='sweep_threshold',
+                        help='Combined with --list-stims, for each connection type, prints the number of connections'
+                             '' 'for which there are >= sweep_threshold number of each stimulus set')
     parser.add_argument('files', nargs='*', type=os.path.abspath)
     args = parser.parse_args(sys.argv[1:])
 
@@ -1174,6 +1233,10 @@ if __name__ == '__main__':
 
     # Print list of connections found
     expts.print_connection_summary(args.list_stims)
+
+    # Print stimulus summary for each connection type
+    if args.list_stims:
+        expts.print_connection_sweep_summary(args.sweep_threshold)
 
     # Generate a summary of connectivity
     expts.print_connectivity_summary()
