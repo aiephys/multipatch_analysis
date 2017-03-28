@@ -918,39 +918,23 @@ class ExperimentList(object):
             tot_connected += expt.n_connections
         return tot_probed, tot_connected
 
-    def connection_stim_summary(self, list_stims=False):
-        connectionSweepSummary = {}
-        for expt in self:
-            for pre_id, post_id in expt.connections:
-                c1, c2 = expt.cells[pre_id], expt.cells[post_id]
-                connection_type = '%s->%s' % (c1.cre_type, c2.cre_type)
-                if connection_type not in connectionSweepSummary:
-                    connectionSweepSummary[connection_type] = {}
-                    index = 0
-                else:
-                    index += 1
-                if list_stims:
-                    for sweep in expt.sweep_summary:
-                        # NOTE the -1 here converts from cell ID to headstage ID.
-                        # Eventually this mapping should be recorded explicitly.
-                        info1 = sweep.get(pre_id - 1)
-                        info2 = sweep.get(post_id - 1)
+    def connection_stim_summary(self):
+        """Return a structure that contains stimulus summary information for each connection type.
 
-                        if info1 is None or info2 is None:
-                            continue
-                        stim_name = expt._short_stim_name(info1[0])
-                        mode = info2[1]
-                        holding = 5 * np.round(info2[3] * 1000 / 5.0)
-                        stim = (mode, stim_name, int(holding))
-                        if stim not in connectionSweepSummary[connection_type]:
-                            connectionSweepSummary[connection_type][stim] = []
-                            connectionSweepSummary[connection_type][stim].append(1)
-                        elif len(connectionSweepSummary[connection_type][stim]) - 1 < index:
-                            connectionSweepSummary[connection_type][stim].append(1)
-                        else:
-                            connectionSweepSummary[connection_type][stim][index] += 1
+            {(pre_type, post_type): {(clamp_mode, freq, holding): [n1_sweeps, n2_sweeps,...]}}
 
-        return connectionSweepSummary
+        """
+        conn_info = self.connection_summary(list_stims=True)
+        connection_sweep_summary = {}
+        for conn in conn_info:
+            c1, c2 = conn["cells"]
+            connection_type = (c1.cre_type, c2.cre_type)
+            conn_type_info = connection_sweep_summary.setdefault(connection_type, {})
+            for stim, n_sweeps in conn["stims"].items():
+                conn_type_info.setdefault(stim, [])
+                conn_type_info[stim].append(n_sweeps)
+
+        return connection_sweep_summary
         
     def print_expt_summary(self, list_stims=False):
         fields = ['# probed', '# connected', 'age', 'cre types']
@@ -1139,15 +1123,15 @@ class ExperimentList(object):
 
         print("")
 
-    def print_connection_sweep_summary(self, list_stims=False, sweep_threshold=5):
+    def print_connection_sweep_summary(self, sweep_threshold=5):
         print("-----------------------")
         print("  Connection: ")
         print("             Stimulus Set: # connections w/ > %d sweeps" % sweep_threshold)
         print("-----------------------")
-        connection_sweep_summary = self.connection_stim_summary(list_stims)
+        connection_sweep_summary = self.connection_stim_summary()
         connection_types = connection_sweep_summary.keys()
         for connection_type in connection_types:
-            print("\n%s:" % connection_type)
+            print("\n%s->%s:" % connection_type)
             stim_sets = connection_sweep_summary[connection_type].keys()
             for stim_set in stim_sets:
                 num_connections = sum(connections >= sweep_threshold for connections in connection_sweep_summary[connection_type][stim_set])
@@ -1251,7 +1235,8 @@ if __name__ == '__main__':
     expts.print_connection_summary(args.list_stims)
 
     # Print stimulus summary for each connection type
-    expts.print_connection_sweep_summary(args.list_stims, args.sweep_threshold)
+    if args.list_stims:
+        expts.print_connection_sweep_summary(args.sweep_threshold)
 
     # Generate a summary of connectivity
     expts.print_connectivity_summary()
