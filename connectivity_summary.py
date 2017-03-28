@@ -873,23 +873,10 @@ class ExperimentList(object):
         
         summary = self.connectivity_summary()
         
-        w.matrix_items = []
-        
-        for i,row in enumerate(rows):
-            txt = pg.QtGui.QGraphicsTextItem(row)
-            br = txt.boundingRect()
-            txt.setPos(-br.width() - 10, i * size + size/2. - br.center().y())
-            txt.setDefaultTextColor(pg.mkColor('w'))
-            v.addItem(txt)
-            w.matrix_items.append(txt)
-        
-        for i,col in enumerate(cols):
-            txt = pg.QtGui.QGraphicsTextItem(col)
-            br = txt.boundingRect()
-            txt.setPos(i * size + size/2 - br.center().x(), -br.height() - 10)
-            txt.setDefaultTextColor(pg.mkColor('w'))
-            v.addItem(txt)
-            w.matrix_items.append(txt)
+        shape = (len(rows), len(cols))
+        text = np.empty(shape, dtype=object)
+        fgcolor = np.empty(shape, dtype=object)
+        bgcolor = np.empty(shape, dtype=object)
         
         for i,row in enumerate(rows):
             for j,col in enumerate(cols):
@@ -900,24 +887,16 @@ class ExperimentList(object):
                 else:
                     conn, uconn = 0, 0
                     color = default
-                x = j * size
-                y = i * size
-                rect = pg.QtGui.QGraphicsRectItem(x, y, size, size)
-                rect.setBrush(pg.mkBrush(color))
-                rect.setZValue(-10)
-                w.matrix_items.append(rect)
-                v.addItem(rect)
-                
-                txt = pg.QtGui.QGraphicsTextItem("%d/%d" % (conn, conn+uconn))
-                br = txt.boundingRect()
-                txt.setPos(x + size/2 - br.center().x(), y + size/2 - br.center().y())
-                c = 'w' if sum(color) < 300 else 'k'
+                bgcolor[i, j] = color
+                text[i, j] = "%d/%d" % (conn, conn+uconn)
+                fgcolor[i, j] = 'w' if sum(color) < 300 else 'k'
                 if conn == uconn == 0:
-                    c = 0.3
-                txt.setDefaultTextColor(pg.mkColor(c))
-                v.addItem(txt)
-                w.matrix_items.append(txt)
+                    fgcolor[i, j] = 0.3
                 
+        w.matrix = MatrixItem(text=text, fgcolor=fgcolor, bgcolor=bgcolor, 
+                              rows=rows, cols=cols, size=size)
+        v.addItem(w.matrix)
+        
         # colormap is logarithmic; remap to linear for legend
         colors = colormap.color
         x = np.linspace(0, 1, len(colors))
@@ -1155,6 +1134,60 @@ class ExperimentList(object):
                 if num_connections:
                    print("\t%s:\t%d" % (' '.join([str(s) for s in stim_set]), num_connections))
 
+class MatrixItem(pg.QtGui.QGraphicsItemGroup):
+    """GraphicsItem displaying a table with column / row labels and text in
+    each cell.
+    
+    Parameters
+    ----------
+    text : 2d array or nested lists
+        Strings to display inside each cell
+    fgcolor : 2d array or nested lists
+        Text colors for each cell
+    bgcolor : 2d array or nested lists
+        Background colors for each cell
+    rows : 1d array or list
+        Strings to display as row header
+    cols : 1d array or list
+        Strings to display as col header
+    size : float
+        Width of each cell
+    """
+    def __init__(self, text, fgcolor, bgcolor, rows, cols, size=50):
+        pg.QtGui.QGraphicsItemGroup.__init__(self)
+        
+        for i,row in enumerate(rows):
+            txt = pg.QtGui.QGraphicsTextItem(row, parent=self)
+            br = txt.boundingRect()
+            txt.setPos(-br.width() - 10, i * size + size/2. - br.center().y())
+            txt.setDefaultTextColor(pg.mkColor('w'))
+        
+        for i,col in enumerate(cols):
+            txt = pg.QtGui.QGraphicsTextItem(col, parent=self)
+            br = txt.boundingRect()
+            txt.setPos(i * size + size/2 - br.center().x(), -br.height() - 10)
+            txt.setDefaultTextColor(pg.mkColor('w'))
+        
+        for i,row in enumerate(rows):
+            for j,col in enumerate(cols):
+                x = j * size
+                y = i * size
+                rect = pg.QtGui.QGraphicsRectItem(x, y, size, size, parent=self)
+                rect.setBrush(pg.mkBrush(bgcolor[i][j]))
+                rect.setZValue(-10)
+                
+                txt = pg.QtGui.QGraphicsTextItem(text[i][j], parent=self)
+                br = txt.boundingRect()
+                txt.setPos(x + size/2 - br.center().x(), y + size/2 - br.center().y())
+                txt.setDefaultTextColor(pg.mkColor(fgcolor[i][j]))
+    
+        br = pg.QtCore.QRectF()
+        for item in self.childItems():
+            br = br.united(self.mapRectFromItem(item, item.boundingRect()))
+        self._bounding_rect = br
+    
+    def boundingRect(self):
+        return self._bounding_rect
 
 
 if __name__ == '__main__':

@@ -5,6 +5,7 @@ from collections import OrderedDict
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.ui.filter import SignalFilter, ArtifactRemover
 from neuroanalysis.ui.baseline import BaselineRemover
+from neuroanalysis.ui.fitting import FitExplorer
 from neuroanalysis.data import Trace
 from neuroanalysis.spike_detection import detect_evoked_spike
 from neuroanalysis import fitting
@@ -73,6 +74,8 @@ class PairView(QtGui.QWidget):
         self.fit_btn.clicked.connect(self.fit_clicked)
 
         self.fit_plot = PlotGrid()
+
+        self.fit_explorer = None
 
         self.artifact_remover = ArtifactRemover(user_width=True)
         self.baseline_remover = BaselineRemover()
@@ -226,7 +229,11 @@ class PairView(QtGui.QWidget):
             fit = self.fit_psp(avg, t, dt, post_mode)
             fits.append(fit)
             
-            self.response_plots[0,i].plot(t, fit.eval(), pen=fit_pen, antialias=True)
+            # let the user mess with this fit
+            curve = self.response_plots[0,i].plot(t, fit.eval(), pen=fit_pen, antialias=True).curve
+            curve.setClickable(True)
+            curve.fit = fit
+            curve.sigClicked.connect(self.fit_curve_clicked)
             
         # display global average
         global_avg = ragged_mean(avg_responses, method='clip')
@@ -237,13 +244,17 @@ class PairView(QtGui.QWidget):
             
         # display fit parameters in table
         events = []
-        for i,f in enumerate(fits):
+        for i,f in enumerate(fits + [global_fit]):
             if f is None:
                 continue
-            spt = [s[i]['peak_index'] * dt for s in spikes]
-            vals = OrderedDict([('id', i), ('spike_time', np.mean(spt)), ('spike_stdev', np.std(spt))])
+            if i >= len(fits):
+                vals = OrderedDict([('id', 'avg'), ('spike_time', np.nan), ('spike_stdev', np.nan)])
+            else:
+                spt = [s[i]['peak_index'] * dt for s in spikes]
+                vals = OrderedDict([('id', i), ('spike_time', np.mean(spt)), ('spike_stdev', np.std(spt))])
             vals.update(OrderedDict([(k,f.best_values[k]) for k in f.params.keys()]))
             events.append(vals)
+            
         self.current_event_set = (pre, post, events, sweeps)
         self.event_set_list.setCurrentRow(0)
         self.event_set_selected()
@@ -252,7 +263,7 @@ class PairView(QtGui.QWidget):
         mode = float_mode(data[:int(1e-3/dt)])
         sign = -1 if data.mean() - mode < 0 else 1
         params = OrderedDict([
-            ('xoffset', (2e-3, 1e-3, 5e-3)),
+            ('xoffset', (2e-3, 3e-4, 5e-3)),
             ('yoffset', data[0]),
             ('amp', sign * 10e-12),
             #('k', (2e-3, 50e-6, 10e-3)),
@@ -294,7 +305,7 @@ class PairView(QtGui.QWidget):
             self.event_table.setData(sel.event_set[2])
     
     def fit_clicked(self):
-        from ...synaptic_release import ReleaseModel
+        from synaptic_release import ReleaseModel
         
         self.fit_plot.clear()
         self.fit_plot.show()
@@ -303,7 +314,7 @@ class PairView(QtGui.QWidget):
         self.fit_plot.set_shape(n_sets, 1)
         l = self.fit_plot[0, 0].legend
         if l is not None:
-            l.setParentItem(None)
+            l.scene.removeItem(l)
             self.fit_plot[0, 0].legend = None
         self.fit_plot[0, 0].addLegend()
         
@@ -312,8 +323,9 @@ class PairView(QtGui.QWidget):
         
         spike_sets = []
         for i,evset in enumerate(self.event_sets):
-            x = np.array([ev['spike_time'] for ev in evset[2]])
-            y = np.array([ev['amp'] for ev in evset[2]])
+            evset = evset[2][:-1]  # select events, skip last row (average)
+            x = np.array([ev['spike_time'] for ev in evset])
+            y = np.array([ev['amp'] for ev in evset])
             x -= x[0]
             x *= 1000
             y /= y[0]
@@ -346,3 +358,9 @@ class PairView(QtGui.QWidget):
                 x = output[:,0]/1000.
                 self.fit_plot[j,0].plot(x, y, pen=(i,max_color), name=dynamics_types[i])
 
+    def fit_curve_clicked(self, curve):
+        if self.fit_explorer is None:
+            self.fit_explorer = FitExplorer(curve.fit)
+        else:
+            self.fit_explorer.set_fit(curve.fit)
+        self.fit_explorer.show()
