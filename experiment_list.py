@@ -363,9 +363,6 @@ class ExperimentList(object):
             connection_type = (c1.cre_type, c2.cre_type)
             conn_type_info = connection_sweep_summary.setdefault(connection_type, {})
             for stim, n_sweeps in conn["stims"].items():
-                # freq = stim[1]
-                # if freq.upper().startswith('S'):
-                #     stim = (stim[0], freq[1:], stim[2])
                 conn_type_info.setdefault(stim, [])
                 conn_type_info[stim].append(n_sweeps)
 
