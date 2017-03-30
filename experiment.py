@@ -158,6 +158,8 @@ class Experiment(object):
             stim = stim[12:]
         if stim.endswith('_DA_0'):
             stim = stim[:-5]
+        if stim.endswith('H'):
+            stim += 'z'
         return stim
 
     def parse_labeling(self, entry):

@@ -363,6 +363,9 @@ class ExperimentList(object):
             connection_type = (c1.cre_type, c2.cre_type)
             conn_type_info = connection_sweep_summary.setdefault(connection_type, {})
             for stim, n_sweeps in conn["stims"].items():
+                # freq = stim[1]
+                # if freq.upper().startswith('S'):
+                #     stim = (stim[0], freq[1:], stim[2])
                 conn_type_info.setdefault(stim, [])
                 conn_type_info[stim].append(n_sweeps)
 
@@ -556,16 +559,32 @@ class ExperimentList(object):
         print("")
 
     def print_connection_sweep_summary(self, sweep_threshold=5):
+        from collections import OrderedDict
         print("-----------------------")
-        print("  Connection: ")
+        print("  Connection: connected/total probed ")
         print("             Stimulus Set: # connections w/ > %d sweeps" % sweep_threshold)
         print("-----------------------")
         connection_sweep_summary = self.connection_stim_summary()
         connection_types = connection_sweep_summary.keys()
+        summary = self.connectivity_summary()
         for connection_type in connection_types:
-            print("\n%s->%s:" % connection_type)
+            connected = summary[connection_type]['connected']
+            probed = connected + summary[connection_type]['unconnected']
+            print("\n%s->%s: %d/%d" % (connection_type[0], connection_type[1], connected, probed))
             stim_sets = connection_sweep_summary[connection_type].keys()
+            stim_sets = sorted(stim_sets, key = lambda s:(s[0], s[1], -s[2]))
+            stim_summary = OrderedDict()
             for stim_set in stim_sets:
-                num_connections = sum(connections >= sweep_threshold for connections in connection_sweep_summary[connection_type][stim_set])
+                freq = stim_set[1]
+                if freq.upper().startswith('S'):
+                    num_connections = sum(connections >= sweep_threshold for connections in
+                                          connection_sweep_summary[connection_type][stim_set])
+                    stim_set = (stim_set[0], freq[1:], stim_set[2])
+                else:
+                    num_connections = sum(connections >= sweep_threshold for connections in connection_sweep_summary[connection_type][stim_set])
+                stim_summary.setdefault(stim_set, 0)
+                stim_summary[stim_set] += num_connections
+            for stim_set in stim_summary:
+                num_connections = stim_summary[stim_set]
                 if num_connections:
                    print("\t%s:\t%d" % (' '.join([str(s) for s in stim_set]), num_connections))
