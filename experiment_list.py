@@ -555,11 +555,11 @@ class ExperimentList(object):
 
         print("")
 
-    def print_connection_sweep_summary(self, sweep_threshold=5):
+    def print_connection_sweep_summary(self, sweep_threshold=[5,10]):
         from collections import OrderedDict
         print("-----------------------")
         print("  Connection: connected/total probed ")
-        print("             Stimulus Set: # connections w/ > %d sweeps" % sweep_threshold)
+        print("            Stimulus Set: # connections w/ >= %d (induction) and %d (recovery) sweeps" % (sweep_threshold[0], sweep_threshold[1]))
         print("-----------------------")
         connection_sweep_summary = self.connection_stim_summary()
         connection_types = connection_sweep_summary.keys()
@@ -572,13 +572,18 @@ class ExperimentList(object):
             stim_sets = sorted(stim_sets, key = lambda s:(s[0], s[1], -s[2]))
             stim_summary = OrderedDict()
             for stim_set in stim_sets:
+                if 'recovery' in stim_set:
+                    threshold = sweep_threshold[1]
+                else:
+                    threshold = sweep_threshold[0]
                 freq = stim_set[1]
                 if freq.upper().startswith('S'):
-                    num_connections = sum(connections >= sweep_threshold for connections in
+                    num_connections = sum(connections >= threshold for connections in
                                           connection_sweep_summary[connection_type][stim_set])
                     stim_set = (stim_set[0], freq[1:], stim_set[2])
                 else:
-                    num_connections = sum(connections >= sweep_threshold for connections in connection_sweep_summary[connection_type][stim_set])
+                    num_connections = sum(connections >= threshold for connections in
+                                          connection_sweep_summary[connection_type][stim_set])
                 stim_summary.setdefault(stim_set, 0)
                 stim_summary[stim_set] += num_connections
             for stim_set in stim_summary:
