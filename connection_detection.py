@@ -1,7 +1,5 @@
 from copy import deepcopy
 import numpy as np
-import pyqtgraph as pg
-pg.dbg()
 
 from neuroanalysis.spike_detection import detect_evoked_spike
 
@@ -101,15 +99,17 @@ class MultiPatchAnalyzer(Analyzer):
         
         result = []
         
-        for rec in post_recs:
-            result.append(deepcopy(spikes))
-            for i,pulse in enumerate(result[-1]
+        
+        raise Exception()
+        #for rec in post_recs:
+            #result.append(deepcopy(spikes))
+            #for i,pulse in enumerate(result[-1]
             
         
         return result
 
 
-def detect_connections(expt, max_freq=50):
+def detect_connections(expt_data, max_freq=50):
     """
     loop over all sweeps (presynaptic)
         ignore sweeps with high induction frequency
@@ -130,7 +130,6 @@ def detect_connections(expt, max_freq=50):
         correct for multiple comparisons?
     Additional metric to detect low release probability connections?
     """
-    expt_data = expt.data
     
     # loop over all sweeps (presynaptic)
     for srec in expt_data.contents:
@@ -139,18 +138,25 @@ def detect_connections(expt, max_freq=50):
             print "   ", pre_rec
             # todo: ignore sweeps with high induction frequency
             
-            print "   ", spikes
             post_recs = srec.recordings[:]
             post_recs.remove(pre_rec)
 
 
 if __name__ == '__main__':
-    from experiment_list import ExperimentList
-    all_expts = ExperimentList(cache='expts_cache.pkl')
+    #from experiment_list import ExperimentList
+    #all_expts = ExperimentList(cache='expts_cache.pkl')
 
-    # pick one experiment with a lot of connections
-    for expt in all_expts:
-        if expt.expt_id[1] == '2017.03.20-0-0' and 'Pasha' in expt.expt_id[0]:
-            break
+    ## pick one experiment with a lot of connections
+    #for expt in all_expts:
+        #if expt.expt_id[1] == '2017.03.20-0-0' and 'Pasha' in expt.expt_id[0]:
+            #break
+
+    import pyqtgraph as pg
+    pg.dbg()
+
+    from neuroanalysis.miesnwb import MiesNwb
+    import sys
+    expt_file = sys.argv[1]
+    expt = MiesNwb(expt_file)
     
     detect_connections(expt)
