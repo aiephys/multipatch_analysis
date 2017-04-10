@@ -364,11 +364,8 @@ class ExperimentList(object):
             connection_type = (c1.cre_type, c2.cre_type)
             conn_type_info = connection_sweep_summary.setdefault(connection_type, {})
             for stim, n_sweeps in conn["stims"].items():
-                freq = stim[1]
-                if freq.upper().startswith('S'):
-                    stim = (stim[0], freq[1:], stim[2])
                 conn_type_info.setdefault(stim, [])
-                conn_type_info[stim].append(n_sweeps)
+                conn_type_info[stim].append(sum(n_sweeps))
 
         return connection_sweep_summary
 
@@ -559,7 +556,7 @@ class ExperimentList(object):
                     pprint.pprint(expt.sweep_summary)
 
                 else:
-                    stims = '\n'.join(["%s %s %dmV, %d sweeps"% (s+(n,)) for s,n in stims.items()])
+                    stims = '\n'.join(["%s %s %dmV; %d,%d sweeps"% (s+(n[0],n[1])) for s,n in stims.items()])
                     print(stims)
             else:
                 print(u"%d->%d: \t%s -> %s; %.0f um\t%s" % (c1.cell_id, c2.cell_id, c1.cre_type, c2.cre_type, distance, expt.expt_id))
@@ -593,10 +590,10 @@ class ExperimentList(object):
                 stim_summary[stim_set] += num_connections
             for stim_set in stim_summary:
                 n_connections = 0
-                if connection_type[1] in INHIBITORY_CRE_TYPES:
+                if connection_type[0] in INHIBITORY_CRE_TYPES:
                     if stim_set[2] <= -50 and stim_set[2] >= -60:
                         n_connections = stim_summary[stim_set]
-                elif connection_type[1] in EXCITATORY_CRE_TYPES:
+                elif connection_type[0] in EXCITATORY_CRE_TYPES:
                     if stim_set[2] <= -65 and stim_set[2] >= -75:
                         n_connections = stim_summary[stim_set]
                 else:

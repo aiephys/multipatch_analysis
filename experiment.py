@@ -155,7 +155,7 @@ class Experiment(object):
         if stim.startswith('PulseTrain_'):
             stim = stim[11:]
         elif stim.startswith('SPulseTrain_'):
-            stim = stim[12:]
+            stim = 'S' + stim[12:]
         if stim.endswith('_DA_0'):
             stim = stim[:-5]
         if stim.endswith('H'):
