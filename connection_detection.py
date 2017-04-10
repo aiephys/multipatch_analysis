@@ -3,6 +3,7 @@ import numpy as np
 
 from neuroanalysis.spike_detection import detect_evoked_spike
 from neuroanalysis.stats import ragged_mean
+from neuroanalysis.stimuli import square_pulses
 
 
 class Analyzer(object):
@@ -28,17 +29,17 @@ class PulseStimAnalyzer(Analyzer):
     def __init__(self, rec):
         self._attach(rec)
         self.rec = rec
-        self._pulse_inds = None
+        self._pulses = None
         self._evoked_spikes = None
         
-    def pulse_inds(self):
-        if self._pulse_inds is None:
+    def pulses(self):
+        """Return a list of (start, stop, amp) tuples describing square pulses
+        in the stimulus.
+        """
+        if self._pulses is None:
             trace = self.rec['command'].data
-            sdiff = np.diff(trace)
-            on_inds = np.argwhere(sdiff > 0)[1:, 0]  # 1: skips test pulse
-            off_inds = np.argwhere(sdiff < 0)[1:, 0]
-            self._pulse_inds = on_inds, off_inds
-        return self._pulse_inds
+            self._pulses = square_pulses(trace)
+        return self._pulss
 
     def evoked_spikes(self):
         """Given presynaptic Recording, detect action potentials
@@ -48,12 +49,16 @@ class PulseStimAnalyzer(Analyzer):
             pre_trace = self.rec['primary']
 
             # Detect pulse times
-            pulses = zip(*self.pulse_inds())
+            pulses = self.pulses()
 
             # detect spike times
             spike_info = []
             for i,pulse in enumerate(pulses):
-                on, off = pulse
+                on, off, amp = pulse
+                if amp < 0:
+                    # assume negative pulses do not evoke spikes
+                    # (todo: should be watching for rebound spikes as well)
+                    continue
                 spike = detect_evoked_spike(self.rec, [on, off])
                 spike_info.append({'pulse_n': i, 'pulse_ind': on, 'spike': spike})
             self._evoked_spikes = spike_info
