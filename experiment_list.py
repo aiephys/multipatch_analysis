@@ -13,6 +13,7 @@ import pyqtgraph as pg
 
 from graphics import MatrixItem
 from experiment import Experiment
+from constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
 
 
 class Entry(object):
@@ -363,6 +364,9 @@ class ExperimentList(object):
             connection_type = (c1.cre_type, c2.cre_type)
             conn_type_info = connection_sweep_summary.setdefault(connection_type, {})
             for stim, n_sweeps in conn["stims"].items():
+                freq = stim[1]
+                if freq.upper().startswith('S'):
+                    stim = (stim[0], freq[1:], stim[2])
                 conn_type_info.setdefault(stim, [])
                 conn_type_info[stim].append(n_sweeps)
 
@@ -500,7 +504,7 @@ class ExperimentList(object):
 
         If *list_stims* is True, then each connection dict also includes a 'stims' key:
 
-            'stims': {(clamp_mode, stim_name, holding): n_sweeps}
+            'stims': {(clamp_mode, stim_name, holding): [n_sweeps, S_n_sweeps]}
         """
         summary = []
         for expt in self:
@@ -521,13 +525,19 @@ class ExperimentList(object):
                         if info1 is None or info2 is None:
                             continue
                         stim_name = expt._short_stim_name(info1[0])
+                        if stim_name.upper().startswith('S'):
+                            short_pulse = True
+                            stim_name = stim_name[1:]
+                        else:
+                            short_pulse = False
                         mode = info2[1]
                         holding = 5 * np.round(info2[3] * 1000 / 5.0)
                         stim = (mode, stim_name, int(holding))
-                        if stim not in stims:
-                                stims[stim] = 1
+                        stims.setdefault(stim,[0,0])
+                        if short_pulse is True:
+                            stims[stim][1] += 1
                         else:
-                                stims[stim] += 1
+                            stims[stim][0] += 1
                     conn_info['stims'] = stims
         return summary
 
@@ -577,22 +587,19 @@ class ExperimentList(object):
                     threshold = sweep_threshold[1]
                 else:
                     threshold = sweep_threshold[0]
-                freq = stim_set[1]
-                if freq.upper().startswith('S'):
-                    num_connections = sum(connections >= threshold for connections in
-                                          connection_sweep_summary[connection_type][stim_set])
-                    stim_set = (stim_set[0], freq[1:], stim_set[2])
-                else:
-                    num_connections = sum(connections >= threshold for connections in
+                num_connections = sum(connections >= threshold for connections in
                                           connection_sweep_summary[connection_type][stim_set])
                 stim_summary.setdefault(stim_set, 0)
                 stim_summary[stim_set] += num_connections
             for stim_set in stim_summary:
+                n_connections = 0
                 if connection_type[1] in INHIBITORY_CRE_TYPES:
                     if stim_set[2] <= -50 and stim_set[2] >= -60:
-                        num_connections = stim_summary[stim_set]
+                        n_connections = stim_summary[stim_set]
                 elif connection_type[1] in EXCITATORY_CRE_TYPES:
                     if stim_set[2] <= -65 and stim_set[2] >= -75:
-                        num_connections = stim_summary[stim_set]
-                if num_connections:
-                    print("\t%s:\t%d" % (' '.join([str(s) for s in stim_set]), num_connections))
+                        n_connections = stim_summary[stim_set]
+                else:
+                    n_connections = stim_summary[stim_set]
+                if n_connections:
+                    print("\t%s:\t%d" % (' '.join([str(s) for s in stim_set]), n_connections))
