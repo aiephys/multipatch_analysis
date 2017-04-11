@@ -577,7 +577,7 @@ class ExperimentList(object):
             probed = connected + summary[connection_type]['unconnected']
             print("\n%s->%s: %d/%d" % (connection_type[0], connection_type[1], connected, probed))
             stim_sets = connection_sweep_summary[connection_type].keys()
-            stim_sets = sorted(stim_sets, key = lambda s:(s[0], s[1], -s[2]))
+            stim_sets = sorted(stim_sets, key = lambda s:(s[0], int(s[1].split('H')[0]) if s[1].split('H')[0].isdigit() else s[1], -s[2]))
             stim_summary = OrderedDict()
             for stim_set in stim_sets:
                 if 'recovery' in stim_set:
