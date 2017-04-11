@@ -337,7 +337,7 @@ class ExperimentList(object):
 
     def print_connectivity_summary(self):
         print("-------------------------------------------------------------")
-        print("     Connectivity  (# connected/probed, % connectivity, cdist, udist, adist)")
+        print("     Connectivity  (# connected/probed, % connectivity, %250, %100, cdist, udist, adist)")
         print("-------------------------------------------------------------")
 
         tot_probed, tot_connected = self.n_connections_probed()
@@ -349,12 +349,23 @@ class ExperimentList(object):
             totals = []
             for k,v in summary.items():
                 probed = v['connected'] + v['unconnected']
+                
+                # calculate probability of connectivity over all points,
+                # within 250um, and within 100um.
+                pconn = []
+                for max_dist in (1e9, 250e-6, 100e-6):
+                    c = sum(np.array(v['cdist']) <= max_dist)
+                    t = c + np.sum(np.array(v['udist']) <= max_dist)
+                    pconn.append(c / t)
+                
                 totals.append((
                     k[0],                        # pre type
                     k[1],                        # post type
                     v['connected'],              # n connected
                     probed,                      # n probed
-                    100*v['connected']/probed,   # % connected
+                    100*pconn[0],                # % connected
+                    100*pconn[1],                # % connected <= 250um
+                    100*pconn[2],                # % connected <= 100um
                     np.nanmean(v['cdist'])*1e6,  # avg cdist
                     np.nanmean(v['udist'])*1e6,  # avg udist
                     np.nanmean(v['cdist']+v['udist'])*1e6   # avg dist
@@ -368,9 +379,9 @@ class ExperimentList(object):
             fields.insert(2, pad)
             fields = tuple(fields)
             try:
-                print(u"%s → %s%s\t:\t%d/%d\t%0.2f%%\t%0.2f\t%0.2f\t%0.2f" % fields)
+                print(u"%s → %s%s\t:\t%d/%d\t%0.2f%%\t%0.2f%%\t%0.2f%%\t%0.2f\t%0.2f\t%0.2f" % fields)
             except UnicodeEncodeError:
-                print("%s - %s%s\t:\t%d/%d\t%0.2f%%\t%0.2f\t%0.2f\t%0.2f" % fields)
+                print("%s - %s%s\t:\t%d/%d\t%0.2f%%\t%0.2f%%\t%0.2f%%\t%0.2f\t%0.2f\t%0.2f" % fields)
 
         print("\nTotal:  \t%d/%d\t%0.2f%%" % (tot_connected, tot_probed, 100*tot_connected/(tot_connected+tot_probed)))
         print("")
