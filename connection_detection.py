@@ -39,7 +39,7 @@ class PulseStimAnalyzer(Analyzer):
         if self._pulses is None:
             trace = self.rec['command'].data
             self._pulses = square_pulses(trace)
-        return self._pulss
+        return self._pulses
 
     def evoked_spikes(self):
         """Given presynaptic Recording, detect action potentials
@@ -86,7 +86,9 @@ class MultiPatchAnalyzer(Analyzer):
         spikes = pulse_stim.evoked_spikes()
         
         # Select ranges to extract from postsynaptic recording
+        result = []
         for i,pulse in enumerate(spikes):
+            pulse = pulse.copy()
             spike = pulse['spike']
             if spike is None:
                 continue
@@ -105,11 +107,12 @@ class MultiPatchAnalyzer(Analyzer):
             
             # Extract data from postsynaptic recording
             pulse['response'] = post_rec['primary'].data[pulse['rec_start']:pulse['rec_stop']]
+            result.append(pulse)
         
-        return spikes
+        return result
 
 
-def detect_connections(expt_data, max_freq=50):
+class MultiPatchExperimentAnalyzer(Analyzer):
     """
     loop over all sweeps (presynaptic)
         ignore sweeps with high induction frequency
@@ -131,33 +134,61 @@ def detect_connections(expt_data, max_freq=50):
         correct for multiple comparisons?
     Additional metric to detect low release probability connections?
     """
-    
-    # loop over all sweeps (presynaptic)
-    all_spikes = {}
-    for srec in expt_data.contents:
-        mp_analyzer = MultiPatchAnalyzer(srec)
-        
-        for pre_rec in srec.recordings:
-            pre_id = pre_rec.device_id
-            all_spikes.setdefault(pre_id, {})
-            # todo: ignore sweeps with high induction frequency
-            
-            for post_rec in srec.recordings:
-                if post_rec is pre_rec:
-                    continue
-                post_id = post_rec.device_id
-                all_spikes[pre_id].setdefault(post_id, [])
-                spikes = {
-                    'spikes': mp_analyzer.get_spike_responses(pre_rec, post_rec),
-                    'pre_rec': pre_rec,
-                    'post_rec': post_rec,
-                }
-                all_spikes[pre_id][post_id].append(spikes)
+    def __init__(self, expt):
+        self._attach(expt)
+        self.expt = expt
+        self._all_spikes = None
 
-                # breadcrumbs
-                #spikes['sync_rec'] = srec
+    def get_evoked_responses(self, pre_id, post_id, clamp_mode='vc', stim_filter='20Hz'):
+        all_spikes = self.all_evoked_responses()
+        responses = []
+        for rec in all_spikes[dev1][dev2]:
+            
+            # do filtering here:
+            pre_rec = rec['pre_rec']
+            post_rec = rec['post_rec']
+            if post_rec.clamp_mode != 'vc':
+                continue
+            stim_name = pre_rec.meta['stim_name']
+            if '20Hz' not in stim_name:
+                continue
+            
+            
+            for spike in rec['spikes']:
+                if spike['spike'] is None:
+                    continue
+                responses.append(spike['response'])
+        return responses
+ 
+    def all_evoked_responses(self, max_freq=50):
+        
+        # loop over all sweeps (presynaptic)
+        if self._all_spikes is None:
+            all_spikes = {}
+            for srec in self.expt.contents:
+                mp_analyzer = MultiPatchAnalyzer(srec)
                 
-    return all_spikes
+                for pre_rec in srec.recordings:
+                    pre_id = pre_rec.device_id
+                    all_spikes.setdefault(pre_id, {})
+                    # todo: ignore sweeps with high induction frequency
+                    
+                    for post_rec in srec.recordings:
+                        if post_rec is pre_rec:
+                            continue
+                        post_id = post_rec.device_id
+                        all_spikes[pre_id].setdefault(post_id, [])
+                        spikes = {
+                            'spikes': mp_analyzer.get_spike_responses(pre_rec, post_rec),
+                            'pre_rec': pre_rec,
+                            'post_rec': post_rec,
+                        }
+                        all_spikes[pre_id][post_id].append(spikes)
+            self._all_spikes = all_spikes
+        return self._all_spikes
+
+    def list_devs(self):
+        return self.all_evoked_responses().keys()
 
 
 if __name__ == '__main__':
@@ -177,35 +208,21 @@ if __name__ == '__main__':
     expt_file = sys.argv[1]
     expt = MiesNwb(expt_file)
     
-    all_spikes = detect_connections(expt)
+    analyzer = MultiPatchExperimentAnalyzer(expt)
 
     from neuroanalysis.ui.plot_grid import PlotGrid
-    
-    n_devs = len(all_spikes)
+
+    devs = analyzer.list_devs()
+    n_devs = len(devs)
     plots = PlotGrid()
     plots.set_shape(n_devs, n_devs)
     plots.show() 
     
-    for i, dev1 in enumerate(all_spikes):
-        for j, dev2 in enumerate(all_spikes):
+    for i, dev1 in enumerate(devs):
+        for j, dev2 in enumerate(devs):
             if dev1 == dev2:
                 continue
-            responses = []
-            for rec in all_spikes[dev1][dev2]:
-                
-                # do filtering here:
-                pre_rec = rec['pre_rec']
-                post_rec = rec['post_rec']
-                if post_rec.clamp_mode != 'vc':
-                    continue
-                stim_name = pre_rec.meta['stim_name']
-                if '20Hz' not in stim_name:
-                    continue
-                
-                
-                for spike in rec['spikes']:
-                    if spike['spike'] is None:
-                        continue
-                    responses.append(spike['response'])
-            avg = ragged_mean(responses, method='clip')
-            plots[i,j].plot(avg)
+            responses = analyzer.get_evoked_responses(dev1, dev2)
+            if len(responses) > 0:
+                avg = ragged_mean(responses, method='clip')
+                plots[i,j].plot(avg)
