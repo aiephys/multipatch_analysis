@@ -65,7 +65,7 @@ class PulseStimAnalyzer(Analyzer):
         return self._evoked_spikes
 
 
-class MultiPatchAnalyzer(Analyzer):
+class MultiPatchSyncRecAnalyzer(Analyzer):
     """Used for analyzing two or more synchronous patch clamp recordings where
     spikes are evoked in at least one and synaptic responses are recorded in
     others.
@@ -106,7 +106,7 @@ class MultiPatchAnalyzer(Analyzer):
                 break
             
             # Extract data from postsynaptic recording
-            pulse['response'] = post_rec['primary'].data[pulse['rec_start']:pulse['rec_stop']]
+            pulse['response'] = post_rec['primary'][pulse['rec_start']:pulse['rec_stop']]
             result.append(pulse)
         
         return result
@@ -140,9 +140,15 @@ class MultiPatchExperimentAnalyzer(Analyzer):
         self._all_spikes = None
 
     def get_evoked_responses(self, pre_id, post_id, clamp_mode='vc', stim_filter='20Hz'):
+        """Return all evoked responses from device pre_id to post_id with the given
+        clamp mode and stimulus conditions.
+        
+        All traces are *downsampled* to the minimum sample rate across the set
+        of returned responses.
+        """
         all_spikes = self.all_evoked_responses()
         responses = []
-        for rec in all_spikes[dev1][dev2]:
+        for rec in all_spikes[pre_id][post_id]:
             
             # do filtering here:
             pre_rec = rec['pre_rec']
@@ -158,15 +164,16 @@ class MultiPatchExperimentAnalyzer(Analyzer):
                 if spike['spike'] is None:
                     continue
                 responses.append(spike['response'])
+        
         return responses
  
-    def all_evoked_responses(self, max_freq=50):
+    def all_evoked_responses(self):
         
         # loop over all sweeps (presynaptic)
         if self._all_spikes is None:
             all_spikes = {}
             for srec in self.expt.contents:
-                mp_analyzer = MultiPatchAnalyzer(srec)
+                mp_analyzer = MultiPatchSyncRecAnalyzer(srec)
                 
                 for pre_rec in srec.recordings:
                     pre_id = pre_rec.device_id
@@ -191,27 +198,10 @@ class MultiPatchExperimentAnalyzer(Analyzer):
         return self.all_evoked_responses().keys()
 
 
-if __name__ == '__main__':
-    #from experiment_list import ExperimentList
-    #all_expts = ExperimentList(cache='expts_cache.pkl')
+from neuroanalysis.ui.plot_grid import PlotGrid
 
-    ## pick one experiment with a lot of connections
-    #for expt in all_expts:
-        #if expt.expt_id[1] == '2017.03.20-0-0' and 'Pasha' in expt.expt_id[0]:
-            #break
-
-    import pyqtgraph as pg
-    pg.dbg()
-
-    from neuroanalysis.miesnwb import MiesNwb
-    import sys
-    expt_file = sys.argv[1]
-    expt = MiesNwb(expt_file)
-    
-    analyzer = MultiPatchExperimentAnalyzer(expt)
-
-    from neuroanalysis.ui.plot_grid import PlotGrid
-
+def plot_response_averages(expt, clamp_mode='vc', stim_filter='20Hz', pulse_ids=None):
+    analyzer = MultiPatchExperimentAnalyzer.get(expt)
     devs = analyzer.list_devs()
     n_devs = len(devs)
     plots = PlotGrid()
@@ -224,5 +214,34 @@ if __name__ == '__main__':
                 continue
             responses = analyzer.get_evoked_responses(dev1, dev2)
             if len(responses) > 0:
-                avg = ragged_mean(responses, method='clip')
-                plots[i,j].plot(avg)
+                # downsample all traces to the same rate
+                # yarg: how does this change SNR?
+                max_dt = max([trace.dt for trace in responses])
+                downsampled = [trace.downsample(n=int(max_dt/trace.dt)).data for trace in responses]
+                avg = ragged_mean(downsampled, method='clip')
+                t = np.arange(len(avg)) * max_dt
+                plots[i,j].plot(t, avg)
+        
+    return plots
+
+
+
+if __name__ == '__main__':
+    #from experiment_list import ExperimentList
+    #all_expts = ExperimentList(cache='expts_cache.pkl')
+
+    ## pick one experiment with a lot of connections
+    #for expt in all_expts:
+        #if expt.expt_id[1] == '2017.03.20-0-0' and 'Pasha' in expt.expt_id[0]:
+            #break
+
+    import user
+    import pyqtgraph as pg
+    pg.dbg()
+
+    from neuroanalysis.miesnwb import MiesNwb
+    import sys
+    expt_file = sys.argv[1]
+    expt = MiesNwb(expt_file)
+    
+    plots = plot_response_averages(expt)
