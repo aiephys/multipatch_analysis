@@ -78,12 +78,21 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         """Given a pre- and a postsynaptic recording, return a structure
         containing evoked responses.
         
-            [{pulse_n, pulse_ind, spike, response}, ...]
+            [{pulse_n, pulse_ind, spike, response, baseline}, ...]
         
         """
         # detect presynaptic spikes
         pulse_stim = PulseStimAnalyzer.get(pre_rec)
         spikes = pulse_stim.evoked_spikes()
+        
+        if len(spikes) == 0:
+            return []
+        
+        # select baseline region
+        baseline_dur = int(50e-3 / post_rec['primary'].dt)
+        stop = spikes[0]['pulse_ind'] - 1
+        start = stop - baseline_dur
+        baseline = post_rec['primary'][start:stop]
         
         # Select ranges to extract from postsynaptic recording
         result = []
@@ -107,6 +116,10 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
             
             # Extract data from postsynaptic recording
             pulse['response'] = post_rec['primary'][pulse['rec_start']:pulse['rec_stop']]
+            
+            # record pointer to the baseline before the first pulse
+            pulse['baseline'] = baseline
+            
             result.append(pulse)
         
         return result
@@ -139,12 +152,14 @@ class MultiPatchExperimentAnalyzer(Analyzer):
         self.expt = expt
         self._all_spikes = None
 
-    def get_evoked_responses(self, pre_id, post_id, clamp_mode='vc', stim_filter='20Hz'):
+    def get_evoked_responses(self, pre_id, post_id, clamp_mode='ic', stim_filter=None, min_duration=None, pulse_ids=None):
         """Return all evoked responses from device pre_id to post_id with the given
         clamp mode and stimulus conditions.
         
         All traces are *downsampled* to the minimum sample rate across the set
         of returned responses.
+        
+        Returns a list of (response, baseline) pairs. 
         """
         all_spikes = self.all_evoked_responses()
         responses = []
@@ -153,17 +168,23 @@ class MultiPatchExperimentAnalyzer(Analyzer):
             # do filtering here:
             pre_rec = rec['pre_rec']
             post_rec = rec['post_rec']
-            if post_rec.clamp_mode != 'vc':
-                continue
-            stim_name = pre_rec.meta['stim_name']
-            if '20Hz' not in stim_name:
+            
+            if post_rec.clamp_mode != clamp_mode:
                 continue
             
+            if stim_filter is not None:
+                stim_name = pre_rec.meta['stim_name']
+                if stim_filter not in stim_name:
+                    continue
             
             for spike in rec['spikes']:
                 if spike['spike'] is None:
                     continue
-                responses.append(spike['response'])
+                if pulse_ids is not None and spike['pulse_n'] not in pulse_ids:
+                    continue
+                resp = spike['response']
+                if resp.duration >= min_duration:
+                    responses.append((resp, spike['baseline']))
         
         return responses
  
@@ -200,7 +221,7 @@ class MultiPatchExperimentAnalyzer(Analyzer):
 
 from neuroanalysis.ui.plot_grid import PlotGrid
 
-def plot_response_averages(expt, clamp_mode='vc', stim_filter='20Hz', pulse_ids=None):
+def plot_response_averages(expt, **kwds):
     analyzer = MultiPatchExperimentAnalyzer.get(expt)
     devs = analyzer.list_devs()
     n_devs = len(devs)
@@ -208,19 +229,62 @@ def plot_response_averages(expt, clamp_mode='vc', stim_filter='20Hz', pulse_ids=
     plots.set_shape(n_devs, n_devs)
     plots.show() 
     
+    ranges = [([], []), ([], [])]
     for i, dev1 in enumerate(devs):
         for j, dev2 in enumerate(devs):
+            
+            # select plot and adjust axes / labels
+            plt = plots[i, j]
+            plt.setXLink(plots[0, 0])
+            plt.setYLink(plots[0, 0])
+            plt.setLabels(bottom=(str(dev2), 's'))
+            if kwds.get('clamp_mode', 'ic') == 'ic':
+                plt.setLabels(left=('%s' % dev1, 'V'))
+            else:
+                plt.setLabels(left=('%s' % dev1, 'A'))
+
+            if i < len(devs) - 1:
+                plt.getAxis('bottom').setVisible(False)
+            if j > 0:
+                plt.getAxis('left').setVisible(False)            
+            
+            
             if dev1 == dev2:
+                #plt.setVisible(False)
                 continue
-            responses = analyzer.get_evoked_responses(dev1, dev2)
+            
+            print "==========", dev1, dev2
+            responses = analyzer.get_evoked_responses(dev1, dev2, **kwds)
+            print "   %d responses" % len(responses) 
             if len(responses) > 0:
+                # unzip into responses and corresponding baselines
+                baselines = [r[1] for r in responses]
+                responses = [r[0] for r in responses]
+                
                 # downsample all traces to the same rate
                 # yarg: how does this change SNR?
                 max_dt = max([trace.dt for trace in responses])
                 downsampled = [trace.downsample(n=int(max_dt/trace.dt)).data for trace in responses]
+                ds_baseline = [trace.downsample(n=int(max_dt/trace.dt)).data for trace in baselines]
+                
+                # average all together, clipping to minimum length
                 avg = ragged_mean(downsampled, method='clip')
+                avg_baseline = ragged_mean(ds_baseline, method='clip')
+                
+                # subtract baseline
+                bsub = avg - np.median(avg_baseline)
+                
+                # plot and remember data extents
                 t = np.arange(len(avg)) * max_dt
-                plots[i,j].plot(t, avg)
+                plt.plot(t, bsub, antialias=True)
+                ranges[0][0].append(bsub.min())
+                ranges[0][1].append(bsub.max())
+                ranges[1][0].append(t[0])
+                ranges[1][1].append(t[-1])
+
+                
+    plots[0,0].setYRange(min(ranges[0][0]), max(ranges[0][1]))
+    plots[0,0].setXRange(min(ranges[1][0]), max(ranges[1][1]))
         
     return plots
 
@@ -244,4 +308,4 @@ if __name__ == '__main__':
     expt_file = sys.argv[1]
     expt = MiesNwb(expt_file)
     
-    plots = plot_response_averages(expt)
+    plots = plot_response_averages(expt, clamp_mode='ic', min_duration=20e-3, pulse_ids=None)
