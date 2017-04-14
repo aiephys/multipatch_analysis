@@ -94,7 +94,7 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         # (ideally we should use more careful criteria for selecting a baseline region)
         dt = post_rec['primary'].dt
         baseline_dur = int(50e-3 / dt)
-        stop = spikes[9]['pulse_ind'] - 1
+        stop = spikes[8]['pulse_ind'] - 1
         start = stop - baseline_dur
         baseline = post_rec['primary'][start:stop]
         
@@ -215,9 +215,17 @@ class MultiPatchExperimentAnalyzer(Analyzer):
         avg_baseline = ragged_mean(ds_baseline, method='clip')
         
         # subtract baseline
-        bsub = avg - np.median(avg_baseline)
+        baseline = np.median(avg_baseline)
+        bsub = avg - baseline
 
-        return Trace(bsub, dt=max_dt)
+        result = Trace(bsub, dt=max_dt)
+
+        # Attach some extra metadata to the result:
+        result.meta['baseline'] = avg_baseline
+        result.meta['baseline_med'] = baseline
+        result.meta['baseline_std'] = avg_baseline.std()
+
+        return result
 
     def all_evoked_responses(self):
         
@@ -261,6 +269,7 @@ def plot_response_averages(expt, **kwds):
     plots.show() 
     
     ranges = [([], []), ([], [])]
+    points = []
     for i, dev1 in enumerate(devs):
         for j, dev2 in enumerate(devs):
             
@@ -303,10 +312,27 @@ def plot_response_averages(expt, **kwds):
                     'exp_amp': (-1e-3, -100e-3, 100e-3),
                     'rise_power': (2, 'fixed'),
                 }
-                fit_kws = {'xtol': 1e-3, 'maxfev': 100, 'nan_policy': 'omit'}
-                fit = psp.fit(y, x=t, fit_kws=fit_kws, **params)
-                plt.plot(t, fit.eval(), pen='b')
+                fit_kws = {'xtol': 1e-3, 'maxfev': 200, 'nan_policy': 'omit'}
+                fit = psp.fit(y, x=t, fit_kws=fit_kws, params=params)
                 print fit.best_values
+                print "RMSE:", fit.rmse()
+                nrmse = fit.nrmse()
+                print "NRMSE:", nrmse
+                snr = abs(fit.best_values['amp']) / avg_response.meta['baseline_std']
+                print "SNR:", snr
+                
+                color = (
+                    255 * (1-nrmse),
+                    np.clip(50 * snr, 0, 255),
+                    255 * nrmse
+                )
+
+                plt.plot(t, fit.eval(), pen=color)
+
+
+                points.append({'x': nrmse, 'y': snr, 'brush': color})
+                # bl = avg_response.meta['baseline'] - avg_response.meta['baseline_med']
+                # plt.plot(np.arange(len(bl)) * avg_response.dt, bl, pen='g')
 
                 # keep track of data range across all plots
                 ranges[0][0].append(y.min())
@@ -314,9 +340,13 @@ def plot_response_averages(expt, **kwds):
                 ranges[1][0].append(t[0])
                 ranges[1][1].append(t[-1])
 
-                
     plots[0,0].setYRange(min(ranges[0][0]), max(ranges[0][1]))
     plots[0,0].setXRange(min(ranges[1][0]), max(ranges[1][1]))
+
+    # scatter plot of SNR vs NRMSE
+    plt = pg.plot()
+    plt.setLabels(left='SNR', bottom='NRMSE')
+    plt.plot([p['x'] for p in points], [p['y'] for p in points], pen=None, symbol='o', symbolBrush=[pg.mkBrush(p['brush']) for p in points])
         
     return plots
 
