@@ -4,6 +4,7 @@ import numpy as np
 from neuroanalysis.spike_detection import detect_evoked_spike
 from neuroanalysis.stats import ragged_mean
 from neuroanalysis.stimuli import square_pulses
+from neuroanalysis.data import Trace
 
 
 class Analyzer(object):
@@ -88,9 +89,10 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         if len(spikes) == 0:
             return []
         
-        # select baseline region
-        baseline_dur = int(50e-3 / post_rec['primary'].dt)
-        stop = spikes[0]['pulse_ind'] - 1
+        # select baseline region between 8th and 9th pulses
+        dt = post_rec['primary'].dt
+        baseline_dur = int(50e-3 / dt)
+        stop = spikes[9]['pulse_ind'] - 1
         start = stop - baseline_dur
         baseline = post_rec['primary'][start:stop]
         
@@ -103,16 +105,14 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
                 continue
             
             # start recording window at the rising phase of the presynaptic spike
-            pulse['rec_start'] = spike['rise_index']
-            # stop 50 ms later
-            pulse['rec_stop'] = spike['rise_index'] + int(50e-3 / pre_rec['primary'].dt)
+            pulse['rec_start'] = spike['rise_index'] - int(10e-3 / dt)
             
-            # truncate window early if there is another spike
-            for pulse2 in spikes[i+1:]:
-                if pulse2['spike'] is None:
-                    continue
-                pulse['rec_stop'] = min(pulse['rec_stop'], pulse2['spike']['rise_index'])
-                break
+            if i+1 < len(spikes):
+                # truncate window early if there is another pulse
+                pulse['rec_stop'] = spikes[i+1]['pulse_ind']
+            else:
+                # otherwise, stop 50 ms later
+                pulse['rec_stop'] = spike['rise_index'] + int(50e-3 / dt)
             
             # Extract data from postsynaptic recording
             pulse['response'] = post_rec['primary'][pulse['rec_start']:pulse['rec_stop']]
@@ -188,6 +188,35 @@ class MultiPatchExperimentAnalyzer(Analyzer):
         
         return responses
  
+    def get_evoked_response_avg(self, pre_id, post_id, **kwds):
+        """Return a baseline-subtracted, average evoked response trace between two cells.
+
+        Source traces are collected using get_evoked_responses(), and all keyword arguments are
+        forwarded there. All traces are downsampled to the minimum sample rate in the set.
+        """
+        responses = self.get_evoked_responses(pre_id, post_id, **kwds)
+        if len(responses) == 0:
+            return None
+
+        # unzip into responses and corresponding baselines
+        baselines = [r[1] for r in responses]
+        responses = [r[0] for r in responses]
+        
+        # downsample all traces to the same rate
+        # yarg: how does this change SNR?
+        max_dt = max([trace.dt for trace in responses])
+        downsampled = [trace.downsample(n=int(max_dt/trace.dt)).data for trace in responses]
+        ds_baseline = [trace.downsample(n=int(max_dt/trace.dt)).data for trace in baselines]
+        
+        # average all together, clipping to minimum length
+        avg = ragged_mean(downsampled, method='clip')
+        avg_baseline = ragged_mean(ds_baseline, method='clip')
+        
+        # subtract baseline
+        bsub = avg - np.median(avg_baseline)
+
+        return Trace(bsub, dt=max_dt)
+
     def all_evoked_responses(self):
         
         # loop over all sweeps (presynaptic)
@@ -254,31 +283,14 @@ def plot_response_averages(expt, **kwds):
                 continue
             
             print "==========", dev1, dev2
-            responses = analyzer.get_evoked_responses(dev1, dev2, **kwds)
-            print "   %d responses" % len(responses) 
-            if len(responses) > 0:
-                # unzip into responses and corresponding baselines
-                baselines = [r[1] for r in responses]
-                responses = [r[0] for r in responses]
+            avg_response = analyzer.get_evoked_response_avg(dev1, dev2, **kwds)
+            if avg_response is not None:
                 
-                # downsample all traces to the same rate
-                # yarg: how does this change SNR?
-                max_dt = max([trace.dt for trace in responses])
-                downsampled = [trace.downsample(n=int(max_dt/trace.dt)).data for trace in responses]
-                ds_baseline = [trace.downsample(n=int(max_dt/trace.dt)).data for trace in baselines]
-                
-                # average all together, clipping to minimum length
-                avg = ragged_mean(downsampled, method='clip')
-                avg_baseline = ragged_mean(ds_baseline, method='clip')
-                
-                # subtract baseline
-                bsub = avg - np.median(avg_baseline)
-                
-                # plot and remember data extents
-                t = np.arange(len(avg)) * max_dt
-                plt.plot(t, bsub, antialias=True)
-                ranges[0][0].append(bsub.min())
-                ranges[0][1].append(bsub.max())
+                t = avg_response.time_values
+                y = avg_response.data
+                plt.plot(t, y, antialias=True)
+                ranges[0][0].append(y.min())
+                ranges[0][1].append(y.max())
                 ranges[1][0].append(t[0])
                 ranges[1][1].append(t[-1])
 
