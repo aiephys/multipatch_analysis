@@ -5,6 +5,7 @@ from neuroanalysis.spike_detection import detect_evoked_spike
 from neuroanalysis.stats import ragged_mean
 from neuroanalysis.stimuli import square_pulses
 from neuroanalysis.data import Trace
+from neuroanalysis.fitting import StackedPsp
 
 
 class Analyzer(object):
@@ -90,6 +91,7 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
             return []
         
         # select baseline region between 8th and 9th pulses
+        # (ideally we should use more careful criteria for selecting a baseline region)
         dt = post_rec['primary'].dt
         baseline_dur = int(50e-3 / dt)
         stop = spikes[9]['pulse_ind'] - 1
@@ -289,6 +291,24 @@ def plot_response_averages(expt, **kwds):
                 t = avg_response.time_values
                 y = avg_response.data
                 plt.plot(t, y, antialias=True)
+
+                # fit!
+                psp = StackedPsp()
+                params = {
+                    'xoffset': (10e-3, -1, 1),
+                    'yoffset': (0, 'fixed'),
+                    'rise_time': (5e-3, 0.1e-3, 30e-3),
+                    'decay_tau': (30e-3, 1e-3, 200e-3),
+                    'amp': (-1e-3, -100e-3, 100e-3),
+                    'exp_amp': (-1e-3, -100e-3, 100e-3),
+                    'rise_power': (2, 'fixed'),
+                }
+                fit_kws = {'xtol': 1e-3, 'maxfev': 100, 'nan_policy': 'omit'}
+                fit = psp.fit(y, x=t, fit_kws=fit_kws, **params)
+                plt.plot(t, fit.eval(), pen='b')
+                print fit.best_values
+
+                # keep track of data range across all plots
                 ranges[0][0].append(y.min())
                 ranges[0][1].append(y.max())
                 ranges[1][0].append(t[0])
