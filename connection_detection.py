@@ -1,5 +1,6 @@
 from copy import deepcopy
 import numpy as np
+import pyqtgraph as pg
 
 from neuroanalysis.spike_detection import detect_evoked_spike
 from neuroanalysis.stats import ragged_mean
@@ -87,7 +88,11 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         pulse_stim = PulseStimAnalyzer.get(pre_rec)
         spikes = pulse_stim.evoked_spikes()
         
-        if len(spikes) == 0:
+        if len(spikes) < 10:
+            # this does not look like the correct kind of stimulus; bail out
+            # Ideally we can make this agnostic to the exact stim type in the future,
+            # but for now we rely on the delay period between pulses 8 and 9 to get
+            # a baseline measurement.
             return []
         
         # select baseline region between 8th and 9th pulses
@@ -233,7 +238,7 @@ class MultiPatchExperimentAnalyzer(Analyzer):
         if self._all_spikes is None:
             all_spikes = {}
             for srec in self.expt.contents:
-                mp_analyzer = MultiPatchSyncRecAnalyzer(srec)
+                mp_analyzer = MultiPatchSyncRecAnalyzer.get(srec)
                 
                 for pre_rec in srec.recordings:
                     pre_id = pre_rec.device_id
@@ -304,12 +309,13 @@ def plot_response_averages(expt, **kwds):
                 # fit!
                 psp = StackedPsp()
                 params = {
-                    'xoffset': (10e-3, -1, 1),
+                    'xoffset': (10e-3, 9e-3, 20e-3),
                     'yoffset': (0, 'fixed'),
-                    'rise_time': (5e-3, 0.1e-3, 30e-3),
-                    'decay_tau': (30e-3, 1e-3, 200e-3),
+                    'rise_time': (10e-3, 0.1e-3, 30e-3),
+                    'decay_tau': (50e-3, 1e-3, 200e-3),
                     'amp': (-1e-3, -100e-3, 100e-3),
-                    'exp_amp': (-1e-3, -100e-3, 100e-3),
+                    'exp_amp': 'amp * amp_ratio',
+                    'amp_ratio': (1, 0, 10),
                     'rise_power': (2, 'fixed'),
                 }
                 fit_kws = {'xtol': 1e-3, 'maxfev': 200, 'nan_policy': 'omit'}
@@ -322,9 +328,9 @@ def plot_response_averages(expt, **kwds):
                 print "SNR:", snr
                 
                 color = (
-                    255 * (1-nrmse),
+                    np.clip(255 * (1-nrmse), 0, 255),
                     np.clip(50 * snr, 0, 255),
-                    255 * nrmse
+                    np.clip(255 * nrmse, 0, 255)
                 )
 
                 plt.plot(t, fit.eval(), pen=color)
@@ -371,3 +377,11 @@ if __name__ == '__main__':
     expt = MiesNwb(expt_file)
     
     plots = plot_response_averages(expt, clamp_mode='ic', min_duration=20e-3, pulse_ids=None)
+
+
+"""
+# run from connectivity_summary script:
+import connection_detection as cd
+cd.plot_response_averages(expts[171].data, min_duration=20e-3)
+
+"""
