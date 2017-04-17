@@ -320,7 +320,7 @@ def plot_response_averages(expt, **kwds):
                 plt.setLabels(left=('%s' % dev1, 'A'))
 
             
-            print "==========", dev1, dev2
+            # print "==========", dev1, dev2
             avg_response = avg_responses[(dev1, dev2)]
             if avg_response is not None:
                 
@@ -329,43 +329,9 @@ def plot_response_averages(expt, **kwds):
                 plt.plot(t, y, antialias=True)
 
                 # fit!
-                psp = StackedPsp()
-                params1 = {
-                    'xoffset': (10e-3, 9e-3, 20e-3),
-                    'yoffset': (0, 'fixed'),
-                    'rise_time': (10e-3, 0.1e-3, 30e-3),
-                    'decay_tau': (50e-3, 1e-3, 200e-3),
-                    'amp': (-1e-3, -100e-3, 100e-3),
-                    'exp_amp': 'amp * amp_ratio',
-                    'amp_ratio': (1, 0, 10),
-                    'rise_power': (2, 'fixed'),
-                }
-                weight = np.ones(len(y))
-                dt = avg_response.dt
-                weight[int(9e-3/dt):int(11e-3/dt)] = 0
-                plt.plot(t, weight)
-                fit_kws = {'weights': weight, 'xtol': 1e-3, 'maxfev': 200, 'nan_policy': 'omit'}
-
-                # fit twice to check for + / - events
-                params2 = params1.copy()
-                params2['amp'] = (-params1['amp'][0],) + params1['amp'][1:]
-                
-                best_fit = None
-                best_score = None
-                for params in [params1, params2]:
-                    fit = psp.fit(y, x=t, fit_kws=fit_kws, params=params)
-                    err = np.sum(fit.residual**2)
-                    if best_fit is None or err < best_score:
-                        best_fit = fit
-                        best_score = err
-                fit = best_fit
-
+                fit = fit_psp(avg_response)
+                snr = fit.snr
                 nrmse = fit.nrmse()
-                snr = abs(fit.best_values['amp']) / avg_response.meta['baseline_std']
-                # print fit.best_values
-                # print "RMSE:", fit.rmse()
-                # print "NRMSE:", nrmse
-                # print "SNR:", snr
                 
                 color = (
                     np.clip(255 * (1-nrmse), 0, 255),
@@ -397,6 +363,54 @@ def plot_response_averages(expt, **kwds):
     return plots
 
 
+def fit_psp(response):
+    t = response.time_values
+    y = response.data
+
+    psp = StackedPsp()
+    params1 = {
+        'xoffset': (10e-3, 9e-3, 20e-3),
+        'yoffset': (0, 'fixed'),
+        'rise_time': (10e-3, 0.1e-3, 30e-3),
+        'decay_tau': (50e-3, 1e-3, 200e-3),
+        'amp': (-1e-3, -100e-3, 100e-3),
+        'exp_amp': 'amp * amp_ratio',
+        'amp_ratio': (1, 0, 10),
+        'rise_power': (2, 'fixed'),
+    }
+
+    # Use zero weight for fit region around the stimulus artifact
+    # weight = np.ones(len(y))
+    # dt = avg_response.dt
+    # weight[int(9e-3/dt):int(11e-3/dt)] = 0
+    # plt.plot(t, weight)
+    weight = None
+
+    fit_kws = {'weights': weight, 'xtol': 1e-3, 'maxfev': 200, 'nan_policy': 'omit'}
+
+    # fit twice to check for + / - events
+    params2 = params1.copy()
+    params2['amp'] = (-params1['amp'][0],) + params1['amp'][1:]
+    
+    best_fit = None
+    best_score = None
+    for params in [params1, params2]:
+        fit = psp.fit(y, x=t, fit_kws=fit_kws, params=params)
+        err = np.sum(fit.residual**2)
+        if best_fit is None or err < best_score:
+            best_fit = fit
+            best_score = err
+    fit = best_fit
+
+    # nrmse = fit.nrmse()
+    fit.snr = abs(fit.best_values['amp']) / response.meta['baseline_std']
+    # print fit.best_values
+    # print "RMSE:", fit.rmse()
+    # print "NRMSE:", nrmse
+    # print "SNR:", snr
+
+    return fit
+
 
 if __name__ == '__main__':
 
@@ -416,7 +430,7 @@ if __name__ == '__main__':
         expt_file = arg
         expt = MiesNwb(expt_file)
     
-    plots = plot_response_averages(expt, clamp_mode='ic', min_duration=20e-3, pulse_ids=None)
+    plots = plot_response_averages(expt, clamp_mode='ic', min_duration=25e-3, pulse_ids=None)
 
 
 """
