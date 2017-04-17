@@ -269,37 +269,59 @@ def plot_response_averages(expt, **kwds):
     analyzer = MultiPatchExperimentAnalyzer.get(expt)
     devs = analyzer.list_devs()
     n_devs = len(devs)
+
+    # First collect averaged responses
+    avg_responses = {}
+    rows = set()
+    cols = set()
+    for i, dev1 in enumerate(devs):
+        for j, dev2 in enumerate(devs):
+            if dev1 == dev2:
+                continue
+            avg = analyzer.get_evoked_response_avg(dev1, dev2, **kwds)
+            if avg is not None:
+                rows.add(dev1)
+                cols.add(dev2)
+            avg_responses[(dev1, dev2)] = avg
+    rows = sorted(list(rows))
+    cols = sorted(list(cols))
+
+    # resize plot grid accordingly
     plots = PlotGrid()
-    plots.set_shape(n_devs, n_devs)
+    plots.set_shape(len(rows), len(cols))
     plots.show() 
     
     ranges = [([], []), ([], [])]
     points = []
-    for i, dev1 in enumerate(devs):
-        for j, dev2 in enumerate(devs):
-            
-            # select plot and adjust axes / labels
+
+    # First collect averaged responses
+    for i, dev1 in enumerate(rows):
+        for j, dev2 in enumerate(cols):
+            # select plot and hide axes
             plt = plots[i, j]
+            if i < len(devs) - 1:
+                plt.getAxis('bottom').setVisible(False)
+            if j > 0:
+                plt.getAxis('left').setVisible(False)            
+
+            if dev1 == dev2:
+                #plt.setVisible(False)
+                continue
+            
+            # adjust axes / labels
             plt.setXLink(plots[0, 0])
             plt.setYLink(plots[0, 0])
+            plt.addLine(x=10e-3, pen=0.3)
+            plt.addLine(y=0, pen=0.3)
             plt.setLabels(bottom=(str(dev2), 's'))
             if kwds.get('clamp_mode', 'ic') == 'ic':
                 plt.setLabels(left=('%s' % dev1, 'V'))
             else:
                 plt.setLabels(left=('%s' % dev1, 'A'))
 
-            if i < len(devs) - 1:
-                plt.getAxis('bottom').setVisible(False)
-            if j > 0:
-                plt.getAxis('left').setVisible(False)            
-            
-            
-            if dev1 == dev2:
-                #plt.setVisible(False)
-                continue
             
             print "==========", dev1, dev2
-            avg_response = analyzer.get_evoked_response_avg(dev1, dev2, **kwds)
+            avg_response = avg_responses[(dev1, dev2)]
             if avg_response is not None:
                 
                 t = avg_response.time_values
@@ -308,7 +330,7 @@ def plot_response_averages(expt, **kwds):
 
                 # fit!
                 psp = StackedPsp()
-                params = {
+                params1 = {
                     'xoffset': (10e-3, 9e-3, 20e-3),
                     'yoffset': (0, 'fixed'),
                     'rise_time': (10e-3, 0.1e-3, 30e-3),
@@ -318,14 +340,32 @@ def plot_response_averages(expt, **kwds):
                     'amp_ratio': (1, 0, 10),
                     'rise_power': (2, 'fixed'),
                 }
-                fit_kws = {'xtol': 1e-3, 'maxfev': 200, 'nan_policy': 'omit'}
-                fit = psp.fit(y, x=t, fit_kws=fit_kws, params=params)
-                print fit.best_values
-                print "RMSE:", fit.rmse()
+                weight = np.ones(len(y))
+                dt = avg_response.dt
+                weight[int(9e-3/dt):int(11e-3/dt)] = 0
+                plt.plot(t, weight)
+                fit_kws = {'weights': weight, 'xtol': 1e-3, 'maxfev': 200, 'nan_policy': 'omit'}
+
+                # fit twice to check for + / - events
+                params2 = params1.copy()
+                params2['amp'] = (-params1['amp'][0],) + params1['amp'][1:]
+                
+                best_fit = None
+                best_score = None
+                for params in [params1, params2]:
+                    fit = psp.fit(y, x=t, fit_kws=fit_kws, params=params)
+                    err = np.sum(fit.residual**2)
+                    if best_fit is None or err < best_score:
+                        best_fit = fit
+                        best_score = err
+                fit = best_fit
+
                 nrmse = fit.nrmse()
-                print "NRMSE:", nrmse
                 snr = abs(fit.best_values['amp']) / avg_response.meta['baseline_std']
-                print "SNR:", snr
+                # print fit.best_values
+                # print "RMSE:", fit.rmse()
+                # print "NRMSE:", nrmse
+                # print "SNR:", snr
                 
                 color = (
                     np.clip(255 * (1-nrmse), 0, 255),
@@ -359,13 +399,6 @@ def plot_response_averages(expt, **kwds):
 
 
 if __name__ == '__main__':
-    #from experiment_list import ExperimentList
-    #all_expts = ExperimentList(cache='expts_cache.pkl')
-
-    ## pick one experiment with a lot of connections
-    #for expt in all_expts:
-        #if expt.expt_id[1] == '2017.03.20-0-0' and 'Pasha' in expt.expt_id[0]:
-            #break
 
     import user
     import pyqtgraph as pg
@@ -373,8 +406,15 @@ if __name__ == '__main__':
 
     from neuroanalysis.miesnwb import MiesNwb
     import sys
-    expt_file = sys.argv[1]
-    expt = MiesNwb(expt_file)
+    arg = sys.argv[1]
+    try:
+        from experiment_list import ExperimentList
+        all_expts = ExperimentList(cache='expts_cache.pkl')
+        expt_ind = int(arg)
+        expt = all_expts[expt_ind].data
+    except ValueError:
+        expt_file = arg
+        expt = MiesNwb(expt_file)
     
     plots = plot_response_averages(expt, clamp_mode='ic', min_duration=20e-3, pulse_ids=None)
 
