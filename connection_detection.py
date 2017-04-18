@@ -7,6 +7,7 @@ from neuroanalysis.stats import ragged_mean
 from neuroanalysis.stimuli import square_pulses
 from neuroanalysis.data import Trace
 from neuroanalysis.fitting import StackedPsp
+from neuroanalysis.ui.plot_grid import PlotGrid
 
 
 class Analyzer(object):
@@ -168,8 +169,8 @@ class MultiPatchExperimentAnalyzer(Analyzer):
         
         Returns a list of (response, baseline) pairs. 
         """
-        all_spikes = self.all_evoked_responses()
-        responses = []
+        all_spikes = self._all_evoked_responses()
+        responses = EvokedResponseGroup(pre_id, post_id)
         for rec in all_spikes[pre_id][post_id]:
             
             # do filtering here:
@@ -191,48 +192,33 @@ class MultiPatchExperimentAnalyzer(Analyzer):
                     continue
                 resp = spike['response']
                 if resp.duration >= min_duration:
-                    responses.append((resp, spike['baseline']))
+                    responses.add(resp, spike['baseline'])
         
         return responses
  
-    def get_evoked_response_avg(self, pre_id, post_id, **kwds):
-        """Return a baseline-subtracted, average evoked response trace between two cells.
-
-        Source traces are collected using get_evoked_responses(), and all keyword arguments are
-        forwarded there. All traces are downsampled to the minimum sample rate in the set.
+    def get_evoked_response_matrix(self, **kwds):
+        """Returned evoked responses for all pre/post pairs
         """
-        responses = self.get_evoked_responses(pre_id, post_id, **kwds)
-        if len(responses) == 0:
-            return None
+        devs = self.list_devs()
 
-        # unzip into responses and corresponding baselines
-        baselines = [r[1] for r in responses]
-        responses = [r[0] for r in responses]
-        
-        # downsample all traces to the same rate
-        # yarg: how does this change SNR?
-        max_dt = max([trace.dt for trace in responses])
-        downsampled = [trace.downsample(n=int(max_dt/trace.dt)).data for trace in responses]
-        ds_baseline = [trace.downsample(n=int(max_dt/trace.dt)).data for trace in baselines]
-        
-        # average all together, clipping to minimum length
-        avg = ragged_mean(downsampled, method='clip')
-        avg_baseline = ragged_mean(ds_baseline, method='clip')
-        
-        # subtract baseline
-        baseline = np.median(avg_baseline)
-        bsub = avg - baseline
+        avg_responses = {}
+        rows = set()
+        cols = set()
+        for i, dev1 in enumerate(devs):
+            for j, dev2 in enumerate(devs):
+                if dev1 == dev2:
+                    continue
+                avg = self.get_evoked_responses(dev1, dev2, **kwds)
+                if avg is not None:
+                    rows.add(dev1)
+                    cols.add(dev2)
+                avg_responses[(dev1, dev2)] = avg
+        rows = sorted(list(rows))
+        cols = sorted(list(cols))
 
-        result = Trace(bsub, dt=max_dt)
+        return avg_responses, rows, cols
 
-        # Attach some extra metadata to the result:
-        result.meta['baseline'] = avg_baseline
-        result.meta['baseline_med'] = baseline
-        result.meta['baseline_std'] = avg_baseline.std()
-
-        return result
-
-    def all_evoked_responses(self):
+    def _all_evoked_responses(self):
         
         # loop over all sweeps (presynaptic)
         if self._all_spikes is None:
@@ -260,31 +246,44 @@ class MultiPatchExperimentAnalyzer(Analyzer):
         return self._all_spikes
 
     def list_devs(self):
-        return self.all_evoked_responses().keys()
+        return self._all_evoked_responses().keys()
 
 
-from neuroanalysis.ui.plot_grid import PlotGrid
+
+class NDDict(object):
+    """N-dimensional dictionary.
+    """
+    def __init__(self, ndim):
+        self._ndim = int(ndim)
+        self._data = {}
+        self._keys = [set() for i in range(ndim)]
+
+    @property
+    def ndim(self):
+        return self._ndim
+
+    def __setitem__(self, item, value):
+        ndim = self.ndim
+        assert len(item) == ndim
+        data = self._data
+        for i,key in enumerate(item[:-1]):
+            data = data.setdefault(key, {})
+            self.keys[i].add(key)
+
+        data[item[-1]] = value
+        self.keys[ndim-1].add(item[-1])
+
+    def keys(self):
+        return self._keys
+
+
 
 def plot_response_averages(expt, **kwds):
     analyzer = MultiPatchExperimentAnalyzer.get(expt)
     devs = analyzer.list_devs()
-    n_devs = len(devs)
 
-    # First collect averaged responses
-    avg_responses = {}
-    rows = set()
-    cols = set()
-    for i, dev1 in enumerate(devs):
-        for j, dev2 in enumerate(devs):
-            if dev1 == dev2:
-                continue
-            avg = analyzer.get_evoked_response_avg(dev1, dev2, **kwds)
-            if avg is not None:
-                rows.add(dev1)
-                cols.add(dev2)
-            avg_responses[(dev1, dev2)] = avg
-    rows = sorted(list(rows))
-    cols = sorted(list(cols))
+    # First get average evoked responses for all pre/post pairs
+    responses, rows, cols = analyzer.get_evoked_response_matrix(**kwds)
 
     # resize plot grid accordingly
     plots = PlotGrid()
@@ -294,7 +293,7 @@ def plot_response_averages(expt, **kwds):
     ranges = [([], []), ([], [])]
     points = []
 
-    # First collect averaged responses
+    # Plot each matrix element with PSP fit
     for i, dev1 in enumerate(rows):
         for j, dev2 in enumerate(cols):
             # select plot and hide axes
@@ -302,7 +301,7 @@ def plot_response_averages(expt, **kwds):
             if i < len(devs) - 1:
                 plt.getAxis('bottom').setVisible(False)
             if j > 0:
-                plt.getAxis('left').setVisible(False)            
+                plt.getAxis('left').setVisible(False)
 
             if dev1 == dev2:
                 #plt.setVisible(False)
@@ -321,7 +320,7 @@ def plot_response_averages(expt, **kwds):
 
             
             # print "==========", dev1, dev2
-            avg_response = avg_responses[(dev1, dev2)]
+            avg_response = responses[(dev1, dev2)].bsub_mean()
             if avg_response is not None:
                 
                 t = avg_response.time_values
@@ -329,7 +328,7 @@ def plot_response_averages(expt, **kwds):
                 plt.plot(t, y, antialias=True)
 
                 # fit!
-                fit = fit_psp(avg_response)
+                fit = responses[(dev1, dev2)].fit_psp()
                 snr = fit.snr
                 nrmse = fit.nrmse()
                 
@@ -363,7 +362,72 @@ def plot_response_averages(expt, **kwds):
     return plots
 
 
-def fit_psp(response):
+class EvokedResponseGroup(object):
+    """A group of similar synaptic responses.
+
+    This is intended to be used as a container for many repeated responses evoked from
+    a single pre/postsynaptic pair. It provides methods for computing the average,
+    baseline-subtracted response and for fitting the average to a curve.
+    """
+    def __init__(self, pre_id, post_id, **kwds):
+        self.pre_id = pre_id
+        self.post_id = post_id
+        self.kwds = kwds
+        self.responses = []
+        self.baselines = []
+        self._bsub_mean = None
+
+    def add(self, response, baseline):
+        self.responses.append(response)
+        self.baselines.append(baseline)
+        self._bsub_mean = None
+
+    def __len__(self):
+        return len(self.responses)
+
+    def bsub_mean(self):
+        """Return a baseline-subtracted, average evoked response trace between two cells.
+
+        All traces are downsampled to the minimum sample rate in the set.
+        """
+        if len(self) == 0:
+            return None
+
+        if self._bsub_mean is None:
+            responses = self.responses
+            baselines = self.baselines
+            
+            # downsample all traces to the same rate
+            # yarg: how does this change SNR?
+            max_dt = max([trace.dt for trace in responses])
+            downsampled = [trace.downsample(n=int(max_dt/trace.dt)).data for trace in responses]
+            ds_baseline = [trace.downsample(n=int(max_dt/trace.dt)).data for trace in baselines]
+            
+            # average all together, clipping to minimum length
+            avg = ragged_mean(downsampled, method='clip')
+            avg_baseline = ragged_mean(ds_baseline, method='clip')
+            
+            # subtract baseline
+            baseline = np.median(avg_baseline)
+            bsub = avg - baseline
+
+            result = Trace(bsub, dt=max_dt)
+
+            # Attach some extra metadata to the result:
+            result.meta['baseline'] = avg_baseline
+            result.meta['baseline_med'] = baseline
+            result.meta['baseline_std'] = avg_baseline.std()
+
+            self._bsub_mean = result
+
+        return self._bsub_mean
+
+    def fit_psp(self, **kwds):
+        response = self.bsub_mean()
+        return fit_psp(response, **kwds)
+
+
+def fit_psp(response, **kwds):
     t = response.time_values
     y = response.data
 
@@ -378,6 +442,11 @@ def fit_psp(response):
         'amp_ratio': (1, 0, 10),
         'rise_power': (2, 'fixed'),
     }
+    params1.update(kwds)
+
+    # fit twice to check for + / - events
+    params2 = params1.copy()
+    params2['amp'] = (-params1['amp'][0],) + params1['amp'][1:]
 
     # Use zero weight for fit region around the stimulus artifact
     # weight = np.ones(len(y))
@@ -387,10 +456,6 @@ def fit_psp(response):
     weight = None
 
     fit_kws = {'weights': weight, 'xtol': 1e-3, 'maxfev': 200, 'nan_policy': 'omit'}
-
-    # fit twice to check for + / - events
-    params2 = params1.copy()
-    params2['amp'] = (-params1['amp'][0],) + params1['amp'][1:]
     
     best_fit = None
     best_score = None
@@ -410,6 +475,15 @@ def fit_psp(response):
     # print "SNR:", snr
 
     return fit
+
+
+def detect_connections(expt):
+    analyzer = MultiPatchExperimentAnalyzer.get(expt)
+
+    # First get average evoked responses for all pre/post pairs with long decay time
+    avg_responses, rows, cols = analyzer.get_evoked_response_matrix(clamp_mode='ic', min_duration=40e-3)
+
+    # fit averages to extract PSP decay
 
 
 if __name__ == '__main__':
@@ -432,10 +506,3 @@ if __name__ == '__main__':
     
     plots = plot_response_averages(expt, clamp_mode='ic', min_duration=25e-3, pulse_ids=None)
 
-
-"""
-# run from connectivity_summary script:
-import connection_detection as cd
-cd.plot_response_averages(expts[171].data, min_duration=20e-3)
-
-"""
