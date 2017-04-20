@@ -79,7 +79,7 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         self._attach(srec)
         self.srec = srec
 
-    def get_spike_responses(self, pre_rec, post_rec):
+    def get_spike_responses(self, pre_rec, post_rec, align_to='pulse', pre_pad=10e-3):
         """Given a pre- and a postsynaptic recording, return a structure
         containing evoked responses.
         
@@ -107,8 +107,12 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
             if spike is None:
                 continue
             
-            # start recording window at the rising phase of the presynaptic spike
-            pulse['rec_start'] = spike['rise_index'] - int(10e-3 / dt)
+            if align_to == 'spike':
+                # start recording window at the rising phase of the presynaptic spike
+                pulse['rec_start'] = spike['rise_index'] - int(pre_pad / dt)
+            elif align_to == 'pulse':
+                # align to pulse onset
+                pulse['rec_start'] = pulse['pulse_ind'] - int(pre_pad / dt)
             
             if i+1 < len(spikes):
                 # truncate window early if there is another pulse
@@ -327,15 +331,15 @@ def plot_response_averages(expt, show_baseline=False, **kwds):
                 y = avg_response.data
                 plt.plot(t, y, antialias=True)
 
-                # fit!
-                fit = responses[(dev1, dev2)].fit_psp(yoffset=0)
+                # fit!                
+                fit = responses[(dev1, dev2)].fit_psp(yoffset=0, mask_stim_artifact=(abs(dev1-dev2) < 3))
                 lsnr = np.log(fit.snr)
-                lerr = np.log(fit.err)
+                lerr = np.log(fit.nrmse())
                 
                 color = (
-                    np.clip(255 * (1-lerr), 0, 255),
+                    np.clip(255 * (-lerr/3.), 0, 255),
                     np.clip(50 * lsnr, 0, 255),
-                    np.clip(255 * lerr, 0, 255)
+                    np.clip(255 * (1+lerr/3.), 0, 255)
                 )
 
                 plt.plot(t, fit.best_fit, pen=color)
@@ -346,7 +350,7 @@ def plot_response_averages(expt, show_baseline=False, **kwds):
                 if show_baseline:
                     # plot baseline for reference
                     bl = avg_response.meta['baseline'] - avg_response.meta['baseline_med']
-                    plt.plot(np.arange(len(bl)) * avg_response.dt, bl, pen='g', antialias=True)
+                    plt.plot(np.arange(len(bl)) * avg_response.dt, bl, pen=(0, 100, 0), antialias=True)
 
                 # keep track of data range across all plots
                 ranges[0][0].append(y.min())
@@ -362,7 +366,7 @@ def plot_response_averages(expt, show_baseline=False, **kwds):
     plt.setLabels(left='ln(SNR)', bottom='ln(NRMSE)')
     plt.plot([p['x'] for p in points], [p['y'] for p in points], pen=None, symbol='o', symbolBrush=[pg.mkBrush(p['brush']) for p in points])
     # show threshold line
-    line = pg.InfiniteLine(pos=[0, 5], angle=180/np.pi * np.arctan(5))
+    line = pg.InfiniteLine(pos=[0, 6], angle=180/np.pi * np.arctan(1))
     plt.addItem(line, ignoreBounds=True)
 
     return plots
@@ -445,7 +449,7 @@ def trace_mean(traces):
 
 
 
-def fit_psp(response, mode='ic', sign='any', xoffset=10e-3, yoffset=(0, 'fixed')):
+def fit_psp(response, mode='ic', sign='any', xoffset=11e-3, yoffset=(0, 'fixed'), mask_stim_artifact=True):
     t = response.time_values
     y = response.data
 
@@ -472,9 +476,9 @@ def fit_psp(response, mode='ic', sign='any', xoffset=10e-3, yoffset=(0, 'fixed')
 
     psp = StackedPsp()
     base_params = {
-        'xoffset': (xoffset, 9e-3, t[-1]-2e-3),
+        'xoffset': (xoffset, 10e-3, 15e-3),
         'yoffset': yoffset,
-        'rise_time': (rise_time, rise_time/20., rise_time*20.),
+        'rise_time': (rise_time, rise_time/2., rise_time*2.),
         'decay_tau': (decay_tau, decay_tau/10., decay_tau*10.),
         'exp_amp': 'amp * amp_ratio',
         'amp_ratio': (1, 0, 10),
@@ -487,14 +491,14 @@ def fit_psp(response, mode='ic', sign='any', xoffset=10e-3, yoffset=(0, 'fixed')
         p2['amp'] = (amp, amp_min, amp_max)
         params.append(p2)
 
-    # Use zero weight for fit region around the stimulus artifact
-    # weight = np.ones(len(y))
-    # dt = avg_response.dt
-    # weight[int(9e-3/dt):int(11e-3/dt)] = 0
-    # plt.plot(t, weight)
-    weight = None
+    dt = response.dt
+    weight = np.ones(len(y))
+    weight[:int(10e-3/dt)] = 0.5
+    if mask_stim_artifact:
+        # Use zero weight for fit region around the stimulus artifact
+        weight[int(10e-3/dt):int(13e-3/dt)] = 0
 
-    fit_kws = {'weights': weight, 'xtol': 1e-3, 'maxfev': 200, 'nan_policy': 'omit'}
+    fit_kws = {'weights': weight, 'xtol': 1e-4, 'maxfev': 300, 'nan_policy': 'omit'}
     
     best_fit = None
     best_score = None
@@ -538,7 +542,7 @@ def detect_connections(expt):
             # make connectivity call
             lsnr = np.log(fit.snr)
             lnrmse = np.log(fit.nrmse())
-            if lsnr > 5 * lnrmse + 5:
+            if lsnr > lnrmse + 6:
                 print "Connection:", pre_id, post_id, fit.snr, fit.nrmse()
 
 
@@ -560,6 +564,6 @@ if __name__ == '__main__':
         expt_file = arg
         expt = MiesNwb(expt_file)
     
-    plots = plot_response_averages(expt, show_baseline=True, clamp_mode='ic', min_duration=25e-3, pulse_ids=None)
+    plots = plot_response_averages(expt, show_baseline=True, clamp_mode='ic', min_duration=15e-3, pulse_ids=None)
 
-    # detect_connections(expt)
+    detect_connections(expt)
