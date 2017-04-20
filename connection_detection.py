@@ -135,6 +135,19 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         
         return result
 
+    def get_pulse_response(self, pre_rec, post_rec, first_pulse=0, last_pulse=-1):
+        pulse_stim = PulseStimAnalyzer.get(pre_rec)
+        spikes = pulse_stim.evoked_spikes()
+        
+        if len(spikes) < 10:
+            return None
+        
+        dt = post_rec['primary'].dt
+        start = spikes[first_pulse]['pulse_ind'] - int(20e-3 / dt)
+        stop = spikes[last_pulse]['pulse_ind'] + int(50e-3 / dt)
+        return post_rec['primary'][start:stop]
+        
+        
 
 class MultiPatchExperimentAnalyzer(Analyzer):
     """
@@ -428,6 +441,11 @@ class EvokedResponseGroup(object):
 
         return self._bsub_mean
 
+    def mean(self):
+        if len(self) == 0:
+            return None
+        return trace_mean(self.responses)
+
     def fit_psp(self, **kwds):
         response = self.bsub_mean()
         if response is None:
@@ -556,9 +574,9 @@ if __name__ == '__main__':
     import sys
     arg = sys.argv[1]
     try:
+        expt_ind = int(arg)
         from experiment_list import ExperimentList
         all_expts = ExperimentList(cache='expts_cache.pkl')
-        expt_ind = int(arg)
         expt = all_expts[expt_ind].data
     except ValueError:
         expt_file = arg
