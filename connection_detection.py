@@ -1,5 +1,6 @@
 from copy import deepcopy
 import numpy as np
+import scipy.signal
 import pyqtgraph as pg
 
 from neuroanalysis.spike_detection import detect_evoked_spike
@@ -95,14 +96,8 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
             # but for now we rely on the delay period between pulses 8 and 9 to get
             # a baseline measurement.
             return []
-        
-        # select baseline region between 8th and 9th pulses
-        # (ideally we should use more careful criteria for selecting a baseline region)
+
         dt = post_rec['primary'].dt
-        baseline_dur = int(50e-3 / dt)
-        stop = spikes[8]['pulse_ind'] - 1
-        start = stop - baseline_dur
-        baseline = post_rec['primary'][start:stop]
         
         # Select ranges to extract from postsynaptic recording
         result = []
@@ -125,8 +120,12 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
             # Extract data from postsynaptic recording
             pulse['response'] = post_rec['primary'][pulse['rec_start']:pulse['rec_stop']]
             
-            # record pointer to the baseline before the first pulse
-            pulse['baseline'] = baseline
+            # select baseline region between 8th and 9th pulses
+            # (ideally we should use more careful criteria for selecting a baseline region)
+            baseline_dur = int(10e-3 / dt)
+            stop = spikes[8]['pulse_ind'] - (i * baseline_dur)
+            start = stop - baseline_dur
+            pulse['baseline'] = post_rec['primary'][start:stop]
             
             result.append(pulse)
         
@@ -201,22 +200,22 @@ class MultiPatchExperimentAnalyzer(Analyzer):
         """
         devs = self.list_devs()
 
-        avg_responses = {}
+        all_responses = {}
         rows = set()
         cols = set()
         for i, dev1 in enumerate(devs):
             for j, dev2 in enumerate(devs):
                 if dev1 == dev2:
                     continue
-                avg = self.get_evoked_responses(dev1, dev2, **kwds)
-                if avg is not None:
+                resp = self.get_evoked_responses(dev1, dev2, **kwds)
+                if len(resp) > 0:
                     rows.add(dev1)
                     cols.add(dev2)
-                avg_responses[(dev1, dev2)] = avg
+                all_responses[(dev1, dev2)] = resp
         rows = sorted(list(rows))
         cols = sorted(list(cols))
 
-        return avg_responses, rows, cols
+        return all_responses, rows, cols
 
     def _all_evoked_responses(self):
         
@@ -278,7 +277,7 @@ class NDDict(object):
 
 
 
-def plot_response_averages(expt, **kwds):
+def plot_response_averages(expt, show_baseline=False, **kwds):
     analyzer = MultiPatchExperimentAnalyzer.get(expt)
     devs = analyzer.list_devs()
 
@@ -304,7 +303,8 @@ def plot_response_averages(expt, **kwds):
                 plt.getAxis('left').setVisible(False)
 
             if dev1 == dev2:
-                #plt.setVisible(False)
+                plt.getAxis('bottom').setVisible(False)
+                plt.getAxis('left').setVisible(False)
                 continue
             
             # adjust axes / labels
@@ -328,22 +328,25 @@ def plot_response_averages(expt, **kwds):
                 plt.plot(t, y, antialias=True)
 
                 # fit!
-                fit = responses[(dev1, dev2)].fit_psp()
-                snr = fit.snr
-                nrmse = fit.nrmse()
+                fit = responses[(dev1, dev2)].fit_psp(yoffset=0)
+                lsnr = np.log(fit.snr)
+                lerr = np.log(fit.err)
                 
                 color = (
-                    np.clip(255 * (1-nrmse), 0, 255),
-                    np.clip(50 * snr, 0, 255),
-                    np.clip(255 * nrmse, 0, 255)
+                    np.clip(255 * (1-lerr), 0, 255),
+                    np.clip(50 * lsnr, 0, 255),
+                    np.clip(255 * lerr, 0, 255)
                 )
 
-                plt.plot(t, fit.eval(), pen=color)
+                plt.plot(t, fit.best_fit, pen=color)
+                # plt.plot(t, fit.init_fit, pen='y')
 
+                points.append({'x': lerr, 'y': lsnr, 'brush': color})
 
-                points.append({'x': nrmse, 'y': snr, 'brush': color})
-                # bl = avg_response.meta['baseline'] - avg_response.meta['baseline_med']
-                # plt.plot(np.arange(len(bl)) * avg_response.dt, bl, pen='g')
+                if show_baseline:
+                    # plot baseline for reference
+                    bl = avg_response.meta['baseline'] - avg_response.meta['baseline_med']
+                    plt.plot(np.arange(len(bl)) * avg_response.dt, bl, pen='g', antialias=True)
 
                 # keep track of data range across all plots
                 ranges[0][0].append(y.min())
@@ -356,9 +359,12 @@ def plot_response_averages(expt, **kwds):
 
     # scatter plot of SNR vs NRMSE
     plt = pg.plot()
-    plt.setLabels(left='SNR', bottom='NRMSE')
+    plt.setLabels(left='ln(SNR)', bottom='ln(NRMSE)')
     plt.plot([p['x'] for p in points], [p['y'] for p in points], pen=None, symbol='o', symbolBrush=[pg.mkBrush(p['brush']) for p in points])
-        
+    # show threshold line
+    line = pg.InfiniteLine(pos=[0, 5], angle=180/np.pi * np.arctan(5))
+    plt.addItem(line, ignoreBounds=True)
+
     return plots
 
 
@@ -399,24 +405,20 @@ class EvokedResponseGroup(object):
             
             # downsample all traces to the same rate
             # yarg: how does this change SNR?
-            max_dt = max([trace.dt for trace in responses])
-            downsampled = [trace.downsample(n=int(max_dt/trace.dt)).data for trace in responses]
-            ds_baseline = [trace.downsample(n=int(max_dt/trace.dt)).data for trace in baselines]
-            
-            # average all together, clipping to minimum length
-            avg = ragged_mean(downsampled, method='clip')
-            avg_baseline = ragged_mean(ds_baseline, method='clip')
-            
+            avg = trace_mean(responses)
+            avg_baseline = trace_mean(baselines).data
+            max_dt = avg.dt
+
             # subtract baseline
             baseline = np.median(avg_baseline)
-            bsub = avg - baseline
+            bsub = avg.data - baseline
 
             result = Trace(bsub, dt=max_dt)
 
             # Attach some extra metadata to the result:
             result.meta['baseline'] = avg_baseline
             result.meta['baseline_med'] = baseline
-            result.meta['baseline_std'] = avg_baseline.std()
+            result.meta['baseline_std'] = scipy.signal.detrend(avg_baseline).std()
 
             self._bsub_mean = result
 
@@ -424,29 +426,66 @@ class EvokedResponseGroup(object):
 
     def fit_psp(self, **kwds):
         response = self.bsub_mean()
+        if response is None:
+            return None
         return fit_psp(response, **kwds)
 
 
-def fit_psp(response, **kwds):
+def trace_mean(traces):
+    """Return the mean of a list of traces.
+
+    Downsamples to the minimum rate and clips ragged edges.
+    """
+    max_dt = max([trace.dt for trace in traces])
+    downsampled = [trace.downsample(n=int(max_dt/trace.dt)).data for trace in traces]
+    avg = ragged_mean(downsampled, method='clip')
+    return Trace(avg, dt=max_dt)
+
+
+
+
+
+def fit_psp(response, mode='ic', sign='any', xoffset=10e-3, yoffset=(0, 'fixed')):
     t = response.time_values
     y = response.data
 
+    if mode == 'ic':
+        amp = .2e-3
+        amp_max = 100e-3
+        rise_time = 5e-3
+        decay_tau = 50e-3
+    elif mode == 'vc':
+        amp = 20e-12
+        amp_max = 500e-12
+        rise_time = 1e-3
+        decay_tau = 4e-3
+    else:
+        raise ValueError('mode must be "ic" or "vc"')
+
+    amps = [(amp, 0, amp_max), (-amp, -amp_max, 0)]
+    if sign == '-':
+        amps = amps[1:]
+    elif sign == '+':
+        amps = amps[:1]
+    elif sign != 'any':
+        raise ValueError('sign must be "+", "-", or "any"')
+
     psp = StackedPsp()
-    params1 = {
-        'xoffset': (10e-3, 9e-3, 20e-3),
-        'yoffset': (0, 'fixed'),
-        'rise_time': (10e-3, 0.1e-3, 30e-3),
-        'decay_tau': (50e-3, 1e-3, 200e-3),
-        'amp': (-1e-3, -100e-3, 100e-3),
+    base_params = {
+        'xoffset': (xoffset, 9e-3, t[-1]-2e-3),
+        'yoffset': yoffset,
+        'rise_time': (rise_time, rise_time/20., rise_time*20.),
+        'decay_tau': (decay_tau, decay_tau/10., decay_tau*10.),
         'exp_amp': 'amp * amp_ratio',
         'amp_ratio': (1, 0, 10),
         'rise_power': (2, 'fixed'),
     }
-    params1.update(kwds)
-
-    # fit twice to check for + / - events
-    params2 = params1.copy()
-    params2['amp'] = (-params1['amp'][0],) + params1['amp'][1:]
+    
+    params = []
+    for amp, amp_min, amp_max in amps:
+        p2 = base_params.copy()
+        p2['amp'] = (amp, amp_min, amp_max)
+        params.append(p2)
 
     # Use zero weight for fit region around the stimulus artifact
     # weight = np.ones(len(y))
@@ -459,8 +498,8 @@ def fit_psp(response, **kwds):
     
     best_fit = None
     best_score = None
-    for params in [params1, params2]:
-        fit = psp.fit(y, x=t, fit_kws=fit_kws, params=params)
+    for p in params:
+        fit = psp.fit(y, x=t, params=p, fit_kws=fit_kws, method='leastsq')
         err = np.sum(fit.residual**2)
         if best_fit is None or err < best_score:
             best_fit = fit
@@ -469,6 +508,7 @@ def fit_psp(response, **kwds):
 
     # nrmse = fit.nrmse()
     fit.snr = abs(fit.best_values['amp']) / response.meta['baseline_std']
+    fit.err = fit.rmse() / response.meta['baseline_std']
     # print fit.best_values
     # print "RMSE:", fit.rmse()
     # print "NRMSE:", nrmse
@@ -481,9 +521,25 @@ def detect_connections(expt):
     analyzer = MultiPatchExperimentAnalyzer.get(expt)
 
     # First get average evoked responses for all pre/post pairs with long decay time
-    avg_responses, rows, cols = analyzer.get_evoked_response_matrix(clamp_mode='ic', min_duration=40e-3)
+    all_responses, rows, cols = analyzer.get_evoked_response_matrix(clamp_mode='ic', min_duration=16e-3)
 
-    # fit averages to extract PSP decay
+    for pre_id in rows:
+        for post_id in cols:
+            try:
+                response = all_responses[(pre_id, post_id)]
+                if len(response) == 0:
+                    continue
+            except KeyError:
+                continue
+
+            # fit average to extract PSP decay
+            fit = response.fit_psp(yoffset=0)
+
+            # make connectivity call
+            lsnr = np.log(fit.snr)
+            lnrmse = np.log(fit.nrmse())
+            if lsnr > 5 * lnrmse + 5:
+                print "Connection:", pre_id, post_id, fit.snr, fit.nrmse()
 
 
 if __name__ == '__main__':
@@ -504,5 +560,6 @@ if __name__ == '__main__':
         expt_file = arg
         expt = MiesNwb(expt_file)
     
-    plots = plot_response_averages(expt, clamp_mode='ic', min_duration=25e-3, pulse_ids=None)
+    plots = plot_response_averages(expt, show_baseline=True, clamp_mode='ic', min_duration=25e-3, pulse_ids=None)
 
+    # detect_connections(expt)
