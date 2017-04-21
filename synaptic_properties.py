@@ -130,7 +130,7 @@ def pulse_average_matrix(expts, **kwds):
             avg_plot = plots[i, j]
             ind_plot = indplots[i, j]
             plot_pulse_average(all_expts, pre_type, post_type, avg_plot, ind_plot, **kwds)
-
+            pg.QtGui.QApplication.processEvents()
 
 
 if __name__ == '__main__':
@@ -145,6 +145,6 @@ if __name__ == '__main__':
     #trace_average_matrix(all_expts, clamp_mode='ic', stim_filter='50Hz', min_traces=25)
 
 
-    resp = get_pulse_responses(all_expts, 'sst', 'sst', clamp_mode='ic', min_duration=25e-3, pulse_ids=[0, 8], stim_filter='20Hz')
+    #resp = get_pulse_responses(all_expts, 'sst', 'sst', clamp_mode='ic', min_duration=25e-3, pulse_ids=[0, 8], stim_filter='20Hz')
     
-    
+    pulse_average_matrix(all_expts, clamp_mode='ic', min_duration=25e-3, pulse_ids=[0, 8], stim_filter='20Hz')
