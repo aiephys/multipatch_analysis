@@ -2,7 +2,7 @@ import pyqtgraph as pg
 from experiment_list import ExperimentList
 from connection_detection import MultiPatchExperimentAnalyzer, MultiPatchSyncRecAnalyzer, EvokedResponseGroup, trace_mean
 from neuroanalysis.ui.plot_grid import PlotGrid
-
+from neuroanalysis.data import Trace
 
 def find_connections(expts, pre_type, post_type):
     """Iterate over all connections having a certain pre- and post-cre type.
@@ -99,7 +99,9 @@ def get_pulse_responses(expts, pre_type, post_type, **kwds):
         xa = MultiPatchExperimentAnalyzer.get(data)
         responses = xa.get_evoked_responses(pre_id, post_id, **kwds)
         avg = responses.bsub_mean()
-        all_responses.add(avg, None)
+        if avg is not None:
+            all_responses.add(avg, None)
+        pg.QtGui.QApplication.processEvents()
     
     return all_responses
         
@@ -108,16 +110,19 @@ def plot_pulse_average(expts, pre_type, post_type, avg_plot, ind_plot, **kwds):
     all_avgs = EvokedResponseGroup()
     ind_plot.setLabels(left=('%s-%s'%(pre_type, post_type), 'V'), bottom=('Time', 's'))
     avg_plot.setLabels(left=('%s-%s'%(pre_type, post_type), 'V'), bottom=('Time', 's'))
-    resposes = get_pulse_responses(expts, pre_type, post_type, **kwds)
+    responses = get_pulse_responses(expts, pre_type, post_type, **kwds)
     for resp in responses.responses:
         ind_plot.plot(resp.time_values, resp.data)
-        all_avgs.add(resp)
+        all_avgs.add(Trace(resp.data, dt=resp.dt), None)
         
     avg = all_avgs.mean()
-    avg_plot.plot(avg.time_values, avg.data)
-    
+    if avg is not None:
+        avg_plot.plot(avg.time_values, avg.data)
+    return avg
+
 
 def pulse_average_matrix(expts, **kwds):
+    results = {}
     types = ['tlx3', 'sim1', 'pvalb', 'sst', 'vip']
     plots = PlotGrid()
     plots.set_shape(len(types), len(types))
@@ -129,8 +134,11 @@ def pulse_average_matrix(expts, **kwds):
         for j, post_type in enumerate(types):
             avg_plot = plots[i, j]
             ind_plot = indplots[i, j]
-            plot_pulse_average(all_expts, pre_type, post_type, avg_plot, ind_plot, **kwds)
+            avg = plot_pulse_average(all_expts, pre_type, post_type, avg_plot, ind_plot, **kwds)
             pg.QtGui.QApplication.processEvents()
+            results[(pre_type, post_type)] = avg
+
+    return results
 
 
 if __name__ == '__main__':
@@ -147,4 +155,4 @@ if __name__ == '__main__':
 
     #resp = get_pulse_responses(all_expts, 'sst', 'sst', clamp_mode='ic', min_duration=25e-3, pulse_ids=[0, 8], stim_filter='20Hz')
     
-    pulse_average_matrix(all_expts, clamp_mode='ic', min_duration=25e-3, pulse_ids=[0, 8], stim_filter='20Hz')
+    results = pulse_average_matrix(all_expts, clamp_mode='ic', min_duration=25e-3, pulse_ids=[0, 8])

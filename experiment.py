@@ -407,8 +407,10 @@ class Experiment(object):
         """
         if self._data is None:
             from neuroanalysis.miesnwb import MiesNwb
-            cf = 'cache/' + self.nwb_file.replace('/', '__')
             import os
+            if not os.path.isdir('cache'):
+                os.mkdir('cache')
+            cf = os.path.join('cache', self.nwb_file.replace('/', '_').replace(':', '_').replace('\\', '_'))
             if not os.path.isfile(cf):
                 try:
                     import shutil
