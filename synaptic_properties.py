@@ -3,12 +3,7 @@ from experiment_list import ExperimentList
 from connection_detection import MultiPatchSyncRecAnalyzer, EvokedResponseGroup, trace_mean
 from neuroanalysis.ui.plot_grid import PlotGrid
 
-app = pg.mkQApp()
-pg.dbg()
-
-all_expts = ExperimentList(cache='expts_cache.pkl')
-
-def plot_trace_average(expts, pre_type, post_type, avg_plot, ind_plot=None, clamp_mode='ic', stim_filter='50Hz'):
+def plot_trace_average(expts, pre_type, post_type, avg_plot, ind_plot=None, clamp_mode='ic', stim_filter='50Hz', min_traces=25):
     all_responses = []
     n_traces = 0
     
@@ -43,7 +38,7 @@ def plot_trace_average(expts, pre_type, post_type, avg_plot, ind_plot=None, clam
         
         print "   got %d sweeps" % len(responses)
         
-        if len(responses) < 25:
+        if len(responses) < min_traces:
             continue
         
         avg = responses.mean()
@@ -53,7 +48,7 @@ def plot_trace_average(expts, pre_type, post_type, avg_plot, ind_plot=None, clam
             ind_plot.plot(avg.time_values, avg.data)
             ind_plot.setTitle('%s - %s  (%d synapses, %d traces)' % (pre_type, post_type, len(all_responses), n_traces))
 
-        app.processEvents()
+        pg.QtGui.QApplication.processEvents()
 
     avg_plot.setTitle('%s - %s  (%d synapses, %d traces)' % (pre_type, post_type, len(all_responses), n_traces))
     if len(all_responses) > 0:
@@ -62,12 +57,7 @@ def plot_trace_average(expts, pre_type, post_type, avg_plot, ind_plot=None, clam
         avg_plot.setLabels(left=('Average response', 'V'), bottom=('Time', 's'))
 
 
-if __name__ == '__main__':
-    #avg_plot = pg.plot()
-    #ind_plot = pg.plot()
-    #plot_trace_average(all_expts, 'tlx3', 'tlx3', avg_plot, ind_plot, clamp_mode='ic', stim_filter='50Hz')
-    
-
+def plot_average_matrix(expts, **kwds):
     types = ['tlx3', 'sim1', 'pvalb', 'sst', 'vip']
     plots = PlotGrid()
     plots.set_shape(len(types), len(types))
@@ -79,4 +69,16 @@ if __name__ == '__main__':
         for j, post_type in enumerate(types):
             avg_plot = plots[i, j]
             ind_plot = indplots[i, j]
-            plot_trace_average(all_expts, pre_type, post_type, avg_plot, ind_plot, clamp_mode='ic', stim_filter='50Hz')
+            plot_trace_average(all_expts, pre_type, post_type, avg_plot, ind_plot, **kwds)
+
+
+if __name__ == '__main__':
+    #avg_plot = pg.plot()
+    #ind_plot = pg.plot()
+    #plot_trace_average(all_expts, 'tlx3', 'tlx3', avg_plot, ind_plot, clamp_mode='ic', stim_filter='50Hz')
+    app = pg.mkQApp()
+    pg.dbg()
+
+    all_expts = ExperimentList(cache='expts_cache.pkl')
+    
+    plot_average_matrix(all_expts, clamp_mode='ic', stim_filter='50Hz', min_traces=25)
