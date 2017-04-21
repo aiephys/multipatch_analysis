@@ -192,7 +192,7 @@ class ExperimentList(object):
             if expt.region is None:
                 print("Warning: Experiment %s has no region" % str(expt.expt_id))
 
-    def distance_plot(self, pre_type, post_type, plot=None, color=(100, 100, 255)):
+    def distance_plot(self, pre_type, post_type, plots=None, color=(100, 100, 255)):
         # get all connected and unconnected distances for pre->post
         probed = []
         connected = []
@@ -205,7 +205,7 @@ class ExperimentList(object):
                 probed.append(dist)
                 connected.append((i, j) in expt.connections)
 
-        distance_plot(connected, distance=probed, plot=plot, color=color)
+        return distance_plot(connected, distance=probed, plots=plots, color=color, name="%s->%s"%(pre_type, post_type))
 
     def matrix(self, rows, cols, size=50):
         w = pg.GraphicsLayoutWidget()
