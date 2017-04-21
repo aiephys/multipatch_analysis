@@ -1,34 +1,51 @@
 import pyqtgraph as pg
 from experiment_list import ExperimentList
-from connection_detection import MultiPatchSyncRecAnalyzer, EvokedResponseGroup, trace_mean
+from connection_detection import MultiPatchExperimentAnalyzer, MultiPatchSyncRecAnalyzer, EvokedResponseGroup, trace_mean
 from neuroanalysis.ui.plot_grid import PlotGrid
 
-def plot_trace_average(expts, pre_type, post_type, avg_plot, ind_plot=None, clamp_mode='ic', stim_filter='50Hz', min_traces=25):
-    all_responses = []
-    n_traces = 0
-    
+
+def find_connections(expts, pre_type, post_type):
+    """Iterate over all connections having a certain pre- and post-cre type.
+    Yields, expt, pre_is, post_id for each connection.
+    """
     for conn in all_expts.connection_summary()[::-1]:
         pre_cell, post_cell = conn['cells']
         if pre_cell.cre_type != pre_type or post_cell.cre_type != post_type:
             continue
         expt = conn['expt']
         pre_id, post_id = pre_cell.cell_id-1, post_cell.cell_id-1
+        yield expt, pre_id, post_id
+
+
+def find_sweeps(expt, pre_id, post_id, clamp_mode=None, stim_filter=None):
+    """Iterate over all sweeps in an experiment having a particular pre- and post-
+    device ID
+    """
+    for sweep in data.contents:
+        devs = sweep.devices
+        if pre_id not in devs or post_id not in devs:
+            continue
+        pre_rec = sweep[pre_id]
+        if stim_filter is not None and stim_filter not in pre_rec.meta['stim_name']:
+            continue
+        post_rec = sweep[post_id]
+        if clamp_mode is not None and post_rec.clamp_mode != clamp_mode:
+            continue
+        yield sweep, pre_rec, post_rec
+
+
+
+def plot_trace_average(expts, pre_type, post_type, avg_plot, ind_plot=None, clamp_mode='ic', stim_filter='50Hz', min_traces=25):
+    all_responses = []
+    n_traces = 0
+    
+    for expt, pre_id, post_id in find_connections(expts, pre_type, post_type):
         print expt, pre_id, post_id
         #with expt.data as data:
         data = expt.data
     
         responses = EvokedResponseGroup(pre_id, post_id)
-        for sweep in data.contents:
-            devs = sweep.devices
-            if pre_id not in devs or post_id not in devs:
-                continue
-            pre_rec = sweep[pre_id]
-            if stim_filter not in pre_rec.meta['stim_name']:
-                continue
-            post_rec = sweep[post_id]
-            if post_rec.clamp_mode != clamp_mode:
-                continue
-            
+        for sweep, pre_rec, post_rec in find_sweeps(data, pre_id, post_id, clamp_mode, stim_filter):
             sa = MultiPatchSyncRecAnalyzer.get(sweep)
             resp = sa.get_pulse_response(pre_rec, post_rec, 0, 7)
             base = None
@@ -57,7 +74,7 @@ def plot_trace_average(expts, pre_type, post_type, avg_plot, ind_plot=None, clam
         avg_plot.setLabels(left=('Average response', 'V'), bottom=('Time', 's'))
 
 
-def plot_average_matrix(expts, **kwds):
+def trace_average_matrix(expts, **kwds):
     types = ['tlx3', 'sim1', 'pvalb', 'sst', 'vip']
     plots = PlotGrid()
     plots.set_shape(len(types), len(types))
@@ -72,6 +89,50 @@ def plot_average_matrix(expts, **kwds):
             plot_trace_average(all_expts, pre_type, post_type, avg_plot, ind_plot, **kwds)
 
 
+def get_pulse_responses(expts, pre_type, post_type, **kwds):
+    all_responses = EvokedResponseGroup()
+    for expt, pre_id, post_id in find_connections(expts, pre_type, post_type):
+        print expt, pre_id, post_id
+        #with expt.data as data:
+        data = expt.data
+    
+        xa = MultiPatchExperimentAnalyzer.get(data)
+        responses = xa.get_evoked_responses(pre_id, post_id, **kwds)
+        avg = responses.bsub_mean()
+        all_responses.add(avg, None)
+    
+    return all_responses
+        
+        
+def plot_pulse_average(expts, pre_type, post_type, avg_plot, ind_plot, **kwds):
+    all_avgs = EvokedResponseGroup()
+    ind_plot.setLabels(left=('%s-%s'%(pre_type, post_type), 'V'), bottom=('Time', 's'))
+    avg_plot.setLabels(left=('%s-%s'%(pre_type, post_type), 'V'), bottom=('Time', 's'))
+    resposes = get_pulse_responses(expts, pre_type, post_type, **kwds)
+    for resp in responses.responses:
+        ind_plot.plot(resp.time_values, resp.data)
+        all_avgs.add(resp)
+        
+    avg = all_avgs.mean()
+    avg_plot.plot(avg.time_values, avg.data)
+    
+
+def pulse_average_matrix(expts, **kwds):
+    types = ['tlx3', 'sim1', 'pvalb', 'sst', 'vip']
+    plots = PlotGrid()
+    plots.set_shape(len(types), len(types))
+    indplots = PlotGrid()
+    indplots.set_shape(len(types), len(types))
+    plots.show()
+    indplots.show()
+    for i, pre_type in enumerate(types):
+        for j, post_type in enumerate(types):
+            avg_plot = plots[i, j]
+            ind_plot = indplots[i, j]
+            plot_pulse_average(all_expts, pre_type, post_type, avg_plot, ind_plot, **kwds)
+
+
+
 if __name__ == '__main__':
     #avg_plot = pg.plot()
     #ind_plot = pg.plot()
@@ -81,4 +142,9 @@ if __name__ == '__main__':
 
     all_expts = ExperimentList(cache='expts_cache.pkl')
     
-    plot_average_matrix(all_expts, clamp_mode='ic', stim_filter='50Hz', min_traces=25)
+    #trace_average_matrix(all_expts, clamp_mode='ic', stim_filter='50Hz', min_traces=25)
+
+
+    resp = get_pulse_responses(all_expts, 'sst', 'sst', clamp_mode='ic', min_duration=25e-3, pulse_ids=[0, 8], stim_filter='20Hz')
+    
+    

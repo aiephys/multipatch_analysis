@@ -9,6 +9,7 @@ from neuroanalysis.stimuli import square_pulses
 from neuroanalysis.data import Trace
 from neuroanalysis.fitting import StackedPsp
 from neuroanalysis.ui.plot_grid import PlotGrid
+from neuroanalysis.filter import bessel_filter
 
 
 class Analyzer(object):
@@ -341,7 +342,7 @@ def plot_response_averages(expt, show_baseline=False, **kwds):
             if avg_response is not None:
                 
                 t = avg_response.time_values
-                y = avg_response.data
+                y = bessel_filter(Trace(avg_response.data, dt=avg_response.dt), 2e3).data
                 plt.plot(t, y, antialias=True)
 
                 # fit!                
@@ -392,7 +393,7 @@ class EvokedResponseGroup(object):
     a single pre/postsynaptic pair. It provides methods for computing the average,
     baseline-subtracted response and for fitting the average to a curve.
     """
-    def __init__(self, pre_id, post_id, **kwds):
+    def __init__(self, pre_id=None, post_id=None, **kwds):
         self.pre_id = pre_id
         self.post_id = post_id
         self.kwds = kwds
@@ -582,6 +583,6 @@ if __name__ == '__main__':
         expt_file = arg
         expt = MiesNwb(expt_file)
     
-    plots = plot_response_averages(expt, show_baseline=True, clamp_mode='ic', min_duration=15e-3, pulse_ids=None)
+    plots = plot_response_averages(expt, show_baseline=True, clamp_mode='ic', min_duration=25e-3, pulse_ids=None)
 
     detect_connections(expt)
