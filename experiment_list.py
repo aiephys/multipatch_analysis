@@ -304,8 +304,8 @@ class ExperimentList(object):
             tot_connected += n_c
             ages.append(expt.age)
 
-            fmt = "%d: %s:  \t%d\t%d\t%d\t%s"
-            fmt_args = [i, expt.expt_id[1], n_p, n_c, expt.age, ', '.join(expt.cre_types)]
+            fmt = "%s: %s %s %s %s %s"
+            fmt_args = [str(i).rjust(4), str(n_p).ljust(5), str(n_c).ljust(5), str(expt.age).ljust(7), ', '.join(expt.cre_types).ljust(15), ':'.join(expt.expt_id)]
 
             # get list of stimuli
             if list_stims:
