@@ -21,7 +21,7 @@ def find_sweeps(expt, pre_id, post_id, clamp_mode=None, stim_filter=None):
     """Iterate over all sweeps in an experiment having a particular pre- and post-
     device ID
     """
-    for sweep in data.contents:
+    for sweep in expt.contents:
         devs = sweep.devices
         if pre_id not in devs or post_id not in devs:
             continue
@@ -76,54 +76,7 @@ def plot_trace_average(expts, pre_type, post_type, avg_plot, ind_plot=None, clam
 
 def trace_average_matrix(expts, **kwds):
     types = ['tlx3', 'sim1', 'pvalb', 'sst', 'vip']
-    plots = PlotGrid()
-    plots.set_shape(len(types), len(types))
-    indplots = PlotGrid()
-    indplots.set_shape(len(types), len(types))
-    plots.show()
-    indplots.show()
-    for i, pre_type in enumerate(types):
-        for j, post_type in enumerate(types):
-            avg_plot = plots[i, j]
-            ind_plot = indplots[i, j]
-            plot_trace_average(all_expts, pre_type, post_type, avg_plot, ind_plot, **kwds)
-
-
-def get_pulse_responses(expts, pre_type, post_type, **kwds):
-    all_responses = EvokedResponseGroup()
-    for expt, pre_id, post_id in find_connections(expts, pre_type, post_type):
-        print expt, pre_id, post_id
-        #with expt.data as data:
-        data = expt.data
-    
-        xa = MultiPatchExperimentAnalyzer.get(data)
-        responses = xa.get_evoked_responses(pre_id, post_id, **kwds)
-        avg = responses.bsub_mean()
-        if avg is not None:
-            all_responses.add(avg, None)
-        pg.QtGui.QApplication.processEvents()
-    
-    return all_responses
-        
-        
-def plot_pulse_average(expts, pre_type, post_type, avg_plot, ind_plot, **kwds):
-    all_avgs = EvokedResponseGroup()
-    ind_plot.setLabels(left=('%s-%s'%(pre_type, post_type), 'V'), bottom=('Time', 's'))
-    avg_plot.setLabels(left=('%s-%s'%(pre_type, post_type), 'V'), bottom=('Time', 's'))
-    responses = get_pulse_responses(expts, pre_type, post_type, **kwds)
-    for resp in responses.responses:
-        ind_plot.plot(resp.time_values, resp.data)
-        all_avgs.add(Trace(resp.data, dt=resp.dt), None)
-        
-    avg = all_avgs.mean()
-    if avg is not None:
-        avg_plot.plot(avg.time_values, avg.data)
-    return avg
-
-
-def pulse_average_matrix(expts, **kwds):
     results = {}
-    types = ['tlx3', 'sim1', 'pvalb', 'sst', 'vip']
     plots = PlotGrid()
     plots.set_shape(len(types), len(types))
     indplots = PlotGrid()
@@ -134,10 +87,8 @@ def pulse_average_matrix(expts, **kwds):
         for j, post_type in enumerate(types):
             avg_plot = plots[i, j]
             ind_plot = indplots[i, j]
-            avg = plot_pulse_average(all_expts, pre_type, post_type, avg_plot, ind_plot, **kwds)
-            pg.QtGui.QApplication.processEvents()
+            avg = plot_trace_average(all_expts, pre_type, post_type, avg_plot, ind_plot, **kwds)
             results[(pre_type, post_type)] = avg
-
     return results
 
 
@@ -150,9 +101,4 @@ if __name__ == '__main__':
 
     all_expts = ExperimentList(cache='expts_cache.pkl')
     
-    #trace_average_matrix(all_expts, clamp_mode='ic', stim_filter='50Hz', min_traces=25)
-
-
-    #resp = get_pulse_responses(all_expts, 'sst', 'sst', clamp_mode='ic', min_duration=25e-3, pulse_ids=[0, 8], stim_filter='20Hz')
-    
-    results = pulse_average_matrix(all_expts, clamp_mode='ic', min_duration=25e-3, pulse_ids=[0, 8])
+    results = trace_average_matrix(all_expts, clamp_mode='ic', stim_filter='50Hz', min_traces=25)
