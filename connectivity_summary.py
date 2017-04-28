@@ -29,9 +29,10 @@ parser.add_argument('--start', type=arg_to_date)
 parser.add_argument('--stop', type=arg_to_date)
 parser.add_argument('--list-stims', action='store_true', default=False, dest='list_stims',
                     help='print a list of each connection and the stimulus sets acquired')
-parser.add_argument('--sweep-threshold', type=int, action='store', default=5, dest='sweep_threshold',
+parser.add_argument('--sweep-threshold', nargs = '*', type=int, action='store', default=[5,10], dest='sweep_threshold',
                     help='Combined with --list-stims, for each connection type, prints the number of connections'
-                         '' 'for which there are >= sweep_threshold number of each stimulus set')
+                         '' 'for which there are >= sweep_threshold number of sweeps/stimulus set. Two thresholds'
+                         '' 'are set one for induction protocols (default=5) and one for recovery (default=10')
 parser.add_argument('files', nargs='*', type=os.path.abspath)
 args = parser.parse_args(sys.argv[1:])
 
