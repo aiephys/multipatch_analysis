@@ -94,13 +94,14 @@ class Experiment(object):
 
     @property
     def connections(self):
-        """A list of connections found in this experiment.
+        """A list of connections reported for this experiment, excluding any that did not pass QC.
         
         Each item in the list is a tuple containing the pre- and postsynaptic cell IDs::
         
             [(pre_cell_id, post_cell_id), ...]
         """
-        return self._connections
+        probed = self.connections_probed
+        return [c for c in self._connections if c in probed]
 
     @property
     def sweep_summary(self):
