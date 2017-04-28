@@ -11,7 +11,7 @@ import warnings
 
 import pyqtgraph as pg
 
-from graphics import MatrixItem
+from graphics import MatrixItem, distance_plot
 from experiment import Experiment
 from constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
 
@@ -193,7 +193,7 @@ class ExperimentList(object):
             if expt.region is None:
                 print("Warning: Experiment %s has no region" % str(expt.expt_id))
 
-    def distance_plot(self, pre_type, post_type, plot=None, color=(100, 100, 255)):
+    def distance_plot(self, pre_type, post_type, plots=None, color=(100, 100, 255)):
         # get all connected and unconnected distances for pre->post
         probed = []
         connected = []
@@ -205,92 +205,8 @@ class ExperimentList(object):
                 dist = ci.distance(cj)
                 probed.append(dist)
                 connected.append((i, j) in expt.connections)
-        connected = np.array(connected).astype(float)
-        probed = np.array(probed)
-        pts = np.vstack([probed, connected]).T
 
-        # scatter points a bit
-        conn = pts[:,1] == 1
-        unconn = pts[:,1] == 0
-        if np.any(conn):
-            cscat = pg.pseudoScatter(pts[:,0][conn], spacing=10e-6, bidir=False)
-            mx = abs(cscat).max()
-            if mx != 0:
-                cscat = cscat * 0.2 / mx
-            pts[:,1][conn] -= cscat
-        if np.any(unconn):
-            uscat = pg.pseudoScatter(pts[:,0][unconn], spacing=10e-6, bidir=False)
-            mx = abs(uscat).max()
-            if mx != 0:
-                uscat = uscat * 0.2 / mx
-            pts[:,1][unconn] -= uscat
-
-        # scatter plot connections probed
-        if plot is None:
-            plot = pg.plot()
-
-        plot.setLabels(bottom=('distance', 'm'), left='connection probability')
-
-        color2 = color + (100,)
-        scatter = plot.plot(pts[:,0], pts[:,1], pen=None, symbol='o', labels={'bottom': ('distance', 'm')}, symbolBrush=color2, symbolPen=None)
-
-        # use a sliding window to plot the proportion of connections found along with a 95% confidence interval
-        # for connection probability
-        def binomial_ci(p, n, alpha=0.05 ):
-            """
-            Two-sided confidence interval for a binomial test.
-
-            If after n trials we obtain p successes, find c such that
-
-            P(k/n < p/n; theta = c) = alpha
-
-            where k/N is the proportion of successes in the set of trials,
-            and theta is the success probability for each trial. 
-            
-            Source: http://stackoverflow.com/questions/13059011/is-there-any-python-function-library-for-calculate-binomial-confidence-intervals
-            """
-            upper_fn = lambda c: scipy.stats.binom.cdf(p, n, c) - alpha
-            lower_fn = lambda c: scipy.stats.binom.cdf(p, n, c) - (1.0 - alpha)
-            return scipy.optimize.bisect(lower_fn, 0, 1), scipy.optimize.bisect(upper_fn, 0, 1)
-
-        window = 40e-6
-        spacing = window / 4.0
-        xvals = np.arange(window / 2.0, 500e-6, spacing)
-        upper = []
-        lower = []
-        prop = []
-        ci_xvals = []
-        for x in xvals:
-            minx = x - window / 2.0
-            maxx = x + window / 2.0
-            # select points inside this window
-            mask = (probed >= minx) & (probed <= maxx)
-            pts_in_window = connected[mask]
-            # compute stats for window
-            n_probed = pts_in_window.shape[0]
-            n_conn = pts_in_window.sum()
-            if n_probed == 0:
-                prop.append(np.nan)
-            else:
-                prop.append(n_conn / n_probed)
-                ci = binomial_ci(n_conn, n_probed)
-                lower.append(ci[0])
-                upper.append(ci[1])
-                ci_xvals.append(x)
-
-        # plot connection probability and confidence intervals
-        color2 = [c / 3.0 for c in color]
-        mid_curve = plot.plot(xvals, prop, pen=color, antialias=True)
-        upper_curve = plot.plot(ci_xvals, upper, pen=color2, antialias=True)
-        lower_curve = plot.plot(ci_xvals, lower, pen=color2, antialias=True)
-        upper_curve.setVisible(False)
-        lower_curve.setVisible(False)
-        color2 = color + (50,)
-        fill = pg.FillBetweenItem(upper_curve, lower_curve, brush=color2)
-        fill.setZValue(-10)
-        plot.addItem(fill, ignoreBounds=True)
-
-        return scatter, mid_curve, lower_curve, upper_curve, fill
+        return distance_plot(connected, distance=probed, plots=plots, color=color, name="%s->%s"%(pre_type, post_type))
 
     def matrix(self, rows, cols, size=50):
         w = pg.GraphicsLayoutWidget()
@@ -389,8 +305,8 @@ class ExperimentList(object):
             tot_connected += n_c
             ages.append(expt.age)
 
-            fmt = "%d: %s:  \t%d\t%d\t%d\t%s"
-            fmt_args = [i, expt.expt_id[1], n_p, n_c, expt.age, ', '.join(expt.cre_types)]
+            fmt = "%s: %s %s %s %s %s"
+            fmt_args = [str(i).rjust(4), str(n_p).ljust(5), str(n_c).ljust(5), str(expt.age).ljust(7), ', '.join(expt.cre_types).ljust(15), ':'.join(expt.expt_id)]
 
             # get list of stimuli
             if list_stims:
@@ -422,7 +338,7 @@ class ExperimentList(object):
 
     def print_connectivity_summary(self):
         print("-------------------------------------------------------------")
-        print("     Connectivity  (# connected/probed, % connectivity, cdist, udist, adist)")
+        print("     Connectivity  (# connected/probed, % connectivity, %250, %100, cdist, udist, adist)")
         print("-------------------------------------------------------------")
 
         tot_probed, tot_connected = self.n_connections_probed()
@@ -434,12 +350,23 @@ class ExperimentList(object):
             totals = []
             for k,v in summary.items():
                 probed = v['connected'] + v['unconnected']
+                
+                # calculate probability of connectivity over all points,
+                # within 250um, and within 100um.
+                pconn = []
+                for max_dist in (1e9, 250e-6, 100e-6):
+                    c = sum(np.array(v['cdist']) <= max_dist)
+                    t = c + np.sum(np.array(v['udist']) <= max_dist)
+                    pconn.append(c / t)
+                
                 totals.append((
                     k[0],                        # pre type
                     k[1],                        # post type
                     v['connected'],              # n connected
                     probed,                      # n probed
-                    100*v['connected']/probed,   # % connected
+                    100*pconn[0],                # % connected
+                    100*pconn[1],                # % connected <= 250um
+                    100*pconn[2],                # % connected <= 100um
                     np.nanmean(v['cdist'])*1e6,  # avg cdist
                     np.nanmean(v['udist'])*1e6,  # avg udist
                     np.nanmean(v['cdist']+v['udist'])*1e6   # avg dist
@@ -453,9 +380,9 @@ class ExperimentList(object):
             fields.insert(2, pad)
             fields = tuple(fields)
             try:
-                print(u"%s → %s%s\t:\t%d/%d\t%0.2f%%\t%0.2f\t%0.2f\t%0.2f" % fields)
+                print(u"%s → %s%s\t:\t%d/%d\t%0.2f%%\t%0.2f%%\t%0.2f%%\t%0.2f\t%0.2f\t%0.2f" % fields)
             except UnicodeEncodeError:
-                print("%s - %s%s\t:\t%d/%d\t%0.2f%%\t%0.2f\t%0.2f\t%0.2f" % fields)
+                print("%s - %s%s\t:\t%d/%d\t%0.2f%%\t%0.2f%%\t%0.2f%%\t%0.2f\t%0.2f\t%0.2f" % fields)
 
         print("\nTotal:  \t%d/%d\t%0.2f%%" % (tot_connected, tot_probed, 100*tot_connected/(tot_connected+tot_probed)))
         print("")

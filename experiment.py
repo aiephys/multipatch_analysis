@@ -29,6 +29,7 @@ class Experiment(object):
         self._sweep_summary = None
         self._mosaic_file = None
         self._nwb_file = None
+        self._data = None
         self._stim_list = None
 
         try:
@@ -93,13 +94,14 @@ class Experiment(object):
 
     @property
     def connections(self):
-        """A list of connections found in this experiment.
+        """A list of connections reported for this experiment, excluding any that did not pass QC.
         
         Each item in the list is a tuple containing the pre- and postsynaptic cell IDs::
         
             [(pre_cell_id, post_cell_id), ...]
         """
-        return self._connections
+        probed = self.connections_probed
+        return [c for c in self._connections if c in probed]
 
     @property
     def sweep_summary(self):
@@ -110,15 +112,13 @@ class Experiment(object):
         """
         if self._sweep_summary is None:
             sweeps = []
-            from neuroanalysis.miesnwb import MiesNwb
-            nwb = MiesNwb(self.nwb_file)
-            for srec in nwb.contents:
-                sweep = {}
-                for dev in srec.devices:
-                    rec = srec[dev]
-                    sweep[dev] = rec.meta['stim_name'], rec.clamp_mode, rec.holding_current, rec.holding_potential
-                sweeps.append(sweep)
-            nwb.close()
+            with self.data as nwb:
+                for srec in nwb.contents:
+                    sweep = {}
+                    for dev in srec.devices:
+                        rec = srec[dev]
+                        sweep[dev] = rec.meta['stim_name'], rec.clamp_mode, rec.holding_current, rec.holding_potential
+                    sweeps.append(sweep)
             self._sweep_summary = sweeps
         return self._sweep_summary
 
@@ -148,7 +148,6 @@ class Experiment(object):
             self._stim_list = stims
 
         return self._stim_list
-
 
     @staticmethod
     def _short_stim_name(stim):
@@ -402,6 +401,17 @@ class Experiment(object):
                 raise Exception("Multiple NWB files found for %s" % self)
             self._nwb_file = files[0]
         return self._nwb_file
+
+    @property
+    def data(self):
+        """Data object from NWB file. 
+        
+        Contains all ephys recordings.
+        """
+        if self._data is None:
+            from neuroanalysis.miesnwb import MiesNwb
+            self._data = MiesNwb(self.nwb_file)
+        return self._data
 
     @property
     def specimen_id(self):

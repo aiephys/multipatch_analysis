@@ -280,7 +280,7 @@ class PairView(QtGui.QWidget):
         fit_kws = {'xtol': 1e-3, 'maxfev': 100}
         
         psp = fitting.Psp()
-        return psp.fit(data, x=t, fit_kws=fit_kws, **params)
+        return psp.fit(data, x=t, fit_kws=fit_kws, params=params)
 
     def add_set_clicked(self):
         if self.current_event_set is None:
