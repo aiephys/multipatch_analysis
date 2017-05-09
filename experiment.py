@@ -448,6 +448,27 @@ class Experiment(object):
         return self._lims_record
 
     @property
+    def multipatch_log(self):
+        files = [p for p in os.listdir(self.path) if re.match(r'MultiPatch_\d+.log', p)]
+        if len(files) == 0:
+            raise TypeError("Could not find multipatch log file for %s" % self)
+        if len(files) > 1:
+            raise TypeError("Found multiple multipatch log files for %s" % self)
+        return os.path.join(self.path, files[0])
+
+    @property
+    def surface_depth(self):
+        try:
+            mplog = self.multipatch_log
+        except TypeError:
+            return None
+        lines = [l for l in open(mplog, 'rb').readlines() if 'surface_depth_changed' in l]
+        if len(lines) == 0:
+            return None
+        line = lines[-1].rstrip(',\r\n')
+        return json.loads(line)['surface_depth']
+
+    @property
     def date(self):
         y,m,d = self.expt_id[1].split('-')[0].split('_')[0].split('.')
         return datetime.date(int(y), int(m), int(d))
