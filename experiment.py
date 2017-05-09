@@ -94,13 +94,14 @@ class Experiment(object):
 
     @property
     def connections(self):
-        """A list of connections found in this experiment.
+        """A list of connections reported for this experiment, excluding any that did not pass QC.
         
         Each item in the list is a tuple containing the pre- and postsynaptic cell IDs::
         
             [(pre_cell_id, post_cell_id), ...]
         """
-        return self._connections
+        probed = self.connections_probed
+        return [c for c in self._connections if c in probed]
 
     @property
     def sweep_summary(self):
@@ -153,9 +154,11 @@ class Experiment(object):
         if stim.startswith('PulseTrain_'):
             stim = stim[11:]
         elif stim.startswith('SPulseTrain_'):
-            stim = stim[12:]
+            stim = 'S' + stim[12:]
         if stim.endswith('_DA_0'):
             stim = stim[:-5]
+        if stim.endswith('H'):
+            stim += 'z'
         return stim
 
     def parse_labeling(self, entry):
@@ -443,6 +446,27 @@ class Experiment(object):
                 raise Exception("LIMS lookup for specimen %s returned %d results" % (sid, len(r)))
             self._lims_record = r[0]
         return self._lims_record
+
+    @property
+    def multipatch_log(self):
+        files = [p for p in os.listdir(self.path) if re.match(r'MultiPatch_\d+.log', p)]
+        if len(files) == 0:
+            raise TypeError("Could not find multipatch log file for %s" % self)
+        if len(files) > 1:
+            raise TypeError("Found multiple multipatch log files for %s" % self)
+        return os.path.join(self.path, files[0])
+
+    @property
+    def surface_depth(self):
+        try:
+            mplog = self.multipatch_log
+        except TypeError:
+            return None
+        lines = [l for l in open(mplog, 'rb').readlines() if 'surface_depth_changed' in l]
+        if len(lines) == 0:
+            return None
+        line = lines[-1].rstrip(',\r\n')
+        return json.loads(line)['surface_depth']
 
     @property
     def date(self):

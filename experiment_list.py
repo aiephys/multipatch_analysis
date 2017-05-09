@@ -13,6 +13,7 @@ import pyqtgraph as pg
 
 from graphics import MatrixItem, distance_plot
 from experiment import Experiment
+from constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
 
 
 class Entry(object):
@@ -280,7 +281,7 @@ class ExperimentList(object):
             conn_type_info = connection_sweep_summary.setdefault(connection_type, {})
             for stim, n_sweeps in conn["stims"].items():
                 conn_type_info.setdefault(stim, [])
-                conn_type_info[stim].append(n_sweeps)
+                conn_type_info[stim].append(sum(n_sweeps))
 
         return connection_sweep_summary
 
@@ -427,7 +428,7 @@ class ExperimentList(object):
 
         If *list_stims* is True, then each connection dict also includes a 'stims' key:
 
-            'stims': {(clamp_mode, stim_name, holding): n_sweeps}
+            'stims': {(clamp_mode, stim_name, holding): [n_sweeps, S_n_sweeps]}
         """
         summary = []
         for expt in self:
@@ -448,13 +449,19 @@ class ExperimentList(object):
                         if info1 is None or info2 is None:
                             continue
                         stim_name = expt._short_stim_name(info1[0])
+                        if stim_name.upper().startswith('S'):
+                            short_pulse = True
+                            stim_name = stim_name[1:]
+                        else:
+                            short_pulse = False
                         mode = info2[1]
                         holding = 5 * np.round(info2[3] * 1000 / 5.0)
                         stim = (mode, stim_name, int(holding))
-                        if stim not in stims:
-                                stims[stim] = 1
+                        stims.setdefault(stim,[0,0])
+                        if short_pulse is True:
+                            stims[stim][1] += 1
                         else:
-                                stims[stim] += 1
+                            stims[stim][0] += 1
                     conn_info['stims'] = stims
         return summary
 
@@ -465,9 +472,10 @@ class ExperimentList(object):
         conns = self.connection_summary(list_stims=list_stims)
         for conn in conns:
             c1, c2 = conn['cells']
+            distance = (c1.distance(c2))*10**6
             expt = conn['expt']
             if 'stims' in conn:
-                print(u"%d->%d: \t%s -> %s\t%s" % (c1.cell_id, c2.cell_id, c1.cre_type, c2.cre_type, expt.expt_id))
+                print(u"%d->%d: \t%s -> %s; %.0f um\t%s" % (c1.cell_id, c2.cell_id, c1.cre_type, c2.cre_type, distance, expt.expt_id))
                 stims = conn['stims']
                 if len(stims) == 0:
                     print('no sweeps: %d %d\n' % (c1.cell_id, c2.cell_id))
@@ -475,24 +483,47 @@ class ExperimentList(object):
                     pprint.pprint(expt.sweep_summary)
 
                 else:
-                    stims = '\n'.join(["%s %s %dmV, %d sweeps"% (s+(n,)) for s,n in stims.items()])
+                    stims = '\n'.join(["%s %s %dmV; %d,%d sweeps"% (s+(n[0],n[1])) for s,n in stims.items()])
                     print(stims)
             else:
-                print(u"%d->%d: \t%s -> %s\t%s" % (c1.cell_id, c2.cell_id, c1.cre_type, c2.cre_type, expt.expt_id))
+                print(u"%d->%d: \t%s -> %s; %.0f um\t%s" % (c1.cell_id, c2.cell_id, c1.cre_type, c2.cre_type, distance, expt.expt_id))
 
         print("")
 
-    def print_connection_sweep_summary(self, sweep_threshold=5):
+    def print_connection_sweep_summary(self, sweep_threshold=[5,10]):
+        from collections import OrderedDict
         print("-----------------------")
-        print("  Connection: ")
-        print("             Stimulus Set: # connections w/ > %d sweeps" % sweep_threshold)
+        print("  Connection: connected/total probed ")
+        print("            Stimulus Set: # connections w/ >= %d (induction) and %d (recovery) sweeps" % (sweep_threshold[0], sweep_threshold[1]))
         print("-----------------------")
         connection_sweep_summary = self.connection_stim_summary()
         connection_types = connection_sweep_summary.keys()
+        summary = self.connectivity_summary()
         for connection_type in connection_types:
-            print("\n%s->%s:" % connection_type)
+            connected = summary[connection_type]['connected']
+            probed = connected + summary[connection_type]['unconnected']
+            print("\n%s->%s: %d/%d" % (connection_type[0], connection_type[1], connected, probed))
             stim_sets = connection_sweep_summary[connection_type].keys()
+            stim_sets = sorted(stim_sets, key = lambda s:(s[0], int(s[1].split('H')[0]) if s[1].split('H')[0].isdigit() else s[1], -s[2]))
+            stim_summary = OrderedDict()
             for stim_set in stim_sets:
-                num_connections = sum(connections >= sweep_threshold for connections in connection_sweep_summary[connection_type][stim_set])
-                if num_connections:
-                   print("\t%s:\t%d" % (' '.join([str(s) for s in stim_set]), num_connections))
+                if 'recovery' in stim_set:
+                    threshold = sweep_threshold[1]
+                else:
+                    threshold = sweep_threshold[0]
+                num_connections = sum(connections >= threshold for connections in
+                                          connection_sweep_summary[connection_type][stim_set])
+                stim_summary.setdefault(stim_set, 0)
+                stim_summary[stim_set] += num_connections
+            for stim_set in stim_summary:
+                n_connections = 0
+                if connection_type[0] in INHIBITORY_CRE_TYPES:
+                    if stim_set[2] <= -50 and stim_set[2] >= -60:
+                        n_connections = stim_summary[stim_set]
+                elif connection_type[0] in EXCITATORY_CRE_TYPES:
+                    if stim_set[2] <= -65 and stim_set[2] >= -75:
+                        n_connections = stim_summary[stim_set]
+                else:
+                    n_connections = stim_summary[stim_set]
+                if n_connections:
+                    print("\t%s:\t%d" % (' '.join([str(s) for s in stim_set]), n_connections))
