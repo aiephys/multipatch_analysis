@@ -56,6 +56,10 @@ class ExperimentDatabase(object):
             ('initial_seal_resistance', 'float'),
             ('initial_pipette_resistance', 'float'),
             ('final_pipette_resistance', 'float'),
+            ('has_biocytin', 'bool'),
+            ('has_dye_fill', 'bool'),
+            ('pass_qc', 'bool'),
+            ('pass_spike_qc', 'bool'),
         ],
         'sync_rec': [
             ('expt_id', 'int'),
@@ -130,18 +134,41 @@ class ExperimentDatabase(object):
     def load_data(self, expts):
         """Populate the database from raw data
         """
-        expt_recs = []
+        expt_rows = []
+        cell_rows = []
+        srec_rows = []
+        
         for expt in expts:
-            expt_recs.append({'expt_key': expt.expt_id, 'internal_id': -1,
-                              'acsf_id': -1, 'temperature': np.nan, 'age': expt.age,
-                              'genotype': None})
+            print("Load: %s" % expt)
+            expt_id = len(expt_rows)
+            expt_rows.append({'id': expt_id, 'expt_key': expt.expt_id, 'internal_id': -1,
+                'acsf_id': -1, 'temperature': np.nan, 'age': expt.age, 'genotype': None})
+            cell_ids = {}
+            for cell in expt.cells.values():
+                cell_id = len(cell_rows)
+                # mapping from experiment's internal ID for this cell to global cell ID 
+                cell_ids[cell.cell_id] = cell_id
+                cell_rows.append({'id': cell_id, 'expt_id': expt_id, 
+                    'cell_key': cell.cell_id, 'cre_type': cell.cre_type,
+                    'pass_qc': cell.pass_qc, 'position': cell.position,
+                    'depth': cell.depth})
+            expt_data = expt.data
+            for srec in expt_data.contents:
+                srec_id = len(srec_rows)
+                srec_rows.append([{'id': srec_id, 'expt_id': expt_id,
+                    'sync_rec_key': srec.key}])
             
+            expt.close_data()
+                
         self.tables['experiment'] = self.make_table('experiment', expt_recs)
         
     def make_table(self, name, data):
-        a = np.empty(0, self.table_schemas[name])
+        schema = self.table_schemas[name]
+        schema.insert(0, ('id', 'uint'))
+        a = np.empty(0, schema)
         table = DataFrame(a)
-        return table.append(data)
+        table = table.append(data)
+        return table
             
     def get_table(self, name):
         if name not in self.tables:

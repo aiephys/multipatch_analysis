@@ -413,6 +413,10 @@ class Experiment(object):
             self._data = MiesNwb(self.nwb_file)
         return self._data
 
+    def close_data(self):
+        self.data.close()
+        self._data = None
+
     @property
     def specimen_id(self):
         return self.slice_info['specimen_ID'].strip()

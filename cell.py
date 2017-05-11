@@ -70,6 +70,16 @@ class Cell(object):
                 ct = default
         return ct
 
+    @property
+    def depth(self):
+        """Depth of cell from the cut surface of the slice.
+        """
+        sd = self.expt.surface_depth
+        p = self.position
+        if None in (sd, p):
+            return None
+        return sd - p[2]
+
     def distance(self, cell):
         """Return distance between cells, or nan if positions are not defined.
         """
