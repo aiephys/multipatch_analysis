@@ -79,7 +79,7 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         self._attach(srec)
         self.srec = srec
 
-    def get_spike_responses(self, pre_rec, post_rec, align_to='pulse', pre_pad=10e-3):
+    def get_spike_responses(self, pre_rec, post_rec, align_to='pulse', pre_pad=10e-3, require_spike=True):
         """Given a pre- and a postsynaptic recording, return a structure
         containing evoked responses.
         
@@ -104,7 +104,7 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         for i,pulse in enumerate(spikes):
             pulse = pulse.copy()
             spike = pulse['spike']
-            if spike is None:
+            if require_spike and spike is None:
                 continue
             
             if align_to == 'spike':
@@ -119,7 +119,7 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
                 pulse['rec_stop'] = spikes[i+1]['pulse_ind']
             else:
                 # otherwise, stop 50 ms later
-                pulse['rec_stop'] = spike['rise_index'] + int(50e-3 / dt)
+                pulse['rec_stop'] = pulse['rec_start'] + int(50e-3 / dt)
             
             # Extract data from postsynaptic recording
             pulse['response'] = post_rec['primary'][pulse['rec_start']:pulse['rec_stop']]
@@ -130,6 +130,8 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
             stop = spikes[8]['pulse_ind'] - (i * baseline_dur)
             start = stop - baseline_dur
             pulse['baseline'] = post_rec['primary'][start:stop]
+            pulse['baseline_start'] = start
+            pulse['baseline_stop'] = stop
             
             result.append(pulse)
         
