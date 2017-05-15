@@ -1,9 +1,10 @@
 """
 Accumulate all experiment data into a set of linked tables.
 """
-import os, pickle, resource
+import os, pickle, resource, tempfile, shutil
 import numpy as np
 from pandas import DataFrame
+from pyqtgraph.debug import Profiler
 
 from neuroanalysis.baseline import float_mode
 from connection_detection import PulseStimAnalyzer, MultiPatchSyncRecAnalyzer
@@ -107,7 +108,11 @@ class ExperimentDatabase(object):
         self.tables.update(pickle.load(open(self.cache, 'rb')))
         
     def store_cache(self):
-        pickle.dump(self.tables, open(self.cache, 'wb'))
+        cache_dir = os.path.dirname(self.cache)
+        fh = tempfile.NamedTemporaryFile(mode='wb', dir=cache_dir, delete=False)
+        pickle.dump(self.tables, fh)
+        fh.close()
+        shutil.move(fh.name, self.cache)
 
     def load_data(self, expts):
         """Populate the database from raw data
@@ -123,11 +128,13 @@ class ExperimentDatabase(object):
         response_rows = self.tables['response']
         baseline_rows = self.tables['baseline']
         
+        prof = Profiler(disabled=False, delayed=False)
         for expt in expts:
             if expt.expt_id in expt_index:
                 print("Cached: %s" % expt)
                 continue
             
+            prof.mark('start')
             print("Load: %s" % expt)
             expt_id = len(expt_rows)
             expt_rows.append({'id': expt_id, 'expt_key': expt.expt_id, 'internal_id': -1,
@@ -144,6 +151,9 @@ class ExperimentDatabase(object):
                     'device_key': cell.cell_id, 'cre_type': cell.cre_type,
                     'pass_qc': cell.pass_qc, 'position': cell.position,
                     'depth': cell.depth})
+            prof.mark('cells')
+
+
             expt_data = expt.data
             for srec in expt_data.contents:
                 srec_id = len(srec_rows)
@@ -190,6 +200,7 @@ class ExperimentDatabase(object):
                         if sp['spike'] is not None:
                             srow.update(sp['spike'])
                         spike_rows.append(srow)
+                prof.mark('pulses')
                     
                 mpa = MultiPatchSyncRecAnalyzer(srec)
                 for pre_dev in srec.devices:
@@ -211,10 +222,14 @@ class ExperimentDatabase(object):
                                 'start_index': resp['rec_start'], 'stop_index': resp['rec_stop'],
                                 'baseline_id': bl_id, 'data': resp['response'].data,
                             })
+                prof.mark('responses')
                         
+            prof.mark('finished reading')
             expt.close_data()
+            prof.mark('closed file')
             
             self.store_cache()
+            prof.mark('store cache')
             
             mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
             print("memory usage: %d" % mem)
