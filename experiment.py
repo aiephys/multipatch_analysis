@@ -23,6 +23,7 @@ class Experiment(object):
         self._summary = None
         self._view = None
         self._slice_info = None
+        self._expt_info = None
         self._lims_record = None
         self._site_path = None
         self._probed = None
@@ -384,9 +385,18 @@ class Experiment(object):
         if self._slice_info is None:
             index = os.path.join(os.path.split(self.path)[0], '.index')
             if not os.path.isfile(index):
-                raise TypeError("Cannot find index file (%s) for experiment %s" % (index, self))
+                raise TypeError("Cannot find slice index file (%s) for experiment %s" % (index, self))
             self._slice_info = pg.configfile.readConfigFile(index)['.']
         return self._slice_info
+
+    @property
+    def expt_info(self):
+        if self._expt_info is None:
+            index = os.path.join(self.path, '..', '..', '.index')
+            if not os.path.isfile(index):
+                raise TypeError("Cannot find index file (%s) for experiment %s" % (index, self))
+            self._expt_info = pg.configfile.readConfigFile(index)['.']
+        return self._expt_info
 
     @property
     def nwb_file(self):

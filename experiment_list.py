@@ -49,7 +49,7 @@ def indentation(line):
 class ExperimentList(object):
 
     def __init__(self, expts=None, cache=None):
-        self._cache_version = 2
+        self._cache_version = 3
         self._cache = cache
         self._expts = []
         self._expts_by_id = {}
