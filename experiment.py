@@ -420,7 +420,23 @@ class Experiment(object):
         """
         if self._data is None:
             from neuroanalysis.miesnwb import MiesNwb
-            self._data = MiesNwb(self.nwb_file)
+            import os
+            if not os.path.isdir('cache'):
+                os.mkdir('cache')
+            cf = os.path.join('cache', self.nwb_file.replace('/', '_').replace(':', '_').replace('\\', '_'))
+            if not os.path.isfile(cf):
+                try:
+                    import shutil
+                    print("cache:", cf)
+                    shutil.copyfile(self.nwb_file, cf)
+                except:
+                    try:
+                        os.remove(cf)
+                    except Exception:
+                        pass
+                    raise
+            
+            self._data = MiesNwb(cf)
         return self._data
 
     def close_data(self):

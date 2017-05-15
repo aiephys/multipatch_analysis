@@ -9,6 +9,7 @@ from neuroanalysis.stimuli import square_pulses
 from neuroanalysis.data import Trace
 from neuroanalysis.fitting import StackedPsp
 from neuroanalysis.ui.plot_grid import PlotGrid
+from neuroanalysis.filter import bessel_filter
 
 
 class Analyzer(object):
@@ -114,12 +115,13 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
                 # align to pulse onset
                 pulse['rec_start'] = pulse['pulse_ind'] - int(pre_pad / dt)
             
+            max_stop = spike['rec_start'] + int(50e-3 / dt)
             if i+1 < len(spikes):
                 # truncate window early if there is another pulse
-                pulse['rec_stop'] = spikes[i+1]['pulse_ind']
+                pulse['rec_stop'] = min(max_stop, spikes[i+1]['pulse_ind'])
             else:
                 # otherwise, stop 50 ms later
-                pulse['rec_stop'] = pulse['rec_start'] + int(50e-3 / dt)
+                pulse['rec_stop'] = max_stop
             
             # Extract data from postsynaptic recording
             pulse['response'] = post_rec['primary'][pulse['rec_start']:pulse['rec_stop']]
@@ -343,7 +345,7 @@ def plot_response_averages(expt, show_baseline=False, **kwds):
             if avg_response is not None:
                 
                 t = avg_response.time_values
-                y = avg_response.data
+                y = bessel_filter(Trace(avg_response.data, dt=avg_response.dt), 2e3).data
                 plt.plot(t, y, antialias=True)
 
                 # fit!                
@@ -394,7 +396,7 @@ class EvokedResponseGroup(object):
     a single pre/postsynaptic pair. It provides methods for computing the average,
     baseline-subtracted response and for fitting the average to a curve.
     """
-    def __init__(self, pre_id, post_id, **kwds):
+    def __init__(self, pre_id=None, post_id=None, **kwds):
         self.pre_id = pre_id
         self.post_id = post_id
         self.kwds = kwds
@@ -469,7 +471,7 @@ def trace_mean(traces):
 
 
 
-def fit_psp(response, mode='ic', sign='any', xoffset=11e-3, yoffset=(0, 'fixed'), mask_stim_artifact=True):
+def fit_psp(response, mode='ic', sign='any', xoffset=11e-3, yoffset=(0, 'fixed'), mask_stim_artifact=True, **kwds):
     t = response.time_values
     y = response.data
 
@@ -504,6 +506,7 @@ def fit_psp(response, mode='ic', sign='any', xoffset=11e-3, yoffset=(0, 'fixed')
         'amp_ratio': (1, 0, 10),
         'rise_power': (2, 'fixed'),
     }
+    base_params.update(kwds)
     
     params = []
     for amp, amp_min, amp_max in amps:
@@ -531,8 +534,9 @@ def fit_psp(response, mode='ic', sign='any', xoffset=11e-3, yoffset=(0, 'fixed')
     fit = best_fit
 
     # nrmse = fit.nrmse()
-    fit.snr = abs(fit.best_values['amp']) / response.meta['baseline_std']
-    fit.err = fit.rmse() / response.meta['baseline_std']
+    if 'baseline_std' in response.meta:
+        fit.snr = abs(fit.best_values['amp']) / response.meta['baseline_std']
+        fit.err = fit.rmse() / response.meta['baseline_std']
     # print fit.best_values
     # print "RMSE:", fit.rmse()
     # print "NRMSE:", nrmse
@@ -584,6 +588,6 @@ if __name__ == '__main__':
         expt_file = arg
         expt = MiesNwb(expt_file)
     
-    plots = plot_response_averages(expt, show_baseline=True, clamp_mode='ic', min_duration=15e-3, pulse_ids=None)
+    plots = plot_response_averages(expt, show_baseline=True, clamp_mode='ic', min_duration=25e-3, pulse_ids=None)
 
     detect_connections(expt)
