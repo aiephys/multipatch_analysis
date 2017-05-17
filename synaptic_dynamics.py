@@ -161,10 +161,15 @@ if __name__ == '__main__':
                     #raise Exception("Canceled response fit")
     
     # Fit trains to multi-event models
-    with pg.ProgressDialog("Fitting responses..", maximum=len(train_response_groups)*2) as dlg:
-        for i,stim_params in enumerate(train_response_groups):
+    
+    tasks = train_response_groups.keys()
+    results = {}
+    import pyqtgraph.multiprocess as mp
+    with mp.Parallelize(enumerate(tasks), results=results, progressDialog='processing in parallel..') as tasker:
+        for i,stim_params in tasker:
             grps = train_response_groups[stim_params]
             pulse_offset = pulse_offsets[stim_params]
+            fits = []
             for j,grp in enumerate(grps):
                 avg = grp.bsub_mean()
                 
@@ -207,13 +212,22 @@ if __name__ == '__main__':
                 
                 fit = model.fit(avg.data, x=avg.time_values, params=args, fit_kws=fit_kws, method='leastsq')
                 
+                fits.append(fit.best_values)
                 
-                print "==============="
-                print stim_params
-                print fit.best_values
-                train_plots[i,j].plot(avg.time_values, fit.best_fit, pen='b', antialias=True)
-                #train_plots[i,j].plot(avg.time_values, fit.init_fit, pen='r')
-                dlg += 1
+            tasker.results[stim_params] = fits
+       
+    model = PspTrain()
+    for i,stim_params in enumerate(train_response_groups.keys()):
+        fits = results[stim_params]
+        for j,fit in enumerate(fits):
+            print "-----------"
+            print stim_params
+            print fit
+            import lmfit
+            params = {k:lmfit.Parameter(name=k, value=v) for k,v in fit.items()}
+            tvals = train_response_groups[stim_params][j].responses[0].time_values
+            
+            train_plots[i,j].plot(tvals, model.eval(x=tvals, params=params), pen='b', antialias=True)
     
 
 
