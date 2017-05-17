@@ -166,6 +166,21 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
     def stim_params(self, pre_rec):
         return PulseStimAnalyzer.get(pre_rec).stim_params()
         
+    def get_train_response(self, pre_rec, post_rec, start_pulse, stop_pulse, padding=(-10e-3, 50e-3)):
+        """Return the part of the post-synaptic recording during a range of pulses.
+        """
+        pulse_stim = PulseStimAnalyzer.get(pre_rec)
+        pulses = [p[0] for p in pulse_stim.pulses() if p[2] > 0]
+        
+        post_trace = post_rec['primary']
+        dt = post_trace.dt
+        start = pulses[start_pulse] + int(padding[0]/dt)
+        stop = pulses[stop_pulse] + int(padding[1]/dt)
+        assert start > 0
+        
+        return post_trace[start:stop]
+        
+
 
 class MultiPatchExperimentAnalyzer(Analyzer):
     """
@@ -442,13 +457,13 @@ class EvokedResponseGroup(object):
             # yarg: how does this change SNR?
             avg = trace_mean(responses)
             avg_baseline = trace_mean(baselines).data
-            max_dt = avg.dt
 
             # subtract baseline
             baseline = np.median(avg_baseline)
             bsub = avg.data - baseline
 
-            result = Trace(bsub, dt=max_dt)
+            result = Trace(bsub, dt=avg.dt, time_values=avg.time_values)
+            assert len(result.time_values) == len(result)
 
             # Attach some extra metadata to the result:
             result.meta['baseline'] = avg_baseline
@@ -477,9 +492,11 @@ def trace_mean(traces):
     Downsamples to the minimum rate and clips ragged edges.
     """
     max_dt = max([trace.dt for trace in traces])
-    downsampled = [trace.downsample(n=int(max_dt/trace.dt)).data for trace in traces]
-    avg = ragged_mean(downsampled, method='clip')
-    return Trace(avg, dt=max_dt)
+    downsampled = [trace.downsample(n=int(max_dt/trace.dt)) for trace in traces]
+    avg = ragged_mean([d.data for d in downsampled], method='clip')
+    tvals = downsampled[0].time_values[:len(avg)]
+    return Trace(avg, time_values=tvals)
+
 
 
 
