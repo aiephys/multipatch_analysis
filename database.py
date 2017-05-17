@@ -1,7 +1,7 @@
 """
 Accumulate all experiment data into a set of linked tables.
 """
-import os, pickle, resource, tempfile, shutil
+import os, sys, pickle, resource, tempfile, shutil
 import numpy as np
 from pandas import DataFrame
 from pyqtgraph.debug import Profiler
@@ -19,12 +19,12 @@ class ExperimentDatabase(object):
             ('acsf_id', 'int'),
             ('temperature', 'float'),
             ('age', 'int'),
-            ('genotype', 'string'),
+            ('genotype', 'object'),
             ('date', 'object')
         ],
         'cell': [
             ('expt_id', 'int'),
-            ('cre_type', 'string'),
+            ('cre_type', 'object'),
             ('device_key', 'object'),
             ('patch_start', 'float'),
             ('patch_stop', 'float'),
@@ -35,6 +35,8 @@ class ExperimentDatabase(object):
             ('has_dye_fill', 'bool'),
             ('pass_qc', 'bool'),
             ('pass_spike_qc', 'bool'),
+            ('depth', 'float'),
+            ('position', 'object'),
         ],
         'sync_rec': [
             ('expt_id', 'int'),
@@ -44,10 +46,11 @@ class ExperimentDatabase(object):
         'recording': [
             ('sync_rec_id', 'int'),
             ('device_key', 'object'),
+            ('cell_id', 'int'),
             ('stim_name', 'object'),
             ('induction_freq', 'float'),
             ('recovery_delay', 'float'),
-            ('clamp_mode', 'string'),
+            ('clamp_mode', 'object'),
             ('test_pulse_id', 'int'),
             ('sample_rate', 'float'),
         ],
@@ -74,6 +77,7 @@ class ExperimentDatabase(object):
             ('pulse_id', 'int'),
             ('peak_index', 'int'),
             ('peak_diff', 'float'),
+            ('peak_val', 'float'),
             ('rise_index', 'int'),
             ('max_dvdt', 'float'),
         ],
@@ -108,13 +112,19 @@ class ExperimentDatabase(object):
         self.tables.update(pickle.load(open(self.cache, 'rb')))
         
     def store_cache(self):
+        if self.cache is None:
+            return
         cache_dir = os.path.dirname(self.cache)
         fh = tempfile.NamedTemporaryFile(mode='wb', dir=cache_dir, delete=False)
-        pickle.dump(self.tables, fh)
+        if sys.version[0] == '2':
+            # greatly impacts file size and performance
+            pickle.dump(self.tables, fh, protocol=2)
+        else:
+            pickle.dump(self.tables, fh)
         fh.close()
         shutil.move(fh.name, self.cache)
 
-    def load_data(self, expts):
+    def load_data(self, expt, pre=None, post=None):
         """Populate the database from raw data
         """
         expt_rows = self.tables['experiment']
@@ -128,59 +138,63 @@ class ExperimentDatabase(object):
         response_rows = self.tables['response']
         baseline_rows = self.tables['baseline']
         
-        prof = Profiler(disabled=False, delayed=False)
-        for expt in expts:
-            if expt.expt_id in expt_index:
-                print("Cached: %s" % expt)
-                continue
-            
-            prof.mark('start')
-            print("Load: %s" % expt)
-            expt_id = len(expt_rows)
-            expt_rows.append({'id': expt_id, 'expt_key': expt.expt_id, 'internal_id': -1,
-                'acsf_id': -1, 'temperature': np.nan, 'age': expt.age, 'genotype': None,
-                'date': expt.date})
-            expt_index[expt.expt_id] = expt_id
-            
-            cell_ids = {}
-            for cell in expt.cells.values():
-                cell_id = len(cell_rows)
-                # mapping from experiment's internal ID for this cell to global cell ID 
-                cell_ids[cell.cell_id] = cell_id
-                cell_rows.append({'id': cell_id, 'expt_id': expt_id, 
-                    'device_key': cell.cell_id, 'cre_type': cell.cre_type,
-                    'pass_qc': cell.pass_qc, 'position': cell.position,
-                    'depth': cell.depth})
-            prof.mark('cells')
+        prof = Profiler(disabled=True, delayed=False)
+        
+        if expt.expt_id in expt_index:
+            print("Cached: %s" % expt)
+            raise NotImplementedError()
+        
+        prof.mark('start')
+        expt_id = len(expt_rows)
+        expt_rows.append({'id': expt_id, 'expt_key': expt.expt_id, 'internal_id': -1,
+            'acsf_id': -1, 'temperature': np.nan, 'age': expt.age, 'genotype': None,
+            'date': expt.date})
+        expt_index[expt.expt_id] = expt_id
+        
+        cell_ids = {}
+        for cell in expt.cells.values():
+            cell_id = len(cell_rows)
+            # mapping from experiment's internal ID for this cell to global cell ID 
+            cell_ids[cell.cell_id] = cell_id
+            cell_rows.append({'id': cell_id, 'expt_id': expt_id, 
+                'device_key': cell.cell_id, 'cre_type': cell.cre_type,
+                'pass_qc': cell.pass_qc, 'position': cell.position,
+                'depth': cell.depth})
+        prof.mark('cells')
 
 
-            expt_data = expt.data
-            for srec in expt_data.contents:
-                srec_id = len(srec_rows)
-                srec_rows.append([{'id': srec_id, 'expt_id': expt_id,
-                    'sync_rec_key': srec.key}])
-                rec_key_id_map = {}
-                pulse_key_n_id_map = {}
-                for rec in srec.recordings:
-                    rec_id = len(rec_rows)
-                    rec_key_id_map[rec.device_id] = rec_id
-                    tp_id = len(tp_rows)
-                    rec_rows.append({'id': rec_id, 'sync_rec_id': srec_id,
-                        'device_key': rec.device_id, 'stim_name': rec.meta['stim_name'],
-                        'clamp_mode': rec.clamp_mode, 'test_pulse_id': tp_id,
-                        'sample_rate': rec['primary'].sample_rate})
-                    
-                    psa = PulseStimAnalyzer.get(rec)
-                    pulses = psa.pulses()
-                    if pulses[0][2] < 0:
-                        # test pulse
-                        tp = pulses[0]
-                    else:
-                        tp = (None, None)
-                    tp_rows.append({'id': tp_id, 'recording_id': rec_id,
-                        'pulse_start': tp[0], 'pulse_stop': tp[1],
-                        })
-                        
+        expt_data = expt.data
+        for srec in expt_data.contents:
+            srec_id = len(srec_rows)
+            srec_rows.append({'id': srec_id, 'expt_id': expt_id,
+                'sync_rec_key': srec.key})
+            rec_key_id_map = {}
+            pulse_key_n_id_map = {}
+            for rec in srec.recordings:
+                rec_id = len(rec_rows)
+                rec_key_id_map[rec.device_id] = rec_id
+                tp_id = len(tp_rows)
+                cell_id = cell_ids[rec.device_id + 1]
+                psa = PulseStimAnalyzer.get(rec)
+                ind_freq, recovery_delay = psa.stim_params()
+                
+                rec_rows.append({'id': rec_id, 'sync_rec_id': srec_id, 'cell_id': cell_id,
+                    'device_key': rec.device_id, 'stim_name': rec.meta['stim_name'],
+                    'clamp_mode': rec.clamp_mode, 'test_pulse_id': tp_id,
+                    'sample_rate': rec['primary'].sample_rate,
+                    'induction_freq': ind_freq, 'recovery_delay': recovery_delay})
+                
+                pulses = psa.pulses()
+                if pulses[0][2] < 0:
+                    # test pulse
+                    tp = pulses[0]
+                else:
+                    tp = (None, None)
+                tp_rows.append({'id': tp_id, 'recording_id': rec_id,
+                    'pulse_start': tp[0], 'pulse_stop': tp[1],
+                    })
+                
+                if pre is None or rec.device_id == pre:
                     pulse_n_id_map = {}
                     for i,pulse in enumerate(pulses):
                         pulse_id = len(pulse_rows)
@@ -190,7 +204,7 @@ class ExperimentDatabase(object):
                             'pulse_number': i, 'onset_index': pulse[0],
                             'length': pulse[1]-pulse[0], 'amplitude': pulse[2],
                             'n_spikes': 0})
-                        
+                
                     spikes = psa.evoked_spikes()
                     for sp in spikes:
                         sp_id = len(spike_rows)
@@ -200,43 +214,34 @@ class ExperimentDatabase(object):
                         if sp['spike'] is not None:
                             srow.update(sp['spike'])
                         spike_rows.append(srow)
-                prof.mark('pulses')
+                
+            mpa = MultiPatchSyncRecAnalyzer(srec)
+            for pre_dev in srec.devices:
+                if pre is not None and pre_dev != pre:
+                    continue
+                
+                for post_dev in srec.devices:
+                    if post is not None and post_dev != post:
+                        continue
                     
-                mpa = MultiPatchSyncRecAnalyzer(srec)
-                for pre_dev in srec.devices:
-                    for post_dev in srec.devices:
-                        responses = mpa.get_spike_responses(srec[pre_dev], srec[post_dev], align_to='pulse', require_spike=False)
-                        for resp in responses:
-                            resp_id = len(response_rows)
-                            bl_id = len(baseline_rows)
-                            baseline_rows.append({'id': bl_id,
-                                'recording_id': rec_key_id_map[post_dev],
-                                'start_index': resp['baseline_start'],
-                                'stop_index': resp['baseline_stop'],
-                                'data': resp['baseline'].data,
-                                'value': float_mode(resp['baseline'].data),
-                            })
-                            response_rows.append({'id': resp_id, 
-                                'recording_id': rec_key_id_map[post_dev],
-                                'pulse_id': pulse_key_n_id_map[(pre_dev, resp['pulse_n'])],
-                                'start_index': resp['rec_start'], 'stop_index': resp['rec_stop'],
-                                'baseline_id': bl_id, 'data': resp['response'].data,
-                            })
-                prof.mark('responses')
-                        
-            prof.mark('finished reading')
-            expt.close_data()
-            prof.mark('closed file')
-            
-            self.store_cache()
-            prof.mark('store cache')
-            
-            mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-            print("memory usage: %d" % mem)
-            if mem > 16000000:
-                print("   it is a good day to die.")
-                sys.exit(-1)
-
+                    responses = mpa.get_spike_responses(srec[pre_dev], srec[post_dev], align_to='pulse', require_spike=False)
+                    for resp in responses:
+                        resp_id = len(response_rows)
+                        bl_id = len(baseline_rows)
+                        baseline_rows.append({'id': bl_id,
+                            'recording_id': rec_key_id_map[post_dev],
+                            'start_index': resp['baseline_start'],
+                            'stop_index': resp['baseline_stop'],
+                            'data': resp['baseline'].downsample(f=50000).data,
+                            'value': float_mode(resp['baseline'].data),
+                        })
+                        response_rows.append({'id': resp_id, 
+                            'recording_id': rec_key_id_map[post_dev],
+                            'pulse_id': pulse_key_n_id_map[(pre_dev, resp['pulse_n'])],
+                            'start_index': resp['rec_start'], 'stop_index': resp['rec_stop'],
+                            'baseline_id': bl_id,
+                            'data': resp['response'].downsample(f=50000).data,
+                        })
         
     def make_table(self, name, data):
         schema = self.table_schemas[name]
@@ -247,11 +252,16 @@ class ExperimentDatabase(object):
         return table
             
     def get_table(self, name):
-        if name not in self.tables:
-            a = np.empty(0, self.table_schemas[name])
-            self.tables[name] = DataFrame(a)
-        return self.tables[name]
-        
+        schema = [('id', 'uint')] + self.table_schemas[name]
+        a = np.empty(len(self.tables[name]), dtype=schema)
+        for i,rec in enumerate(self.tables[name]):
+            for k,v in rec.items():
+                a[i][k] = v
+        return DataFrame(a)
+
+    def joined_tables(self, names):
+        pass
+
 
 if __name__ == '__main__':
     import pyqtgraph as pg
@@ -263,7 +273,8 @@ if __name__ == '__main__':
     
     db_cache_file = 'database.pkl'
     db = ExperimentDatabase(cache=db_cache_file)
-    db.load_data(all_expts)
+    for n,expt in enumerate(all_expts):
+        print("Load %d/%d: %s" % (n, len(all_expts), expt))
+        db.load_data(expt)
     db.store_cache()
-
-
+    
