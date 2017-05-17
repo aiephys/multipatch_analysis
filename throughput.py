@@ -24,8 +24,9 @@ for exp in expts:
 expt_colors = [ctype_colors[ct] for ct in ctypes]
 
 
-p1 = pg.plot(dates, np.cumsum(probed), symbol='o', symbolBrush=expt_colors, symbolPen=None, title="Connections probed over time")
-p1.plot(days, np.cumsum(probed), symbol='o', symbolBrush=expt_colors, symbolPen=None)
+p1 = pg.plot(dates, np.cumsum(probed), symbol='o', symbolBrush=expt_colors, symbolPen=None, title="Connections probed over time (including no-experiment days)")
+
+p1 = pg.plot(days, np.cumsum(probed), symbol='o', symbolBrush=expt_colors, symbolPen=None, title="Connections probed per experiment day")
 
 p2 = pg.plot(dates, np.cumsum(found), symbol='o', symbolBrush=expt_colors, symbolPen=None, title="Synapses detected over time")
 p2.plot(days, np.cumsum(found), symbol='o', symbolBrush=expt_colors, symbolPen=None)
