@@ -4,6 +4,7 @@ from connection_detection import MultiPatchExperimentAnalyzer, MultiPatchSyncRec
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.data import Trace
 
+
 def find_connections(expts, pre_type, post_type):
     """Iterate over all connections having a certain pre- and post-cre type.
     Yields, expt, pre_is, post_id for each connection.

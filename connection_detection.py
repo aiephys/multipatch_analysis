@@ -70,6 +70,18 @@ class PulseStimAnalyzer(Analyzer):
             self._evoked_spikes = spike_info
         return self._evoked_spikes
 
+    def stim_params(self):
+        """Return induction frequency and recovery delay.
+        """
+        pulses = [p[0] for p in self.pulses() if p[2] > 0]
+        if len(pulses) < 2:
+            return None, None
+        dt = self.rec['command'].dt
+        ind_freq = np.round(1.0 / (dt * (pulses[1] - pulses[0])))
+        rec_delay = np.round(dt*np.diff(pulses).max(), 3)
+        
+        return ind_freq, rec_delay
+
 
 class MultiPatchSyncRecAnalyzer(Analyzer):
     """Used for analyzing two or more synchronous patch clamp recordings where
@@ -115,7 +127,7 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
                 # align to pulse onset
                 pulse['rec_start'] = pulse['pulse_ind'] - int(pre_pad / dt)
             
-            max_stop = spike['rec_start'] + int(50e-3 / dt)
+            max_stop = pulse['rec_start'] + int(50e-3 / dt)
             if i+1 < len(spikes):
                 # truncate window early if there is another pulse
                 pulse['rec_stop'] = min(max_stop, spikes[i+1]['pulse_ind'])
@@ -150,7 +162,9 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         start = spikes[first_pulse]['pulse_ind'] - int(20e-3 / dt)
         stop = spikes[last_pulse]['pulse_ind'] + int(50e-3 / dt)
         return post_rec['primary'][start:stop]
-        
+
+    def stim_params(self, pre_rec):
+        return PulseStimAnalyzer.get(pre_rec).stim_params()
         
 
 class MultiPatchExperimentAnalyzer(Analyzer):
@@ -506,6 +520,19 @@ def fit_psp(response, mode='ic', sign='any', xoffset=11e-3, yoffset=(0, 'fixed')
         'amp_ratio': (1, 0, 10),
         'rise_power': (2, 'fixed'),
     }
+    
+    if 'rise_time' in kwds:
+        rt = kwds.pop('rise_time')
+        if not isinstance(rt, tuple):
+            rt = (rt, rt/2., rt*2.)
+        base_params['rise_time'] = rt
+                
+    if 'decay_tau' in kwds:
+        dt = kwds.pop('decay_tau')
+        if not isinstance(dt, tuple):
+            dt = (dt, dt/2., dt*2.)
+        base_params['decay_tau'] = dt
+                
     base_params.update(kwds)
     
     params = []
