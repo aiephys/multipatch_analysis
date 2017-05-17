@@ -424,10 +424,10 @@ class Experiment(object):
             if not os.path.isdir('cache'):
                 os.mkdir('cache')
             cf = os.path.join('cache', self.nwb_file.replace('/', '_').replace(':', '_').replace('\\', '_'))
-            if not os.path.isfile(cf):
+            if not os.path.isfile(cf) or os.stat(self.nwb_file).st_mtime > os.stat(cf).st_mtime:
                 try:
                     import shutil
-                    print("cache:", cf)
+                    print("copying to cache:", cf)
                     shutil.copyfile(self.nwb_file, cf)
                 except:
                     try:
