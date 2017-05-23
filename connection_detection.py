@@ -502,7 +502,7 @@ def trace_mean(traces):
 
 
 
-def fit_psp(response, mode='ic', sign='any', xoffset=11e-3, yoffset=(0, 'fixed'), mask_stim_artifact=True, **kwds):
+def fit_psp(response, mode='ic', sign='any', xoffset=11e-3, yoffset=(0, 'fixed'), mask_stim_artifact=True, method='leastsq', fit_kws=None, **kwds):
     t = response.time_values
     y = response.data
 
@@ -560,17 +560,22 @@ def fit_psp(response, mode='ic', sign='any', xoffset=11e-3, yoffset=(0, 'fixed')
 
     dt = response.dt
     weight = np.ones(len(y))
-    weight[:int(10e-3/dt)] = 0.5
+    #weight[:int(10e-3/dt)] = 0.5
     if mask_stim_artifact:
         # Use zero weight for fit region around the stimulus artifact
-        weight[int(10e-3/dt):int(13e-3/dt)] = 0
+        weight[int(10e-3/dt):int(12e-3/dt)] = 0
+    weight[int(12e-3/dt):int(19e-3/dt)] = 30
 
-    fit_kws = {'weights': weight, 'xtol': 1e-4, 'maxfev': 300, 'nan_policy': 'omit'}
+    if fit_kws is None:
+        fit_kws = {'xtol': 1e-4, 'maxfev': 300, 'nan_policy': 'omit'}
+
+    if 'weight' not in fit_kws:
+        fit_kws['weights'] = weight
     
     best_fit = None
     best_score = None
     for p in params:
-        fit = psp.fit(y, x=t, params=p, fit_kws=fit_kws, method='leastsq')
+        fit = psp.fit(y, x=t, params=p, fit_kws=fit_kws, method=method)
         err = np.sum(fit.residual**2)
         if best_fit is None or err < best_score:
             best_fit = fit
