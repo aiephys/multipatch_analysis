@@ -214,6 +214,9 @@ class PairView(QtGui.QWidget):
                 trace = post_traces[j]
                 d = trace.data[start:stop].copy()
                 responses.append(d)
+
+            if len(responses) == 0:
+                continue
                 
             # extend all responses to the same length and take nanmean
             avg = ragged_mean(responses, method='clip')
@@ -250,7 +253,7 @@ class PairView(QtGui.QWidget):
             if i >= len(fits):
                 vals = OrderedDict([('id', 'avg'), ('spike_time', np.nan), ('spike_stdev', np.nan)])
             else:
-                spt = [s[i]['peak_index'] * dt for s in spikes]
+                spt = [s[i]['peak_index'] * dt for s in spikes if s[i] is not None]
                 vals = OrderedDict([('id', i), ('spike_time', np.mean(spt)), ('spike_stdev', np.std(spt))])
             vals.update(OrderedDict([(k,f.best_values[k]) for k in f.params.keys()]))
             events.append(vals)
