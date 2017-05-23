@@ -474,8 +474,9 @@ class ExperimentList(object):
             c1, c2 = conn['cells']
             distance = (c1.distance(c2))*10**6
             expt = conn['expt']
+            i = self._expts.index(expt)
             if 'stims' in conn:
-                print(u"%d->%d: \t%s -> %s; %.0f um\t%s" % (c1.cell_id, c2.cell_id, c1.cre_type, c2.cre_type, distance, expt.expt_id))
+                print(u"%d %d->%d: \t%s -> %s; %.0f um\t%s" % (i, c1.cell_id, c2.cell_id, c1.cre_type, c2.cre_type, distance, expt.expt_id))
                 stims = conn['stims']
                 if len(stims) == 0:
                     print('no sweeps: %d %d\n' % (c1.cell_id, c2.cell_id))
@@ -486,7 +487,7 @@ class ExperimentList(object):
                     stims = '\n'.join(["%s %s %dmV; %d,%d sweeps"% (s+(n[0],n[1])) for s,n in stims.items()])
                     print(stims)
             else:
-                print(u"%d->%d: \t%s -> %s; %.0f um\t%s" % (c1.cell_id, c2.cell_id, c1.cre_type, c2.cre_type, distance, expt.expt_id))
+                print(u"%d %d->%d: \t%s -> %s; %.0f um\t%s" % (i, c1.cell_id, c2.cell_id, c1.cre_type, c2.cre_type, distance, expt.expt_id))
 
         print("")
 
