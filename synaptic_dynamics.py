@@ -6,12 +6,13 @@ from neuroanalysis.stats import ragged_mean
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.fitting import PspTrain
+from synaptic_release import ReleaseModel
 
 
 if __name__ == '__main__':
     import pyqtgraph as pg
     from experiment_list import ExperimentList
-    pg.mkQApp()
+    app = pg.mkQApp()
     pg.dbg()
     
     arg = sys.argv[1]
@@ -57,6 +58,8 @@ if __name__ == '__main__':
             i0 = resp[0]['pulse_ind']
             pulse_offsets[stim_params] = [(r['pulse_ind'] - i0)*dt for r in resp]
     
+    stim_param_order = sorted(pulse_offsets.keys())
+    
 
     # Sort responses by stimulus parameters and plot averages
     #plots = PlotGrid()
@@ -69,7 +72,7 @@ if __name__ == '__main__':
     amp_group = EvokedResponseGroup()
     #response_groups = {}
     train_response_groups = {}
-    for i,stim_params in enumerate(pulse_responses):
+    for i,stim_params in enumerate(stim_param_order):
         # collect all individual pulse responses:
         #  - we can try fitting individual responses averaged across trials
         #  - collect first pulses for amplitude estimate
@@ -105,8 +108,8 @@ if __name__ == '__main__':
             ind_group.add(ind, b)
             rec_group.add(rec, b)
             base = np.median(b.data)
-            train_plots[i,0].plot(ind.time_values, ind.data - base, pen=(255, 255, 255, 30))
-            train_plots[i,1].plot(rec.time_values, rec.data - base, pen=(255, 255, 255, 30))
+            train_plots[i,0].plot(ind.time_values, ind.data - base, pen=(128, 128, 128, 100))
+            train_plots[i,1].plot(rec.time_values, rec.data - base, pen=(128, 128, 128, 100))
         ind_avg = ind_group.bsub_mean()
         rec_avg = rec_group.bsub_mean()
 
@@ -117,7 +120,15 @@ if __name__ == '__main__':
         #plots[i,0].setLabels(left=("ind: %0.0f rec: %0.0f" % (ind_freq, rec_delay*1000), 'V'))
     #plots.show()
     train_plots.show()
-
+    train_plots.setYLink(train_plots[0,0])
+    for i in range(train_plots.shape[0]):
+        train_plots[i,0].setXLink(train_plots[0,0])
+        train_plots[i,1].setXLink(train_plots[0,1])
+    train_plots.grid.ci.layout.setColumnStretchFactor(0, 3)
+    train_plots.grid.ci.layout.setColumnStretchFactor(1, 2)
+    train_plots.setClipToView(True)
+    train_plots.setDownsampling(True, True, 'peak')
+    
     # Generate average first response
     avg_amp = amp_group.bsub_mean()
     amp_plot = pg.plot(title='First pulse amplitude')
@@ -140,12 +151,12 @@ if __name__ == '__main__':
     kin_plot.plot(avg_kinetic.time_values, avg_kinetic.data)
     
     # Make initial kinetics estimate
-    kin_fit = fit_psp(avg_kinetic, sign=amp_sign, yoffset=0, amp=amp_est)
+    kin_fit = fit_psp(avg_kinetic, sign=amp_sign, yoffset=0, amp=amp_est, method='leastsq', fit_kws={})
     kin_plot.plot(avg_kinetic.time_values, kin_fit.eval(), pen='b')
     rise_time = kin_fit.best_values['rise_time']
     decay_tau = kin_fit.best_values['decay_tau']
     latency = kin_fit.best_values['xoffset'] - 10e-3
-    
+
     ## Fit all responses and plot dynamics curves
     #with pg.ProgressDialog("Fitting responses..", maximum=len(response_groups)*12) as dlg:
         #for i,stim_params in enumerate(response_groups):
@@ -162,7 +173,7 @@ if __name__ == '__main__':
     
     # Fit trains to multi-event models
     
-    tasks = train_response_groups.keys()
+    tasks = stim_param_order
     results = {}
     import pyqtgraph.multiprocess as mp
     with mp.Parallelize(enumerate(tasks), results=results, progressDialog='processing in parallel..') as tasker:
@@ -215,10 +226,16 @@ if __name__ == '__main__':
                 fits.append(fit.best_values)
                 
             tasker.results[stim_params] = fits
-       
+
+
+    # plot train fits
+    dyn_plots = PlotGrid()
+    dyn_plots.set_shape(len(results), 1)
+    spike_sets = []
     model = PspTrain()
-    for i,stim_params in enumerate(train_response_groups.keys()):
+    for i,stim_params in enumerate(stim_param_order):
         fits = results[stim_params]
+        amps = []
         for j,fit in enumerate(fits):
             print "-----------"
             print stim_params
@@ -229,11 +246,56 @@ if __name__ == '__main__':
             
             train_plots[i,j].plot(tvals, model.eval(x=tvals, params=params), pen='b', antialias=True)
     
+            amps.extend([abs(v) for k,v in sorted(fit.items()) if k.startswith('amp')])
 
-
-
-    
+        # plot dynamics
+        dyn_plots[i,0].plot(amps)
+        ind_freq, rec_delay = stim_params
+        dyn_plots[i,0].setLabels(left=("ind: %0.0f rec: %0.0f" % (ind_freq, rec_delay*1000), 'V'))
             
+        # prepare dynamics data for release model fit
+        t = np.array(pulse_offsets[stim_params]) * 1000
+        amps = np.array(amps) / amps[0]
+        spike_sets.append((t, amps))
+        
+    dyn_plots.show()
+    app.processEvents()
+    
+    # Fit release model to dynamics
+    model = ReleaseModel()
+    model.Dynamics['Dep'] = 1
+    model.Dynamics['Fac'] = 1
+    model.Dynamics['UR'] = 1
+    model.Dynamics['SMR'] = 1
+    model.Dynamics['DSR'] = 1
+
+    fit = model.run_fit(spike_sets)
+    rel_plots = PlotGrid()
+    rel_plots.set_shape(2, 1)
+    ind_plot = rel_plots[0, 0]
+    ind_plot.setTitle('Release model fit - induction frequency')
+    ind_plot.setLabels(bottom=('time', 's'), left='relative amplitude')
+    rec_plot = rel_plots[1, 0]
+    rec_plot.setTitle('Release model fit - recovery delay')
+    rec_plot.setLabels(bottom=('time', 's'), left='relative amplitude')
+    
+    ind_plot.setLogMode(x=True, y=False)
+    rec_plot.setLogMode(x=True, y=False)
+    ind_plot.setXLink(rec_plot)
+    
+    for i,stim_params in enumerate(stim_param_order):
+        x,y = spike_sets[i]
+        output = model.eval(x, fit.values(), dt=0.5)
+        y1 = output[:,1]
+        x1 = output[:,0]
+        if stim_params[1] == 0.252:
+            ind_plot.plot((x+10)/1000., y, pen=None, symbol='o', symbolBrush=(i,10))
+            ind_plot.plot((x1+10)/1000., y1, pen=(i,10))
+        if stim_params[0] == 50:
+            rec_plot.plot((x+10)/1000., y, pen=None, symbol='o', symbolBrush=(i,10))
+            rec_plot.plot((x1+10)/1000., y1, pen=(i,10))
+    
+    rel_plots.show()
 
 
 
