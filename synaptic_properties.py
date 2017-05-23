@@ -60,6 +60,7 @@ def plot_trace_average(expts, pre_type, post_type, avg_plot, ind_plot=None, clam
             continue
         
         avg = responses.mean()
+        avg.t0 = 0
         n_traces += len(responses)
         all_responses.append(avg)
         if ind_plot is not None:
