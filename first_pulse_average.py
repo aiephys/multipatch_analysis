@@ -1,7 +1,7 @@
 from collections import OrderedDict
 import pyqtgraph as pg
 import numpy as np
-import os, pickle, tempfile
+import os, sys, pickle, tempfile, resource
 from neuroanalysis.ui.plot_grid import PlotGrid
 from experiment_list import ExperimentList
 from connection_detection import MultiPatchExperimentAnalyzer, EvokedResponseGroup, fit_psp
@@ -42,7 +42,7 @@ def plot_pulse_average(expts, pre_type, post_type, avg_plot, ind_plot, **kwds):
 
 def pulse_average_matrix(expts, **kwds):
     results = {}
-    types = ['tlx3', 'sim1', 'pvalb', 'sst', 'vip']
+    types = ['sim1', 'tlx3', 'pvalb', 'sst', 'vip']
     plots = PlotGrid()
     plots.set_shape(len(types), len(types))
     indplots = PlotGrid()
@@ -74,7 +74,7 @@ if __name__ == '__main__':
         conn_expts.setdefault(c['expt'], []).append(c['cells'])
 
     # 2. for each experiment, get and cache the full set of first-pulse averages
-    types = ['tlx3', 'sim1', 'pvalb', 'sst', 'vip']
+    types = ['sim1', 'tlx3', 'pvalb', 'sst', 'vip']
     indplots = PlotGrid()
     indplots.set_shape(len(types), len(types))
     indplots.show()
@@ -91,11 +91,16 @@ if __name__ == '__main__':
                     responses = []
                     for pre_cell, post_cell in conns:
                         pre_id, post_id = pre_cell.cell_id-1, post_cell.cell_id-1
-                        resp = analyzer.get_evoked_responses(pre_id, post_id, clamp_mode='ic', min_duration=25e-3, pulse_ids=[1, 9])
+                        resp = analyzer.get_evoked_responses(pre_id, post_id, 
+                            clamp_mode='ic', 
+                            min_duration=25e-3, 
+                            pulse_ids=[1]
+                        )
                         avg = resp.bsub_mean()
                         cretypes = (pre_cell.cre_type, post_cell.cre_type)
 
                         if avg is not None:
+                            avg.t0 = 0
                             responses.append({'types': cretypes, 'channels': (pre_id, post_id), 'response': avg})
                     cache[expt.expt_id] = responses
             except IOError:
@@ -115,6 +120,12 @@ if __name__ == '__main__':
             plt.plot(avg.time_values, avg.data)
             plt.setLabels(left=('%s-%s'%cretypes, 'V'), bottom=('Time', 's'))
             app.processEvents()
+            
+        
+        mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        if mem > 12000000:
+            print("It is a good day to die.")
+            sys.exit(-1)
 
 
     # 3. plot matrix of averages by cell type
@@ -146,7 +157,11 @@ if __name__ == '__main__':
             base = np.median(avg.data[:100])
             plt.plot(avg.time_values, avg.data - base)
 
+            # for first pulse
             fit = fit_psp(avg, yoffset=0, amp_ratio=(0, 'fixed'), mask_stim_artifact=True)
+            # for later pulses
+            #fit = fit_psp(avg, yoffset=0, mask_stim_artifact=True)
+            
             amps[(pre_type, post_type)] = fit.best_values['amp']
             plt.plot(avg.time_values, fit.eval()-base, pen='g')
 
