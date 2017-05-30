@@ -20,8 +20,9 @@ if __name__ == '__main__':
     all_expts = ExperimentList(cache='expts_cache.pkl')
     expt = all_expts[expt_ind]
 
-    pre = int(sys.argv[2])
-    post = int(sys.argv[3])
+    # convert cell ID to headstage ID
+    pre = int(sys.argv[2]) - 1
+    post = int(sys.argv[3]) - 1
 
     pre_pad = 10e-3
     post_pad = 50e-3
