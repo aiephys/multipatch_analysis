@@ -30,23 +30,21 @@ class Cell(object):
     def cre_type(self):
         """Cre type string for this cell.
         
-        If the cell is reporter-negative then cre_type is 'unk'.
+        If the cell is positive for multiple cre types, then they will be returned
+        as a comma-separated string.
+        If the cell is reporter-negative then cre_type is 'unknown'.
         If the cell has ambiguous or missing data then cre_type is None.
         """
         default = 'unknown'
-        ct = None
+        ct = []
         for label,pos in self.labels.items():
             if label in ALL_LABELS:
                 continue
             if pos == '+':
-                if ct not in (None, default):
-                    raise Exception("%s has multiple labels!" % self)
-                ct = label
-            elif pos == '-':
-                if ct is not None:
-                    continue
-                ct = default
-        return ct
+                ct.append(label)
+        if len(ct) == 0:
+            return default
+        return ','.join(ct)
 
     @property
     def label_type(self):
