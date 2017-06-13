@@ -372,7 +372,7 @@ def plot_response_averages(expt, show_baseline=False, **kwds):
             # print "==========", dev1, dev2
             avg_response = responses[(dev1, dev2)].bsub_mean()
             if avg_response is not None:
-                
+                avg_response.t0 = 0
                 t = avg_response.time_values
                 y = bessel_filter(Trace(avg_response.data, dt=avg_response.dt), 2e3).data
                 plt.plot(t, y, antialias=True)
