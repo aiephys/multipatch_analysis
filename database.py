@@ -1,7 +1,7 @@
 """
 Accumulate all experiment data into a set of linked tables.
 """
-import os, sys, pickle, resource, tempfile, shutil
+import os, sys, pickle, tempfile, shutil
 import numpy as np
 from pandas import DataFrame
 from pyqtgraph.debug import Profiler
