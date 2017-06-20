@@ -203,7 +203,7 @@ if __name__ == '__main__':
                     args['amp%d'%p] = (amp_est,) + tuple(sorted([0, amp_est * 10]))
 
                 fit_kws = {'xtol': 1e-4, 'maxfev': 1000, 'nan_policy': 'omit'}                
-                model = PspTrain()
+                model = PspTrain(len(pulses))
                 fit = model.fit(avg.data, x=avg.time_values, params=args, fit_kws=fit_kws, method='leastsq')
                 
 
