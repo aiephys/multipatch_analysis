@@ -224,7 +224,7 @@ if __name__ == '__main__':
                 
                 fit = model.fit(avg.data, x=avg.time_values, params=args, fit_kws=fit_kws, method='leastsq')
                 
-                fits.append(fit.best_values)
+                fits.append((fit.best_values, len(pulses)))
                 
             tasker.results[stim_params] = fits
 
@@ -233,18 +233,19 @@ if __name__ == '__main__':
     dyn_plots = PlotGrid()
     dyn_plots.set_shape(len(results), 1)
     spike_sets = []
-    model = PspTrain()
+    models = {4: PspTrain(4), 8: PspTrain(8)}
     for i,stim_params in enumerate(stim_param_order):
         fits = results[stim_params]
         amps = []
         for j,fit in enumerate(fits):
+            fit, n_psp = fit
             print "-----------"
             print stim_params
             print fit
             import lmfit
             params = {k:lmfit.Parameter(name=k, value=v) for k,v in fit.items()}
             tvals = train_response_groups[stim_params][j].responses[0].time_values
-            
+            model = models[n_psp]
             train_plots[i,j].plot(tvals, model.eval(x=tvals, params=params), pen='b', antialias=True)
     
             amps.extend([abs(v) for k,v in sorted(fit.items()) if k.startswith('amp')])
