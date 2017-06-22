@@ -144,12 +144,18 @@ class ExperimentList(object):
             raise Exception("ExperimentList has no cache file; cannot write cache.")
         pickle.dump(self, open(self._cache, 'w'))
 
-    def select(self, start=None, stop=None, region=None, source_files=None):
+    def select(self, start=None, stop=None, region=None, source_files=None, cre_type=None, calcium=None, age=None, temp=None):
         expts = []
-        start_skip = []
-        stop_skip = []
         for ex in self._expts:
-            # filter experiments by start/stop dates
+            # filter experiments by experimental date and conditions
+            if 'solution' in ex.expt_info:
+                if '2mM' in ex.expt_info['solution']:
+                    ex_calcium = 'high'
+                else:
+                    ex_calcium = 'low'
+            else:
+                print("External calcium concentration not set for experiment %s" % str(ex.expt_id))
+                continue
             if start is not None and ex.date < start:
                 continue
             elif stop is not None and ex.date > stop:
@@ -158,12 +164,18 @@ class ExperimentList(object):
                 continue
             elif source_files is not None and ex.expt_id[0] not in source_files:
                 continue
+            elif cre_type is not None and (set(cre_type) and set(ex.cre_types)) is None:
+                continue
+            elif calcium is not None and calcium != ex_calcium:
+                continue
+            elif age is not None and ((ex.age < age[0]) and (ex.age > age[1])) is False:
+                continue
+            elif temp is not None and ex.expt_info['temperature'][:2] != temp:
+                continue
             else:
                 expts.append(ex)
 
         el = ExperimentList(expts)
-        el.start_skip = self.start_skip + start_skip
-        el.stop_skip = stop_skip + self.stop_skip
         return el
 
     def __getitem__(self, item):

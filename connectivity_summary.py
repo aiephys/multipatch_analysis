@@ -34,6 +34,10 @@ parser.add_argument('--sweep-threshold', nargs = '*', type=int, action='store', 
                          '' 'for which there are >= sweep_threshold number of sweeps/stimulus set. Two thresholds'
                          '' 'are set one for induction protocols (default=5) and one for recovery (default=10')
 parser.add_argument('files', nargs='*', type=os.path.abspath)
+parser.add_argument('--cre_type', nargs=2, type=str)
+parser.add_argument('--calcium', type=str, help='define external calcium concentration as "Low" or "High"')
+parser.add_argument('--age', nargs=2, type=int, help='Define age as a range from min to max')
+parser.add_argument('--temp', type=int)
 args = parser.parse_args(sys.argv[1:])
 
 cache_file = 'expts_cache.pkl'
@@ -46,7 +50,7 @@ if len(all_expts) == 0:
     print("No experiments loaded; bailing out.")
     sys.exit(-1)
 
-expts = all_expts.select(start=args.start, stop=args.stop, region=args.region)
+expts = all_expts.select(start=args.start, stop=args.stop, region=args.region, cre_type=args.cre_type, calcium=args.calcium, age=args.age, temp=args.temp)
 if len(args.files) > 0:
     expts = expts.select(source_files=args.files)
 
