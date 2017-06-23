@@ -80,7 +80,7 @@ plots = expts.distance_plot('sim1', 'sim1', color=(0, 150, 255))
 expts.distance_plot('tlx3', 'tlx3', plots=plots, color=(200, 100, 0))
 #expts.distance_plot('pvalb', 'pvalb', plot=p, color=(200, 0, 200))
 
-types = ['unknown', 'sim1', 'tlx3', 'pvalb', 'sst', 'vip']
+types = ['unknown', 'rorb', 'sim1', 'tlx3', 'pvalb', 'sst', 'vip']
 #types = ['sim1', 'unknown']
 expts.matrix(types, types)
 
