@@ -13,6 +13,7 @@ import pyqtgraph.configfile
 from allensdk_internal.core import lims_utilities as lims
 from constants import ALL_CRE_TYPES, ALL_LABELS
 from cell import Cell
+from data import MultipatchExperiment
 
 
 class Experiment(object):
@@ -419,8 +420,6 @@ class Experiment(object):
         Contains all ephys recordings.
         """
         if self._data is None:
-            from neuroanalysis.miesnwb import MiesNwb
-            import os
             if not os.path.isdir('cache'):
                 os.mkdir('cache')
             cf = os.path.join('cache', self.nwb_file.replace('/', '_').replace(':', '_').replace('\\', '_'))
@@ -430,13 +429,11 @@ class Experiment(object):
                     print("copying to cache:", cf)
                     shutil.copyfile(self.nwb_file, cf)
                 except:
-                    try:
+                    if os.path.isfile(cf):
                         os.remove(cf)
-                    except Exception:
-                        pass
                     raise
             
-            self._data = MiesNwb(cf)
+            self._data = MultipatchExperiment(cf)
         return self._data
 
     def close_data(self):
