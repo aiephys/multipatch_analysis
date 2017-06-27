@@ -82,15 +82,18 @@ expts.print_label_summary()
 
 pg.mkQApp()
 
-
-if args.calcium == 'compare' and args.cre_type is not None:
+if args.cre_type is not None:
     cre_type = args.cre_type
-    plots = expts.distance_plot(cre_type[0], cre_type[1], calcium='high', color=(200, 0, 200))
-    expts.distance_plot(cre_type[0], cre_type[1], calcium='low', plots=plots, color=(200, 100, 0))
+    if args.calcium == 'compare' and args.cre_type is not None:
+        plots = expts.distance_plot(cre_type[0], cre_type[1], calcium='high', age=None, color=(200, 0, 200))
+        expts.distance_plot(cre_type[0], cre_type[1], calcium='low', age=None, plots=plots, color=(200, 100, 0))
+    elif args.age == [0, 100]:
+        plots = expts.distance_plot(cre_type[0], cre_type[1], calcium=None, age=[40, 50], color=(200, 0, 200))
+        expts.distance_plot(cre_type[0], cre_type[1], calcium=None, age=[60, 80], plots=plots, color=(200, 100, 0))
 else:
-    plots = expts.distance_plot('sim1', 'sim1', color=(0, 150, 255))
-    expts.distance_plot('tlx3', 'tlx3', plots=plots, color=(200, 100, 0))
-    expts.distance_plot('pvalb', 'pvalb', plots=plots, color=(200, 0, 200))
+    plots = expts.distance_plot('sim1', 'sim1', calcium=None, color=(0, 150, 255))
+    expts.distance_plot('tlx3', 'tlx3', calcium=None, plots=plots, color=(200, 100, 0))
+    expts.distance_plot('pvalb', 'pvalb', calcium=None, plots=plots, color=(200, 0, 200))
 
 types = ['unknown', 'sim1', 'tlx3', 'pvalb', 'sst', 'vip']
 #types = ['sim1', 'unknown']

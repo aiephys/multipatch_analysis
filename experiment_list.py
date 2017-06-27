@@ -148,7 +148,7 @@ class ExperimentList(object):
         expts = []
         for ex in self._expts:
             # filter experiments by experimental date and conditions
-            if calcium != 'compare':
+            if calcium is not None and calcium != 'compare':
                 if 'solution' in ex.expt_info:
                     if '2mM' in ex.expt_info['solution']:
                         ex_calcium = 'high'
@@ -171,7 +171,7 @@ class ExperimentList(object):
                 continue
             elif calcium is not None and calcium.lower() != ex_calcium:
                 continue
-            elif age is not None and ((ex.age < age[0]) and (ex.age > age[1])) is False:
+            elif age is not None and ((ex.age < age[0]) or (ex.age > age[1])):
                 continue
             elif temp is not None and ex.expt_info['temperature'][:2] != temp:
                 continue
@@ -208,12 +208,19 @@ class ExperimentList(object):
             if expt.region is None:
                 print("Warning: Experiment %s has no region" % str(expt.expt_id))
 
-    def distance_plot(self, pre_type, post_type, calcium, plots=None, color=(100, 100, 255)):
+    def distance_plot(self, pre_type, post_type, calcium, age, plots=None, color=(100, 100, 255)):
         # get all connected and unconnected distances for pre->post
         probed = []
         connected = []
         if calcium is not None:
             el = self.select(calcium=calcium)
+            legend = 'Ca = %s' % calcium
+        elif age is not None:
+            el = self.select(age=age)
+            legend = 'age = p%d - %d' % (age[0], age[1])
+        else:
+            el = self
+            legend = ''
         for expt in el:
             for i,j in expt.connections_probed:
                 ci, cj = expt.cells[i], expt.cells[j]
@@ -223,7 +230,7 @@ class ExperimentList(object):
                 probed.append(dist)
                 connected.append((i, j) in expt.connections)
 
-        return distance_plot(connected, distance=probed, plots=plots, color=color, name="%s->%s, Ca = %s"%(pre_type, post_type, calcium))
+        return distance_plot(connected, distance=probed, plots=plots, color=color, name=("%s->%s "%(pre_type, post_type)) + legend)
 
     def matrix(self, rows, cols, size=50):
         w = pg.GraphicsLayoutWidget()
