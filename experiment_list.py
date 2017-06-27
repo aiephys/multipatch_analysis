@@ -237,7 +237,7 @@ class ExperimentList(object):
         )
         default = (0, 0, 0)
 
-        summary = self.connectivity_summary()
+        summary = self.connectivity_summary(cre_type=None)
 
         shape = (len(rows), len(cols))
         text = np.empty(shape, dtype=object)
