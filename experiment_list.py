@@ -148,14 +148,17 @@ class ExperimentList(object):
         expts = []
         for ex in self._expts:
             # filter experiments by experimental date and conditions
-            if 'solution' in ex.expt_info:
-                if '2mM' in ex.expt_info['solution']:
-                    ex_calcium = 'high'
+            if calcium != 'compare':
+                if 'solution' in ex.expt_info:
+                    if '2mM' in ex.expt_info['solution']:
+                        ex_calcium = 'high'
+                    elif '1.3mM' in ex.expt_info['solution']:
+                        ex_calcium = 'low'
                 else:
-                    ex_calcium = 'low'
+                    print("External calcium concentration not set for experiment %s" % str(ex.expt_id))
+                    continue
             else:
-                print("External calcium concentration not set for experiment %s" % str(ex.expt_id))
-                continue
+                ex_calcium = "compare"
             if start is not None and ex.date < start:
                 continue
             elif stop is not None and ex.date > stop:
@@ -166,7 +169,7 @@ class ExperimentList(object):
                 continue
             elif cre_type is not None and len(set(cre_type) & set(ex.cre_types)) == 0:
                 continue
-            elif calcium is not None and calcium != ex_calcium:
+            elif calcium is not None and calcium.lower() != ex_calcium:
                 continue
             elif age is not None and ((ex.age < age[0]) and (ex.age > age[1])) is False:
                 continue
@@ -205,11 +208,13 @@ class ExperimentList(object):
             if expt.region is None:
                 print("Warning: Experiment %s has no region" % str(expt.expt_id))
 
-    def distance_plot(self, pre_type, post_type, plots=None, color=(100, 100, 255)):
+    def distance_plot(self, pre_type, post_type, calcium, plots=None, color=(100, 100, 255)):
         # get all connected and unconnected distances for pre->post
         probed = []
         connected = []
-        for expt in self:
+        if calcium is not None:
+            el = self.select(calcium=calcium)
+        for expt in el:
             for i,j in expt.connections_probed:
                 ci, cj = expt.cells[i], expt.cells[j]
                 if ci.cre_type != pre_type or cj.cre_type != post_type:
@@ -218,7 +223,7 @@ class ExperimentList(object):
                 probed.append(dist)
                 connected.append((i, j) in expt.connections)
 
-        return distance_plot(connected, distance=probed, plots=plots, color=color, name="%s->%s"%(pre_type, post_type))
+        return distance_plot(connected, distance=probed, plots=plots, color=color, name="%s->%s, Ca = %s"%(pre_type, post_type, calcium))
 
     def matrix(self, rows, cols, size=50):
         w = pg.GraphicsLayoutWidget()
