@@ -336,10 +336,12 @@ class ExperimentList(object):
         print("Mean age: %0.1f" % np.mean(ages))
         print("")
 
-    def connectivity_summary(self):
+    def connectivity_summary(self, cre_type):
         summary = {}
         for expt in self:
             for k,v in expt.summary().items():
+                if cre_type is not None and cre_type != list(k):
+                    continue
                 if k not in summary:
                     summary[k] = {'connected':0, 'unconnected':0, 'cdist':[], 'udist':[]}
                 summary[k]['connected'] += v['connected']
@@ -348,14 +350,14 @@ class ExperimentList(object):
                 summary[k]['udist'].extend(v['udist'])
         return summary
 
-    def print_connectivity_summary(self):
+    def print_connectivity_summary(self, cre_type=None):
         print("-------------------------------------------------------------")
         print("     Connectivity  (# connected/probed, % connectivity, %250, %100, cdist, udist, adist)")
         print("-------------------------------------------------------------")
 
         tot_probed, tot_connected = self.n_connections_probed()
 
-        summary = self.connectivity_summary()
+        summary = self.connectivity_summary(cre_type)
 
         with warnings.catch_warnings():  # we expect warnings when nanmean is called on an empty list
             warnings.simplefilter("ignore")
@@ -433,7 +435,7 @@ class ExperimentList(object):
 
         print("")
 
-    def connection_summary(self, list_stims=False):
+    def connection_summary(self, cre_type, list_stims=False):
         """Return a structure that contains summary information for each connection found.
 
             [{'cells': (pre, post), 'expt': expt}, ...]
@@ -447,6 +449,8 @@ class ExperimentList(object):
             for pre_id, post_id in expt.connections:
 
                 c1, c2 = expt.cells[pre_id], expt.cells[post_id]
+                if cre_type is not None and cre_type != [c1.cre_type, c2.cre_type]:
+                    continue
                 conn_info = {'cells': (c1, c2), 'expt': expt}
                 summary.append(conn_info)
 
@@ -477,11 +481,11 @@ class ExperimentList(object):
                     conn_info['stims'] = stims
         return summary
 
-    def print_connection_summary(self, list_stims=False):
+    def print_connection_summary(self, cre_type=None, list_stims=False):
         print("-----------------------")
         print("       Connections")
         print("-----------------------")
-        conns = self.connection_summary(list_stims=list_stims)
+        conns = self.connection_summary(cre_type, list_stims=list_stims)
         for conn in conns:
             c1, c2 = conn['cells']
             distance = (c1.distance(c2))*10**6

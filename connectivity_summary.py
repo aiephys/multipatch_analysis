@@ -65,14 +65,14 @@ expts.check()
 expts.print_expt_summary(args.list_stims)
 
 # Print list of connections found
-expts.print_connection_summary(args.list_stims)
+expts.print_connection_summary(args.cre_type, args.list_stims)
 
 # Print stimulus summary for each connection type
 if args.list_stims:
     expts.print_connection_sweep_summary(args.sweep_threshold)
 
 # Generate a summary of connectivity
-expts.print_connectivity_summary()
+expts.print_connectivity_summary(args.cre_type)
 
 # Print extra information about labeling
 expts.print_label_summary()
