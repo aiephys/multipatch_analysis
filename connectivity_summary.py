@@ -38,7 +38,7 @@ parser.add_argument('--cre_type', nargs=2, type=str)
 parser.add_argument('--calcium', type=str,
                     help='define external calcium concentration as "Low", "High", or "Compare" to compare 2 levels, in'
                          '' 'this case cre_type mush also be used to define connection type')
-parser.add_argument('--age', nargs=2, type=int, help='Define age as a range from min to max')
+parser.add_argument('--age', nargs='*', type=int, help='Define age as a range from min to max. To compare across ages use 2 sets of age ranges')
 parser.add_argument('--temp', type=int)
 args = parser.parse_args(sys.argv[1:])
 
@@ -87,9 +87,9 @@ if args.cre_type is not None:
     if args.calcium == 'compare' and args.cre_type is not None:
         plots = expts.distance_plot(cre_type[0], cre_type[1], calcium='high', age=None, color=(200, 0, 200))
         expts.distance_plot(cre_type[0], cre_type[1], calcium='low', age=None, plots=plots, color=(200, 100, 0))
-    elif args.age == [0, 100]:
-        plots = expts.distance_plot(cre_type[0], cre_type[1], calcium=None, age=[40, 50], color=(200, 0, 200))
-        expts.distance_plot(cre_type[0], cre_type[1], calcium=None, age=[60, 80], plots=plots, color=(200, 100, 0))
+    elif len(args.age) > 2:
+        plots = expts.distance_plot(cre_type[0], cre_type[1], calcium=None, age=args.age[:2], color=(200, 0, 200))
+        expts.distance_plot(cre_type[0], cre_type[1], calcium=None, age=args.age[2:], plots=plots, color=(200, 100, 0))
 else:
     plots = expts.distance_plot('sim1', 'sim1', calcium=None, color=(0, 150, 255))
     expts.distance_plot('tlx3', 'tlx3', calcium=None, plots=plots, color=(200, 100, 0))

@@ -171,7 +171,7 @@ class ExperimentList(object):
                 continue
             elif calcium is not None and calcium.lower() != ex_calcium:
                 continue
-            elif age is not None and ((ex.age < age[0]) or (ex.age > age[1])):
+            elif age is not None and ((ex.age < age[0]) or (ex.age > age[-1])):
                 continue
             elif temp is not None and ex.expt_info['temperature'][:2] != temp:
                 continue
