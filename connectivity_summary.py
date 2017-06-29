@@ -52,6 +52,9 @@ if len(all_expts) == 0:
     print("No experiments loaded; bailing out.")
     sys.exit(-1)
 
+for i, ex in enumerate(all_expts._expts):
+    all_expts._expts[i].summary_id = i
+
 expts = all_expts.select(start=args.start, stop=args.stop, region=args.region, cre_type=args.cre_type, calcium=args.calcium, age=args.age, temp=args.temp)
 if len(args.files) > 0:
     expts = expts.select(source_files=args.files)

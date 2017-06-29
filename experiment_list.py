@@ -330,7 +330,7 @@ class ExperimentList(object):
             ages.append(expt.age)
 
             fmt = "%s: %s %s %s %s %s"
-            fmt_args = [str(i).rjust(4), str(n_p).ljust(5), str(n_c).ljust(5), str(expt.age).ljust(7), ', '.join(expt.cre_types).ljust(15), ':'.join(expt.expt_id)]
+            fmt_args = [str(expt.summary_id).rjust(4), str(n_p).ljust(5), str(n_c).ljust(5), str(expt.age).ljust(7), ', '.join(expt.cre_types).ljust(15), ':'.join(expt.expt_id)]
 
             # get list of stimuli
             if list_stims:
