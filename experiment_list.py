@@ -291,13 +291,13 @@ class ExperimentList(object):
             tot_connected += expt.n_connections
         return tot_probed, tot_connected
 
-    def connection_stim_summary(self):
+    def connection_stim_summary(self, cre_type):
         """Return a structure that contains stimulus summary information for each connection type.
 
             {(pre_type, post_type): {(clamp_mode, freq, holding): [n1_sweeps, n2_sweeps,...]}}
 
         """
-        conn_info = self.connection_summary(list_stims=True)
+        conn_info = self.connection_summary(cre_type, list_stims=True)
         connection_sweep_summary = {}
         for conn in conn_info:
             c1, c2 = conn["cells"]
@@ -519,15 +519,15 @@ class ExperimentList(object):
 
         print("")
 
-    def print_connection_sweep_summary(self, sweep_threshold=[5,10]):
+    def print_connection_sweep_summary(self, cre_types, sweep_threshold=[5,10]):
         from collections import OrderedDict
         print("-----------------------")
         print("  Connection: connected/total probed ")
         print("            Stimulus Set: # connections w/ >= %d (induction) and %d (recovery) sweeps" % (sweep_threshold[0], sweep_threshold[1]))
         print("-----------------------")
-        connection_sweep_summary = self.connection_stim_summary()
+        connection_sweep_summary = self.connection_stim_summary(cre_types)
         connection_types = connection_sweep_summary.keys()
-        summary = self.connectivity_summary()
+        summary = self.connectivity_summary(cre_types)
         for connection_type in connection_types:
             connected = summary[connection_type]['connected']
             probed = connected + summary[connection_type]['unconnected']

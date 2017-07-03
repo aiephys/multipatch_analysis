@@ -74,7 +74,7 @@ expts.print_connection_summary(args.cre_type, args.list_stims)
 
 # Print stimulus summary for each connection type
 if args.list_stims:
-    expts.print_connection_sweep_summary(args.sweep_threshold)
+    expts.print_connection_sweep_summary(args.cre_type, args.sweep_threshold)
 
 # Generate a summary of connectivity
 expts.print_connectivity_summary(args.cre_type)
@@ -87,12 +87,14 @@ pg.mkQApp()
 
 if args.cre_type is not None:
     cre_type = args.cre_type
-    if args.calcium == 'compare' and args.cre_type is not None:
+    if args.calcium is not None and args.calcium == 'compare':
         plots = expts.distance_plot(cre_type[0], cre_type[1], calcium='high', age=None, color=(200, 0, 200))
         expts.distance_plot(cre_type[0], cre_type[1], calcium='low', age=None, plots=plots, color=(200, 100, 0))
-    elif len(args.age) > 2:
+    elif args.age is not None and len(args.age) > 2:
         plots = expts.distance_plot(cre_type[0], cre_type[1], calcium=None, age=args.age[:2], color=(200, 0, 200))
         expts.distance_plot(cre_type[0], cre_type[1], calcium=None, age=args.age[2:], plots=plots, color=(200, 100, 0))
+    else:
+        plots = expts.distance_plot(cre_type[0], cre_type[1], calcium=None, age=None, color=(0, 150, 255))
 else:
     plots = expts.distance_plot('sim1', 'sim1', calcium=None, age=None, color=(0, 150, 255))
     expts.distance_plot('tlx3', 'tlx3', calcium=None, age=None, plots=plots, color=(200, 100, 0))
