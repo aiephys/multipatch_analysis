@@ -9,6 +9,54 @@ from neuroanalysis.fitting import PspTrain
 from synaptic_release import ReleaseModel
 
 
+def collect_stim_trains(expt, pre, post, padding):
+    """Collect all stimulus-response recordings from an experiment between a
+    specific pre- and post-synaptic cell.
+    
+    Returns data in 3 dicts, each keyed with the stimulus parameters (induction
+    frequency and recovery delay):
+        pre_responses : {stim_params: [spike_responses], ...}
+            Presynaptic spike recordings
+        post_responses : {stim_params: [(induction, recovery)], ...} 
+            Postsynaptic resposes, separated into chunks for induction and recovery 
+        pulse_offsets : {stim_params: [pulse_offsets], ...}
+            Offset times of pulses for each set of stimulus parameters
+    """
+    pre_pad, post_pad = padding
+    pre_responses = {}
+    post_responses = {}
+    pulse_offsets = {}
+    for srec in expt.data.contents:
+        if pre not in srec.devices or post not in srec.devices:
+            continue
+        pre_rec = srec[pre]
+        post_rec = srec[post]
+        if post_rec.clamp_mode != 'ic':
+            continue
+        
+        analyzer = MultiPatchSyncRecAnalyzer.get(srec)
+        resp = analyzer.get_spike_responses(pre_rec, post_rec, pre_pad=pre_pad)
+        if len(resp) != 12:
+            # for dynamics, we require all 12 pulses to elicit a presynaptic spike
+            continue
+        
+        stim_params = analyzer.stim_params(pre_rec)
+        pre_responses.setdefault(stim_params, []).append(resp)
+        
+        ind = analyzer.get_train_response(pre_rec, post_rec, 0, 7, padding=(-pre_pad, post_pad))
+        rec = analyzer.get_train_response(pre_rec, post_rec, 8, 11, padding=(-pre_pad, post_pad))
+        ind.t0 = 0
+        rec.t0 = 0
+        post_responses.setdefault(stim_params, []).append((ind, rec))
+        
+        dt = pre_rec['command'].dt
+        if stim_params not in pulse_offsets:
+            i0 = resp[0]['pulse_ind']
+            pulse_offsets[stim_params] = [(r['pulse_ind'] - i0)*dt for r in resp]
+    
+    return pre_responses, post_responses, pulse_offsets
+
+
 if __name__ == '__main__':
     import pyqtgraph as pg
     from experiment_list import ExperimentList
@@ -28,46 +76,17 @@ if __name__ == '__main__':
     post_pad = 50e-3
     
     # Collect all data from NWB
-    pulse_responses = {}
-    train_responses = {}
-    pulse_offsets = {}
-    for srec in expt.data.contents:
-        if pre not in srec.devices or post not in srec.devices:
-            continue
-        pre_rec = srec[pre]
-        post_rec = srec[post]
-        if post_rec.clamp_mode != 'ic':
-            continue
-        
-        analyzer = MultiPatchSyncRecAnalyzer.get(srec)
-        resp = analyzer.get_spike_responses(pre_rec, post_rec, pre_pad=pre_pad)
-        if len(resp) != 12:
-            # for dynamics, we require all 12 pulses to elicit a presynaptic spike
-            continue
-        
-        stim_params = analyzer.stim_params(pre_rec)
-        pulse_responses.setdefault(stim_params, []).append(resp)
-        
-        ind = analyzer.get_train_response(pre_rec, post_rec, 0, 7, padding=(-pre_pad, post_pad))
-        rec = analyzer.get_train_response(pre_rec, post_rec, 8, 11, padding=(-pre_pad, post_pad))
-        ind.t0 = 0
-        rec.t0 = 0
-        train_responses.setdefault(stim_params, []).append((ind, rec))
-        
-        dt = pre_rec['command'].dt
-        if stim_params not in pulse_offsets:
-            i0 = resp[0]['pulse_ind']
-            pulse_offsets[stim_params] = [(r['pulse_ind'] - i0)*dt for r in resp]
+    pre_responses, post_responses, pulse_offsets = collect_stim_trains(expt, pre, post, padding=(pre_pad, post_pad))
     
     stim_param_order = sorted(pulse_offsets.keys())
     
 
     # Sort responses by stimulus parameters and plot averages
     #plots = PlotGrid()
-    #plots.set_shape(len(pulse_responses), 12)
+    #plots.set_shape(len(pre_responses), 12)
 
     train_plots = PlotGrid()
-    train_plots.set_shape(len(pulse_responses), 2)
+    train_plots.set_shape(len(pre_responses), 2)
 
     kinetics_group = EvokedResponseGroup()
     amp_group = EvokedResponseGroup()
@@ -78,7 +97,7 @@ if __name__ == '__main__':
         #  - we can try fitting individual responses averaged across trials
         #  - collect first pulses for amplitude estimate
         #  - colect last pulses for kinetics estimate
-        resp = pulse_responses[stim_params]
+        resp = pre_responses[stim_params]
         ind_freq, rec_delay = stim_params
         rec_delay = np.round(rec_delay, 2)
         #response_groups[stim_params] = []
@@ -105,7 +124,7 @@ if __name__ == '__main__':
         rec_group = EvokedResponseGroup()
         train_response_groups[stim_params] = (ind_group, rec_group)
         
-        for ind, rec in train_responses[stim_params]:
+        for ind, rec in post_responses[stim_params]:
             ind_group.add(ind, b)
             rec_group.add(rec, b)
             base = np.median(b.data)
