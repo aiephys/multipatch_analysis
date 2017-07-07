@@ -6,7 +6,7 @@ from neuroanalysis.stats import ragged_mean
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.fitting import PspTrain
-from synaptic_release import ReleaseModel
+from neuroanalysis.synaptic_release import ReleaseModel
 
 
 def collect_stim_trains(expt, pre, post, padding):
@@ -200,7 +200,7 @@ def fit_response_trains(train_responses, pulse_offsets):
                     args['xoffset%d'%p] = (pt - pulses[0] + pre_pad, 'fixed')
                     args['amp%d'%p] = (amp_est,) + tuple(sorted([0, amp_est * 10]))
 
-                fit_kws = {'xtol': 1e-4, 'maxfev': 1000, 'nan_policy': 'omit'}                
+                fit_kws = {'xtol': 1e-4, 'maxfev': 3000, 'nan_policy': 'omit'}                
                 model = PspTrain(len(pulses))
                 fit = model.fit(avg.data, x=avg.time_values, params=args, fit_kws=fit_kws, method='leastsq')
                 
@@ -276,6 +276,36 @@ def plot_train_fits(results, train_responses, train_plots):
     #dyn_plots.show()
 
 
+def plot_model_results(stim_param_order, spike_sets, model, fit):
+    rel_plots = PlotGrid()
+    rel_plots.set_shape(2, 1)
+    ind_plot = rel_plots[0, 0]
+    ind_plot.setTitle('Release model fit - induction frequency')
+    ind_plot.setLabels(bottom=('time', 's'), left='relative amplitude')
+    rec_plot = rel_plots[1, 0]
+    rec_plot.setTitle('Release model fit - recovery delay')
+    rec_plot.setLabels(bottom=('time', 's'), left='relative amplitude')
+    
+    ind_plot.setLogMode(x=True, y=False)
+    rec_plot.setLogMode(x=True, y=False)
+    ind_plot.setXLink(rec_plot)
+    
+    for i,stim_params in enumerate(stim_param_order):
+        x,y = spike_sets[i]
+        output = model.eval(x, fit.values(), dt=0.5)
+        y1 = output[:,1]
+        x1 = output[:,0]
+        if stim_params[1] - 0.250 < 5e-3:
+            ind_plot.plot((x+10)/1000., y, pen=None, symbol='o', symbolBrush=(i,10))
+            ind_plot.plot((x1+10)/1000., y1, pen=(i,10))
+        if stim_params[0] == 50:
+            rec_plot.plot((x+10)/1000., y, pen=None, symbol='o', symbolBrush=(i,10))
+            rec_plot.plot((x1+10)/1000., y1, pen=(i,10))
+    
+    rel_plots.show()
+    return rel_plots
+
+
 if __name__ == '__main__':
     import pyqtgraph as pg
     from experiment_list import ExperimentList
@@ -311,9 +341,11 @@ if __name__ == '__main__':
 
     # Estimate PSP amplitude
     amp_est, amp_sign, amp_plot = estimate_amplitude(amp_group)
+    app.processEvents()
     
     # Estimate PSP kinetics
     rise_time, decay_tau, latency, kin_plot = estimate_kinetics(kinetics_group)
+    app.processEvents()
     
     # Fit trains to multi-event models
     results = fit_response_trains(train_responses, pulse_offsets)
@@ -333,34 +365,10 @@ if __name__ == '__main__':
     model.Dynamics['UR'] = 1
     model.Dynamics['SMR'] = 1
     model.Dynamics['DSR'] = 1
-
     fit = model.run_fit(spike_sets)
-    rel_plots = PlotGrid()
-    rel_plots.set_shape(2, 1)
-    ind_plot = rel_plots[0, 0]
-    ind_plot.setTitle('Release model fit - induction frequency')
-    ind_plot.setLabels(bottom=('time', 's'), left='relative amplitude')
-    rec_plot = rel_plots[1, 0]
-    rec_plot.setTitle('Release model fit - recovery delay')
-    rec_plot.setLabels(bottom=('time', 's'), left='relative amplitude')
     
-    ind_plot.setLogMode(x=True, y=False)
-    rec_plot.setLogMode(x=True, y=False)
-    ind_plot.setXLink(rec_plot)
-    
-    for i,stim_params in enumerate(stim_param_order):
-        x,y = spike_sets[i]
-        output = model.eval(x, fit.values(), dt=0.5)
-        y1 = output[:,1]
-        x1 = output[:,0]
-        if stim_params[1] == 0.252:
-            ind_plot.plot((x+10)/1000., y, pen=None, symbol='o', symbolBrush=(i,10))
-            ind_plot.plot((x1+10)/1000., y1, pen=(i,10))
-        if stim_params[0] == 50:
-            rec_plot.plot((x+10)/1000., y, pen=None, symbol='o', symbolBrush=(i,10))
-            rec_plot.plot((x1+10)/1000., y1, pen=(i,10))
-    
-    rel_plots.show()
+    # plot fit results
+    rel_plots = plot_model_results(stim_param_order, spike_sets, model, fit)
 
 
 
