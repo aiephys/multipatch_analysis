@@ -79,7 +79,6 @@ def get_kinetics_groups(pulse_responses):
         #  - colect last pulses for kinetics estimate
         resp = pulse_responses[stim_params]
         ind_freq, rec_delay = stim_params
-        rec_delay = np.round(rec_delay, 2)
         for j in range(12):
             for trial in resp:
                 r = trial[j]['response']
@@ -119,6 +118,7 @@ def plot_train_responses(train_responses):
         rec_avg = rec_group.bsub_mean()
 
         ind_freq, rec_delay = stim_params
+        rec_delay = np.round(rec_delay, 2)
         train_plots[i,0].plot(ind_avg.time_values, ind_avg.data, pen='g', antialias=True)
         train_plots[i,1].plot(rec_avg.time_values, rec_avg.data, pen='g', antialias=True)
         train_plots[i,0].setLabels(left=("ind: %0.0f rec: %0.0f" % (ind_freq, rec_delay*1000), 'V'))
@@ -136,41 +136,7 @@ def plot_train_responses(train_responses):
     return train_plots
 
 
-if __name__ == '__main__':
-    import pyqtgraph as pg
-    from experiment_list import ExperimentList
-    app = pg.mkQApp()
-    pg.dbg()
-    
-    arg = sys.argv[1]
-    expt_ind = int(arg)
-    all_expts = ExperimentList(cache='expts_cache.pkl')
-    expt = all_expts[expt_ind]
-
-    # convert cell ID to headstage ID
-    pre = int(sys.argv[2]) - 1
-    post = int(sys.argv[3]) - 1
-
-    pre_pad = 10e-3
-    post_pad = 50e-3
-    
-    # Collect all data from NWB
-    pulse_responses, train_responses, pulse_offsets = collect_stim_trains(expt, pre, post, padding=(pre_pad, post_pad))
-    
-    if len(pulse_responses) == 0:
-        raise Exception("No suitable data found for cell %d -> cell %d in expt %s" % (pre, post, expt_ind))
-           
-    stim_param_order = pulse_offsets.keys()
-    
-
-    # Plot all individual and averaged train responses for all sets of stimulus parameters
-    train_plots = plot_train_responses(train_responses)
-
-    
-    # Collect groups of events that can be averaged together to estimate the 
-    # amplitude and kinetics of this synapse
-    amp_group, kinetics_group = get_kinetics_groups(pulse_responses)
-    
+def estimate_amplitude(amp_group):
     # Generate average first response
     avg_amp = amp_group.bsub_mean()
     amp_plot = pg.plot(title='First pulse amplitude')
@@ -185,7 +151,10 @@ if __name__ == '__main__':
     amp_est = neg if abs(neg) > abs(pos) else pos
     amp_plot.addLine(y=base + amp_est)
     amp_sign = '-' if amp_est < 0 else '+'
+    return amp_est, amp_sign, amp_plot
 
+
+def estimate_kinetics(kinetics_group):
     # Generate average decay phase
     avg_kinetic = kinetics_group.bsub_mean()
     avg_kinetic.t0 = 0
@@ -199,26 +168,14 @@ if __name__ == '__main__':
     decay_tau = kin_fit.best_values['decay_tau']
     latency = kin_fit.best_values['xoffset'] - 10e-3
 
-    ## Fit all responses and plot dynamics curves
-    #with pg.ProgressDialog("Fitting responses..", maximum=len(response_groups)*12) as dlg:
-        #for i,stim_params in enumerate(response_groups):
-            #for j in range(12):
-                #rg = response_groups[stim_params][j]
-                #avg = rg.bsub_mean()
-                #fit = fit_psp(avg, sign=amp_sign, amp=amp_est, 
-                            #rise_time=(kin_fit.best_values['rise_time'], 'fixed'),
-                            #decay_tau=(kin_fit.best_values['decay_tau'], 'fixed'))
-                #plots[i,j].plot(avg.time_values, fit.eval(), pen='b')
-                #dlg += 1
-                #if dlg.wasCanceled():
-                    #raise Exception("Canceled response fit")
-    
-    # Fit trains to multi-event models
-    
-    tasks = stim_param_order
+    return rise_time, decay_tau, latency, kin_plot
+
+
+def fit_response_trains(train_responses, pulse_offsets):
+    tasks = train_responses.keys()
     results = {}
     import pyqtgraph.multiprocess as mp
-    with mp.Parallelize(enumerate(tasks), results=results, progressDialog='processing in parallel..') as tasker:
+    with mp.Parallelize(enumerate(tasks), results=results, progressDialog='Fitting PSP trains..') as tasker:
         for i,stim_params in tasker:
             grps = train_responses[stim_params]
             pulse_offset = pulse_offsets[stim_params]
@@ -269,6 +226,50 @@ if __name__ == '__main__':
                 
             tasker.results[stim_params] = fits
 
+    return results
+
+
+if __name__ == '__main__':
+    import pyqtgraph as pg
+    from experiment_list import ExperimentList
+    app = pg.mkQApp()
+    pg.dbg()
+    
+    arg = sys.argv[1]
+    expt_ind = int(arg)
+    all_expts = ExperimentList(cache='expts_cache.pkl')
+    expt = all_expts[expt_ind]
+
+    # convert cell ID to headstage ID
+    pre = int(sys.argv[2]) - 1
+    post = int(sys.argv[3]) - 1
+
+    pre_pad = 10e-3
+    post_pad = 50e-3
+    
+    # Collect all data from NWB
+    pulse_responses, train_responses, pulse_offsets = collect_stim_trains(expt, pre, post, padding=(pre_pad, post_pad))
+    
+    if len(pulse_responses) == 0:
+        raise Exception("No suitable data found for cell %d -> cell %d in expt %s" % (pre, post, expt_ind))
+           
+    stim_param_order = pulse_offsets.keys()
+    
+    # Plot all individual and averaged train responses for all sets of stimulus parameters
+    train_plots = plot_train_responses(train_responses)
+
+    # Collect groups of events that can be averaged together to estimate the 
+    # amplitude and kinetics of this synapse
+    amp_group, kinetics_group = get_kinetics_groups(pulse_responses)
+
+    # Estimate PSP amplitude
+    amp_est, amp_sign, amp_plot = estimate_amplitude(amp_group)
+    
+    # Estimate PSP kinetics
+    rise_time, decay_tau, latency, kin_plot = estimate_kinetics(kinetics_group)
+    
+    # Fit trains to multi-event models
+    results = fit_response_trains(train_responses, pulse_offsets)
 
     # plot train fits
     dyn_plots = PlotGrid()
