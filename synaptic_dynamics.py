@@ -1,7 +1,7 @@
 import sys
+from collections import OrderedDict
 import numpy as np
 from connection_detection import MultiPatchSyncRecAnalyzer, EvokedResponseGroup, fit_psp
-from database import ExperimentDatabase
 from neuroanalysis.stats import ragged_mean
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.ui.plot_grid import PlotGrid
@@ -15,16 +15,16 @@ def collect_stim_trains(expt, pre, post, padding):
     
     Returns data in 3 dicts, each keyed with the stimulus parameters (induction
     frequency and recovery delay):
-        pre_responses : {stim_params: [spike_responses], ...}
-            Presynaptic spike recordings
-        post_responses : {stim_params: [(induction, recovery)], ...} 
-            Postsynaptic resposes, separated into chunks for induction and recovery 
+        pulse_responses : {stim_params: [(pulse1, ..., pulse12), ...], ...}
+            Postsynaptic responses separated into small chunks for each stimulus pulse
+        train_responses : {stim_params: [(induction, recovery), ...], ...} 
+            Postsynaptic responses, separated into larger chunks of multiple pulses for induction and recovery
         pulse_offsets : {stim_params: [pulse_offsets], ...}
             Offset times of pulses for each set of stimulus parameters
     """
     pre_pad, post_pad = padding
-    pre_responses = {}
-    post_responses = {}
+    pulse_responses = {}
+    train_responses = {}
     pulse_offsets = {}
     for srec in expt.data.contents:
         if pre not in srec.devices or post not in srec.devices:
@@ -41,20 +41,57 @@ def collect_stim_trains(expt, pre, post, padding):
             continue
         
         stim_params = analyzer.stim_params(pre_rec)
-        pre_responses.setdefault(stim_params, []).append(resp)
+        pulse_responses.setdefault(stim_params, []).append(resp)
         
-        ind = analyzer.get_train_response(pre_rec, post_rec, 0, 7, padding=(-pre_pad, post_pad))
-        rec = analyzer.get_train_response(pre_rec, post_rec, 8, 11, padding=(-pre_pad, post_pad))
+        ind, base = analyzer.get_train_response(pre_rec, post_rec, 0, 7, padding=(-pre_pad, post_pad))
+        rec, base = analyzer.get_train_response(pre_rec, post_rec, 8, 11, padding=(-pre_pad, post_pad))
         ind.t0 = 0
         rec.t0 = 0
-        post_responses.setdefault(stim_params, []).append((ind, rec))
+        if stim_params not in train_responses:
+            train_responses[stim_params] = (EvokedResponseGroup(), EvokedResponseGroup())
+        train_responses[stim_params][0].add(ind, base)
+        train_responses[stim_params][1].add(rec, base)
         
         dt = pre_rec['command'].dt
         if stim_params not in pulse_offsets:
             i0 = resp[0]['pulse_ind']
             pulse_offsets[stim_params] = [(r['pulse_ind'] - i0)*dt for r in resp]
     
-    return pre_responses, post_responses, pulse_offsets
+    # re-write as ordered dicts
+    stim_param_order = sorted(pulse_offsets.keys())
+    pulse_responses = OrderedDict([(k, pulse_responses[k]) for k in stim_param_order])
+    train_responses = OrderedDict([(k, train_responses[k]) for k in stim_param_order])
+    pulse_offsets = OrderedDict([(k, pulse_offsets[k]) for k in stim_param_order])
+    
+    return pulse_responses, train_responses, pulse_offsets
+
+
+def get_kinetics_groups(pulse_responses):
+    """Given a set of pulse responses, return EvokedResponseGroups that can be used to extract
+    kinetic parameters.
+    """
+    kinetics_group = EvokedResponseGroup()
+    amp_group = EvokedResponseGroup()
+    for i,stim_params in enumerate(pulse_responses.keys()):
+        # collect all individual pulse responses:
+        #  - we can try fitting individual responses averaged across trials
+        #  - collect first pulses for amplitude estimate
+        #  - colect last pulses for kinetics estimate
+        resp = pulse_responses[stim_params]
+        ind_freq, rec_delay = stim_params
+        rec_delay = np.round(rec_delay, 2)
+        for j in range(12):
+            for trial in resp:
+                r = trial[j]['response']
+                b = trial[j]['baseline']
+                
+                if ind_freq <= 20 or j in (7, 11):
+                    kinetics_group.add(r, b)
+                if ind_freq <= 100 and j == 0:
+                    amp_group.add(r, b)
+    
+    return amp_group, kinetics_group
+
 
 
 if __name__ == '__main__':
@@ -76,63 +113,37 @@ if __name__ == '__main__':
     post_pad = 50e-3
     
     # Collect all data from NWB
-    pre_responses, post_responses, pulse_offsets = collect_stim_trains(expt, pre, post, padding=(pre_pad, post_pad))
+    pulse_responses, train_responses, pulse_offsets = collect_stim_trains(expt, pre, post, padding=(pre_pad, post_pad))
     
-    stim_param_order = sorted(pulse_offsets.keys())
+    if len(pulse_responses) == 0:
+        raise Exception("No suitable data found for cell %d -> cell %d in expt %s" % (pre, post, expt_ind))
+           
+    stim_param_order = pulse_offsets.keys()
     
 
-    # Sort responses by stimulus parameters and plot averages
-    #plots = PlotGrid()
-    #plots.set_shape(len(pre_responses), 12)
-
+    # Set up ui for plotting all train responses
     train_plots = PlotGrid()
-    train_plots.set_shape(len(pre_responses), 2)
+    train_plots.set_shape(len(stim_param_order), 2)
 
-    kinetics_group = EvokedResponseGroup()
-    amp_group = EvokedResponseGroup()
-    #response_groups = {}
-    train_response_groups = {}
+    amp_group, kinetics_group = get_kinetics_groups(pulse_responses)
+    
     for i,stim_params in enumerate(stim_param_order):
-        # collect all individual pulse responses:
-        #  - we can try fitting individual responses averaged across trials
-        #  - collect first pulses for amplitude estimate
-        #  - colect last pulses for kinetics estimate
-        resp = pre_responses[stim_params]
-        ind_freq, rec_delay = stim_params
-        rec_delay = np.round(rec_delay, 2)
-        #response_groups[stim_params] = []
-        for j in range(12):
-            #rg = EvokedResponseGroup()
-            #response_groups[stim_params].append(rg)
-            for trial in resp:
-                r = trial[j]['response']
-                b = trial[j]['baseline']
-                #rg.add(r, b)
-                #plots[i,j].plot(r.time_values, r.data - np.median(b.data), pen=0.5)
-                
-                if ind_freq <= 50 and j in (7, 11):
-                    kinetics_group.add(r, b)
-                if ind_freq <= 100 and j == 0:
-                    amp_group.add(r, b)
-            #avg = rg.bsub_mean()
-            #plots[i,j].plot(avg.time_values, avg.data, pen='g')
-
-            
+        
         # Collect and plot average traces covering the induction and recovery 
         # periods for this set of stim params
-        ind_group = EvokedResponseGroup()
-        rec_group = EvokedResponseGroup()
-        train_response_groups[stim_params] = (ind_group, rec_group)
+        ind_group = train_responses[stim_params][0]
+        rec_group = train_responses[stim_params][1]
         
-        for ind, rec in post_responses[stim_params]:
-            ind_group.add(ind, b)
-            rec_group.add(rec, b)
-            base = np.median(b.data)
+        for j in range(len(ind_group)):
+            ind = ind_group.responses[j]
+            rec = rec_group.responses[j]
+            base = np.median(ind_group.baselines[j].data)
             train_plots[i,0].plot(ind.time_values, ind.data - base, pen=(128, 128, 128, 100))
             train_plots[i,1].plot(rec.time_values, rec.data - base, pen=(128, 128, 128, 100))
         ind_avg = ind_group.bsub_mean()
         rec_avg = rec_group.bsub_mean()
 
+        ind_freq, rec_delay = stim_params
         train_plots[i,0].plot(ind_avg.time_values, ind_avg.data, pen='g', antialias=True)
         train_plots[i,1].plot(rec_avg.time_values, rec_avg.data, pen='g', antialias=True)
         train_plots[i,0].setLabels(left=("ind: %0.0f rec: %0.0f" % (ind_freq, rec_delay*1000), 'V'))
@@ -198,7 +209,7 @@ if __name__ == '__main__':
     import pyqtgraph.multiprocess as mp
     with mp.Parallelize(enumerate(tasks), results=results, progressDialog='processing in parallel..') as tasker:
         for i,stim_params in tasker:
-            grps = train_response_groups[stim_params]
+            grps = train_responses[stim_params]
             pulse_offset = pulse_offsets[stim_params]
             fits = []
             for j,grp in enumerate(grps):
@@ -263,7 +274,7 @@ if __name__ == '__main__':
             print fit
             import lmfit
             params = {k:lmfit.Parameter(name=k, value=v) for k,v in fit.items()}
-            tvals = train_response_groups[stim_params][j].responses[0].time_values
+            tvals = train_responses[stim_params][j].responses[0].time_values
             model = models[n_psp]
             train_plots[i,j].plot(tvals, model.eval(x=tvals, params=params), pen='b', antialias=True)
     

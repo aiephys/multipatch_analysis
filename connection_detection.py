@@ -167,7 +167,8 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         return PulseStimAnalyzer.get(pre_rec).stim_params()
         
     def get_train_response(self, pre_rec, post_rec, start_pulse, stop_pulse, padding=(-10e-3, 50e-3)):
-        """Return the part of the post-synaptic recording during a range of pulses.
+        """Return the part of the post-synaptic recording during a range of pulses,
+        along with a baseline chunk
         """
         pulse_stim = PulseStimAnalyzer.get(pre_rec)
         pulses = [p[0] for p in pulse_stim.pulses() if p[2] > 0]
@@ -178,7 +179,13 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         stop = pulses[stop_pulse] + int(padding[1]/dt)
         assert start > 0
         
-        return post_trace[start:stop]
+        response = post_trace[start:stop]
+        
+        bstop = pulses[8] - int(10e-3/dt)
+        bstart = bstop - int(200e-3/dt)
+        baseline = post_trace[bstart:bstop]
+        
+        return response, baseline
         
 
 
