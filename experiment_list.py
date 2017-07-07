@@ -49,7 +49,7 @@ def indentation(line):
 class ExperimentList(object):
 
     def __init__(self, expts=None, cache=None):
-        self._cache_version = 3
+        self._cache_version = 4
         self._cache = cache
         self._expts = []
         self._expts_by_id = {}
@@ -439,7 +439,7 @@ class ExperimentList(object):
 
         print("")
 
-    def connection_summary(self, cre_type, list_stims=False):
+    def connection_summary(self, cre_type=None, list_stims=False):
         """Return a structure that contains summary information for each connection found.
 
             [{'cells': (pre, post), 'expt': expt}, ...]
