@@ -1,33 +1,28 @@
 import sys
+from collections import OrderedDict
 import numpy as np
 from connection_detection import MultiPatchSyncRecAnalyzer, EvokedResponseGroup, fit_psp
-from database import ExperimentDatabase
 from neuroanalysis.stats import ragged_mean
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.fitting import PspTrain
-from synaptic_release import ReleaseModel
+from neuroanalysis.synaptic_release import ReleaseModel
 
 
-if __name__ == '__main__':
-    import pyqtgraph as pg
-    from experiment_list import ExperimentList
-    app = pg.mkQApp()
-    pg.dbg()
+def collect_stim_trains(expt, pre, post, padding):
+    """Collect all stimulus-response recordings from an experiment between a
+    specific pre- and post-synaptic cell.
     
-    arg = sys.argv[1]
-    expt_ind = int(arg)
-    all_expts = ExperimentList(cache='expts_cache.pkl')
-    expt = all_expts[expt_ind]
-
-    # convert cell ID to headstage ID
-    pre = int(sys.argv[2]) - 1
-    post = int(sys.argv[3]) - 1
-
-    pre_pad = 10e-3
-    post_pad = 50e-3
-    
-    # Collect all data from NWB
+    Returns data in 3 dicts, each keyed with the stimulus parameters (induction
+    frequency and recovery delay):
+        pulse_responses : {stim_params: [(pulse1, ..., pulse12), ...], ...}
+            Postsynaptic responses separated into small chunks for each stimulus pulse
+        train_responses : {stim_params: [(induction, recovery), ...], ...} 
+            Postsynaptic responses, separated into larger chunks of multiple pulses for induction and recovery
+        pulse_offsets : {stim_params: [pulse_offsets], ...}
+            Offset times of pulses for each set of stimulus parameters
+    """
+    pre_pad, post_pad = padding
     pulse_responses = {}
     train_responses = {}
     pulse_offsets = {}
@@ -48,78 +43,86 @@ if __name__ == '__main__':
         stim_params = analyzer.stim_params(pre_rec)
         pulse_responses.setdefault(stim_params, []).append(resp)
         
-        ind = analyzer.get_train_response(pre_rec, post_rec, 0, 7, padding=(-pre_pad, post_pad))
-        rec = analyzer.get_train_response(pre_rec, post_rec, 8, 11, padding=(-pre_pad, post_pad))
+        ind, base = analyzer.get_train_response(pre_rec, post_rec, 0, 7, padding=(-pre_pad, post_pad))
+        rec, base = analyzer.get_train_response(pre_rec, post_rec, 8, 11, padding=(-pre_pad, post_pad))
         ind.t0 = 0
         rec.t0 = 0
-        train_responses.setdefault(stim_params, []).append((ind, rec))
+        if stim_params not in train_responses:
+            train_responses[stim_params] = (EvokedResponseGroup(), EvokedResponseGroup())
+        train_responses[stim_params][0].add(ind, base)
+        train_responses[stim_params][1].add(rec, base)
         
         dt = pre_rec['command'].dt
         if stim_params not in pulse_offsets:
             i0 = resp[0]['pulse_ind']
             pulse_offsets[stim_params] = [(r['pulse_ind'] - i0)*dt for r in resp]
     
+    # re-write as ordered dicts
     stim_param_order = sorted(pulse_offsets.keys())
+    pulse_responses = OrderedDict([(k, pulse_responses[k]) for k in stim_param_order])
+    train_responses = OrderedDict([(k, train_responses[k]) for k in stim_param_order])
+    pulse_offsets = OrderedDict([(k, pulse_offsets[k]) for k in stim_param_order])
     
+    return pulse_responses, train_responses, pulse_offsets
 
-    # Sort responses by stimulus parameters and plot averages
-    #plots = PlotGrid()
-    #plots.set_shape(len(pulse_responses), 12)
 
-    train_plots = PlotGrid()
-    train_plots.set_shape(len(pulse_responses), 2)
-
+def get_kinetics_groups(pulse_responses):
+    """Given a set of pulse responses, return EvokedResponseGroups that can be used to extract
+    kinetic parameters.
+    """
     kinetics_group = EvokedResponseGroup()
     amp_group = EvokedResponseGroup()
-    #response_groups = {}
-    train_response_groups = {}
-    for i,stim_params in enumerate(stim_param_order):
+    for i,stim_params in enumerate(pulse_responses.keys()):
         # collect all individual pulse responses:
         #  - we can try fitting individual responses averaged across trials
         #  - collect first pulses for amplitude estimate
         #  - colect last pulses for kinetics estimate
         resp = pulse_responses[stim_params]
         ind_freq, rec_delay = stim_params
-        rec_delay = np.round(rec_delay, 2)
-        #response_groups[stim_params] = []
         for j in range(12):
-            #rg = EvokedResponseGroup()
-            #response_groups[stim_params].append(rg)
             for trial in resp:
                 r = trial[j]['response']
                 b = trial[j]['baseline']
-                #rg.add(r, b)
-                #plots[i,j].plot(r.time_values, r.data - np.median(b.data), pen=0.5)
                 
-                if ind_freq <= 50 and j in (7, 11):
+                if ind_freq <= 20 or j in (7, 11):
                     kinetics_group.add(r, b)
                 if ind_freq <= 100 and j == 0:
                     amp_group.add(r, b)
-            #avg = rg.bsub_mean()
-            #plots[i,j].plot(avg.time_values, avg.data, pen='g')
+    
+    return amp_group, kinetics_group
 
-            
+
+def plot_train_responses(train_responses):
+    """
+    Plot individual and averaged train responses for each set of stimulus parameters.
+    
+    Return a new PlotGrid.
+    """
+    train_plots = PlotGrid()
+    train_plots.set_shape(len(stim_param_order), 2)
+
+    for i,stim_params in enumerate(train_responses.keys()):
+        
         # Collect and plot average traces covering the induction and recovery 
         # periods for this set of stim params
-        ind_group = EvokedResponseGroup()
-        rec_group = EvokedResponseGroup()
-        train_response_groups[stim_params] = (ind_group, rec_group)
+        ind_group = train_responses[stim_params][0]
+        rec_group = train_responses[stim_params][1]
         
-        for ind, rec in train_responses[stim_params]:
-            ind_group.add(ind, b)
-            rec_group.add(rec, b)
-            base = np.median(b.data)
+        for j in range(len(ind_group)):
+            ind = ind_group.responses[j]
+            rec = rec_group.responses[j]
+            base = np.median(ind_group.baselines[j].data)
             train_plots[i,0].plot(ind.time_values, ind.data - base, pen=(128, 128, 128, 100))
             train_plots[i,1].plot(rec.time_values, rec.data - base, pen=(128, 128, 128, 100))
         ind_avg = ind_group.bsub_mean()
         rec_avg = rec_group.bsub_mean()
 
+        ind_freq, rec_delay = stim_params
+        rec_delay = np.round(rec_delay, 2)
         train_plots[i,0].plot(ind_avg.time_values, ind_avg.data, pen='g', antialias=True)
         train_plots[i,1].plot(rec_avg.time_values, rec_avg.data, pen='g', antialias=True)
         train_plots[i,0].setLabels(left=("ind: %0.0f rec: %0.0f" % (ind_freq, rec_delay*1000), 'V'))
         
-        #plots[i,0].setLabels(left=("ind: %0.0f rec: %0.0f" % (ind_freq, rec_delay*1000), 'V'))
-    #plots.show()
     train_plots.show()
     train_plots.setYLink(train_plots[0,0])
     for i in range(train_plots.shape[0]):
@@ -130,6 +133,10 @@ if __name__ == '__main__':
     train_plots.setClipToView(True)
     train_plots.setDownsampling(True, True, 'peak')
     
+    return train_plots
+
+
+def estimate_amplitude(amp_group):
     # Generate average first response
     avg_amp = amp_group.bsub_mean()
     amp_plot = pg.plot(title='First pulse amplitude')
@@ -144,7 +151,10 @@ if __name__ == '__main__':
     amp_est = neg if abs(neg) > abs(pos) else pos
     amp_plot.addLine(y=base + amp_est)
     amp_sign = '-' if amp_est < 0 else '+'
+    return amp_est, amp_sign, amp_plot
 
+
+def estimate_kinetics(kinetics_group):
     # Generate average decay phase
     avg_kinetic = kinetics_group.bsub_mean()
     avg_kinetic.t0 = 0
@@ -158,28 +168,16 @@ if __name__ == '__main__':
     decay_tau = kin_fit.best_values['decay_tau']
     latency = kin_fit.best_values['xoffset'] - 10e-3
 
-    ## Fit all responses and plot dynamics curves
-    #with pg.ProgressDialog("Fitting responses..", maximum=len(response_groups)*12) as dlg:
-        #for i,stim_params in enumerate(response_groups):
-            #for j in range(12):
-                #rg = response_groups[stim_params][j]
-                #avg = rg.bsub_mean()
-                #fit = fit_psp(avg, sign=amp_sign, amp=amp_est, 
-                            #rise_time=(kin_fit.best_values['rise_time'], 'fixed'),
-                            #decay_tau=(kin_fit.best_values['decay_tau'], 'fixed'))
-                #plots[i,j].plot(avg.time_values, fit.eval(), pen='b')
-                #dlg += 1
-                #if dlg.wasCanceled():
-                    #raise Exception("Canceled response fit")
-    
-    # Fit trains to multi-event models
-    
-    tasks = stim_param_order
-    results = {}
+    return rise_time, decay_tau, latency, kin_plot
+
+
+def fit_response_trains(train_responses, pulse_offsets):
+    tasks = train_responses.keys()
+    results = OrderedDict([(task,None) for task in tasks])
     import pyqtgraph.multiprocess as mp
-    with mp.Parallelize(enumerate(tasks), results=results, progressDialog='processing in parallel..') as tasker:
+    with mp.Parallelize(enumerate(tasks), results=results, progressDialog='Fitting PSP trains..') as tasker:
         for i,stim_params in tasker:
-            grps = train_response_groups[stim_params]
+            grps = train_responses[stim_params]
             pulse_offset = pulse_offsets[stim_params]
             fits = []
             for j,grp in enumerate(grps):
@@ -202,7 +200,7 @@ if __name__ == '__main__':
                     args['xoffset%d'%p] = (pt - pulses[0] + pre_pad, 'fixed')
                     args['amp%d'%p] = (amp_est,) + tuple(sorted([0, amp_est * 10]))
 
-                fit_kws = {'xtol': 1e-4, 'maxfev': 1000, 'nan_policy': 'omit'}                
+                fit_kws = {'xtol': 1e-4, 'maxfev': 3000, 'nan_policy': 'omit'}                
                 model = PspTrain(len(pulses))
                 fit = model.fit(avg.data, x=avg.time_values, params=args, fit_kws=fit_kws, method='leastsq')
                 
@@ -228,13 +226,33 @@ if __name__ == '__main__':
                 
             tasker.results[stim_params] = fits
 
+    return results
 
-    # plot train fits
-    dyn_plots = PlotGrid()
-    dyn_plots.set_shape(len(results), 1)
+
+def prepare_spike_sets(results, train_responses, pulse_offsets):
+    """Generate spike amplitude structure needed for release model fitting
+    """
     spike_sets = []
+    for i,stim_params in enumerate(results.keys()):
+        fits = results[stim_params]
+        amps = []
+        for j,fit in enumerate(fits):
+            fit, n_psp = fit
+            amps.extend([abs(v) for k,v in sorted(fit.items()) if k.startswith('amp')])
+
+        # prepare dynamics data for release model fit
+        t = np.array(pulse_offsets[stim_params]) * 1000
+        amps = np.array(amps) / amps[0]
+        spike_sets.append((t, amps))
+        
+    return spike_sets
+
+
+def plot_train_fits(results, train_responses, train_plots):
+    #dyn_plots = PlotGrid()
+    #dyn_plots.set_shape(len(results), 1)
     models = {4: PspTrain(4), 8: PspTrain(8)}
-    for i,stim_params in enumerate(stim_param_order):
+    for i,stim_params in enumerate(results.keys()):
         fits = results[stim_params]
         amps = []
         for j,fit in enumerate(fits):
@@ -244,34 +262,21 @@ if __name__ == '__main__':
             print fit
             import lmfit
             params = {k:lmfit.Parameter(name=k, value=v) for k,v in fit.items()}
-            tvals = train_response_groups[stim_params][j].responses[0].time_values
+            tvals = train_responses[stim_params][j].responses[0].time_values
             model = models[n_psp]
             train_plots[i,j].plot(tvals, model.eval(x=tvals, params=params), pen='b', antialias=True)
     
-            amps.extend([abs(v) for k,v in sorted(fit.items()) if k.startswith('amp')])
+            #amps.extend([abs(v) for k,v in sorted(fit.items()) if k.startswith('amp')])
 
         # plot dynamics
-        dyn_plots[i,0].plot(amps)
-        ind_freq, rec_delay = stim_params
-        dyn_plots[i,0].setLabels(left=("ind: %0.0f rec: %0.0f" % (ind_freq, rec_delay*1000), 'V'))
-            
-        # prepare dynamics data for release model fit
-        t = np.array(pulse_offsets[stim_params]) * 1000
-        amps = np.array(amps) / amps[0]
-        spike_sets.append((t, amps))
+        #dyn_plots[i,0].plot(amps)
+        #ind_freq, rec_delay = stim_params
+        #dyn_plots[i,0].setLabels(left=("ind: %0.0f rec: %0.0f" % (ind_freq, rec_delay*1000), 'V'))
         
-    dyn_plots.show()
-    app.processEvents()
-    
-    # Fit release model to dynamics
-    model = ReleaseModel()
-    model.Dynamics['Dep'] = 1
-    model.Dynamics['Fac'] = 1
-    model.Dynamics['UR'] = 1
-    model.Dynamics['SMR'] = 1
-    model.Dynamics['DSR'] = 1
+    #dyn_plots.show()
 
-    fit = model.run_fit(spike_sets)
+
+def plot_model_results(stim_param_order, spike_sets, model, fit):
     rel_plots = PlotGrid()
     rel_plots.set_shape(2, 1)
     ind_plot = rel_plots[0, 0]
@@ -290,7 +295,7 @@ if __name__ == '__main__':
         output = model.eval(x, fit.values(), dt=0.5)
         y1 = output[:,1]
         x1 = output[:,0]
-        if stim_params[1] == 0.252:
+        if stim_params[1] - 0.250 < 5e-3:
             ind_plot.plot((x+10)/1000., y, pen=None, symbol='o', symbolBrush=(i,10))
             ind_plot.plot((x1+10)/1000., y1, pen=(i,10))
         if stim_params[0] == 50:
@@ -298,6 +303,72 @@ if __name__ == '__main__':
             rec_plot.plot((x1+10)/1000., y1, pen=(i,10))
     
     rel_plots.show()
+    return rel_plots
+
+
+if __name__ == '__main__':
+    import pyqtgraph as pg
+    from experiment_list import ExperimentList
+    app = pg.mkQApp()
+    pg.dbg()
+    
+    arg = sys.argv[1]
+    expt_ind = int(arg)
+    all_expts = ExperimentList(cache='expts_cache.pkl')
+    expt = all_expts[expt_ind]
+
+    # convert cell ID to headstage ID
+    pre = int(sys.argv[2]) - 1
+    post = int(sys.argv[3]) - 1
+
+    pre_pad = 10e-3
+    post_pad = 50e-3
+    
+    # Collect all data from NWB
+    pulse_responses, train_responses, pulse_offsets = collect_stim_trains(expt, pre, post, padding=(pre_pad, post_pad))
+    
+    if len(pulse_responses) == 0:
+        raise Exception("No suitable data found for cell %d -> cell %d in expt %s" % (pre, post, expt_ind))
+           
+    stim_param_order = pulse_offsets.keys()
+    
+    # Plot all individual and averaged train responses for all sets of stimulus parameters
+    train_plots = plot_train_responses(train_responses)
+
+    # Collect groups of events that can be averaged together to estimate the 
+    # amplitude and kinetics of this synapse
+    amp_group, kinetics_group = get_kinetics_groups(pulse_responses)
+
+    # Estimate PSP amplitude
+    amp_est, amp_sign, amp_plot = estimate_amplitude(amp_group)
+    app.processEvents()
+    
+    # Estimate PSP kinetics
+    rise_time, decay_tau, latency, kin_plot = estimate_kinetics(kinetics_group)
+    app.processEvents()
+    
+    # Fit trains to multi-event models
+    results = fit_response_trains(train_responses, pulse_offsets)
+
+    # plot train fits
+    plot_train_fits(results, train_responses, train_plots)
+    # update GUI before doing model fit
+    app.processEvents()
+
+    # generate spike amplitude structure needed for release model fitting
+    spike_sets = prepare_spike_sets(results, train_responses, pulse_offsets)
+    
+    # Fit release model to dynamics
+    model = ReleaseModel()
+    model.Dynamics['Dep'] = 1
+    model.Dynamics['Fac'] = 1
+    model.Dynamics['UR'] = 1
+    model.Dynamics['SMR'] = 1
+    model.Dynamics['DSR'] = 1
+    fit = model.run_fit(spike_sets)
+    
+    # plot fit results
+    rel_plots = plot_model_results(stim_param_order, spike_sets, model, fit)
 
 
 
