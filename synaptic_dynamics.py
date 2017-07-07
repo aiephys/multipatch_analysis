@@ -173,7 +173,7 @@ def estimate_kinetics(kinetics_group):
 
 def fit_response_trains(train_responses, pulse_offsets):
     tasks = train_responses.keys()
-    results = {}
+    results = OrderedDict([(task,None) for task in tasks])
     import pyqtgraph.multiprocess as mp
     with mp.Parallelize(enumerate(tasks), results=results, progressDialog='Fitting PSP trains..') as tasker:
         for i,stim_params in tasker:
@@ -229,6 +229,53 @@ def fit_response_trains(train_responses, pulse_offsets):
     return results
 
 
+def prepare_spike_sets(results, train_responses, pulse_offsets):
+    """Generate spike amplitude structure needed for release model fitting
+    """
+    spike_sets = []
+    for i,stim_params in enumerate(results.keys()):
+        fits = results[stim_params]
+        amps = []
+        for j,fit in enumerate(fits):
+            fit, n_psp = fit
+            amps.extend([abs(v) for k,v in sorted(fit.items()) if k.startswith('amp')])
+
+        # prepare dynamics data for release model fit
+        t = np.array(pulse_offsets[stim_params]) * 1000
+        amps = np.array(amps) / amps[0]
+        spike_sets.append((t, amps))
+        
+    return spike_sets
+
+
+def plot_train_fits(results, train_responses, train_plots):
+    #dyn_plots = PlotGrid()
+    #dyn_plots.set_shape(len(results), 1)
+    models = {4: PspTrain(4), 8: PspTrain(8)}
+    for i,stim_params in enumerate(results.keys()):
+        fits = results[stim_params]
+        amps = []
+        for j,fit in enumerate(fits):
+            fit, n_psp = fit
+            print "-----------"
+            print stim_params
+            print fit
+            import lmfit
+            params = {k:lmfit.Parameter(name=k, value=v) for k,v in fit.items()}
+            tvals = train_responses[stim_params][j].responses[0].time_values
+            model = models[n_psp]
+            train_plots[i,j].plot(tvals, model.eval(x=tvals, params=params), pen='b', antialias=True)
+    
+            #amps.extend([abs(v) for k,v in sorted(fit.items()) if k.startswith('amp')])
+
+        # plot dynamics
+        #dyn_plots[i,0].plot(amps)
+        #ind_freq, rec_delay = stim_params
+        #dyn_plots[i,0].setLabels(left=("ind: %0.0f rec: %0.0f" % (ind_freq, rec_delay*1000), 'V'))
+        
+    #dyn_plots.show()
+
+
 if __name__ == '__main__':
     import pyqtgraph as pg
     from experiment_list import ExperimentList
@@ -272,38 +319,12 @@ if __name__ == '__main__':
     results = fit_response_trains(train_responses, pulse_offsets)
 
     # plot train fits
-    dyn_plots = PlotGrid()
-    dyn_plots.set_shape(len(results), 1)
-    spike_sets = []
-    models = {4: PspTrain(4), 8: PspTrain(8)}
-    for i,stim_params in enumerate(stim_param_order):
-        fits = results[stim_params]
-        amps = []
-        for j,fit in enumerate(fits):
-            fit, n_psp = fit
-            print "-----------"
-            print stim_params
-            print fit
-            import lmfit
-            params = {k:lmfit.Parameter(name=k, value=v) for k,v in fit.items()}
-            tvals = train_responses[stim_params][j].responses[0].time_values
-            model = models[n_psp]
-            train_plots[i,j].plot(tvals, model.eval(x=tvals, params=params), pen='b', antialias=True)
-    
-            amps.extend([abs(v) for k,v in sorted(fit.items()) if k.startswith('amp')])
-
-        # plot dynamics
-        dyn_plots[i,0].plot(amps)
-        ind_freq, rec_delay = stim_params
-        dyn_plots[i,0].setLabels(left=("ind: %0.0f rec: %0.0f" % (ind_freq, rec_delay*1000), 'V'))
-            
-        # prepare dynamics data for release model fit
-        t = np.array(pulse_offsets[stim_params]) * 1000
-        amps = np.array(amps) / amps[0]
-        spike_sets.append((t, amps))
-        
-    dyn_plots.show()
+    plot_train_fits(results, train_responses, train_plots)
+    # update GUI before doing model fit
     app.processEvents()
+
+    # generate spike amplitude structure needed for release model fitting
+    spike_sets = prepare_spike_sets(results, train_responses, pulse_offsets)
     
     # Fit release model to dynamics
     model = ReleaseModel()
