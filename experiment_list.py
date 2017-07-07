@@ -148,7 +148,7 @@ class ExperimentList(object):
         expts = []
         for ex in self._expts:
             # filter experiments by experimental date and conditions
-            if calcium is not None and calcium != 'compare':
+            if calcium is not None:
                 if 'solution' in ex.expt_info:
                     if '2mM' in ex.expt_info['solution']:
                         ex_calcium = 'high'
@@ -157,8 +157,8 @@ class ExperimentList(object):
                 else:
                     print("External calcium concentration not set for experiment %s" % str(ex.expt_id))
                     continue
-            else:
-                ex_calcium = "compare"
+            if age is not None:
+                age_range = sorted([int(i) for i in age.split(',')[0].split('-')])
             if start is not None and ex.date < start:
                 continue
             elif stop is not None and ex.date > stop:
@@ -171,7 +171,7 @@ class ExperimentList(object):
                 continue
             elif calcium is not None and calcium.lower() != ex_calcium:
                 continue
-            elif age is not None and ((ex.age < age[0]) or (ex.age > age[-1])):
+            elif age is not None and ((ex.age < age_range[0]) or (ex.age > age_range[1])) :
                 continue
             elif temp is not None and ex.expt_info['temperature'][:2] != temp:
                 continue
@@ -208,20 +208,11 @@ class ExperimentList(object):
             if expt.region is None:
                 print("Warning: Experiment %s has no region" % str(expt.expt_id))
 
-    def distance_plot(self, pre_type, post_type, calcium, age, plots=None, color=(100, 100, 255)):
+    def distance_plot(self, pre_type, post_type, plots=None, color=(100, 100, 255), name=None):
         # get all connected and unconnected distances for pre->post
         probed = []
         connected = []
-        if calcium is not None:
-            el = self.select(calcium=calcium)
-            legend = 'Ca = %s' % calcium
-        elif age is not None:
-            el = self.select(age=age)
-            legend = 'age = p%d - %d' % (age[0], age[1])
-        else:
-            el = self
-            legend = ''
-        for expt in el:
+        for expt in self:
             for i,j in expt.connections_probed:
                 ci, cj = expt.cells[i], expt.cells[j]
                 if ci.cre_type != pre_type or cj.cre_type != post_type:
@@ -229,8 +220,9 @@ class ExperimentList(object):
                 dist = ci.distance(cj)
                 probed.append(dist)
                 connected.append((i, j) in expt.connections)
-
-        return distance_plot(connected, distance=probed, plots=plots, color=color, name=("%s->%s "%(pre_type, post_type)) + legend)
+        if name is None:
+            name = ("%s->%s "%(pre_type, post_type))
+        return distance_plot(connected, distance=probed, plots=plots, color=color, name=name)
 
     def matrix(self, rows, cols, size=50):
         w = pg.GraphicsLayoutWidget()
@@ -352,7 +344,7 @@ class ExperimentList(object):
         summary = {}
         for expt in self:
             for k,v in expt.summary().items():
-                if cre_type is not None and cre_type != list(k):
+                if cre_type is not None and list(cre_type) != list(k):
                     continue
                 if k not in summary:
                     summary[k] = {'connected':0, 'unconnected':0, 'cdist':[], 'udist':[]}
@@ -461,7 +453,7 @@ class ExperimentList(object):
             for pre_id, post_id in expt.connections:
 
                 c1, c2 = expt.cells[pre_id], expt.cells[post_id]
-                if cre_type is not None and cre_type != [c1.cre_type, c2.cre_type]:
+                if cre_type is not None and list(cre_type) != [c1.cre_type, c2.cre_type]:
                     continue
                 conn_info = {'cells': (c1, c2), 'expt': expt}
                 summary.append(conn_info)

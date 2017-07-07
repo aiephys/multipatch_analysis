@@ -74,6 +74,7 @@ def distance_plot(connected, distance, plots=None, color=(100, 100, 255), window
     plots : list of PlotWidget | PlotItem
         (optional) Two plots used to display distance profile and scatter plot.
     """
+    color = pg.colorTuple(pg.mkColor(color))[:3]
     connected = np.array(connected).astype(float)
     distance = np.array(distance)
     pts = np.vstack([distance, connected]).T
