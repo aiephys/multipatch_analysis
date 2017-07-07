@@ -34,6 +34,12 @@ parser.add_argument('--sweep-threshold', nargs = '*', type=int, action='store', 
                          '' 'for which there are >= sweep_threshold number of sweeps/stimulus set. Two thresholds'
                          '' 'are set one for induction protocols (default=5) and one for recovery (default=10')
 parser.add_argument('files', nargs='*', type=os.path.abspath)
+parser.add_argument('--cre-type', nargs=1, type=str)
+parser.add_argument('--calcium', type=str,
+                    help='define external calcium concentration as "Low", "High"')
+parser.add_argument('--age', type=str, help='Define age as a range from min to max.  Ex age=30-40')
+parser.add_argument('--temp', type=int)
+
 args = parser.parse_args(sys.argv[1:])
 
 cache_file = 'expts_cache.pkl'
@@ -46,7 +52,10 @@ if len(all_expts) == 0:
     print("No experiments loaded; bailing out.")
     sys.exit(-1)
 
-expts = all_expts.select(start=args.start, stop=args.stop, region=args.region)
+for i, ex in enumerate(all_expts):
+    ex.summary_id = i
+
+expts = all_expts.select(start=args.start, stop=args.stop, region=args.region, cre_type=args.cre_type, calcium=args.calcium, age=args.age, temp=args.temp)
 if len(args.files) > 0:
     expts = expts.select(source_files=args.files)
 
@@ -61,14 +70,14 @@ expts.check()
 expts.print_expt_summary(args.list_stims)
 
 # Print list of connections found
-expts.print_connection_summary(args.list_stims)
+expts.print_connection_summary(args.cre_type, args.list_stims)
 
 # Print stimulus summary for each connection type
 if args.list_stims:
-    expts.print_connection_sweep_summary(args.sweep_threshold)
+    expts.print_connection_sweep_summary(args.cre_type, args.sweep_threshold)
 
 # Generate a summary of connectivity
-expts.print_connectivity_summary()
+expts.print_connectivity_summary(args.cre_type)
 
 # Print extra information about labeling
 expts.print_label_summary()
@@ -78,7 +87,7 @@ pg.mkQApp()
 
 plots = expts.distance_plot('sim1', 'sim1', color=(0, 150, 255))
 expts.distance_plot('tlx3', 'tlx3', plots=plots, color=(200, 100, 0))
-#expts.distance_plot('pvalb', 'pvalb', plot=p, color=(200, 0, 200))
+expts.distance_plot('pvalb', 'pvalb', plots=plots, color=(200, 0, 200))
 
 types = ['unknown', 'rorb', 'sim1', 'tlx3', 'pvalb', 'sst', 'vip']
 #types = ['sim1', 'unknown']
@@ -86,3 +95,4 @@ expts.matrix(types, types)
 
 # cache everything!
 all_expts.write_cache()
+print("Cache successfully updated!")
