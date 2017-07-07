@@ -93,6 +93,48 @@ def get_kinetics_groups(pulse_responses):
     return amp_group, kinetics_group
 
 
+def plot_train_responses(train_responses):
+    """
+    Plot individual and averaged train responses for each set of stimulus parameters.
+    
+    Return a new PlotGrid.
+    """
+    train_plots = PlotGrid()
+    train_plots.set_shape(len(stim_param_order), 2)
+
+    for i,stim_params in enumerate(train_responses.keys()):
+        
+        # Collect and plot average traces covering the induction and recovery 
+        # periods for this set of stim params
+        ind_group = train_responses[stim_params][0]
+        rec_group = train_responses[stim_params][1]
+        
+        for j in range(len(ind_group)):
+            ind = ind_group.responses[j]
+            rec = rec_group.responses[j]
+            base = np.median(ind_group.baselines[j].data)
+            train_plots[i,0].plot(ind.time_values, ind.data - base, pen=(128, 128, 128, 100))
+            train_plots[i,1].plot(rec.time_values, rec.data - base, pen=(128, 128, 128, 100))
+        ind_avg = ind_group.bsub_mean()
+        rec_avg = rec_group.bsub_mean()
+
+        ind_freq, rec_delay = stim_params
+        train_plots[i,0].plot(ind_avg.time_values, ind_avg.data, pen='g', antialias=True)
+        train_plots[i,1].plot(rec_avg.time_values, rec_avg.data, pen='g', antialias=True)
+        train_plots[i,0].setLabels(left=("ind: %0.0f rec: %0.0f" % (ind_freq, rec_delay*1000), 'V'))
+        
+    train_plots.show()
+    train_plots.setYLink(train_plots[0,0])
+    for i in range(train_plots.shape[0]):
+        train_plots[i,0].setXLink(train_plots[0,0])
+        train_plots[i,1].setXLink(train_plots[0,1])
+    train_plots.grid.ci.layout.setColumnStretchFactor(0, 3)
+    train_plots.grid.ci.layout.setColumnStretchFactor(1, 2)
+    train_plots.setClipToView(True)
+    train_plots.setDownsampling(True, True, 'peak')
+    
+    return train_plots
+
 
 if __name__ == '__main__':
     import pyqtgraph as pg
@@ -121,44 +163,13 @@ if __name__ == '__main__':
     stim_param_order = pulse_offsets.keys()
     
 
-    # Set up ui for plotting all train responses
-    train_plots = PlotGrid()
-    train_plots.set_shape(len(stim_param_order), 2)
+    # Plot all individual and averaged train responses for all sets of stimulus parameters
+    train_plots = plot_train_responses(train_responses)
 
-    amp_group, kinetics_group = get_kinetics_groups(pulse_responses)
     
-    for i,stim_params in enumerate(stim_param_order):
-        
-        # Collect and plot average traces covering the induction and recovery 
-        # periods for this set of stim params
-        ind_group = train_responses[stim_params][0]
-        rec_group = train_responses[stim_params][1]
-        
-        for j in range(len(ind_group)):
-            ind = ind_group.responses[j]
-            rec = rec_group.responses[j]
-            base = np.median(ind_group.baselines[j].data)
-            train_plots[i,0].plot(ind.time_values, ind.data - base, pen=(128, 128, 128, 100))
-            train_plots[i,1].plot(rec.time_values, rec.data - base, pen=(128, 128, 128, 100))
-        ind_avg = ind_group.bsub_mean()
-        rec_avg = rec_group.bsub_mean()
-
-        ind_freq, rec_delay = stim_params
-        train_plots[i,0].plot(ind_avg.time_values, ind_avg.data, pen='g', antialias=True)
-        train_plots[i,1].plot(rec_avg.time_values, rec_avg.data, pen='g', antialias=True)
-        train_plots[i,0].setLabels(left=("ind: %0.0f rec: %0.0f" % (ind_freq, rec_delay*1000), 'V'))
-        
-        #plots[i,0].setLabels(left=("ind: %0.0f rec: %0.0f" % (ind_freq, rec_delay*1000), 'V'))
-    #plots.show()
-    train_plots.show()
-    train_plots.setYLink(train_plots[0,0])
-    for i in range(train_plots.shape[0]):
-        train_plots[i,0].setXLink(train_plots[0,0])
-        train_plots[i,1].setXLink(train_plots[0,1])
-    train_plots.grid.ci.layout.setColumnStretchFactor(0, 3)
-    train_plots.grid.ci.layout.setColumnStretchFactor(1, 2)
-    train_plots.setClipToView(True)
-    train_plots.setDownsampling(True, True, 'peak')
+    # Collect groups of events that can be averaged together to estimate the 
+    # amplitude and kinetics of this synapse
+    amp_group, kinetics_group = get_kinetics_groups(pulse_responses)
     
     # Generate average first response
     avg_amp = amp_group.bsub_mean()
