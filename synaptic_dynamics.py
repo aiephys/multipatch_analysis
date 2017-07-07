@@ -335,6 +335,9 @@ if __name__ == '__main__':
     # Plot all individual and averaged train responses for all sets of stimulus parameters
     train_plots = plot_train_responses(train_responses)
 
+    if '--no-fit' in sys.argv:
+        sys.exit(0)  # user requested no fitting; bail out early
+        
     # Collect groups of events that can be averaged together to estimate the 
     # amplitude and kinetics of this synapse
     amp_group, kinetics_group = get_kinetics_groups(pulse_responses)
@@ -354,6 +357,9 @@ if __name__ == '__main__':
     plot_train_fits(results, train_responses, train_plots)
     # update GUI before doing model fit
     app.processEvents()
+
+    if '--no-model' in sys.argv:
+        sys.exit(0)  # user requested no model; bail out early
 
     # generate spike amplitude structure needed for release model fitting
     spike_sets = prepare_spike_sets(results, train_responses, pulse_offsets)
