@@ -158,7 +158,7 @@ class ExperimentList(object):
                     print("External calcium concentration not set for experiment %s" % str(ex.expt_id))
                     continue
             if age is not None:
-                age_range = sorted([int(i) for i in age.split(',')[0].split('-')])
+                age_range = sorted([int(i) for i in age.split('-')])
             if start is not None and ex.date < start:
                 continue
             elif stop is not None and ex.date > stop:
