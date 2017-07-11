@@ -167,7 +167,7 @@ class ExperimentList(object):
                 continue
             elif source_files is not None and ex.expt_id[0] not in source_files:
                 continue
-            elif cre_type is not None and len(set(cre_type) & set(ex.cre_types)) == 0:
+            elif cre_type is not None and set(cre_type) != set(ex.cre_types):
                 continue
             elif calcium is not None and calcium.lower() != ex_calcium:
                 continue
