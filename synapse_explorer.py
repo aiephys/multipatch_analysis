@@ -1,6 +1,6 @@
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtGui, QtCore
-from ui import SynapseTreeWidget
+from ui import SynapseTreeWidget, ExperimentInfoWidget
 from neuroanalysis.ui.plot_grid import PlotGrid
 from synaptic_dynamics import DynamicsAnalyzer
 
@@ -16,9 +16,15 @@ class SynapseExplorer(QtGui.QWidget):
         self.hsplit = QtGui.QSplitter(QtCore.Qt.Horizontal)
         self.layout.addWidget(self.hsplit, 0, 0)
         
+        self.vsplit = QtGui.QSplitter(QtCore.Qt.Vertical)
+        self.hsplit.addWidget(self.vsplit)
+        
         self.syn_tree = SynapseTreeWidget(self.expts)
-        self.hsplit.addWidget(self.syn_tree)
+        self.vsplit.addWidget(self.syn_tree)
         self.syn_tree.itemSelectionChanged.connect(self.selection_changed)
+        
+        self.expt_info = ExperimentInfoWidget()
+        self.vsplit.addWidget(self.expt_info)
         
         self.train_plots = PlotGrid()
         self.hsplit.addWidget(self.train_plots)
@@ -29,6 +35,9 @@ class SynapseExplorer(QtGui.QWidget):
         with pg.BusyCursor():
             sel = self.syn_tree.selectedItems()[0]
             expt = sel.expt
+            
+            self.expt_info.set_experiment(expt)
+            
             pre_cell = sel.cells[0].cell_id
             post_cell = sel.cells[1].cell_id
             

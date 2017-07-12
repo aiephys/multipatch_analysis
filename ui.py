@@ -1,3 +1,6 @@
+from collections import OrderedDict
+import os
+import pyqtgraph as pg
 from pyqtgraph.Qt import QtGui
 
 
@@ -28,3 +31,34 @@ class SynapseTreeItem(QtGui.QTreeWidgetItem):
         ]
         
         QtGui.QTreeWidgetItem.__init__(self, fields)
+
+
+class ExperimentInfoWidget(QtGui.QWidget):
+    def __init__(self, parent=None):
+        QtGui.QWidget.__init__(self, parent)
+        
+        self.expt = None
+        
+        self.layout = QtGui.QGridLayout()
+        self.setLayout(self.layout)
+        
+        self.info_tree = pg.DataTreeWidget()
+        self.layout.addWidget(self.info_tree, self.layout.rowCount(), 0)
+        
+        self.biocytin_btn = QtGui.QPushButton('biocytin image...')
+        self.biocytin_btn.clicked.connect(self.show_biocytin)
+        self.layout.addWidget(self.biocytin_btn, self.layout.rowCount(), 0)
+        
+    def set_experiment(self, expt):
+        self.expt = expt
+        
+        info = OrderedDict([
+            ('date', str(expt.date)),
+            ('specimen', expt.specimen_id),
+            ('age', expt.age),
+        ])
+          
+        self.info_tree.setData(info)
+        
+    def show_biocytin(self):
+        os.system("firefox " + self.expt.biocytin_image_url)

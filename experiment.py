@@ -475,6 +475,20 @@ class Experiment(object):
         return self._lims_record
 
     @property
+    def biocytin_image_url(self):
+        sid = self.specimen_id
+        q = """
+            select sub_images.id from specimens 
+            join image_series on image_series.specimen_id=specimens.id 
+            join sub_images on sub_images.image_series_id=image_series.id
+            where specimens.name='%s';
+            """ % sid
+        r = lims.query(q)
+        if len(r) != 1:
+            raise Exception("LIMS lookup for specimen %s returned %d results (expected 1)" % (sid, len(r)))
+        return "http://lims2/siv?sub_image=%d" % r[0]['id']
+
+    @property
     def multipatch_log(self):
         files = [p for p in os.listdir(self.path) if re.match(r'MultiPatch_\d+.log', p)]
         if len(files) == 0:
