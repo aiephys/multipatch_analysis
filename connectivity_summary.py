@@ -34,7 +34,7 @@ parser.add_argument('--sweep-threshold', nargs = '*', type=int, action='store', 
                          '' 'for which there are >= sweep_threshold number of sweeps/stimulus set. Two thresholds'
                          '' 'are set one for induction protocols (default=5) and one for recovery (default=10')
 parser.add_argument('files', nargs='*', type=os.path.abspath)
-parser.add_argument('--cre-type', nargs=1, type=str)
+parser.add_argument('--cre-type', nargs=2, type=str)
 parser.add_argument('--calcium', type=str,
                     help='define external calcium concentration as "Low", "High"')
 parser.add_argument('--age', type=str, help='Define age as a range from min to max.  Ex age=30-40')
