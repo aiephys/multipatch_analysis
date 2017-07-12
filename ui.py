@@ -1,5 +1,5 @@
 from collections import OrderedDict
-import os
+import os, sys, subprocess
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtGui
 
@@ -61,4 +61,7 @@ class ExperimentInfoWidget(QtGui.QWidget):
         self.info_tree.setData(info)
         
     def show_biocytin(self):
-        os.system("firefox " + self.expt.biocytin_image_url)
+        if sys.platform == 'win32':
+            subprocess.Popen([r'C:\Program Files (x86)\Mozilla Firefox\firefox.exe', self.expt.biocytin_image_url])
+        else:
+            os.system("firefox " + self.expt.biocytin_image_url)
