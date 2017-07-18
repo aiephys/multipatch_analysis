@@ -235,15 +235,17 @@ class DynamicsAnalyzer(object):
 
     def estimate_amplitude(self, plot=False):
         amp_group = self.amp_group
-        
+        amp_est = None
+        amp_plot = None
+        amp_sign = None
+        avg_amp = None
+        if len(amp_group) == 0:
+            return amp_est, amp_sign, avg_amp, amp_plot
         # Generate average first response
         avg_amp = amp_group.bsub_mean()
-        
         if plot:
             amp_plot = pg.plot(title='First pulse amplitude')
             amp_plot.plot(avg_amp.time_values, avg_amp.data)
-        else:
-            amp_plot = None
 
         # Make initial amplitude estimate
         ad = avg_amp.data
@@ -259,7 +261,7 @@ class DynamicsAnalyzer(object):
         self._psp_estimate['amp'] = amp_est
         self._psp_estimate['amp_sign'] = amp_sign
         
-        return amp_est, amp_sign, amp_plot
+        return amp_est, amp_sign, avg_amp, amp_plot
 
     def estimate_kinetics(self, plot=False):
         kinetics_group = self.kinetics_group
