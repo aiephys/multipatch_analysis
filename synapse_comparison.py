@@ -55,7 +55,7 @@ def avg_first_pulse(expt, pre, post):
     if key in result_cache:
         res = result_cache[key]
         if 'avg_est' not in res:
-            return None, None
+            return None, None, None
         avg_est = res['avg_est']
         avg_amp = Trace(data=res['data'], dt=res['dt'])
         n_sweeps = res['n_sweeps']
