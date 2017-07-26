@@ -10,10 +10,11 @@ from neuroanalysis.synaptic_release import ReleaseModel
 
 
 class DynamicsAnalyzer(object):
-    def __init__(self, expt, pre_cell, post_cell):
+    def __init__(self, expt, pre_cell, post_cell, align_to='pulse'):
         self.expt = expt
         self.pre_cell = pre_cell
         self.post_cell = post_cell
+        self.align_to = align_to
 
         # how much padding to include when extracting events
         self.pre_pad = 10e-3
@@ -126,7 +127,7 @@ class DynamicsAnalyzer(object):
                 continue
             
             analyzer = MultiPatchSyncRecAnalyzer.get(srec)
-            resp = analyzer.get_spike_responses(pre_rec, post_rec, pre_pad=pre_pad)
+            resp = analyzer.get_spike_responses(pre_rec, post_rec, pre_pad=pre_pad, align_to=self.align_to)
             if len(resp) != 12:
                 # for dynamics, we require all 12 pulses to elicit a presynaptic spike
                 continue
