@@ -20,6 +20,9 @@ from experiment_list import ExperimentList
 from neuroanalysis.baseline import float_mode
 from connection_detection import trace_mean
 from neuroanalysis.data import Trace
+from scipy import stats
+from neuroanalysis.ui.plot_grid import PlotGrid
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--cre-type', type=str, help='Enter as pretype-posttype. If comparing connection types separate'
@@ -34,9 +37,8 @@ args = parser.parse_args(sys.argv[1:])
 cache_file = 'expts_cache.pkl'
 all_expts = ExperimentList(cache=cache_file)
 app = pg.mkQApp()
-pg.dbg()
 
-result_cache_file = 'connectivity_comparison_cache.pkl'
+result_cache_file = 'synapse_comparison_cache.pkl'
 if os.path.exists(result_cache_file):
     try:
         result_cache = pickle.load(open(result_cache_file, 'rb'))
@@ -56,16 +58,17 @@ def avg_first_pulse(expt, pre, post):
             return None, None
         avg_est = res['avg_est']
         avg_amp = Trace(data=res['data'], dt=res['dt'])
-        return avg_est, avg_amp
+        n_sweeps = res['n_sweeps']
+        return avg_est, avg_amp, n_sweeps
 
-    analyzer = DynamicsAnalyzer(expt, pre, post)
-    avg_est, _, avg_amp, _ = analyzer.estimate_amplitude(plot=False)
-    if avg_amp is None:
+    analyzer = DynamicsAnalyzer(expt, pre, post, align_to='pulse')
+    avg_est, _, avg_amp, _, n_sweeps = analyzer.estimate_amplitude(plot=False)
+    if n_sweeps == 0:
         result_cache[key] = {}
-        ret = None, None
+        ret = None, None, n_sweeps
     else:
-        result_cache[key] = {'avg_est': avg_est, 'data': avg_amp.data, 'dt': avg_amp.dt}
-        ret = avg_est, avg_amp
+        result_cache[key] = {'avg_est': avg_est, 'data': avg_amp.data, 'dt': avg_amp.dt, 'n_sweeps': n_sweeps}
+        ret = avg_est, avg_amp, n_sweeps
 
     data = pickle.dumps(result_cache)
     open(result_cache_file, 'wb').write(data)
@@ -73,21 +76,29 @@ def avg_first_pulse(expt, pre, post):
     return ret
 
 def first_pulse_plot(expt_list, name=None):
-    amp_plots = pg.plot(labels={'left': ('Vm', 'V')})
+    amp_plots = pg.plot()
+    amp_plots.setLabels(left=('Vm', 'V'))
     amp_base_subtract = []
+    avg_ests = []
     for expt in expt_list:
         for pre, post in expt.connections:
             if expt.cells[pre].cre_type == cre_type[0] and expt.cells[post].cre_type == cre_type[1]:
-                avg_est, avg_amp = avg_first_pulse(expt, pre, post)
-                if avg_amp is not None:
+                avg_est, avg_amp, n_sweeps = avg_first_pulse(expt, pre, post)
+                if n_sweeps >= 10:
                     avg_amp.t0 = 0
+                    avg_ests.append(avg_est)
                     base = float_mode(avg_amp.data[:int(10e-3 / avg_amp.dt)])
                     amp_base_subtract.append(avg_amp.copy(data=avg_amp.data - base))
                     amp_plots.plot(avg_amp.time_values, avg_amp.data - base)
                     app.processEvents()
     grand_mean = trace_mean(amp_base_subtract)
+    grand_est = np.mean(np.array(avg_ests))
+    grand_est_sem = stats.sem(np.array(avg_ests))
+    print ('Grand mean estimate = %f' % grand_est)
     amp_plots.addLegend()
     amp_plots.plot(grand_mean.time_values, grand_mean.data, pen={'color': 'g', 'width': 3}, name=name)
+    amp_plots.addLine(y=grand_est, pen={'color': 'g'})
+    return grand_mean, avg_ests, grand_est, grand_est_sem
 
 if args.cre_type is not None and len(args.cre_type.split(',')) == 1:
     cre_type = args.cre_type.split('-')
@@ -98,7 +109,7 @@ if args.cre_type is not None and len(args.cre_type.split(',')) == 1:
         first_pulse_plot(expts, name=legend)
         expts = all_expts.select(calcium='low')
         legend = ("%s->%s, calcium = 1.3mM " % (cre_type[0], cre_type[1]))
-        expts.distance_plot(cre_type[0], cre_type[1], plots=dist_plots, color=(5, 10), name=("%s->%s, calcium = 1.3mM " %(cre_type[0], cre_type[1])))
+        expts.distance_plot(cre_type[0], cre_type[1], plots=dist_plots, color=(5, 10), name=legend)
         first_pulse_plot(expts, name=legend)
     elif args.age is not None:
         ages = args.age.split(',')
@@ -113,7 +124,22 @@ elif args.cre_type is None and (args.calcium is not None or args.age is not None
 else:
     cre_types = args.cre_type.split(',')
     plots = None
+    grid = PlotGrid()
+    grid.set_shape(1, 2)
+    amp_plot = (grid[0,0], grid[0,1])
+    grid.show()
+    amp_plot[1].addLegend()
+    amp_plot[0].setLabels(left=('Vm', 'V'))
+    amp_plot[0].hideAxis('bottom')
     for i, type in enumerate(cre_types):
         cre_type = type.split('-')
-        expts = all_expts.select(cre_type=cre_type)
+        expts = all_expts.select(cre_type=cre_type, age=args.age, calcium='High')
+        legend = ("%s->%s" % (cre_type[0], cre_type[1]))
         plots = expts.distance_plot(cre_type[0], cre_type[1], plots=plots, color=(i, len(cre_types)*1.3))
+        grand_mean, avg_est, grand_est, grand_est_sem = first_pulse_plot(expts, name=legend)
+        amp_plot[1].plot(grand_mean.time_values, grand_mean.data/grand_est, pen=(i, len(cre_types)*1.3), name=legend)
+        dx = pg.pseudoScatter(np.array(avg_est).astype(float), 0.3, bidir=True)
+        amp_plot[0].plot((0.3 * dx/dx.max()) + i, avg_est, pen=None, symbol='x', symbolBrush=(i, len(cre_types)*1.3), symbolPen=None)
+        amp_plot[0].plot([i], [grand_est], pen=None, symbol='o', symbolBrush=(i, len(cre_types)*1.3), symbolPen='w', symbolSize=10)
+        # error = pg.ErrorBarItem(x=[i], y=[grand_est], height=[grand_est_sem], beam=0.5, pen='w')
+        # amp_scatter.addItem(error)

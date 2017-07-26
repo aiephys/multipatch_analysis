@@ -240,8 +240,9 @@ class DynamicsAnalyzer(object):
         amp_plot = None
         amp_sign = None
         avg_amp = None
-        if len(amp_group) == 0:
-            return amp_est, amp_sign, avg_amp, amp_plot
+        n_sweeps = len(amp_group)
+        if n_sweeps == 0:
+            return amp_est, amp_sign, avg_amp, amp_plot, n_sweeps
         # Generate average first response
         avg_amp = amp_group.bsub_mean()
         if plot:
@@ -262,7 +263,7 @@ class DynamicsAnalyzer(object):
         self._psp_estimate['amp'] = amp_est
         self._psp_estimate['amp_sign'] = amp_sign
         
-        return amp_est, amp_sign, avg_amp, amp_plot
+        return amp_est, amp_sign, avg_amp, amp_plot, n_sweeps
 
     def estimate_kinetics(self, plot=False):
         kinetics_group = self.kinetics_group
