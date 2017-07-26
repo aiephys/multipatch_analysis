@@ -100,46 +100,63 @@ def first_pulse_plot(expt_list, name=None):
     amp_plots.addLine(y=grand_est, pen={'color': 'g'})
     return grand_mean, avg_ests, grand_est, grand_est_sem
 
+def summary_plot(grand_mean, avg_est, grand_est, i, plot=None, color=None, name=None):
+    if plot == None:
+        grid = PlotGrid()
+        grid.set_shape(1, 2)
+        plot = (grid[0, 0], grid[0, 1])
+        plot[0].grid = grid
+        grid.show()
+        plot[1].addLegend()
+        plot[0].setLabels(left=('Vm', 'V'))
+        plot[0].hideAxis('bottom')
+        plot[1].setLabels(left=('Vm', 'V'))
+
+    plot[1].plot(grand_mean.time_values, grand_mean.data, pen=color, name=name)
+    dx = pg.pseudoScatter(np.array(avg_est).astype(float), 0.3, bidir=True)
+    plot[0].plot((0.3 * dx / dx.max()) + i, avg_est, pen=None, symbol='x', symbolBrush=color,
+                     symbolPen=None)
+    plot[0].plot([i], [grand_est], pen=None, symbol='o', symbolBrush=color, symbolPen='w',
+                     symbolSize=10)
+    return plot
+
 if args.cre_type is not None and len(args.cre_type.split(',')) == 1:
     cre_type = args.cre_type.split('-')
     if args.calcium is True:
         expts = all_expts.select(cre_type=cre_type, calcium='high')
         legend = ("%s->%s, calcium = 2.0mM " % (cre_type[0], cre_type[1]))
         dist_plots = expts.distance_plot(cre_type[0], cre_type[1], color=(0, 10), name=legend)
-        first_pulse_plot(expts, name=legend)
+        grand_mean, avg_est, grand_est, grand_est_sem = first_pulse_plot(expts, name=legend)
+        amp_plots = summary_plot(grand_mean, avg_est, grand_est, i=0, plot=None, color=(0, 10), name=legend)
         expts = all_expts.select(calcium='low')
         legend = ("%s->%s, calcium = 1.3mM " % (cre_type[0], cre_type[1]))
         expts.distance_plot(cre_type[0], cre_type[1], plots=dist_plots, color=(5, 10), name=legend)
-        first_pulse_plot(expts, name=legend)
+        grand_mean, avg_est, grand_est, grand_est_sem = first_pulse_plot(expts, name=legend)
+        amp_plots = summary_plot(grand_mean, avg_est, grand_est, i=1, plot=amp_plots, color=(5, 10), name=legend)
     elif args.age is not None:
         ages = args.age.split(',')
         if len(ages) < 2:
             print("Please specify more than one age range")
         expts = all_expts.select(age=ages[0])
-        plots = expts.distance_plot(cre_type[0], cre_type[1], color=(0, 10), name=("%s->%s, age = P%s " %(cre_type[0], cre_type[1], ages[0])))
+        legend = ("%s->%s, age = P%s " % (cre_type[0], cre_type[1], ages[0]))
+        dist_plots = expts.distance_plot(cre_type[0], cre_type[1], color=(0, 10), name=legend)
+        grand_mean, avg_est, grand_est, grand_est_sem = first_pulse_plot(expts, name=legend)
+        amp_plots = summary_plot(grand_mean, avg_est, grand_est, i=0, plot=None, color=(0, 10), name=legend)
         expts = all_expts.select(age=ages[1])
-        expts.distance_plot(cre_type[0], cre_type[1], plots=plots, color=(5, 10), name=("%s->%s, age = P%s " %(cre_type[0], cre_type[1], ages[1])))
+        legend = ("%s->%s, age = P%s " % (cre_type[0], cre_type[1], ages[1]))
+        expts.distance_plot(cre_type[0], cre_type[1], plots=dist_plots, color=(5, 10), name=legend)
+        grand_mean, avg_est, grand_est, grand_est_sem = first_pulse_plot(expts, name=legend)
+        amp_plots = summary_plot(grand_mean, avg_est, grand_est, i=1, plot=amp_plots, color=(5, 10), name=legend)
 elif args.cre_type is None and (args.calcium is not None or args.age is not None):
     print('Error: in order to compare across conditions a single cre-type connection must be specified')
 else:
     cre_types = args.cre_type.split(',')
-    plots = None
-    grid = PlotGrid()
-    grid.set_shape(1, 2)
-    amp_plot = (grid[0,0], grid[0,1])
-    grid.show()
-    amp_plot[1].addLegend()
-    amp_plot[0].setLabels(left=('Vm', 'V'))
-    amp_plot[0].hideAxis('bottom')
+    dist_plots = None
+    amp_plots = None
     for i, type in enumerate(cre_types):
         cre_type = type.split('-')
         expts = all_expts.select(cre_type=cre_type, age=args.age, calcium='High')
         legend = ("%s->%s" % (cre_type[0], cre_type[1]))
-        plots = expts.distance_plot(cre_type[0], cre_type[1], plots=plots, color=(i, len(cre_types)*1.3))
+        dist_plots = expts.distance_plot(cre_type[0], cre_type[1], plots=dist_plots, color=(i, len(cre_types)*1.3))
         grand_mean, avg_est, grand_est, grand_est_sem = first_pulse_plot(expts, name=legend)
-        amp_plot[1].plot(grand_mean.time_values, grand_mean.data/grand_est, pen=(i, len(cre_types)*1.3), name=legend)
-        dx = pg.pseudoScatter(np.array(avg_est).astype(float), 0.3, bidir=True)
-        amp_plot[0].plot((0.3 * dx/dx.max()) + i, avg_est, pen=None, symbol='x', symbolBrush=(i, len(cre_types)*1.3), symbolPen=None)
-        amp_plot[0].plot([i], [grand_est], pen=None, symbol='o', symbolBrush=(i, len(cre_types)*1.3), symbolPen='w', symbolSize=10)
-        # error = pg.ErrorBarItem(x=[i], y=[grand_est], height=[grand_est_sem], beam=0.5, pen='w')
-        # amp_scatter.addItem(error)
+        amp_plots = summary_plot(grand_mean, avg_est, grand_est, i=i, plot=amp_plots, color=(i, len(cre_types)*1.3), name=legend)
