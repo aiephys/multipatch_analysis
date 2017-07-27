@@ -150,14 +150,16 @@ if args.cre_type is not None and len(args.cre_type.split(',')) == 1:
         legend = ("%s->%s, age = P%s " % (cre_type[0], cre_type[1], ages[0]))
         dist_plots = expts.distance_plot(cre_type[0], cre_type[1], color=(0, 10), name=legend)
         grand_mean, avg_est_age1, grand_est = first_pulse_plot(expts, name=legend)
-        print(legend + 'Grand mean amplitude = %f' % grand_est)
-        amp_plots = summary_plot(grand_mean, avg_est_age1, grand_est, i=0, plot=None, color=(0, 10), name=legend)
+        if grand_mean is not None:
+            print(legend + 'Grand mean amplitude = %f' % grand_est)
+            amp_plots = summary_plot(grand_mean, avg_est_age1, grand_est, i=0, plot=None, color=(0, 10), name=legend)
         expts = all_expts.select(age=ages[1])
         legend = ("%s->%s, age = P%s " % (cre_type[0], cre_type[1], ages[1]))
         expts.distance_plot(cre_type[0], cre_type[1], plots=dist_plots, color=(5, 10), name=legend)
         grand_mean, avg_est_age2, grand_est = first_pulse_plot(expts, name=legend)
-        print(legend + 'Grand mean amplitude = %f' % grand_est)
-        amp_plots = summary_plot(grand_mean, avg_est_age2, grand_est, i=1, plot=amp_plots, color=(5, 10), name=legend)
+        if grand_mean is not None:
+            print(legend + 'Grand mean amplitude = %f' % grand_est)
+            amp_plots = summary_plot(grand_mean, avg_est_age2, grand_est, i=1, plot=amp_plots, color=(5, 10), name=legend)
         ks = stats.ks_2samp(avg_est_age1, avg_est_age2)
         print('p = %f (KS test)' % ks.pvalue)
 elif args.cre_type is None and (args.calcium is not None or args.age is not None):
@@ -172,5 +174,6 @@ else:
         legend = ("%s->%s" % (cre_type[0], cre_type[1]))
         dist_plots = expts.distance_plot(cre_type[0], cre_type[1], plots=dist_plots, color=(i, len(cre_types)*1.3))
         grand_mean, avg_est, grand_est = first_pulse_plot(expts, name=legend)
-        print(legend + 'Grand mean amplitude = %f' % grand_est)
-        amp_plots = summary_plot(grand_mean, avg_est, grand_est, i=i, plot=amp_plots, color=(i, len(cre_types)*1.3), name=legend)
+        if grand_mean is not None:
+            print(legend + 'Grand mean amplitude = %f' % grand_est)
+            amp_plots = summary_plot(grand_mean, avg_est, grand_est, i=i, plot=amp_plots, color=(i, len(cre_types)*1.3), name=legend)
