@@ -11,7 +11,6 @@ class ExperimentSubmitUi(QtGui.QWidget):
     def __init__(self):
         self.path = None
         
-        
         QtGui.QWidget.__init__(self)
         
         self.layout = QtGui.QGridLayout()
@@ -23,10 +22,13 @@ class ExperimentSubmitUi(QtGui.QWidget):
         self.file_tree = pg.TreeWidget()
         self.file_tree.setColumnCount(3)
         self.file_tree.setHeaderLabels(['file', 'category', 'metadata'])
+        self.file_tree.setSelectionMode(self.file_tree.ExtendedSelection)
         self.hsplit.addWidget(self.file_tree)
         
         self.canvas = acq4.util.Canvas.Canvas()
         self.hsplit.addWidget(self.canvas)
+        
+        self.hsplit.setSizes([400, 1000])
         
     def set_path(self, path):
         self.path = path
@@ -43,6 +45,10 @@ class ExperimentSubmitUi(QtGui.QWidget):
         for fname in dh.ls():
             fh = dh[fname]
             item = self._make_item(fh)
+            
+            if hasattr(item, 'type_selected'):
+                item.type_selected.connect(self._item_type_selected)
+            
             root.addChild(item)
             item.fh = fh
             if fh.isDir():
@@ -58,16 +64,48 @@ class ExperimentSubmitUi(QtGui.QWidget):
             print objtyp, '\t', fh.name()
             return item
 
+    def _item_type_selected(self, item, typ):
+        for item in self.file_tree.selectedItems():
+            item.set_type(typ)
+
 
 class ImageTreeItem(pg.TreeWidgetItem):
+    
+    class Signals(QtCore.QObject):
+        type_selected = QtCore.Signal(object, object)
+    
     def __init__(self, fh):
-        pg.TreeWidgetItem.__init__(self, [fh.shortName(), '', fh.info()['objective']])
+        self._sigprox = ImageTreeItem.Signals()
+        self.type_selected = self._sigprox.type_selected
+
+        pg.TreeWidgetItem.__init__(self, [fh.shortName(), 'ignore', fh.info()['objective']])
         self.fh = fh
-        self.combo = QtGui.QComboBox()
+        #self.combo = QtGui.QComboBox()
         self.types = ['ignore', 'type 1', 'type 2']
+        #for typ in self.types:
+            #self.combo.addItem(typ)
+        #self.setWidget(1, self.combo)
+        self.menu = QtGui.QMenu()
         for typ in self.types:
-            self.combo.addItem(typ)
-        self.setWidget(1, self.combo)
+            act = self.menu.addAction(typ, self._type_selected)
+            
+    def _type_selected(self):
+        action = self.treeWidget().sender()
+        text = str(action.text()).strip()
+        self.set_type(text)
+        self.type_selected.emit(self, text)
+            
+    def itemClicked(self, col):
+        if col != 1:
+            return
+        tw = self.treeWidget()
+        x = tw.header().sectionPosition(col)
+        y = tw.header().height() + tw.visualItemRect(self).bottom()
+        self.menu.popup(tw.mapToGlobal(QtCore.QPoint(x, y)))
+        return None
+    
+    def set_type(self, typ):
+        self.setText(1, typ)
         
 
 
@@ -80,7 +118,7 @@ if __name__ == '__main__':
     
     path = sys.argv[1]
     ui = ExperimentSubmitUi()
-    ui.resize(1000, 800)
+    ui.resize(1300, 800)
     ui.show()
     ui.set_path(path)
     
