@@ -20,7 +20,9 @@ class ExperimentSubmitUi(QtGui.QWidget):
         self.hsplit = QtGui.QSplitter(QtCore.Qt.Horizontal)
         self.layout.addWidget(self.hsplit, 0, 0)
 
-        self.file_tree = QtGui.QTreeWidget()
+        self.file_tree = pg.TreeWidget()
+        self.file_tree.setColumnCount(3)
+        self.file_tree.setHeaderLabels(['file', 'category', 'metadata'])
         self.hsplit.addWidget(self.file_tree)
         
         self.canvas = acq4.util.Canvas.Canvas()
@@ -39,13 +41,38 @@ class ExperimentSubmitUi(QtGui.QWidget):
         
     def _fill_file_tree(self, dh, root):
         for fname in dh.ls():
-            item = QtGui.QTreeWidgetItem([fname])
-            root.addChild(item)
             fh = dh[fname]
+            item = self._make_item(fh)
+            root.addChild(item)
             item.fh = fh
             if fh.isDir():
                 self._fill_file_tree(fh, item)
         
+    def _make_item(self, fh):
+        info = fh.info()
+        objtyp = info.get('__object_type__')
+        if objtyp in ['ImageFile', 'MetaArray']:
+            return ImageTreeItem(fh)
+        else:
+            item = pg.TreeWidgetItem([fh.shortName()])
+            print objtyp, '\t', fh.name()
+            return item
+
+
+class ImageTreeItem(pg.TreeWidgetItem):
+    def __init__(self, fh):
+        pg.TreeWidgetItem.__init__(self, [fh.shortName(), '', fh.info()['objective']])
+        self.fh = fh
+        self.combo = QtGui.QComboBox()
+        self.types = ['ignore', 'type 1', 'type 2']
+        for typ in self.types:
+            self.combo.addItem(typ)
+        self.setWidget(1, self.combo)
+        
+
+
+
+
         
 if __name__ == '__main__':
     import sys
