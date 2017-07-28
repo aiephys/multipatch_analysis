@@ -10,10 +10,11 @@ from neuroanalysis.synaptic_release import ReleaseModel
 
 
 class DynamicsAnalyzer(object):
-    def __init__(self, expt, pre_cell, post_cell):
+    def __init__(self, expt, pre_cell, post_cell, align_to='pulse'):
         self.expt = expt
         self.pre_cell = pre_cell
         self.post_cell = post_cell
+        self.align_to = align_to
 
         # how much padding to include when extracting events
         self.pre_pad = 10e-3
@@ -126,7 +127,7 @@ class DynamicsAnalyzer(object):
                 continue
             
             analyzer = MultiPatchSyncRecAnalyzer.get(srec)
-            resp = analyzer.get_spike_responses(pre_rec, post_rec, pre_pad=pre_pad)
+            resp = analyzer.get_spike_responses(pre_rec, post_rec, pre_pad=pre_pad, align_to=self.align_to)
             if len(resp) != 12:
                 # for dynamics, we require all 12 pulses to elicit a presynaptic spike
                 continue
@@ -235,15 +236,18 @@ class DynamicsAnalyzer(object):
 
     def estimate_amplitude(self, plot=False):
         amp_group = self.amp_group
-        
+        amp_est = None
+        amp_plot = None
+        amp_sign = None
+        avg_amp = None
+        n_sweeps = len(amp_group)
+        if n_sweeps == 0:
+            return amp_est, amp_sign, avg_amp, amp_plot, n_sweeps
         # Generate average first response
         avg_amp = amp_group.bsub_mean()
-        
         if plot:
             amp_plot = pg.plot(title='First pulse amplitude')
             amp_plot.plot(avg_amp.time_values, avg_amp.data)
-        else:
-            amp_plot = None
 
         # Make initial amplitude estimate
         ad = avg_amp.data
@@ -259,7 +263,7 @@ class DynamicsAnalyzer(object):
         self._psp_estimate['amp'] = amp_est
         self._psp_estimate['amp_sign'] = amp_sign
         
-        return amp_est, amp_sign, amp_plot
+        return amp_est, amp_sign, avg_amp, amp_plot, n_sweeps
 
     def estimate_kinetics(self, plot=False):
         kinetics_group = self.kinetics_group
