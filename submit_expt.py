@@ -28,7 +28,7 @@ class ExperimentSubmitUi(QtGui.QWidget):
         self.canvas = acq4.util.Canvas.Canvas()
         self.hsplit.addWidget(self.canvas)
         
-        self.hsplit.setSizes([400, 1000])
+        self.hsplit.setSizes([600, 700])
         
     def set_path(self, path):
         self.path = path
@@ -45,7 +45,7 @@ class ExperimentSubmitUi(QtGui.QWidget):
         for fname in dh.ls():
             fh = dh[fname]
             item = self._make_item(fh)
-            
+            item.setExpanded(True)
             if hasattr(item, 'type_selected'):
                 item.type_selected.connect(self._item_type_selected)
             
@@ -54,11 +54,13 @@ class ExperimentSubmitUi(QtGui.QWidget):
             if fh.isDir():
                 self._fill_file_tree(fh, item)
         
+        for i in range(3):
+            self.file_tree.resizeColumnToContents(i)
+        
     def _make_item(self, fh):
         info = fh.info()
         objtyp = info.get('__object_type__')
         if objtyp in ['ImageFile', 'MetaArray']:
-            print info
             return ImageTreeItem(fh)
         else:
             item = pg.TreeWidgetItem([fh.shortName()])
@@ -90,7 +92,7 @@ class ImageTreeItem(pg.TreeWidgetItem):
         elif len(colors) > 1:
             color = 'y'
         else:
-            color = {'infrared': (255, 200, 200), 'green': (200, 255, 200), 'blue': (200, 200, 255)}[colors[0]]
+            color = {'infrared': (255, 200, 200), 'green': (200, 255, 200), 'blue': (200, 200, 255), 'uv': (240, 200, 255)}[colors[0]]
         self.setBackground(2, pg.mkColor(color))
         
         self.fh = fh
