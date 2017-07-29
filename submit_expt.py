@@ -58,6 +58,7 @@ class ExperimentSubmitUi(QtGui.QWidget):
         info = fh.info()
         objtyp = info.get('__object_type__')
         if objtyp in ['ImageFile', 'MetaArray']:
+            print info
             return ImageTreeItem(fh)
         else:
             item = pg.TreeWidgetItem([fh.shortName()])
@@ -78,13 +79,22 @@ class ImageTreeItem(pg.TreeWidgetItem):
         self._sigprox = ImageTreeItem.Signals()
         self.type_selected = self._sigprox.type_selected
 
-        pg.TreeWidgetItem.__init__(self, [fh.shortName(), 'ignore', fh.info()['objective']])
+        info = fh.info()
+        meta = info['objective']
+
+        pg.TreeWidgetItem.__init__(self, [fh.shortName(), 'ignore', meta])
+        
+        colors = info['illumination'].keys()
+        if len(colors) == 0:
+            color = 'w'
+        elif len(colors) > 1:
+            color = 'y'
+        else:
+            color = {'infrared': (255, 200, 200), 'green': (200, 255, 200), 'blue': (200, 200, 255)}[colors[0]]
+        self.setBackground(2, pg.mkColor(color))
+        
         self.fh = fh
-        #self.combo = QtGui.QComboBox()
         self.types = ['ignore', 'type 1', 'type 2']
-        #for typ in self.types:
-            #self.combo.addItem(typ)
-        #self.setWidget(1, self.combo)
         self.menu = QtGui.QMenu()
         for typ in self.types:
             act = self.menu.addAction(typ, self._type_selected)
