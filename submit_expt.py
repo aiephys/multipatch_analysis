@@ -25,11 +25,18 @@ class ExperimentSubmitUi(QtGui.QWidget):
         self.hsplit.addWidget(self.ctrl_widget)
         
         self.file_tree = FileTreeWidget()
+        self.file_tree.itemSelectionChanged.connect(self.selection_changed)
         self.ctrl_layout.addWidget(self.file_tree, 0, 0, 1, 2)
         
+        row = self.ctrl_layout.rowCount()
         self.load_btn = QtGui.QPushButton('load files')
         self.load_btn.clicked.connect(self.load_clicked)
-        self.ctrl_layout.addWidget(self.load_btn, self.ctrl_layout.rowCount(), 0)
+        self.ctrl_layout.addWidget(self.load_btn, row, 0)
+        
+        self.submit_btn = QtGui.QPushButton('submit')
+        self.submit_btn.clicked.connect(self.submit_clicked)
+        self.submit_btn.setEnabled(False)
+        self.ctrl_layout.addWidget(self.submit_btn, row, 1)
         
         self.canvas = acq4.util.Canvas.Canvas(allowTransforms=False)
         self.hsplit.addWidget(self.canvas)
@@ -46,6 +53,14 @@ class ExperimentSubmitUi(QtGui.QWidget):
             fh = item.fh
             self.canvas.addFile(fh)
 
+    def submit_clicked(self):
+        pass
+
+    def selection_changed(self):
+        sel = self.file_tree.selectedItems()
+        sub = len(sel) == 1 and sel[0].is_submittable
+        self.submit_btn.setEnabled(sub)
+
 
 class FileTreeWidget(pg.TreeWidget):
     def __init__(self):
@@ -54,6 +69,13 @@ class FileTreeWidget(pg.TreeWidget):
         self.setColumnCount(3)
         self.setHeaderLabels(['file', 'category', 'metadata'])
         self.setSelectionMode(self.ExtendedSelection)
+        self.setDragDropMode(self.NoDragDrop)
+        
+        # attempts to retain background colors on selected items:
+        #self.setAllColumnsShowFocus(False)
+        #self.itemSelectionChanged.connect(self._selection_changed)
+        #self.style_delegate = StyleDelegate(self)
+        #self.setItemDelegateForColumn(1, self.style_delegate)
 
     def set_path(self, path):
         self.path = path
@@ -85,18 +107,78 @@ class FileTreeWidget(pg.TreeWidget):
     def _make_item(self, fh):
         info = fh.info()
         objtyp = info.get('__object_type__')
+        
+        if fh.isDir():
+            dirtyp = info.get('dirType', None)
+            dtyps = {'Experiment': ExperimentTreeItem, 'Slice': SliceTreeItem, 'Site': SiteTreeItem}
+            if dirtyp in dtyps:
+                return dtyps[dirtyp](fh)
         if objtyp in ['ImageFile', 'MetaArray']:
             return ImageTreeItem(fh)
         elif fh.shortName().lower().endswith('.nwb'):
             return NwbTreeItem(fh)
-        else:
-            item = pg.TreeWidgetItem([fh.shortName()])
-            print objtyp, '\t', fh.name()
-            return item
+        
+        item = TypeSelectItem(fh, ['ignore'], 'ignore')
+        return item
 
     def _item_type_selected(self, item, typ):
         for item in self.selectedItems():
             item.set_type(typ)
+
+    ###### attempts to retain background colors on selected items:
+    #def _selection_changed(self):
+        ## Only select first column
+        #try:
+            #self.blockSignals(True)
+            #for i in self.selectionModel().selectedIndexes():
+                #if i.column() != 0:
+                    #self.selectionModel().select(i, QtGui.QItemSelectionModel.Deselect)
+        #finally:
+            #self.blockSignals(False)
+
+    #def mousePressEvent(self, ev):
+        #if ev.button() == QtCore.Qt.RightButton:
+            #print('press')
+            #ev.accept()
+        #else:
+            #pg.TreeWidget.mousePressEvent(self, ev)
+
+    #def mouseReleaseEvent(self, ev):
+        #if ev.button() == QtCore.Qt.RightButton:
+            #index = self.indexAt(ev.pos())
+            #item, col = self.itemFromIndex(index)
+            #print('release', item, col)
+            #self._itemClicked(item, col)
+        #else:
+            #pg.TreeWidget.mouseReleaseEvent(self, ev)
+
+
+#class StyleDelegate(QtGui.QStyledItemDelegate):
+    #def __init__(self, table):
+        #QtGui.QStyledItemDelegate.__init__(self)
+        #self.table = table
+    
+    #def paint(self, painter, option, index):
+        ##print(index.row(), index.column())
+        #QtGui.QStyledItemDelegate.paint(self, painter, option, index)
+
+
+class ExperimentTreeItem(pg.TreeWidgetItem):
+    def __init__(self, fh):
+        self.fh = fh
+        pg.TreeWidgetItem.__init__(self, [fh.shortName()])
+
+
+class SliceTreeItem(pg.TreeWidgetItem):
+    def __init__(self, fh):
+        self.fh = fh
+        pg.TreeWidgetItem.__init__(self, [fh.shortName()])
+
+
+class SiteTreeItem(pg.TreeWidgetItem):
+    def __init__(self, fh):
+        self.fh = fh
+        pg.TreeWidgetItem.__init__(self, [fh.shortName()])
 
 
 class TypeSelectItem(pg.TreeWidgetItem):
@@ -106,15 +188,18 @@ class TypeSelectItem(pg.TreeWidgetItem):
         type_selected = QtCore.Signal(object, object)
     
     def __init__(self, fh, types, current_type):
+        self.is_submittable = False
         self.fh = fh
         self._sigprox = ImageTreeItem.Signals()
         self.type_selected = self._sigprox.type_selected
         self.types = types
-        pg.TreeWidgetItem.__init__(self, [fh.shortName(), current_type, ''])
+        pg.TreeWidgetItem.__init__(self, [fh.shortName(), '', ''])
 
         self.menu = QtGui.QMenu()
         for typ in self.types:
             act = self.menu.addAction(typ, self._type_selected)
+        
+        self.set_type(current_type)
 
     def _type_selected(self):
         action = self.treeWidget().sender()
@@ -125,7 +210,9 @@ class TypeSelectItem(pg.TreeWidgetItem):
     def set_type(self, typ):
         self.setText(1, typ)
         if typ == 'ignore':
-            self.setBachground(1, pg.mkColor(0.8))
+            self.setBackground(1, pg.mkColor(0.9))
+        else:
+            self.setBackground(1, pg.mkColor('w'))
 
     def itemClicked(self, col):
         if col != 1:
