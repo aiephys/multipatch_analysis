@@ -22,6 +22,7 @@ class ExperimentSubmitUi(QtGui.QWidget):
         self.ctrl_widget = QtGui.QWidget()
         self.ctrl_layout = QtGui.QGridLayout()
         self.ctrl_widget.setLayout(self.ctrl_layout)
+        self.ctrl_layout.setContentsMargins(0, 0, 0, 0)
         self.hsplit.addWidget(self.ctrl_widget)
         
         self.file_tree = FileTreeWidget()
@@ -33,7 +34,7 @@ class ExperimentSubmitUi(QtGui.QWidget):
         self.load_btn.clicked.connect(self.load_clicked)
         self.ctrl_layout.addWidget(self.load_btn, row, 0)
         
-        self.submit_btn = QtGui.QPushButton('submit')
+        self.submit_btn = QtGui.QPushButton('submit...')
         self.submit_btn.clicked.connect(self.submit_clicked)
         self.submit_btn.setEnabled(False)
         self.ctrl_layout.addWidget(self.submit_btn, row, 1)
@@ -42,6 +43,8 @@ class ExperimentSubmitUi(QtGui.QWidget):
         self.hsplit.addWidget(self.canvas)
         
         self.hsplit.setSizes([600, 700])
+        
+        self.submit_window = SubmitWindow()
         
     def set_path(self, path):
         self.path = path
@@ -54,7 +57,11 @@ class ExperimentSubmitUi(QtGui.QWidget):
             self.canvas.addFile(fh)
 
     def submit_clicked(self):
-        pass
+        sel = self.file_tree.selectedItems()[0]
+        data, messages = sel.submission_data()
+        self.submit_window.update_info(messages, data)
+        self.submit_window.show()
+        self.submit_window.activateWindow()        
 
     def selection_changed(self):
         sel = self.file_tree.selectedItems()
@@ -172,13 +179,20 @@ class ExperimentTreeItem(pg.TreeWidgetItem):
 class SliceTreeItem(pg.TreeWidgetItem):
     def __init__(self, fh):
         self.fh = fh
+        self.is_submittable = True
         pg.TreeWidgetItem.__init__(self, [fh.shortName()])
 
 
 class SiteTreeItem(pg.TreeWidgetItem):
     def __init__(self, fh):
         self.fh = fh
+        self.is_submittable = True
         pg.TreeWidgetItem.__init__(self, [fh.shortName()])
+        
+    def submission_data(self):
+        data = self.fh.info()
+        msg = "This is <b>totally</b> ready to submit."
+        return data, msg
 
 
 class TypeSelectItem(pg.TreeWidgetItem):
@@ -249,7 +263,28 @@ class ImageTreeItem(TypeSelectItem):
         self.setBackground(2, pg.mkColor(color))
             
 
-
+class SubmitWindow(QtGui.QWidget):
+    def __init__(self):
+        QtGui.QWidget.__init__(self)
+        self.resize(800, 800)
+        
+        self.layout = QtGui.QGridLayout()
+        self.setLayout(self.layout)
+        
+        self.message_text = QtGui.QTextEdit()
+        self.layout.addWidget(self.message_text, 0, 0)
+        
+        self.info_tree = pg.DataTreeWidget()
+        self.info_tree.setColumnHidden(1, True)
+        self.layout.addWidget(self.info_tree, 0, 1)
+        
+        self.submit_btn = QtGui.QPushButton('submit!')
+        self.layout.addWidget(self.submit_btn, 1, 1)
+        
+    def update_info(self, messages, data):
+        self.message_text.setHtml(messages)
+        self.info_tree.setData(data)
+        
 
 
         
