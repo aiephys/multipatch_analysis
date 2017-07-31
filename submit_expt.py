@@ -120,8 +120,10 @@ class FileTreeWidget(pg.TreeWidget):
             dtyps = {'Experiment': ExperimentTreeItem, 'Slice': SliceTreeItem, 'Site': SiteTreeItem}
             if dirtyp in dtyps:
                 return dtyps[dirtyp](fh)
+        
         if objtyp in ['ImageFile', 'MetaArray']:
             return ImageTreeItem(fh)
+        
         elif fh.shortName().lower().endswith('.nwb'):
             return NwbTreeItem(fh)
         
@@ -131,6 +133,7 @@ class FileTreeWidget(pg.TreeWidget):
     def _item_type_selected(self, item, typ):
         for item in self.selectedItems():
             item.set_type(typ)
+        self.resizeColumnToContents(1)
 
     ###### attempts to retain background colors on selected items:
     #def _selection_changed(self):
@@ -190,7 +193,21 @@ class SiteTreeItem(pg.TreeWidgetItem):
         pg.TreeWidgetItem.__init__(self, [fh.shortName()])
         
     def submission_data(self):
-        data = self.fh.info()
+        slice_dh = self.fh.parent()
+        expt_dh = slice_dh.parent()
+        data = dict(self.fh.info().deepcopy())
+        data.update(expt_dh.info().deepcopy())
+        data.update(slice_dh.info().deepcopy())
+
+        files = []
+        for item in self.childItems():
+            typ = item.text(1)
+            if typ != 'recording site':
+                continue
+            fname = item.text(0)
+            files.append(fname)
+        data['image_files'] = files
+        
         msg = "This is <b>totally</b> ready to submit."
         return data, msg
 
@@ -241,18 +258,33 @@ class TypeSelectItem(pg.TreeWidgetItem):
 class NwbTreeItem(TypeSelectItem):
     def __init__(self, fh):
         types = ['ignore', 'MIES physiology']
-        TypeSelectItem.__init__(self, fh, types, 'ignore')        
+        if fh.parent().info().get('dirType') == 'Site':
+            typ = 'MIES physiology'
+        else:
+            typ = 'ignore'
+        TypeSelectItem.__init__(self, fh, types, typ)
     
 
 class ImageTreeItem(TypeSelectItem):
     def __init__(self, fh):
         info = fh.info()
-        meta = info['objective']
+        obj = fh.info().get('objective', '')
+
+        # Make initial guess on image type
+        typ = 'ignore'
+        ptype = fh.parent().info().get('dirType')
+        if ptype == 'Site':
+            typ = 'recording site'
+        elif ptype == 'Slice':
+            if obj.startswith('40x'):
+                typ = 'slice quality stack'
+            if obj.startswith('4x'):
+                typ = 'slice anatomy'
 
         types = ['ignore', 'slice anatomy', 'slice quality stack', 'recording site']
-        TypeSelectItem.__init__(self, fh, types, 'ignore')        
+        TypeSelectItem.__init__(self, fh, types, typ)
         
-        self.setText(2, meta)
+        self.setText(2, obj)
         colors = info.get('illumination', {}).keys()
         if len(colors) == 0:
             color = 'w'
