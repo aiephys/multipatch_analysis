@@ -15,9 +15,9 @@ from connection_detection import PulseStimAnalyzer, MultiPatchSyncRecAnalyzer
 table_schemas = {
     'experiment': [
         ('expt_key', 'object'),                     # Describes original location of raw data
-        ('internal_id', 'int'),
-        ('slice_id', 'int'),
-        ('acsf_id', 'int'),
+        ('slice_id', ('int', 'slice.id')),
+        ('internal', 'str'),
+        ('acsf', 'str'),
         ('temperature', 'float'),
         ('date', 'datetime'),
         ('lims_specimen_id', 'int'),                # ID of LIMS "cell cluster" specimen
@@ -278,6 +278,9 @@ def generate_mapping(table):
         'id': Column(Integer, primary_key=True),
     }
     for k,v in table_schemas[table]:
+        fk = None
+        if isinstance(v, tuple):
+            v, fk = v
         coltyp = {
             'int': Integer,
             'float': Float,
@@ -287,25 +290,30 @@ def generate_mapping(table):
             'datetime': DateTime,
             'object': JSONB,
         }[v]
-        props[k] = Column(coltyp)
+        
+        if fk is None:
+            props[k] = Column(coltyp)
+        else:
+            props[k] = Column(coltyp, ForeignKey(fk))
     return type(name, (ORMBase,), props)
 
 Slice = generate_mapping('slice')
 
 
-class Experiment(ORMBase):
-    __tablename__ = 'experiment'
+#class Experiment(ORMBase):
+    #__tablename__ = 'experiment'
 
-    id = Column(Integer, primary_key=True)
-    acsf = Column(String)
-    slice_id = Column(Integer, ForeignKey('slice.id'))
+    #id = Column(Integer, primary_key=True)
+    #acsf = Column(String)
+    #slice_id = Column(Integer, ForeignKey('slice.id'))
     
-    slice = relationship("Slice", back_populates="experiments")
 
-    def __repr__(self):
-        return "<Experiment %r>" % self.id
+    #def __repr__(self):
+        #return "<Experiment %r>" % self.id
 
+Experiment = generate_mapping('experiment')
 
+Experiment.slice = relationship("Slice", back_populates="experiments")
 Slice.experiments = relationship("Experiment", order_by=Experiment.id, back_populates="slice")
 
 
