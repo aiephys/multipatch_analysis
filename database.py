@@ -1,30 +1,20 @@
 """
 Accumulate all experiment data into a set of linked tables.
 """
+import io
 import numpy as np
 
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, Integer, String, Boolean, Float, Date, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, Float, Date, DateTime, LargeBinary, ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
+from sqlalchemy.types import TypeDecorator
 
 from neuroanalysis.baseline import float_mode
 from connection_detection import PulseStimAnalyzer, MultiPatchSyncRecAnalyzer
 
 
 table_schemas = {
-    'experiment': [
-        ('expt_key', 'object'),                     # Describes original location of raw data
-        ('slice_id', ('int', 'slice.id')),
-        ('internal', 'str'),
-        ('acsf', 'str'),
-        ('temperature', 'float'),
-        ('date', 'datetime'),
-        ('lims_specimen_id', 'int'),                # ID of LIMS "cell cluster" specimen
-        ('lims_trigger_id', 'int'),                 # ID used to query status of LIMS upload
-        ('connectivity_analysis_complete', 'bool'),
-        ('kinetics_analysis_complete', 'bool'),
-    ],
     'slice': [                            # most of this should be pulled from external sources
         ('species', 'str'),                      # human / mouse
         ('age', 'int'),
@@ -37,11 +27,29 @@ table_schemas = {
         ('lims_specimen_id', 'int'),                # ID of LIMS "slice" specimen
         ('lims_trigger_id', 'int'),                 # ID used to query status of LIMS upload
         ('original_path', 'object'),                # Original location of slice folder
+        ('submission_data', 'object'),          # structure generated for original submission
+    ],
+    'experiment': [
+        ('original_path', 'object'),                     # Describes original location of raw data
+        ('slice_id', 'slice.id'),
+        ('internal', 'str'),
+        ('acsf', 'str'),
+        ('temperature', 'float'),
+        ('date', 'datetime'),
+        ('lims_specimen_id', 'int'),                # ID of LIMS "cell cluster" specimen
+        ('submission_data', 'object'),          # structure generated for original submission
+        ('lims_trigger_id', 'int'),                 # ID used to query status of LIMS upload
+        ('connectivity_analysis_complete', 'bool'),
+        ('kinetics_analysis_complete', 'bool'),
+    ],
+    'electrode': [
+        ('expt_id', 'experiment.id'),
+        ('patch_status', 'str'),
+        ('device_key', 'int'),
     ],
     'cell': [
-        ('expt_id', 'int'),
+        ('electrode_id', 'electrode.id'),
         ('cre_type', 'str'),
-        ('device_key', 'int'),
         ('patch_start', 'float'),
         ('patch_stop', 'float'),
         ('initial_seal_resistance', 'float'),
@@ -56,40 +64,30 @@ table_schemas = {
     ],
     
     'pair': [     # table of all POSSIBLE connections
-        ('pre_cell', 'int'),
-        ('post_cell', 'int'),
+        ('pre_cell', 'cell.id'),
+        ('post_cell', 'cell.id'),
         ('synapse', 'bool'),       # Whether the experimenter thinks there is a synapse
         ('electrical', 'bool'),    # whether the experimenter thinks there is a gap junction
     ],
         # NOTE: add individual per-pair analyses to new tables.
     
     'sync_rec': [
-        ('expt_id', 'int'),
+        ('expt_id', 'experiment.id'),
         ('sync_rec_key', 'object'),
         ('time_post_patch', 'float'),
     ],
     'recording': [
-        ('sync_rec_id', 'int'),
+        ('sync_rec_id', 'sync_rec.id'),
         ('device_key', 'object'),
-        ('cell_id', 'int'),
-        ('stim_name', 'object'),
-        ('induction_freq', 'float'),
-        ('recovery_delay', 'float'),
+        ('electrode_id', 'electrode.id'),
         ('clamp_mode', 'object'),
-        ('test_pulse_id', 'int'),
+        ('stimulus', 'object'),   # contains name, induction freq, recovery delay
+        ('test_pulse', 'object'),  # contains pulse_start, pulse_stop, baseline_current,
+                                   # baseline_voltage, input_resistance, access_resistance
         ('sample_rate', 'float'),
     ],
-    'test_pulse': [
-        ('recording_id', 'int'),
-        ('pulse_start', 'int'),
-        ('pulse_stop', 'int'),
-        ('baseline_current', 'float'),
-        ('baseline_voltage', 'float'),
-        ('input_resistance', 'float'),
-        ('access_resistance', 'float'),
-    ],
     'stim_pulse': [
-        ('recording_id', 'int'),
+        ('recording_id', 'recording.id'),
         ('pulse_number', 'int'),
         ('onset_time', 'float'),
         ('onset_index', 'int'),
@@ -99,28 +97,28 @@ table_schemas = {
         ('n_spikes', 'int'),                           # number of spikes evoked
     ],
     'stim_spike': [                                  # One evoked action potential
-        ('recording_id', 'int'),
-        ('pulse_id', 'int'),
+        ('recording_id', 'recording.id'),
+        ('pulse_id', 'stim_pulse.id'),
         ('peak_index', 'int'),
         ('peak_diff', 'float'),
         ('peak_val', 'float'),
         ('rise_index', 'int'),
         ('max_dvdt', 'float'),
     ],
-    'response': [                                    # One evoked synaptic response
-        ('recording_id', 'int'),
-        ('pulse_id', 'int'),
-        ('pair_id', 'int'),
+    'pulse_response': [                                    # One evoked synaptic response
+        ('recording_id', 'recording.id'),
+        ('pulse_id', 'stim_pulse.id'),
+        ('pair_id', 'pair.id'),
         ('start_index', 'int'),
         ('stop_index', 'int'),
         ('data', 'object'),
-        ('baseline_id', 'int'),
+        ('baseline_id', 'baseline.id'),
     ],
     'baseline': [                                    # One snippet of baseline data
-        ('recording_id', 'int'),
+        ('recording_id', 'recording.id'),
         ('start_index', 'int'),                        # start/stop indices of baseline snippet
         ('stop_index', 'int'),                         #   relative to full recording
-        ('data', 'object'),                             # array containing baseline snippet
+        ('data', 'bytes'),                             # array containing baseline snippet
         ('value', 'float'),                             # median or mode baseline value
     ],
 }
@@ -271,6 +269,32 @@ ORMBase = declarative_base()
     #def __repr__(self):
         #return "<Slice %r>" % self.id
 
+class NDArray(TypeDecorator):
+    """For marshalling arrays in/out of binary DB fields.
+    """
+    impl = LargeBinary
+    
+    def process_bind_param(self, value, dialect):
+        buf = io.BytesIO()
+        np.save(buf, value, allow_pickle=False)
+        return buf.getvalue()
+        
+    def process_result_value(self, value, dialect):
+        buf = io.BytesIO(value)
+        return np.load(buf, allow_pickle=False)
+
+
+_coltypes = {
+    'int': Integer,
+    'float': Float,
+    'bool': Boolean,
+    'str': String,
+    'date': Date,
+    'datetime': DateTime,
+    'array': NDArray,
+    'object': JSONB,
+}
+
 def generate_mapping(table):
     name = table.capitalize()
     props = {
@@ -278,23 +302,13 @@ def generate_mapping(table):
         'id': Column(Integer, primary_key=True),
     }
     for k,v in table_schemas[table]:
-        fk = None
-        if isinstance(v, tuple):
-            v, fk = v
-        coltyp = {
-            'int': Integer,
-            'float': Float,
-            'bool': Boolean,
-            'str': String,
-            'date': Date,
-            'datetime': DateTime,
-            'object': JSONB,
-        }[v]
-        
-        if fk is None:
-            props[k] = Column(coltyp)
+        if v not in _coltypes:
+            if not v.endswith('.id'):
+                raise ValueError("Unrecognized column type %s" % v)
+            props[k] = Column(Integer, ForeignKey(v))
         else:
-            props[k] = Column(coltyp, ForeignKey(fk))
+            coltyp = _coltypes[v]
+            props[k] = Column(coltyp)
     return type(name, (ORMBase,), props)
 
 Slice = generate_mapping('slice')
