@@ -129,6 +129,85 @@ table_schemas = {
 
 
 
+#----------- define ORM classes -------------
+
+ORMBase = declarative_base()
+
+class NDArray(TypeDecorator):
+    """For marshalling arrays in/out of binary DB fields.
+    """
+    impl = LargeBinary
+    
+    def process_bind_param(self, value, dialect):
+        buf = io.BytesIO()
+        np.save(buf, value, allow_pickle=False)
+        return buf.getvalue()
+        
+    def process_result_value(self, value, dialect):
+        buf = io.BytesIO(value)
+        return np.load(buf, allow_pickle=False)
+
+
+_coltypes = {
+    'int': Integer,
+    'float': Float,
+    'bool': Boolean,
+    'str': String,
+    'date': Date,
+    'datetime': DateTime,
+    'array': NDArray,
+    'object': JSONB,
+}
+
+
+def _generate_mapping(table):
+    name = table.capitalize()
+    props = {
+        '__tablename__': table,
+        'id': Column(Integer, primary_key=True),
+    }
+    for k,v in table_schemas[table]:
+        if v not in _coltypes:
+            if not v.endswith('.id'):
+                raise ValueError("Unrecognized column type %s" % v)
+            props[k] = Column(Integer, ForeignKey(v))
+        else:
+            coltyp = _coltypes[v]
+            props[k] = Column(coltyp)
+    return type(name, (ORMBase,), props)
+
+
+# Generate ORM mapping classes
+Slice = _generate_mapping('slice')
+Experiment = _generate_mapping('experiment')
+
+# Set up relationships
+Experiment.slice = relationship("Slice", back_populates="experiments")
+Slice.experiments = relationship("Experiment", order_by=Experiment.id, back_populates="slice")
+
+
+
+#-------------- initial DB access ----------------
+
+# connect to DB
+engine = create_engine(synphys_db)
+
+
+# recreate all tables in DB
+# (just for initial development)
+ORMBase.metadata.drop_all(engine)
+ORMBase.metadata.create_all(engine)
+
+
+# external users should create sessions from here.
+Session = sessionmaker(bind=engine)
+
+
+
+
+
+
+
 def load_data(self, expt, pre=None, post=None):
     """Populate the database from raw data
     """
@@ -251,74 +330,6 @@ def load_data(self, expt, pre=None, post=None):
 
 
 
-
-ORMBase = declarative_base()
-
-class NDArray(TypeDecorator):
-    """For marshalling arrays in/out of binary DB fields.
-    """
-    impl = LargeBinary
-    
-    def process_bind_param(self, value, dialect):
-        buf = io.BytesIO()
-        np.save(buf, value, allow_pickle=False)
-        return buf.getvalue()
-        
-    def process_result_value(self, value, dialect):
-        buf = io.BytesIO(value)
-        return np.load(buf, allow_pickle=False)
-
-
-_coltypes = {
-    'int': Integer,
-    'float': Float,
-    'bool': Boolean,
-    'str': String,
-    'date': Date,
-    'datetime': DateTime,
-    'array': NDArray,
-    'object': JSONB,
-}
-
-
-def _generate_mapping(table):
-    name = table.capitalize()
-    props = {
-        '__tablename__': table,
-        'id': Column(Integer, primary_key=True),
-    }
-    for k,v in table_schemas[table]:
-        if v not in _coltypes:
-            if not v.endswith('.id'):
-                raise ValueError("Unrecognized column type %s" % v)
-            props[k] = Column(Integer, ForeignKey(v))
-        else:
-            coltyp = _coltypes[v]
-            props[k] = Column(coltyp)
-    return type(name, (ORMBase,), props)
-
-
-# Generate ORM mapping classes
-Slice = _generate_mapping('slice')
-Experiment = _generate_mapping('experiment')
-
-# Set up relationships
-Experiment.slice = relationship("Slice", back_populates="experiments")
-Slice.experiments = relationship("Experiment", order_by=Experiment.id, back_populates="slice")
-
-
-
-
-# connect to DB
-engine = create_engine(synphys_db)
-
-
-# recreate all tables in DB
-# (just for initial development)
-ORMBase.metadata.drop_all(engine)
-ORMBase.metadata.create_all(engine)
-
-Session = sessionmaker(bind=engine)
 
 
 if __name__ == '__main__':
