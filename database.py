@@ -1,128 +1,138 @@
 """
 Accumulate all experiment data into a set of linked tables.
 """
-import os, sys, pickle, tempfile, shutil
 import numpy as np
-from pandas import DataFrame
-from pyqtgraph.debug import Profiler
+
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, Integer, String, Boolean, Float, Date, DateTime, ForeignKey
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import relationship
 
 from neuroanalysis.baseline import float_mode
 from connection_detection import PulseStimAnalyzer, MultiPatchSyncRecAnalyzer
 
 
+table_schemas = {
+    'experiment': [
+        ('expt_key', 'object'),                     # Describes original location of raw data
+        ('internal_id', 'int'),
+        ('slice_id', 'int'),
+        ('acsf_id', 'int'),
+        ('temperature', 'float'),
+        ('date', 'datetime'),
+        ('lims_specimen_id', 'int'),                # ID of LIMS "cell cluster" specimen
+        ('lims_trigger_id', 'int'),                 # ID used to query status of LIMS upload
+        ('connectivity_analysis_complete', 'bool'),
+        ('kinetics_analysis_complete', 'bool'),
+    ],
+    'slice': [                            # most of this should be pulled from external sources
+        ('species', 'str'),                      # human / mouse
+        ('age', 'int'),
+        ('genotype', 'str'),                     # maybe NOT the labtracks group name?
+        ('orientation', 'str'),                  # eg "sagittal"
+        ('surface', 'str'),                      # eg "medial" or "lateral"
+        ('quality', 'int'),                         # 0-5
+        ('slice_time', 'datetime'),                   
+        ('slice_conditions', 'object'),             # solutions, perfusion, incubation time, etc.
+        ('lims_specimen_id', 'int'),                # ID of LIMS "slice" specimen
+        ('lims_trigger_id', 'int'),                 # ID used to query status of LIMS upload
+        ('original_path', 'object'),                # Original location of slice folder
+    ],
+    'cell': [
+        ('expt_id', 'int'),
+        ('cre_type', 'str'),
+        ('device_key', 'int'),
+        ('patch_start', 'float'),
+        ('patch_stop', 'float'),
+        ('initial_seal_resistance', 'float'),
+        ('initial_pipette_resistance', 'float'),
+        ('final_pipette_resistance', 'float'),
+        ('has_biocytin', 'bool'),
+        ('has_dye_fill', 'bool'),
+        ('pass_qc', 'bool'),
+        ('pass_spike_qc', 'bool'),
+        ('depth', 'float'),
+        ('position', 'object'),
+    ],
+    
+    'pair': [     # table of all POSSIBLE connections
+        ('pre_cell', 'int'),
+        ('post_cell', 'int'),
+        ('synapse', 'bool'),       # Whether the experimenter thinks there is a synapse
+        ('electrical', 'bool'),    # whether the experimenter thinks there is a gap junction
+    ],
+        # NOTE: add individual per-pair analyses to new tables.
+    
+    'sync_rec': [
+        ('expt_id', 'int'),
+        ('sync_rec_key', 'object'),
+        ('time_post_patch', 'float'),
+    ],
+    'recording': [
+        ('sync_rec_id', 'int'),
+        ('device_key', 'object'),
+        ('cell_id', 'int'),
+        ('stim_name', 'object'),
+        ('induction_freq', 'float'),
+        ('recovery_delay', 'float'),
+        ('clamp_mode', 'object'),
+        ('test_pulse_id', 'int'),
+        ('sample_rate', 'float'),
+    ],
+    'test_pulse': [
+        ('recording_id', 'int'),
+        ('pulse_start', 'int'),
+        ('pulse_stop', 'int'),
+        ('baseline_current', 'float'),
+        ('baseline_voltage', 'float'),
+        ('input_resistance', 'float'),
+        ('access_resistance', 'float'),
+    ],
+    'stim_pulse': [
+        ('recording_id', 'int'),
+        ('pulse_number', 'int'),
+        ('onset_time', 'float'),
+        ('onset_index', 'int'),
+        ('next_pulse_index', 'int'),      # index of the next pulse on any channel in the sync rec
+        ('amplitude', 'float'),
+        ('length', 'int'),
+        ('n_spikes', 'int'),                           # number of spikes evoked
+    ],
+    'stim_spike': [                                  # One evoked action potential
+        ('recording_id', 'int'),
+        ('pulse_id', 'int'),
+        ('peak_index', 'int'),
+        ('peak_diff', 'float'),
+        ('peak_val', 'float'),
+        ('rise_index', 'int'),
+        ('max_dvdt', 'float'),
+    ],
+    'response': [                                    # One evoked synaptic response
+        ('recording_id', 'int'),
+        ('pulse_id', 'int'),
+        ('pair_id', 'int'),
+        ('start_index', 'int'),
+        ('stop_index', 'int'),
+        ('data', 'object'),
+        ('baseline_id', 'int'),
+    ],
+    'baseline': [                                    # One snippet of baseline data
+        ('recording_id', 'int'),
+        ('start_index', 'int'),                        # start/stop indices of baseline snippet
+        ('stop_index', 'int'),                         #   relative to full recording
+        ('data', 'object'),                             # array containing baseline snippet
+        ('value', 'float'),                             # median or mode baseline value
+    ],
+}
+
+
+
 class ExperimentDatabase(object):
     
-    table_schemas = {
-        'experiment': [
-            ('expt_key', 'object'),
-            ('internal_id', 'int'),
-            ('acsf_id', 'int'),
-            ('temperature', 'float'),
-            ('age', 'int'),
-            ('genotype', 'object'),
-            ('date', 'object')
-        ],
-        'cell': [
-            ('expt_id', 'int'),
-            ('cre_type', 'object'),
-            ('device_key', 'object'),
-            ('patch_start', 'float'),
-            ('patch_stop', 'float'),
-            ('initial_seal_resistance', 'float'),
-            ('initial_pipette_resistance', 'float'),
-            ('final_pipette_resistance', 'float'),
-            ('has_biocytin', 'bool'),
-            ('has_dye_fill', 'bool'),
-            ('pass_qc', 'bool'),
-            ('pass_spike_qc', 'bool'),
-            ('depth', 'float'),
-            ('position', 'object'),
-        ],
-        'sync_rec': [
-            ('expt_id', 'int'),
-            ('sync_rec_key', 'object'),
-            ('time_post_patch', 'float'),
-        ],
-        'recording': [
-            ('sync_rec_id', 'int'),
-            ('device_key', 'object'),
-            ('cell_id', 'int'),
-            ('stim_name', 'object'),
-            ('induction_freq', 'float'),
-            ('recovery_delay', 'float'),
-            ('clamp_mode', 'object'),
-            ('test_pulse_id', 'int'),
-            ('sample_rate', 'float'),
-        ],
-        'test_pulse': [
-            ('recording_id', 'int'),
-            ('pulse_start', 'int'),
-            ('pulse_stop', 'int'),
-            ('baseline_current', 'float'),
-            ('baseline_voltage', 'float'),
-            ('input_resistance', 'float'),
-            ('access_resistance', 'float'),
-        ],
-        'stim_pulse': [
-            ('recording_id', 'int'),
-            ('pulse_number', 'int'),
-            ('onset_time', 'float'),
-            ('onset_index', 'int'),
-            ('amplitude', 'float'),
-            ('length', 'int'),
-            ('n_spikes', 'int'),                           # number of spikes evoked
-        ],
-        'stim_spike': [                                  # One evoked action potential
-            ('recording_id', 'int'),
-            ('pulse_id', 'int'),
-            ('peak_index', 'int'),
-            ('peak_diff', 'float'),
-            ('peak_val', 'float'),
-            ('rise_index', 'int'),
-            ('max_dvdt', 'float'),
-        ],
-        'response': [                                    # One evoked synaptic response
-            ('recording_id', 'int'),
-            ('pulse_id', 'int'),
-            ('start_index', 'int'),
-            ('stop_index', 'int'),
-            ('data', 'object'),
-            ('baseline_id', 'int'),
-        ],
-        'baseline': [                                    # One snippet of baseline data
-            ('recording_id', 'int'),
-            ('start_index', 'int'),                        # start/stop indices of baseline snippet
-            ('stop_index', 'int'),                         #   relative to full recording
-            ('data', 'object'),                             # array containing baseline snippet
-            ('value', 'float'),                             # median or mode baseline value
-        ],
-    }
         
 
     def __init__(self, cache=None):
-        self.tables = {name:[] for name in self.table_schemas}
-        self.tables['_expt_index'] = {}
-        self.tables['_version'] = 1
-        
-        self.cache = cache
-        if cache is not None and os.path.isfile(cache):
-            self.load_cache()
-            
-    def load_cache(self):
-        self.tables.update(pickle.load(open(self.cache, 'rb')))
-        
-    def store_cache(self):
-        if self.cache is None:
-            return
-        cache_dir = os.path.dirname(self.cache)
-        fh = tempfile.NamedTemporaryFile(mode='wb', dir=cache_dir, delete=False)
-        if sys.version[0] == '2':
-            # greatly impacts file size and performance
-            pickle.dump(self.tables, fh, protocol=2)
-        else:
-            pickle.dump(self.tables, fh)
-        fh.close()
-        shutil.move(fh.name, self.cache)
+        pass
 
     def load_data(self, expt, pre=None, post=None):
         """Populate the database from raw data
@@ -243,38 +253,98 @@ class ExperimentDatabase(object):
                             'data': resp['response'].downsample(f=50000).data,
                         })
         
-    def make_table(self, name, data):
-        schema = self.table_schemas[name]
-        schema.insert(0, ('id', 'uint'))
-        a = np.empty(0, schema)
-        table = DataFrame(a)
-        table = table.append(data)
-        return table
-            
-    def get_table(self, name):
-        schema = [('id', 'uint')] + self.table_schemas[name]
-        a = np.empty(len(self.tables[name]), dtype=schema)
-        for i,rec in enumerate(self.tables[name]):
-            for k,v in rec.items():
-                a[i][k] = v
-        return DataFrame(a)
 
-    def joined_tables(self, names):
-        pass
+
+
+
+ORMBase = declarative_base()
+
+
+#class Slice(ORMBase):
+    #__tablename__ = 'slice'
+
+    #id = Column(Integer, primary_key=True)
+    #surface = Column(String)
+    #meta = Column(JSONB)
+    #specimen_id = Column(Integer)
+
+    #def __repr__(self):
+        #return "<Slice %r>" % self.id
+
+def generate_mapping(table):
+    name = table.capitalize()
+    props = {
+        '__tablename__': table,
+        'id': Column(Integer, primary_key=True),
+    }
+    for k,v in table_schemas[table]:
+        coltyp = {
+            'int': Integer,
+            'float': Float,
+            'bool': Boolean,
+            'str': String,
+            'date': Date,
+            'datetime': DateTime,
+            'object': JSONB,
+        }[v]
+        props[k] = Column(coltyp)
+    return type(name, (ORMBase,), props)
+
+Slice = generate_mapping('slice')
+
+
+class Experiment(ORMBase):
+    __tablename__ = 'experiment'
+
+    id = Column(Integer, primary_key=True)
+    acsf = Column(String)
+    slice_id = Column(Integer, ForeignKey('slice.id'))
+    
+    slice = relationship("Slice", back_populates="experiments")
+
+    def __repr__(self):
+        return "<Experiment %r>" % self.id
+
+
+Slice.experiments = relationship("Experiment", order_by=Experiment.id, back_populates="slice")
+
 
 
 if __name__ == '__main__':
-    import pyqtgraph as pg
-    pg.dbg()
+    #import pyqtgraph as pg
+    #pg.dbg()
     
-    from experiment_list import ExperimentList
-    all_expts = ExperimentList(cache='expts_cache.pkl')
+    #from experiment_list import ExperimentList
+    #all_expts = ExperimentList(cache='expts_cache.pkl')
     
     
-    db_cache_file = 'database.pkl'
-    db = ExperimentDatabase(cache=db_cache_file)
-    for n,expt in enumerate(all_expts):
-        print("Load %d/%d: %s" % (n, len(all_expts), expt))
-        db.load_data(expt)
-    db.store_cache()
+    #db_cache_file = 'database.pkl'
+    #db = ExperimentDatabase(cache=db_cache_file)
+    #for n,expt in enumerate(all_expts):
+        #print("Load %d/%d: %s" % (n, len(all_expts), expt))
+        #db.load_data(expt)
+    #db.store_cache()
+
+
+    from config import synphys_db
     
+    # connect to DB
+    from sqlalchemy import create_engine
+    engine = create_engine(synphys_db)
+
+    # recreate all tables in DB
+    ORMBase.metadata.drop_all(engine)
+    ORMBase.metadata.create_all(engine)
+
+    # start a session
+    from sqlalchemy.orm import sessionmaker
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    
+    
+    sl = Slice(lims_specimen_id=123456, surface='medial')
+    exp = Experiment(slice=sl, acsf='MP ACSF 1')
+    exp2 = Experiment(slice=sl, acsf='MP ACSF 1')
+    
+    session.add(sl)
+    session.commit()
