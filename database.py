@@ -19,33 +19,39 @@ from config import synphys_db
 
 table_schemas = {
     'slice': [                            # most of this should be pulled from external sources
+        ('uid', 'str', 'Unique ID assigned to this slice by the acquisition system.'),
         ('species', 'str'),                      # human / mouse
         ('age', 'int'),
         ('genotype', 'str'),                     # maybe NOT the labtracks group name?
         ('orientation', 'str'),                  # eg "sagittal"
         ('surface', 'str'),                      # eg "medial" or "lateral"
-        ('quality', 'int'),                         # 0-5
+        ('quality', 'int', 'Experimenter subjective slice quality assessment (0-5)'),
         ('slice_time', 'datetime'),                   
         ('slice_conditions', 'object'),             # solutions, perfusion, incubation time, etc.
-        ('lims_specimen_id', 'int'),                # ID of LIMS "slice" specimen
+        ('lims_specimen_name', 'str'),                # ID of LIMS "slice" specimen
         ('lims_trigger_id', 'int'),                 # ID used to query status of LIMS upload
-        ('original_path', 'object'),                # Original location of slice folder
+        ('original_path', 'str'),                # Original location of slice folder
         ('submission_data', 'object'),          # structure generated for original submission
     ],
     'experiment': [
-        ('original_path', 'object'),                     # Describes original location of raw data
+        "A group of cells patched simultaneously in the same slice.",
+        ('original_path', 'object', 'Describes original location of raw data'),
         ('slice_id', 'slice.id'),
-        ('internal', 'str'),
-        ('acsf', 'str'),
+        ('internal', 'str', 'The name of the internal solution used in this experiment. '
+                            'The solution should be described in the pycsf database.'),
+        ('acsf', 'str', 'The name of the ACSF solution used in theis experiment. '
+                        'The solution should be described in the pycsf database.'),
         ('temperature', 'float'),
         ('date', 'datetime'),
-        ('lims_specimen_id', 'int'),                # ID of LIMS "cell cluster" specimen
-        ('submission_data', 'object'),          # structure generated for original submission
-        ('lims_trigger_id', 'int'),                 # ID used to query status of LIMS upload
+        ('lims_specimen_id', 'int', 'ID of LIMS "CellCluster" specimen.'),
+        ('submission_data', 'object', 'structure generated for original submission.'),
+        ('lims_trigger_id', 'int', 'ID used to query status of LIMS upload.'),
         ('connectivity_analysis_complete', 'bool'),
         ('kinetics_analysis_complete', 'bool'),
     ],
     'electrode': [
+        "Each electrode records a patch attempt, whether or not it resulted in a "
+        "successful cell recording.",
         ('expt_id', 'experiment.id'),
         ('patch_status', 'str'),
         ('device_key', 'int'),
@@ -161,19 +167,34 @@ _coltypes = {
 
 
 def _generate_mapping(table):
+    """Generate an ORM mapping class from an entry in table_schemas.
+    """
     name = table.capitalize()
+    schema = table_schemas[table]
+    table_args = {}
+    if isinstance(schema[0], str):
+        table_args['comment'] = schema[0]
+        schema = schema[1:]
+    
     props = {
         '__tablename__': table,
+        '__table_args__': table_args,
         'id': Column(Integer, primary_key=True),
     }
-    for k,v in table_schemas[table]:
-        if v not in _coltypes:
-            if not v.endswith('.id'):
-                raise ValueError("Unrecognized column type %s" % v)
-            props[k] = Column(Integer, ForeignKey(v))
+    for column in schema:
+        colname, coltype = column[:2]
+        if len(column) > 2:
+            comment = column[2]
         else:
-            coltyp = _coltypes[v]
-            props[k] = Column(coltyp)
+            comment = None
+            
+        if coltype not in _coltypes:
+            if not coltype.endswith('.id'):
+                raise ValueError("Unrecognized column type %s" % coltype)
+            props[colname] = Column(Integer, ForeignKey(coltype), comment=comment)
+        else:
+            ctyp = _coltypes[coltype]
+            props[colname] = Column(ctyp, comment=comment)
     return type(name, (ORMBase,), props)
 
 
@@ -336,7 +357,7 @@ if __name__ == '__main__':
     # start a session
     session = Session()
     
-    sl = Slice(lims_specimen_id=123456, surface='medial')
+    sl = Slice(lims_specimen_name="xxxxx", surface='medial')
     exp = Experiment(slice=sl, acsf='MP ACSF 1')
     exp2 = Experiment(slice=sl, acsf='MP ACSF 1')
     

@@ -6,6 +6,9 @@ import acq4.util.Canvas, acq4.util.DataManager
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtGui, QtCore
 
+from database import Session, Slice, Experiment
+import submission, config
+
 
 class ExperimentSubmitUi(QtGui.QWidget):
     def __init__(self):
@@ -58,8 +61,8 @@ class ExperimentSubmitUi(QtGui.QWidget):
 
     def submit_clicked(self):
         sel = self.file_tree.selectedItems()[0]
-        data, messages = sel.submission_data()
-        self.submit_window.update_info(messages, data)
+        data, messages, submit_fn = sel.submission_data()
+        self.submit_window.update_info(messages, data, submit_fn)
         self.submit_window.show()
         self.submit_window.activateWindow()        
 
@@ -185,6 +188,45 @@ class SliceTreeItem(pg.TreeWidgetItem):
         self.is_submittable = True
         pg.TreeWidgetItem.__init__(self, [fh.shortName()])
 
+    def submission_data(self):
+        slice_dh = self.fh
+        info = slice_dh.info()
+
+        files = {}
+        for item in self.childItems():
+            typ = item.text(1)
+            if typ in ['ignore', '']:
+                continue
+            fname = item.text(0)
+            files.setdefault(typ, []).append(fname)
+        
+        data = {
+            'image_files': files,
+            'acquisition_uid': '45647823406234',
+            'original_path': '%s:%s' % (config.rig_name, slice_dh.name()),
+            'slice_quality': info['slice quality'],
+        }
+        
+        messages = []
+
+        
+        surface = info.get('surface')
+        if info.get('surface') not in ['medial', 'lateral']:
+            messages.append("Warning: slice surface '%s' should have been 'medial' or 'lateral'" % surface)
+        data['surface'] = surface
+
+
+        specimen = info['specimen_ID'].strip()
+        data['specimen_name'] = specimen
+        
+
+        if len(messages) == 0:
+            msg = "No issues; ready to submit."
+        else:
+            msg = '\n'.join(messages)
+        
+        return data, msg, submission.submit_slice
+
 
 class SiteTreeItem(pg.TreeWidgetItem):
     def __init__(self, fh):
@@ -209,7 +251,7 @@ class SiteTreeItem(pg.TreeWidgetItem):
         data['image_files'] = files
         
         msg = "This is <b>totally</b> ready to submit."
-        return data, msg
+        return data, msg, submission.submit_experiment
 
 
 class TypeSelectItem(pg.TreeWidgetItem):
@@ -311,12 +353,24 @@ class SubmitWindow(QtGui.QWidget):
         self.layout.addWidget(self.info_tree, 0, 1)
         
         self.submit_btn = QtGui.QPushButton('submit!')
+        self.submit_btn.clicked.connect(self.submit)
         self.layout.addWidget(self.submit_btn, 1, 1)
         
-    def update_info(self, messages, data):
+    def update_info(self, messages, data, submit_fn):
+        self.submit_fn = submit_fn
         self.message_text.setHtml(messages)
         self.info_tree.setData(data)
+        self.data = data
         
+    def submit(self):
+        self.submit_fn(self.data)
+        
+
+
+def submit(data):
+    print "Submitting ", data
+    session = Session()
+    
 
 
         
