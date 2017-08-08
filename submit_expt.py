@@ -2,11 +2,13 @@
 Script used to submit completed experiment to database.
 """
 
+from datetime import datetime
+
 import acq4.util.Canvas, acq4.util.DataManager
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtGui, QtCore
 
-from database import Session, Slice, Experiment
+import database
 import submission, config
 
 
@@ -186,7 +188,17 @@ class SliceTreeItem(pg.TreeWidgetItem):
     def __init__(self, fh):
         self.fh = fh
         self.is_submittable = True
-        pg.TreeWidgetItem.__init__(self, [fh.shortName()])
+        
+        in_db = database.slice_from_timestamp(self.uid())
+        if len(in_db) == 0:
+            status = "NOT SUBMITTED"
+        else:
+            status = "submitted"
+        pg.TreeWidgetItem.__init__(self, [fh.shortName(), status])
+
+    def uid(self):
+        info = self.fh.info()
+        return datetime.fromtimestamp(info['__timestamp__'])
 
     def submission_data(self):
         slice_dh = self.fh
@@ -202,7 +214,7 @@ class SliceTreeItem(pg.TreeWidgetItem):
         
         data = {
             'image_files': files,
-            'acquisition_uid': '45647823406234',
+            'acq_timestamp': self.uid(),
             'original_path': '%s:%s' % (config.rig_name, slice_dh.name()),
             'slice_quality': info['slice quality'],
         }

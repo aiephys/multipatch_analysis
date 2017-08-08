@@ -17,7 +17,7 @@ def submit_slice(data):
     """
     session = Session()
     sl = Slice(lims_specimen_name=data['specimen_name'], surface=data['surface'],
-               original_path=data['original_path'], uid=data['acquisition_uid'],
+               original_path=data['original_path'], acq_timestamp=data['acq_timestamp'],
                submission_data=data['image_files'], quality=data['slice_quality'])
     session.add(sl)
     session.commit()

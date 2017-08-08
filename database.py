@@ -19,7 +19,7 @@ from config import synphys_db
 
 table_schemas = {
     'slice': [                            # most of this should be pulled from external sources
-        ('uid', 'str', 'Unique ID assigned to this slice by the acquisition system.'),
+        ('acq_timestamp', 'datetime', 'Creation timestamp for slice data acquisition folder.'),
         ('species', 'str'),                      # human / mouse
         ('age', 'int'),
         ('genotype', 'str'),                     # maybe NOT the labtracks group name?
@@ -216,8 +216,10 @@ engine = create_engine(synphys_db)
 
 # recreate all tables in DB
 # (just for initial development)
-ORMBase.metadata.drop_all(engine)
-ORMBase.metadata.create_all(engine)
+import sys
+if '--reset-db' in sys.argv:
+    ORMBase.metadata.drop_all(engine)
+    ORMBase.metadata.create_all(engine)
 
 
 # external users should create sessions from here.
@@ -349,7 +351,10 @@ def load_data(self, expt, pre=None, post=None):
                     })
     
 
-
+def slice_from_timestamp(ts):
+    session = Session()
+    slices = session.query(Slice).filter(Slice.acq_timestamp==ts).all()
+    return slices
 
 
 
