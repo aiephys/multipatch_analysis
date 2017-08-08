@@ -67,7 +67,8 @@ class Experiment(object):
         cre_types = set()
         labels = set()
         for cell in self.cells.values():
-            cre_types |= set(cell.labels.keys()) & set(ALL_CRE_TYPES)
+            if cell.cre_type not in cre_types:
+                cre_types.add(cell.cre_type)
             labels |= set(cell.labels.keys()) & set(ALL_LABELS)
         self.cre_types = sorted(list(cre_types), key=lambda x: ALL_CRE_TYPES.index(x))
         self.labels = sorted(list(labels), key=lambda x: ALL_LABELS.index(x))
@@ -76,8 +77,7 @@ class Experiment(object):
         for cell in self.cells.values():
             for label in labels:
                 assert label in cell.labels
-            for cre in cre_types:
-                assert cre in cell.labels
+            assert cell.cre_type in cre_types
 
         # read cell positions from mosaic files
         try:
