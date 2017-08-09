@@ -116,7 +116,7 @@ class DynamicsAnalyzer(object):
         specific pre- and post-synaptic cell.
         
         Returns data in 3 dicts, each keyed with the stimulus parameters (induction
-        frequency and recovery delay):
+        frequency, recovery delay, and holding potential):
             pulse_responses : {stim_params: [(pulse1, ..., pulse12), ...], ...}
                 Postsynaptic responses separated into small chunks for each stimulus pulse
             train_responses : {stim_params: [(induction, recovery), ...], ...} 
@@ -148,7 +148,7 @@ class DynamicsAnalyzer(object):
                 # for dynamics, we require all 12 pulses to elicit a presynaptic spike
                 continue
             
-            stim_params = analyzer.stim_params(pre_rec)
+            stim_params = analyzer.stim_params(pre_rec) + (post_rec.rounded_holding_potential(),)
             pulse_responses.setdefault(stim_params, []).append(resp)
             
             ind, base = analyzer.get_train_response(pre_rec, post_rec, 0, 7, padding=(-pre_pad, post_pad))
@@ -188,7 +188,7 @@ class DynamicsAnalyzer(object):
             #  - collect first pulses for amplitude estimate
             #  - colect last pulses for kinetics estimate
             resp = pulse_responses[stim_params]
-            ind_freq, rec_delay = stim_params
+            ind_freq, rec_delay, holding = stim_params
             for j in range(12):
                 for trial in resp:
                     r = trial[j]['response']
@@ -232,11 +232,14 @@ class DynamicsAnalyzer(object):
             ind_avg = ind_group.bsub_mean()
             rec_avg = rec_group.bsub_mean()
 
-            ind_freq, rec_delay = stim_params
+            ind_freq, rec_delay, holding = stim_params
             rec_delay = np.round(rec_delay, 2)
             train_plots[i,0].plot(ind_avg.time_values, ind_avg.data, pen='g', antialias=True)
             train_plots[i,1].plot(rec_avg.time_values, rec_avg.data, pen='g', antialias=True)
-            train_plots[i,0].setLabels(left=("ind: %0.0f rec: %0.0f" % (ind_freq, rec_delay*1000), 'V'))
+            train_plots[i,0].setLabels(left=('Vm', 'V'))
+            label = pg.LabelItem("ind: %0.0f  rec: %0.0f  hold: %0.0f" % (ind_freq, rec_delay*1000, holding*1000))
+            label.setParentItem(train_plots[i,0].vb)
+            train_plots[i,0].label = label
             
         train_plots.show()
         train_plots.setYLink(train_plots[0,0])
