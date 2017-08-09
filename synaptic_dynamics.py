@@ -319,6 +319,8 @@ class DynamicsAnalyzer(object):
             kin_plot = None
         
         # Make initial kinetics estimate
+        amp_est = self._psp_estimate['amp']
+        amp_sign = '-' if amp_est < 0 else '+'
         kin_fit = fit_psp(avg_kinetic, sign=amp_sign, yoffset=0, amp=amp_est, method='leastsq', fit_kws={})
         if plot:
             kin_plot.plot(avg_kinetic.time_values, kin_fit.eval(), pen='b')
@@ -418,6 +420,8 @@ class DynamicsAnalyzer(object):
         """Generate spike amplitude structure needed for release model fitting,
         using exponential deconvolution peaks rather than curve fit amplitudes
         """
+        psp_est = self.psp_estimate
+        
         pulse_offsets = self.pulse_offsets
         deconv = self.deconvolved_trains
         spike_sets = []
@@ -441,7 +445,10 @@ class DynamicsAnalyzer(object):
                     start = int(pulse/dt)
                     stop = start + int(4e-3/dt)
                     chunk = part_trace.data[start:stop]
-                    imx = np.argmax(chunk)
+                    if psp_est['amp'] > 0:
+                        imx = np.argmax(chunk)
+                    else:
+                        imx = np.argmin(chunk)
                     mx = chunk[imx]
                     amps.append(mx)
                     
