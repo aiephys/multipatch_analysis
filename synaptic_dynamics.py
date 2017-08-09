@@ -7,17 +7,25 @@ from neuroanalysis.baseline import float_mode
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.fitting import PspTrain
 from neuroanalysis.synaptic_release import ReleaseModel
+from neuroanalysis.event_detection import exp_deconvolve
+from neuroanalysis.filter import bessel_filter
 
 
 class DynamicsAnalyzer(object):
-    def __init__(self, expt, pre_cell, post_cell):
+    def __init__(self, expt, pre_cell, post_cell, method='deconv'):
         self.expt = expt
         self.pre_cell = pre_cell
         self.post_cell = post_cell
+        self.method = method  # 'deconv' or 'fit'
 
         # how much padding to include when extracting events
         self.pre_pad = 10e-3
         self.post_pad = 50e-3
+        
+        # time constant for exponential deconvolution
+        self.exp_tau = 15e-3
+        # cutoff frequency for deconvolved traces
+        self.cutoff = 500.
         
         self._reset()
         
@@ -27,6 +35,8 @@ class DynamicsAnalyzer(object):
         self._pulse_responses = None
         self._train_responses = None
         self._pulse_offsets = None
+
+        self._deconvolved_trains = None
         
         self._amp_group = None
         self._kinetics_group = None
@@ -55,6 +65,12 @@ class DynamicsAnalyzer(object):
         if self._pulse_offsets is None:
             self._collect_stim_trains()
         return self._pulse_offsets
+
+    @property
+    def deconvolved_trains(self):
+        if self._deconvolved_trains is None:
+            self._get_deconvolved_trains()
+        return self._deconvolved_trains
     
     @property
     def stim_param_order(self):
@@ -228,10 +244,30 @@ class DynamicsAnalyzer(object):
             train_plots[i,1].setXLink(train_plots[0,1])
         train_plots.grid.ci.layout.setColumnStretchFactor(0, 3)
         train_plots.grid.ci.layout.setColumnStretchFactor(1, 2)
-        train_plots.setClipToView(True)
+        train_plots.setClipToView(False)  # has a bug :(
         train_plots.setDownsampling(True, True, 'peak')
         
         return train_plots
+
+    def _get_deconvolved_trains(self):
+        train_responses = self.train_responses
+        
+        deconv = OrderedDict()
+        for k,v in train_responses.items():
+            ind = v[0].bsub_mean()
+            rec = v[1].bsub_mean()
+            idec = bessel_filter(exp_deconvolve(ind, self.exp_tau), self.cutoff)
+            rdec = bessel_filter(exp_deconvolve(rec, self.exp_tau), self.cutoff)
+            deconv[k] = (idec, rdec)
+        
+        self._deconvolved_trains = deconv
+
+    def plot_deconvolved_trains(self, plot_grid):
+        deconv = self.deconvolved_trains
+        for i,k in enumerate(deconv.keys()):
+            ind, rec = deconv[k]
+            plot_grid[i,0].plot(ind.time_values, ind.data, pen='y', antialias=True)
+            plot_grid[i,1].plot(rec.time_values, rec.data, pen='y', antialias=True)
 
     def estimate_amplitude(self, plot=False):
         amp_group = self.amp_group
@@ -352,7 +388,6 @@ class DynamicsAnalyzer(object):
     def prepare_spike_sets(self):
         """Generate spike amplitude structure needed for release model fitting
         """
-        train_responses = self.train_responses
         pulse_offsets = self.pulse_offsets
         results = self.train_fit_results
         
@@ -370,6 +405,49 @@ class DynamicsAnalyzer(object):
             spike_sets.append((t, amps))
             
         self._spike_sets = spike_sets
+
+    def prepare_spike_sets_from_deconv(self, plot_grid=None):
+        """Generate spike amplitude structure needed for release model fitting,
+        using exponential deconvolution peaks rather than curve fit amplitudes
+        """
+        pulse_offsets = self.pulse_offsets
+        deconv = self.deconvolved_trains
+        spike_sets = []
+        # iterate over all stimulus types
+        for i,stim_params in enumerate(deconv.keys()):
+            amps = []
+            pulses = np.array(pulse_offsets[stim_params])
+            ind_pulses = pulses[:8] + self.pre_pad
+            rec_pulses = pulses[8:].copy()
+            rec_pulses += self.pre_pad - rec_pulses[0]
+            ind = deconv[stim_params][0]
+            rec = deconv[stim_params][1]
+            dt = ind.dt
+            
+            all_amps = []
+            # collect peak amplitudes from induction and recovery traces
+            for k, part_pulses, part_trace in [(0, ind_pulses, ind), (1, rec_pulses, rec)]:
+                amps = []
+                # iterate over each pulse
+                for j,pulse in enumerate(part_pulses):
+                    start = int(pulse/dt)
+                    stop = start + int(4e-3/dt)
+                    chunk = part_trace.data[start:stop]
+                    imx = np.argmax(chunk)
+                    mx = chunk[imx]
+                    amps.append(mx)
+                    
+                if plot_grid is not None:
+                    plot_grid[i,k].plot(part_pulses, amps, pen=None, symbol='o')
+                
+                all_amps.extend(amps)
+                
+            t = np.array(pulses) * 1000
+            amps = np.array(all_amps) / all_amps[0]
+            spike_sets.append((t, amps))
+            
+        self._spike_sets = spike_sets
+                
 
     def plot_train_fits(self, plot_grid):
         train_responses = self.train_responses
@@ -479,59 +557,31 @@ if __name__ == '__main__':
     if '--no-fit' in sys.argv:
         sys.exit(0)  # user requested no fitting; bail out early
 
-    # Estimate PSP amplitude
-    amp_est, amp_sign, amp_plot = analyzer.estimate_amplitude(plot=True)
-    app.processEvents()
-    
-    # Estimate PSP kinetics
-    rise_time, decay_tau, latency, kin_plot = analyzer.estimate_kinetics(plot=True)
-    app.processEvents()
-    
-    # Fit trains to multi-event models and plot the results
-    analyzer.plot_train_fits(train_plots)
-
-    # update GUI before doing model fit
-    app.processEvents()
+    if '--deconv' in sys.argv:
+        # get deconvolved response trains
+        analyzer.plot_deconvolved_trains(train_plots)
+        analyzer.prepare_spike_sets_from_deconv(plot_grid=train_plots)
+        
+    else:
+        # Estimate PSP amplitude
+        amp_est, amp_sign, amp_plot = analyzer.estimate_amplitude(plot=True)
+        app.processEvents()
+        
+        # Estimate PSP kinetics
+        rise_time, decay_tau, latency, kin_plot = analyzer.estimate_kinetics(plot=True)
+        app.processEvents()
+        
+        # Fit trains to multi-event models and plot the results
+        analyzer.plot_train_fits(train_plots)
 
     if '--no-model' in sys.argv:
         sys.exit(0)  # user requested no model; bail out early
+        
+    # update GUI before doing model fit
+    app.processEvents()
     
     # Fit release model to dynamics
     model, fit = analyzer.fit_release_model(dynamics=['Dep', 'Fac', 'UR'])
     
     # plot nost recently-generated fit results
     rel_plots = analyzer.plot_model_results()
-
-
-
-
-
-
-    #db = ExperimentDatabase()
-    #db.load_data(expt, pre, post)
-
-    #expts = db.get_table('experiment')
-    #cell = db.get_table('cell')
-    #srec = db.get_table('sync_rec')
-    #rec = db.get_table('recording')
-    #resp = db.get_table('response')
-    #spike = db.get_table('stim_spike')
-    #pulse = db.get_table('stim_pulse')
-
-    ## don't need spikes for now; puse table gives us n_spikes
-    ##spikes = pulse.merge(spike, how='left', left_on='id', right_on='pulse_id', suffixes=('_pulse', '_spike'))
-    #pulses = pulse.merge(rec, how='left', left_on='recording_id', right_on='id', suffixes=('_pulse', '_pre_rec'))
-    #pulses = pulses.merge(cell, how='left', left_on='cell_id', right_on='id', suffixes=('_spikes', '_pre_cell'))
-    
-    
-    #resp = resp.merge(pulses, how='right', left_on='pulse_id', right_on='id_pulse', suffixes=('_resp', '_pulses'))
-
-    #resp = rec.merge(resp, how='right', left_on='id', right_on='recording_id_resp', suffixes=('_post_rec', '_resp'))
-    
-    #resp = srec.merge(resp, how='right', left_on='id', right_on='sync_rec_id_post_rec', suffixes=('_srec', '_resp'))
-    
-    #resp = expts.merge(resp, how='right', left_on='id', right_on='expt_id_srec', suffixes=('_expt', '_resp'))
-    
-    #resp = resp.merge(cell, how='left', left_on='cell_id_post_rec', right_on='id', suffixes=('_resp', '_post_cell'))
-    
-    
