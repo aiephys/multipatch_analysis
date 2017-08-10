@@ -132,9 +132,10 @@ def summary_plot(grand_mean, avg_est, grand_est, i, plot=None, color=None, name=
                      symbolSize=10)
     return plot
 
-if args.cre_type is not None and len(args.cre_type.split(',')) == 1:
-    cre_type = args.cre_type.split('-')
-    if args.calcium is True:
+if args.cre_type is not None:
+    cre_types = args.cre_type.split(',')
+    if args.calcium is True and len(cre_types) == 1:
+        cre_type = cre_types.split('-')
         expts = all_expts.select(cre_type=cre_type, calcium='high', start=args.start)
         legend = ("%s->%s, calcium = 2.0mM " % (cre_type[0], cre_type[1]))
         dist_plots = expts.distance_plot(cre_type[0], cre_type[1], color=(0, 10), name=legend)
@@ -152,7 +153,8 @@ if args.cre_type is not None and len(args.cre_type.split(',')) == 1:
         ks = stats.ks_2samp(avg_est_high, avg_est_low)
         print('p = %f (KS test)' % ks.pvalue)
         #amp_plots[0].addLegend('p = %f (KS test)' % ks.pvalue)
-    elif args.age is not None and len(args.age.split(',')) >= 2:
+    elif args.age is not None and len(args.age.split(',')) >= 2 and len(cre_types) == 1:
+        cre_type = cre_types.split('-')
         ages = args.age.split(',')
         expts = all_expts.select(age=ages[0], start=args.start)
         legend = ("%s->%s, age = P%s " % (cre_type[0], cre_type[1], ages[0]))
@@ -173,7 +175,6 @@ if args.cre_type is not None and len(args.cre_type.split(',')) == 1:
     elif args.cre_type is None and (args.calcium is not None or args.age is not None):
         print('Error: in order to compare across conditions a single cre-type connection must be specified')
     else:
-        cre_types = args.cre_type.split(',')
         dist_plots = None
         amp_plots = None
         for i, type in enumerate(cre_types):
