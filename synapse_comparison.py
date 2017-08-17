@@ -22,6 +22,7 @@ from connection_detection import trace_mean
 from neuroanalysis.data import Trace
 from scipy import stats
 from neuroanalysis.ui.plot_grid import PlotGrid
+from constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
 
 
 parser = argparse.ArgumentParser()
@@ -84,6 +85,10 @@ def first_pulse_plot(expt_list, name=None):
         for pre, post in expt.connections:
             if expt.cells[pre].cre_type == cre_type[0] and expt.cells[post].cre_type == cre_type[1]:
                 avg_est, avg_amp, n_sweeps = avg_first_pulse(expt, pre, post)
+                if expt.cells[pre].cre_type in EXCITATORY_CRE_TYPES and avg_est < 0:
+                    continue
+                elif expt.cells[pre].cre_type in INHIBITORY_CRE_TYPES and avg_est > 0:
+                    continue
                 if n_sweeps >= 10:
                     avg_amp.t0 = 0
                     avg_ests.append(avg_est)
