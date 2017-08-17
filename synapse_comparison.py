@@ -32,6 +32,9 @@ parser.add_argument('--calcium', action='store_true', default=False, dest='calci
                     help='cre-type must also be specified')
 parser.add_argument('--age', type=str, help='Enter age ranges separated by ",". Ex 40-50,60-70.'
                     '' 'cre-type must also be specified')
+# Optional argument
+parser.add_argument('--Recip', action='store_true', default=False, dest='Recip',
+                    help='Traces from reciprocal connections are red instead of gray')
 
 args = parser.parse_args(sys.argv[1:])
 
@@ -94,8 +97,20 @@ def first_pulse_plot(expt_list, name=None):
                     avg_ests.append(avg_est)
                     base = float_mode(avg_amp.data[:int(10e-3 / avg_amp.dt)])
                     amp_base_subtract.append(avg_amp.copy(data=avg_amp.data - base))
-                    amp_plots.plot(avg_amp.time_values, avg_amp.data - base)
+
+                    current_connection_HS = post, pre
+                    if len(expt.connections) > 1 and args.Recip is True:
+                        for x in expt.connections:
+                            if cmp(current_connection_HS, x) == 0:  # determine if a reciprocal connection
+                                amp_plots.plot(avg_amp.time_values, avg_amp.data - base, pen={'color': 'r', 'width': 1})
+                                break
+                            else:  # reciprocal connection was not found
+                                 amp_plots.plot(avg_amp.time_values, avg_amp.data - base)
+                    else:
+                        amp_plots.plot(avg_amp.time_values, avg_amp.data - base)
+
                     app.processEvents()
+
     if len(amp_base_subtract) != 0:
         grand_mean = trace_mean(amp_base_subtract)
         grand_est = np.mean(np.array(avg_ests))
