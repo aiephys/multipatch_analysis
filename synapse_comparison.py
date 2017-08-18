@@ -132,27 +132,6 @@ def summary_plot(grand_mean, avg_est, grand_est, i, plot=None, color=None, name=
                      symbolSize=10)
     return plot
 
-def reciprocal(expts, pre_type, post_type):
-    n_uni = 0
-    n_reciprocal = 0
-    n_total = 0
-    for expt in expts:
-        uni = []
-        recip = []
-        if len(expt.connections) == 0:
-            continue
-        for pre, post in expt.connections:
-            if expt.cells[pre].cre_type == pre_type and expt.cells[post].cre_type == post_type:
-                n_total += 1
-                if (post, pre) in expt.connections:
-                    if (pre, post) not in recip:
-                        recip.append((post, pre))
-                else:
-                    uni.append((pre, post))
-        n_reciprocal += len(recip)
-        n_uni += len(uni)
-    return n_uni, n_reciprocal, n_total
-
 if args.cre_type is not None:
     cre_types = args.cre_type.split(',')
     if args.calcium is True and len(cre_types) == 1:
@@ -202,11 +181,15 @@ if args.cre_type is not None:
             cre_type = type.split('-')
             expts = all_expts.select(cre_type=cre_type, age=args.age, calcium='High', start=args.start)
             legend = ("%s->%s" % (cre_type[0], cre_type[1]))
-            n_uni, n_reciprocal, n_total = reciprocal(expts, cre_type[0], cre_type[1])
+            reciprocal_summary = expts.reciprocal(cre_type[0], cre_type[1])
             dist_plots = expts.distance_plot(cre_type[0], cre_type[1], plots=dist_plots, color=(i, len(cre_types)*1.3))
             grand_mean, avg_est, grand_est = first_pulse_plot(expts, name=legend)
             print(legend + ' %d/%d (%0.02f%%) uni-directional, %d/%d (%0.02f%%) reciprocal' % (
-              n_uni, n_total, 100 * n_uni / n_total, n_reciprocal, n_total, 100 * n_reciprocal / n_total))
+              reciprocal_summary[tuple(cre_type)]['Uni-directional'], reciprocal_summary[tuple(cre_type)]['Total_connections'],
+              100 * reciprocal_summary[tuple(cre_type)]['Uni-directional']/reciprocal_summary[tuple(cre_type)]['Total_connections'],
+              reciprocal_summary[tuple(cre_type)]['Reciprocal'],
+              reciprocal_summary[tuple(cre_type)]['Total_connections'],
+              100 * reciprocal_summary[tuple(cre_type)]['Reciprocal']/reciprocal_summary[tuple(cre_type)]['Total_connections']))
             if grand_mean is not None:
                 print(legend + ' Grand mean amplitude = %f' % grand_est)
                 amp_plots = summary_plot(grand_mean, avg_est, grand_est, i=i, plot=amp_plots, color=(i, len(cre_types)*1.3), name=legend)
