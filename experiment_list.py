@@ -371,6 +371,12 @@ class ExperimentList(object):
                 if (post, pre) in expt.connections:
                     if (pre, post) not in recip:
                         recip.append((post, pre))
+                        if connection_type[::-1] != connection_type:
+                            recip_connection_type = connection_type[::-1]
+                            if recip_connection_type not in summary:
+                                summary[recip_connection_type] = {'Uni-directional': 0, 'Reciprocal': 0,
+                                                                  'Total_connections': 0}
+                            summary[recip_connection_type]['Reciprocal'] += 1
                         summary[connection_type]['Reciprocal'] += 1
                 else:
                     summary[connection_type]['Uni-directional'] += 1
