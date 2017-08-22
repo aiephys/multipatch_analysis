@@ -11,6 +11,8 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import TypeDecorator
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.sql.expression import func
+
 
 from neuroanalysis.baseline import float_mode
 from connection_detection import PulseStimAnalyzer, MultiPatchSyncRecAnalyzer
@@ -20,26 +22,26 @@ from config import synphys_db
 table_schemas = {
     'slice': [                            # most of this should be pulled from external sources
         ('acq_timestamp', 'datetime', 'Creation timestamp for slice data acquisition folder.'),
-        ('species', 'str'),                      # human / mouse
-        ('age', 'int'),
-        ('genotype', 'str'),                     # maybe NOT the labtracks group name?
-        ('orientation', 'str'),                  # eg "sagittal"
-        ('surface', 'str'),                      # eg "medial" or "lateral"
+        ('species', 'str', 'Human | mouse'),
+        ('age', 'int', 'Specimen age (in days) at time of dissection'),
+        ('genotype', 'str', 'Specimen donor genotype (from LIMS)'),
+        ('orientation', 'str', 'Orientation of the slice plane (eg "sagittal")'),
+        ('surface', 'str', 'The surface of the slice facing up during the experiment (eg "medial")'),
         ('quality', 'int', 'Experimenter subjective slice quality assessment (0-5)'),
-        ('slice_time', 'datetime'),                   
-        ('slice_conditions', 'object'),             # solutions, perfusion, incubation time, etc.
-        ('lims_specimen_name', 'str'),                # ID of LIMS "slice" specimen
-        ('lims_trigger_id', 'int'),                 # ID used to query status of LIMS upload
-        ('original_path', 'str'),                # Original location of slice folder
+        ('slice_time', 'datetime', 'Time when this specimen was sliced'),
+        ('slice_conditions', 'object', 'JSON containing solutions, perfusion, incubation time, etc.'),
+        ('lims_specimen_name', 'str', 'Name of LIMS "slice" specimen'),
+        ('original_path', 'str', 'Original path of the slice folder on the acquisition rig'),
         ('submission_data', 'object'),          # structure generated for original submission
     ],
     'experiment': [
         "A group of cells patched simultaneously in the same slice.",
         ('original_path', 'object', 'Describes original location of raw data'),
         ('slice_id', 'slice.id'),
+        ('region', 'str', 'The intended brain region for this experiment'),
         ('internal', 'str', 'The name of the internal solution used in this experiment. '
                             'The solution should be described in the pycsf database.'),
-        ('acsf', 'str', 'The name of the ACSF solution used in theis experiment. '
+        ('acsf', 'str', 'The name of the ACSF solution used in this experiment. '
                         'The solution should be described in the pycsf database.'),
         ('temperature', 'float'),
         ('date', 'datetime'),
@@ -180,6 +182,8 @@ def _generate_mapping(table):
         '__tablename__': table,
         '__table_args__': table_args,
         'id': Column(Integer, primary_key=True),
+        'time_created': Column(DateTime, default=func.now()),
+        'time_modified': Column(DateTime, onupdate=func.current_timestamp()),
     }
     for column in schema:
         colname, coltype = column[:2]
