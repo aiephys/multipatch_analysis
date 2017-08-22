@@ -1,4 +1,74 @@
+import datetime
 from database import Session, Slice
+from allensdk_internal.core import lims_utilities as lims
+
+import config
+
+class SliceSubmission(object):
+    def __init__(self, dh):
+        self.dh = dh
+        
+        self._fields = None
+
+    @property
+    def fields(self):
+        info = dh.info()
+        
+        # pull some metadata from LIMS
+        sid = info['specimen_ID']
+        query = """
+            select 
+              organisms.name as organism, 
+              ages.days as age, 
+              donors.full_genotype as genotype,
+              tissue_processings.section_thickness_um as thickness,
+              plane_of_sections.name as orientation
+            from specimens
+              left join donors on specimens.donor_id=donors.id 
+              left join organisms on donors.organism_id=organisms.id
+              left join ages on donors.age_id=ages.id
+              left join tissue_processings on specimens.tissue_processing_id=tissue_processings.id
+              left join plane_of_sections on tissue_processings.plane_of_section_id=plane_of_sections.id
+            where specimens.name='%s';
+        """ % sid
+        r = lims.query(query)
+        if len(r) != 1:
+            raise Exception("LIMS lookup for specimen %s returned %d results (expected 1)" % (sid, len(r)))
+        limsdata = r[0]
+        
+        self._fields = {
+            'acq_timestamp', datetime.fromtimestamp(info['__timestamp__']),
+            'species': limsdata['organism'],
+            'age': limsdata['age'],
+            'genotype': limsdata['genotype'],
+            'orientation' limsdata['orientation'],
+            'surface': info.get('surface'),
+            'quality': info.get('slice quality'),
+            'slice_time': None,
+            'slice_conditions': {},
+            'lims_specimen_name': sid,
+            'original_path': '%s:%s' % (config.rig_name, self.dh.name()),
+            'submission_data': None,
+        }
+        return self._fields
+
+    def check(self):
+        warnings = []
+        errors = []
+        fields = self.fields
+        if fields['surface'] not in ['medial', 'lateral']:
+            messages.append("Warning: slice surface '%s' should have been 'medial' or 'lateral'" % surface)
+        return errors, warnings
+        
+    def create(self):
+        if len(self.check()[0]) > 0:
+            raise Exception("Submission has errors; see SliceSubmission.check()")
+        data = self.fields
+        sl = Slice(lims_specimen_name=data['specimen_name'], surface=data['surface'],
+                original_path=data['original_path'], acq_timestamp=data['acq_timestamp'],
+                submission_data=data['image_files'], quality=data['slice_quality'])
+        return sl
+        
 
 
 def submit_slice(data):
@@ -16,10 +86,6 @@ def submit_slice(data):
         }
     """
     session = Session()
-    sl = Slice(lims_specimen_name=data['specimen_name'], surface=data['surface'],
-               original_path=data['original_path'], acq_timestamp=data['acq_timestamp'],
-               submission_data=data['image_files'], quality=data['slice_quality'])
-    session.add(sl)
     session.commit()
     
     

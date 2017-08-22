@@ -196,10 +196,6 @@ class SliceTreeItem(pg.TreeWidgetItem):
             status = "submitted"
         pg.TreeWidgetItem.__init__(self, [fh.shortName(), status])
 
-    def uid(self):
-        info = self.fh.info()
-        return datetime.fromtimestamp(info['__timestamp__'])
-
     def submission_data(self):
         slice_dh = self.fh
         info = slice_dh.info()
@@ -214,18 +210,8 @@ class SliceTreeItem(pg.TreeWidgetItem):
         
         data = {
             'image_files': files,
-            'acq_timestamp': self.uid(),
-            'original_path': '%s:%s' % (config.rig_name, slice_dh.name()),
-            'slice_quality': info['slice quality'],
         }
         
-        messages = []
-
-        
-        surface = info.get('surface')
-        if info.get('surface') not in ['medial', 'lateral']:
-            messages.append("Warning: slice surface '%s' should have been 'medial' or 'lateral'" % surface)
-        data['surface'] = surface
 
 
         specimen = info['specimen_ID'].strip()
