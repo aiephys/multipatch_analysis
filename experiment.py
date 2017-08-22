@@ -77,7 +77,9 @@ class Experiment(object):
         for cell in self.cells.values():
             for label in labels:
                 assert label in cell.labels
-            assert cell.cre_type in cre_types
+            for cre in cre_types:
+                if cre!= 'unknown':
+                    assert cre in cell.labels
 
         # read cell positions from mosaic files
         try:

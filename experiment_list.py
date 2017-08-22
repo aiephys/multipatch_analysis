@@ -355,6 +355,12 @@ class ExperimentList(object):
         return summary
 
     def reciprocal(self, pre_type=None, post_type=None):
+        """Return a summary of reciprocal connections:
+            {connection_type: {reciprocal: number reciprocal connections, uni-directional: number uni-directional
+            connections, Total_connections: number total connections}}
+            
+            IF pre_type and post_type are not None one may use this to probe a specific connection type"""
+
         summary = {}
         for expt in self:
             recip = []
@@ -363,7 +369,7 @@ class ExperimentList(object):
             for pre, post in expt.connections:
                 connection_type = (expt.cells[pre].cre_type, expt.cells[post].cre_type)
                 if pre_type is not None and post_type is not None:
-                    if cmp(connection_type, (pre_type, post_type)) != 0:
+                    if connection_type != (pre_type, post_type):
                         continue
                 if connection_type not in summary:
                     summary[connection_type] = {'Uni-directional': 0, 'Reciprocal': 0, 'Total_connections': 0}
