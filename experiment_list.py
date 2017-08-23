@@ -354,21 +354,61 @@ class ExperimentList(object):
                 summary[k]['udist'].extend(v['udist'])
         return summary
 
+    def reciprocal(self, pre_type=None, post_type=None):
+        """Return a summary of reciprocal connections:
+            {connection_type: {reciprocal: number reciprocal connections, uni-directional: number uni-directional
+            connections, Total_connections: number total connections}}
+            
+            IF pre_type and post_type are not None one may use this to probe a specific connection type"""
+
+        summary = {}
+        for expt in self:
+            recip = []
+            if len(expt.connections) == 0:
+                continue
+            for pre, post in expt.connections:
+                connection_type = (expt.cells[pre].cre_type, expt.cells[post].cre_type)
+                if pre_type is not None and post_type is not None:
+                    if connection_type != (pre_type, post_type):
+                        continue
+                if connection_type not in summary:
+                    summary[connection_type] = {'Uni-directional': 0, 'Reciprocal': 0, 'Total_connections': 0}
+                summary[connection_type]['Total_connections'] += 1
+                if (post, pre) in expt.connections:
+                    if (pre, post) not in recip:
+                        recip.append((post, pre))
+                        if connection_type[::-1] != connection_type:
+                            recip_connection_type = connection_type[::-1]
+                            if recip_connection_type not in summary:
+                                summary[recip_connection_type] = {'Uni-directional': 0, 'Reciprocal': 0,
+                                                                  'Total_connections': 0}
+                            summary[recip_connection_type]['Reciprocal'] += 1
+                        summary[connection_type]['Reciprocal'] += 1
+                else:
+                    summary[connection_type]['Uni-directional'] += 1
+        return summary
+
     def print_connectivity_summary(self, cre_type=None):
         print("-------------------------------------------------------------")
-        print("     Connectivity  (# connected/probed, % connectivity, %250, %100, cdist, udist, adist)")
+        print("     Connectivity  (# connected/probed, # reciprocal, % connectivity, %250, %100, cdist, udist, adist)")
         print("-------------------------------------------------------------")
 
         tot_probed, tot_connected = self.n_connections_probed()
 
         summary = self.connectivity_summary(cre_type)
+        reciprocal_summary = self.reciprocal()
 
         with warnings.catch_warnings():  # we expect warnings when nanmean is called on an empty list
             warnings.simplefilter("ignore")
             totals = []
             for k,v in summary.items():
                 probed = v['connected'] + v['unconnected']
-                
+                if k in reciprocal_summary:
+                    if reciprocal_summary[k]['Total_connections'] == v['connected']:
+                        reciprocal = str(reciprocal_summary[k]['Reciprocal'])
+                else:
+                    reciprocal = 'nan'
+
                 # calculate probability of connectivity over all points,
                 # within 250um, and within 100um.
                 pconn = []
@@ -382,6 +422,7 @@ class ExperimentList(object):
                     k[1],                        # post type
                     v['connected'],              # n connected
                     probed,                      # n probed
+                    reciprocal,                  # n reciprocal
                     100*pconn[0],                # % connected
                     100*pconn[1],                # % connected <= 250um
                     100*pconn[2],                # % connected <= 100um
@@ -398,9 +439,9 @@ class ExperimentList(object):
             fields.insert(2, pad)
             fields = tuple(fields)
             try:
-                print(u"%s → %s%s\t:\t%d/%d\t%0.2f%%\t%0.2f%%\t%0.2f%%\t%0.2f\t%0.2f\t%0.2f" % fields)
+                print(u"%s → %s%s\t:\t%d/%d\t%s\t%0.2f%%\t%0.2f%%\t%0.2f%%\t%0.2f\t%0.2f\t%0.2f" % fields)
             except UnicodeEncodeError:
-                print("%s - %s%s\t:\t%d/%d\t%0.2f%%\t%0.2f%%\t%0.2f%%\t%0.2f\t%0.2f\t%0.2f" % fields)
+                print("%s - %s%s\t:\t%d/%d\t%s\t%0.2f%%\t%0.2f%%\t%0.2f%%\t%0.2f\t%0.2f\t%0.2f" % fields)
 
         print("\nTotal:  \t%d/%d\t%0.2f%%" % (tot_connected, tot_probed, 100*tot_connected/(tot_connected+tot_probed)))
         print("")
