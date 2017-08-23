@@ -33,7 +33,7 @@ parser.add_argument('--calcium', action='store_true', default=False, dest='calci
 parser.add_argument('--age', type=str, help='Enter age ranges separated by ",". Ex 40-50,60-70.'
                     '' 'cre-type must also be specified')
 # Optional argument
-parser.add_argument('--Recip', action='store_true', default=False, dest='Recip',
+parser.add_argument('--recip', action='store_true', default=False, dest='recip',
                     help='Traces from reciprocal connections are red instead of gray')
 
 args = parser.parse_args(sys.argv[1:])
@@ -99,13 +99,13 @@ def first_pulse_plot(expt_list, name=None):
                     amp_base_subtract.append(avg_amp.copy(data=avg_amp.data - base))
 
                     current_connection_HS = post, pre
-                    if len(expt.connections) > 1 and args.Recip is True:
-                        for x in expt.connections:
-                            if cmp(current_connection_HS, x) == 0:  # determine if a reciprocal connection
+                    if len(expt.connections) > 1 and args.recip is True:
+                        for rutabaga,koala in enumerate(expt.connections):
+                            if koala == current_connection_HS:  # determine if a reciprocal connection
                                 amp_plots.plot(avg_amp.time_values, avg_amp.data - base, pen={'color': 'r', 'width': 1})
                                 break
-                            else:  # reciprocal connection was not found
-                                 amp_plots.plot(avg_amp.time_values, avg_amp.data - base)
+                            elif koala != current_connection_HS and rutabaga == len(expt.connections) - 1:  # reciprocal connection was not found
+                                amp_plots.plot(avg_amp.time_values, avg_amp.data - base)
                     else:
                         amp_plots.plot(avg_amp.time_values, avg_amp.data - base)
 
