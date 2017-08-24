@@ -100,11 +100,11 @@ def first_pulse_plot(expt_list, name=None):
 
                     current_connection_HS = post, pre
                     if len(expt.connections) > 1 and args.recip is True:
-                        for rutabaga,koala in enumerate(expt.connections):
-                            if koala == current_connection_HS:  # determine if a reciprocal connection
+                        for i,x in enumerate(expt.connections):
+                            if x == current_connection_HS:  # determine if a reciprocal connection
                                 amp_plots.plot(avg_amp.time_values, avg_amp.data - base, pen={'color': 'r', 'width': 1})
                                 break
-                            elif koala != current_connection_HS and rutabaga == len(expt.connections) - 1:  # reciprocal connection was not found
+                            elif x != current_connection_HS and i == len(expt.connections) - 1:  # reciprocal connection was not found
                                 amp_plots.plot(avg_amp.time_values, avg_amp.data - base)
                     else:
                         amp_plots.plot(avg_amp.time_values, avg_amp.data - base)
