@@ -57,9 +57,14 @@ class SynapseExplorer(QtGui.QWidget):
 
 if __name__ == '__main__':
     from experiment_list import ExperimentList
-    pg.mkQApp()
+    import sys
+    app = pg.mkQApp()
 
     all_expts = ExperimentList(cache='expts_cache.pkl')
     
     exp = SynapseExplorer(all_expts)
     exp.show()
+
+
+    if sys.flags.interactive == 0:
+        app.exec_()
