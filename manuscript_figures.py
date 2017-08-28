@@ -22,9 +22,10 @@ if len(analyzer.pulse_responses) == 0:
     raise Exception("No suitable data found for cell %d -> cell %d in expt %s" % (pre_cell, post_cell, expt_ind))
 
 amp_group = analyzer.amp_group
-amp_plot = None
 stop_freq = 50
 sweep_list = []
+ind = []
+ind_base_subtract = []
 n_sweeps = len(amp_group)
 if n_sweeps == 0:
     print "No Sweeps"
@@ -40,7 +41,23 @@ for sweep in range(n_sweeps):
 if len(sweep_list) != 0:
     avg_first_pulse = trace_mean(sweep_list)
     amp_plot = pg.plot(title='First pulse amplitude')
+    amp_plot.setLabels(left=('Vm', 'V'))
     amp_plot.plot(avg_first_pulse.time_values, avg_first_pulse.data)
+train_responses = analyzer.train_responses
+for i, stim_params in enumerate(train_responses.keys()):
+    if stim_params[0] == 50:
+        if len(train_responses[stim_params][0]) != 0:
+            ind_group = train_responses[stim_params][0]
+            for j in range(len(ind_group)):
+                ind.append(ind_group.responses[j])
+if len(ind) > 5:
+    ind_avg = trace_mean(ind)
+    base = float_mode(ind_avg.data[:int(10e-3 / ind_avg.dt)])
+    ind_base_subtract.append(ind_avg.copy(data=ind_avg.data - base))
+    train_plot = pg.plot(title='50 Hz train')
+    train_plot.setLabels(left=('Vm','V'))
+    train_plot.plot(ind_avg.time_values, ind_avg.data - base)
+
 
 
 
