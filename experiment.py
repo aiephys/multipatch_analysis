@@ -371,6 +371,8 @@ class Experiment(object):
                 os.path.join(root, date, "slice_%03d"%int(slice), "site_%03d"%int(site)),
                 os.path.join(root, 'V1', date, "slice_%03d"%int(slice), "site_%03d"%int(site)),
                 os.path.join(root, 'ALM', date, "slice_%03d"%int(slice), "site_%03d"%int(site)),
+                # missing data, still in versioned backups
+                os.path.join(root, '..', '..', '..', 'version_backups', 'data', 'Alex', 'V1', date, "slice_%03d" % int(slice), "site_%03d" % int(site)),
             ]
             for path in paths:
                 if os.path.isdir(path):
