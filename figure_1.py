@@ -63,7 +63,9 @@ for connection_type, expt_id in args.items():
                 sweep_list.append(sweep_trace.copy(data=sweep_trace.data - base))
         if len(sweep_list) > 5:
             avg_first_pulse = trace_mean(sweep_list)
+            avg_first_pulse.t0 = 0
             grid[row,0].setLabels(left=('Vm', 'V'))
+            grid[row,0].setLabels(bottom=('t', 'sec'))
             grid[row,0].plot(avg_first_pulse.time_values, avg_first_pulse.data, name=connection_type)
         else:
             print ("%s not enough sweeps for first pulse" % connection_type)
@@ -76,11 +78,16 @@ for connection_type, expt_id in args.items():
                         ind.append(ind_group.responses[j])
         if len(ind) > 5:
             ind_avg = trace_mean(ind)
+            ind_avg.t0 = 0
             base = float_mode(ind_avg.data[:int(10e-3 / ind_avg.dt)])
             ind_dec = bessel_filter(exp_deconvolve(ind_avg, tau), lp)
+            ind_dec.t0 = 0
             grid[row,1].setLabels(left=('Vm','V'))
-            grid[row,2].setLabels(left=('Vm', 'V'))
+            grid[row,1].setLabels(bottom=('t', 'sec'))
+            grid[row,2].setLabels(bottom=('t', 'sec'))
             grid[row,1].plot(ind_avg.time_values, ind_avg.data - base)
             grid[row,2].plot(ind_dec.time_values, ind_dec.data)
+            grid[row,0].setYLink(grid[row, 1])
         else:
             print ("%s not enough sweeps for trains" % connection_type)
+            grid[row,0].setYLink(grid[0,1])
