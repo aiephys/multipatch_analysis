@@ -451,7 +451,7 @@ class EvokedResponseGroup(object):
         self.commands = []
         self._bsub_mean = None
 
-    def add(self, response, baseline, pre_spike, stim_command):
+    def add(self, response, baseline, pre_spike=None, stim_command=None):
         self.responses.append(response)
         self.baselines.append(baseline)
         self.spikes.append(pre_spike)
