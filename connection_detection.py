@@ -178,18 +178,23 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         pulses = [p[0] for p in pulse_stim.pulses() if p[2] > 0]
         
         post_trace = post_rec['primary']
+        pre_trace = pre_rec['primary']
+        stim_command = pre_rec['command']
+
         dt = post_trace.dt
         start = pulses[start_pulse] + int(padding[0]/dt)
         stop = pulses[stop_pulse] + int(padding[1]/dt)
         assert start > 0
         
         response = post_trace[start:stop]
+        pre_spike = pre_trace[start:stop]
+        command = stim_command[start:stop]
         
         bstop = pulses[8] - int(10e-3/dt)
         bstart = bstop - int(200e-3/dt)
         baseline = post_trace[bstart:bstop]
         
-        return response, baseline
+        return response, baseline, pre_spike, command
         
 
 
@@ -442,11 +447,15 @@ class EvokedResponseGroup(object):
         self.kwds = kwds
         self.responses = []
         self.baselines = []
+        self.spikes = []
+        self.commands = []
         self._bsub_mean = None
 
-    def add(self, response, baseline):
+    def add(self, response, baseline, pre_spike, stim_command):
         self.responses.append(response)
         self.baselines.append(baseline)
+        self.spikes.append(pre_spike)
+        self.commands.append(stim_command)
         self._bsub_mean = None
 
     def __len__(self):
