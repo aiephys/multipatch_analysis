@@ -137,7 +137,11 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
             
             # Extract data from postsynaptic recording
             pulse['response'] = post_rec['primary'][pulse['rec_start']:pulse['rec_stop']]
-            
+
+            # Extract presynaptic spike and stimulus command
+            pulse['pre_rec'] = pre_rec['primary'][pulse['rec_start']:pulse['rec_stop']]
+            pulse['command'] = pre_rec['command'][pulse['rec_start']:pulse['rec_stop']]
+
             # select baseline region between 8th and 9th pulses
             # (ideally we should use more careful criteria for selecting a baseline region)
             baseline_dur = int(10e-3 / dt)
