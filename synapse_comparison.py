@@ -14,6 +14,8 @@ import os
 import pickle
 import pyqtgraph.multiprocess as mp
 import numpy as np
+import datetime
+import re
 
 from synaptic_dynamics import DynamicsAnalyzer
 from experiment_list import ExperimentList
@@ -22,7 +24,15 @@ from connection_detection import trace_mean
 from neuroanalysis.data import Trace
 from scipy import stats
 from neuroanalysis.ui.plot_grid import PlotGrid
+from constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
 
+
+
+def arg_to_date(arg):
+    if arg is None:
+        return None
+    parts = re.split('\D+', arg)
+    return datetime.date(*map(int, parts))
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--cre-type', type=str, help='Enter as pretype-posttype. If comparing connection types separate'
@@ -31,6 +41,9 @@ parser.add_argument('--calcium', action='store_true', default=False, dest='calci
                     help='cre-type must also be specified')
 parser.add_argument('--age', type=str, help='Enter age ranges separated by ",". Ex 40-50,60-70.'
                     '' 'cre-type must also be specified')
+parser.add_argument('--recip', action='store_true', default=False, dest='recip',
+                    help='Traces from reciprocal connections are red instead of gray')
+parser.add_argument('--start', type=arg_to_date)
 
 args = parser.parse_args(sys.argv[1:])
 
@@ -84,13 +97,29 @@ def first_pulse_plot(expt_list, name=None):
         for pre, post in expt.connections:
             if expt.cells[pre].cre_type == cre_type[0] and expt.cells[post].cre_type == cre_type[1]:
                 avg_est, avg_amp, n_sweeps = avg_first_pulse(expt, pre, post)
+                if expt.cells[pre].cre_type in EXCITATORY_CRE_TYPES and avg_est < 0:
+                    continue
+                elif expt.cells[pre].cre_type in INHIBITORY_CRE_TYPES and avg_est > 0:
+                    continue
                 if n_sweeps >= 10:
                     avg_amp.t0 = 0
                     avg_ests.append(avg_est)
                     base = float_mode(avg_amp.data[:int(10e-3 / avg_amp.dt)])
                     amp_base_subtract.append(avg_amp.copy(data=avg_amp.data - base))
-                    amp_plots.plot(avg_amp.time_values, avg_amp.data - base)
+
+                    current_connection_HS = post, pre
+                    if len(expt.connections) > 1 and args.recip is True:
+                        for i,x in enumerate(expt.connections):
+                            if x == current_connection_HS:  # determine if a reciprocal connection
+                                amp_plots.plot(avg_amp.time_values, avg_amp.data - base, pen={'color': 'r', 'width': 1})
+                                break
+                            elif x != current_connection_HS and i == len(expt.connections) - 1:  # reciprocal connection was not found
+                                amp_plots.plot(avg_amp.time_values, avg_amp.data - base)
+                    else:
+                        amp_plots.plot(avg_amp.time_values, avg_amp.data - base)
+
                     app.processEvents()
+
     if len(amp_base_subtract) != 0:
         grand_mean = trace_mean(amp_base_subtract)
         grand_est = np.mean(np.array(avg_ests))
@@ -122,58 +151,64 @@ def summary_plot(grand_mean, avg_est, grand_est, i, plot=None, color=None, name=
                      symbolSize=10)
     return plot
 
-if args.cre_type is not None and len(args.cre_type.split(',')) == 1:
-    cre_type = args.cre_type.split('-')
-    if args.calcium is True:
-        expts = all_expts.select(cre_type=cre_type, calcium='high')
+if args.cre_type is not None:
+    cre_types = args.cre_type.split(',')
+    if args.calcium is True and len(cre_types) == 1:
+        cre_type = cre_types.split('-')
+        expts = all_expts.select(cre_type=cre_type, calcium='high', start=args.start)
         legend = ("%s->%s, calcium = 2.0mM " % (cre_type[0], cre_type[1]))
         dist_plots = expts.distance_plot(cre_type[0], cre_type[1], color=(0, 10), name=legend)
         grand_mean, avg_est_high, grand_est = first_pulse_plot(expts, name=legend)
         if grand_mean is not None:
-            print(legend + 'Grand mean amplitude = %f' % grand_est)
+            print(legend + ' Grand mean amplitude = %f' % grand_est)
             amp_plots = summary_plot(grand_mean, avg_est_high, grand_est, i=0, plot=None, color=(0, 10), name=legend)
-        expts = all_expts.select(calcium='low')
+        expts = all_expts.select(cre_type=cre_type, calcium='low', start=args.start)
         legend = ("%s->%s, calcium = 1.3mM " % (cre_type[0], cre_type[1]))
         expts.distance_plot(cre_type[0], cre_type[1], plots=dist_plots, color=(5, 10), name=legend)
         grand_mean, avg_est_low, grand_est = first_pulse_plot(expts, name=legend)
         if grand_mean is not None:
-            print(legend + 'Grand mean amplitude = %f' % grand_est)
+            print(legend + ' Grand mean amplitude = %f' % grand_est)
             amp_plots = summary_plot(grand_mean, avg_est_low, grand_est, i=1, plot=amp_plots, color=(5, 10), name=legend)
         ks = stats.ks_2samp(avg_est_high, avg_est_low)
         print('p = %f (KS test)' % ks.pvalue)
         #amp_plots[0].addLegend('p = %f (KS test)' % ks.pvalue)
-    elif args.age is not None:
+    elif args.age is not None and len(args.age.split(',')) >= 2 and len(cre_types) == 1:
+        cre_type = cre_types.split('-')
         ages = args.age.split(',')
-        if len(ages) < 2:
-            print("Please specify more than one age range")
-        expts = all_expts.select(age=ages[0])
+        expts = all_expts.select(age=ages[0], start=args.start)
         legend = ("%s->%s, age = P%s " % (cre_type[0], cre_type[1], ages[0]))
         dist_plots = expts.distance_plot(cre_type[0], cre_type[1], color=(0, 10), name=legend)
         grand_mean, avg_est_age1, grand_est = first_pulse_plot(expts, name=legend)
         if grand_mean is not None:
-            print(legend + 'Grand mean amplitude = %f' % grand_est)
+            print(legend + ' Grand mean amplitude = %f' % grand_est)
             amp_plots = summary_plot(grand_mean, avg_est_age1, grand_est, i=0, plot=None, color=(0, 10), name=legend)
-        expts = all_expts.select(age=ages[1])
+        expts = all_expts.select(age=ages[1], start=args.start)
         legend = ("%s->%s, age = P%s " % (cre_type[0], cre_type[1], ages[1]))
         expts.distance_plot(cre_type[0], cre_type[1], plots=dist_plots, color=(5, 10), name=legend)
         grand_mean, avg_est_age2, grand_est = first_pulse_plot(expts, name=legend)
         if grand_mean is not None:
-            print(legend + 'Grand mean amplitude = %f' % grand_est)
+            print(legend + ' Grand mean amplitude = %f' % grand_est)
             amp_plots = summary_plot(grand_mean, avg_est_age2, grand_est, i=1, plot=amp_plots, color=(5, 10), name=legend)
         ks = stats.ks_2samp(avg_est_age1, avg_est_age2)
         print('p = %f (KS test)' % ks.pvalue)
-elif args.cre_type is None and (args.calcium is not None or args.age is not None):
-    print('Error: in order to compare across conditions a single cre-type connection must be specified')
-else:
-    cre_types = args.cre_type.split(',')
-    dist_plots = None
-    amp_plots = None
-    for i, type in enumerate(cre_types):
-        cre_type = type.split('-')
-        expts = all_expts.select(cre_type=cre_type, age=args.age, calcium='High')
-        legend = ("%s->%s" % (cre_type[0], cre_type[1]))
-        dist_plots = expts.distance_plot(cre_type[0], cre_type[1], plots=dist_plots, color=(i, len(cre_types)*1.3))
-        grand_mean, avg_est, grand_est = first_pulse_plot(expts, name=legend)
-        if grand_mean is not None:
-            print(legend + 'Grand mean amplitude = %f' % grand_est)
-            amp_plots = summary_plot(grand_mean, avg_est, grand_est, i=i, plot=amp_plots, color=(i, len(cre_types)*1.3), name=legend)
+    elif args.cre_type is None and (args.calcium is not None or args.age is not None):
+        print('Error: in order to compare across conditions a single cre-type connection must be specified')
+    else:
+        dist_plots = None
+        amp_plots = None
+        for i, type in enumerate(cre_types):
+            cre_type = type.split('-')
+            expts = all_expts.select(cre_type=cre_type, age=args.age, calcium='High', start=args.start)
+            legend = ("%s->%s" % (cre_type[0], cre_type[1]))
+            reciprocal_summary = expts.reciprocal(cre_type[0], cre_type[1])
+            dist_plots = expts.distance_plot(cre_type[0], cre_type[1], plots=dist_plots, color=(i, len(cre_types)*1.3))
+            grand_mean, avg_est, grand_est = first_pulse_plot(expts, name=legend)
+            print(legend + ' %d/%d (%0.02f%%) uni-directional, %d/%d (%0.02f%%) reciprocal' % (
+              reciprocal_summary[tuple(cre_type)]['Uni-directional'], reciprocal_summary[tuple(cre_type)]['Total_connections'],
+              100 * reciprocal_summary[tuple(cre_type)]['Uni-directional']/reciprocal_summary[tuple(cre_type)]['Total_connections'],
+              reciprocal_summary[tuple(cre_type)]['Reciprocal'],
+              reciprocal_summary[tuple(cre_type)]['Total_connections'],
+              100 * reciprocal_summary[tuple(cre_type)]['Reciprocal']/reciprocal_summary[tuple(cre_type)]['Total_connections']))
+            if grand_mean is not None:
+                print(legend + ' Grand mean amplitude = %f' % grand_est)
+                amp_plots = summary_plot(grand_mean, avg_est, grand_est, i=i, plot=amp_plots, color=(i, len(cre_types)*1.3), name=legend)
