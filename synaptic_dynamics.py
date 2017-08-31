@@ -152,14 +152,14 @@ class DynamicsAnalyzer(object):
             stim_params = analyzer.stim_params(pre_rec) + (post_rec.rounded_holding_potential(),)
             pulse_responses.setdefault(stim_params, []).append(resp)
             
-            ind, base, spike, command = analyzer.get_train_response(pre_rec, post_rec, 0, 7, padding=(-pre_pad, post_pad))
-            rec, base, spike, command = analyzer.get_train_response(pre_rec, post_rec, 8, 11, padding=(-pre_pad, post_pad))
+            ind, base, ind_spike, ind_command = analyzer.get_train_response(pre_rec, post_rec, 0, 7, padding=(-pre_pad, post_pad))
+            rec, base, rec_spike, rec_command = analyzer.get_train_response(pre_rec, post_rec, 8, 11, padding=(-pre_pad, post_pad))
             ind.t0 = 0
             rec.t0 = 0
             if stim_params not in train_responses:
                 train_responses[stim_params] = (EvokedResponseGroup(), EvokedResponseGroup())
-            train_responses[stim_params][0].add(ind, base, spike, command)
-            train_responses[stim_params][1].add(rec, base, spike, command)
+            train_responses[stim_params][0].add(ind, base, ind_spike, ind_command)
+            train_responses[stim_params][1].add(rec, base, rec_spike, rec_command)
             
             dt = pre_rec['command'].dt
             if stim_params not in pulse_offsets:
