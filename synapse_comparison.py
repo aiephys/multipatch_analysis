@@ -20,8 +20,7 @@ import re
 from synaptic_dynamics import DynamicsAnalyzer
 from experiment_list import ExperimentList
 from neuroanalysis.baseline import float_mode
-from connection_detection import trace_mean
-from neuroanalysis.data import Trace
+from neuroanalysis.data import Trace, TraceList
 from scipy import stats
 from neuroanalysis.ui.plot_grid import PlotGrid
 from constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
@@ -121,7 +120,7 @@ def first_pulse_plot(expt_list, name=None):
                     app.processEvents()
 
     if len(amp_base_subtract) != 0:
-        grand_mean = trace_mean(amp_base_subtract)
+        grand_mean = TraceList(amp_base_subtract).mean()
         grand_est = np.mean(np.array(avg_ests))
         amp_plots.addLegend()
         amp_plots.plot(grand_mean.time_values, grand_mean.data, pen={'color': 'g', 'width': 3}, name=name)
