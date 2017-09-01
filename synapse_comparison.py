@@ -24,6 +24,7 @@ from connection_detection import trace_mean
 from neuroanalysis.data import Trace
 from scipy import stats
 from neuroanalysis.ui.plot_grid import PlotGrid
+from constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
 
 
 
@@ -40,6 +41,8 @@ parser.add_argument('--calcium', action='store_true', default=False, dest='calci
                     help='cre-type must also be specified')
 parser.add_argument('--age', type=str, help='Enter age ranges separated by ",". Ex 40-50,60-70.'
                     '' 'cre-type must also be specified')
+parser.add_argument('--recip', action='store_true', default=False, dest='recip',
+                    help='Traces from reciprocal connections are red instead of gray')
 parser.add_argument('--start', type=arg_to_date)
 
 args = parser.parse_args(sys.argv[1:])
@@ -94,13 +97,29 @@ def first_pulse_plot(expt_list, name=None):
         for pre, post in expt.connections:
             if expt.cells[pre].cre_type == cre_type[0] and expt.cells[post].cre_type == cre_type[1]:
                 avg_est, avg_amp, n_sweeps = avg_first_pulse(expt, pre, post)
+                if expt.cells[pre].cre_type in EXCITATORY_CRE_TYPES and avg_est < 0:
+                    continue
+                elif expt.cells[pre].cre_type in INHIBITORY_CRE_TYPES and avg_est > 0:
+                    continue
                 if n_sweeps >= 10:
                     avg_amp.t0 = 0
                     avg_ests.append(avg_est)
                     base = float_mode(avg_amp.data[:int(10e-3 / avg_amp.dt)])
                     amp_base_subtract.append(avg_amp.copy(data=avg_amp.data - base))
-                    amp_plots.plot(avg_amp.time_values, avg_amp.data - base)
+
+                    current_connection_HS = post, pre
+                    if len(expt.connections) > 1 and args.recip is True:
+                        for i,x in enumerate(expt.connections):
+                            if x == current_connection_HS:  # determine if a reciprocal connection
+                                amp_plots.plot(avg_amp.time_values, avg_amp.data - base, pen={'color': 'r', 'width': 1})
+                                break
+                            elif x != current_connection_HS and i == len(expt.connections) - 1:  # reciprocal connection was not found
+                                amp_plots.plot(avg_amp.time_values, avg_amp.data - base)
+                    else:
+                        amp_plots.plot(avg_amp.time_values, avg_amp.data - base)
+
                     app.processEvents()
+
     if len(amp_base_subtract) != 0:
         grand_mean = trace_mean(amp_base_subtract)
         grand_est = np.mean(np.array(avg_ests))

@@ -6,7 +6,7 @@ import pyqtgraph as pg
 from neuroanalysis.spike_detection import detect_evoked_spike
 from neuroanalysis.stats import ragged_mean
 from neuroanalysis.stimuli import square_pulses
-from neuroanalysis.data import Trace
+from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.fitting import StackedPsp
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.filter import bessel_filter
@@ -475,14 +475,14 @@ class EvokedResponseGroup(object):
             
             # downsample all traces to the same rate
             # yarg: how does this change SNR?
-            avg = trace_mean(responses)
-            avg_baseline = trace_mean(baselines).data
+            avg = TraceList(responses).mean()
+            avg_baseline = TraceList(baselines).mean().data
 
             # subtract baseline
             baseline = np.median(avg_baseline)
             bsub = avg.data - baseline
 
-            result = Trace(bsub, dt=avg.dt, time_values=avg.time_values)
+            result = avg.copy(data=bsub)
             assert len(result.time_values) == len(result)
 
             # Attach some extra metadata to the result:
@@ -504,22 +504,6 @@ class EvokedResponseGroup(object):
         if response is None:
             return None
         return fit_psp(response, **kwds)
-
-
-def trace_mean(traces):
-    """Return the mean of a list of traces.
-
-    Downsamples to the minimum rate and clips ragged edges.
-    """
-    max_dt = max([trace.dt for trace in traces])
-    downsampled = [trace.downsample(n=int(max_dt/trace.dt)) for trace in traces]
-    avg = ragged_mean([d.data for d in downsampled], method='clip')
-    tvals = downsampled[0].time_values[:len(avg)]
-    return Trace(avg, time_values=tvals)
-
-
-
-
 
 
 def fit_psp(response, mode='ic', sign='any', xoffset=11e-3, yoffset=(0, 'fixed'), mask_stim_artifact=True, method='leastsq', fit_kws=None, **kwds):
