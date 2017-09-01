@@ -54,6 +54,10 @@ if __name__ == '__main__':
     
     # collect all first pulse responses
     responses = analyzer.amp_group
+    
+    # collect all events
+    #responses = analyzer.all_events
+    
     n_responses = len(responses)
     
     # do exponential deconvolution on all responses
@@ -63,6 +67,9 @@ if __name__ == '__main__':
     for i in range(n_responses):
         r = responses.responses[i]
         grid1[0, 0].plot(r.time_values, r.data)
+        
+        filt = bessel_filter(r - np.median(r.time_slice(0, 10e-3).data), 300.)
+        responses.responses[i] = filt
         
         dec = exp_deconvolve(r, 15e-3)
         baseline = np.median(dec.data[:100])
@@ -74,7 +81,7 @@ if __name__ == '__main__':
     grid1.show()
     
 
-    def measure_amp(trace, baseline=(6e-3, 8e-3), response=(12e-3, 20e-3)):
+    def measure_amp(trace, baseline=(6e-3, 8e-3), response=(13e-3, 17e-3)):
         baseline = trace.time_slice(*baseline).data.mean()
         peak = trace.time_slice(*response).data.max()
         return peak - baseline
@@ -96,7 +103,7 @@ if __name__ == '__main__':
         np.random.shuffle(inds)
         for i in range(iters):
             tl = TraceList([deconv[k] for k in inds[n*i:n*(i+1)]])
-            x.append(n)
+            x.append(n + np.random.normal(scale=0.1))
             
             # calculate amplitude from averaged trace
             avg = tl.mean()
