@@ -3,7 +3,7 @@ import argparse
 import pyqtgraph as pg
 from experiment_list import ExperimentList
 from synaptic_dynamics import DynamicsAnalyzer
-from connection_detection import trace_mean
+from neuroanalysis.data import TraceList
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.filter import bessel_filter
 from neuroanalysis.event_detection import exp_deconvolve
@@ -13,9 +13,7 @@ from neuroanalysis.ui.plot_grid import PlotGrid
 app = pg.mkQApp()
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
-spike_color = (169, 169, 169)
-stim_color = (211, 211, 211)
-response_color = 'k'
+grey = (169, 169, 169)
 
 parser = argparse.ArgumentParser()
 # specify each connection for example figure as exp ID, pre_cell, post_cell
@@ -23,6 +21,8 @@ parser.add_argument('--tlx3', nargs=3, type=int)
 parser.add_argument('--sim1', nargs=3, type=int)
 parser.add_argument('--rorb', nargs=3, type=int)
 parser.add_argument('--l23pyr', nargs=3, type=int)
+parser.add_argument('--sweeps', action='store_true', default=False, dest='sweeps',
+                    help='plot individual sweeps behing average')
 
 args = vars(parser.parse_args(sys.argv[1:]))
 all_expts = ExperimentList(cache='expts_cache.pkl')
@@ -44,19 +44,18 @@ grid[0, 2].hideAxis('bottom')
 grid[0, 2].hideAxis('left')
 
 grid_positions = {'l23pyr': range(1, 3), 'rorb': range(3, 5), 'sim1': range(5, 7), 'tlx3': range(7, 9)}
-grid[0,0].setTitle(title='First Pulse')
-grid[0,1].setTitle(title='50 Hz Train')
-grid[0,2].setTitle(title='Exponential Deconvolution')
+grid[0, 0].setTitle(title='First Pulse')
+grid[0, 1].setTitle(title='50 Hz Train')
+grid[0, 2].setTitle(title='Exponential Deconvolution')
 ii = 0
-for connection_type, expt_id in args.items():
-    if expt_id is not None:
+for connection_type in grid_positions.keys():
+    if args[connection_type] is not None:
         ii += 1
-        expt_ind = expt_id[0]
-        pre_cell = expt_id[1]
-        post_cell = expt_id[2]
+        expt_ind = args[connection_type][0]
+        pre_cell = args[connection_type][1]
+        post_cell = args[connection_type][2]
         expt = all_expts[expt_ind]
         row = grid_positions[connection_type]
-        grid[row[1],0].addLegend()
 
         analyzer = DynamicsAnalyzer(expt, pre_cell, post_cell)
         if len(analyzer.pulse_responses) == 0:
@@ -67,7 +66,7 @@ for connection_type, expt_id in args.items():
         tau = 15e-3
         lp = 1000
         sweep_list = {'response': [], 'spike': [], 'command': []}
-        ind = {'response': [], 'spike': []}
+        ind = {'response': [], 'spike': [], 'dec': []}
         n_sweeps = len(amp_group)
         if n_sweeps == 0:
             print "No Sweeps"
@@ -85,21 +84,32 @@ for connection_type, expt_id in args.items():
                 sweep_list['spike'].append(pre_spike.copy(data=pre_spike.data - pre_base))
                 sweep_list['command'].append(amp_group.commands[sweep])
         if len(sweep_list['response']) > 5:
-            avg_first_pulse = trace_mean(sweep_list['response'])
+            n = len(sweep_list['response'])
+            if args['sweeps'] is True:
+                for sweep in range(n):
+                    current_sweep = sweep_list['response'][sweep]
+                    current_spike = sweep_list['spike'][sweep]
+                    grid[row[1], 0].plot(current_sweep.time_values, current_sweep.data, pen=grey)
+                    grid[row[0], 0].plot(current_spike.time_values, current_spike.data, pen=grey)
+            avg_first_pulse = TraceList(sweep_list['response']).mean()
             avg_first_pulse.t0 = 0
-            avg_spike = trace_mean(sweep_list['spike'])
+            avg_spike = TraceList(sweep_list['spike']).mean()
             avg_spike.t0 = 0
-            grid[row[1],0].setLabels(left=('Vm', 'V'))
-            grid[row[1],0].setLabels(bottom=('t', 's'))
-            grid[row[1],0].plot(avg_first_pulse.time_values, avg_first_pulse.data, pen={'color': response_color, 'width': 2}, name=connection_type)
-            grid[row[0],0].setLabels(left=('Vm', 'V'))
-            grid[row[0],0].plot(avg_spike.time_values, avg_spike.data, pen=spike_color)
+            grid[row[1], 0].setLabels(left=('Vm', 'V'))
+            grid[row[1], 0].setLabels(bottom=('t', 's'))
+            grid[row[1], 0].plot(avg_first_pulse.time_values, avg_first_pulse.data, pen={'color': 'k', 'width': 2})
+            grid[row[0], 0].setLabels(left=('Vm', 'V'))
+            grid[row[0], 0].plot(avg_spike.time_values, avg_spike.data, pen='k')
+            label = pg.LabelItem('%s, n = %d' % (connection_type, n))
+            label.setParentItem(grid[row[1], 0].vb)
+            label.setPos(50, 0)
+            grid[row[1], 0].label = label
         else:
             print ("%s not enough sweeps for first pulse" % connection_type)
         if ii == 1:
-            stim_command = trace_mean(sweep_list['command'])
+            stim_command = TraceList(sweep_list['command']).mean()
             stim_command.t0 = 0
-            grid[0, 0].plot(stim_command.time_values, stim_command.data, pen=stim_color)
+            grid[0, 0].plot(stim_command.time_values, stim_command.data, pen=grey)
             grid[0, 0].setLabels(left=('', ''))
             grid[0, 0].getAxis('left').setOpacity(0)
         train_responses = analyzer.train_responses
@@ -108,27 +118,42 @@ for connection_type, expt_id in args.items():
                 if len(train_responses[stim_params][0]) != 0:
                     ind_group = train_responses[stim_params][0]
                     for j in range(len(ind_group)):
-                        ind['response'].append(ind_group.responses[j])
+                        train_trace = ind_group.responses[j]
+                        ind_base = float_mode(train_trace.data[:int(10e-3 / train_trace.dt)])
+                        ind['response'].append(train_trace.copy(data=train_trace.data - ind_base))
+                        dec_trace = bessel_filter(exp_deconvolve(train_trace, tau), lp)
+                        dec_base = float_mode(dec_trace.data[:int(10e-3 / dec_trace.dt)])
+                        ind['dec'].append(dec_trace.copy(data=dec_trace.data - dec_base))
                         ind['spike'].append(ind_group.spikes[j])
         if len(ind['response']) > 5:
-            ind_avg = trace_mean(ind['response'])
+            n = len(ind['response'])
+            if args['sweeps'] is True:
+                for sweep in range(n):
+                    train_sweep = ind['response'][sweep]
+                    dec_sweep = ind['dec'][sweep]
+                    grid[row[1], 1].plot(train_sweep.time_values, train_sweep.data, pen=grey)
+                    grid[row[1], 2].plot(dec_sweep.time_values, dec_sweep.data, pen=grey)
+            ind_avg = TraceList(ind['response']).mean()
             ind_avg.t0 = 0
-            ind_base = float_mode(ind_avg.data[:int(10e-3 / ind_avg.dt)])
-            ind_dec = bessel_filter(exp_deconvolve(ind_avg, tau), lp)
+            ind_dec = TraceList(ind['dec']).mean()
             ind_dec.t0 = 0
-            train_spike = trace_mean(ind['spike'])
+            train_spike = TraceList(ind['spike']).mean()
             train_spike.t0 = 0
             spike_base = float_mode(train_spike.data[:int(10e-3 / train_spike.dt)])
-            stim_command = trace_mean(ind_group.commands)
+            stim_command = TraceList(ind_group.commands).mean()
             stim_command.t0 = 0
-            grid[row[1],1].setLabels(left=('Vm','V'))
-            grid[row[1],1].setLabels(bottom=('t', 's'))
-            grid[row[1],2].setLabels(bottom=('t', 's'))
-            grid[row[1],1].plot(ind_avg.time_values, ind_avg.data - ind_base, pen={'color': response_color, 'width': 2})
+            grid[row[1], 1].setLabels(left=('Vm','V'))
+            grid[row[1], 1].setLabels(bottom=('t', 's'))
+            grid[row[1], 2].setLabels(bottom=('t', 's'))
+            grid[row[1], 1].plot(ind_avg.time_values, ind_avg.data, pen={'color': 'k', 'width': 2})
             grid[row[0], 1].setLabels(left=('Vm', 'V'))
-            grid[row[0], 1].plot(train_spike.time_values, train_spike.data - spike_base, pen=spike_color)
-            grid[row[1],2].plot(ind_dec.time_values, ind_dec.data, pen={'color': response_color, 'width': 2})
-            grid[row[1],0].setYLink(grid[row[1], 1])
+            grid[row[0], 1].plot(train_spike.time_values, train_spike.data - spike_base, pen=grey)
+            grid[row[1], 2].plot(ind_dec.time_values, ind_dec.data, pen={'color': 'k', 'width': 2})
+            grid[row[1], 0].setYLink(grid[row[1], 1])
+            label = pg.LabelItem('n = %d' % n)
+            label.setParentItem(grid[row[1], 1].vb)
+            label.setPos(50, 0)
+            grid[row[1], 1].label = label
         else:
             print ("%s not enough sweeps for trains" % connection_type)
             grid[row[1], 0].setYLink(grid[2, 1])
@@ -141,8 +166,8 @@ for connection_type, expt_id in args.items():
             grid[row[1], 1].hideAxis('left')
             grid[row[1], 2].hideAxis('left')
         if ii == 1:
-            stim_command = trace_mean(ind_group.commands)
+            stim_command = TraceList(ind_group.commands).mean()
             stim_command.t0 = 0
-            grid[0, 1].plot(stim_command.time_values, stim_command.data, pen=stim_color)
+            grid[0, 1].plot(stim_command.time_values, stim_command.data, pen=grey)
             grid[0, 1].setLabels(left=('', ''))
             grid[0, 1].getAxis('left').setOpacity(0)
