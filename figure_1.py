@@ -24,10 +24,13 @@ parser.add_argument('--l23pyr', nargs=3, type=int)
 parser.add_argument('--sweeps', action='store_true', default=False, dest='sweeps',
                     help='plot individual sweeps behing average')
 parser.add_argument('--trains', action='store_true', default=False, dest='trains', help='plot 50Hz train and deconvolution')
+parser.add_argument('--axis', type=str, help='choose linked (to link all grid y-axes) or overlay (generate new'
+                                                      'plot with first pulse responses overlaid)')
 
 args = vars(parser.parse_args(sys.argv[1:]))
 plot_sweeps =args['sweeps']
 plot_trains = args['trains']
+axis = args['axis']
 all_expts = ExperimentList(cache='expts_cache.pkl')
 
 grid = PlotGrid()
@@ -44,12 +47,16 @@ for g in range(1, grid.shape[0], 2):
         grid[g, 1].hideAxis('bottom')
         grid[g, 2].hideAxis('bottom')
         grid[g, 2].hideAxis('left')
+        grid[g + 1, 2].hideAxis('left')
+grid.grid.ci.layout.setRowStretchFactor(0, 1)
+grid[0, 0].hideAxis('bottom')
 if plot_trains is True:
-    grid.grid.ci.layout.setRowStretchFactor(0, 1)
-    grid[0, 0].hideAxis('bottom')
     grid[0, 1].hideAxis('bottom')
     grid[0, 2].hideAxis('bottom')
     grid[0, 2].hideAxis('left')
+if axis == 'overlay':
+    overlay_plot = pg.plot()
+    overlay_plot.addLegend()
 
 grid_positions = {'l23pyr': range(1, 3), 'rorb': range(3, 5), 'sim1': range(5, 7), 'tlx3': range(7, 9)}
 grid[0, 0].setTitle(title='First Pulse')
@@ -106,9 +113,11 @@ for connection_type in grid_positions.keys():
             avg_spike.t0 = 0
             grid[row[1], 0].setLabels(left=('Vm', 'V'))
             grid[row[1], 0].setLabels(bottom=('t', 's'))
+            grid[row[1], 0].setXRange(0, 30e-3)
             grid[row[1], 0].plot(avg_first_pulse.time_values, avg_first_pulse.data, pen={'color': 'k', 'width': 2})
             grid[row[0], 0].setLabels(left=('Vm', 'V'))
             grid[row[0], 0].plot(avg_spike.time_values, avg_spike.data, pen='k')
+            grid[row[0], 0].setXLink(grid[row[1], 0])
             label = pg.LabelItem('%s, n = %d' % (connection_type, n))
             label.setParentItem(grid[row[1], 0].vb)
             label.setPos(50, 0)
@@ -121,6 +130,11 @@ for connection_type in grid_positions.keys():
             grid[0, 0].plot(stim_command.time_values, stim_command.data, pen=grey)
             grid[0, 0].setLabels(left=('', ''))
             grid[0, 0].getAxis('left').setOpacity(0)
+            grid[0, 0].setXLink(grid[2, 0])
+        if axis == 'overlay':
+            overlay_plot.plot(avg_first_pulse.time_values, avg_first_pulse.data, pen=(ii, len(grid_positions.keys())*1.3), name=connection_type)
+            overlay_plot.setLabels(left=('Vm', 'V'))
+            overlay_plot.setLabels(bottom=('t', 's'))
         if plot_trains is True:
             train_responses = analyzer.train_responses
             for i, stim_params in enumerate(train_responses.keys()):
@@ -181,3 +195,4 @@ for connection_type in grid_positions.keys():
                 grid[0, 1].plot(stim_command.time_values, stim_command.data, pen=grey)
                 grid[0, 1].setLabels(left=('', ''))
                 grid[0, 1].getAxis('left').setOpacity(0)
+                grid[0, 1].setXLink(grid[2, 1])
