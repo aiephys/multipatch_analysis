@@ -591,8 +591,7 @@ if __name__ == '__main__':
     app = pg.mkQApp()
     pg.dbg()
     
-    arg = sys.argv[1]
-    expt_ind = int(arg)
+    expt_ind = sys.argv[1]
     all_expts = ExperimentList(cache='expts_cache.pkl')
     expt = all_expts[expt_ind]
 

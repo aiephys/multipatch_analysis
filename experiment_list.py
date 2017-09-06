@@ -8,6 +8,7 @@ import scipy.stats
 import sys
 import traceback
 import warnings
+import datetime
 
 import pyqtgraph as pg
 
@@ -49,17 +50,18 @@ def indentation(line):
 class ExperimentList(object):
 
     def __init__(self, expts=None, cache=None):
-        self._cache_version = 4
+        self._cache_version = 5
         self._cache = cache
         self._expts = []
-        self._expts_by_id = {}
+        self._expts_by_uid = {}
+        self._expts_by_source_id = {}
         self.start_skip = []
         self.stop_skip = []
 
         if expts is not None:
             for expt in expts:
                 self._add_experiment(expt)
-        if cache is not None:
+        if cache is not None and os.path.isfile(cache):
             try:
                 self.load(cache)
             except Exception:
@@ -112,7 +114,7 @@ class ExperimentList(object):
         for entry in root.children:
             try:
                 expt_id = Experiment.id_from_entry(entry)
-                if expt_id in self._expts_by_id:
+                if expt_id in self._expts_by_source_id:
                     # Already have this experiment cached
                     cached += 1
                     continue
@@ -137,7 +139,9 @@ class ExperimentList(object):
 
     def _add_experiment(self, expt):
         self._expts.append(expt)
-        self._expts_by_id[expt.expt_id] = expt
+        assert expt.uid not in self._expts_by_uid
+        self._expts_by_uid[expt.uid] = expt
+        self._expts_by_source_id[expt.source_id] = expt
 
     def write_cache(self):
         if self._cache is None:
@@ -155,7 +159,7 @@ class ExperimentList(object):
                     elif '1.3mM' in ex.expt_info['solution']:
                         ex_calcium = 'low'
                 else:
-                    print("External calcium concentration not set for experiment %s" % str(ex.expt_id))
+                    print("External calcium concentration not set for experiment %s" % str(ex.source_id))
                     continue
             if age is not None:
                 age_range = sorted([int(i) for i in age.split('-')])
@@ -165,7 +169,7 @@ class ExperimentList(object):
                 continue
             elif region is not None and ex.region != region:
                 continue
-            elif source_files is not None and ex.expt_id[0] not in source_files:
+            elif source_files is not None and ex.source_id[0] not in source_files:
                 continue
             elif cre_type is not None and len(set(cre_type) & set(ex.cre_types)) == 0:
                 continue
@@ -182,8 +186,17 @@ class ExperimentList(object):
         return el
 
     def __getitem__(self, item):
-
-        return self._expts[item]
+        if isinstance(item, str):
+            try:
+                return self._expts_by_uid[item]
+            except KeyError:
+                try:
+                    date = datetime.datetime.fromtimestamp(float(item)).strftime('%Y-%m-%d %H:%M:%S')
+                except Exception:
+                    raise KeyError("No experiment in this list with UID '%s'" % (item,))
+                raise KeyError("No experiment in this list with UID '%s' (%s)" % (item, date))
+        else:
+            return self._expts[item]
 
     def __len__(self):
         return len(self._expts)
@@ -192,9 +205,9 @@ class ExperimentList(object):
         return self._expts.__iter__()
 
     def append(self, expt):
-        self._expts.append(expt)
+        self._add_experiment(expt)
 
-    def sort(self, key=lambda expt: expt.expt_id[1], **kwds):
+    def sort(self, key=lambda expt: expt.source_id[1], **kwds):
         self._expts.sort(key=key, **kwds)
 
     def check(self):
@@ -202,11 +215,11 @@ class ExperimentList(object):
         for expt in self:
             # make sure we have at least one non-biocytin label and one cre label
             if len(expt.cre_types) < 1:
-                print("Warning: Experiment %s has no cre-type labels" % str(expt.expt_id))
+                print("Warning: Experiment %s has no cre-type labels" % str(expt.source_id))
             if len(expt.labels) < 1 or expt.labels == ['biocytin']:
-                print("Warning: Experiment %s has no fluorescent labels" % str(expt.expt_id))
+                print("Warning: Experiment %s has no fluorescent labels" % str(expt.source_id))
             if expt.region is None:
-                print("Warning: Experiment %s has no region" % str(expt.expt_id))
+                print("Warning: Experiment %s has no region" % str(expt.source_id))
 
     def distance_plot(self, pre_type, post_type, plots=None, color=(100, 100, 255), name=None):
         # get all connected and unconnected distances for pre->post
@@ -322,7 +335,7 @@ class ExperimentList(object):
             ages.append(expt.age)
 
             fmt = "%s: %s %s %s %s %s"
-            fmt_args = [str(expt.summary_id).rjust(4), str(n_p).ljust(5), str(n_c).ljust(5), str(expt.age).ljust(7), ', '.join(expt.cre_types).ljust(15), ':'.join(expt.expt_id)]
+            fmt_args = [str(expt.summary_id).rjust(4), str(n_p).ljust(5), str(n_c).ljust(5), str(expt.age).ljust(7), ', '.join(expt.cre_types).ljust(15), ':'.join(expt.source_id)]
 
             # get list of stimuli
             if list_stims:
@@ -536,8 +549,8 @@ class ExperimentList(object):
             distance = (c1.distance(c2))*10**6
             expt = conn['expt']
             i = self._expts.index(expt)
+            print(u"%s %d->%d: \t%s -> %s; %.0f um\t%s" % (expt.uid, c1.cell_id, c2.cell_id, c1.cre_type, c2.cre_type, distance, expt.source_id))
             if 'stims' in conn:
-                print(u"%d %d->%d: \t%s -> %s; %.0f um\t%s" % (i, c1.cell_id, c2.cell_id, c1.cre_type, c2.cre_type, distance, expt.expt_id))
                 stims = conn['stims']
                 if len(stims) == 0:
                     print('no sweeps: %d %d\n' % (c1.cell_id, c2.cell_id))
@@ -547,8 +560,6 @@ class ExperimentList(object):
                 else:
                     stims = '\n'.join(["%s %s %dmV; %d,%d sweeps"% (s+(n[0],n[1])) for s,n in stims.items()])
                     print(stims)
-            else:
-                print(u"%d %d->%d: \t%s -> %s; %.0f um\t%s" % (expt.summary_id, c1.cell_id, c2.cell_id, c1.cre_type, c2.cre_type, distance, expt.expt_id))
 
         print("")
 
