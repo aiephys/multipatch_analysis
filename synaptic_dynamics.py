@@ -217,23 +217,24 @@ class DynamicsAnalyzer(object):
                     b = trial[j]['baseline']
                     s = trial[j]['pre_rec']
                     c = trial[j]['command']
-                    
+                    s.meta['spike'] = trial[j]['spike']
+
                     if ind_freq <= 20 or j in (7, 11):
                         kinetics_group.add(r, b, s, c)
                     if ind_freq <= 100 and j == 0:
                         amp_group.add(r, b, s, c)
-        
+
         self._amp_group = amp_group
         self._kinetics_group = kinetics_group
 
     def plot_train_responses(self, plot_grid=None):
         """
         Plot individual and averaged train responses for each set of stimulus parameters.
-        
+
         Return a new PlotGrid.
         """
         train_responses = self.train_responses
-        
+
         if plot_grid is None:
             train_plots = PlotGrid()
         else:

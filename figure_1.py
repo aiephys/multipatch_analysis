@@ -73,7 +73,7 @@ for connection_type in grid_positions.keys():
         expt = all_expts[expt_ind]
         row = grid_positions[connection_type]
 
-        analyzer = DynamicsAnalyzer(expt, pre_cell, post_cell)
+        analyzer = DynamicsAnalyzer(expt, pre_cell, post_cell, align_to='spike')
         if len(analyzer.pulse_responses) == 0:
             raise Exception("No suitable data found for cell %d -> cell %d in expt %s" % (pre_cell, post_cell, expt_ind))
 
