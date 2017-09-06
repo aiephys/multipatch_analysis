@@ -20,19 +20,19 @@ app = pg.mkQApp()
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
 grey = (169, 169, 169)
+sweep_color = (0, 0, 0, 5)
 
 parser = argparse.ArgumentParser()
 # plot options
 parser.add_argument('--sweeps', action='store_true', default=False, dest='sweeps',
                     help='plot individual sweeps behing average')
 parser.add_argument('--trains', action='store_true', default=False, dest='trains', help='plot 50Hz train and deconvolution')
-parser.add_argument('--axis', type=str, help='choose linked (to link all grid y-axes) or overlay (generate new'
-                                                      'plot with first pulse responses overlaid)')
+parser.add_argument('--link-y-axis', action='store_true', default=False, dest='link-y-axis', help='link all y-axis down a column')
 
 args = vars(parser.parse_args(sys.argv[1:]))
-plot_sweeps =args['sweeps']
+plot_sweeps = args['sweeps']
 plot_trains = args['trains']
-axis = args['axis']
+link_y_axis = args['link-y-axis']
 all_expts = ExperimentList(cache='expts_cache.pkl')
 
 grid = PlotGrid()
@@ -56,9 +56,6 @@ if plot_trains is True:
     grid[0, 1].hideAxis('bottom')
     grid[0, 2].hideAxis('bottom')
     grid[0, 2].hideAxis('left')
-if axis == 'overlay':
-    overlay_plot = pg.plot()
-    overlay_plot.addLegend()
 
 grid_positions = {'L23Pyr': range(1, 3), 'Rorb': range(3, 5), 'Sim1': range(5, 7), 'Tlx3': range(7, 9)}
 grid[0, 0].setTitle(title='First Pulse')
@@ -106,8 +103,8 @@ for connection_type, synapse_id in connections.items():
             for sweep in range(n):
                 current_sweep = sweep_list['response'][sweep]
                 current_spike = sweep_list['spike'][sweep]
-                grid[row[1], 0].plot(current_sweep.time_values, current_sweep.data, pen=grey)
-                grid[row[0], 0].plot(current_spike.time_values, current_spike.data, pen=grey)
+                grid[row[1], 0].plot(current_sweep.time_values, current_sweep.data, pen=sweep_color)
+                grid[row[0], 0].plot(current_spike.time_values, current_spike.data, pen=sweep_color)
         avg_first_pulse = TraceList(sweep_list['response']).mean()
         avg_first_pulse.t0 = 0
         avg_spike = TraceList(sweep_list['spike']).mean()
@@ -132,10 +129,6 @@ for connection_type, synapse_id in connections.items():
         grid[0, 0].setLabels(left=('', ''))
         grid[0, 0].getAxis('left').setOpacity(0)
         grid[0, 0].setXLink(grid[2, 0])
-    if axis == 'overlay':
-        overlay_plot.plot(avg_first_pulse.time_values, avg_first_pulse.data, pen=(ii, len(grid_positions.keys())*1.3), name=connection_type)
-        overlay_plot.setLabels(left=('Vm', 'V'))
-        overlay_plot.setLabels(bottom=('t', 's'))
     if plot_trains is True:
         train_responses = analyzer.train_responses
         for i, stim_params in enumerate(train_responses.keys()):
@@ -156,8 +149,8 @@ for connection_type, synapse_id in connections.items():
                 for sweep in range(n):
                     train_sweep = ind['response'][sweep]
                     dec_sweep = ind['dec'][sweep]
-                    grid[row[1], 1].plot(train_sweep.time_values, train_sweep.data, pen=grey)
-                    grid[row[1], 2].plot(dec_sweep.time_values, dec_sweep.data, pen=grey)
+                    grid[row[1], 1].plot(train_sweep.time_values, train_sweep.data, pen=sweep_color)
+                    grid[row[1], 2].plot(dec_sweep.time_values, dec_sweep.data, pen=sweep_color)
             ind_avg = TraceList(ind['response']).mean()
             ind_avg.t0 = 0
             ind_dec = TraceList(ind['dec']).mean()
@@ -197,3 +190,6 @@ for connection_type, synapse_id in connections.items():
             grid[0, 1].setLabels(left=('', ''))
             grid[0, 1].getAxis('left').setOpacity(0)
             grid[0, 1].setXLink(grid[2, 1])
+
+if sys.flags.interactive == 0:
+    app.exec_()
