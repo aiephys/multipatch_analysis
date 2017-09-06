@@ -70,7 +70,7 @@ class Experiment(object):
             if cell.cre_type not in cre_types:
                 cre_types.add(cell.cre_type)
             labels |= set(cell.labels.keys()) & set(ALL_LABELS)
-        self.cre_types = sorted(list(cre_types), key=lambda x: ALL_CRE_TYPES.index(x))
+        self.cre_types = sorted(list(cre_types), key=lambda x: ALL_CRE_TYPES.index(x.split(',')[0]))
         self.labels = sorted(list(labels), key=lambda x: ALL_LABELS.index(x))
 
         # make sure all cells have information for all labels
@@ -78,8 +78,9 @@ class Experiment(object):
             for label in labels:
                 assert label in cell.labels
             for cre in cre_types:
-                if cre!= 'unknown':
-                    assert cre in cell.labels
+                for crepart in cre.split(','):
+                    if crepart != 'unknown' and crepart not in cell.labels:
+                        raise Exception('Cre type "%s" not in cell.labels: %s' % (crepart, cell.labels.keys()))
 
         # read cell positions from mosaic files
         try:
