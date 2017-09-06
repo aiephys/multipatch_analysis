@@ -138,10 +138,11 @@ class ExperimentList(object):
         self.sort()
 
     def _add_experiment(self, expt):
-        self._expts.append(expt)
         assert expt.uid not in self._expts_by_uid
+        self._expts.append(expt)
         self._expts_by_uid[expt.uid] = expt
         self._expts_by_source_id[expt.source_id] = expt
+        self._expts.sort(key=lambda ex: ex.uid)
 
     def write_cache(self):
         if self._cache is None:
@@ -334,8 +335,8 @@ class ExperimentList(object):
             tot_connected += n_c
             ages.append(expt.age)
 
-            fmt = "%s: %s %s %s %s %s"
-            fmt_args = [str(expt.summary_id).rjust(4), str(n_p).ljust(5), str(n_c).ljust(5), str(expt.age).ljust(7), ', '.join(expt.cre_types).ljust(15), ':'.join(expt.source_id)]
+            fmt = "%s: %s %s %s %s"
+            fmt_args = [str(expt.uid).rjust(4), str(n_p).ljust(5), str(n_c).ljust(5), str(expt.age).ljust(7), ', '.join(expt.cre_types).ljust(15)]
 
             # get list of stimuli
             if list_stims:
@@ -549,7 +550,7 @@ class ExperimentList(object):
             distance = (c1.distance(c2))*10**6
             expt = conn['expt']
             i = self._expts.index(expt)
-            print(u"%s %d->%d: \t%s -> %s; %.0f um\t%s" % (expt.uid, c1.cell_id, c2.cell_id, c1.cre_type, c2.cre_type, distance, expt.source_id))
+            print(u"%s %d->%d: \t%s -> %s; %.0f um" % (expt.uid, c1.cell_id, c2.cell_id, c1.cre_type, c2.cre_type, distance))
             if 'stims' in conn:
                 stims = conn['stims']
                 if len(stims) == 0:
