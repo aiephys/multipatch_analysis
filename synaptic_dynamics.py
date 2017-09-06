@@ -42,6 +42,7 @@ class DynamicsAnalyzer(object):
         
         self._amp_group = None
         self._kinetics_group = None
+        self._all_events = None
         
         self._psp_estimate = {}
         
@@ -85,6 +86,12 @@ class DynamicsAnalyzer(object):
         if self._amp_group is None:
             self._get_kinetics_groups()
         return self._amp_group
+
+    @property
+    def all_events(self):
+        if self._all_events is None:
+            self._get_kinetics_groups()
+        return self._all_events
 
     @property
     def kinetics_group(self):
@@ -204,6 +211,7 @@ class DynamicsAnalyzer(object):
         pulse_responses = self.pulse_responses
         kinetics_group = EvokedResponseGroup()
         amp_group = EvokedResponseGroup()
+        all_group = EvokedResponseGroup()
         for i,stim_params in enumerate(pulse_responses.keys()):
             # collect all individual pulse responses:
             #  - we can try fitting individual responses averaged across trials
@@ -219,6 +227,7 @@ class DynamicsAnalyzer(object):
                     c = trial[j]['command']
                     s.meta['spike'] = trial[j]['spike']
 
+                    all_group.add(r, b)
                     if ind_freq <= 20 or j in (7, 11):
                         kinetics_group.add(r, b, s, c)
                     if ind_freq <= 100 and j == 0:
@@ -226,6 +235,7 @@ class DynamicsAnalyzer(object):
 
         self._amp_group = amp_group
         self._kinetics_group = kinetics_group
+        self._all_events = all_group
 
     def plot_train_responses(self, plot_grid=None):
         """
@@ -584,8 +594,7 @@ if __name__ == '__main__':
     app = pg.mkQApp()
     pg.dbg()
     
-    arg = sys.argv[1]
-    expt_ind = int(arg)
+    expt_ind = sys.argv[1]
     all_expts = ExperimentList(cache='expts_cache.pkl')
     expt = all_expts[expt_ind]
 
