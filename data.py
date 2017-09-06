@@ -12,7 +12,10 @@ class MultipatchExperiment(MiesNwb):
 class MultipatchSyncRecording(MiesSyncRecording):
     def __init__(self, nwb, sweep_id):
         MiesSyncRecording.__init__(self, nwb, sweep_id)
-        self.meta['temperature'] = self.recordings[0].meta['notebook']['Async AD 1: Bath Temperature']
+        try:
+            self.meta['temperature'] = self.recordings[0].meta['notebook']['Async AD 1: Bath Temperature']
+        except Exception:
+            self.meta['temperature'] = None
     
     def create_recording(self, sweep_id, ch):
         return MiesRecording(self, sweep_id, ch)
