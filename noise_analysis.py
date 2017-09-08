@@ -39,7 +39,8 @@ if __name__ == '__main__':
     app = pg.mkQApp()
     #pg.dbg()
     
-    expt_index, pre_id, post_id = map(int, sys.argv[1:4])
+    expt_index = sys.argv[1]
+    pre_id, post_id = map(int, sys.argv[2:4])
     
     # Load experiment index
     cache_file = 'expts_cache.pkl'
