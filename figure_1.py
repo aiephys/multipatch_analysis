@@ -62,6 +62,9 @@ grid[0, 0].setTitle(title='First Pulse')
 if plot_trains is True:
     grid[0, 1].setTitle(title='50 Hz Train')
     grid[0, 2].setTitle(title='Exponential Deconvolution')
+maxYpulse = []
+maxYtrain = []
+maxYdec = []
 ii = 0
 for connection_type, synapse_id in connections.items():
     ii += 1
@@ -91,12 +94,14 @@ for connection_type, synapse_id in connections.items():
         freq = int(freq.split('H')[0])
         if freq <= stop_freq:
             sweep_trace = amp_group.responses[sweep]
-            post_base = float_mode(sweep_trace.data[:int(10e-3 / sweep_trace.dt)])
-            pre_spike = amp_group.spikes[sweep]
-            pre_base = float_mode(pre_spike.data[:int(10e-3 / pre_spike.dt)])
-            sweep_list['response'].append(sweep_trace.copy(data=sweep_trace.data - post_base))
-            sweep_list['spike'].append(pre_spike.copy(data=pre_spike.data - pre_base))
-            sweep_list['command'].append(amp_group.commands[sweep])
+            holding_potential = int(sweep_trace.recording.holding_potential*1000)
+            if holding_potential >= -72 and holding_potential <= -68:
+                post_base = float_mode(sweep_trace.data[:int(10e-3 / sweep_trace.dt)])
+                pre_spike = amp_group.spikes[sweep]
+                pre_base = float_mode(pre_spike.data[:int(10e-3 / pre_spike.dt)])
+                sweep_list['response'].append(sweep_trace.copy(data=sweep_trace.data - post_base))
+                sweep_list['spike'].append(pre_spike.copy(data=pre_spike.data - pre_base))
+                sweep_list['command'].append(amp_group.commands[sweep])
     if len(sweep_list['response']) > 5:
         n = len(sweep_list['response'])
         if plot_sweeps is True:
@@ -120,6 +125,7 @@ for connection_type, synapse_id in connections.items():
         label.setParentItem(grid[row[1], 0].vb)
         label.setPos(50, 0)
         grid[row[1], 0].label = label
+        maxYpulse.append((row[1], grid[row[1],0].getAxis('left').range[1]))
     else:
         print ("%s not enough sweeps for first pulse" % connection_type)
     if ii == 1:
@@ -167,11 +173,12 @@ for connection_type, synapse_id in connections.items():
             grid[row[0], 1].setLabels(left=('Vm', 'V'))
             grid[row[0], 1].plot(train_spike.time_values, train_spike.data - spike_base, pen=grey)
             grid[row[1], 2].plot(ind_dec.time_values, ind_dec.data, pen={'color': 'k', 'width': 2})
-            grid[row[1], 0].setYLink(grid[row[1], 1])
             label = pg.LabelItem('n = %d' % n)
             label.setParentItem(grid[row[1], 1].vb)
             label.setPos(50, 0)
             grid[row[1], 1].label = label
+            maxYtrain.append((row[1], grid[row[1], 1].getAxis('left').range[1]))
+            maxYdec.append((row[1], grid[row[1], 2].getAxis('left').range[1]))
         else:
             print ("%s not enough sweeps for trains" % connection_type)
             grid[row[1], 0].setYLink(grid[2, 1])
@@ -190,6 +197,19 @@ for connection_type, synapse_id in connections.items():
             grid[0, 1].setLabels(left=('', ''))
             grid[0, 1].getAxis('left').setOpacity(0)
             grid[0, 1].setXLink(grid[2, 1])
+if link_y_axis is True:
+    max_row = max(maxYpulse, key=lambda x:x[1])[0]
+    for g in range(2, grid.shape[0], 2):
+        if g != max_row:
+            grid[g, 0].setYLink(grid[max_row, 0])
+        if plot_trains is True:
+            max_row_train = max(maxYtrain, key=lambda x:x[1])[0]
+            max_row_dec = max(maxYdec, key=lambda x:x[1])[0]
+            for g in range(2, grid.shape[0], 2):
+                if g != max_row_train:
+                    grid[g, 1].setYLink(grid[max_row_train, 1])
+                if g != max_row_dec:
+                    grid[g, 2].setYLink(grid[max_row_dec, 2])
 
 if sys.flags.interactive == 0:
     app.exec_()
