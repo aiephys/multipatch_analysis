@@ -10,7 +10,7 @@ import re
 import pyqtgraph as pg
 import pyqtgraph.configfile
 
-from lims import specimen_info
+from lims import specimen_info, specimen_images
 from constants import ALL_CRE_TYPES, ALL_LABELS
 from cell import Cell
 from data import MultipatchExperiment
@@ -494,17 +494,23 @@ class Experiment(object):
 
     @property
     def biocytin_image_url(self):
-        sid = self.specimen_id
-        q = """
-            select sub_images.id from specimens 
-            join image_series on image_series.specimen_id=specimens.id 
-            join sub_images on sub_images.image_series_id=image_series.id
-            where specimens.name='%s';
-            """ % sid
-        r = lims.query(q)
-        if len(r) != 1:
-            raise Exception("LIMS lookup for specimen %s returned %d results (expected 1)" % (sid, len(r)))
-        return "http://lims2/siv?sub_image=%d" % r[0]['id']
+        """A LIMS URL that points to the biocytin image for this specimen, or
+        None if no image is found.
+        """
+        images = specimen_images(self.specimen_id)
+        for img_id, treatment in images:
+            if treatment == 'Biocytin':
+                return "http://lims2/siv?sub_image=%d" % img_id
+
+    @property
+    def dapi_image_url(self):
+        """A LIMS URL that points to the DAPI image for this specimen, or
+        None if no image is found.
+        """
+        images = specimen_images(self.specimen_id)
+        for img_id, treatment in images:
+            if treatment == 'DAPI':
+                return "http://lims2/siv?sub_image=%d" % img_id
 
     @property
     def multipatch_log(self):

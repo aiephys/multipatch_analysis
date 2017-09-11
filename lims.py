@@ -17,8 +17,14 @@ def specimen_info(specimen_name):
     plane_of_section : 'coronal' or 'sagittal'
     hemisphere : 'left' or 'right'
     thickness : speimen slice thickness (unscaled meters)
-    sectioning_mount_side : the side of the tissue that was mounted during sectioning
-    section_instructions : description of the slice angle and target region used for sectioning
+    sectioning_mount_side : the side of the tissue that was mounted during
+        sectioning
+    flipped : boolean; if True, then the slice was flipped relative to its 
+        blockface image during recording
+    exposed_surface : The surface that was exposed during the experiment (right, 
+        left, anterior, or posterior)
+    section_instructions : description of the slice angle and target region
+        used for sectioning
     section_number : indicates the order this slice was sectioned (1=first)
     """
     
@@ -32,13 +38,15 @@ def specimen_info(specimen_name):
             donors.full_genotype as genotype,
             tissue_processings.section_thickness_um as thickness,
             tissue_processings.instructions as section_instructions,
-            plane_of_sections.name as plane_of_section
+            plane_of_sections.name as plane_of_section,
+            flipped_specimens.name as flipped
         from specimens
             left join donors on specimens.donor_id=donors.id 
             left join organisms on donors.organism_id=organisms.id
             left join ages on donors.age_id=ages.id
             left join tissue_processings on specimens.tissue_processing_id=tissue_processings.id
             left join plane_of_sections on tissue_processings.plane_of_section_id=plane_of_sections.id
+            left join flipped_specimens on flipped_specimens.id = specimens.flipped_specimen_id
         where specimens.name='%s';
     """ % sid
     r = lims.query(query)
@@ -50,6 +58,8 @@ def specimen_info(specimen_name):
     rec['thickness'] = rec['thickness'] * 1e-6
     # convert organism to more easily searchable form
     rec['organism'] = {'Mus musculus': 'mouse', 'Homo Sapiens': 'human'}[rec['organism']]
+    # convert flipped to bool
+    rec['flipped'] = {'flipped': True, 'not flipped': False, 'not cheched': None}[rec['flipped']]
     
     # Parse the specimen name to extract more information about the plane of section
     m = re.match(r'(.*)-(\d{6,7})(\.(\d{2}))(\.(\d{2}))$', sid)
@@ -74,7 +84,30 @@ def specimen_info(specimen_name):
     rec['hemisphere'] = hem
     rec['sectioning_mount_side'] = mount
     
+    # decide which surface was patched
+    if rec['flipped'] is True:
+        rec['exposed_surface'] = mount
+    elif rec['flipped'] is False:
+        rec['exposed_surface'] = {'anterior': 'posterior', 'posterior': 'anterior', 'right': 'left', 'left': 'right'}[mount]
+    else:    
+        rec['exposed_surface'] = None
+    
     return rec
     
     
+def specimen_images(specimen_name):
+    """Return a list of (image ID, treatment) pairs for a specimen.
     
+    """
+    q = """
+        select sub_images.id, treatments.name from specimens 
+        join image_series on image_series.specimen_id=specimens.id 
+        join sub_images on sub_images.image_series_id=image_series.id
+        join images on images.id = sub_images.image_id
+        left join treatments on treatments.id = images.treatment_id
+        where specimens.name='%s';
+        """ % specimen_name
+    r = lims.query(q)
+    return [(rec['id'], rec['name']) for rec in r]
+
+        
