@@ -50,7 +50,7 @@ def indentation(line):
 class ExperimentList(object):
 
     def __init__(self, expts=None, cache=None):
-        self._cache_version = 5
+        self._cache_version = 6
         self._cache = cache
         self._expts = []
         self._expts_by_uid = {}
@@ -149,7 +149,7 @@ class ExperimentList(object):
             raise Exception("ExperimentList has no cache file; cannot write cache.")
         pickle.dump(self, open(self._cache, 'w'))
 
-    def select(self, start=None, stop=None, region=None, source_files=None, cre_type=None, calcium=None, age=None, temp=None):
+    def select(self, start=None, stop=None, region=None, source_files=None, cre_type=None, calcium=None, age=None, temp=None, organism=None):
         expts = []
         for ex in self._expts:
             # filter experiments by experimental date and conditions
@@ -179,6 +179,8 @@ class ExperimentList(object):
             elif age is not None and ((ex.age < age_range[0]) or (ex.age > age_range[1])) :
                 continue
             elif temp is not None and ex.expt_info['temperature'][:2] != temp:
+                continue
+            elif organism is not None and ex.lims_record['organism'] != organism:
                 continue
             else:
                 expts.append(ex)
