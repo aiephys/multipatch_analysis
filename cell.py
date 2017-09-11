@@ -13,6 +13,7 @@ class Cell(object):
         self.spiking_qc = None
         self.labels = {}
         self.position = None
+        self._target_layer = None
 
     @property
     def pass_qc(self):
@@ -67,6 +68,13 @@ class Cell(object):
                     continue
                 ct = default
         return ct
+
+    @property
+    def target_layer(self):
+        """Intended cortical layer for this cell; actual layer call may be
+        different.
+        """
+        return self._target_layer
 
     @property
     def depth(self):
