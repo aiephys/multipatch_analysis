@@ -59,7 +59,7 @@ def specimen_info(specimen_name):
     # convert organism to more easily searchable form
     rec['organism'] = {'Mus musculus': 'mouse', 'Homo Sapiens': 'human'}[rec['organism']]
     # convert flipped to bool
-    rec['flipped'] = {'flipped': True, 'not flipped': False, 'not cheched': None}[rec['flipped']]
+    rec['flipped'] = {'flipped': True, 'not flipped': False, 'not checked': None}[rec['flipped']]
     
     # Parse the specimen name to extract more information about the plane of section
     m = re.match(r'(.*)-(\d{6,7})(\.(\d{2}))(\.(\d{2}))$', sid)

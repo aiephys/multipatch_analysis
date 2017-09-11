@@ -470,7 +470,7 @@ class Experiment(object):
 
     @property
     def age(self):
-        age = self.lims_record.get('days', 0)
+        age = self.lims_record.get('age', 0)
         if age == 0:
             raise Exception("Donor age not set in LIMS for specimen %s" % self.specimen_id)
             # data not entered in to lims
