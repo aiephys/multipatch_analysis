@@ -189,7 +189,7 @@ class SliceTreeItem(pg.TreeWidgetItem):
         self.fh = fh
         self.is_submittable = True
         
-        in_db = database.slice_from_timestamp(self.uid())
+        in_db = database.slice_from_timestamp(datetime.fromtimestamp(fh.info()['__timestamp__']))
         if len(in_db) == 0:
             status = "NOT SUBMITTED"
         else:
@@ -211,8 +211,6 @@ class SliceTreeItem(pg.TreeWidgetItem):
         data = {
             'image_files': files,
         }
-        
-
 
         specimen = info['specimen_ID'].strip()
         data['specimen_name'] = specimen
