@@ -8,6 +8,7 @@ import scipy.stats
 import sys
 import traceback
 import warnings
+import datetime
 
 import pyqtgraph as pg
 
@@ -49,17 +50,18 @@ def indentation(line):
 class ExperimentList(object):
 
     def __init__(self, expts=None, cache=None):
-        self._cache_version = 4
+        self._cache_version = 6
         self._cache = cache
         self._expts = []
-        self._expts_by_id = {}
+        self._expts_by_uid = {}
+        self._expts_by_source_id = {}
         self.start_skip = []
         self.stop_skip = []
 
         if expts is not None:
             for expt in expts:
                 self._add_experiment(expt)
-        if cache is not None:
+        if cache is not None and os.path.isfile(cache):
             try:
                 self.load(cache)
             except Exception:
@@ -112,7 +114,7 @@ class ExperimentList(object):
         for entry in root.children:
             try:
                 expt_id = Experiment.id_from_entry(entry)
-                if expt_id in self._expts_by_id:
+                if expt_id in self._expts_by_source_id:
                     # Already have this experiment cached
                     cached += 1
                     continue
@@ -136,15 +138,18 @@ class ExperimentList(object):
         self.sort()
 
     def _add_experiment(self, expt):
+        assert expt.uid not in self._expts_by_uid
         self._expts.append(expt)
-        self._expts_by_id[expt.expt_id] = expt
+        self._expts_by_uid[expt.uid] = expt
+        self._expts_by_source_id[expt.source_id] = expt
+        self._expts.sort(key=lambda ex: ex.uid)
 
     def write_cache(self):
         if self._cache is None:
             raise Exception("ExperimentList has no cache file; cannot write cache.")
         pickle.dump(self, open(self._cache, 'w'))
 
-    def select(self, start=None, stop=None, region=None, source_files=None, cre_type=None, calcium=None, age=None, temp=None):
+    def select(self, start=None, stop=None, region=None, source_files=None, cre_type=None, calcium=None, age=None, temp=None, organism=None):
         expts = []
         for ex in self._expts:
             # filter experiments by experimental date and conditions
@@ -155,7 +160,7 @@ class ExperimentList(object):
                     elif '1.3mM' in ex.expt_info['solution']:
                         ex_calcium = 'low'
                 else:
-                    print("External calcium concentration not set for experiment %s" % str(ex.expt_id))
+                    print("External calcium concentration not set for experiment %s" % str(ex.source_id))
                     continue
             if age is not None:
                 age_range = sorted([int(i) for i in age.split('-')])
@@ -165,7 +170,7 @@ class ExperimentList(object):
                 continue
             elif region is not None and ex.region != region:
                 continue
-            elif source_files is not None and ex.expt_id[0] not in source_files:
+            elif source_files is not None and ex.source_id[0] not in source_files:
                 continue
             elif cre_type is not None and len(set(cre_type) & set(ex.cre_types)) == 0:
                 continue
@@ -175,6 +180,8 @@ class ExperimentList(object):
                 continue
             elif temp is not None and ex.expt_info['temperature'][:2] != temp:
                 continue
+            elif organism is not None and ex.lims_record['organism'] != organism:
+                continue
             else:
                 expts.append(ex)
 
@@ -182,8 +189,17 @@ class ExperimentList(object):
         return el
 
     def __getitem__(self, item):
-
-        return self._expts[item]
+        if isinstance(item, str):
+            try:
+                return self._expts_by_uid[item]
+            except KeyError:
+                try:
+                    date = datetime.datetime.fromtimestamp(float(item)).strftime('%Y-%m-%d %H:%M:%S')
+                except Exception:
+                    raise KeyError("No experiment in this list with UID '%s'" % (item,))
+                raise KeyError("No experiment in this list with UID '%s' (%s)" % (item, date))
+        else:
+            return self._expts[item]
 
     def __len__(self):
         return len(self._expts)
@@ -192,9 +208,9 @@ class ExperimentList(object):
         return self._expts.__iter__()
 
     def append(self, expt):
-        self._expts.append(expt)
+        self._add_experiment(expt)
 
-    def sort(self, key=lambda expt: expt.expt_id[1], **kwds):
+    def sort(self, key=lambda expt: expt.source_id[1], **kwds):
         self._expts.sort(key=key, **kwds)
 
     def check(self):
@@ -202,11 +218,11 @@ class ExperimentList(object):
         for expt in self:
             # make sure we have at least one non-biocytin label and one cre label
             if len(expt.cre_types) < 1:
-                print("Warning: Experiment %s has no cre-type labels" % str(expt.expt_id))
+                print("Warning: Experiment %s has no cre-type labels" % str(expt.source_id))
             if len(expt.labels) < 1 or expt.labels == ['biocytin']:
-                print("Warning: Experiment %s has no fluorescent labels" % str(expt.expt_id))
+                print("Warning: Experiment %s has no fluorescent labels" % str(expt.source_id))
             if expt.region is None:
-                print("Warning: Experiment %s has no region" % str(expt.expt_id))
+                print("Warning: Experiment %s has no region" % str(expt.source_id))
 
     def distance_plot(self, pre_type, post_type, plots=None, color=(100, 100, 255), name=None):
         # get all connected and unconnected distances for pre->post
@@ -321,8 +337,8 @@ class ExperimentList(object):
             tot_connected += n_c
             ages.append(expt.age)
 
-            fmt = "%s: %s %s %s %s %s"
-            fmt_args = [str(expt.summary_id).rjust(4), str(n_p).ljust(5), str(n_c).ljust(5), str(expt.age).ljust(7), ', '.join(expt.cre_types).ljust(15), ':'.join(expt.expt_id)]
+            fmt = "%s: %s %s %s %s"
+            fmt_args = [str(expt.uid).rjust(4), str(n_p).ljust(5), str(n_c).ljust(5), str(expt.age).ljust(7), ', '.join(expt.cre_types).ljust(15)]
 
             # get list of stimuli
             if list_stims:
@@ -354,21 +370,61 @@ class ExperimentList(object):
                 summary[k]['udist'].extend(v['udist'])
         return summary
 
+    def reciprocal(self, pre_type=None, post_type=None):
+        """Return a summary of reciprocal connections:
+            {connection_type: {reciprocal: number reciprocal connections, uni-directional: number uni-directional
+            connections, Total_connections: number total connections}}
+            
+            IF pre_type and post_type are not None one may use this to probe a specific connection type"""
+
+        summary = {}
+        for expt in self:
+            recip = []
+            if len(expt.connections) == 0:
+                continue
+            for pre, post in expt.connections:
+                connection_type = (expt.cells[pre].cre_type, expt.cells[post].cre_type)
+                if pre_type is not None and post_type is not None:
+                    if connection_type != (pre_type, post_type):
+                        continue
+                if connection_type not in summary:
+                    summary[connection_type] = {'Uni-directional': 0, 'Reciprocal': 0, 'Total_connections': 0}
+                summary[connection_type]['Total_connections'] += 1
+                if (post, pre) in expt.connections:
+                    if (pre, post) not in recip:
+                        recip.append((post, pre))
+                        if connection_type[::-1] != connection_type:
+                            recip_connection_type = connection_type[::-1]
+                            if recip_connection_type not in summary:
+                                summary[recip_connection_type] = {'Uni-directional': 0, 'Reciprocal': 0,
+                                                                  'Total_connections': 0}
+                            summary[recip_connection_type]['Reciprocal'] += 1
+                        summary[connection_type]['Reciprocal'] += 1
+                else:
+                    summary[connection_type]['Uni-directional'] += 1
+        return summary
+
     def print_connectivity_summary(self, cre_type=None):
         print("-------------------------------------------------------------")
-        print("     Connectivity  (# connected/probed, % connectivity, %250, %100, cdist, udist, adist)")
+        print("     Connectivity  (# connected/probed, # reciprocal, % connectivity, %250, %100, cdist, udist, adist)")
         print("-------------------------------------------------------------")
 
         tot_probed, tot_connected = self.n_connections_probed()
 
         summary = self.connectivity_summary(cre_type)
+        reciprocal_summary = self.reciprocal()
 
         with warnings.catch_warnings():  # we expect warnings when nanmean is called on an empty list
             warnings.simplefilter("ignore")
             totals = []
             for k,v in summary.items():
                 probed = v['connected'] + v['unconnected']
-                
+                if k in reciprocal_summary:
+                    if reciprocal_summary[k]['Total_connections'] == v['connected']:
+                        reciprocal = str(reciprocal_summary[k]['Reciprocal'])
+                else:
+                    reciprocal = 'nan'
+
                 # calculate probability of connectivity over all points,
                 # within 250um, and within 100um.
                 pconn = []
@@ -382,6 +438,7 @@ class ExperimentList(object):
                     k[1],                        # post type
                     v['connected'],              # n connected
                     probed,                      # n probed
+                    reciprocal,                  # n reciprocal
                     100*pconn[0],                # % connected
                     100*pconn[1],                # % connected <= 250um
                     100*pconn[2],                # % connected <= 100um
@@ -398,9 +455,9 @@ class ExperimentList(object):
             fields.insert(2, pad)
             fields = tuple(fields)
             try:
-                print(u"%s → %s%s\t:\t%d/%d\t%0.2f%%\t%0.2f%%\t%0.2f%%\t%0.2f\t%0.2f\t%0.2f" % fields)
+                print(u"%s → %s%s\t:\t%d/%d\t%s\t%0.2f%%\t%0.2f%%\t%0.2f%%\t%0.2f\t%0.2f\t%0.2f" % fields)
             except UnicodeEncodeError:
-                print("%s - %s%s\t:\t%d/%d\t%0.2f%%\t%0.2f%%\t%0.2f%%\t%0.2f\t%0.2f\t%0.2f" % fields)
+                print("%s - %s%s\t:\t%d/%d\t%s\t%0.2f%%\t%0.2f%%\t%0.2f%%\t%0.2f\t%0.2f\t%0.2f" % fields)
 
         print("\nTotal:  \t%d/%d\t%0.2f%%" % (tot_connected, tot_probed, 100*tot_connected/(tot_connected+tot_probed)))
         print("")
@@ -495,8 +552,8 @@ class ExperimentList(object):
             distance = (c1.distance(c2))*10**6
             expt = conn['expt']
             i = self._expts.index(expt)
+            print(u"%s %d->%d: \t%s -> %s; %.0f um" % (expt.uid, c1.cell_id, c2.cell_id, c1.cre_type, c2.cre_type, distance))
             if 'stims' in conn:
-                print(u"%d %d->%d: \t%s -> %s; %.0f um\t%s" % (i, c1.cell_id, c2.cell_id, c1.cre_type, c2.cre_type, distance, expt.expt_id))
                 stims = conn['stims']
                 if len(stims) == 0:
                     print('no sweeps: %d %d\n' % (c1.cell_id, c2.cell_id))
@@ -506,8 +563,6 @@ class ExperimentList(object):
                 else:
                     stims = '\n'.join(["%s %s %dmV; %d,%d sweeps"% (s+(n[0],n[1])) for s,n in stims.items()])
                     print(stims)
-            else:
-                print(u"%d %d->%d: \t%s -> %s; %.0f um\t%s" % (expt.summary_id, c1.cell_id, c2.cell_id, c1.cre_type, c2.cre_type, distance, expt.expt_id))
 
         print("")
 

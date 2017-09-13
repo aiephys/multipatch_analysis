@@ -10,7 +10,7 @@ import re
 import pyqtgraph as pg
 import pyqtgraph.configfile
 
-from allensdk_internal.core import lims_utilities as lims
+from lims import specimen_info, specimen_images
 from constants import ALL_CRE_TYPES, ALL_LABELS
 from cell import Cell
 from data import MultipatchExperiment
@@ -23,6 +23,7 @@ class Experiment(object):
         self._region = None
         self._summary = None
         self._view = None
+        self._site_info = None
         self._slice_info = None
         self._expt_info = None
         self._lims_record = None
@@ -35,7 +36,7 @@ class Experiment(object):
         self._stim_list = None
 
         try:
-            self.expt_id = self.id_from_entry(entry)
+            self.source_id = self.id_from_entry(entry)
             self.cells = {x:Cell(self,x) for x in range(1,9)}
         except Exception as exc:
             Exception("Error parsing experiment: %s\n%s" % (self, exc.args[0]))
@@ -67,9 +68,10 @@ class Experiment(object):
         cre_types = set()
         labels = set()
         for cell in self.cells.values():
-            cre_types |= set(cell.labels.keys()) & set(ALL_CRE_TYPES)
+            if cell.cre_type not in cre_types:
+                cre_types.add(cell.cre_type)
             labels |= set(cell.labels.keys()) & set(ALL_LABELS)
-        self.cre_types = sorted(list(cre_types), key=lambda x: ALL_CRE_TYPES.index(x))
+        self.cre_types = sorted(list(cre_types), key=lambda x: ALL_CRE_TYPES.index(x.split(',')[0]))
         self.labels = sorted(list(labels), key=lambda x: ALL_LABELS.index(x))
 
         # make sure all cells have information for all labels
@@ -77,7 +79,9 @@ class Experiment(object):
             for label in labels:
                 assert label in cell.labels
             for cre in cre_types:
-                assert cre in cell.labels
+                for crepart in cre.split(','):
+                    if crepart != 'unknown' and crepart not in cell.labels:
+                        raise Exception('Cre type "%s" not in cell.labels: %s' % (crepart, cell.labels.keys()))
 
         # read cell positions from mosaic files
         try:
@@ -93,6 +97,15 @@ class Experiment(object):
     @staticmethod
     def id_from_entry(entry):
         return (entry.file, entry.lines[0])
+
+    @property
+    def uid(self):
+        """Return a unique ID string for this experiment.
+        
+        This returns the site timestamp formatted to 2 decimal places, which is
+        very likely to be unique for any site.
+        """
+        return '%0.2f' % (self.site_info['__timestamp__'])
 
     @property
     def connections(self):
@@ -305,7 +318,7 @@ class Experiment(object):
                         continue
                     if ci.cre_type is None or cj.cre_type is None:
                         # indeterminate cell types; ignore
-                        #print("Ignore probe (ind. cell type) %s:%d-%d" % (self.expt_id, i, j))
+                        #print("Ignore probe (ind. cell type) %s:%d-%d" % (self.source_id, i, j))
                         #if (i, j) in self.connections:
                             #print("    --> connected!")
                         continue
@@ -361,14 +374,16 @@ class Experiment(object):
         """Filesystem path to the root of this experiment.
         """
         if self._site_path is None:
-            date, slice, site = self.expt_id[1].split('-')
-            root = os.path.dirname(self.expt_id[0])
+            date, slice, site = self.source_id[1].split('-')
+            root = os.path.dirname(self.source_id[0])
             if '_' not in date:
                 date += '_000'
             paths = [
                 os.path.join(root, date, "slice_%03d"%int(slice), "site_%03d"%int(site)),
                 os.path.join(root, 'V1', date, "slice_%03d"%int(slice), "site_%03d"%int(site)),
                 os.path.join(root, 'ALM', date, "slice_%03d"%int(slice), "site_%03d"%int(site)),
+                # missing data, still in versioned backups
+                os.path.join(root, '..', '..', '..', 'version_backups', 'data', 'Alex', 'V1', date, "slice_%03d" % int(slice), "site_%03d" % int(site)),
             ]
             for path in paths:
                 if os.path.isdir(path):
@@ -379,7 +394,16 @@ class Experiment(object):
         return self._site_path
 
     def __repr__(self):
-        return "<Experiment %s (%s:%d)>" % (self.expt_id[1], self.expt_id[0], self.entry.lineno)
+        return "<Experiment %s (%s:%d)>" % (self.source_id[1], self.source_id[0], self.entry.lineno)
+
+    @property
+    def site_info(self):
+        if self._site_info is None:
+            index = os.path.join(self.path, '.index')
+            if not os.path.isfile(index):
+                raise TypeError("Cannot find slice index file (%s) for experiment %s" % (index, self))
+            self._site_info = pg.configfile.readConfigFile(index)['.']
+        return self._site_info
 
     @property
     def slice_info(self):
@@ -446,7 +470,7 @@ class Experiment(object):
 
     @property
     def age(self):
-        age = self.lims_record.get('days', 0)
+        age = self.lims_record.get('age', 0)
         if age == 0:
             raise Exception("Donor age not set in LIMS for specimen %s" % self.specimen_id)
             # data not entered in to lims
@@ -460,33 +484,33 @@ class Experiment(object):
 
     @property
     def lims_record(self):
+        """A dictionary of specimen information queried from LIMS.
+        
+        See multipatch_analysis.lims.section_info()
+        """
         if self._lims_record is None:
-            sid = self.specimen_id
-            q = """
-                select d.date_of_birth, ages.days from donors d
-                join specimens sp on sp.donor_id = d.id
-                join ages on ages.id = d.age_id
-                where sp.name  = '%s'
-                limit 2""" % sid
-            r = lims.query(q)
-            if len(r) != 1:
-                raise Exception("LIMS lookup for specimen %s returned %d results" % (sid, len(r)))
-            self._lims_record = r[0]
+            self._lims_record = specimen_info(self.specimen_id)
         return self._lims_record
 
     @property
     def biocytin_image_url(self):
-        sid = self.specimen_id
-        q = """
-            select sub_images.id from specimens 
-            join image_series on image_series.specimen_id=specimens.id 
-            join sub_images on sub_images.image_series_id=image_series.id
-            where specimens.name='%s';
-            """ % sid
-        r = lims.query(q)
-        if len(r) != 1:
-            raise Exception("LIMS lookup for specimen %s returned %d results (expected 1)" % (sid, len(r)))
-        return "http://lims2/siv?sub_image=%d" % r[0]['id']
+        """A LIMS URL that points to the biocytin image for this specimen, or
+        None if no image is found.
+        """
+        images = specimen_images(self.specimen_id)
+        for img_id, treatment in images:
+            if treatment == 'Biocytin':
+                return "http://lims2/siv?sub_image=%d" % img_id
+
+    @property
+    def dapi_image_url(self):
+        """A LIMS URL that points to the DAPI image for this specimen, or
+        None if no image is found.
+        """
+        images = specimen_images(self.specimen_id)
+        for img_id, treatment in images:
+            if treatment == 'DAPI':
+                return "http://lims2/siv?sub_image=%d" % img_id
 
     @property
     def multipatch_log(self):
@@ -511,7 +535,7 @@ class Experiment(object):
 
     @property
     def date(self):
-        y,m,d = self.expt_id[1].split('-')[0].split('_')[0].split('.')
+        y,m,d = self.source_id[1].split('-')[0].split('_')[0].split('.')
         return datetime.date(int(y), int(m), int(d))
 
     def show(self):

@@ -13,6 +13,7 @@ class Cell(object):
         self.spiking_qc = None
         self.labels = {}
         self.position = None
+        self._target_layer = None
 
     @property
     def pass_qc(self):
@@ -69,6 +70,13 @@ class Cell(object):
         return ct
 
     @property
+    def target_layer(self):
+        """Intended cortical layer for this cell; actual layer call may be
+        different.
+        """
+        return self._target_layer
+
+    @property
     def depth(self):
         """Depth of cell from the cut surface of the slice.
         """
@@ -88,4 +96,4 @@ class Cell(object):
         return ((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2 + (p1[2]-p2[2])**2)**0.5
 
     def __repr__(self):
-        return "<Cell %s:%d>" % (self.expt.expt_id, self.cell_id)
+        return "<Cell %s:%d>" % (self.expt.source_id, self.cell_id)

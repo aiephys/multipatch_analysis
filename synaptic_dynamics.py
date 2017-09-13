@@ -42,10 +42,13 @@ class DynamicsAnalyzer(object):
         
         self._amp_group = None
         self._kinetics_group = None
+        self._all_events = None
         
         self._psp_estimate = {}
         
         self._train_fit_results = None
+        self._fit_train_amps = None
+        self._deconv_train_amps = None
         self._spike_sets = None
         
         self._last_model_fit = None
@@ -85,6 +88,12 @@ class DynamicsAnalyzer(object):
         return self._amp_group
 
     @property
+    def all_events(self):
+        if self._all_events is None:
+            self._get_kinetics_groups()
+        return self._all_events
+
+    @property
     def kinetics_group(self):
         if self._kinetics_group is None:
             self._get_kinetics_groups()
@@ -107,7 +116,26 @@ class DynamicsAnalyzer(object):
         return self._train_fit_results
     
     @property
+    def train_amplitudes(self):
+        """Amplitudes extracted from averaged pulse trains
+        """
+        if self.method == 'fit':
+            if self._fit_train_amps is None:
+                self.measure_train_amps_from_fit()
+            return self._fit_train_amps
+        elif method == 'deconv':
+            if self._deconv_train_amps is None:
+                self.measure_train_amps_from_deconv()
+            return self._deconv_train_amps
+        else:
+            raise ValueError("method must be 'fit' or 'deconv'")
+
+
+    @property
     def spike_sets(self):
+        """Amplitudes normalized and converted to the format required for 
+        fitting with the synaptic release model
+        """
         if self._spike_sets is None:
             self.prepare_spike_sets()
         return self._spike_sets
@@ -183,6 +211,7 @@ class DynamicsAnalyzer(object):
         pulse_responses = self.pulse_responses
         kinetics_group = EvokedResponseGroup()
         amp_group = EvokedResponseGroup()
+        all_group = EvokedResponseGroup()
         for i,stim_params in enumerate(pulse_responses.keys()):
             # collect all individual pulse responses:
             #  - we can try fitting individual responses averaged across trials
@@ -195,6 +224,7 @@ class DynamicsAnalyzer(object):
                     r = trial[j]['response']
                     b = trial[j]['baseline']
                     
+                    all_group.add(r, b)
                     if ind_freq <= 20 or j in (7, 11):
                         kinetics_group.add(r, b)
                     if ind_freq <= 100 and j == 0:
@@ -202,6 +232,7 @@ class DynamicsAnalyzer(object):
         
         self._amp_group = amp_group
         self._kinetics_group = kinetics_group
+        self._all_events = all_group
 
     def plot_train_responses(self, plot_grid=None):
         """
@@ -395,13 +426,13 @@ class DynamicsAnalyzer(object):
         self._train_fit_results = results
         return results
 
-    def prepare_spike_sets(self):
-        """Generate spike amplitude structure needed for release model fitting
+    def measure_train_amps_from_fit(self):
+        self._fit_train_amps = OrderedDict()
+        """Generate structure describing timing and amplitude of averaged pulse responses
+        using train fit amplitudes
         """
         pulse_offsets = self.pulse_offsets
         results = self.train_fit_results
-        
-        spike_sets = []
         for i,stim_params in enumerate(results.keys()):
             fits = results[stim_params]
             amps = []
@@ -410,21 +441,19 @@ class DynamicsAnalyzer(object):
                 amps.extend([abs(v) for k,v in sorted(fit.items()) if k.startswith('amp')])
 
             # prepare dynamics data for release model fit
-            t = np.array(pulse_offsets[stim_params]) * 1000
-            amps = np.array(amps) / amps[0]
-            spike_sets.append((t, amps))
-            
-        self._spike_sets = spike_sets
+            t = np.array(pulse_offsets[stim_params])
+            amps = np.array(amps)
+            self._fit_train_amps[stim_params] = (t, amps)
 
-    def prepare_spike_sets_from_deconv(self, plot_grid=None):
-        """Generate spike amplitude structure needed for release model fitting,
+    def measure_train_amps_from_deconv(self, plot_grid=None):
+        """Generate structure describing timing and amplitude of averaged pulse responses
         using exponential deconvolution peaks rather than curve fit amplitudes
         """
         psp_est = self.psp_estimate
         
         pulse_offsets = self.pulse_offsets
         deconv = self.deconvolved_trains
-        spike_sets = []
+        self._deconv_train_amps = OrderedDict()
         # iterate over all stimulus types
         for i,stim_params in enumerate(deconv.keys()):
             amps = []
@@ -457,12 +486,21 @@ class DynamicsAnalyzer(object):
                 
                 all_amps.extend(amps)
                 
-            t = np.array(pulses) * 1000
-            amps = np.array(all_amps) / all_amps[0]
-            spike_sets.append((t, amps))
+            t = np.array(pulses)
+            amps = np.array(all_amps)
+            self._deconv_train_amps[stim_params] = (t, amps)
+
+    def prepare_spike_sets(self):
+        """Generate spike amplitude structure needed for release model fitting
+        """
+        spike_sets = []
+        for stim, amps in self.train_amplitudes.items():
+            tvals, amps = amps
+            # Convert time values from seconds to ms
+            # Normalize amplitudes
+            spike_sets.append((tvals * 1000, amps / amps[0]))
             
         self._spike_sets = spike_sets
-                
 
     def plot_train_fits(self, plot_grid):
         train_responses = self.train_responses
@@ -553,16 +591,16 @@ if __name__ == '__main__':
     app = pg.mkQApp()
     pg.dbg()
     
-    arg = sys.argv[1]
-    expt_ind = int(arg)
+    expt_ind = sys.argv[1]
     all_expts = ExperimentList(cache='expts_cache.pkl')
     expt = all_expts[expt_ind]
 
     pre_cell = int(sys.argv[2])
     post_cell = int(sys.argv[3])
 
+    method = 'deconv' if '--deconv' in sys.argv else 'fit'
 
-    analyzer = DynamicsAnalyzer(expt, pre_cell, post_cell)
+    analyzer = DynamicsAnalyzer(expt, pre_cell, post_cell, method=method)
     if len(analyzer.pulse_responses) == 0:
         raise Exception("No suitable data found for cell %d -> cell %d in expt %s" % (pre_cell, post_cell, expt_ind))
            
@@ -575,11 +613,11 @@ if __name__ == '__main__':
     if '--deconv' in sys.argv:
         # get deconvolved response trains
         analyzer.plot_deconvolved_trains(train_plots)
-        analyzer.prepare_spike_sets_from_deconv(plot_grid=train_plots)
+        analyzer.measure_train_amps_from_deconv(plot_grid=train_plots)
         
     else:
         # Estimate PSP amplitude
-        amp_est, amp_sign, amp_plot = analyzer.estimate_amplitude(plot=True)
+        amp_est, amp_sign, avg_amp, amp_plot, n_sweeps = analyzer.estimate_amplitude(plot=True)
         app.processEvents()
         
         # Estimate PSP kinetics

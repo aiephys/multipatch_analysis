@@ -83,8 +83,8 @@ if __name__ == '__main__':
     cache = pickle.load(open(cachefile, 'rb')) if os.path.isfile(cachefile) else {}
 
     for expt, conns in sorted(conn_expts.items()):
-        if expt.expt_id not in cache:
-            print "Load:", expt.expt_id
+        if expt.source_id not in cache:
+            print "Load:", expt.source_id
             try:
                 with expt.data:
                     analyzer = MultiPatchExperimentAnalyzer.get(expt.data)
@@ -102,7 +102,7 @@ if __name__ == '__main__':
                         if avg is not None:
                             avg.t0 = 0
                             responses.append({'types': cretypes, 'channels': (pre_id, post_id), 'response': avg})
-                    cache[expt.expt_id] = responses
+                    cache[expt.source_id] = responses
             except IOError:
                 print "Skipped:", expt
                 continue
@@ -111,7 +111,7 @@ if __name__ == '__main__':
             open(cachefile, 'wb').write(pkl)
 
 
-        for conn in cache[expt.expt_id]:
+        for conn in cache[expt.source_id]:
             cretypes = conn['types']
             avg = conn['response']
             if cretypes[0] not in types or cretypes[1] not in types:
