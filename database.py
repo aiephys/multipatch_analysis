@@ -38,7 +38,7 @@ table_schemas = {
     ],
     'experiment': [
         "A group of cells patched simultaneously in the same slice.",
-        ('original_path', 'object', 'Describes original location of raw data'),
+        ('original_path', 'str', 'Describes original location of raw data'),
         ('acq_timestamp', 'datetime', 'Creation timestamp for site data acquisition folder.'),
         ('slice_id', 'slice.id'),
         ('target_region', 'str', 'The intended brain region for this experiment'),
@@ -77,27 +77,46 @@ table_schemas = {
         ('position', 'object'),
     ],
     
-    'pair': [     # table of all POSSIBLE connections
+    'pair': [
+        "All possible putative synaptic connections",
         ('pre_cell', 'cell.id'),
         ('post_cell', 'cell.id'),
-        ('synapse', 'bool'),       # Whether the experimenter thinks there is a synapse
-        ('electrical', 'bool'),    # whether the experimenter thinks there is a gap junction
+        ('synapse', 'bool', 'Whether the experimenter thinks there is a synapse'),
+        ('electrical', 'bool', 'whether the experimenter thinks there is a gap junction'),
     ],
-        # NOTE: add individual per-pair analyses to new tables.
-    
     'sync_rec': [
         ('expt_id', 'experiment.id'),
         ('sync_rec_key', 'object'),
-        ('time_post_patch', 'float'),
+        ('meta', 'object'),
     ],
     'recording': [
         ('sync_rec_id', 'sync_rec.id', 'References the synchronous recording to which this recording belongs.'),
         ('device_key', 'object', 'Identifies the device that generated this recording (this is usually the MIES AD channel)'),
+        ('start_time', 'datetime', 'The clock time at the start of this recording'),
+    ],
+    'patch_clamp_recording': [
+        "Extra data for recordings made with a patch clamp amplifier",
+        ('recording_id', 'recording.id'),
         ('electrode_id', 'electrode.id', 'References the patch electrode that was used during this recording'),
-        ('clamp_mode', 'object', 'The mode used by the patch clamp amplifier: "ic" or "vc"'),
-        ('stimulus', 'object', "The name of the stimulus protocol"),   # contains name, induction freq, recovery delay
-        ('test_pulse', 'object', "Reference to the test pulse for this recording"),  # contains pulse_start, pulse_stop, baseline_current,
-                                   # baseline_voltage, input_resistance, access_resistance
+        ('clamp_mode', 'str', 'The mode used by the patch clamp amplifier: "ic" or "vc"'),
+        ('patch_mode', 'str', "The state of the membrane patch. E.g. 'whole cell', 'cell attached', 'loose seal', 'bath', 'inside out', 'outside out'"),
+        ('stim_name', 'object', "The name of the stimulus protocol"),
+        ('baseline_potential', 'float'),
+        ('baseline_current', 'float'),
+        ('baseline_rms_noise', 'float'),
+        #('nearest_test_pulse_id', 'test_pulse.id', "Reference to the test pulse for this recording"),
+        #('lowpass_test_pulse_id', 'test_pulse.id', "Reference to the low-passed test pulse values"),
+    ],
+    'test_pulse': [
+        ('patch_clamp_recording_id', 'patch_clamp_recording.id'),
+        ('start_index', 'int'),
+        ('stop_index', 'int'),
+        ('baseline_current', 'float'),
+        ('baseline_potential', 'float'),
+        ('access_resistance', 'float'),
+        ('input_resistance', 'float'),
+        ('capacitance', 'float'),
+        ('time_constant', 'float'),
     ],
     'stim_pulse': [
         "A pulse stimulus intended to evoke an action potential",
@@ -231,6 +250,8 @@ Cell = _generate_mapping('cell')
 Pair = _generate_mapping('pair')
 SyncRec = _generate_mapping('sync_rec')
 Recording = _generate_mapping('recording')
+PatchClampRecording = _generate_mapping('patch_clamp_recording')
+TestPulse = _generate_mapping('test_pulse')
 StimPulse = _generate_mapping('stim_pulse')
 StimSpike = _generate_mapping('stim_spike')
 PulseResponse = _generate_mapping('pulse_response')
@@ -244,6 +265,8 @@ SyncRec.experiment = relationship(Experiment)
 #Experiment.sync_recs = relationship("SyncRec", order_by=SyncRec.id, back_populates="experiment")
 
 Recording.sync_rec = relationship(SyncRec)
+PatchClampRecording.recording = relationship(Recording)
+TestPulse.patch_clamp_recording = relationship(PatchClampRecording)
 
 StimPulse.recording = relationship(Recording)
 

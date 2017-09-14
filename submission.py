@@ -1,6 +1,7 @@
 from datetime import datetime
 import database as db
 from neuroanalysis.baseline import float_mode
+from neuroanalysis.data import PatchClampRecording
 from lims import specimen_info
 from allensdk_internal.core import lims_utilities as lims
 from data import MultipatchExperiment
@@ -155,25 +156,46 @@ class ExperimentSubmission(object):
                 psa = PulseStimAnalyzer.get(rec)
                 ind_freq, recovery_delay = psa.stim_params()
                 
+                # import all recordings
                 rec_entry = db.Recording(
                     sync_rec=srec_entry,
                     device_key=rec.device_id, 
-                    clamp_mode=rec.clamp_mode,
-                    stimulus=rec.meta['stim_name'],
+                    start_time=rec.start_time,
                 )
                 session.add(rec_entry)
                 rec_entries[rec.device_id] = rec_entry
                 
-                pulses = psa.pulses()
+                # import patch clamp recording information
+                if isinstance(rec, PatchClampRecording):
+                    pcrec_entry = db.PatchClampRecording(
+                        recording=rec_entry,
+                        clamp_mode=rec.clamp_mode,
+                        patch_mode=rec.patch_mode,
+                        stim_name=rec.meta['stim_name'],
+                        baseline_potential=rec.baseline_potential,
+                        baseline_current=rec.baseline_current,
+                        baseline_rms_noise=rec.baseline_rms_noise,
+                    )
+                    session.add(pcrec_entry)
+
+                # import test pulse information
+                tp = rec.nearest_test_pulse
+                if tp is not None:
+                    tp_entry = db.TestPulse(
+                        patch_clamp_recording=pcrec_entry,
+                        start_index=tp.indices[0],
+                        stop_index=tp.indices[1],
+                        baseline_current=tp.baseline_current,
+                        baseline_potential=tp.baseline_potential,
+                        access_resistance=tp.access_resistance,
+                        input_resistance=tp.input_resistance,
+                        capacitance=tp.capacitance,
+                        time_constant=tp.time_constant,
+                    )
+                    session.add(tp_entry)
                 
-                #if pulses[0][2] < 0:
-                    ## test pulse
-                    #tp = pulses[0]
-                #else:
-                    #tp = (None, None)
-                #tp_rows.append({'id': tp_id, 'recording_id': rec_id,
-                    #'pulse_start': tp[0], 'pulse_stop': tp[1],
-                    #})
+                # import presynaptic stim pulses
+                pulses = psa.pulses()
                 
                 pulse_entries = {}
                 all_pulse_entries[rec.device_id] = pulse_entries
@@ -191,7 +213,8 @@ class ExperimentSubmission(object):
                     )
                     session.add(pulse_entry)
                     pulse_entries[i] = pulse_entry
-            
+
+                # import presynaptic evoked spikes
                 spikes = psa.evoked_spikes()
                 for i,sp in enumerate(spikes):
                     pulse = pulse_entries[sp['pulse_n']]
@@ -209,6 +232,7 @@ class ExperimentSubmission(object):
                     )
                     session.add(spike_entry)
                 
+            # import postsynaptic responses
             mpa = MultiPatchSyncRecAnalyzer(srec)
             for pre_dev in srec.devices:
                 for post_dev in srec.devices:
