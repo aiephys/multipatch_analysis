@@ -20,14 +20,15 @@ from config import synphys_db
 
 
 table_schemas = {
-    'slice': [                            # most of this should be pulled from external sources
+    'slice': [
+        "All brain slices on which an experiment was attempted.",
         ('acq_timestamp', 'datetime', 'Creation timestamp for slice data acquisition folder.'),
-        ('species', 'str', 'Human | mouse'),
-        ('age', 'int', 'Specimen age (in days) at time of dissection'),
+        ('species', 'str', 'Human | mouse (from LIMS)'),
+        ('age', 'int', 'Specimen age (in days) at time of dissection (from LIMS)'),
         ('genotype', 'str', 'Specimen donor genotype (from LIMS)'),
-        ('orientation', 'str', 'Orientation of the slice plane (eg "sagittal")'),
-        ('surface', 'str', 'The surface of the slice exposed during the experiment (eg "left")'),
-        ('hemisphere', 'str', 'The brain hemisphere from which the slice originated.'),
+        ('orientation', 'str', 'Orientation of the slice plane (eg "sagittal"; from LIMS specimen name)'),
+        ('surface', 'str', 'The surface of the slice exposed during the experiment (eg "left"; from LIMS specimen name)'),
+        ('hemisphere', 'str', 'The brain hemisphere from which the slice originated. (from LIMS specimen name)'),
         ('quality', 'int', 'Experimenter subjective slice quality assessment (0-5)'),
         ('slice_time', 'datetime', 'Time when this specimen was sliced'),
         ('slice_conditions', 'object', 'JSON containing solutions, perfusion, incubation time, etc.'),
@@ -99,6 +100,7 @@ table_schemas = {
                                    # baseline_voltage, input_resistance, access_resistance
     ],
     'stim_pulse': [
+        "A pulse stimulus intended to evoke an action potential",
         ('recording_id', 'recording.id'),
         ('pulse_number', 'int'),
         ('onset_time', 'float'),
@@ -108,7 +110,8 @@ table_schemas = {
         ('length', 'int'),
         ('n_spikes', 'int'),                           # number of spikes evoked
     ],
-    'stim_spike': [                                  # One evoked action potential
+    'stim_spike': [
+        "An evoked action potential",
         ('recording_id', 'recording.id'),
         ('pulse_id', 'stim_pulse.id'),
         ('peak_index', 'int'),
@@ -117,21 +120,23 @@ table_schemas = {
         ('rise_index', 'int'),
         ('max_dvdt', 'float'),
     ],
-    'pulse_response': [                                    # One evoked synaptic response
+    'baseline': [
+        "A snippet of baseline data, matched to a postsynaptic recording",
+        ('recording_id', 'recording.id', 'The recording from which this baseline snippet was extracted.'),
+        ('start_index', 'int', 'start index of this snippet, relative to the beginning of the recording'),
+        ('stop_index', 'int', 'stop index of this snippet, relative to the beginning of the recording'),
+        ('data', 'array', 'array containing the baseline snippet'),
+        ('mode', 'float', 'most common value in the baseline snippet'),
+    ],
+    'pulse_response': [
+        "A postsynaptic recording taken during a presynaptic stimulus",
         ('recording_id', 'recording.id'),
         ('pulse_id', 'stim_pulse.id'),
         ('pair_id', 'pair.id'),
         ('start_index', 'int'),
         ('stop_index', 'int'),
-        ('data', 'object'),
+        ('data', 'array'),
         ('baseline_id', 'baseline.id'),
-    ],
-    'baseline': [                                    # One snippet of baseline data
-        ('recording_id', 'recording.id'),
-        ('start_index', 'int'),                        # start/stop indices of baseline snippet
-        ('stop_index', 'int'),                         #   relative to full recording
-        ('data', 'bytes'),                             # array containing baseline snippet
-        ('value', 'float'),                             # median or mode baseline value
     ],
 }
 
@@ -223,12 +228,13 @@ Slice = _generate_mapping('slice')
 Experiment = _generate_mapping('experiment')
 Electrode = _generate_mapping('electrode')
 Cell = _generate_mapping('cell')
+Pair = _generate_mapping('pair')
 SyncRec = _generate_mapping('sync_rec')
 Recording = _generate_mapping('recording')
 StimPulse = _generate_mapping('stim_pulse')
 StimSpike = _generate_mapping('stim_spike')
-#PulseResponse = _generate_mapping('pulse_response')
-#Baseline = _generate_mapping('baseline')
+PulseResponse = _generate_mapping('pulse_response')
+Baseline = _generate_mapping('baseline')
 
 # Set up relationships
 Experiment.slice = relationship("Slice", back_populates="experiments")
@@ -243,6 +249,13 @@ StimPulse.recording = relationship(Recording)
 
 StimSpike.recording = relationship(Recording)
 StimSpike.pulse = relationship(StimPulse)
+
+Baseline.recording = relationship(Recording)
+
+PulseResponse.recording = relationship(Recording)
+PulseResponse.stim_pulse = relationship(StimPulse)
+PulseResponse.baseline = relationship(Baseline)
+
 
 #-------------- initial DB access ----------------
 

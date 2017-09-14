@@ -61,13 +61,19 @@ def specimen_info(specimen_name):
     # convert flipped to bool
     rec['flipped'] = {'flipped': True, 'not flipped': False, 'not checked': None}[rec['flipped']]
     
-    # Parse the specimen name to extract more information about the plane of section
+    # Parse the specimen name to extract more information about the plane of section.
+    # Format is:  
+    #    driver1;reporter1;driver2;reporter2-AAAAAA.BB.CC
+    #        AAAAAA = donor ID
+    #            BB = slice number
+    #            CC = orientation and hemisphere
     m = re.match(r'(.*)-(\d{6,7})(\.(\d{2}))(\.(\d{2}))$', sid)
     if m is None:
         raise Exception('Could not parse specimen name: "%s"' % sid)
     
     rec['section_number'] = int(m.groups()[3])
     
+    # The last number contains information about the orientation and hemisphere
     orientation_num = m.groups()[5]
     plane, hem, mount = {
         '01': ('coronal', 'left', 'anterior'),

@@ -1,9 +1,10 @@
 from datetime import datetime
 import database as db
+from neuroanalysis.baseline import float_mode
 from lims import specimen_info
 from allensdk_internal.core import lims_utilities as lims
 from data import MultipatchExperiment
-from connection_detection import PulseStimAnalyzer
+from connection_detection import PulseStimAnalyzer, MultiPatchSyncRecAnalyzer
 import config
 
 
@@ -148,7 +149,8 @@ class ExperimentSubmission(object):
             srec_entry = db.SyncRec(sync_rec_key=srec.key, experiment=expt)
             session.add(srec_entry)
             
-            
+            rec_entries = {}
+            all_pulse_entries = {}
             for rec in srec.recordings:
                 psa = PulseStimAnalyzer.get(rec)
                 ind_freq, recovery_delay = psa.stim_params()
@@ -160,6 +162,7 @@ class ExperimentSubmission(object):
                     stimulus=rec.meta['stim_name'],
                 )
                 session.add(rec_entry)
+                rec_entries[rec.device_id] = rec_entry
                 
                 pulses = psa.pulses()
                 
@@ -173,6 +176,8 @@ class ExperimentSubmission(object):
                     #})
                 
                 pulse_entries = {}
+                all_pulse_entries[rec.device_id] = pulse_entries
+                
                 for i,pulse in enumerate(pulses):
                     if i == 0 and rec.has_inserted_test_pulse:
                         continue
@@ -204,34 +209,29 @@ class ExperimentSubmission(object):
                     )
                     session.add(spike_entry)
                 
-            #mpa = MultiPatchSyncRecAnalyzer(srec)
-            #for pre_dev in srec.devices:
-                #if pre is not None and pre_dev != pre:
-                    #continue
-                
-                #for post_dev in srec.devices:
-                    #if post is not None and post_dev != post:
-                        #continue
-                    
-                    #responses = mpa.get_spike_responses(srec[pre_dev], srec[post_dev], align_to='pulse', require_spike=False)
-                    #for resp in responses:
-                        #resp_id = len(response_rows)
-                        #bl_id = len(baseline_rows)
-                        #baseline_rows.append({'id': bl_id,
-                            #'recording_id': rec_key_id_map[post_dev],
-                            #'start_index': resp['baseline_start'],
-                            #'stop_index': resp['baseline_stop'],
-                            #'data': resp['baseline'].downsample(f=50000).data,
-                            #'value': float_mode(resp['baseline'].data),
-                        #})
-                        #response_rows.append({'id': resp_id, 
-                            #'recording_id': rec_key_id_map[post_dev],
-                            #'pulse_id': pulse_key_n_id_map[(pre_dev, resp['pulse_n'])],
-                            #'start_index': resp['rec_start'], 'stop_index': resp['rec_stop'],
-                            #'baseline_id': bl_id,
-                            #'data': resp['response'].downsample(f=50000).data,
-                        #})
-        
+            mpa = MultiPatchSyncRecAnalyzer(srec)
+            for pre_dev in srec.devices:
+                for post_dev in srec.devices:
+                    # get all responses, regardless of the presence of a spike
+                    responses = mpa.get_spike_responses(srec[pre_dev], srec[post_dev], align_to='pulse', require_spike=False)
+                    for resp in responses:
+                        base_entry = db.Baseline(
+                            recording=rec_entries[post_dev],
+                            start_index=resp['baseline_start'],
+                            stop_index=resp['baseline_stop'],
+                            data=resp['baseline'].downsample(f=50000).data,
+                            mode=float_mode(resp['baseline'].data),
+                        )
+                        session.add(base_entry)
+                        resp_entry = db.PulseResponse(
+                            recording=rec_entries[post_dev],
+                            stim_pulse=all_pulse_entries[pre_dev][resp['pulse_n']],
+                            baseline=base_entry,
+                            start_index=resp['rec_start'],
+                            stop_index=resp['rec_stop'],
+                            data=resp['response'].downsample(f=50000).data,
+                        )
+                        session.add(resp_entry)
         return expt
         
     def submit(self):
