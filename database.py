@@ -38,13 +38,14 @@ table_schemas = {
     'experiment': [
         "A group of cells patched simultaneously in the same slice.",
         ('original_path', 'object', 'Describes original location of raw data'),
+        ('acq_timestamp', 'datetime', 'Creation timestamp for site data acquisition folder.'),
         ('slice_id', 'slice.id'),
-        ('region', 'str', 'The intended brain region for this experiment'),
+        ('target_region', 'str', 'The intended brain region for this experiment'),
         ('internal', 'str', 'The name of the internal solution used in this experiment. '
                             'The solution should be described in the pycsf database.'),
         ('acsf', 'str', 'The name of the ACSF solution used in this experiment. '
                         'The solution should be described in the pycsf database.'),
-        ('temperature', 'float'),
+        ('target_temperature', 'float'),
         ('date', 'datetime'),
         ('lims_specimen_id', 'int', 'ID of LIMS "CellCluster" specimen.'),
         ('submission_data', 'object', 'structure generated for original submission.'),
@@ -89,14 +90,13 @@ table_schemas = {
         ('time_post_patch', 'float'),
     ],
     'recording': [
-        ('sync_rec_id', 'sync_rec.id'),
-        ('device_key', 'object'),
-        ('electrode_id', 'electrode.id'),
-        ('clamp_mode', 'object'),
-        ('stimulus', 'object'),   # contains name, induction freq, recovery delay
-        ('test_pulse', 'object'),  # contains pulse_start, pulse_stop, baseline_current,
+        ('sync_rec_id', 'sync_rec.id', 'References the synchronous recording to which this recording belongs.'),
+        ('device_key', 'object', 'Identifies the device that generated this recording (this is usually the MIES AD channel)'),
+        ('electrode_id', 'electrode.id', 'References the patch electrode that was used during this recording'),
+        ('clamp_mode', 'object', 'The mode used by the patch clamp amplifier: "ic" or "vc"'),
+        ('stimulus', 'object', "The name of the stimulus protocol"),   # contains name, induction freq, recovery delay
+        ('test_pulse', 'object', "Reference to the test pulse for this recording"),  # contains pulse_start, pulse_stop, baseline_current,
                                    # baseline_voltage, input_resistance, access_resistance
-        ('sample_rate', 'float'),
     ],
     'stim_pulse': [
         ('recording_id', 'recording.id'),
@@ -157,9 +157,24 @@ class NDArray(TypeDecorator):
         return np.load(buf, allow_pickle=False)
 
 
+class FloatType(TypeDecorator):
+    """For marshalling float types (including numpy).
+    """
+    impl = Float
+    
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        return float(value)
+        
+    #def process_result_value(self, value, dialect):
+        #buf = io.BytesIO(value)
+        #return np.load(buf, allow_pickle=False)
+
+
 _coltypes = {
     'int': Integer,
-    'float': Float,
+    'float': FloatType,
     'bool': Boolean,
     'str': String,
     'date': Date,
@@ -206,12 +221,28 @@ def _generate_mapping(table):
 # Generate ORM mapping classes
 Slice = _generate_mapping('slice')
 Experiment = _generate_mapping('experiment')
+Electrode = _generate_mapping('electrode')
+Cell = _generate_mapping('cell')
+SyncRec = _generate_mapping('sync_rec')
+Recording = _generate_mapping('recording')
+StimPulse = _generate_mapping('stim_pulse')
+StimSpike = _generate_mapping('stim_spike')
+#PulseResponse = _generate_mapping('pulse_response')
+#Baseline = _generate_mapping('baseline')
 
 # Set up relationships
 Experiment.slice = relationship("Slice", back_populates="experiments")
 Slice.experiments = relationship("Experiment", order_by=Experiment.id, back_populates="slice")
 
+SyncRec.experiment = relationship(Experiment)
+#Experiment.sync_recs = relationship("SyncRec", order_by=SyncRec.id, back_populates="experiment")
 
+Recording.sync_rec = relationship(SyncRec)
+
+StimPulse.recording = relationship(Recording)
+
+StimSpike.recording = relationship(Recording)
+StimSpike.pulse = relationship(StimPulse)
 
 #-------------- initial DB access ----------------
 
@@ -241,7 +272,12 @@ Session = sessionmaker(bind=engine)
 def slice_from_timestamp(ts):
     session = Session()
     slices = session.query(Slice).filter(Slice.acq_timestamp==ts).all()
-    return slices
+    if len(slices) == 0:
+        raise KeyError("No slice found for timestamp %s" % ts)
+    elif len(slices) > 1:
+        raise KeyError("Multiple slices found for timestamp %s" % ts)
+    
+    return slices[0]
 
 
 

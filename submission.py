@@ -1,12 +1,16 @@
 from datetime import datetime
-from database import Session, Slice
+import database as db
 from lims import specimen_info
 from allensdk_internal.core import lims_utilities as lims
-
-
+from data import MultipatchExperiment
+from connection_detection import PulseStimAnalyzer
 import config
 
+
+
 class SliceSubmission(object):
+    """Used to submit a new slice entry to the synphys DB.
+    """
     def __init__(self, dh):
         self.dh = dh
         
@@ -42,19 +46,23 @@ class SliceSubmission(object):
         warnings = []
         errors = []
         fields = self.fields
+        
+        # TODO: Add a lot more checking here..
+        
         if fields['surface'] not in ['right', 'left']:
-            warnings.append("Warning: slice surface '%s' should have been 'medial' or 'lateral'" % surface)
+            warnings.append("Warning: slice surface '%s' should have been 'right' or 'left'" % surface)
+        
         return errors, warnings
         
     def create(self):
         if len(self.check()[0]) > 0:
             raise Exception("Submission has errors; see SliceSubmission.check()")
         data = self.fields
-        sl = Slice(**data)
+        sl = db.Slice(**data)
         return sl
         
     def submit(self):
-        session = Session()
+        session = db.Session()
         sl = self.create()
         session.add(sl)
         session.commit()
@@ -76,6 +84,162 @@ def submit_slice(data):
     """
     
     
+class ExperimentSubmission(object):
+    """Used to submit a new experiment entry to the synphys DB.
+    
+    This causes several tables to be populated: experiment, sync_rec, recording,
+    stim_pulse, stim_spike, pulse_response, baseline
+    """
+    def __init__(self, dh, nwb_file):
+        self.dh = dh
+        self.nwb_file = nwb_file
+        self._fields = None
+
+    @property
+    def fields(self):
+        if self._fields is None:
+            info = self.dh.info()
+            
+            slice_dir = self.dh.parent()
+            ts = datetime.fromtimestamp(slice_dir.info()['__timestamp__'])
+            slice_id = db.slice_from_timestamp(ts).id
+            
+            expt_dir = slice_dir.parent()
+            expt_info = expt_dir.info()
+
+            temp = expt_info.get('temperature')
+            if temp is not None:
+                temp = float(temp.rstrip(' C'))
+
+            self._fields = {
+                'original_path': '%s:%s' % (config.rig_name, self.dh.name()),
+                'acq_timestamp': datetime.fromtimestamp(info['__timestamp__']),
+                'slice_id': slice_id,
+                'target_region': expt_info.get('region'),
+                'internal': expt_info.get('internal'),
+                'acsf': expt_info.get('acsf'),
+                'target_temperature': temp,
+                
+            }
+        return self._fields
+
+    def check(self):
+        warnings = []
+        errors = []
+        fields = self.fields
+        
+        # TODO: Add a lot more checking here..
+        
+        return errors, warnings
+        
+    def create(self, session):
+        if len(self.check()[0]) > 0:
+            raise Exception("Submission has errors; see SiteSubmission.check()")
+        
+        # Create entry in experiment table
+        data = self.fields
+        expt = db.Experiment(**data)
+        session.add(expt)
+        
+        # Load NWB file and create data entries
+        nwb = MultipatchExperiment(self.nwb_file.name())
+
+        for srec in nwb.contents:
+            srec_entry = db.SyncRec(sync_rec_key=srec.key, experiment=expt)
+            session.add(srec_entry)
+            
+            
+            for rec in srec.recordings:
+                psa = PulseStimAnalyzer.get(rec)
+                ind_freq, recovery_delay = psa.stim_params()
+                
+                rec_entry = db.Recording(
+                    sync_rec=srec_entry,
+                    device_key=rec.device_id, 
+                    clamp_mode=rec.clamp_mode,
+                    stimulus=rec.meta['stim_name'],
+                )
+                session.add(rec_entry)
+                
+                pulses = psa.pulses()
+                
+                #if pulses[0][2] < 0:
+                    ## test pulse
+                    #tp = pulses[0]
+                #else:
+                    #tp = (None, None)
+                #tp_rows.append({'id': tp_id, 'recording_id': rec_id,
+                    #'pulse_start': tp[0], 'pulse_stop': tp[1],
+                    #})
+                
+                pulse_entries = {}
+                for i,pulse in enumerate(pulses):
+                    if i == 0 and rec.has_inserted_test_pulse:
+                        continue
+
+                    pulse_entry = db.StimPulse(
+                        recording=rec_entry,
+                        pulse_number=i,
+                        onset_index=pulse[0],
+                        amplitude=pulse[2],
+                        length=pulse[1]-pulse[0],
+                    )
+                    session.add(pulse_entry)
+                    pulse_entries[i] = pulse_entry
+            
+                spikes = psa.evoked_spikes()
+                for i,sp in enumerate(spikes):
+                    pulse = pulse_entries[sp['pulse_n']]
+                    if sp['spike'] is not None:
+                        extra = sp['spike']
+                        pulse.n_spikes = 1
+                    else:
+                        extra = {}
+                        pulse.n_spikes = 0
+                    
+                    spike_entry = db.StimSpike(
+                        recording=rec_entry,
+                        pulse=pulse,
+                        **extra
+                    )
+                    session.add(spike_entry)
+                
+            #mpa = MultiPatchSyncRecAnalyzer(srec)
+            #for pre_dev in srec.devices:
+                #if pre is not None and pre_dev != pre:
+                    #continue
+                
+                #for post_dev in srec.devices:
+                    #if post is not None and post_dev != post:
+                        #continue
+                    
+                    #responses = mpa.get_spike_responses(srec[pre_dev], srec[post_dev], align_to='pulse', require_spike=False)
+                    #for resp in responses:
+                        #resp_id = len(response_rows)
+                        #bl_id = len(baseline_rows)
+                        #baseline_rows.append({'id': bl_id,
+                            #'recording_id': rec_key_id_map[post_dev],
+                            #'start_index': resp['baseline_start'],
+                            #'stop_index': resp['baseline_stop'],
+                            #'data': resp['baseline'].downsample(f=50000).data,
+                            #'value': float_mode(resp['baseline'].data),
+                        #})
+                        #response_rows.append({'id': resp_id, 
+                            #'recording_id': rec_key_id_map[post_dev],
+                            #'pulse_id': pulse_key_n_id_map[(pre_dev, resp['pulse_n'])],
+                            #'start_index': resp['rec_start'], 'stop_index': resp['rec_stop'],
+                            #'baseline_id': bl_id,
+                            #'data': resp['response'].downsample(f=50000).data,
+                        #})
+        
+        return expt
+        
+    def submit(self):
+        session = db.Session()
+        exp = self.create(session)
+        session.commit()
+
+
 
 def submit_experiment(data):
     """Submit a new experiment to the internal analysis DB.
@@ -102,16 +266,6 @@ def submit_experiment(data):
       (these are extracted from NWB)
     
     """
-    expt_rows = self.tables['experiment']
-    expt_index = self.tables['_expt_index']
-    cell_rows = self.tables['cell']
-    srec_rows = self.tables['sync_rec']
-    rec_rows = self.tables['recording']
-    tp_rows = self.tables['test_pulse']
-    pulse_rows = self.tables['stim_pulse']
-    spike_rows = self.tables['stim_spike']
-    response_rows = self.tables['response']
-    baseline_rows = self.tables['baseline']
     
     prof = Profiler(disabled=True, delayed=False)
     
