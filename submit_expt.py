@@ -10,6 +10,7 @@ from pyqtgraph.Qt import QtGui, QtCore
 
 import database
 import submission, config
+import ui
 
 
 class ExperimentSubmitUi(QtGui.QWidget):
@@ -43,11 +44,16 @@ class ExperimentSubmitUi(QtGui.QWidget):
         self.submit_btn.clicked.connect(self.submit_clicked)
         self.submit_btn.setEnabled(False)
         self.ctrl_layout.addWidget(self.submit_btn, row, 1)
+
+        self.vsplit = QtGui.QSplitter(QtCore.Qt.Vertical)
+        self.hsplit.addWidget(self.vsplit)
+        self.hsplit.setSizes([600, 700])
         
         self.canvas = acq4.util.Canvas.Canvas(allowTransforms=False)
-        self.hsplit.addWidget(self.canvas)
+        self.vsplit.addWidget(self.canvas)
         
-        self.hsplit.setSizes([600, 700])
+        self.timeline = ui.ExperimentTimeline()
+        self.vsplit.addWidget(self.timeline)
         
         self.submit_window = SubmitWindow()
         
@@ -59,7 +65,10 @@ class ExperimentSubmitUi(QtGui.QWidget):
         sel = self.file_tree.selectedItems()
         for item in sel:
             fh = item.fh
-            self.canvas.addFile(fh)
+            if isinstance(item, NwbTreeItem):
+                self.timeline.load_experiment(fh)
+            else:
+                self.canvas.addFile(fh)
 
     def submit_clicked(self):
         sel = self.file_tree.selectedItems()[0]
@@ -373,7 +382,7 @@ def submit(data):
 if __name__ == '__main__':
     import sys
     app = pg.mkQApp()
-    pg.dbg()
+    #pg.dbg()
     
     path = sys.argv[1]
     ui = ExperimentSubmitUi()
