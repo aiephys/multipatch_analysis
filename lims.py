@@ -118,7 +118,7 @@ def specimen_images(specimen_name):
 
         
 def submit_expt(spec_id, nwb_file, json_file):
-    import limstk.limstk as limstk
+    import limstk.LIMStk as limstk
     #limstk.init_log()
 
     """
