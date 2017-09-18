@@ -105,6 +105,7 @@ class ExperimentTimeline(QtGui.QWidget):
     def remove_electrodes(self):
         for ch in self.params.children():
             self.params.removeChild(ch)
+            ch.region.scene().removeItem(ch.region)
         
     def load_experiment(self, nwb_handle):
         self.nwb_handle = nwb_handle
