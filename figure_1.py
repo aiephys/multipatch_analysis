@@ -20,7 +20,7 @@ app = pg.mkQApp()
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
 grey = (169, 169, 169)
-sweep_color = (0, 0, 0, 5)
+sweep_color = (0, 0, 0, 10)
 
 parser = argparse.ArgumentParser()
 # plot options
@@ -37,11 +37,11 @@ all_expts = ExperimentList(cache='expts_cache.pkl')
 
 grid = PlotGrid()
 if plot_trains is True:
-    grid.set_shape(9, 3)
+    grid.set_shape(8, 3)
 else:
-    grid.set_shape(9,1)
+    grid.set_shape(8,1)
 grid.show()
-for g in range(1, grid.shape[0], 2):
+for g in range(0, grid.shape[0], 2):
     grid.grid.ci.layout.setRowStretchFactor(g, 5)
     grid.grid.ci.layout.setRowStretchFactor(g + 1, 20)
     grid[g, 0].hideAxis('bottom')
@@ -50,14 +50,12 @@ for g in range(1, grid.shape[0], 2):
         grid[g, 2].hideAxis('bottom')
         grid[g, 2].hideAxis('left')
         grid[g + 1, 2].hideAxis('left')
-grid.grid.ci.layout.setRowStretchFactor(0, 1)
-grid[0, 0].hideAxis('bottom')
 if plot_trains is True:
     grid[0, 1].hideAxis('bottom')
     grid[0, 2].hideAxis('bottom')
     grid[0, 2].hideAxis('left')
 
-grid_positions = {'L23Pyr': range(1, 3), 'Rorb': range(3, 5), 'Sim1': range(5, 7), 'Tlx3': range(7, 9)}
+grid_positions = {'L23Pyr': range(0, 2), 'Rorb': range(2, 4), 'Sim1': range(4, 6), 'Tlx3': range(6, 8)}
 grid[0, 0].setTitle(title='First Pulse')
 if plot_trains is True:
     grid[0, 1].setTitle(title='50 Hz Train')
@@ -65,9 +63,7 @@ if plot_trains is True:
 maxYpulse = []
 maxYtrain = []
 maxYdec = []
-ii = 0
 for connection_type, synapse_id in connections.items():
-    ii += 1
     expt_ind = synapse_id[0]
     pre_cell = synapse_id[1]
     post_cell = synapse_id[2]
@@ -82,7 +78,7 @@ for connection_type, synapse_id in connections.items():
     stop_freq = 50
     tau = 15e-3
     lp = 1000
-    sweep_list = {'response': [], 'spike': [], 'command': []}
+    sweep_list = {'response': [], 'spike': []}
     ind = {'response': [], 'spike': [], 'dec': []}
     n_sweeps = len(amp_group)
     if n_sweeps == 0:
@@ -101,24 +97,23 @@ for connection_type, synapse_id in connections.items():
                 pre_base = float_mode(pre_spike.data[:int(10e-3 / pre_spike.dt)])
                 sweep_list['response'].append(sweep_trace.copy(data=sweep_trace.data - post_base))
                 sweep_list['spike'].append(pre_spike.copy(data=pre_spike.data - pre_base))
-                sweep_list['command'].append(amp_group.commands[sweep])
     if len(sweep_list['response']) > 5:
         n = len(sweep_list['response'])
         if plot_sweeps is True:
             for sweep in range(n):
                 current_sweep = sweep_list['response'][sweep]
-                current_spike = sweep_list['spike'][sweep]
+                current_sweep.t0 = 0
                 grid[row[1], 0].plot(current_sweep.time_values, current_sweep.data, pen=sweep_color)
-                grid[row[0], 0].plot(current_spike.time_values, current_spike.data, pen=sweep_color)
         avg_first_pulse = TraceList(sweep_list['response']).mean()
         avg_first_pulse.t0 = 0
         avg_spike = TraceList(sweep_list['spike']).mean()
         avg_spike.t0 = 0
         grid[row[1], 0].setLabels(left=('Vm', 'V'))
         grid[row[1], 0].setLabels(bottom=('t', 's'))
-        grid[row[1], 0].setXRange(0, 30e-3)
+        grid[row[1], 0].setXRange(0, 27e-3)
         grid[row[1], 0].plot(avg_first_pulse.time_values, avg_first_pulse.data, pen={'color': 'k', 'width': 2})
         grid[row[0], 0].setLabels(left=('Vm', 'V'))
+        sweep_list['spike'][0].t0 = 0
         grid[row[0], 0].plot(avg_spike.time_values, avg_spike.data, pen='k')
         grid[row[0], 0].setXLink(grid[row[1], 0])
         label = pg.LabelItem('%s, n = %d' % (connection_type, n))
@@ -128,13 +123,6 @@ for connection_type, synapse_id in connections.items():
         maxYpulse.append((row[1], grid[row[1],0].getAxis('left').range[1]))
     else:
         print ("%s not enough sweeps for first pulse" % connection_type)
-    if ii == 1:
-        stim_command = TraceList(sweep_list['command']).mean()
-        stim_command.t0 = 0
-        grid[0, 0].plot(stim_command.time_values, stim_command.data, pen=grey)
-        grid[0, 0].setLabels(left=('', ''))
-        grid[0, 0].getAxis('left').setOpacity(0)
-        grid[0, 0].setXLink(grid[2, 0])
     if plot_trains is True:
         train_responses = analyzer.train_responses
         for i, stim_params in enumerate(train_responses.keys()):
@@ -190,16 +178,9 @@ for connection_type, synapse_id in connections.items():
             grid[row[1], 2].hideAxis('bottom')
             grid[row[1], 1].hideAxis('left')
             grid[row[1], 2].hideAxis('left')
-        if ii == 1:
-            stim_command = TraceList(ind_group.commands).mean()
-            stim_command.t0 = 0
-            grid[0, 1].plot(stim_command.time_values, stim_command.data, pen=grey)
-            grid[0, 1].setLabels(left=('', ''))
-            grid[0, 1].getAxis('left').setOpacity(0)
-            grid[0, 1].setXLink(grid[2, 1])
 if link_y_axis is True:
     max_row = max(maxYpulse, key=lambda x:x[1])[0]
-    for g in range(2, grid.shape[0], 2):
+    for g in range(1, grid.shape[0], 2):
         if g != max_row:
             grid[g, 0].setYLink(grid[max_row, 0])
         if plot_trains is True:
