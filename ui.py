@@ -100,8 +100,11 @@ class ExperimentTimeline(QtGui.QWidget):
         return self.plots[i, 0]
         
     def add_electrode_clicked(self):
-        elec = ElectrodeParameter(self)
-        self.params.addChild(elec)
+        self.add_electrode(channel=self.channels[0], start=0, stop=500)
+        
+    def remove_electrodes(self):
+        for ch in self.params.children():
+            self.params.removeChild(ch)
         
     def load_experiment(self, nwb_handle):
         self.nwb_handle = nwb_handle
@@ -161,6 +164,7 @@ class ExperimentTimeline(QtGui.QWidget):
                 plt.plot(times, data, pen=None, symbol=symbol, symbolPen=None, symbolBrush=brushes)
 
         # automatically select electrode regions
+        self.remove_electrodes()
         site_info = self.nwb_handle.parent().info()
         for i in self.channels:
             hs_state = site_info.get('Headstage %d'%i, None)
@@ -172,8 +176,8 @@ class ExperimentTimeline(QtGui.QWidget):
                 'GS': 'GOhm seal',
                 'TF': 'Technical failure',
             }[hs_state]
-            start = (recs[i][0].start_time - start_time).seconds
-            stop = (recs[i][-1].start_time - start_time).seconds
+            start = (recs[i][0].start_time - start_time).seconds - 1
+            stop = (recs[i][-1].start_time - start_time).seconds + 1
             
             # assume if we got more than two recordings, then a cell was present.
             got_cell = len(recs[i]) > 2
@@ -185,11 +189,11 @@ class ExperimentTimeline(QtGui.QWidget):
         self.params.addChild(elec, autoIncrementName=True)
         elec.child('channel').sigValueChanged.connect(self._electrode_channel_changed)
         elec.region.sigRegionChangeFinished.connect(self._electrode_region_changed)
-        self._electrode_channel_changed(elec)
+        self._electrode_channel_changed(elec.child('channel'))
         
     def _electrode_channel_changed(self, param):
-        plt = self.get_channel_plot(param['channel'])
-        plt.addItem(param.region)
+        plt = self.get_channel_plot(param.value())
+        plt.addItem(param.parent().region)
         self._rename_electrodes()
         
     def _electrode_region_changed(self):
@@ -206,6 +210,9 @@ class ExperimentTimeline(QtGui.QWidget):
             chan_elecs = sorted(elecs[chan], key=lambda e: e.region.getRegion()[0])
             
             # assign names
+            for i,elec in enumerate(chan_elecs):
+                # rename all first to avoid name colisions
+                elec.setName('rename%d' % i)
             for i,elec in enumerate(chan_elecs):
                 # If there are multiple electrodes on this channel, then 
                 # each extra electrode increments its name by the number of 
