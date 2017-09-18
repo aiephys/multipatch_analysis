@@ -180,14 +180,14 @@ class DynamicsAnalyzer(object):
             stim_params = analyzer.stim_params(pre_rec) + (post_rec.rounded_holding_potential(),)
             pulse_responses.setdefault(stim_params, []).append(resp)
             
-            ind, base = analyzer.get_train_response(pre_rec, post_rec, 0, 7, padding=(-pre_pad, post_pad))
-            rec, base = analyzer.get_train_response(pre_rec, post_rec, 8, 11, padding=(-pre_pad, post_pad))
+            ind, base, ind_spike, ind_command = analyzer.get_train_response(pre_rec, post_rec, 0, 7, padding=(-pre_pad, post_pad))
+            rec, base, rec_spike, rec_command = analyzer.get_train_response(pre_rec, post_rec, 8, 11, padding=(-pre_pad, post_pad))
             ind.t0 = 0
             rec.t0 = 0
             if stim_params not in train_responses:
                 train_responses[stim_params] = (EvokedResponseGroup(), EvokedResponseGroup())
-            train_responses[stim_params][0].add(ind, base)
-            train_responses[stim_params][1].add(rec, base)
+            train_responses[stim_params][0].add(ind, base, ind_spike, ind_command)
+            train_responses[stim_params][1].add(rec, base, rec_spike, rec_command)
             
             dt = pre_rec['command'].dt
             if stim_params not in pulse_offsets:
@@ -223,13 +223,16 @@ class DynamicsAnalyzer(object):
                 for trial in resp:
                     r = trial[j]['response']
                     b = trial[j]['baseline']
-                    
+                    s = trial[j]['pre_rec']
+                    c = trial[j]['command']
+                    s.meta['spike'] = trial[j]['spike']
+
                     all_group.add(r, b)
                     if ind_freq <= 20 or j in (7, 11):
-                        kinetics_group.add(r, b)
+                        kinetics_group.add(r, b, s, c)
                     if ind_freq <= 100 and j == 0:
-                        amp_group.add(r, b)
-        
+                        amp_group.add(r, b, s, c)
+
         self._amp_group = amp_group
         self._kinetics_group = kinetics_group
         self._all_events = all_group
@@ -237,11 +240,11 @@ class DynamicsAnalyzer(object):
     def plot_train_responses(self, plot_grid=None):
         """
         Plot individual and averaged train responses for each set of stimulus parameters.
-        
+
         Return a new PlotGrid.
         """
         train_responses = self.train_responses
-        
+
         if plot_grid is None:
             train_plots = PlotGrid()
         else:
