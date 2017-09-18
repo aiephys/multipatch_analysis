@@ -113,11 +113,11 @@ class FileTreeWidget(pg.TreeWidget):
         for fname in dh.ls():
             fh = dh[fname]
             item = self._make_item(fh)
-            item.setExpanded(True)
             if hasattr(item, 'type_selected'):
                 item.type_selected.connect(self._item_type_selected)
             
             root.addChild(item)
+            item.setExpanded(True)
             item.fh = fh
             if fh.isDir():
                 self._fill_tree(fh, item)

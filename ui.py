@@ -5,6 +5,7 @@ import pyqtgraph as pg
 from pyqtgraph.Qt import QtGui
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.miesnwb import MiesNwb
+from config import n_headstages
 
 
 class SynapseTreeWidget(QtGui.QTreeWidget):
@@ -73,6 +74,8 @@ class ExperimentInfoWidget(QtGui.QWidget):
 class ExperimentTimeline(QtGui.QWidget):
     def __init__(self):
         QtGui.QWidget.__init__(self)
+        self.channels = None
+        
         self.layout = QtGui.QGridLayout()
         self.setLayout(self.layout)
         self.layout.setContentsMargins(0, 0, 0, 0)
@@ -89,6 +92,13 @@ class ExperimentTimeline(QtGui.QWidget):
         self.params.addNew = self.add_electrode_clicked  # monkey!
         self.ptree.setParameters(self.params, showTop=False)
         
+    def list_channels(self):
+        return self.channels
+        
+    def get_channel_plot(self, chan):
+        i = self.channels.index(chan)
+        return self.plots[i, 0]
+        
     def add_electrode_clicked(self):
         elec = ElectrodeParameter(self)
         self.params.addChild(elec)
@@ -104,6 +114,7 @@ class ExperimentTimeline(QtGui.QWidget):
                 recs.setdefault(chan, []).append(srec[chan])
 
         chans = sorted(recs.keys())
+        self.channels = chans
         self.plots.set_shape(len(chans), 1)
         self.plots.setXLink(self.plots[0, 0])
         
@@ -136,40 +147,107 @@ class ExperimentTimeline(QtGui.QWidget):
                     i_noise[j] = np.nan
                     
             # scale all qc metrics to the range 0-1
-            pass_brush = pg.mkBrush('b')
-            fail_brush = pg.mkBrush('r')
+            pass_brush = pg.mkBrush(100, 100, 255, 200)
+            fail_brush = pg.mkBrush(255, 0, 0, 200)
             v_hold = (v_hold + 60e-3) / 20e-3
             i_hold = i_hold / 400e-12
             v_noise = v_noise / 5e-3
             i_noise = i_noise / 100e-12
             
             plt = self.plots[i, 0]
-            plt.setLabels(left=("Ch %02d" % chan))
+            plt.setLabels(left=("Ch %d" % chan))
             for data,symbol in [(np.zeros_like(times), 'o'), (v_hold, 't'), (i_hold, 'x'), (v_noise, 't1'), (i_noise, 'x')]:
                 brushes = np.where(np.abs(data) > 1.0, fail_brush, pass_brush)
                 plt.plot(times, data, pen=None, symbol=symbol, symbolPen=None, symbolBrush=brushes)
 
         # automatically select electrode regions
         site_info = self.nwb_handle.parent().info()
-        for i in range(1, 9):
+        for i in self.channels:
             hs_state = site_info.get('Headstage %d'%i, None)
             if hs_state is None:
                 continue
+            status = {
+                'NS': 'No seal',
+                'LS': 'Low seal',
+                'GS': 'GOhm seal',
+                'TF': 'Technical failure',
+            }[hs_state]
+            start = (recs[i][0].start_time - start_time).seconds
+            stop = (recs[i][-1].start_time - start_time).seconds
             
-            start = recs[i-1][0].start_time
-            stop = recs[i-1][-1].start_time
-            elec = ElectrodeParameter(self, i, start, stop)
-            self.params.addChild(elec)
+            # assume if we got more than two recordings, then a cell was present.
+            got_cell = len(recs[i]) > 2
             
+            self.add_electrode(i, start, stop, status=status, got_cell=got_cell)
+            
+    def add_electrode(self, channel, start, stop, status=None, got_cell=None):
+        elec = ElectrodeParameter(self, channel, start, stop, status=status, got_cell=got_cell)
+        self.params.addChild(elec, autoIncrementName=True)
+        elec.child('channel').sigValueChanged.connect(self._electrode_channel_changed)
+        elec.region.sigRegionChangeFinished.connect(self._electrode_region_changed)
+        self._electrode_channel_changed(elec)
         
+    def _electrode_channel_changed(self, param):
+        plt = self.get_channel_plot(param['channel'])
+        plt.addItem(param.region)
+        self._rename_electrodes()
+        
+    def _electrode_region_changed(self):
+        self._rename_electrodes()
+        
+    def _rename_electrodes(self):
+        # sort electrodes by channel
+        elecs = {}
+        for elec in self.params.children():
+            elecs.setdefault(elec['channel'], []).append(elec)
+        
+        for chan in elecs:
+            # sort all electrodes on this channel by start time
+            chan_elecs = sorted(elecs[chan], key=lambda e: e.region.getRegion()[0])
+            
+            # assign names
+            for i,elec in enumerate(chan_elecs):
+                # If there are multiple electrodes on this channel, then 
+                # each extra electrode increments its name by the number of 
+                # headstages (for example, on AD channel 3, the first electrode
+                # is called "Electrode 4", and on an 8-headstage system, the
+                # second electrode will be "Electrode 12").
+                e_id = (chan+1) + (i*n_headstages)
+                elec.id = e_id
+                elec.setName('Electrode %d' % e_id)
+
 
 class ElectrodeParameter(pg.parametertree.parameterTypes.GroupParameter):
-    def __init__(self, ui):
+    def __init__(self, ui, channel, start, stop, status=None, got_cell=None):
         self.ui = ui
         params = [
-            {'name': 'channel', 'type': 'list', 'values': []},
+            {'name': 'channel', 'type': 'list', 'values': ui.list_channels()},
             {'name': 'status', 'type': 'list', 'values': ['No seal', 'Low seal', 'GOhm seal', 'Technical failure']},
+            {'name': 'got cell', 'type': 'bool'},
         ]
         pg.parametertree.parameterTypes.GroupParameter.__init__(self, name="Electrode?", children=params, removable=True)
+        self.child('got cell').sigValueChanged.connect(self._got_cell_changed)
         
-        
+        region = [0, 500]
+        if start is not None:
+            region[0] = start
+        if stop is not None:
+            region[1] = stop
+
+        self.region = pg.LinearRegionItem(region)
+        self.region.setZValue(-10)
+
+        if channel is not None:
+            self['channel'] = channel
+        if status is not None:
+            self['status'] = status
+        if got_cell is not None:
+            self['got cell'] = got_cell
+            
+    def _got_cell_changed(self):
+        if self['got cell'] is True:
+            self.region.setBrush((0, 255, 0, 100))
+        else:
+            self.region.setBrush((0, 0, 255, 100))
+        self.region.update()  # pg bug
+                
