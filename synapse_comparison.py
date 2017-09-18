@@ -20,16 +20,9 @@ import re
 from synaptic_dynamics import DynamicsAnalyzer
 from experiment_list import ExperimentList
 from neuroanalysis.baseline import float_mode
-<<<<<<< HEAD
-from neuroanalysis.data import Trace, TraceList
-||||||| merged common ancestors
-from connection_detection import trace_mean
-from neuroanalysis.data import Trace
-=======
 from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.filter import bessel_filter
 from neuroanalysis.event_detection import exp_deconvolve
->>>>>>> master
 from scipy import stats
 from neuroanalysis.ui.plot_grid import PlotGrid
 from constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
