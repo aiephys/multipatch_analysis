@@ -405,7 +405,7 @@ class ExperimentSubmission(object):
         warnings = []
         
         # Make sure only one NWB file was selected
-        nwb_files = [f['path'] for f in self.files if f['category'] == 'MIES physiology'][0]
+        nwb_files = [f['path'] for f in self.files if f['category'] == 'MIES physiology']
         if len(nwb_files) != 1:
             errors.append('selected %d NWB files (must have exactly 1)' % len(nwb_files))
         
@@ -424,6 +424,8 @@ class ExperimentSubmission(object):
         return summ
     
     def submit(self):
+        for stage in self.stages:
+            assert len(stage.check()[0]) == 0
         for stage in self.stages:
             stage.submit()
 

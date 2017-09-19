@@ -340,7 +340,7 @@ class ImageTreeItem(TypeSelectItem):
         elif len(colors) > 1:
             color = 'y'
         else:
-            color = {'infrared': (255, 220, 220), 'green': (220, 255, 220), 'blue': (220, 220, 255), 'uv': (245, 220, 255)}[colors[0]]
+            color = {'infrared': (255, 230, 230), 'green': (230, 255, 230), 'blue': (230, 230, 255), 'uv': (255, 220, 255)}[colors[0]]
         self.setBackground(2, pg.mkColor(color))
             
 
@@ -366,7 +366,16 @@ class SubmitWindow(QtGui.QWidget):
     def update_info(self, submission):
         self.submission = submission
         errors, warnings = submission.check()
-        messages = '<br>\n'.join(errors+warnings)
+        messages = ''
+        for name, msgs in [('errors', errors), ('warnings', warnings)]:
+            if len(msgs) == 0:
+                messages += "<h3>No %s.</h3><br><br>" % name
+            else:
+                messages += "<h3>%s:</h3></br>\n<ul>\n" % name.capitalize()
+                for msg in msgs:
+                    messages += "<li>" + msg + "<br>\n"
+                messages += "</ul><br><br>\n"
+        
         self.message_text.setHtml(messages)
         
         summary = submission.summary()
