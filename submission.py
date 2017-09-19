@@ -14,6 +14,8 @@ import config
 class SliceSubmission(object):
     """Used to submit a new slice entry to the synphys DB.
     """
+    message = "Generating slice DB entries"
+    
     def __init__(self, dh):
         self.dh = dh
         
@@ -108,6 +110,8 @@ class ExperimentDBSubmission(object):
     This causes several tables to be populated: experiment, sync_rec, recording,
     stim_pulse, stim_spike, pulse_response, baseline
     """
+    message = "Generating database entries"
+
     def __init__(self, dh, nwb_file):
         self.dh = dh
         self.nwb_file = nwb_file
@@ -158,7 +162,6 @@ class ExperimentDBSubmission(object):
         slice_dir = self.dh.parent()
         ts = datetime.fromtimestamp(slice_dir.info()['__timestamp__'])
         slice_entry = db.slice_from_timestamp(ts, session=session)
-
         
         # Create entry in experiment table
         data = self.fields
@@ -289,10 +292,14 @@ class ExperimentDBSubmission(object):
 
 
 class ExperimentMetadataSubmission(object):
-    """Handles storing submission metadata to ACQ4 index files.
+    """Handles storing submission metadata back to ACQ4 index files.
+    
+    This makes it possible to automatically re-submit without user intervention.
     
     (see ExperimentSubmission for details)
     """
+    message = "Copying submission metadata back to index files"
+    
     def __init__(self, site_dh, files, electrodes):
         self.site_dh = site_dh
         self.files = files
@@ -348,7 +355,86 @@ class ExperimentMetadataSubmission(object):
         
         self.site_dh.setInfo(electrodes=self.electrodes)
         
-            
+
+class ElectrodeDBSubmission(object):
+    """Generates electrode / cell / pair entries in the synphys DB
+    """
+    message = "Generating electrode entries in DB"
+    
+    def __init__(self, site_dh):
+        self.site_dh = site_dh
+        
+    def check(self):
+        errors = []
+        info = self.site_dh.info()
+        if 'electrodes' not in info:
+            errors.append("No electrode information found in site metadata.")
+        return errors, []
+        
+    def summary(self):
+        return {'electrodes': None}
+        
+    def submit(self):
+        ts = datetime.fromtimestamp(self.site_dir.info()['__timestamp__'])
+        expt_entry = db.experiment_from_timestamp(ts)
+
+
+class SiteMosaicSubmission(object):
+    """Submit site mosaic data to multiple locations:
+    
+    * Copy site mosaic file to server
+    * Add cell position/label information to DB
+    * Update LIMS json
+    """
+    message = "Submitting site mosaic"
+    
+    def __init__(self, site_dh):
+        self.site_dh = site_dh
+        
+    def check(self):
+        return [], []
+        
+    def summary(self):
+        return {'mosaic': None}
+        
+    def submit(self):
+        pass
+
+
+class RawDataSubmission(object):
+    """Copies all raw data to a central server.
+    """
+    message = "Copying data to server"
+    
+    def __init__(self, site_dh):
+        self.site_dh = site_dh
+        
+    def check(self):
+        return [], []
+        
+    def summary(self):
+        return {'raw_data': None}
+        
+    def submit(self):
+        pass
+        
+
+class LIMSSubmission(object):
+    """Packages all raw data into a single NWB/JSON pair and submits to LIMS.
+    """
+    message = "Submitting data to LIMS"
+    
+    def __init__(self, site_dh):
+        self.site_dh = site_dh
+        
+    def check(self):
+        return [], []
+        
+    def summary(self):
+        return {'lims': None}
+        
+    def submit(self):
+        pass
         
         
         
@@ -398,16 +484,47 @@ class ExperimentSubmission(object):
             ExperimentMetadataSubmission(site_dh, files, electrodes),
             SliceSubmission(site_dh.parent()),
             ExperimentDBSubmission(site_dh, self.nwb_file),
+            ElectrodeDBSubmission(site_dh),
+            RawDataSubmission(site_dh),
+            LIMSSubmission(site_dh),
         ]
         
     def check(self):
         errors = []
         warnings = []
+
+        # sort files by category for counting
+        categories = {}
+        for f in self.files:
+            categories.setdefault(f['category'], []).append(f['path'])
+        n_files = {k:len(v) for k,v in categories.items()}
         
-        # Make sure only one NWB file was selected
-        nwb_files = [f['path'] for f in self.files if f['category'] == 'MIES physiology']
-        if len(nwb_files) != 1:
-            errors.append('selected %d NWB files (must have exactly 1)' % len(nwb_files))
+        # Make sure exactly one NWB file was selected
+        n_mp = n_files.get('MIES physiology', 0)
+        if n_mp != 1:
+            errors.append('selected %d NWB files (must have exactly 1)' % n_mp)
+        
+        # Make sure exactly one MP log file was selected
+        n_mpl = n_files.get('Multipatch log', 0)
+        if n_mpl != 1:
+            errors.append('selected %d multipatch log files (must have exactly 1)' % n_files['Multipatch log'])
+
+        # Check that we have at least 1 slice anatomy image, and warn if we have fewer
+        # than 4
+        n_sa = n_files.get('slice anatomy', 0)
+        if n_sa < 1:
+            errors.append('no slice anatomy images found.')
+        elif n_sa < 4:
+            warnings.append('only %d slice anatomy images found.' % n_sa)
+
+        # warn if there are no slice quality images
+        n_sq = n_files.get('slice quality stack', 0)
+        if n_sq < 1:
+            warnings.append('no slice quality stack found.')
+            
+        # todo: check for images covering all fluorescent reporters
+
+        # todo: make sure all images are associated with a light source
         
         # allow all submission stages to make their own checks
         for stage in self.stages:

@@ -145,6 +145,9 @@ class FileTreeWidget(pg.TreeWidget):
         elif fh.shortName().lower().endswith('.nwb'):
             return NwbTreeItem(self.ui, fh)
         
+        elif fh.shortName().startswith('MultiPatch_'):
+            return MPLogTreeItem(self.ui, fh)
+        
         item = TypeSelectItem(self.ui, fh, ['ignore'], 'ignore')
         return item
 
@@ -239,7 +242,7 @@ class SiteTreeItem(pg.TreeWidgetItem):
     
     def list_files(self):
         """Generate a structure describing all files associated with this 
-        experiment (site).
+        experiment (site) and its parent slice.
         """
         files = []
         slice_dir = self.fh.parent()
@@ -253,6 +256,8 @@ class SiteTreeItem(pg.TreeWidgetItem):
                 if not item.fh.isFile():
                     continue
                 typ = item.type()
+                if typ == 'ignore':
+                    continue
                 files.append({'path': item.fh.name(relativeTo=slice_dir), 'category': typ})
         return files
         
@@ -309,6 +314,16 @@ class NwbTreeItem(TypeSelectItem):
         types = ['ignore', 'MIES physiology']
         if fh.parent().info().get('dirType') == 'Site':
             typ = 'MIES physiology'
+        else:
+            typ = 'ignore'
+        TypeSelectItem.__init__(self, ui, fh, types, typ)
+    
+
+class MPLogTreeItem(TypeSelectItem):
+    def __init__(self, ui, fh):
+        types = ['ignore', 'Multipatch log']
+        if fh.parent().info().get('dirType') == 'Site':
+            typ = types[1]
         else:
             typ = 'ignore'
         TypeSelectItem.__init__(self, ui, fh, types, typ)
