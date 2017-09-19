@@ -22,7 +22,7 @@ from config import synphys_db
 table_schemas = {
     'slice': [
         "All brain slices on which an experiment was attempted.",
-        ('acq_timestamp', 'datetime', 'Creation timestamp for slice data acquisition folder.'),
+        ('acq_timestamp', 'datetime', 'Creation timestamp for slice data acquisition folder.', {'unique': True}),
         ('species', 'str', 'Human | mouse (from LIMS)'),
         ('age', 'int', 'Specimen age (in days) at time of dissection (from LIMS)'),
         ('genotype', 'str', 'Specimen donor genotype (from LIMS)'),
@@ -39,7 +39,7 @@ table_schemas = {
     'experiment': [
         "A group of cells patched simultaneously in the same slice.",
         ('original_path', 'str', 'Describes original location of raw data'),
-        ('acq_timestamp', 'datetime', 'Creation timestamp for site data acquisition folder.'),
+        ('acq_timestamp', 'datetime', 'Creation timestamp for site data acquisition folder.', {'unique': True}),
         ('slice_id', 'slice.id'),
         ('target_region', 'str', 'The intended brain region for this experiment'),
         ('internal', 'str', 'The name of the internal solution used in this experiment. '
@@ -231,18 +231,16 @@ def _generate_mapping(table):
     }
     for column in schema:
         colname, coltype = column[:2]
-        if len(column) > 2:
-            comment = column[2]
-        else:
-            comment = None
+        kwds = {} if len(column) < 4 else column[3]
+        kwds['comment'] = None if len(column) < 3 else column[2]
             
         if coltype not in _coltypes:
             if not coltype.endswith('.id'):
                 raise ValueError("Unrecognized column type %s" % coltype)
-            props[colname] = Column(Integer, ForeignKey(coltype), comment=comment)
+            props[colname] = Column(Integer, ForeignKey(coltype), **kwds)
         else:
             ctyp = _coltypes[coltype]
-            props[colname] = Column(ctyp, comment=comment)
+            props[colname] = Column(ctyp, **kwds)
     return type(name, (ORMBase,), props)
 
 
@@ -318,6 +316,17 @@ def slice_from_timestamp(ts):
         raise KeyError("Multiple slices found for timestamp %s" % ts)
     
     return slices[0]
+
+
+def experiment_from_timestamp(ts):
+    session = Session()
+    expts = session.query(Experiment).filter(Experiment.acq_timestamp==ts).all()
+    if len(expts) == 0:
+        raise KeyError("No experiment found for timestamp %s" % ts)
+    elif len(expts) > 1:
+        raise RuntimeError("Multiple experiments found for timestamp %s" % ts)
+    
+    return expts[0]
 
 
 

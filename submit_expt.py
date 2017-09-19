@@ -31,7 +31,7 @@ class ExperimentSubmitUi(QtGui.QWidget):
         self.ctrl_layout.setContentsMargins(0, 0, 0, 0)
         self.hsplit.addWidget(self.ctrl_widget)
         
-        self.file_tree = FileTreeWidget()
+        self.file_tree = FileTreeWidget(self)
         self.file_tree.itemSelectionChanged.connect(self.selection_changed)
         self.ctrl_layout.addWidget(self.file_tree, 0, 0, 1, 2)
         
@@ -54,6 +54,7 @@ class ExperimentSubmitUi(QtGui.QWidget):
         
         self.timeline = ui.ExperimentTimeline()
         self.vsplit.addWidget(self.timeline)
+        self.vsplit.setSizes([300, 600])
         
         self.submit_window = SubmitWindow()
         
@@ -72,8 +73,8 @@ class ExperimentSubmitUi(QtGui.QWidget):
 
     def submit_clicked(self):
         sel = self.file_tree.selectedItems()[0]
-        data, messages, submit_fn = sel.submission_data()
-        self.submit_window.update_info(messages, data, submit_fn)
+        sub = sel.submission()
+        self.submit_window.update_info(sub)
         self.submit_window.show()
         self.submit_window.activateWindow()        
 
@@ -84,8 +85,9 @@ class ExperimentSubmitUi(QtGui.QWidget):
 
 
 class FileTreeWidget(pg.TreeWidget):
-    def __init__(self):
+    def __init__(self, ui):
         pg.TreeWidget.__init__(self)
+        self.ui = ui
         self.path = None
         self.setColumnCount(3)
         self.setHeaderLabels(['file', 'category', 'metadata'])
@@ -110,9 +112,11 @@ class FileTreeWidget(pg.TreeWidget):
         self._fill_tree(dh, root)
         
     def _fill_tree(self, dh, root):
+        self.items = {}
         for fname in dh.ls():
             fh = dh[fname]
             item = self._make_item(fh)
+            self.items[fh] = item
             if hasattr(item, 'type_selected'):
                 item.type_selected.connect(self._item_type_selected)
             
@@ -133,15 +137,15 @@ class FileTreeWidget(pg.TreeWidget):
             dirtyp = info.get('dirType', None)
             dtyps = {'Experiment': ExperimentTreeItem, 'Slice': SliceTreeItem, 'Site': SiteTreeItem}
             if dirtyp in dtyps:
-                return dtyps[dirtyp](fh)
+                return dtyps[dirtyp](self.ui, fh)
         
         if objtyp in ['ImageFile', 'MetaArray']:
-            return ImageTreeItem(fh)
+            return ImageTreeItem(self.ui, fh)
         
         elif fh.shortName().lower().endswith('.nwb'):
-            return NwbTreeItem(fh)
+            return NwbTreeItem(self.ui, fh)
         
-        item = TypeSelectItem(fh, ['ignore'], 'ignore')
+        item = TypeSelectItem(self.ui, fh, ['ignore'], 'ignore')
         return item
 
     def _item_type_selected(self, item, typ):
@@ -188,15 +192,15 @@ class FileTreeWidget(pg.TreeWidget):
 
 
 class ExperimentTreeItem(pg.TreeWidgetItem):
-    def __init__(self, fh):
+    def __init__(self, ui, fh):
         self.fh = fh
         pg.TreeWidgetItem.__init__(self, [fh.shortName()])
 
 
 class SliceTreeItem(pg.TreeWidgetItem):
-    def __init__(self, fh):
+    def __init__(self, ui, fh):
         self.fh = fh
-        self.is_submittable = True
+        self.is_submittable = False
         
         in_db = database.slice_from_timestamp(datetime.fromtimestamp(fh.info()['__timestamp__']))
         if len(in_db) == 0:
@@ -205,58 +209,53 @@ class SliceTreeItem(pg.TreeWidgetItem):
             status = "submitted"
         pg.TreeWidgetItem.__init__(self, [fh.shortName(), status])
 
-    def submission_data(self):
-        slice_dh = self.fh
-        info = slice_dh.info()
-
-        files = {}
-        for item in self.childItems():
-            typ = item.text(1)
-            if typ in ['ignore', '']:
-                continue
-            fname = item.text(0)
-            files.setdefault(typ, []).append(fname)
-        
-        data = {
-            'image_files': files,
-        }
-
-        specimen = info['specimen_ID'].strip()
-        data['specimen_name'] = specimen
-        
-
-        if len(messages) == 0:
-            msg = "No issues; ready to submit."
-        else:
-            msg = '\n'.join(messages)
-        
-        return data, msg, submission.submit_slice
-
 
 class SiteTreeItem(pg.TreeWidgetItem):
-    def __init__(self, fh):
+    def __init__(self, ui, fh):
         self.fh = fh
+        self.ui = ui
         self.is_submittable = True
-        pg.TreeWidgetItem.__init__(self, [fh.shortName()])
-        
-    def submission_data(self):
-        slice_dh = self.fh.parent()
-        expt_dh = slice_dh.parent()
-        data = dict(self.fh.info().deepcopy())
-        data.update(expt_dh.info().deepcopy())
-        data.update(slice_dh.info().deepcopy())
 
-        files = []
-        for item in self.childItems():
-            typ = item.text(1)
-            if typ != 'recording site':
-                continue
-            fname = item.text(0)
-            files.append(fname)
-        data['image_files'] = files
+        try:
+            expt = database.experiment_from_timestamp(datetime.fromtimestamp(fh.info()['__timestamp__']))
+        except KeyError:
+            expt = None
+        if expt is None:
+            status = "NOT SUBMITTED"
+        else:
+            status = "submitted"
+
+        pg.TreeWidgetItem.__init__(self, [fh.shortName(), status])
         
-        msg = "This is <b>totally</b> ready to submit."
-        return data, msg, submission.submit_experiment
+    def submission(self):
+        elecs = self.ui.timeline.save()
+        files = self.list_files()
+        
+        return submission.ExperimentSubmission(
+            site_dh=self.fh, 
+            files=files,
+            electrodes=elecs,
+        )
+    
+    def list_files(self):
+        """Generate a structure describing all files associated with this 
+        experiment (site).
+        """
+        files = []
+        slice_dir = self.fh.parent()
+        slice_item = self.parent()
+        if slice_item is None:
+            slice_item = self.treeWidget().invisibleRootItem()
+            
+        for parent in [slice_item, self]:
+            childs = [parent.child(i) for i in range(parent.childCount())]
+            for item in childs:
+                if not item.fh.isFile():
+                    continue
+                typ = item.type()
+                files.append({'path': item.fh.name(relativeTo=slice_dir), 'category': typ})
+        return files
+        
 
 
 class TypeSelectItem(pg.TreeWidgetItem):
@@ -265,7 +264,7 @@ class TypeSelectItem(pg.TreeWidgetItem):
     class Signals(QtCore.QObject):
         type_selected = QtCore.Signal(object, object)
     
-    def __init__(self, fh, types, current_type):
+    def __init__(self, ui, fh, types, current_type):
         self.is_submittable = False
         self.fh = fh
         self._sigprox = ImageTreeItem.Signals()
@@ -292,6 +291,9 @@ class TypeSelectItem(pg.TreeWidgetItem):
         else:
             self.setBackground(1, pg.mkColor('w'))
 
+    def type(self):
+        return self.text(1)
+
     def itemClicked(self, col):
         if col != 1:
             return
@@ -303,17 +305,17 @@ class TypeSelectItem(pg.TreeWidgetItem):
         
 
 class NwbTreeItem(TypeSelectItem):
-    def __init__(self, fh):
+    def __init__(self, ui, fh):
         types = ['ignore', 'MIES physiology']
         if fh.parent().info().get('dirType') == 'Site':
             typ = 'MIES physiology'
         else:
             typ = 'ignore'
-        TypeSelectItem.__init__(self, fh, types, typ)
+        TypeSelectItem.__init__(self, ui, fh, types, typ)
     
 
 class ImageTreeItem(TypeSelectItem):
-    def __init__(self, fh):
+    def __init__(self, ui, fh):
         info = fh.info()
         obj = fh.info().get('objective', '')
 
@@ -329,7 +331,7 @@ class ImageTreeItem(TypeSelectItem):
                 typ = 'slice anatomy'
 
         types = ['ignore', 'slice anatomy', 'slice quality stack', 'recording site']
-        TypeSelectItem.__init__(self, fh, types, typ)
+        TypeSelectItem.__init__(self, ui, fh, types, typ)
         
         self.setText(2, obj)
         colors = info.get('illumination', {}).keys()
@@ -338,7 +340,7 @@ class ImageTreeItem(TypeSelectItem):
         elif len(colors) > 1:
             color = 'y'
         else:
-            color = {'infrared': (255, 200, 200), 'green': (200, 255, 200), 'blue': (200, 200, 255), 'uv': (240, 200, 255)}[colors[0]]
+            color = {'infrared': (255, 220, 220), 'green': (220, 255, 220), 'blue': (220, 220, 255), 'uv': (245, 220, 255)}[colors[0]]
         self.setBackground(2, pg.mkColor(color))
             
 
@@ -361,14 +363,17 @@ class SubmitWindow(QtGui.QWidget):
         self.submit_btn.clicked.connect(self.submit)
         self.layout.addWidget(self.submit_btn, 1, 1)
         
-    def update_info(self, messages, data, submit_fn):
-        self.submit_fn = submit_fn
+    def update_info(self, submission):
+        self.submission = submission
+        errors, warnings = submission.check()
+        messages = '<br>\n'.join(errors+warnings)
         self.message_text.setHtml(messages)
-        self.info_tree.setData(data)
-        self.data = data
+        
+        summary = submission.summary()
+        self.info_tree.setData(summary)
         
     def submit(self):
-        self.submit_fn(self.data)
+        self.submission.submit()
         
 
 
@@ -382,11 +387,11 @@ def submit(data):
 if __name__ == '__main__':
     import sys
     app = pg.mkQApp()
-    #pg.dbg()
+    pg.dbg()
     
     path = sys.argv[1]
     ui = ExperimentSubmitUi()
-    ui.resize(1300, 800)
+    ui.resize(1600, 1000)
     ui.show()
     ui.set_path(path)
     

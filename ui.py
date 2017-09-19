@@ -1,5 +1,5 @@
 from collections import OrderedDict
-import os, sys, subprocess
+import os, sys, subprocess, datetime
 import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtGui
@@ -223,6 +223,22 @@ class ExperimentTimeline(QtGui.QWidget):
                 e_id = (chan+1) + (i*n_headstages)
                 elec.id = e_id
                 elec.setName('Electrode %d' % e_id)
+
+    def save(self):
+        state = []
+        for elec in self.params.children():
+            rgn = elec.region.getRegion()
+            start = self.start_time + datetime.timedelta(seconds=rgn[0])
+            stop = self.start_time + datetime.timedelta(seconds=rgn[1])
+            state.append({
+                'id': elec.id,
+                'status': elec['status'],
+                'got_cell': elec['got cell'],
+                'channel': elec['channel'],
+                'start': start,
+                'stop': stop,
+            })
+        return state
 
 
 class ElectrodeParameter(pg.parametertree.parameterTypes.GroupParameter):

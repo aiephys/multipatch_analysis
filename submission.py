@@ -1,3 +1,4 @@
+from collections import OrderedDict
 from datetime import datetime
 import database as db
 from neuroanalysis.baseline import float_mode
@@ -49,12 +50,27 @@ class SliceSubmission(object):
         errors = []
         fields = self.fields
         
-        # TODO: Add a lot more checking here..
-        
+        ts = datetime.fromtimestamp(self.dh.info()['__timestamp__'])
+        try:
+            slice_entry = db.slice_from_timestamp(ts)
+            update_fields = []
+            for k,v in fields.items():
+                v1 = getattr(slice_entry, k)
+                if v1 != v:
+                    update_fields.append((k, v1, v))
+            if len(update_fields) > 0:
+                update_msg = ['%s: %s=>%s'%x for x in update_fields]
+                warnings.append("will overwrite slice metadata: %s" % (', '.join(update_msg)))
+        except KeyError:
+            pass
+       
         if fields['surface'] not in ['right', 'left']:
             warnings.append("Warning: slice surface '%s' should have been 'right' or 'left'" % surface)
         
         return errors, warnings
+        
+    def summary(self):
+        return {'slice': self.fields}
         
     def create(self):
         if len(self.check()[0]) > 0:
@@ -86,7 +102,7 @@ def submit_slice(data):
     """
     
     
-class ExperimentSubmission(object):
+class ExperimentDBSubmission(object):
     """Used to submit a new experiment entry to the synphys DB.
     
     This causes several tables to be populated: experiment, sync_rec, recording,
@@ -103,8 +119,6 @@ class ExperimentSubmission(object):
             info = self.dh.info()
             
             slice_dir = self.dh.parent()
-            ts = datetime.fromtimestamp(slice_dir.info()['__timestamp__'])
-            slice_id = db.slice_from_timestamp(ts).id
             
             expt_dir = slice_dir.parent()
             expt_info = expt_dir.info()
@@ -116,7 +130,6 @@ class ExperimentSubmission(object):
             self._fields = {
                 'original_path': '%s:%s' % (config.rig_name, self.dh.name()),
                 'acq_timestamp': datetime.fromtimestamp(info['__timestamp__']),
-                'slice_id': slice_id,
                 'target_region': expt_info.get('region'),
                 'internal': expt_info.get('internal'),
                 'acsf': expt_info.get('acsf'),
@@ -133,14 +146,25 @@ class ExperimentSubmission(object):
         # TODO: Add a lot more checking here..
         
         return errors, warnings
+    
+    def summary(self):
+        return {'database': 'might add some records..'}
         
     def create(self, session):
         if len(self.check()[0]) > 0:
             raise Exception("Submission has errors; see SiteSubmission.check()")
+
+        # look up slice record in DB
+        slice_dir = self.dh.parent()
+        ts = datetime.fromtimestamp(slice_dir.info()['__timestamp__'])
+        slice_entry = db.slice_from_timestamp(ts)
+
         
         # Create entry in experiment table
         data = self.fields
         expt = db.Experiment(**data)
+        expt.slice = slice_entry
+        self.expt_entry = expt
         session.add(expt)
         
         # Load NWB file and create data entries
@@ -264,139 +288,146 @@ class ExperimentSubmission(object):
         session.commit()
 
 
-
-def submit_experiment(data):
-    """Submit a new experiment to the internal analysis DB.
+class ExperimentMetadataSubmission(object):
+    """Handles storing submission metadata to ACQ4 index files.
     
-        data = {
-            'slice_specimen_id': <LIMS specimen ID of parent slice>,
-            'original_site_path': <original file location eg: \\RIG\\D\...\site_000>,
-            'acquisition_uid': <unique ID chosen by acquisition system>,
-            'nwb_file': <subpath to NWB file>,
-            'images': {
-                'recording site': [image file names],
-            }
-            'electrodes': 
-        }
-    
-    
-    Causes new structures to be generated in DB:
-    
-    * an entry in experiment table
-    * entries in electrode, cell, pair tables
-    * entries in syncrec, recording, trace tables 
-      (these just enumerate the structures in the NWB)
-    * entries in stim_pulse, stim_spike, pulse_response, and baseline tables
-      (these are extracted from NWB)
-    
+    (see ExperimentSubmission for details)
     """
-    
-    prof = Profiler(disabled=True, delayed=False)
-    
-    if expt.expt_id in expt_index:
-        print("Cached: %s" % expt)
-        raise NotImplementedError()
-    
-    prof.mark('start')
-    expt_id = len(expt_rows)
-    expt_rows.append({'id': expt_id, 'expt_key': expt.expt_id, 'internal_id': -1,
-        'acsf_id': -1, 'temperature': np.nan, 'age': expt.age, 'genotype': None,
-        'date': expt.date})
-    expt_index[expt.expt_id] = expt_id
-    
-    cell_ids = {}
-    for cell in expt.cells.values():
-        cell_id = len(cell_rows)
-        # mapping from experiment's internal ID for this cell to global cell ID 
-        cell_ids[cell.cell_id] = cell_id
-        cell_rows.append({'id': cell_id, 'expt_id': expt_id, 
-            'device_key': cell.cell_id, 'cre_type': cell.cre_type,
-            'pass_qc': cell.pass_qc, 'position': cell.position,
-            'depth': cell.depth})
-    prof.mark('cells')
-
-
-    expt_data = expt.data
-    for srec in expt_data.contents:
-        srec_id = len(srec_rows)
-        srec_rows.append({'id': srec_id, 'expt_id': expt_id,
-            'sync_rec_key': srec.key})
-        rec_key_id_map = {}
-        pulse_key_n_id_map = {}
-        for rec in srec.recordings:
-            rec_id = len(rec_rows)
-            rec_key_id_map[rec.device_id] = rec_id
-            tp_id = len(tp_rows)
-            cell_id = cell_ids[rec.device_id + 1]
-            psa = PulseStimAnalyzer.get(rec)
-            ind_freq, recovery_delay = psa.stim_params()
-            
-            rec_rows.append({'id': rec_id, 'sync_rec_id': srec_id, 'cell_id': cell_id,
-                'device_key': rec.device_id, 'stim_name': rec.meta['stim_name'],
-                'clamp_mode': rec.clamp_mode, 'test_pulse_id': tp_id,
-                'sample_rate': rec['primary'].sample_rate,
-                'induction_freq': ind_freq, 'recovery_delay': recovery_delay})
-            
-            pulses = psa.pulses()
-            if pulses[0][2] < 0:
-                # test pulse
-                tp = pulses[0]
-            else:
-                tp = (None, None)
-            tp_rows.append({'id': tp_id, 'recording_id': rec_id,
-                'pulse_start': tp[0], 'pulse_stop': tp[1],
-                })
-            
-            if pre is None or rec.device_id == pre:
-                pulse_n_id_map = {}
-                for i,pulse in enumerate(pulses):
-                    pulse_id = len(pulse_rows)
-                    pulse_n_id_map[i] = pulse_id
-                    pulse_key_n_id_map[(rec.device_id, i)] = pulse_id
-                    pulse_rows.append({'id': pulse_id, 'recording_id': rec_id,
-                        'pulse_number': i, 'onset_index': pulse[0],
-                        'length': pulse[1]-pulse[0], 'amplitude': pulse[2],
-                        'n_spikes': 0})
-            
-                spikes = psa.evoked_spikes()
-                for sp in spikes:
-                    sp_id = len(spike_rows)
-                    pulse_id = pulse_n_id_map[sp['pulse_n']]
-                    srow = {'id': sp_id, 'recording_id': rec_id, 'pulse_id': pulse_id}
-                    pulse_rows[pulse_id]['n_spikes'] += 1
-                    if sp['spike'] is not None:
-                        srow.update(sp['spike'])
-                    spike_rows.append(srow)
-            
-        mpa = MultiPatchSyncRecAnalyzer(srec)
-        for pre_dev in srec.devices:
-            if pre is not None and pre_dev != pre:
+    def __init__(self, site_dh, files, electrodes):
+        self.site_dh = site_dh
+        self.files = files
+        self.electrodes = electrodes
+        
+    def check(self):
+        """
+        * error if any files do not exist
+        * warning if existing files are not mentioned in file list
+        * warning if any metadata would be overwritten with a new value
+        """
+        errors = []
+        warnings = []
+        
+        slice_dh = self.site_dh.parent()
+        for file_info in self.files:
+            fh = slice_dh[file_info['path']]
+            if not fh.isFile():
+                errors.append("file %s does not exist" % fh.name())
                 continue
+            info = fh.info()
+            if 'category' in info and info['category'] != file_info['category']:
+                warnings.append("category for file %s will change %s => %s" % 
+                                (info['category'], file_info['category']))
+        
+        all_files = [f['path'] for f in self.files]
+        for dh in [slice_dh, self.site_dh]:
+            for fname in dh.ls():
+                fh = dh[fname]
+                relname = fh.name(relativeTo=slice_dh)
+                if fh.isFile() and relname not in all_files:
+                    warnings.append("file %s is not mentioned in metadata." % relname)
+        
+        site_info = self.site_dh.info()
+        if 'electrodes' in site_info and site_info['electrodes'] != self.electrodes:
+            warnings.append('site electrode metadata will be overwritten: %s => %s' % 
+                            (site_info['electrodes'], self.electrodes))
+        
+        return errors, warnings
+
+    def summary(self):
+        summ = OrderedDict()
+        summ['file categories'] = self.files
+        summ['electrodes'] = self.electrodes
+        
+        return {'metadata': summ}
+    
+    def submit(self):
+        slice_dh = self.site_dh.parent()
+        for file_info in self.files:
+            fh = slice_dh[file_info['path']]
+            fh.setInfo(category=file_info['category'])
+        
+        self.site_dh.setInfo(electrodes=self.electrodes)
+        
             
-            for post_dev in srec.devices:
-                if post is not None and post_dev != post:
-                    continue
-                
-                responses = mpa.get_spike_responses(srec[pre_dev], srec[post_dev], align_to='pulse', require_spike=False)
-                for resp in responses:
-                    resp_id = len(response_rows)
-                    bl_id = len(baseline_rows)
-                    baseline_rows.append({'id': bl_id,
-                        'recording_id': rec_key_id_map[post_dev],
-                        'start_index': resp['baseline_start'],
-                        'stop_index': resp['baseline_stop'],
-                        'data': resp['baseline'].downsample(f=50000).data,
-                        'value': float_mode(resp['baseline'].data),
-                    })
-                    response_rows.append({'id': resp_id, 
-                        'recording_id': rec_key_id_map[post_dev],
-                        'pulse_id': pulse_key_n_id_map[(pre_dev, resp['pulse_n'])],
-                        'start_index': resp['rec_start'], 'stop_index': resp['rec_stop'],
-                        'baseline_id': bl_id,
-                        'data': resp['response'].downsample(f=50000).data,
-                    })
+        
+        
+        
+
+
+class ExperimentSubmission(object):
+    def __init__(self, site_dh, files, electrodes):
+        """Handles the entire process of submitting an experiment, including:
+        
+        1. Storing submission metadata into ACQ4 index files
+        2. Submitting slice metadata to synphys DB
+        3. Submitting initial experiment to synphys DB
+        4. Submitting electrode / cell info to synphys DB
+        5. Copying all files to synphys data storage
+        6. Generating NWB file
+        7. Submitting NWB + metadata to LIMS
+        
+        Parameters
+        ----------
+        dh : DirHandle
+            Handle to the ACQ4 "site" folder to be submitted
+        files : list
+            Describes all files to be considered part of this experiment.
+            Each item in the list is a dict containing:
+               
+                * path: file path relative to slice folder
+                * category: the purpose of this file
+        electrodes : list
+            Describes all electrodes used during this experiment. Each item in
+            the list is a dict containing:
+            
+                * id: the ID of this electrode (usually 1-8)
+                * status: 'GOhm seal', 'Low seal', 'No seal', ...
+                * got_cell: bool, whether a cell was recorded from
+                * channel: AD channel number for this electrode
+                * start: starting datetime
+                * stop: ending datetime
+        """
+        self.site_dh = site_dh
+        self.files = files
+        self.electrodes = electrodes
     
+        nwb_file = [f['path'] for f in files if f['category'] == 'MIES physiology'][0]
+        self.nwb_file = site_dh.parent()[nwb_file]
     
+        self.stages = [
+            ExperimentMetadataSubmission(site_dh, files, electrodes),
+            SliceSubmission(site_dh.parent()),
+            ExperimentDBSubmission(site_dh, self.nwb_file),
+        ]
+        
+    def check(self):
+        errors = []
+        warnings = []
+        
+        # Make sure only one NWB file was selected
+        nwb_files = [f['path'] for f in self.files if f['category'] == 'MIES physiology'][0]
+        if len(nwb_files) != 1:
+            errors.append('selected %d NWB files (must have exactly 1)' % len(nwb_files))
+        
+        # allow all submission stages to make their own checks
+        for stage in self.stages:
+            e,w = stage.check()
+            errors.extend(e)
+            warnings.extend(w)
+            
+        return errors, warnings
+
+    def summary(self):
+        summ = OrderedDict()
+        for stage in self.stages:
+            summ.update(stage.summary())
+        return summ
+    
+    def submit(self):
+        for stage in self.stages:
+            stage.submit()
+
+
 def submit_site_mosaic(data):
     """Submit a site mosaic and information about cell labeling
     
