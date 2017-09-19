@@ -91,7 +91,9 @@ for connection_type, synapse_id in connections.items():
         if freq <= stop_freq:
             sweep_trace = amp_group.responses[sweep]
             holding_potential = int(sweep_trace.recording.holding_potential*1000)
+            holding = []
             if holding_potential >= -72 and holding_potential <= -68:
+                holding.append(holding_potential)
                 post_base = float_mode(sweep_trace.data[:int(10e-3 / sweep_trace.dt)])
                 pre_spike = amp_group.spikes[sweep]
                 pre_base = float_mode(pre_spike.data[:int(10e-3 / pre_spike.dt)])
@@ -110,7 +112,7 @@ for connection_type, synapse_id in connections.items():
         avg_spike.t0 = 0
         grid[row[1], 0].setLabels(left=('Vm', 'V'))
         grid[row[1], 0].setLabels(bottom=('t', 's'))
-        grid[row[1], 0].setXRange(0, 27e-3)
+        grid[row[1], 0].setXRange(-2e-3, 27e-3)
         grid[row[1], 0].plot(avg_first_pulse.time_values, avg_first_pulse.data, pen={'color': 'k', 'width': 2})
         grid[row[0], 0].setLabels(left=('Vm', 'V'))
         sweep_list['spike'][0].t0 = 0
@@ -119,6 +121,9 @@ for connection_type, synapse_id in connections.items():
         label = pg.LabelItem('%s, n = %d' % (connection_type, n))
         label.setParentItem(grid[row[1], 0].vb)
         label.setPos(50, 0)
+        holding_label = pg.LabelItem('%d mV' % (sum(holding)/len(holding)))
+        holding_label.setParentItem(grid[row[1], 0].vb)
+        holding_label.setPos(50, 100)
         grid[row[1], 0].label = label
         maxYpulse.append((row[1], grid[row[1],0].getAxis('left').range[1]))
     else:
