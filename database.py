@@ -307,8 +307,9 @@ Session = sessionmaker(bind=engine)
 
     
 
-def slice_from_timestamp(ts):
-    session = Session()
+def slice_from_timestamp(ts, session=None):
+    if session is None:
+        session = Session()
     slices = session.query(Slice).filter(Slice.acq_timestamp==ts).all()
     if len(slices) == 0:
         raise KeyError("No slice found for timestamp %s" % ts)
@@ -318,8 +319,9 @@ def slice_from_timestamp(ts):
     return slices[0]
 
 
-def experiment_from_timestamp(ts):
-    session = Session()
+def experiment_from_timestamp(ts, session=None):
+    if session is None:
+        session = Session()
     expts = session.query(Experiment).filter(Experiment.acq_timestamp==ts).all()
     if len(expts) == 0:
         raise KeyError("No experiment found for timestamp %s" % ts)

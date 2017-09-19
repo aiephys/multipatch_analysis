@@ -157,7 +157,7 @@ class ExperimentDBSubmission(object):
         # look up slice record in DB
         slice_dir = self.dh.parent()
         ts = datetime.fromtimestamp(slice_dir.info()['__timestamp__'])
-        slice_entry = db.slice_from_timestamp(ts)
+        slice_entry = db.slice_from_timestamp(ts, session=session)
 
         
         # Create entry in experiment table
