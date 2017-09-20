@@ -633,7 +633,7 @@ if __name__ == '__main__':
     import sys
     arg = sys.argv[1]
     try:
-        expt_ind = int(arg)
+        expt_ind = arg
         from experiment_list import ExperimentList
         all_expts = ExperimentList(cache='expts_cache.pkl')
         expt = all_expts[expt_ind].data
