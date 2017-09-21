@@ -8,7 +8,7 @@ from allensdk_internal.core import lims_utilities as lims
 from data import MultipatchExperiment
 from connection_detection import PulseStimAnalyzer, MultiPatchSyncRecAnalyzer
 import config
-
+from pyqtgraph.debug import Profiler
 
 
 class SliceSubmission(object):
@@ -27,8 +27,14 @@ class SliceSubmission(object):
             info = self.dh.info()
             
             # pull some metadata from LIMS
-            sid = info['specimen_ID']
+            sid = info['specimen_ID'].strip()
             limsdata = specimen_info(sid)
+
+            quality = info.get('slice quality', None)
+            try:
+                quality = int(quality)
+            except Exception:
+                quality = None
 
             self._fields = {
                 'acq_timestamp': datetime.fromtimestamp(info['__timestamp__']),
@@ -38,7 +44,7 @@ class SliceSubmission(object):
                 'orientation': limsdata['plane_of_section'],
                 'surface': limsdata['exposed_surface'],
                 'hemisphere': limsdata['hemisphere'],
-                'quality': info.get('slice quality'),
+                'quality': quality,
                 'slice_time': info.get('slice time'),
                 'slice_conditions': {},
                 'lims_specimen_name': sid,
@@ -67,9 +73,18 @@ class SliceSubmission(object):
             pass
        
         if fields['surface'] not in ['right', 'left']:
-            warnings.append("Warning: slice surface '%s' should have been 'right' or 'left'" % surface)
+            warnings.append("Warning: slice surface '%s' should have been 'right' or 'left'" % fields['surface'])
         
         return errors, warnings
+        
+    def submitted(self):
+        slice_dir = self.dh
+        ts = datetime.fromtimestamp(slice_dir.info()['__timestamp__'])
+        try:
+            slice_entry = db.slice_from_timestamp(ts)
+            return True
+        except KeyError:
+            return False
         
     def summary(self):
         return {'slice': self.fields}
@@ -83,9 +98,12 @@ class SliceSubmission(object):
         
     def submit(self):
         session = db.Session()
-        sl = self.create()
-        session.add(sl)
-        session.commit()
+        try:
+            sl = self.create()
+            session.add(sl)
+            session.commit()
+        finally:
+            session.close()
         
 
 def submit_slice(data):
@@ -117,44 +135,57 @@ class ExperimentDBSubmission(object):
         self.nwb_file = nwb_file
         self._fields = None
 
-    @property
-    def fields(self):
-        if self._fields is None:
-            info = self.dh.info()
-            
-            slice_dir = self.dh.parent()
-            
-            expt_dir = slice_dir.parent()
-            expt_info = expt_dir.info()
-
-            temp = expt_info.get('temperature')
-            if temp is not None:
-                temp = float(temp.rstrip(' C'))
-
-            self._fields = {
-                'original_path': '%s:%s' % (config.rig_name, self.dh.name()),
-                'acq_timestamp': datetime.fromtimestamp(info['__timestamp__']),
-                'target_region': expt_info.get('region'),
-                'internal': expt_info.get('internal'),
-                'acsf': expt_info.get('acsf'),
-                'target_temperature': temp,
-                
-            }
-        return self._fields
+    def submitted(self):
+        site_dir = self.dh
+        ts = datetime.fromtimestamp(site_dir.info()['__timestamp__'])
+        try:
+            expt_entry = db.experiment_from_timestamp(ts)
+            return True
+        except KeyError:
+            return False
 
     def check(self):
         warnings = []
         errors = []
-        fields = self.fields
         
-        # TODO: Add a lot more checking here..
+        info = self.dh.info()
         
+        slice_dir = self.dh.parent()
+        
+        expt_dir = slice_dir.parent()
+        expt_info = expt_dir.info()
+        self._expt_info = expt_info
+
+        temp = expt_info.get('temperature')
+        if temp is not None:
+            temp = temp.lower().rstrip(' c').strip()
+            if temp == 'rt':
+                temp = 22.0
+            else:
+                try:
+                    temp = float(temp)
+                except Exception:
+                    temp = None
+                    errors.append("Experiment temperature '%s' is invalid." % self._expt_info['temperature'])
+        
+        self.fields = {
+            'original_path': '%s:%s' % (config.rig_name, self.dh.name()),
+            'acq_timestamp': datetime.fromtimestamp(info['__timestamp__']),
+            'target_region': expt_info.get('region'),
+            'internal': expt_info.get('internal'),
+            'acsf': expt_info.get('acsf'),
+            'target_temperature': temp,
+            
+        }
+                
         return errors, warnings
     
     def summary(self):
         return {'database': 'might add some records..'}
         
     def create(self, session):
+        prof = Profiler(disabled=False, delayed=False)
+        
         if len(self.check()[0]) > 0:
             raise Exception("Submission has errors; see SiteSubmission.check()")
 
@@ -172,6 +203,8 @@ class ExperimentDBSubmission(object):
         
         # Load NWB file and create data entries
         nwb = MultipatchExperiment(self.nwb_file.name())
+        
+        prof('load nwb')
 
         for srec in nwb.contents:
             srec_entry = db.SyncRec(sync_rec_key=srec.key, experiment=expt)
@@ -258,7 +291,9 @@ class ExperimentDBSubmission(object):
                         **extra
                     )
                     session.add(spike_entry)
-                
+            
+            #prof('import recordings')
+            
             # import postsynaptic responses
             mpa = MultiPatchSyncRecAnalyzer(srec)
             for pre_dev in srec.devices:
@@ -270,7 +305,8 @@ class ExperimentDBSubmission(object):
                             recording=rec_entries[post_dev],
                             start_index=resp['baseline_start'],
                             stop_index=resp['baseline_stop'],
-                            data=resp['baseline'].downsample(f=50000).data,
+                            # 50kHz should be the lowest sample rate in our data..
+                            data=resp['baseline'].resample(sample_rate=50000).data,
                             mode=float_mode(resp['baseline'].data),
                         )
                         session.add(base_entry)
@@ -283,12 +319,21 @@ class ExperimentDBSubmission(object):
                             data=resp['response'].downsample(f=50000).data,
                         )
                         session.add(resp_entry)
+                        
+            #prof('import responses')
+            
         return expt
         
     def submit(self):
+        prof = Profiler(disabled=False, delayed=False)
         session = db.Session()
-        exp = self.create(session)
-        session.commit()
+        try:
+            exp = self.create(session)
+            prof('create experiment')
+            session.commit()
+            prof('commit session')
+        finally:
+            session.close()
 
 
 class ExperimentMetadataSubmission(object):
