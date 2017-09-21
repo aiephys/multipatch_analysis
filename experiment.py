@@ -438,26 +438,29 @@ class Experiment(object):
         return self._nwb_file
 
     @property
+    def nwb_cache_file(self):
+        if not os.path.isdir('cache'):
+            os.mkdir('cache')
+        cf = os.path.join('cache', self.nwb_file.replace('/', '_').replace(':', '_').replace('\\', '_'))
+        if not os.path.isfile(cf) or os.stat(self.nwb_file).st_mtime > os.stat(cf).st_mtime:
+            try:
+                import shutil
+                print("copying to cache:", cf)
+                shutil.copyfile(self.nwb_file, cf)
+            except:
+                if os.path.isfile(cf):
+                    os.remove(cf)
+                raise
+        return cf
+
+    @property
     def data(self):
         """Data object from NWB file. 
         
         Contains all ephys recordings.
         """
         if self._data is None:
-            if not os.path.isdir('cache'):
-                os.mkdir('cache')
-            cf = os.path.join('cache', self.nwb_file.replace('/', '_').replace(':', '_').replace('\\', '_'))
-            if not os.path.isfile(cf) or os.stat(self.nwb_file).st_mtime > os.stat(cf).st_mtime:
-                try:
-                    import shutil
-                    print("copying to cache:", cf)
-                    shutil.copyfile(self.nwb_file, cf)
-                except:
-                    if os.path.isfile(cf):
-                        os.remove(cf)
-                    raise
-            
-            self._data = MultipatchExperiment(cf)
+            self._data = MultipatchExperiment(self.nwb_cache_file)
         return self._data
 
     def close_data(self):
