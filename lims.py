@@ -29,7 +29,7 @@ def specimen_info(specimen_name):
     """
     
     # Query all interesting information about this specimen from LIMS
-    sid = specimen_name
+    sid = specimen_name.strip()
     query = """
         select 
             organisms.name as organism, 
@@ -51,7 +51,7 @@ def specimen_info(specimen_name):
     """ % sid
     r = lims.query(query)
     if len(r) != 1:
-        raise Exception("LIMS lookup for specimen %s returned %d results (expected 1)" % (sid, len(r)))
+        raise Exception("LIMS lookup for specimen '%s' returned %d results (expected 1)" % (sid, len(r)))
     rec = r[0]
     
     # convert thickness to unscaled
