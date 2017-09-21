@@ -13,9 +13,6 @@ from sqlalchemy.types import TypeDecorator
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql.expression import func
 
-
-from neuroanalysis.baseline import float_mode
-from connection_detection import PulseStimAnalyzer, MultiPatchSyncRecAnalyzer
 from config import synphys_db
 
 
@@ -303,13 +300,23 @@ Session = sessionmaker(bind=engine)
 
 
 
+def default_session(fn):
+    def wrap_with_session(*args, **kwds):
+        close = False
+        if kwds.get('session', None) is None:
+            kwds['session'] = Session()
+            close = True
+        try:
+            ret = fn(*args, **kwds)
+            return ret
+        finally:
+            if close:
+                kwds['session'].close()
+    return wrap_with_session    
 
 
-    
-
+@default_session
 def slice_from_timestamp(ts, session=None):
-    if session is None:
-        session = Session()
     slices = session.query(Slice).filter(Slice.acq_timestamp==ts).all()
     if len(slices) == 0:
         raise KeyError("No slice found for timestamp %s" % ts)
@@ -319,9 +326,8 @@ def slice_from_timestamp(ts, session=None):
     return slices[0]
 
 
+@default_session
 def experiment_from_timestamp(ts, session=None):
-    if session is None:
-        session = Session()
     expts = session.query(Experiment).filter(Experiment.acq_timestamp==ts).all()
     if len(expts) == 0:
         raise KeyError("No experiment found for timestamp %s" % ts)
