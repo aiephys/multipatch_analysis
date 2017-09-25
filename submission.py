@@ -1,3 +1,4 @@
+import re
 from collections import OrderedDict
 from datetime import datetime
 import database as db
@@ -5,7 +6,7 @@ from neuroanalysis.baseline import float_mode
 from neuroanalysis.data import PatchClampRecording
 from lims import specimen_info
 from allensdk_internal.core import lims_utilities as lims
-from data import MultipatchExperiment
+from data import MultiPatchExperiment, MultiPatchRecording
 from connection_detection import PulseStimAnalyzer, MultiPatchSyncRecAnalyzer
 import config
 from pyqtgraph.debug import Profiler
@@ -36,6 +37,18 @@ class SliceSubmission(object):
             except Exception:
                 quality = None
 
+            # Interpret slice time
+            slice_time = info.get('slice time', None)
+            if slice_time is not None:
+                m = re.match(r'((20\d\d)-(\d{1,2})-(\d{1,2})\s+)?(\d+):(\d+)', slice_time.strip())
+                if m is not None:
+                    _, year, mon, day, hh, mm = m.groups()
+                    if year is None:
+                        date = datetime.fromtimestamp(self.dh.parent().info('__timestamp__'))
+                        slice_time = datetime(date.year, date.month, date.day, hh, mm)
+                    else:
+                        slice_time = datetime(year, mon, day, hh, mm)
+
             self._fields = {
                 'acq_timestamp': datetime.fromtimestamp(info['__timestamp__']),
                 'species': limsdata['organism'],
@@ -45,7 +58,7 @@ class SliceSubmission(object):
                 'surface': limsdata['exposed_surface'],
                 'hemisphere': limsdata['hemisphere'],
                 'quality': quality,
-                'slice_time': info.get('slice time'),
+                'slice_time': slice_time,
                 'slice_conditions': {},
                 'lims_specimen_name': sid,
                 'original_path': '%s:%s' % (config.rig_name, self.dh.name()),
@@ -186,8 +199,9 @@ class ExperimentDBSubmission(object):
     def create(self, session):
         prof = Profiler(disabled=False, delayed=False)
         
-        if len(self.check()[0]) > 0:
-            raise Exception("Submission has errors; see SiteSubmission.check()")
+        err,warn = self.check()
+        if len(err) > 0:
+            raise Exception("Submission has errors:\n%s" % '\n'.join(err))
 
         # look up slice record in DB
         slice_dir = self.dh.parent()
@@ -202,7 +216,7 @@ class ExperimentDBSubmission(object):
         session.add(expt)
         
         # Load NWB file and create data entries
-        nwb = MultipatchExperiment(self.nwb_file.name())
+        nwb = MultiPatchExperiment(self.nwb_file.name())
         
         prof('load nwb')
 
@@ -237,6 +251,16 @@ class ExperimentDBSubmission(object):
                         baseline_rms_noise=rec.baseline_rms_noise,
                     )
                     session.add(pcrec_entry)
+                    
+                # import information about STP protocol
+                if isinstance(rec, MultiPatchRecording):
+                    ind_freq, rec_delay = psa.stim_params()
+                    mprec_entry = db.MultiPatchRecording(
+                        patch_clamp_recording=pcrec_entry,
+                        induction_frequency=ind_freq,
+                        recovery_delay=rec_delay,
+                    )
+                    session.add(mprec_entry)
 
                 # import test pulse information
                 tp = rec.nearest_test_pulse
@@ -261,9 +285,7 @@ class ExperimentDBSubmission(object):
                 all_pulse_entries[rec.device_id] = pulse_entries
                 
                 for i,pulse in enumerate(pulses):
-                    if i == 0 and rec.has_inserted_test_pulse:
-                        continue
-
+                    # Record information about all pulses, including test pulse.
                     pulse_entry = db.StimPulse(
                         recording=rec_entry,
                         pulse_number=i,
@@ -305,8 +327,7 @@ class ExperimentDBSubmission(object):
                             recording=rec_entries[post_dev],
                             start_index=resp['baseline_start'],
                             stop_index=resp['baseline_stop'],
-                            # 50kHz should be the lowest sample rate in our data..
-                            data=resp['baseline'].resample(sample_rate=50000).data,
+                            data=resp['baseline'].resample(sample_rate=20000).data,
                             mode=float_mode(resp['baseline'].data),
                         )
                         session.add(base_entry)
@@ -316,7 +337,7 @@ class ExperimentDBSubmission(object):
                             baseline=base_entry,
                             start_index=resp['rec_start'],
                             stop_index=resp['rec_stop'],
-                            data=resp['response'].downsample(f=50000).data,
+                            data=resp['response'].resample(sample_rate=20000).data,
                         )
                         session.add(resp_entry)
                         

@@ -13,7 +13,7 @@ import pyqtgraph.configfile
 from lims import specimen_info, specimen_images
 from constants import ALL_CRE_TYPES, ALL_LABELS
 from cell import Cell
-from data import MultipatchExperiment
+from data import MultiPatchExperiment
 
 
 class Experiment(object):
@@ -394,7 +394,7 @@ class Experiment(object):
         return self._site_path
 
     def __repr__(self):
-        return "<Experiment %s (%s:%d)>" % (self.source_id[1], self.source_id[0], self.entry.lineno)
+        return "<Experiment %s (%s:%d) uid=%s>" % (self.source_id[1], self.source_id[0], self.entry.lineno, self.uid)
 
     @property
     def site_info(self):
@@ -460,7 +460,7 @@ class Experiment(object):
         Contains all ephys recordings.
         """
         if self._data is None:
-            self._data = MultipatchExperiment(self.nwb_cache_file)
+            self._data = MultiPatchExperiment(self.nwb_cache_file)
         return self._data
 
     def close_data(self):
