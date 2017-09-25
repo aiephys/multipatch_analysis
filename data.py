@@ -18,7 +18,16 @@ class MultipatchSyncRecording(MiesSyncRecording):
             self.meta['temperature'] = None
     
     def create_recording(self, sweep_id, ch):
-        return MiesRecording(self, sweep_id, ch)
+        return MultiPatchRecording(MiesRecording(self, sweep_id, ch))
 
 
+class MultiPatchRecording(MiesRecording):
+    def __init__(self, recording):
+        self._parent_rec = recording
+        
+    #@property    
+    #def induction_frequency(self):
+        #return self.stim_params
 
+    def __getattr__(self, attr):
+        return getattr(self._parent_rec, attr)
