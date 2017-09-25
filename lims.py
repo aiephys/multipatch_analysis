@@ -150,8 +150,8 @@ def submit_expt(spec_id, nwb_file, json_file):
     lims_session.trigger_data['id'] = resp['ephys_specimen_roi_plans'][0]['id']
 
     # enumerate the files you'd like to copy over
-    lims_session.add_to_manifest(json_file)
-    lims_session.add_to_manifest(nwb_file)
+    lims_session.add_to_manifest(json_file, dst_filename='multipatch-test.json')
+    lims_session.add_to_manifest(nwb_file, dst_filename='multipatch-test.nwb')
 
     # you could optionally copy a file over with a new name
     # lims_session.add_to_manifest('c:/myFile', dst_filename = 'newFilename') <--- no path necessary on dst_filename
@@ -161,9 +161,10 @@ def submit_expt(spec_id, nwb_file, json_file):
 
 
 if __name__ == '__main__':
-    spec_name = "Sst-IRES-Cre;Ai140;Pvalb-2A-FlpO;Ai65F-347233.05.06"
+    spec_name = "Ntsr1-Cre_GN220;Ai14-349905.03.06"
     recs = lims.query("select id from specimens where name='%s'" % spec_name)
     spec_id = recs[0]['id']
+    print (spec_id)
     submit_expt(spec_id, 'lims_test.nwb', 'lims_test.json')
     
     
