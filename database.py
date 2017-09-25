@@ -86,13 +86,13 @@ table_schemas = {
         ('electrical', 'bool', 'whether the experimenter thinks there is a gap junction'),
     ],
     'sync_rec': [
-        ('expt_id', 'experiment.id'),
+        ('experiment_id', 'experiment.id'),
         ('sync_rec_key', 'object'),
         ('meta', 'object'),
     ],
     'recording': [
         ('sync_rec_id', 'sync_rec.id', 'References the synchronous recording to which this recording belongs.'),
-        ('device_key', 'object', 'Identifies the device that generated this recording (this is usually the MIES AD channel)'),
+        ('device_key', 'int', 'Identifies the device that generated this recording (this is usually the MIES AD channel)'),
         ('start_time', 'datetime', 'The clock time at the start of this recording'),
     ],
     'patch_clamp_recording': [
@@ -107,6 +107,13 @@ table_schemas = {
         ('baseline_rms_noise', 'float'),
         #('nearest_test_pulse_id', 'test_pulse.id', "Reference to the test pulse for this recording"),
         #('lowpass_test_pulse_id', 'test_pulse.id', "Reference to the low-passed test pulse values"),
+    ],
+    'multipatch_recording': [
+        "Extra data for multipatch recordings intended to test synaptic connections.",
+        ('patch_clamp_recording_id', 'patch_clamp_recording.id'),
+        ('induction_frequency', 'float'),
+        ('recovery_delay', 'float'),
+        ('n_spikes_evoked', 'int'),
     ],
     'test_pulse': [
         ('patch_clamp_recording_id', 'patch_clamp_recording.id'),
@@ -225,6 +232,7 @@ def _generate_mapping(table):
         'id': Column(Integer, primary_key=True),
         'time_created': Column(DateTime, default=func.now()),
         'time_modified': Column(DateTime, onupdate=func.current_timestamp()),
+        'meta': Column(JSONB),
     }
     for column in schema:
         colname, coltype = column[:2]
@@ -250,6 +258,7 @@ Pair = _generate_mapping('pair')
 SyncRec = _generate_mapping('sync_rec')
 Recording = _generate_mapping('recording')
 PatchClampRecording = _generate_mapping('patch_clamp_recording')
+MultiPatchRecording = _generate_mapping('multipatch_recording')
 TestPulse = _generate_mapping('test_pulse')
 StimPulse = _generate_mapping('stim_pulse')
 StimSpike = _generate_mapping('stim_spike')
@@ -265,6 +274,7 @@ SyncRec.experiment = relationship(Experiment)
 
 Recording.sync_rec = relationship(SyncRec)
 PatchClampRecording.recording = relationship(Recording)
+MultiPatchRecording.patch_clamp_recording = relationship(PatchClampRecording)
 TestPulse.patch_clamp_recording = relationship(PatchClampRecording)
 
 StimPulse.recording = relationship(Recording)
