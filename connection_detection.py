@@ -137,7 +137,11 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
             
             # Extract data from postsynaptic recording
             pulse['response'] = post_rec['primary'][pulse['rec_start']:pulse['rec_stop']]
-            
+
+            # Extract presynaptic spike and stimulus command
+            pulse['pre_rec'] = pre_rec['primary'][pulse['rec_start']:pulse['rec_stop']]
+            pulse['command'] = pre_rec['command'][pulse['rec_start']:pulse['rec_stop']]
+
             # select baseline region between 8th and 9th pulses
             # (ideally we should use more careful criteria for selecting a baseline region)
             baseline_dur = int(10e-3 / dt)
@@ -174,18 +178,23 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         pulses = [p[0] for p in pulse_stim.pulses() if p[2] > 0]
         
         post_trace = post_rec['primary']
+        pre_trace = pre_rec['primary']
+        stim_command = pre_rec['command']
+
         dt = post_trace.dt
         start = pulses[start_pulse] + int(padding[0]/dt)
         stop = pulses[stop_pulse] + int(padding[1]/dt)
         assert start > 0
         
         response = post_trace[start:stop]
+        pre_spike = pre_trace[start:stop]
+        command = stim_command[start:stop]
         
         bstop = pulses[8] - int(10e-3/dt)
         bstart = bstop - int(200e-3/dt)
         baseline = post_trace[bstart:bstop]
         
-        return response, baseline
+        return response, baseline, pre_spike, command
         
 
 
@@ -438,11 +447,15 @@ class EvokedResponseGroup(object):
         self.kwds = kwds
         self.responses = []
         self.baselines = []
+        self.spikes = []
+        self.commands = []
         self._bsub_mean = None
 
-    def add(self, response, baseline):
+    def add(self, response, baseline, pre_spike=None, stim_command=None):
         self.responses.append(response)
         self.baselines.append(baseline)
+        self.spikes.append(pre_spike)
+        self.commands.append(stim_command)
         self._bsub_mean = None
 
     def __len__(self):
@@ -620,7 +633,7 @@ if __name__ == '__main__':
     import sys
     arg = sys.argv[1]
     try:
-        expt_ind = int(arg)
+        expt_ind = arg
         from experiment_list import ExperimentList
         all_expts = ExperimentList(cache='expts_cache.pkl')
         expt = all_expts[expt_ind].data

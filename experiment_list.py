@@ -138,7 +138,8 @@ class ExperimentList(object):
         self.sort()
 
     def _add_experiment(self, expt):
-        assert expt.uid not in self._expts_by_uid
+        if expt.uid in self._expts_by_uid:
+            return
         self._expts.append(expt)
         self._expts_by_uid[expt.uid] = expt
         self._expts_by_source_id[expt.source_id] = expt

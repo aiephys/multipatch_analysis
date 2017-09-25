@@ -28,7 +28,7 @@ class SynapseTreeItem(QtGui.QTreeWidgetItem):
         self.cells = cells
 
         fields = [
-            str(expt.summary_id),
+            str(expt.uid),
             "%d - %d" % (cells[0].cell_id, cells[1].cell_id),
             "%s - %s" % (cells[0].cre_type, cells[1].cre_type),
             
