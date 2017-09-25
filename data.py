@@ -1,15 +1,15 @@
 from neuroanalysis.miesnwb import MiesNwb, MiesSyncRecording, MiesRecording
 
 
-class MultipatchExperiment(MiesNwb):
+class MultiPatchExperiment(MiesNwb):
     """Extension of neuroanalysis data abstraction layer to include
     multipatch-specific metadata.
     """
     def create_sync_recording(self, sweep_id):
-        return MultipatchSyncRecording(self, sweep_id)
+        return MultiPatchSyncRecording(self, sweep_id)
 
         
-class MultipatchSyncRecording(MiesSyncRecording):
+class MultiPatchSyncRecording(MiesSyncRecording):
     def __init__(self, nwb, sweep_id):
         MiesSyncRecording.__init__(self, nwb, sweep_id)
         try:
