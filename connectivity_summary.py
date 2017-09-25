@@ -25,6 +25,7 @@ def arg_to_date(arg):
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--region', type=str)
+parser.add_argument('--organism', type=str, help='"mouse" or "human"')
 parser.add_argument('--start', type=arg_to_date)
 parser.add_argument('--stop', type=arg_to_date)
 parser.add_argument('--list-stims', action='store_true', default=False, dest='list_stims',

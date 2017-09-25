@@ -10,7 +10,7 @@ import re
 import pyqtgraph as pg
 import pyqtgraph.configfile
 
-from allensdk_internal.core import lims_utilities as lims
+from lims import specimen_info, specimen_images
 from constants import ALL_CRE_TYPES, ALL_LABELS
 from cell import Cell
 from data import MultipatchExperiment
@@ -470,7 +470,7 @@ class Experiment(object):
 
     @property
     def age(self):
-        age = self.lims_record.get('days', 0)
+        age = self.lims_record.get('age', 0)
         if age == 0:
             raise Exception("Donor age not set in LIMS for specimen %s" % self.specimen_id)
             # data not entered in to lims
@@ -484,33 +484,33 @@ class Experiment(object):
 
     @property
     def lims_record(self):
+        """A dictionary of specimen information queried from LIMS.
+        
+        See multipatch_analysis.lims.section_info()
+        """
         if self._lims_record is None:
-            sid = self.specimen_id
-            q = """
-                select d.date_of_birth, ages.days from donors d
-                join specimens sp on sp.donor_id = d.id
-                join ages on ages.id = d.age_id
-                where sp.name  = '%s'
-                limit 2""" % sid
-            r = lims.query(q)
-            if len(r) != 1:
-                raise Exception("LIMS lookup for specimen %s returned %d results" % (sid, len(r)))
-            self._lims_record = r[0]
+            self._lims_record = specimen_info(self.specimen_id)
         return self._lims_record
 
     @property
     def biocytin_image_url(self):
-        sid = self.specimen_id
-        q = """
-            select sub_images.id from specimens 
-            join image_series on image_series.specimen_id=specimens.id 
-            join sub_images on sub_images.image_series_id=image_series.id
-            where specimens.name='%s';
-            """ % sid
-        r = lims.query(q)
-        if len(r) != 1:
-            raise Exception("LIMS lookup for specimen %s returned %d results (expected 1)" % (sid, len(r)))
-        return "http://lims2/siv?sub_image=%d" % r[0]['id']
+        """A LIMS URL that points to the biocytin image for this specimen, or
+        None if no image is found.
+        """
+        images = specimen_images(self.specimen_id)
+        for img_id, treatment in images:
+            if treatment == 'Biocytin':
+                return "http://lims2/siv?sub_image=%d" % img_id
+
+    @property
+    def dapi_image_url(self):
+        """A LIMS URL that points to the DAPI image for this specimen, or
+        None if no image is found.
+        """
+        images = specimen_images(self.specimen_id)
+        for img_id, treatment in images:
+            if treatment == 'DAPI':
+                return "http://lims2/siv?sub_image=%d" % img_id
 
     @property
     def multipatch_log(self):
