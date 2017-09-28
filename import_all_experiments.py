@@ -36,7 +36,7 @@ if __name__ == '__main__':
             start = time.time()
             
             print("submit site:", site_dir.name())
-            
+            print(expt)
             sub = ExperimentDBSubmission(site_dir, nwb_cache_file)
             if sub.submitted():
                 print("   already in DB")

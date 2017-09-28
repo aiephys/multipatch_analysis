@@ -6,7 +6,7 @@ from neuroanalysis.baseline import float_mode
 from neuroanalysis.data import PatchClampRecording
 from lims import specimen_info
 from allensdk_internal.core import lims_utilities as lims
-from data import MultiPatchExperiment, MultiPatchRecording
+from data import MultiPatchExperiment, MultiPatchProbe
 from connection_detection import PulseStimAnalyzer, MultiPatchSyncRecAnalyzer
 import config
 from pyqtgraph.debug import Profiler
@@ -221,14 +221,15 @@ class ExperimentDBSubmission(object):
         prof('load nwb')
 
         for srec in nwb.contents:
-            srec_entry = db.SyncRec(sync_rec_key=srec.key, experiment=expt)
+            temp = srec.meta.get('temperature', None)
+            srec_entry = db.SyncRec(sync_rec_key=srec.key, experiment=expt, temperature=temp)
             session.add(srec_entry)
+            
+            srec_has_mp_probes = False
             
             rec_entries = {}
             all_pulse_entries = {}
             for rec in srec.recordings:
-                psa = PulseStimAnalyzer.get(rec)
-                ind_freq, recovery_delay = psa.stim_params()
                 
                 # import all recordings
                 rec_entry = db.Recording(
@@ -240,33 +241,23 @@ class ExperimentDBSubmission(object):
                 rec_entries[rec.device_id] = rec_entry
                 
                 # import patch clamp recording information
-                if isinstance(rec, PatchClampRecording):
-                    pcrec_entry = db.PatchClampRecording(
-                        recording=rec_entry,
-                        clamp_mode=rec.clamp_mode,
-                        patch_mode=rec.patch_mode,
-                        stim_name=rec.meta['stim_name'],
-                        baseline_potential=rec.baseline_potential,
-                        baseline_current=rec.baseline_current,
-                        baseline_rms_noise=rec.baseline_rms_noise,
-                    )
-                    session.add(pcrec_entry)
-                    
-                # import information about STP protocol
-                if isinstance(rec, MultiPatchRecording):
-                    ind_freq, rec_delay = psa.stim_params()
-                    mprec_entry = db.MultiPatchRecording(
-                        patch_clamp_recording=pcrec_entry,
-                        induction_frequency=ind_freq,
-                        recovery_delay=rec_delay,
-                    )
-                    session.add(mprec_entry)
+                if not isinstance(rec, PatchClampRecording):
+                    continue
+                pcrec_entry = db.PatchClampRecording(
+                    recording=rec_entry,
+                    clamp_mode=rec.clamp_mode,
+                    patch_mode=rec.patch_mode,
+                    stim_name=rec.meta['stim_name'],
+                    baseline_potential=rec.baseline_potential,
+                    baseline_current=rec.baseline_current,
+                    baseline_rms_noise=rec.baseline_rms_noise,
+                )
+                session.add(pcrec_entry)
 
                 # import test pulse information
                 tp = rec.nearest_test_pulse
                 if tp is not None:
                     tp_entry = db.TestPulse(
-                        patch_clamp_recording=pcrec_entry,
                         start_index=tp.indices[0],
                         stop_index=tp.indices[1],
                         baseline_current=tp.baseline_current,
@@ -277,7 +268,21 @@ class ExperimentDBSubmission(object):
                         time_constant=tp.time_constant,
                     )
                     session.add(tp_entry)
-                
+                    pcrec_entry.nearest_test_pulse = tp_entry
+                    
+                # import information about STP protocol
+                if not isinstance(rec, MultiPatchProbe):
+                    continue
+                srec_has_mp_probes = True
+                psa = PulseStimAnalyzer.get(rec)
+                ind_freq, rec_delay = psa.stim_params()
+                mprec_entry = db.MultiPatchProbe(
+                    patch_clamp_recording=pcrec_entry,
+                    induction_frequency=ind_freq,
+                    recovery_delay=rec_delay,
+                )
+                session.add(mprec_entry)
+            
                 # import presynaptic stim pulses
                 pulses = psa.pulses()
                 
@@ -316,6 +321,9 @@ class ExperimentDBSubmission(object):
             
             #prof('import recordings')
             
+            if not srec_has_mp_probes:
+                continue
+            
             # import postsynaptic responses
             mpa = MultiPatchSyncRecAnalyzer(srec)
             for pre_dev in srec.devices:
@@ -353,6 +361,9 @@ class ExperimentDBSubmission(object):
             prof('create experiment')
             session.commit()
             prof('commit session')
+        except:
+            session.rollback()
+            raise
         finally:
             session.close()
 

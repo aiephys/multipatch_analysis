@@ -1,7 +1,8 @@
 import os, yaml
 
 template = """
-synphys_db: "postgresql://user:password@server/synphys"
+synphys_db_host: "postgresql://user:password@server"
+synphys_db: "synphys"
 synphys_data: "/path/to/data"
 cache_path: "cache"
 rig_name: 'MP2'

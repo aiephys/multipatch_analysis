@@ -18,10 +18,15 @@ class MultiPatchSyncRecording(MiesSyncRecording):
             self.meta['temperature'] = None
     
     def create_recording(self, sweep_id, ch):
-        return MultiPatchRecording(MiesRecording(self, sweep_id, ch))
+        miesrec = MiesRecording(self, sweep_id, ch)
+        stim = miesrec.meta['stim_name'].lower()
+        if 'pulsetrain' in stim or 'recovery' in stim:
+            return MultiPatchProbe(miesrec)
+        else:
+            return miesrec
 
 
-class MultiPatchRecording(MiesRecording):
+class MultiPatchProbe(MiesRecording):
     def __init__(self, recording):
         self._parent_rec = recording
         

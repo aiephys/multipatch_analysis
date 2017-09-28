@@ -4,6 +4,7 @@ Accumulate all experiment data into a set of linked tables.
 import io
 import numpy as np
 
+import sqlalchemy
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, Integer, String, Boolean, Float, Date, DateTime, LargeBinary, ForeignKey
@@ -13,7 +14,7 @@ from sqlalchemy.types import TypeDecorator
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql.expression import func
 
-from config import synphys_db
+from config import synphys_db_host, synphys_db
 
 
 table_schemas = {
@@ -88,6 +89,7 @@ table_schemas = {
     'sync_rec': [
         ('experiment_id', 'experiment.id'),
         ('sync_rec_key', 'object'),
+        ('temperature', 'float'),
         ('meta', 'object'),
     ],
     'recording': [
@@ -105,10 +107,9 @@ table_schemas = {
         ('baseline_potential', 'float'),
         ('baseline_current', 'float'),
         ('baseline_rms_noise', 'float'),
-        #('nearest_test_pulse_id', 'test_pulse.id', "Reference to the test pulse for this recording"),
-        #('lowpass_test_pulse_id', 'test_pulse.id', "Reference to the low-passed test pulse values"),
+        ('nearest_test_pulse_id', 'test_pulse.id'),
     ],
-    'multipatch_recording': [
+    'multi_patch_probe': [
         "Extra data for multipatch recordings intended to test synaptic connections.",
         ('patch_clamp_recording_id', 'patch_clamp_recording.id'),
         ('induction_frequency', 'float'),
@@ -116,7 +117,6 @@ table_schemas = {
         ('n_spikes_evoked', 'int'),
     ],
     'test_pulse': [
-        ('patch_clamp_recording_id', 'patch_clamp_recording.id'),
         ('start_index', 'int'),
         ('stop_index', 'int'),
         ('baseline_current', 'float'),
@@ -258,7 +258,7 @@ Pair = _generate_mapping('pair')
 SyncRec = _generate_mapping('sync_rec')
 Recording = _generate_mapping('recording')
 PatchClampRecording = _generate_mapping('patch_clamp_recording')
-MultiPatchRecording = _generate_mapping('multipatch_recording')
+MultiPatchProbe = _generate_mapping('multi_patch_probe')
 TestPulse = _generate_mapping('test_pulse')
 StimPulse = _generate_mapping('stim_pulse')
 StimSpike = _generate_mapping('stim_spike')
@@ -266,23 +266,34 @@ PulseResponse = _generate_mapping('pulse_response')
 Baseline = _generate_mapping('baseline')
 
 # Set up relationships
-Experiment.slice = relationship("Slice", back_populates="experiments")
 Slice.experiments = relationship("Experiment", order_by=Experiment.id, back_populates="slice")
+Experiment.slice = relationship("Slice", back_populates="experiments")
 
-SyncRec.experiment = relationship(Experiment)
-#Experiment.sync_recs = relationship("SyncRec", order_by=SyncRec.id, back_populates="experiment")
+Experiment.sync_recs = relationship(SyncRec, order_by=SyncRec.id, back_populates="experiment", cascade='delete', single_parent=True)
+SyncRec.experiment = relationship(Experiment, back_populates='sync_recs')
 
-Recording.sync_rec = relationship(SyncRec)
-PatchClampRecording.recording = relationship(Recording)
-MultiPatchRecording.patch_clamp_recording = relationship(PatchClampRecording)
-TestPulse.patch_clamp_recording = relationship(PatchClampRecording)
+SyncRec.recordings = relationship(Recording, order_by=Recording.id, back_populates="sync_rec", cascade="delete", single_parent=True)
+Recording.sync_rec = relationship(SyncRec, back_populates="recordings")
 
-StimPulse.recording = relationship(Recording)
+Recording.patch_clamp_recording = relationship(PatchClampRecording, back_populates="recording", cascade="delete", single_parent=True)
+PatchClampRecording.recording = relationship(Recording, back_populates="patch_clamp_recording")
 
-StimSpike.recording = relationship(Recording)
+PatchClampRecording.multi_patch_probe = relationship(MultiPatchProbe, back_populates="patch_clamp_recording", cascade="delete", single_parent=True)
+MultiPatchProbe.patch_clamp_recording = relationship(PatchClampRecording, back_populates="multi_patch_probe")
+
+PatchClampRecording.nearest_test_pulse = relationship(TestPulse, cascade="delete", single_parent=True, foreign_keys=[PatchClampRecording.nearest_test_pulse_id])
+#TestPulse.patch_clamp_recording = relationship(PatchClampRecording)
+
+Recording.stim_pulses = relationship(StimPulse, back_populates="recording", cascade="delete", single_parent=True)
+StimPulse.recording = relationship(Recording, back_populates="stim_pulses")
+
+Recording.stim_spikes = relationship(StimSpike, back_populates="recording", cascade="delete", single_parent=True)
+StimSpike.recording = relationship(Recording, back_populates="stim_spikes")
+
 StimSpike.pulse = relationship(StimPulse)
 
-Baseline.recording = relationship(Recording)
+Recording.baselines = relationship(Baseline, back_populates="recording", cascade="delete", single_parent=True)
+Baseline.recording = relationship(Recording, back_populates="baselines")
 
 PulseResponse.recording = relationship(Recording)
 PulseResponse.stim_pulse = relationship(StimPulse)
@@ -291,16 +302,30 @@ PulseResponse.baseline = relationship(Baseline)
 
 #-------------- initial DB access ----------------
 
-# connect to DB
-engine = create_engine(synphys_db)
-
-
 # recreate all tables in DB
 # (just for initial development)
-import sys
+import sys, sqlalchemy
 if '--reset-db' in sys.argv:
-    ORMBase.metadata.drop_all(engine)
+    engine = create_engine(synphys_db_host + '/postgres')
+    #ORMBase.metadata.drop_all(engine)
+    conn = engine.connect()
+    conn.connection.set_isolation_level(0)
+    try:
+        conn.execute('drop database synphys')
+    except sqlalchemy.exc.ProgrammingError as err:
+        if 'does not exist' not in err.message:
+            raise
+    conn.execute('create database synphys')
+    conn.close()
+    
+    # connect to DB
+    engine = create_engine(synphys_db_host + '/' + synphys_db)
     ORMBase.metadata.create_all(engine)
+else:
+
+    # connect to DB
+    engine = create_engine(synphys_db_host + '/' + synphys_db)
+
 
 
 # external users should create sessions from here.
@@ -353,8 +378,26 @@ if __name__ == '__main__':
     session = Session()
     
     sl = Slice(lims_specimen_name="xxxxx", surface='medial')
-    exp = Experiment(slice=sl, acsf='MP ACSF 1')
+    exp1 = Experiment(slice=sl, acsf='MP ACSF 1')
     exp2 = Experiment(slice=sl, acsf='MP ACSF 1')
     
-    session.add(sl)
+    srec1 = SyncRec(experiment=exp1)
+    srec2 = SyncRec(experiment=exp2)
+    srec3 = SyncRec(experiment=exp2)
+    
+    rec1 = Recording(sync_rec=srec1)
+    rec2 = Recording(sync_rec=srec2)
+    rec3 = Recording(sync_rec=srec3)
+    rec4 = Recording(sync_rec=srec3)
+    
+    pcrec1 = PatchClampRecording(recording=rec1)
+    pcrec2 = PatchClampRecording(recording=rec2)
+    pcrec3 = PatchClampRecording(recording=rec3)
+    
+    tp1 = TestPulse()
+    tp2 = TestPulse()
+    pcrec1.nearest_test_pulse = tp1
+    pcrec2.nearest_test_pulse = tp2
+    
+    session.add_all([sl, exp1, exp2, srec1, srec2, srec3, rec1, rec2, rec3, rec4, pcrec1, pcrec2, pcrec3, tp1, tp2])
     session.commit()

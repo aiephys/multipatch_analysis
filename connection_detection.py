@@ -150,7 +150,7 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
             pulse['baseline'] = post_rec['primary'][start:stop]
             pulse['baseline_start'] = start
             pulse['baseline_stop'] = stop
-            
+            assert len(pulse['baseline']) > 0
             result.append(pulse)
         
         return result
