@@ -304,13 +304,10 @@ def addSliceContents(siteNWBs, filesToInclude, basepath, sliceName):
     slicePath  = os.path.join(basepath, sliceName)
     sliceIndex = os.path.join(slicePath, ".index")
 
-    print slicePath
-    print siteNWBs
-
     sliceNWBs = [elem for elem in siteNWBs if elem.startswith(slicePath)]
 
     if len(sliceNWBs) == 0:
-        print "No NWB files belong to slice folder %s, skipping it." % slicePath
+        #print "No NWB files belong to slice folder %s, skipping it." % slicePath
         return 1
 
     dh = adm.getHandle(slicePath)
@@ -388,9 +385,9 @@ def buildCombinedNWB(siteNWB, filesToInclude = []):
     if not os.path.isfile(siteNWB):
         raise NameError("The file \"%s\" given in siteNWB does not exist" % siteNWB)
 
-    basepath = os.path.abspath(os.path.join(os.path.dirname(siteNWB), "/../.."))
+    basepath = os.path.abspath(os.path.join(os.path.dirname(siteNWB), "../.."))
 
-    return buildCombinedNWBInternal(basepath, siteNWB, filesToInclude)[0]
+    return buildCombinedNWBInternal(basepath, [siteNWB], filesToInclude)[0]
 
 # - base 1     # no NWB
 #   - slice 1  # no NWB

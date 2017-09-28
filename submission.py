@@ -1,15 +1,13 @@
-import re
+import os, re, json
 from collections import OrderedDict
 from datetime import datetime
 import database as db
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.data import PatchClampRecording
-from lims import specimen_info
-from allensdk_internal.core import lims_utilities as lims
+import lims
 from data import MultiPatchExperiment, MultiPatchProbe
 from connection_detection import PulseStimAnalyzer, MultiPatchSyncRecAnalyzer
 import config
-from pyqtgraph.debug import Profiler
 
 
 class SliceSubmission(object):
@@ -29,7 +27,7 @@ class SliceSubmission(object):
             
             # pull some metadata from LIMS
             sid = info['specimen_ID'].strip()
-            limsdata = specimen_info(sid)
+            limsdata = lims.specimen_info(sid)
 
             quality = info.get('slice quality', None)
             try:
@@ -197,8 +195,6 @@ class ExperimentDBSubmission(object):
         return {'database': 'might add some records..'}
         
     def create(self, session):
-        prof = Profiler(disabled=False, delayed=False)
-        
         err,warn = self.check()
         if len(err) > 0:
             raise Exception("Submission has errors:\n%s" % '\n'.join(err))
@@ -218,8 +214,6 @@ class ExperimentDBSubmission(object):
         # Load NWB file and create data entries
         nwb = MultiPatchExperiment(self.nwb_file.name())
         
-        prof('load nwb')
-
         for srec in nwb.contents:
             temp = srec.meta.get('temperature', None)
             srec_entry = db.SyncRec(sync_rec_key=srec.key, experiment=expt, temperature=temp)
@@ -319,8 +313,6 @@ class ExperimentDBSubmission(object):
                     )
                     session.add(spike_entry)
             
-            #prof('import recordings')
-            
             if not srec_has_mp_probes:
                 continue
             
@@ -349,18 +341,13 @@ class ExperimentDBSubmission(object):
                         )
                         session.add(resp_entry)
                         
-            #prof('import responses')
-            
         return expt
         
     def submit(self):
-        prof = Profiler(disabled=False, delayed=False)
         session = db.Session()
         try:
             exp = self.create(session)
-            prof('create experiment')
             session.commit()
-            prof('commit session')
         except:
             session.rollback()
             raise
@@ -427,11 +414,13 @@ class ExperimentMetadataSubmission(object):
     def submit(self):
         slice_dh = self.site_dh.parent()
         for file_info in self.files:
+            if file_info['category'] == 'ignore':
+                continue
             fh = slice_dh[file_info['path']]
             fh.setInfo(category=file_info['category'])
         
         self.site_dh.setInfo(electrodes=self.electrodes)
-        
+
 
 class ElectrodeDBSubmission(object):
     """Generates electrode / cell / pair entries in the synphys DB
@@ -501,20 +490,74 @@ class LIMSSubmission(object):
     """
     message = "Submitting data to LIMS"
     
-    def __init__(self, site_dh):
+    def __init__(self, site_dh, files, _override_spec_name=None):
         self.site_dh = site_dh
+        self.files = files
+        
+        # Only used for testing
+        self.spec_name = _override_spec_name
         
     def check(self):
-        return [], []
+        errors = []
+
+        site_info = self.site_dh.info()
+        self.meta = {
+            'acq_timestamp': site_info['__timestamp__'],
+            'source_path': '%s:%s' % (config.rig_name, self.site_dh.name()),
+        }
+        
+        if self.spec_name is None:
+            self.spec_name = self.site_dh.parent().info()['specimen_ID']
+        
+        source_nwb_files = [f['path'] for f in self.files if f['category'] == 'MIES physiology']
+        if len(source_nwb_files) == 0:
+            errors.append("%d NWB files specified (should be 1)" % len(source_nwb_files))
+        self.source_nwb = source_nwb_files[0]
+        
+        return errors, []
         
     def summary(self):
         return {'lims': None}
         
     def submit(self):
-        pass
+        import nwb_packaging
         
+        assert len(self.check()[0]) == 0
         
+        # Generate combined NWB file
+        print("Generating combined NWB file..")
+        file_paths = [self.site_dh[f['path']].name() for f in self.files]
+        source_nwb = self.site_dh[self.source_nwb].name()
+        combined_nwb = nwb_packaging.buildCombinedNWB(source_nwb, file_paths)
+        assert os.path.isfile(combined_nwb)
         
+        # Generate json metadata file
+        json_file = os.path.splitext(combined_nwb)[0] + '.json'
+        json.dump(self.meta, open(json_file, 'wb'))
+        print("Generated files:")
+        print("    " + combined_nwb)
+        print("    " + json_file)
+        
+        # submit to LIMS
+        print("Submitting to LIMS..")
+        self.lims_incoming_files = lims.submit_expt(self.spec_name, str(self.meta['acq_timestamp']), combined_nwb, json_file)
+        
+        # delete submission files
+        os.remove(json_file)
+        os.remove(combined_nwb)
+        
+        # Write an artifact file describing the upload data.
+        # Ideally, we can use this to easily repeat the LIMS upload
+        # in the future.
+        artifact = {
+            'files': self.files,
+            'meta': self.meta,
+            'specimen': self.spec_name,
+            'submitted_files': self.lims_incoming_files,
+        }
+        artifact_file = self.site_dh['lims_upload_manifest.json'].name()
+        json.dump(artifact, open(artifact_file, 'wb'))
+        print("Complete; left artifact in %s" % artifact_file)
 
 
 class ExperimentSubmission(object):

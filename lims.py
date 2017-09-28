@@ -1,3 +1,4 @@
+from __future__ import print_function
 import re
 from allensdk_internal.core import lims_utilities as lims
 
@@ -116,8 +117,35 @@ def specimen_images(specimen_name):
     r = lims.query(q)
     return [(rec['id'], rec['name']) for rec in r]
 
-        
-def submit_expt(spec_id, nwb_file, json_file):
+
+def specimen_id_from_name(spec_name):
+    """Return the LIMS ID of a specimen give its name.
+    """
+    recs = lims.query("select id from specimens where name='%s'" % spec_name)
+    return recs[0]['id']
+
+
+def cell_cluster_ids(spec_id):
+    recs = lims.query("select id from specimens where specimens.parent_id=%d" % spec_id)
+    return [rec['id'] for rec in recs]
+
+
+def cell_cluster_data_paths(cluster_id):
+    recs = lims.query("""
+        select ephys_roi_results.storage_directory 
+        from specimens 
+        join ephys_roi_results on ephys_roi_results.id=specimens.ephys_roi_result_id
+        where specimens.id=%d
+    """ % cluster_id)
+    return [r['storage_directory'] for r in recs]
+
+
+def specimen_metadata(spec_id):
+    recs = lims.query("select data from specimen_metadata where specimen_id=%d" % spec_id)
+    return recs[0]['data']
+
+
+def submit_expt(spec_name, uid, nwb_file, json_file):
     import limstk.LIMStk as limstk
     #limstk.init_log()
 
@@ -131,16 +159,24 @@ def submit_expt(spec_id, nwb_file, json_file):
 
     These are defined in the lims_config.yml
     """
+    spec_id = specimen_id_from_name(spec_name)
 
     # notice the "' notation when adding the filename - this is to allow the ' to appear in the trigger file
     # 'multipatch' is a lookup key for your specification but,
     # id, NWBIgor and metadata are key-value pairs you want to see in the trigger file but that do not come from lims
+    
+    filebase = "%d-%s" % (spec_id, uid)
+    
+    incoming_files = dict(
+        NWBIgor="'/allen/programs/celltypes/production/incoming/mousecelltypes/%s.nwb'" % filebase,
+        metadata="'/allen/programs/celltypes/production/incoming/mousecelltypes/%s.json'" % filebase,
+    )
+    
     # they are also defined in the limstk_config.
     lims_session = limstk.Session(
         'multipatch',  # defined in the limstk_config file
         id=spec_id,
-        NWBIgor="'/allen/programs/celltypes/production/incoming/mousecelltypes/multipatch-test.nwb'",
-        metadata="'/allen/programs/celltypes/production/incoming/mousecelltypes/multipatch-test.json'")
+        **incoming_files)
 
     # Because there could be multiple plans returned on this query, the user has to determine which plan id is correct
     # For these situations, there are 'manual' requests like specimens_by_id and specimens_by_well_name
@@ -150,21 +186,25 @@ def submit_expt(spec_id, nwb_file, json_file):
     lims_session.trigger_data['id'] = resp['ephys_specimen_roi_plans'][0]['id']
 
     # enumerate the files you'd like to copy over
-    lims_session.add_to_manifest(json_file, dst_filename='multipatch-test.json')
-    lims_session.add_to_manifest(nwb_file, dst_filename='multipatch-test.nwb')
-
-    # you could optionally copy a file over with a new name
-    # lims_session.add_to_manifest('c:/myFile', dst_filename = 'newFilename') <--- no path necessary on dst_filename
+    lims_session.add_to_manifest(json_file, dst_filename='%s.json' % filebase)
+    lims_session.add_to_manifest(nwb_file, dst_filename='%s.nwb' % filebase)
 
     # to finish out, schedule the session
     lims_session.commit_manifest(trigger_file='%d.mp' % spec_id)
 
+    return incoming_files
+
 
 if __name__ == '__main__':
+    # testing specimen
     spec_name = "Ntsr1-Cre_GN220;Ai14-349905.03.06"
-    recs = lims.query("select id from specimens where name='%s'" % spec_name)
-    spec_id = recs[0]['id']
-    print (spec_id)
-    submit_expt(spec_id, 'lims_test.nwb', 'lims_test.json')
+    spec_id = specimen_id_from_name(spec_name)
+    cluster_ids = cell_cluster_ids(spec_id)
+    print("Slice:", spec_id)
+    for cid in cluster_ids:
+        print("  %d '%s'" % (cid, specimen_metadata(cid)))
+    print(cell_cluster_data_paths(cluster_ids[0]))
+    
+    #submit_expt(spec_id, 'lims_test.nwb', 'lims_test.json')
     
     
