@@ -152,7 +152,7 @@ table_schemas = {
         ('recording_id', 'recording.id', 'The recording from which this baseline snippet was extracted.'),
         ('start_index', 'int', 'start index of this snippet, relative to the beginning of the recording'),
         ('stop_index', 'int', 'stop index of this snippet, relative to the beginning of the recording'),
-        ('data', 'array', 'array containing the baseline snippet'),
+        ('data', 'array', 'numpy array of baseline data sampled at 20kHz'),
         ('mode', 'float', 'most common value in the baseline snippet'),
     ],
     'pulse_response': [
@@ -162,7 +162,7 @@ table_schemas = {
         ('pair_id', 'pair.id'),
         ('start_index', 'int'),
         ('stop_index', 'int'),
-        ('data', 'array'),
+        ('data', 'array', 'numpy array of response data sampled at 20kHz'),
         ('baseline_id', 'baseline.id'),
     ],
 }

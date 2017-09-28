@@ -3,6 +3,7 @@ import numpy as np
 import scipy.signal
 import pyqtgraph as pg
 
+from data import MultiPatchProbe
 from neuroanalysis.spike_detection import detect_evoked_spike
 from neuroanalysis.stats import ragged_mean
 from neuroanalysis.stimuli import square_pulses
@@ -292,6 +293,8 @@ class MultiPatchExperimentAnalyzer(Analyzer):
                 mp_analyzer = MultiPatchSyncRecAnalyzer.get(srec)
                 
                 for pre_rec in srec.recordings:
+                    if not isinstance(pre_rec, MultiPatchProbe):
+                        continue
                     pre_id = pre_rec.device_id
                     all_spikes.setdefault(pre_id, {})
                     # todo: ignore sweeps with high induction frequency
