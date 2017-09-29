@@ -1,5 +1,5 @@
 from __future__ import print_function
-import re
+import os, re, json
 from allensdk_internal.core import lims_utilities as lims
 
 
@@ -142,10 +142,19 @@ def cell_cluster_data_paths(cluster_id):
 
 def specimen_metadata(spec_id):
     recs = lims.query("select data from specimen_metadata where specimen_id=%d" % spec_id)
-    return recs[0]['data']
+    meta = recs[0]['data']
+    if meta == '':
+        return None
+    return json.loads(meta)  # unserialization corrects for a LIMS bug; we can remove this later.
 
 
-def submit_expt(spec_name, uid, nwb_file, json_file):
+def filename_base(specimen_id, acq_timestamp):
+    """Return a base filename string to be used for all LIMS uploads.
+    """
+    return "synphys-%d-%s" % (specimen_id, acq_timestamp)
+
+
+def submit_expt(spec_name, acq_timestamp, nwb_file, json_file):
     import limstk.LIMStk as limstk
     #limstk.init_log()
 
@@ -165,18 +174,20 @@ def submit_expt(spec_name, uid, nwb_file, json_file):
     # 'multipatch' is a lookup key for your specification but,
     # id, NWBIgor and metadata are key-value pairs you want to see in the trigger file but that do not come from lims
     
-    filebase = "%d-%s" % (spec_id, uid)
+    filebase = filename_base(spec_id, acq_timestamp)
     
     incoming_files = dict(
-        NWBIgor="'/allen/programs/celltypes/production/incoming/mousecelltypes/%s.nwb'" % filebase,
-        metadata="'/allen/programs/celltypes/production/incoming/mousecelltypes/%s.json'" % filebase,
+        NWBIgor="/allen/programs/celltypes/production/incoming/mousecelltypes/%s.nwb" % filebase,
+        metadata="/allen/programs/celltypes/production/incoming/mousecelltypes/%s.json" % filebase,
     )
     
     # they are also defined in the limstk_config.
     lims_session = limstk.Session(
         'multipatch',  # defined in the limstk_config file
         id=spec_id,
-        **incoming_files)
+        NWBIgor="'" + incoming_files['NWBIgor'] + "'",
+        metadata="'" + incoming_files['metadata'] + "'"
+    )
 
     # Because there could be multiple plans returned on this query, the user has to determine which plan id is correct
     # For these situations, there are 'manual' requests like specimens_by_id and specimens_by_well_name
@@ -190,10 +201,41 @@ def submit_expt(spec_name, uid, nwb_file, json_file):
     lims_session.add_to_manifest(nwb_file, dst_filename='%s.nwb' % filebase)
 
     # to finish out, schedule the session
-    lims_session.commit_manifest(trigger_file='%d.mp' % spec_id)
+    lims_session.commit_manifest(trigger_file='%s.mp' % filebase)
 
     return incoming_files
 
+
+def expt_submissions(spec_id, acq_timestamp):
+    """Return information about the status of each submission found for an
+    experiment, identified by its specimen ID and experiment uid.
+    """
+    submissions = []
+    filebase = filename_base(spec_id, acq_timestamp)
+    
+    # Do we have incoming files?
+    incoming_path = '/allen/programs/celltypes/production/incoming/mousecelltypes'
+    incoming_nwb = os.path.join(incoming_path, filebase + '.nwb')
+    incoming_trigger = os.path.join(incoming_path, 'trigger', '%s.mp' % filebase)
+    failed_trigger = os.path.join(incoming_path, 'failed_trigger', '%s.mp' % filebase)
+    
+    if os.path.exists(incoming_nwb):
+        if os.path.exists(incoming_trigger):
+            submissions.append(("trigger pending", incoming_trigger))
+        if os.path.exists(failed_trigger):
+            error = open(failed_trigger+'.err', 'r').read()
+            submissions.append(("trigger failed", failed_trigger, error))
+            
+    # Anything in LIMS already?
+    cluster_ids = cell_cluster_ids(spec_id)
+    for cid in cluster_ids:
+        meta = specimen_metadata(cid)
+        if meta is not None and meta['acq_timestamp'] == acq_timestamp:
+            data_path = cell_cluster_data_paths(cid)
+            submissions.append(("succeeded", cid, data_path))
+    
+    return submissions
+    
 
 if __name__ == '__main__':
     # testing specimen
@@ -202,9 +244,12 @@ if __name__ == '__main__':
     cluster_ids = cell_cluster_ids(spec_id)
     print("Slice:", spec_id)
     for cid in cluster_ids:
-        print("  %d '%s'" % (cid, specimen_metadata(cid)))
-    print(cell_cluster_data_paths(cluster_ids[0]))
-    
+        print("  %d %s" % (cid, specimen_metadata(cid)))
+    #print(cell_cluster_data_paths(cluster_ids[0]))
+    print("")
+    for sub in expt_submissions(spec_id, 1505768693.087):
+        print(sub)
+
     #submit_expt(spec_id, 'lims_test.nwb', 'lims_test.json')
     
     
