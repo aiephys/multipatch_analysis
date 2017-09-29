@@ -115,7 +115,7 @@ def first_pulse_plot(expt_list, name=None, summary_plot=None, color=None, scatte
         amp_plots.addLine(y=grand_est, pen={'color': 'g'})
         if grand_mean is not None:
             print(legend + ' Grand mean amplitude = %f' % grand_est)
-            summary_plots = summary_plot_pulse(grand_mean, avg_ests, grand_est, i=scatter, plot=summary_plot, color=color, name=legend)
+            summary_plots = summary_plot_pulse(grand_mean, avg_ests, grand_est, labels=['Vm', 'V'], titles='Amplitude', i=scatter, plot=summary_plot, color=color, name=legend)
             return avg_ests, summary_plots
     else:
         print ("No Traces")
@@ -172,24 +172,39 @@ def summary_plot_train(ind_grand_mean, plot=None, color=None, name=None):
     plot.plot(ind_grand_mean.time_values, ind_grand_mean.data, pen=color, name=name)
     return plot
 
-def summary_plot_pulse(grand_mean, avg_est, grand_est, i, plot=None, color=None, name=None):
+def summary_plot_pulse(grand_trace, feature_list, feature_mean, labels, titles, i, plot=None, color=None, name=None):
+    if type(feature_list) is tuple:
+        n_features = len(feature_list)
+    else:
+        n_features = 1
     if plot is None:
-        grid = PlotGrid()
-        grid.set_shape(1, 2)
-        plot = (grid[0, 0], grid[0, 1])
-        plot[0].grid = grid
-        grid.show()
-        plot[1].addLegend()
-        plot[0].setLabels(left=('Vm', 'V'))
-        plot[0].hideAxis('bottom')
-        plot[1].setLabels(left=('Vm', 'V'))
-        plot[1].setLabels(bottom=('t', 's'))
+        plot = PlotGrid()
+        plot.set_shape(n_features, 2)
+        plot.show()
+        for g in range(n_features):
+            plot[g, 1].addLegend()
+            plot[g, 1].setLabels(left=('Vm', 'V'))
+            plot[g, 1].setLabels(bottom=('t', 's'))
 
-    plot[1].plot(grand_mean.time_values, grand_mean.data, pen=color, name=name)
-    dx = pg.pseudoScatter(np.array(avg_est).astype(float), 0.3, bidir=True)
-    plot[0].plot((0.3 * dx / dx.max()) + i, avg_est, pen=None, symbol='x', symbolBrush=color,
-                     symbolPen=None)
-    plot[0].plot([i], [grand_est], pen=None, symbol='o', symbolBrush=color, symbolPen='w',
+    for feature in range(n_features):
+        if n_features > 1:
+            features = feature_list[feature]
+            mean = feature_mean[feature]
+            label = labels[feature]
+            title = titles[feature]
+        else:
+            features = feature_list
+            mean = feature_mean
+            label = labels
+            title = titles
+        plot[feature, 0].setLabels(left=(label[0], label[1]))
+        plot[feature, 0].hideAxis('bottom')
+        plot[feature, 0].setTitle(title)
+        plot[feature, 1].plot(grand_trace.time_values, grand_trace.data, pen=color, name=name)
+        dx = pg.pseudoScatter(np.array(features).astype(float), 0.3, bidir=True)
+        plot[feature, 0].plot((0.3 * dx / dx.max()) + i, features, pen=None, symbol='x', symbolSize=5, symbolBrush=color,
+                         symbolPen=None)
+        plot[feature, 0].plot([i], [mean], pen=None, symbol='o', symbolBrush=color, symbolPen='w',
                      symbolSize=10)
     return plot
 
