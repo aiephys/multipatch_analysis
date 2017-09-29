@@ -20,7 +20,7 @@ app = pg.mkQApp()
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
 grey = (169, 169, 169)
-sweep_color = (0, 0, 0, 10)
+sweep_color = (0, 0, 0, 30)
 
 parser = argparse.ArgumentParser()
 # plot options
@@ -113,7 +113,7 @@ for connection_type, synapse_id in connections.items():
         grid[row[1], 0].setLabels(left=('Vm', 'V'))
         grid[row[1], 0].setLabels(bottom=('t', 's'))
         grid[row[1], 0].setXRange(-2e-3, 27e-3)
-        grid[row[1], 0].plot(avg_first_pulse.time_values, avg_first_pulse.data, pen={'color': 'k', 'width': 2})
+        grid[row[1], 0].plot(avg_first_pulse.time_values, avg_first_pulse.data, pen={'color': (255, 0, 255), 'width': 2})
         grid[row[0], 0].setLabels(left=('Vm', 'V'))
         sweep_list['spike'][0].t0 = 0
         grid[row[0], 0].plot(avg_spike.time_values, avg_spike.data, pen='k')
