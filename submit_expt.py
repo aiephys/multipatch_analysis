@@ -18,6 +18,7 @@ class ExperimentSubmitUi(QtGui.QWidget):
         self.path = None
         
         QtGui.QWidget.__init__(self)
+        self.setWindowTitle("pywhip (submission tool)")
         
         self.layout = QtGui.QGridLayout()
         self.setLayout(self.layout)
@@ -231,13 +232,13 @@ class SiteTreeItem(pg.TreeWidgetItem):
         pg.TreeWidgetItem.__init__(self, [fh.shortName(), status])
         
     def submission(self):
-        elecs = self.ui.timeline.save()
+        pips = self.ui.timeline.save()
         files = self.list_files()
         
         return submission.ExperimentSubmission(
             site_dh=self.fh, 
             files=files,
-            electrodes=elecs,
+            pipettes=pips,
         )
     
     def list_files(self):

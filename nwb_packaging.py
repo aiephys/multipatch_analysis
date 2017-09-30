@@ -7,6 +7,7 @@ import glob
 import hashlib
 import os
 import datetime
+import time
 import numpy as np
 import acq4.util.DataManager as adm
 import acq4.util.advancedTypes
@@ -130,9 +131,18 @@ def encodeAsJSONString(obj):
     """ Return the object as string in JSON encoding """
 
     if type(obj) is acq4.util.advancedTypes.ProtectedDict:
-        return json.dumps(obj.deepcopy())
+        return json.dumps(obj.deepcopy(), cls=JSONEncoder)
     else:
-        return json.dumps(obj)
+        return json.dumps(obj, cls=JSONEncoder)
+
+
+class JSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, datetime.datetime):
+            return time.mktime(obj.timetuple())
+        else:
+            return json.JSONEncoder.default(self, obj)
+
 
 def getSiteNWBs(basepath):
     """ Get all experiment NWBs in the slice*/site* folders """

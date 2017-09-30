@@ -88,8 +88,8 @@ class ExperimentTimeline(QtGui.QWidget):
         self.ptree.setMaximumWidth(250)
         
         self.params = pg.parametertree.Parameter.create(name='params',
-            type='group', addText='Add electrode')
-        self.params.addNew = self.add_electrode_clicked  # monkey!
+            type='group', addText='Add pipette')
+        self.params.addNew = self.add_pipette_clicked  # monkey!
         self.ptree.setParameters(self.params, showTop=False)
         
     def list_channels(self):
@@ -99,10 +99,10 @@ class ExperimentTimeline(QtGui.QWidget):
         i = self.channels.index(chan)
         return self.plots[i, 0]
         
-    def add_electrode_clicked(self):
-        self.add_electrode(channel=self.channels[0], start=0, stop=500)
+    def add_pipette_clicked(self):
+        self.add_pipette(channel=self.channels[0], start=0, stop=500)
         
-    def remove_electrodes(self):
+    def remove_pipettes(self):
         for ch in self.params.children():
             self.params.removeChild(ch)
             ch.region.scene().removeItem(ch.region)
@@ -165,7 +165,7 @@ class ExperimentTimeline(QtGui.QWidget):
                 plt.plot(times, data, pen=None, symbol=symbol, symbolPen=None, symbolBrush=brushes)
 
         # automatically select electrode regions
-        self.remove_electrodes()
+        self.remove_pipettes()
         site_info = self.nwb_handle.parent().info()
         for i in self.channels:
             hs_state = site_info.get('Headstage %d'%i, None)
@@ -183,24 +183,24 @@ class ExperimentTimeline(QtGui.QWidget):
             # assume if we got more than two recordings, then a cell was present.
             got_cell = len(recs[i]) > 2
             
-            self.add_electrode(i, start, stop, status=status, got_cell=got_cell)
+            self.add_pipette(i, start, stop, status=status, got_cell=got_cell)
             
-    def add_electrode(self, channel, start, stop, status=None, got_cell=None):
-        elec = ElectrodeParameter(self, channel, start, stop, status=status, got_cell=got_cell)
+    def add_pipette(self, channel, start, stop, status=None, got_cell=None):
+        elec = PipetteParameter(self, channel, start, stop, status=status, got_cell=got_cell)
         self.params.addChild(elec, autoIncrementName=True)
-        elec.child('channel').sigValueChanged.connect(self._electrode_channel_changed)
-        elec.region.sigRegionChangeFinished.connect(self._electrode_region_changed)
-        self._electrode_channel_changed(elec.child('channel'))
+        elec.child('channel').sigValueChanged.connect(self._pipette_channel_changed)
+        elec.region.sigRegionChangeFinished.connect(self._pipette_region_changed)
+        self._pipette_channel_changed(elec.child('channel'))
         
-    def _electrode_channel_changed(self, param):
+    def _pipette_channel_changed(self, param):
         plt = self.get_channel_plot(param.value())
         plt.addItem(param.parent().region)
-        self._rename_electrodes()
+        self._rename_pipettes()
         
-    def _electrode_region_changed(self):
-        self._rename_electrodes()
+    def _pipette_region_changed(self):
+        self._rename_pipettes()
         
-    def _rename_electrodes(self):
+    def _rename_pipettes(self):
         # sort electrodes by channel
         elecs = {}
         for elec in self.params.children():
@@ -222,7 +222,7 @@ class ExperimentTimeline(QtGui.QWidget):
                 # second electrode will be "Electrode 12").
                 e_id = (chan+1) + (i*n_headstages)
                 elec.id = e_id
-                elec.setName('Electrode %d' % e_id)
+                elec.setName('Pipette %d' % e_id)
 
     def save(self):
         state = []
@@ -241,7 +241,7 @@ class ExperimentTimeline(QtGui.QWidget):
         return state
 
 
-class ElectrodeParameter(pg.parametertree.parameterTypes.GroupParameter):
+class PipetteParameter(pg.parametertree.parameterTypes.GroupParameter):
     def __init__(self, ui, channel, start, stop, status=None, got_cell=None):
         self.ui = ui
         params = [
@@ -249,7 +249,7 @@ class ElectrodeParameter(pg.parametertree.parameterTypes.GroupParameter):
             {'name': 'status', 'type': 'list', 'values': ['No seal', 'Low seal', 'GOhm seal', 'Technical failure']},
             {'name': 'got cell', 'type': 'bool'},
         ]
-        pg.parametertree.parameterTypes.GroupParameter.__init__(self, name="Electrode?", children=params, removable=True)
+        pg.parametertree.parameterTypes.GroupParameter.__init__(self, name="Pipette?", children=params, removable=True)
         self.child('got cell').sigValueChanged.connect(self._got_cell_changed)
         
         region = [0, 500]

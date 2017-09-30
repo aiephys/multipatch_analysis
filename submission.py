@@ -1,4 +1,4 @@
-import os, re, json
+import os, re, json, shutil
 from collections import OrderedDict
 from datetime import datetime
 import database as db
@@ -364,10 +364,10 @@ class ExperimentMetadataSubmission(object):
     """
     message = "Copying submission metadata back to index files"
     
-    def __init__(self, site_dh, files, electrodes):
+    def __init__(self, site_dh, files, pipettes):
         self.site_dh = site_dh
         self.files = files
-        self.electrodes = electrodes
+        self.pipettes = pipettes
         
     def check(self):
         """
@@ -398,34 +398,36 @@ class ExperimentMetadataSubmission(object):
                     warnings.append("file %s is not mentioned in metadata." % relname)
         
         site_info = self.site_dh.info()
-        if 'electrodes' in site_info and site_info['electrodes'] != self.electrodes:
-            warnings.append('site electrode metadata will be overwritten: %s => %s' % 
-                            (site_info['electrodes'], self.electrodes))
+        if 'pipettes' in site_info and site_info['pipettes'] != self.pipettes:
+            warnings.append('site pipette metadata will be overwritten: %s => %s' % 
+                            (site_info['pipettes'], self.pipettes))
         
         return errors, warnings
 
     def summary(self):
         summ = OrderedDict()
         summ['file categories'] = self.files
-        summ['electrodes'] = self.electrodes
+        summ['pipettes'] = self.pipettes
         
         return {'metadata': summ}
     
     def submit(self):
         slice_dh = self.site_dh.parent()
+        expt_dh = slice_dh.parent()
+        expt_dh.setInfo(rig_name=config.rig_name)
         for file_info in self.files:
             if file_info['category'] == 'ignore':
                 continue
             fh = slice_dh[file_info['path']]
             fh.setInfo(category=file_info['category'])
         
-        self.site_dh.setInfo(electrodes=self.electrodes)
+        self.site_dh.setInfo(pipettes=self.pipettes)
 
 
-class ElectrodeDBSubmission(object):
+class PipetteDBSubmission(object):
     """Generates electrode / cell / pair entries in the synphys DB
     """
-    message = "Generating electrode entries in DB"
+    message = "Generating pipette entries in DB"
     
     def __init__(self, site_dh):
         self.site_dh = site_dh
@@ -433,12 +435,12 @@ class ElectrodeDBSubmission(object):
     def check(self):
         errors = []
         info = self.site_dh.info()
-        if 'electrodes' not in info:
-            errors.append("No electrode information found in site metadata.")
+        if 'pipettes' not in info:
+            errors.append("No pipette information found in site metadata.")
         return errors, []
         
     def summary(self):
-        return {'electrodes': None}
+        return {'pipettes': None}
         
     def submit(self):
         ts = datetime.fromtimestamp(self.site_dir.info()['__timestamp__'])
@@ -482,7 +484,62 @@ class RawDataSubmission(object):
         return {'raw_data': None}
         
     def submit(self):
-        pass
+        site_dh = self.site_dh
+        slice_dh = site_dh.parent()
+        expt_dh = slice_dh.parent()
+        
+        print("Copying raw data to server..")
+        
+        # Decide how the top-level directory will be named on the remote server
+        # (it may already be there from a previous slice/site, or the current
+        # name may already be taken by another rig.)
+        server_path = config.synphys_data
+        expt_name = expt_dh.info().get('synphys_server_path', None)
+        if expt_name is None:
+            expt_base_name = expt_dh.shortName().split('_')[0]
+            expt_dirs = set(os.listdir(server_path))
+            i = 0
+            while True:
+                expt_name = expt_base_name + '_%03d' % i
+                if expt_name not in expt_dirs:
+                    break
+                i += 1
+        server_expt_path = os.path.join(server_path, expt_name)
+        
+        # Leave an artifact
+        expt_dh.setInfo(synphys_server_path=server_expt_path)
+
+        self.server_path = server_expt_path
+        print("   using server path: %s" % server_path)
+        self._sync_paths(expt_dh.name(), server_expt_path)
+        
+        # Copy slice files if needed
+        server_slice_path = os.path.join(server_expt_path, slice_dh.shortName())
+        self._sync_paths(slice_dh.name(), server_slice_path)
+
+        # Copy site files if needed
+        server_site_path = os.path.join(server_slice_path, site_dh.shortName())
+        self._sync_paths(site_dh.name(), server_site_path)
+
+        # Leave an artifact indicating this copy finished
+        site_dh.setInfo(synphys_server_path=server_site_path)
+        
+        print("Done.")
+        
+    def _sync_paths(self, source, target):
+        """Non-recursive directory sync.
+        """
+        if not os.path.isdir(target):
+            os.mkdir(target)
+        for fname in os.listdir(source):
+            src_path = os.path.join(source, fname)
+            if os.path.isfile(src_path):
+                dst_path = os.path.join(target, fname)
+                if os.path.isfile(dst_path):
+                    # Todo: add better checking here..
+                    continue
+                shutil.copyfile(src_path, dst_path)
+                print("    copy %s => %s" % (src_path, dst_path))
         
 
 class LIMSSubmission(object):
@@ -526,8 +583,9 @@ class LIMSSubmission(object):
         
         # Generate combined NWB file
         print("Generating combined NWB file..")
-        file_paths = [self.site_dh[f['path']].name() for f in self.files]
-        source_nwb = self.site_dh[self.source_nwb].name()
+        slice_dh = self.site_dh.parent()
+        file_paths = [slice_dh[f['path']].name() for f in self.files if f['path'] is not self.source_nwb]
+        source_nwb = slice_dh[self.source_nwb].name()
         combined_nwb = nwb_packaging.buildCombinedNWB(source_nwb, file_paths)
         assert os.path.isfile(combined_nwb)
         
@@ -561,16 +619,12 @@ class LIMSSubmission(object):
 
 
 class ExperimentSubmission(object):
-    def __init__(self, site_dh, files, electrodes):
+    def __init__(self, site_dh, files, pipettes):
         """Handles the entire process of submitting an experiment, including:
         
         1. Storing submission metadata into ACQ4 index files
-        2. Submitting slice metadata to synphys DB
-        3. Submitting initial experiment to synphys DB
-        4. Submitting electrode / cell info to synphys DB
-        5. Copying all files to synphys data storage
-        6. Generating NWB file
-        7. Submitting NWB + metadata to LIMS
+        2. Copying all files to synphys data storage
+        3. Submitting combined NWB + metadata to LIMS
         
         Parameters
         ----------
@@ -582,31 +636,29 @@ class ExperimentSubmission(object):
                
                 * path: file path relative to slice folder
                 * category: the purpose of this file
-        electrodes : list
+        pipettes : list
             Describes all electrodes used during this experiment. Each item in
             the list is a dict containing:
             
-                * id: the ID of this electrode (usually 1-8)
+                * id: the ID of this pipette (usually 1-8)
                 * status: 'GOhm seal', 'Low seal', 'No seal', ...
                 * got_cell: bool, whether a cell was recorded from
-                * channel: AD channel number for this electrode
+                * channel: AD channel number for this pipette
                 * start: starting datetime
                 * stop: ending datetime
         """
         self.site_dh = site_dh
         self.files = files
-        self.electrodes = electrodes
+        self.pipettes = pipettes
     
         nwb_file = [f['path'] for f in files if f['category'] == 'MIES physiology'][0]
         self.nwb_file = site_dh.parent()[nwb_file]
     
         self.stages = [
-            ExperimentMetadataSubmission(site_dh, files, electrodes),
-            SliceSubmission(site_dh.parent()),
-            ExperimentDBSubmission(site_dh, self.nwb_file),
-            ElectrodeDBSubmission(site_dh),
+            ExperimentMetadataSubmission(site_dh, files, pipettes),
             RawDataSubmission(site_dh),
-            LIMSSubmission(site_dh),
+            LIMSSubmission(site_dh, files),
+            #LIMSSubmission(site_dh, files, _override_spec_name="Ntsr1-Cre_GN220;Ai14-349905.03.06"),
         ]
         
     def check(self):
