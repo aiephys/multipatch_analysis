@@ -26,15 +26,21 @@ class ExperimentSubmitUi(QtGui.QWidget):
         self.hsplit = QtGui.QSplitter(QtCore.Qt.Horizontal)
         self.layout.addWidget(self.hsplit, 0, 0)
 
+        self.left_panel = QtGui.QWidget()
+        self.left_layout = QtGui.QVBoxLayout()
+        self.left_layout.setContentsMargins(0, 0, 0, 0)
+        self.left_panel.setLayout(self.left_layout)
+        self.hsplit.addWidget(self.left_panel)
+
+        self.file_tree = FileTreeWidget(self)
+        self.file_tree.itemSelectionChanged.connect(self.selection_changed)
+        self.left_layout.addWidget(self.file_tree)
+        
         self.ctrl_widget = QtGui.QWidget()
         self.ctrl_layout = QtGui.QGridLayout()
         self.ctrl_widget.setLayout(self.ctrl_layout)
         self.ctrl_layout.setContentsMargins(0, 0, 0, 0)
-        self.hsplit.addWidget(self.ctrl_widget)
-        
-        self.file_tree = FileTreeWidget(self)
-        self.file_tree.itemSelectionChanged.connect(self.selection_changed)
-        self.ctrl_layout.addWidget(self.file_tree, 0, 0, 1, 2)
+        self.left_layout.addWidget(self.ctrl_widget)
         
         row = self.ctrl_layout.rowCount()
         self.load_btn = QtGui.QPushButton('load files')
@@ -220,16 +226,7 @@ class SiteTreeItem(pg.TreeWidgetItem):
         self.ui = ui
         self.is_submittable = True
 
-        try:
-            expt = database.experiment_from_timestamp(datetime.fromtimestamp(fh.info()['__timestamp__']))
-        except KeyError:
-            expt = None
-        if expt is None:
-            status = "NOT SUBMITTED"
-        else:
-            status = "submitted"
-
-        pg.TreeWidgetItem.__init__(self, [fh.shortName(), status])
+        pg.TreeWidgetItem.__init__(self, [fh.shortName(), ''])
         
     def submission(self):
         pips = self.ui.timeline.save()
@@ -368,7 +365,8 @@ class SubmitWindow(QtGui.QWidget):
         self.layout = QtGui.QGridLayout()
         self.setLayout(self.layout)
         
-        self.message_text = QtGui.QTextEdit()
+        self.message_text = QtGui.QTextBrowser()
+        self.message_text.setOpenExternalLinks(True)
         self.layout.addWidget(self.message_text, 0, 0)
         
         self.info_tree = pg.DataTreeWidget()

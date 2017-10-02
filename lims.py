@@ -40,7 +40,9 @@ def specimen_info(specimen_name):
             tissue_processings.section_thickness_um as thickness,
             tissue_processings.instructions as section_instructions,
             plane_of_sections.name as plane_of_section,
-            flipped_specimens.name as flipped
+            flipped_specimens.name as flipped,
+            specimens.histology_well_name as histology_well_name,
+            specimens.carousel_well_name as carousel_well_name
         from specimens
             left join donors on specimens.donor_id=donors.id 
             left join organisms on donors.organism_id=organisms.id
@@ -122,7 +124,27 @@ def specimen_id_from_name(spec_name):
     """Return the LIMS ID of a specimen give its name.
     """
     recs = lims.query("select id from specimens where name='%s'" % spec_name)
+    if len(recs) == 0:
+        raise ValueError('No LIMS specimen named "%s"' % spec_name)
     return recs[0]['id']
+
+
+def specimen_ephys_roi_plans(spec_name):
+    """Return a list of all ephys roi plans for this specimen.
+    """
+    sid = specimen_id_from_name(spec_name)
+    recs = lims.query("""
+        select 
+            ephys_roi_plans.id as ephys_roi_plan_id,
+            ephys_specimen_roi_plans.id as ephys_specimen_roi_plan_id,
+            ephys_roi_plans.name as name
+        from 
+            ephys_specimen_roi_plans
+            join ephys_roi_plans on ephys_specimen_roi_plans.ephys_roi_plan_id=ephys_roi_plans.id
+        where 
+            ephys_specimen_roi_plans.specimen_id=%d
+    """ % sid)
+    return recs
 
 
 def cell_cluster_ids(spec_id):
