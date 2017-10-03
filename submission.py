@@ -1,6 +1,6 @@
 import os, re, json, shutil
 from collections import OrderedDict
-from datetime import datetime
+from datetime import datetime, timedelta
 import database as db
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.data import PatchClampRecording
@@ -539,11 +539,15 @@ class RawDataSubmission(object):
             src_path = os.path.join(source, fname)
             if os.path.isfile(src_path):
                 dst_path = os.path.join(target, fname)
+                # don't copy again if destination file is newer than source file
                 if os.path.isfile(dst_path):
-                    # Todo: add better checking here..
-                    continue
-                shutil.copyfile(src_path, dst_path)
+                    src_mtime = os.stat(src_path).st_mtime
+                    dst_mtime = os.stat(dst_path).st_mtime
+                    if dst_mtime >= src_mtime:
+                        print("    skip %s => %s" % (src_path, dst_path))
+                        continue
                 print("    copy %s => %s" % (src_path, dst_path))
+                shutil.copyfile(src_path, dst_path)
         
 
 class LIMSSubmission(object):
@@ -607,17 +611,17 @@ class LIMSSubmission(object):
             if m is None:
                 errors.append("Histology well name appears to be incorrectly formatted: %s" % lims_edit_href)        
             else:
-                yy, mm, dd, plate_n, well = m.groups()[:3]
+                yy, mm, dd, plate_n, well = m.groups()[:5]
                 plate_date = datetime(2000+int(yy), int(mm), int(dd))
                 site_date = datetime.fromtimestamp(self.meta['acq_timestamp'])
                 # find the most recent Monday
                 expected_plate_date = site_date - timedelta(days=site_date.weekday())
                 if abs((expected_plate_date - plate_date).total_seconds()) > 7*24*3600:
                     # error if more than a week out of sync
-                    errors.append("Histology well date is %d%d%d; expected %s: %s" % (yy, mm, dd, expected_plate_date.strftime('%y%m%d'), lims_edit_href))
-                if expected_plate_date.date() != plate_date:
+                    errors.append("Histology well date is %s%s%s; expected %s: %s" % (yy, mm, dd, expected_plate_date.strftime('%y%m%d'), lims_edit_href))
+                if expected_plate_date.date() != plate_date.date():
                     # warning if the date is not exactly as expected
-                    warnings.append("Histology well date is %d%d%d; expected %s: %s" % (yy, mm, dd, expected_plate_date.strftime('%y%m%d'), lims_edit_href))
+                    warnings.append("Histology well date is %s%s%s; expected %s: %s" % (yy, mm, dd, expected_plate_date.strftime('%y%m%d'), lims_edit_href))
                     
                 if int(plate_n) > 24:
                     warnings.append("Histology plate number %s is probably too high. %s" % (plate_n, lims_edit_href))
