@@ -13,7 +13,7 @@ class MultipatchSubmissionModule(Module):
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
         self.ui = submit_expt.ExperimentSubmitUi()
-        self.ui.resize(1600, 1000)
+        self.ui.resize(1600, 900)
         self.ui.show()
         
         self.load_from_dm_btn = QtGui.QPushButton("load from data manager")
