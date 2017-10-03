@@ -168,7 +168,7 @@ class ExperimentTimeline(QtGui.QWidget):
         self.remove_pipettes()
         site_info = self.nwb_handle.parent().info()
         for i in self.channels:
-            hs_state = site_info.get('Headstage %d'%i, None)
+            hs_state = site_info.get('Headstage %d'%(i+1), None)
             if hs_state is None:
                 continue
             status = {
