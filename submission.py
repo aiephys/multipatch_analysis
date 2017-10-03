@@ -572,7 +572,7 @@ class LIMSSubmission(object):
         }
         
         if self.spec_name is None:
-            self.spec_name = self.site_dh.parent().info()['specimen_ID']
+            self.spec_name = self.site_dh.parent().info()['specimen_ID'].strip()
         
         try:
             sid = lims.specimen_id_from_name(self.spec_name)
@@ -629,17 +629,17 @@ class LIMSSubmission(object):
         if cw_name is None or len(cw_name.strip()) == 0:
             errors.append('No LIMS carousel well name for this specimen!')
         else:
-            if cw_name != slice_info['carousel_well_ID']:
+            if cw_name != slice_info['carousel_well_ID'].strip():
                 errors.append('LIMS carousel well name "%s" does not match ACQ4 carousel_well_ID "%s"' 
                     % (cw_name, slice_info['carousel_well_ID']))
             
         # If histology well name was recorded in ACQ4, make sure it matches the one in LIMS
         acq_plate_well = slice_info.get('plate_well_ID', None)
-        if acq_plate_well is not None and acq_plate_well != hist_well:
+        if acq_plate_well is not None and acq_plate_well.strip() != hist_well:
             errors.append('LIMS histology well name "%s" does not match ACQ4 plate_well_ID "%s"' 
                     % (hist_well, acq_plate_well))
-            
-        
+
+        # make sure we have one nwb file to submit
         source_nwb_files = [f['path'] for f in self.files if f['category'] == 'MIES physiology']
         if len(source_nwb_files) == 0:
             errors.append("%d NWB files specified (should be 1)" % len(source_nwb_files))
