@@ -18,11 +18,11 @@ raw_data_paths:
 
 """
 
-configfile = 'config.yml'
+configfile = os.path.join(os.path.dirname(__file__), 'config.yml')
 if not os.path.isfile(configfile):
     open(configfile, 'wb').write(template)
 
-config = yaml.load(open('config.yml', 'rb'))
+config = yaml.load(open(configfile, 'rb'))
 
 for k,v in config.items():
     locals()[k] = v
