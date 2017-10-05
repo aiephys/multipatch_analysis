@@ -169,7 +169,7 @@ class ExperimentTimeline(QtGui.QWidget):
         site_info = self.nwb_handle.parent().info()
         for i in self.channels:
             hs_state = site_info.get('Headstage %d'%(i+1), None)
-            if hs_state is None:
+            if hs_state in (None, 'NA'):
                 continue
             status = {
                 'NS': 'No seal',
