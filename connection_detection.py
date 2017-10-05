@@ -104,7 +104,7 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         pulse_stim = PulseStimAnalyzer.get(pre_rec)
         spikes = pulse_stim.evoked_spikes()
         
-        if len(spikes) < 10:
+        if not isinstance(pre_rec, MultiPatchProbe):
             # this does not look like the correct kind of stimulus; bail out
             # Ideally we can make this agnostic to the exact stim type in the future,
             # but for now we rely on the delay period between pulses 8 and 9 to get
