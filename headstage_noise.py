@@ -10,7 +10,7 @@ q = """
         pcrec.baseline_rms_noise,
         substring(experiment.original_path from 36 for 1),
         recording.device_key,
-        experiment.acq_timestamp
+        recording.start_time
     from 
         patch_clamp_recording pcrec
         join recording on pcrec.recording_id=recording.id
@@ -54,7 +54,7 @@ for r, c in ((1, 'r'), (2, 'g'), (3, 'b')):
     plt.plot(x, y/len(rig_data), stepMode=True, connect='finite', pen=c, name="Rig %d" % r)
 
     p = grid[r-1, 0]
-    p.plot(ts[mask] + np.random.uniform(size=len(rig_data))*1e5, rig_data, pen=None, symbol='o', symbolPen=None, symbolBrush=(255, 255, 255, 100))
+    p.plot(ts[mask], rig_data, pen=None, symbol='o', symbolPen=None, symbolBrush=(255, 255, 255, 100))
     p.setLabels(left=('rig %d baseline rms noise'%r, 'V'))
 
 grid.setXLink(grid[0, 0])
