@@ -26,7 +26,6 @@ response_cache = load_cache(cache_file)
 
 grand_response = {}
 feature_plot = None
-dist_plot = None
 grid = PlotGrid()
 grid.set_shape(4, 1)
 synapse_plot = (grid[0, 0], grid[1, 0], grid[2, 0], grid[3, 0])
@@ -36,13 +35,12 @@ for c in range(len(connection_types)):
     cre_type = connection_types[c].split('-')
     expt_list = all_expts.select(cre_type=cre_type, calcium=calcium, age=age)
     color = (c, len(connection_types)*1.3)
-    dist_plot = expt_list.distance_plot(cre_type[0], cre_type[1], plots=dist_plot, color=color, name=cre_type[0])
     grand_response[cre_type[0]] = {'trace': [], 'amp': [], 'latency': [], 'rise': [], 'decay':[]}
     synapse_plot[c].addLegend()
     for expt in expt_list:
         for pre, post in expt.connections:
             if expt.cells[pre].cre_type == cre_type[0] and expt.cells[post].cre_type == cre_type[1]:
-                pulse_response = cache_response(expt, pre, post, cache_file, response_cache)
+                pulse_response = cache_response(expt, pre, post, cache_file, response_cache, type='pulse')
                 response_subset = response_filter(pulse_response, freq_range=[0, 50], holding_range=[-68, -72])
                 if len(response_subset) >= 10:
                     avg_trace, avg_amp, amp_sign, peak_t = get_amplitude(response_subset)
