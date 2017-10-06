@@ -34,6 +34,7 @@ class ExperimentSubmitUi(QtGui.QWidget):
 
         self.file_tree = FileTreeWidget(self)
         self.file_tree.itemSelectionChanged.connect(self.selection_changed)
+        self.file_tree.itemDoubleClicked.connect(self.load_clicked)
         self.left_layout.addWidget(self.file_tree)
         
         self.ctrl_widget = QtGui.QWidget()
@@ -373,7 +374,7 @@ class SubmitWindow(QtGui.QWidget):
         self.info_tree.setColumnHidden(1, True)
         self.layout.addWidget(self.info_tree, 0, 1)
         
-        self.submit_btn = QtGui.QPushButton('submit!')
+        self.submit_btn = pg.FeedbackButton('submit!')
         self.submit_btn.clicked.connect(self.submit)
         self.layout.addWidget(self.submit_btn, 1, 1)
         
@@ -396,7 +397,13 @@ class SubmitWindow(QtGui.QWidget):
         self.info_tree.setData(summary)
         
     def submit(self):
-        self.submission.submit()
+        try:
+            self.submission.submit()
+            self.submit_btn.success("Done!")
+        except:
+            self.submit_btn.failure("Failed; see console.")
+            raise
+        
         
 
 

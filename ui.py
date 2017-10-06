@@ -6,6 +6,7 @@ from pyqtgraph.Qt import QtGui
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.miesnwb import MiesNwb
 from config import n_headstages
+import constants
 
 
 class SynapseTreeWidget(QtGui.QTreeWidget):
@@ -108,6 +109,10 @@ class ExperimentTimeline(QtGui.QWidget):
             ch.region.scene().removeItem(ch.region)
         
     def load_experiment(self, nwb_handle):
+        with pg.BusyCursor():
+            self._load_experiment(nwb_handle)
+            
+    def _load_experiment(self, nwb_handle):
         self.nwb_handle = nwb_handle
         self.nwb = MiesNwb(nwb_handle.name())
         
@@ -164,6 +169,12 @@ class ExperimentTimeline(QtGui.QWidget):
                 brushes = np.where(np.abs(data) > 1.0, fail_brush, pass_brush)
                 plt.plot(times, data, pen=None, symbol=symbol, symbolPen=None, symbolBrush=brushes)
 
+        # automatically fill pipette fluorophore field
+        expt_dh = nwb_handle.parent().parent().parent()
+        expt_info = expt_dh.info()
+        dye = expt_info.get('internal_dye', None)
+        internal = expt_info.get('internal', None)
+
         # automatically select electrode regions
         self.remove_pipettes()
         site_info = self.nwb_handle.parent().info()
@@ -180,13 +191,13 @@ class ExperimentTimeline(QtGui.QWidget):
             start = (recs[i][0].start_time - start_time).seconds - 1
             stop = (recs[i][-1].start_time - start_time).seconds + 1
             
-            # assume if we got more than two recordings, then a cell was present.
-            got_cell = len(recs[i]) > 2
+            got_data = len(recs[i]) > 2
             
-            self.add_pipette(i, start, stop, status=status, got_cell=got_cell)
-            
-    def add_pipette(self, channel, start, stop, status=None, got_cell=None):
-        elec = PipetteParameter(self, channel, start, stop, status=status, got_cell=got_cell)
+            self.add_pipette(i, start, stop, status=status, got_data=got_data, internal_dye=dye, internal=internal)
+        
+        
+    def add_pipette(self, channel, start, stop, status=None, **kwds):
+        elec = PipetteParameter(self, channel, start, stop, status=status, **kwds)
         self.params.addChild(elec, autoIncrementName=True)
         elec.child('channel').sigValueChanged.connect(self._pipette_channel_changed)
         elec.region.sigRegionChangeFinished.connect(self._pipette_region_changed)
@@ -225,32 +236,37 @@ class ExperimentTimeline(QtGui.QWidget):
                 elec.setName('Pipette %d' % e_id)
 
     def save(self):
-        state = []
+        state = {}
+        cell = {'target_layer': None, 'biocytin': None}
         for elec in self.params.children():
             rgn = elec.region.getRegion()
             start = self.start_time + datetime.timedelta(seconds=rgn[0])
             stop = self.start_time + datetime.timedelta(seconds=rgn[1])
-            state.append({
-                'id': elec.id,
-                'status': elec['status'],
-                'got_cell': elec['got cell'],
-                'channel': elec['channel'],
-                'start': start,
-                'stop': stop,
-            })
+            state[elec.id] = {
+                'pipette_status': elec['status'],
+                'got_data': elec['got data'],
+                'ad_channel': elec['channel'],
+                'patch_start': start,
+                'patch_stop': stop,
+                'cell_labels': {'biocytin': '', 'red': '', 'green': '', 'blue': ''},
+                'internal_solution': elec['internal'],
+                'internal_dye': elec['internal dye'],
+            }
         return state
 
 
 class PipetteParameter(pg.parametertree.parameterTypes.GroupParameter):
-    def __init__(self, ui, channel, start, stop, status=None, got_cell=None):
+    def __init__(self, ui, channel, start, stop, status=None, got_data=None, internal=None, internal_dye=None):
         self.ui = ui
         params = [
             {'name': 'channel', 'type': 'list', 'values': ui.list_channels()},
             {'name': 'status', 'type': 'list', 'values': ['No seal', 'Low seal', 'GOhm seal', 'Technical failure']},
-            {'name': 'got cell', 'type': 'bool'},
+            {'name': 'got data', 'type': 'bool'},
+            {'name': 'internal', 'type': 'list', 'values': [''] + constants.INTERNAL_RECIPES},
+            {'name': 'internal dye', 'type': 'list', 'values': [''] + constants.INTERNAL_DYES},
         ]
         pg.parametertree.parameterTypes.GroupParameter.__init__(self, name="Pipette?", children=params, removable=True)
-        self.child('got cell').sigValueChanged.connect(self._got_cell_changed)
+        self.child('got data').sigValueChanged.connect(self._got_data_changed)
         
         region = [0, 500]
         if start is not None:
@@ -265,11 +281,15 @@ class PipetteParameter(pg.parametertree.parameterTypes.GroupParameter):
             self['channel'] = channel
         if status is not None:
             self['status'] = status
-        if got_cell is not None:
-            self['got cell'] = got_cell
+        if got_data is not None:
+            self['got data'] = got_data
+        if internal is not None:
+            self['internal'] = internal
+        if internal_dye is not None:
+            self['internal dye'] = internal_dye
             
-    def _got_cell_changed(self):
-        if self['got cell'] is True:
+    def _got_data_changed(self):
+        if self['got data'] is True:
             self.region.setBrush((0, 255, 0, 100))
         else:
             self.region.setBrush((0, 0, 255, 100))

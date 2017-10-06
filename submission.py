@@ -1,6 +1,7 @@
-import os, re, json, shutil
+import os, re, json, yaml, shutil
 from collections import OrderedDict
 from datetime import datetime, timedelta
+import pyqtgraph as pg
 import database as db
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.data import PatchClampRecording
@@ -8,6 +9,7 @@ import lims
 from data import MultiPatchExperiment, MultiPatchProbe
 from connection_detection import PulseStimAnalyzer, MultiPatchSyncRecAnalyzer
 import config
+import constants
 
 
 class SliceSubmission(object):
@@ -51,6 +53,7 @@ class SliceSubmission(object):
                 'acq_timestamp': datetime.fromtimestamp(info['__timestamp__']),
                 'species': limsdata['organism'],
                 'age': limsdata['age'],
+                'sex': limsdata['sex'],
                 'genotype': limsdata['genotype'],
                 'orientation': limsdata['plane_of_section'],
                 'surface': limsdata['exposed_surface'],
@@ -180,13 +183,13 @@ class ExperimentDBSubmission(object):
                     errors.append("Experiment temperature '%s' is invalid." % self._expt_info['temperature'])
         
         self.fields = {
-            'original_path': '%s:%s' % (config.rig_name, self.dh.name()),
+            'original_path': self.dh.name(),
+            'rig_name': expt_info.get('rig_name', None),  # optional for now; make mandatory later
             'acq_timestamp': datetime.fromtimestamp(info['__timestamp__']),
             'target_region': expt_info.get('region'),
             'internal': expt_info.get('internal'),
             'acsf': expt_info.get('acsf'),
             'target_temperature': temp,
-            
         }
                 
         return errors, warnings
@@ -397,14 +400,56 @@ class ExperimentMetadataSubmission(object):
             for fname in dh.ls():
                 fh = dh[fname]
                 relname = fh.name(relativeTo=slice_dh)
-                if fh.isFile() and relname not in all_files:
+                if fh.isFile() and relname not in all_files and fh.ext() not in ['.pxp']:
                     warnings.append("file %s is not mentioned in metadata." % relname)
         
         # Do we already have pipette information submitted?
-        site_info = self.site_dh.info()
-        if 'pipettes' in site_info and site_info['pipettes'] != self.pipettes:
-            warnings.append('site pipette metadata will be overwritten: %s => %s' % 
-                            (site_info['pipettes'], self.pipettes))
+        self.pip_file = self.site_dh['pipettes.yml'].name()
+        if os.path.exists(self.pip_file):
+            yaml_pips = yaml.load(open(self.pip_file, 'rb'))
+            if yaml_pips != self.pipettes:
+                warnings.append('pipette metadata file will be overwritten: %s => %s' % 
+                            (yaml_pips, self.pipettes))
+        
+        
+        # Sanity checks on experiment metadata:
+        
+        slice_info = slice_dh.info()
+        expt_dh = slice_dh.parent()
+        expt_info = expt_dh.info()
+        spec_info = lims.specimen_info(slice_info['specimen_ID'].strip())
+        
+        # Is rig name set and known?
+        if config.rig_name not in ('MP0', 'MP1', 'MP2', 'MP3', 'MP4', 'MP5'):
+            errors.append('Unrecognized rig name "%s"' % config.rig_name)
+        
+        # Is ACSF set?
+        acsf = expt_info.get('solution', None)
+        if acsf not in constants.ACSF_RECIPES:
+            errors.append('Unrecognized ACSF recipe: "%s"' % acsf)
+        
+        # Is temperature set?
+        temp = expt_info.get('temperature', '')
+        m = re.match(r'(rt|\d{2}\s*c?)', temp.lower())
+        if m is None:
+            errors.append('Unrecognized temperature: "%s"' % temp)
+        
+        # Is specimen from today?
+        
+        
+        # Sanity checks on pipette metadata:
+        
+        for pip_id, pip in self.pipettes.items():
+            # Did we specify a known dye for each pipette?
+            if pip['internal_dye'] not in constants.INTERNAL_DYES:
+                errors.append('Pipette %d has unrecognized dye "%s"' % (pip_id, pip['internal_dye']))
+            
+            # Did we specify a known internal for each pipette?
+            if pip['internal_solution'] not in constants.INTERNAL_RECIPES:
+                errors.append('Pipette %d has unrecognized internal "%s"' % (pip_id, pip['internal_solution']))
+            
+            # Does the selected dye overlap with cre reporters?
+            
         
         return errors, warnings
 
@@ -418,14 +463,19 @@ class ExperimentMetadataSubmission(object):
     def submit(self):
         slice_dh = self.site_dh.parent()
         expt_dh = slice_dh.parent()
-        expt_dh.setInfo(rig_name=config.rig_name)
+        
+        # Set rig name from config if it has not already been written
+        if 'rig_name' not in expt_dh.info():
+            expt_dh.setInfo(rig_name=config.rig_name)
+            
         for file_info in self.files:
             if file_info['category'] == 'ignore':
                 continue
             fh = slice_dh[file_info['path']]
             fh.setInfo(category=file_info['category'])
         
-        self.site_dh.setInfo(pipettes=self.pipettes)
+        # Generate yml file with pipette/cell information
+        yaml.dump(self.pipettes, open(self.pip_file, 'wb'), default_flow_style=False, indent=4)
 
 
 class PipetteDBSubmission(object):
@@ -500,6 +550,8 @@ class RawDataSubmission(object):
         server_path = config.synphys_data
         expt_name = expt_dh.info().get('synphys_server_path', None)
         if expt_name is None:
+            # We have not already submitted a site from this experiment folder;
+            # look for a suitable new directory name on the server
             expt_base_name = expt_dh.shortName().split('_')[0]
             expt_dirs = set(os.listdir(server_path))
             i = 0
@@ -734,8 +786,8 @@ class ExperimentSubmission(object):
     
         self.stages = [
             ExperimentMetadataSubmission(site_dh, files, pipettes),
-            RawDataSubmission(site_dh),
-            LIMSSubmission(site_dh, files),
+            #RawDataSubmission(site_dh),
+            #LIMSSubmission(site_dh, files),
             #LIMSSubmission(site_dh, files, _override_spec_name="Ntsr1-Cre_GN220;Ai14-349905.03.06"),
         ]
         
@@ -793,8 +845,12 @@ class ExperimentSubmission(object):
     def submit(self):
         for stage in self.stages:
             assert len(stage.check()[0]) == 0
-        for stage in self.stages:
-            stage.submit()
+        with pg.ProgressDialog("Submitting experiment..", maximum=len(self.stages), nested=True) as dlg:
+            for stage in self.stages:
+                stage.submit()
+                dlg += 1
+                if dlg.wasCanceled():
+                    break
 
 
 def submit_site_mosaic(data):
