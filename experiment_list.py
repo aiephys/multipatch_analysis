@@ -104,6 +104,9 @@ class ExperimentList(object):
             else:
                 while current.indentation > ind:
                     current = current.parent
+                    if current is None:
+                        raise Exception("There seems to be an indentation issue around line %d in %s" % 
+                                        (i, filename))
                 ch = Entry(line, parent=current.parent, file=filename, lineno=i)
                 current = ch
                 continue
