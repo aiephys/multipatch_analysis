@@ -37,6 +37,7 @@ def specimen_info(specimen_name):
             ages.days as age,
             donors.date_of_birth as date_of_birth,
             donors.full_genotype as genotype,
+            genders.name as sex,
             tissue_processings.section_thickness_um as thickness,
             tissue_processings.instructions as section_instructions,
             plane_of_sections.name as plane_of_section,
@@ -47,6 +48,7 @@ def specimen_info(specimen_name):
             left join donors on specimens.donor_id=donors.id 
             left join organisms on donors.organism_id=organisms.id
             left join ages on donors.age_id=ages.id
+            left join genders on donors.gender_id=genders.id
             left join tissue_processings on specimens.tissue_processing_id=tissue_processings.id
             left join plane_of_sections on tissue_processings.plane_of_section_id=plane_of_sections.id
             left join flipped_specimens on flipped_specimens.id = specimens.flipped_specimen_id
@@ -265,6 +267,7 @@ if __name__ == '__main__':
     spec_id = specimen_id_from_name(spec_name)
     cluster_ids = cell_cluster_ids(spec_id)
     print("Slice:", spec_id)
+    print(specimen_info(spec_name))
     for cid in cluster_ids:
         print("  %d %s" % (cid, specimen_metadata(cid)))
     #print(cell_cluster_data_paths(cluster_ids[0]))
