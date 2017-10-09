@@ -17,11 +17,6 @@ import shutil
 import nwb
 from nwb.nwbco import *
 
-# TODO
-# - Code layout
-# - integrate ai-nwb fixes from Keith into upstream version
-#   fixes are available in https://github.com/t-b/nwb-api/tree/local_fixes
-
 def appendMAFile(siteNWBs, filePath, filedesc):
     """ Split and append the given ma file from ACQ4 to the NWB files """
 
