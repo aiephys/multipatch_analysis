@@ -123,7 +123,7 @@ class DynamicsAnalyzer(object):
             if self._fit_train_amps is None:
                 self.measure_train_amps_from_fit()
             return self._fit_train_amps
-        elif method == 'deconv':
+        elif self.method == 'deconv':
             if self._deconv_train_amps is None:
                 self.measure_train_amps_from_deconv()
             return self._deconv_train_amps
@@ -225,6 +225,10 @@ class DynamicsAnalyzer(object):
                     b = trial[j]['baseline']
                     s = trial[j]['pre_rec']
                     c = trial[j]['command']
+                    r.t0 = 0
+                    b.t0 = 0
+                    s.t0 = 0
+                    c.t0 = 0
                     s.meta['spike'] = trial[j]['spike']
 
                     all_group.add(r, b)
