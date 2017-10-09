@@ -480,7 +480,7 @@ def main():
             print "The directory \"%s\" given in --basepath does not exist." % args.basePath
             return 1
 
-        basepath = args.basePath
+        basepath = os.path.abspath(args.basePath)
         siteNWBs = getSiteNWBs(basepath)
 
         if len(siteNWBs) == 0:
