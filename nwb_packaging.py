@@ -176,12 +176,12 @@ def getSiteNWBs(basepath):
             all_pxps = glob.glob(os.path.join(sitePath, '*.pxp'))
 
             if len(all_nwbs) != 1:
-                print "The site folder \"%s\" will be ignored as it holds more than one NWB file." % sitePath
+                print "The site folder \"%s\" will be ignored as it holds not exactly one NWB file." % sitePath
                 print all_nwbs
                 continue
 
             if len(all_pxps) != 1:
-                print "The site folder \"%s\" will be ignored as it holds more than one PXP file." % sitePath
+                print "The site folder \"%s\" will be ignored as it holds not exactly one PXP file." % sitePath
                 print all_pxps
                 continue
 
