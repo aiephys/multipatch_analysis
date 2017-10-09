@@ -14,6 +14,7 @@ import acq4.util.advancedTypes
 import h5py
 import shutil
 
+# Requires the patched version of nwb-api from https://github.com/t-b/nwb-api/tree/local_fixes
 import nwb
 from nwb.nwbco import *
 
