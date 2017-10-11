@@ -37,6 +37,7 @@ def specimen_info(specimen_name):
             ages.days as age,
             donors.date_of_birth as date_of_birth,
             donors.full_genotype as genotype,
+            donors.weight as weight,
             genders.name as sex,
             tissue_processings.section_thickness_um as thickness,
             tissue_processings.instructions as section_instructions,
