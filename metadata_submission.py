@@ -1,4 +1,5 @@
 import os, yaml, re
+from datetime import datetime, timedelta
 from collections import OrderedDict
 import acq4
 import config
@@ -154,7 +155,7 @@ class ExperimentMetadataSubmission(object):
             else:
                 yy, mm, dd, plate_n, well = m.groups()[:5]
                 plate_date = datetime(2000+int(yy), int(mm), int(dd))
-                site_date = datetime.fromtimestamp(self.meta['acq_timestamp'])
+                site_date = datetime.fromtimestamp(site_info['__timestamp__'])
                 # find the most recent Monday
                 expected_plate_date = site_date - timedelta(days=site_date.weekday())
                 if abs((expected_plate_date - plate_date).total_seconds()) > 7*24*3600:

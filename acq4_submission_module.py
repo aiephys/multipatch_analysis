@@ -27,7 +27,7 @@ class MultipatchSubmissionModule(Module):
     def load_from_dm_clicked(self):
         man = getManager()
         sel_dir = man.currentFile
-        self.ui.set_path(sel_dir.name())
+        self.ui.set_path(sel_dir)
         
     def window(self):
         return self.ui
