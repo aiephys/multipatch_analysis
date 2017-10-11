@@ -120,21 +120,20 @@ class ExperimentMetadataSubmission(object):
             # Does the selected dye overlap with cre reporters?
         
         # If slice was not fixed, don't attempt LIMS submission
-        cw_name = self.spec_info['carousel_well_name']
-            
-        
         try:
             sid = lims.specimen_id_from_name(spec_name)
         except ValueError as err:
             errors.append(err.message)
             sid = None
 
-        if cw_name != 'not fixed' and sid is not None:
-            self._check_lims(errors, warnings, spec_name, sid, cw_name, site_info, slice_info)
+        if slice_info['plate_well_ID'] != 'not fixed' and sid is not None:
+            self._check_lims(errors, warnings, spec_name, sid, site_info, slice_info)
         
         return errors, warnings
         
-    def _check_lims(self, errors, warnings, spec_name, sid, cw_name, site_info, slice_info):
+    def _check_lims(self, errors, warnings, spec_name, sid, site_info, slice_info):
+        cw_name = self.spec_info['carousel_well_name']
+        
         # LIMS upload will fail if the specimen has not been given an ephys roi plan.
         roi_plans = lims.specimen_ephys_roi_plans(spec_name)
         lims_edit_href = '<a href="http://lims2/specimens/{sid}/edit">http://lims2/specimens/{sid}/edit</a>'.format(sid=sid)
