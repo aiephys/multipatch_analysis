@@ -109,6 +109,8 @@ class ExperimentTimeline(QtGui.QWidget):
         for ch in self.params.children():
             self.params.removeChild(ch)
             ch.region.scene().removeItem(ch.region)
+        for i in range(self.plots.shape[0]):
+            self.plots[i,0].clear()
 
     def load_site(self, site_dh):
         """Generate pipette list for this site

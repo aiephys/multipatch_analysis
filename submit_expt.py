@@ -71,6 +71,7 @@ class ExperimentSubmitUi(QtGui.QWidget):
             raise Exception("Requested path is not a site directory: %s" % (path.name()))
         self.file_tree.set_path(path)
         self.timeline.load_site(path)
+        self.canvas.clear()
 
     def load_clicked(self):
         sel = self.file_tree.selectedItems()
@@ -379,7 +380,7 @@ class SubmitWindow(QtGui.QWidget):
         self.info_tree.setColumnHidden(1, True)
         self.layout.addWidget(self.info_tree, 0, 1)
         
-        self.submit_btn = pg.FeedbackButton('submit!')
+        self.submit_btn = QtGui.QPushButton('submit!')
         self.submit_btn.clicked.connect(self.submit)
         self.layout.addWidget(self.submit_btn, 1, 1)
         
@@ -402,12 +403,8 @@ class SubmitWindow(QtGui.QWidget):
         self.info_tree.setData(summary)
         
     def submit(self):
-        try:
-            self.submission.submit()
-            self.submit_btn.success("Done!")
-        except:
-            self.submit_btn.failure("Failed; see console.")
-            raise
+        self.submission.submit()
+        self.hide()
         
         
 

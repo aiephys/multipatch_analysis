@@ -76,7 +76,6 @@ class ExperimentMetadataSubmission(object):
             warnings.append("No NWB files specified")
         if len(source_nwb_files) > 1:
             errors.append("%d NWB files specified (should be 0 or 1)" % len(source_nwb_files))
-        self.source_nwb = source_nwb_files[0]
         
         # make sure we have at most one multipatch log file to submit
         source_log_files = [f['path'] for f in self.files if f['category'] == 'Multipatch log']
@@ -119,14 +118,23 @@ class ExperimentMetadataSubmission(object):
                 errors.append('Pipette %d has unrecognized internal "%s"' % (pip_id, pip['internal_solution']))
             
             # Does the selected dye overlap with cre reporters?
+        
+        # If slice was not fixed, don't attempt LIMS submission
+        cw_name = self.spec_info['carousel_well_name']
             
+        
         try:
             sid = lims.specimen_id_from_name(spec_name)
         except ValueError as err:
             errors.append(err.message)
-            # bail out here; downstream checks will fail.
-            return errors, warnings
+            sid = None
+
+        if cw_name != 'not fixed' and sid is not None:
+            self._check_lims(errors, warnings, spec_name, sid, cw_name, site_info, slice_info)
         
+        return errors, warnings
+        
+    def _check_lims(self, errors, warnings, spec_name, sid, cw_name, site_info, slice_info):
         # LIMS upload will fail if the specimen has not been given an ephys roi plan.
         roi_plans = lims.specimen_ephys_roi_plans(spec_name)
         lims_edit_href = '<a href="http://lims2/specimens/{sid}/edit">http://lims2/specimens/{sid}/edit</a>'.format(sid=sid)
@@ -171,7 +179,6 @@ class ExperimentMetadataSubmission(object):
                     warnings.append("Histology plate number %s might be too high? %s" % (plate_n, lims_edit_href))
 
         # Check carousel ID matches the one in LIMS
-        cw_name = self.spec_info['carousel_well_name']
         if cw_name is None or len(cw_name.strip()) == 0:
             errors.append('No LIMS carousel well name for this specimen!')
         else:
@@ -184,9 +191,6 @@ class ExperimentMetadataSubmission(object):
         if acq_plate_well is not None and acq_plate_well.strip() != hist_well:
             errors.append('LIMS histology well name "%s" does not match ACQ4 plate_well_ID "%s"' 
                     % (hist_well, acq_plate_well))
-        
-        
-        return errors, warnings
 
     def summary(self):
         summ = OrderedDict()
