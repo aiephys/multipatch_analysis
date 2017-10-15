@@ -12,20 +12,23 @@ def specimen_info(specimen_name):
     Returns
     -------
     organism : "mouse" or "human"
-    genotype : the full genotype of the donor as recorded in labtracks
     age : age of specimen in days at time of sectioning
     date_of_birth : donor's date of birth
+    genotype : the full genotype of the donor as recorded in labtracks
+    weight : weight in grams
+    sex : 'M', 'F', or 
     plane_of_section : 'coronal' or 'sagittal'
     hemisphere : 'left' or 'right'
     thickness : speimen slice thickness (unscaled meters)
-    sectioning_mount_side : the side of the tissue that was mounted during
-        sectioning
-    flipped : boolean; if True, then the slice was flipped relative to its 
-        blockface image during recording
-    exposed_surface : The surface that was exposed during the experiment (right, 
-        left, anterior, or posterior)
     section_instructions : description of the slice angle and target region
         used for sectioning
+    plane_of_section : 
+    flipped : boolean; if True, then the slice was flipped relative to its 
+        blockface image during recording
+    sectioning_mount_side : the side of the tissue that was mounted during
+        sectioning
+    exposed_surface : The surface that was exposed during the experiment (right, 
+        left, anterior, or posterior)
     section_number : indicates the order this slice was sectioned (1=first)
     """
     
