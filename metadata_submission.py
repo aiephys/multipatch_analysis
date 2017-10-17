@@ -44,6 +44,14 @@ class ExperimentMetadataSubmission(object):
         
         # Do all categorized files actually exist?
         # Was a file categorized differently on a previous submission?
+        # Are file sizes appropriate?
+        max_sizes = {
+            'MIES physiology': 5000,
+            'Multipatch log': 1,
+            'slice anatomy': 10,
+            'slice quality stack': 5000,
+            'recording site': 5000,
+        }
         for file_info in self.files:
             fh = slice_dh[file_info['path']]
             if not fh.isFile():
@@ -53,6 +61,13 @@ class ExperimentMetadataSubmission(object):
             if 'category' in info and info['category'] != file_info['category']:
                 warnings.append("category for file %s will change %s => %s" % 
                                 (info['category'], file_info['category']))
+            
+            max_size = max_sizes.get(file_info['category'], 0)
+            size = int(os.stat(fh.name()).st_size / 1e6)
+            if max_size > 0 and size > max_size:
+                errors.append('File "%s" is too large (%dMB > %dMB max for category "%s")' % 
+                              (fh.name(), size, max_size, file_info['category']))
+            
         
         # Did we forget to categorize a file?
         all_files = [f['path'] for f in self.files]
@@ -72,15 +87,17 @@ class ExperimentMetadataSubmission(object):
         
         # make sure we have at most one nwb file to submit
         source_nwb_files = [f['path'] for f in self.files if f['category'] == 'MIES physiology']
+        have_nwb = len(source_nwb_files) > 0
         if len(source_nwb_files) == 0:
             warnings.append("No NWB files specified")
         if len(source_nwb_files) > 1:
             errors.append("%d NWB files specified (should be 0 or 1)" % len(source_nwb_files))
         
-        # make sure we have at most one multipatch log file to submit
+        # make sure we have one multipatch log file to submit if an nwb is present
+        # or 0-1 log files if there is no nwb
         source_log_files = [f['path'] for f in self.files if f['category'] == 'Multipatch log']
-        if len(source_log_files) == 0:
-            warnings.append("No MultiPatch log files specified")
+        if have_nwb and len(source_log_files) == 0:
+            errors.append("No MultiPatch log files specified")
         if len(source_log_files) > 1:
             errors.append("%d MultiPatch log files specified (should be 0 or 1)" % len(source_log_files))
 
