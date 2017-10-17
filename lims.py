@@ -22,7 +22,6 @@ def specimen_info(specimen_name):
     thickness : speimen slice thickness (unscaled meters)
     section_instructions : description of the slice angle and target region
         used for sectioning
-    plane_of_section : 
     flipped : boolean; if True, then the slice was flipped relative to its 
         blockface image during recording
     sectioning_mount_side : the side of the tissue that was mounted during
