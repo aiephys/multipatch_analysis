@@ -177,7 +177,7 @@ class DynamicsAnalyzer(object):
                 # for dynamics, we require all 12 pulses to elicit a presynaptic spike
                 continue
             
-            stim_params = analyzer.stim_params(pre_rec) + (post_rec.rounded_holding_potential(),)
+            stim_params = analyzer.stim_params(pre_rec) + (post_rec.rounded_holding_potential,)
             pulse_responses.setdefault(stim_params, []).append(resp)
             
             ind, base, ind_spike, ind_command = analyzer.get_train_response(pre_rec, post_rec, 0, 7, padding=(-pre_pad, post_pad))
