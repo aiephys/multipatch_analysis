@@ -3,10 +3,6 @@ from acq4.modules.Module import Module
 from acq4.Manager import getManager
 import submit_expt
 
-# workaround module imports
-# remove this after multipatch_analysis becomes an importable module
-import nwb_packaging
-
 
 class MultipatchSubmissionModule(Module):
     """Allows multipatch data submission UI to be invoked as an ACQ4 module.
