@@ -403,6 +403,8 @@ class SubmitWindow(QtGui.QWidget):
         self.info_tree.setData(summary)
         
     def submit(self):
+        if len(self.submission.check()[0]) > 0:
+            raise Exception("Can't submit; experiment has errors.")
         self.submission.submit()
         self.hide()
         
