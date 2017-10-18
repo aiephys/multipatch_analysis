@@ -11,6 +11,7 @@ from neuroanalysis.ui.plot_grid import PlotGrid
 from synapse_comparison import load_cache
 from manuscript_figures import cache_response, response_filter, trace_avg
 from rep_connections import connections
+from constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
 
 ### Select synapses for representative traces as {Connection Type: [UID, Pre_cell, Post_cell], } ###
 
@@ -24,6 +25,8 @@ pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
 grey = (169, 169, 169)
 sweep_color = (0, 0, 0, 30)
+holding_i = [-53, -60]
+holding_e = [-68, -72]
 
 parser = argparse.ArgumentParser()
 # plot options
@@ -63,9 +66,12 @@ for row in range(len(connection_types)):
         connection_type = tuple(connection_type.split('-'))
     expt_id, pre_cell, post_cell = connections[connection_type]
     expt = all_expts[expt_id]
-
+    if connection_type[0] in EXCITATORY_CRE_TYPES:
+        holding = holding_e
+    elif connection_type[0] in INHIBITORY_CRE_TYPES:
+        holding = holding_i
     pulse_response = cache_response(expt, pre_cell, post_cell, cache_file, response_cache, type='pulse')
-    sweep_list = response_filter(pulse_response, freq_range=[0, 50], holding_range=[-68, -72])
+    sweep_list = response_filter(pulse_response, freq_range=[0, 50], holding_range=holding)
     n_sweeps = len(sweep_list)
     if n_sweeps > 5:
         if plot_sweeps is True:
@@ -87,10 +93,10 @@ for row in range(len(connection_types)):
         label.setPos(50, 0)
         maxYpulse.append((row, grid[row,0].getAxis('left').range[1]))
     else:
-        print ("%s not enough sweeps for first pulse" % connection_type)
+        print ("%s -> %s not enough sweeps for first pulse" % (connection_type[0], connection_type[1]))
     if plot_trains is True:
         train_responses = cache_response(expt, pre_cell, post_cell, train_cache_file, train_response_cache, type='train')
-        train_sweep_list = response_filter(train_responses[0], freq_range=[50, 50], holding_range=[-68, -72])
+        train_sweep_list = response_filter(train_responses[0], freq_range=[50, 50], holding_range=holding)
         n_train_sweeps = len(train_sweep_list)
         if n_train_sweeps > 5:
             dec_sweep_list = []
