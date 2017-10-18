@@ -35,4 +35,6 @@ class MultiPatchProbe(MiesRecording):
         #return self.stim_params
 
     def __getattr__(self, attr):
+        if '_parent_rec' not in self.__dict__:
+            raise AttributeError(attr)
         return getattr(self._parent_rec, attr)
