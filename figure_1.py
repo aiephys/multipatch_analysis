@@ -14,7 +14,7 @@ from rep_connections import connections
 
 ### Select synapses for representative traces as {Connection Type: [UID, Pre_cell, Post_cell], } ###
 
-connection_types = ['L23pyr-L23pyr', 'rorb-rorb', 'sim1-sim1', 'tlx3-tlx3']
+connection_types = connections.keys() #['L23pyr-L23pyr', 'rorb-rorb', 'sim1-sim1', 'tlx3-tlx3']
 
 cache_file = 'pulse_response_cache.pkl'
 response_cache = load_cache(cache_file)
@@ -57,9 +57,11 @@ grid[0, 0].setTitle(title='First Pulse')
 maxYpulse = []
 maxYtrain = []
 maxYdec = []
-for row, connection_type in enumerate(connection_types):
-    type = tuple(connection_type.split('-'))
-    expt_id, pre_cell, post_cell = connections[type]
+for row in range(len(connection_types)):
+    connection_type = connection_types[row]
+    if type(connection_type) is not tuple:
+        connection_type = tuple(connection_type.split('-'))
+    expt_id, pre_cell, post_cell = connections[connection_type]
     expt = all_expts[expt_id]
 
     pulse_response = cache_response(expt, pre_cell, post_cell, cache_file, response_cache, type='pulse')
