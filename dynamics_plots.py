@@ -5,8 +5,8 @@ from manuscript_figures import cache_response, trace_avg, response_filter, featu
 from synapse_comparison import load_cache, summary_plot_pulse
 from neuroanalysis.data import TraceList
 from neuroanalysis.ui.plot_grid import PlotGrid
-from connection_detection import fit_psp
-
+from synaptic_dynamics import DynamicsAnalyzer
+pg.dbg()
 app = pg.mkQApp()
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
@@ -29,6 +29,7 @@ sweep_threshold = 5
 
 cache_file = 'train_response_cache.pkl'
 response_cache = load_cache(cache_file)
+analyzer = DynamicsAnalyzer
 
 ind_plot = PlotGrid()
 ind_plot.set_shape(4, 4)
@@ -52,8 +53,7 @@ for c in range(len(connection_types)):
                 else:
                     trace_color = (0, 0, 0, 5)
                 for f, freq in enumerate(freqs):
-                    induction_traces = response_filter(train_response[0], freq_range=[freq, freq], holding_range=holding,
-                                                      delta_t=rec_t[0])
+                    induction_traces = response_filter(train_response[0], freq_range=[freq, freq], holding_range=holding)
                     ind_rec_traces = response_filter(train_response[1], freq_range=[freq, freq], holding_range=holding,
                                                       delta_t=rec_t[0])
                     if len(induction_traces) >= sweep_threshold:
@@ -67,10 +67,9 @@ for c in range(len(connection_types)):
                         ind_plot[f, c].plot(induction_avg.time_values, induction_avg.data, pen=trace_color)
                         ind_plot[f, c].plot(ind_rec_avg.time_values, ind_rec_avg.data, pen=trace_color)
                         app.processEvents()
+                rec_ind_traces = response_filter(train_response[0], freq_range=[50, 50], holding_range=holding)
                 for t, delta in enumerate(rec_t):
                     recovery_traces = response_filter(train_response[1], freq_range=[50, 50], holding_range=holding,
-                                                      delta_t=delta)
-                    rec_ind_traces = response_filter(train_response[0], freq_range=[50, 50], holding_range=holding,
                                                       delta_t=delta)
                     if len(recovery_traces) >= sweep_threshold:
                         recovery_avg = trace_avg(recovery_traces)
@@ -100,6 +99,8 @@ for c in range(len(connection_types)):
         ind_plot[f, c].plot(ind_rec_grand_trace.time_values, ind_rec_grand_trace.data, pen={'color': color, 'width': 2})
         ind_plot[f, c].setLabels(left=('Vm', 'V'))
         ind_plot[f, c].setLabels(bottom=('t', 's'))
+
+        #train_amp = analyzer.train_amplitudes(induction_grand_trace[freq])
     for t, delta in enumerate(rec_t):
         recovery_grand_trace = TraceList(recovery_grand[delta][1]).mean()
         rec_ind_grand_trace = TraceList(recovery_grand[delta][0]).mean()
