@@ -2,7 +2,7 @@
 Used to synchronize raw data from rigs to central server.
 """
 
-import os, shutil, glob, traceback, pickle
+import os, sys, shutil, glob, traceback, pickle, time
 from acq4.util.DataManager import getDirHandle
 
 import config
@@ -29,26 +29,37 @@ class RawDataSubmission(object):
         slice_dh = site_dh.parent()
         expt_dh = slice_dh.parent()
         
-        print("Copying %s to server.." % site_dh.name())
+        now = time.strftime('%Y-%m-%d_%H:%M:%S')
+        self.log("========== %s : Sync %s to server" % (now, site_dh.name()))
+        self.skipped = 0
         
-        # Decide how the top-level directory will be named on the remote server
-        # (it may already be there from a previous slice/site, or the current
-        # name may already be taken by another rig.)
-        server_expt_path = get_experiment_server_path(expt_dh)
-        
-        self.server_path = server_expt_path
-        print("   using server path: %s" % server_expt_path)
-        self._sync_paths(expt_dh.name(), server_expt_path)
-        
-        # Copy slice files if needed
-        server_slice_path = os.path.join(server_expt_path, slice_dh.shortName())
-        self._sync_paths(slice_dh.name(), server_slice_path)
+        try:
+            # Decide how the top-level directory will be named on the remote server
+            # (it may already be there from a previous slice/site, or the current
+            # name may already be taken by another rig.)
+            server_expt_path = get_experiment_server_path(expt_dh)
+            
+            self.server_path = server_expt_path
+            self.log("    using server path: %s" % server_expt_path)
+            self._sync_paths(expt_dh.name(), server_expt_path)
+            
+            # Copy slice files if needed
+            server_slice_path = os.path.join(server_expt_path, slice_dh.shortName())
+            self._sync_paths(slice_dh.name(), server_slice_path)
 
-        # Copy site files if needed
-        server_site_path = os.path.join(server_slice_path, site_dh.shortName())
-        self._sync_paths(site_dh.name(), server_site_path)
-        
-        print("Done.")
+            # Copy site files if needed
+            server_site_path = os.path.join(server_slice_path, site_dh.shortName())
+            self._sync_paths(site_dh.name(), server_site_path)
+            
+            self.log("    Done; skipped %d files." % self.skipped)
+        except Exception:
+            err = traceback.format_exc()
+            self.log(err)
+
+    def log(self, msg):
+        print(msg)
+        with open(os.path.join(config.synphys_data, 'sync_log'), 'ab') as log_fh:
+            log_fh.write(msg+'\n')
         
     def _sync_paths(self, source, target):
         """Non-recursive directory sync.
@@ -59,19 +70,32 @@ class RawDataSubmission(object):
         for fname in os.listdir(source):
             src_path = os.path.join(source, fname)
             if os.path.isfile(src_path):
+                # Skip large files:
+                #   - pxp > 10GB
+                #   - others > 5GB
+                src_stat = os.stat(src_path)
+                if (src_stat.st_size > 5e9 and not src.endswith('.pxp')) or  (src_stat.st_size > 10e9):
+                    self.log("    err! %s => %s" % (src_path, dst_path))
+                    self.changes.append(('error', src_path, 'file too large'))
+                    continue
+                
                 dst_path = os.path.join(target, fname)
-                # don't copy again if destination file is newer than source file
+                
+                # don't copy again if destination file is newer than source file and has the same size
                 if os.path.isfile(dst_path):
-                    src_mtime = os.stat(src_path).st_mtime
-                    dst_mtime = os.stat(dst_path).st_mtime
-                    if dst_mtime >= src_mtime:
+                    dst_stat = os.stat(dst_path)
+                    up_to_date = dst_stat.st_mtime >= src_stat.st_mtime and src_stat.st_size == dst_stat.st_size
+                    
+                    if up_to_date:
                         print("    skip %s => %s" % (src_path, dst_path))
+                        self.skipped += 1
                         continue
-                    print("    updt %s => %s" % (src_path, dst_path))
+                    
+                    self.log("    updt %s => %s" % (src_path, dst_path))
                     safe_copy(src_path, dst_path)
                     self.changes.append(('update', src_path, dst_path))
                 else:
-                    print("    copy %s => %s" % (src_path, dst_path))
+                    self.log("    copy %s => %s" % (src_path, dst_path))
                     safe_copy(src_path, dst_path)
                     self.changes.append(('copy', src_path, dst_path))
 
@@ -101,6 +125,7 @@ def get_experiment_server_path(dh):
     os.mkdir(server_expt_path)
     try:
         dh = getDirHandle(server_expt_path)
+        # temporarily mark with timestamp; should be overwritten later.
         dh.setInfo(__timestamp__=acq_timestamp)
     except Exception:
         if os.path.exists(server_expt_path):
@@ -154,13 +179,74 @@ def write_expt_path_cache():
 
 
 def safe_copy(src, dst):
-    tmp_dst = dst + '_uploading'
+    """Copy a file, but rename the destination file if it already exists.
+    
+    Also, the destination file is suffixed ".partial" until the copy is complete.
+    """
+    tmp_dst = dst + '.partial'
     try:
-        shutil.copyfile(src, tmp_dst)
+        new_name = None
+        chunk_copy(src, tmp_dst)
+        if os.path.exists(dst):
+            # rename destination file to avoid overwriting
+            now = time.strftime('%Y-%m-%d_%H:%M:%S')
+            i = 0
+            while True:
+                new_name = '%s_%s_%d' % (dst, now, i)
+                if not os.path.exists(new_name):
+                    break
+                i += 1
+            os.rename(dst, new_name)
         os.rename(tmp_dst, dst)
+    except Exception:
+        # Move dst file back if there was a problem during copy
+        if new_name is not None and os.path.exists(new_name):
+            os.rename(new_name, dst)
+        raise
     finally:
         if os.path.isfile(tmp_dst):
             os.remove(tmp_dst)
+    
+
+def chunk_copy(src, dst, chunk_size=100e6):
+    """Manually copy a file one chunk at a time.
+    
+    This allows progress feedback and more graceful cancellation during long
+    copy operations.
+    """
+    if os.path.exists(dst):
+        raise Exception("Won't copy over existing file %s" % dst)
+    size = os.stat(src).st_size
+    in_fh = open(src, 'rb')
+    out_fh = open(dst, 'ab')
+    msglen = 0
+    try:
+        with in_fh:
+            with out_fh:
+                chunk_size = int(chunk_size)
+                tot = 0
+                while True:
+                    chunk = in_fh.read(chunk_size)
+                    out_fh.write(chunk)
+                    tot += len(chunk)
+                    if size > chunk_size * 2:
+                        n = int(50 * (float(tot) / size))
+                        msg = '[' + '#' * n + '-' * (50-n) + ']  %d / %d MB\r' %
+                            (int(tot/1e6), int(size/1e6))
+                        msglen = len(msg)
+                        sys.stdout.write(msg)
+                        sys.stdout.flush()
+                    if len(chunk) < chunk_size:
+                        break
+                sys.stdout.write("[###  flushing..  \r")
+                sys.stdout.flush()
+        sys.stdout.write(' '*msglen + '\r')
+        sys.stdout.flush()
+    except Exception:
+        if os.path.isfile(dst):
+            os.remove(dst)
+        raise
+    
     
 
 def sync_experiment(site_dir):
@@ -179,23 +265,35 @@ def find_all_sites(root):
     return sites
     
 
-def sync_all():
-    log = []
+def sync_all(log):
     for raw_data_path in config.raw_data_paths:
-        for site_dir in find_all_sites(raw_data_path):
-            try:
-                changes, err, warn = sync_experiment(site_dir)
-                if len(changes) > 0:
-                    log.append((site_dir, changes, err, warn))
-            except Exception:
-                exc = traceback.format_exception()
-                log.append((site_dir, [], exc, []))
-                
+        paths = find_all_sites(raw_data_path)
+        sync_paths(paths, log)
 
+
+def sync_paths(paths, log):
+    for site_dir in paths:
+        try:
+            changes, err, warn = sync_experiment(site_dir)
+            if len(changes) > 0:
+                log.append((site_dir, changes, err, warn))
+        except Exception:
+            exc = traceback.format_exc()
+            print(exc)
+            log.append((site_dir, [], exc, []))
 
 
 if __name__ == '__main__':
-    sync_all()
+    log = []
+    
+    paths = sys.argv[1:]
+    if len(paths) == 0:
+        sync_all(log)
+    else:
+        sync_paths(paths, log)
+    
+    errs = [x for x in log if len(x[2]) > 0]
+    print("\n----- DONE ------\n   %d errors" % len(errs))
     
     #sites = find_all_sites(config.raw_data_paths[1])
     #path = get_experiment_server_path(getDirHandle(sites[0]).parent().parent())
