@@ -13,10 +13,22 @@ import acq4.util.DataManager as adm
 import acq4.util.advancedTypes
 import h5py
 import shutil
+import tempfile
+import atexit
 
 # Requires the patched version of nwb-api from https://github.com/t-b/nwb-api/tree/local_fixes
 import nwb
 from nwb.nwbco import *
+
+tmpdir = None
+
+def removeTmpdir():
+    global tmpdir
+    if tmpdir is not None:
+        shutil.rmtree(tmpdir)
+
+atexit.register(removeTmpdir)
+
 
 def appendMAFile(siteNWBs, filePath, filedesc):
     """ Split and append the given ma file from ACQ4 to the NWB files """
@@ -354,13 +366,13 @@ def fileShouldBeSkipped(path, filesToInclude):
 
 def deriveOutputNWB(siteNWB):
     """ Derive the output NWB filename for a given site NWB """
-
-    directory = os.path.dirname(siteNWB)
+    global tmpdir
+    if tmpdir is None:
+        tmpdir = tempfile.mkdtemp(prefix="nwb-packaging")
+    
     filename  = os.path.splitext(os.path.basename(siteNWB))[0] + "_combined.nwb"
 
-    folder = os.path.join(directory, "../..")
-
-    return os.path.abspath(os.path.join(folder, filename))
+    return os.path.abspath(os.path.join(tmpdir, filename))
 
 def buildCombinedNWB(siteNWB, filesToInclude = []):
     """
