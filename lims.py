@@ -76,14 +76,14 @@ def specimen_info(specimen_name):
     #            BB = slice number
     #            CC = orientation and hemisphere
     if rec['organism'] == 'mouse':
-        m = re.match(r'(.*)-(\d{6,7})(\.(\d{2}))(\.(\d{2}))$', sid)
+        m = re.match(r'(.*)(-(\d{6,7}))?(\.(\d{2}))(\.(\d{2}))$', sid)
         if m is None:
             raise Exception('Could not parse mouse specimen name: "%s"' % sid)
         
-        rec['section_number'] = int(m.groups()[3])
+        rec['section_number'] = int(m.groups()[4])
         
         # The last number contains information about the orientation and hemisphere
-        orientation_num = m.groups()[5]
+        orientation_num = m.groups()[6]
         plane, hem, mount = {
             '01': ('coronal', 'left', 'anterior'),
             '02': ('coronal', 'right', 'anterior'),
@@ -108,15 +108,20 @@ def specimen_info(specimen_name):
             rec['exposed_surface'] = None
             
     # Human format is:
-    #   Haa.bb.ccc.dd.ee
+    #   Haa.bb.ccc.dd.ee.ff
     elif rec['organism'] == 'human':
-        m = re.match(r'H(\d+)\.(\d+)\.(\d+)\.(\d+)\.(\d+)$', sid)
+        m = re.match(r'H(\d+)\.(\d+)\.(\d+)\.(\d+)\.(\d+)(\.(\d+))?$', sid)
         if m is None:
             raise Exception('Could not parse human specimen name: "%s"' % sid)
         rec['hemisphere'] = None
         rec['sectioning_mount_side'] = None
         rec['exposed_surface'] = None
-        rec['section_number'] = int(m.groups()[3])
+        rec['human_donor_site'] = int(m.groups()[1])
+        rec['human_donor_number'] = int(m.groups()[2])
+        rec['block_number'] = int(m.groups()[3])
+        rec['section_number'] = int(m.groups()[4])
+        rec['subsection_number'] = None if m.groups()[6] is None else int(m.groups()[6])
+        
         
     else:
         raise Exception('Unsupported organism: "%s"' % rec['organism'])
