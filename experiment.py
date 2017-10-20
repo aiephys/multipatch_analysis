@@ -91,6 +91,7 @@ class Experiment(object):
 
         # pull donor/specimen info from LIMS
         self.age
+        
         # check for a single NWB file
         self.nwb_file
 
@@ -382,6 +383,7 @@ class Experiment(object):
                 os.path.join(root, date, "slice_%03d"%int(slice), "site_%03d"%int(site)),
                 os.path.join(root, 'V1', date, "slice_%03d"%int(slice), "site_%03d"%int(site)),
                 os.path.join(root, 'ALM', date, "slice_%03d"%int(slice), "site_%03d"%int(site)),
+                os.path.join(root, 'Human', date, "slice_%03d"%int(slice), "site_%03d"%int(site)),
                 # missing data, still in versioned backups
                 os.path.join(root, '..', '..', '..', 'version_backups', 'data', 'Alex', 'V1', date, "slice_%03d" % int(slice), "site_%03d" % int(site)),
             ]
@@ -397,7 +399,7 @@ class Experiment(object):
         try:
             uid = self.uid
         except Exception as exc:
-            uid = str(exc)
+            uid = '?'
         return "<Experiment %s (%s:%d) uid=%s>" % (self.source_id[1], self.source_id[0], self.entry.lineno, uid)
 
     @property
