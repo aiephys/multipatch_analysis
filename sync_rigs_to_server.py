@@ -52,6 +52,9 @@ class RawDataSubmission(object):
             self._sync_paths(site_dh.name(), server_site_path)
             
             self.log("    Done; skipped %d files." % self.skipped)
+            
+            # Leave a note about the source of this data
+            open(os.path.join(server_site_path, 'sync_source'), 'wb').write(site_dh.name())
         except Exception:
             err = traceback.format_exc()
             self.log(err)
@@ -70,16 +73,17 @@ class RawDataSubmission(object):
         for fname in os.listdir(source):
             src_path = os.path.join(source, fname)
             if os.path.isfile(src_path):
+                dst_path = os.path.join(target, fname)
+                
                 # Skip large files:
                 #   - pxp > 10GB
                 #   - others > 5GB
                 src_stat = os.stat(src_path)
-                if (src_stat.st_size > 5e9 and not src.endswith('.pxp')) or  (src_stat.st_size > 10e9):
+                if (src_stat.st_size > 5e9 and not src_path.endswith('.pxp')) or  (src_stat.st_size > 10e9):
                     self.log("    err! %s => %s" % (src_path, dst_path))
                     self.changes.append(('error', src_path, 'file too large'))
                     continue
                 
-                dst_path = os.path.join(target, fname)
                 
                 # don't copy again if destination file is newer than source file and has the same size
                 if os.path.isfile(dst_path):
@@ -87,7 +91,7 @@ class RawDataSubmission(object):
                     up_to_date = dst_stat.st_mtime >= src_stat.st_mtime and src_stat.st_size == dst_stat.st_size
                     
                     if up_to_date:
-                        print("    skip %s => %s" % (src_path, dst_path))
+                        #print("    skip %s => %s" % (src_path, dst_path))
                         self.skipped += 1
                         continue
                     
@@ -231,8 +235,7 @@ def chunk_copy(src, dst, chunk_size=100e6):
                     tot += len(chunk)
                     if size > chunk_size * 2:
                         n = int(50 * (float(tot) / size))
-                        msg = '[' + '#' * n + '-' * (50-n) + ']  %d / %d MB\r' %
-                            (int(tot/1e6), int(size/1e6))
+                        msg = ('[' + '#' * n + '-' * (50-n) + ']  %d / %d MB\r') % (int(tot/1e6), int(size/1e6))
                         msglen = len(msg)
                         sys.stdout.write(msg)
                         sys.stdout.flush()
@@ -292,8 +295,11 @@ if __name__ == '__main__':
     else:
         sync_paths(paths, log)
     
-    errs = [x for x in log if len(x[2]) > 0]
+    errs = [change for site in log for change in site[1] if change[0] == 'error']
     print("\n----- DONE ------\n   %d errors" % len(errs))
+    
+    for err in errs:
+        print(err[1], err[2])
     
     #sites = find_all_sites(config.raw_data_paths[1])
     #path = get_experiment_server_path(getDirHandle(sites[0]).parent().parent())
