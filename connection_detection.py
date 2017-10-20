@@ -500,7 +500,7 @@ class EvokedResponseGroup(object):
     def mean(self):
         if len(self) == 0:
             return None
-        return trace_mean(self.responses)
+        return TraceList(self.responses).mean()
 
     def fit_psp(self, **kwds):
         response = self.bsub_mean()
