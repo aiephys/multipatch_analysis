@@ -339,10 +339,15 @@ class ExperimentList(object):
             n_c = expt.n_connections
             tot_probed += n_p
             tot_connected += n_c
-            ages.append(expt.age)
+            try:
+                age = expt.age
+                ages.append(age)
+            except Exception:
+                age = None
+                
 
             fmt = "%s: %s %s %s %s"
-            fmt_args = [str(expt.uid).rjust(4), str(n_p).ljust(5), str(n_c).ljust(5), str(expt.age).ljust(7), ', '.join(expt.cre_types).ljust(15)]
+            fmt_args = [str(expt.uid).rjust(4), str(n_p).ljust(5), str(n_c).ljust(5), str(age).ljust(7), ', '.join(expt.cre_types).ljust(15)]
 
             # get list of stimuli
             if list_stims:
