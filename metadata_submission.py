@@ -208,6 +208,10 @@ class ExperimentMetadataSubmission(object):
             errors.append('LIMS histology well name "%s" does not match ACQ4 plate_well_ID "%s"' 
                     % (hist_well, acq_plate_well))
 
+        # check specimen age
+        if self.spec_info['age'] is None:
+            warnings.append("Donor age is nto set in LIMS.")
+
     def summary(self):
         summ = OrderedDict()
         summ['file categories'] = self.files
