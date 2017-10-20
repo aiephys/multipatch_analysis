@@ -57,6 +57,7 @@ class RawDataSubmission(object):
             open(os.path.join(server_site_path, 'sync_source'), 'wb').write(site_dh.name())
         except Exception:
             err = traceback.format_exc()
+            self.changes.append(('error', site_dh.name(), err))
             self.log(err)
 
     def log(self, msg):
@@ -84,24 +85,15 @@ class RawDataSubmission(object):
                     self.changes.append(('error', src_path, 'file too large'))
                     continue
                 
-                
-                # don't copy again if destination file is newer than source file and has the same size
-                if os.path.isfile(dst_path):
-                    dst_stat = os.stat(dst_path)
-                    up_to_date = dst_stat.st_mtime >= src_stat.st_mtime and src_stat.st_size == dst_stat.st_size
-                    
-                    if up_to_date:
-                        #print("    skip %s => %s" % (src_path, dst_path))
-                        self.skipped += 1
-                        continue
-                    
-                    self.log("    updt %s => %s" % (src_path, dst_path))
-                    safe_copy(src_path, dst_path)
-                    self.changes.append(('update', src_path, dst_path))
-                else:
+                status = sync_file(src_path, dst_path)
+                if status == 'skip':
+                    self.skipped += 1
+                elif status == 'copy':
                     self.log("    copy %s => %s" % (src_path, dst_path))
-                    safe_copy(src_path, dst_path)
                     self.changes.append(('copy', src_path, dst_path))
+                elif status == 'update':
+                    self.log("    updt %s => %s" % (src_path, dst_path))
+                    self.changes.append(('update', src_path, dst_path))
 
 
 def get_experiment_server_path(dh):
@@ -180,6 +172,24 @@ def write_expt_path_cache():
     tmp = cache_file+'.tmp'
     pickle.dump(_expt_path_cache, open(tmp, 'wb'))
     os.rename(tmp, cache_file)
+
+
+def sync_file(src, dst):
+    """Safely copy *src* to *dst*, but only if *src* is newer or a different size.
+    """
+    if os.path.isfile(dst):
+        src_stat = os.stat(src)
+        dst_stat = os.stat(dst)
+        up_to_date = dst_stat.st_mtime >= src_stat.st_mtime and src_stat.st_size == dst_stat.st_size
+        
+        if up_to_date:
+            return "skip"
+        
+        safe_copy(src, dst)
+        return "update"
+    else:
+        safe_copy(src, dst)
+        return "copy"
 
 
 def safe_copy(src, dst):
