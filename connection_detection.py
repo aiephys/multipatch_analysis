@@ -145,7 +145,7 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
 
             # select baseline region between 8th and 9th pulses
             # (ideally we should use more careful criteria for selecting a baseline region)
-            baseline_dur = int(10e-3 / dt)
+            baseline_dur = int(20e-3 / dt)
             stop = spikes[8]['pulse_ind'] - (i * baseline_dur)
             start = stop - baseline_dur
             pulse['baseline'] = post_rec['primary'][start:stop]

@@ -219,11 +219,10 @@ _coltypes = {
 }
 
 
-def _generate_mapping(table):
+def generate_mapping(table, schema):
     """Generate an ORM mapping class from an entry in table_schemas.
     """
     name = table.capitalize()
-    schema = table_schemas[table]
     table_args = {}
     if isinstance(schema[0], str):
         table_args['comment'] = schema[0]
@@ -250,6 +249,10 @@ def _generate_mapping(table):
             ctyp = _coltypes[coltype]
             props[colname] = Column(ctyp, **kwds)
     return type(name, (ORMBase,), props)
+
+
+def _generate_mapping(table):
+    return generate_mapping(table, table_schemas[table])
 
 
 # Generate ORM mapping classes
