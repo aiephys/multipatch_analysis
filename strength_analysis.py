@@ -35,6 +35,10 @@ class TableGroup(object):
             ('neg_amp', 'float'),
             ('pos_base_amp', 'float'),
             ('neg_base_amp', 'float'),
+            ('pos_dec_amp', 'float'),
+            ('neg_dec_amp', 'float'),
+            ('pos_dec_base_amp', 'float'),
+            ('neg_dec_base_amp', 'float'),
         ]
         #'deconv_pulse_response': [
             #"Exponentially deconvolved pulse responses",
@@ -90,9 +94,16 @@ def measure_sum(trace, sign, baseline=(0e-3, 9e-3), response=(12e-3, 17e-3)):
     baseline = trace.time_slice(*baseline).data.sum()
     peak = trace.time_slice(*response).data.sum()
     return peak - baseline
-        
 
-def rebuild_tables():
+        
+def deconv_filter(trace, tau=15e-3, lowpass=300.):
+    dec = exp_deconvolve(trace, tau)
+    baseline = np.median(dec.time_slice(trace.t0, trace.t0+10e-3).data)
+    deconv = bessel_filter(dec-baseline, lowpass)
+    return deconv
+
+
+def rebuild_tables(process):
     tables.drop_tables()
     tables.create_tables()
     
@@ -107,6 +118,14 @@ def rebuild_tables():
         base = Trace(r.baseline.data, sample_rate=20e3)
         prs.pos_base_amp = measure_peak(base, '+')
         prs.neg_base_amp = measure_peak(base, '-')
+
+        dec_data = deconv_filter(data)
+        prs.pos_dec_amp = measure_peak(dec_data, '+')
+        prs.neg_dec_amp = measure_peak(dec_data, '-')
+        
+        dec_base = deconv_filter(base)
+        prs.pos_dec_base_amp = measure_peak(dec_base, '+')
+        prs.neg_dec_base_amp = measure_peak(dec_base, '-')
         
         ses.add(prs)
         
@@ -151,47 +170,110 @@ class ExperimentBrowser(pg.TreeWidget):
                     pair_item.expt = expt
 
 
+def get_amps(session, expt, devs, clamp_mode='ic'):
+    """Select records from pulse_response_strength table
+    """
+    pre_rec = aliased(db.Recording)
+    post_rec = aliased(db.Recording)
+    q = session.query(
+        tables['pulse_response_strength'],
+        tables['pulse_response_strength'].pos_amp,
+        tables['pulse_response_strength'].neg_amp,
+        tables['pulse_response_strength'].pos_base_amp,
+        tables['pulse_response_strength'].neg_base_amp,
+        tables['pulse_response_strength'].pos_dec_amp,
+        tables['pulse_response_strength'].neg_dec_amp,
+        tables['pulse_response_strength'].pos_dec_base_amp,
+        tables['pulse_response_strength'].neg_dec_base_amp,
+    )
+    
+    joins = [
+        (db.PulseResponse,),
+        (post_rec, db.PulseResponse.recording),
+        (db.PatchClampRecording,),
+        (db.SyncRec,),
+        (db.Experiment,),
+        (db.StimPulse, db.PulseResponse.stim_pulse),
+        (pre_rec, db.StimPulse.recording),
+    ]
+    for join_args in joins:
+        q = q.join(*join_args)
+        
+    filters = [
+        (db.Experiment.id==expt.id,),
+        (pre_rec.device_key==devs[0],),
+        (post_rec.device_key==devs[1],),
+        (db.PatchClampRecording.clamp_mode==clamp_mode,),
+    ]
+    for filter_args in filters:
+        q = q.filter(*filter_args)
+    
+    return q
+
+
 if __name__ == '__main__':
     pg.dbg()
     #rebuild_tables()
     
+    win = pg.QtGui.QSplitter()
+    win.setOrientation(pg.QtCore.Qt.Horizontal)
+    win.resize(1000, 800)
+    win.show()
+    
     b = ExperimentBrowser()
-    b.resize(1000, 800)
-    b.show()
+    win.addWidget(b)
+    
+    gl = pg.GraphicsLayoutWidget()
+    win.addWidget(gl)
+    
+    plt = gl.addPlot()
 
-    plt = pg.plot()
-    plt.setAspectLocked()
+    sp = pg.ScatterPlotItem(pen=None, symbol='o', symbolPen=None)
+    plt.addItem(sp)
+    
+    plt2 = gl.addPlot(row=1, col=0, labels={'bottom': ('time', 's'), 'left': ('Vm', 'V')})
 
+    session = db.Session()
     def selected(*args):
         sel = b.selectedItems()[0]
         expt = sel.expt
         devs = sel.devs
         
-        s = db.Session()
-        pre_rec = aliased(db.Recording)
-        post_rec = aliased(db.Recording)
-        q = s.query(tables['pulse_response_strength'])\
-            .join(db.PulseResponse)\
-            .join(post_rec, db.PulseResponse.recording)\
-            .join(db.PatchClampRecording)\
-            .join(db.SyncRec)\
-            .join(db.Experiment)\
-            .join(db.StimPulse, db.PulseResponse.stim_pulse)\
-            .join(pre_rec, db.StimPulse.recording)\
-            .filter(db.Experiment.id==expt.id)\
-            .filter(pre_rec.device_key==devs[0])\
-            .filter(post_rec.device_key==devs[1])\
-            .filter(db.PatchClampRecording.clamp_mode=='ic')
+        q = get_amps(session, expt, devs)
         
-        x = [rec.pos_base_amp for rec in q]
-        y = [rec.pos_amp for rec in q]
-        
-        plt.clear()
-        plt.plot(x, y, pen=None, symbol='o', symbolPen=None, symbolBrush=(255, 255, 255, 80))
+        ay = [rec.pos_dec_base_amp for rec in q]
+        ax = np.random.random(size=len(ay)) * 0.5
+        by = [rec.pos_dec_amp for rec in q]
+        bx = 1 + np.random.random(size=len(by)) * 0.5
+        cy = [rec.neg_dec_base_amp for rec in q]
+        cx = 2 + np.random.random(size=len(cy)) * 0.5
+        dy = [rec.neg_dec_amp for rec in q]
+        dx = 3 + np.random.random(size=len(dy)) * 0.5
+        sp.setData(ax, ay, data=q.all(), brush=(255, 255, 255, 80))
+        sp.addPoints(bx, by, data=q.all(), brush=(255, 255, 255, 80))
+        sp.addPoints(cx, cy, data=q.all(), brush=(255, 255, 255, 80))
+        sp.addPoints(dx, dy, data=q.all(), brush=(255, 255, 255, 80))
         
 
     b.itemSelectionChanged.connect(selected)
     
+    
+    def clicked(sp, points):
+        global clicked_points
+        clicked_points = points
+        
+        plt2.clear()
+        for p in points:
+            rec = p.data()
+            trace = Trace(rec[0].pulse_response.data, sample_rate=20e3)
+            dec_trace = deconv_filter(trace)
+            plt2.plot(dec_trace.time_values, dec_trace.data)
+            
+            base = Trace(rec[0].pulse_response.baseline.data, sample_rate=20e3)
+            dec_base = deconv_filter(base)
+            plt2.plot(dec_base.time_values, dec_base.data, pen='r')
+        
+    sp.sigClicked.connect(clicked)
 
 #if __name__ == '__main__':
     #app = pg.mkQApp()
