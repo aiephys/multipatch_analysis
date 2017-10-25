@@ -12,7 +12,8 @@ import sys
 import pyqtgraph as pg
 import os
 import pickle
-import pyqtgraph.multiprocess as mp
+import io
+import multiprocessing
 import numpy as np
 import scipy.stats
 
@@ -30,7 +31,7 @@ import database as db
 class TableGroup(object):
     schemas = {
         'pulse_response_strength': [
-            ('pulse_id', 'pulse_response.id'),
+            ('pulse_response_id', 'pulse_response.id'),
             ('pos_amp', 'float'),
             ('neg_amp', 'float'),
             ('pos_base_amp', 'float'),
@@ -103,19 +104,108 @@ def deconv_filter(trace, tau=15e-3, lowpass=300.):
     return deconv
 
 
-def rebuild_tables(process):
+def rebuild_tables(parallel=True, workers=6):
     tables.drop_tables()
     tables.create_tables()
     
     ses = db.Session()
-    q = ses.query(db.PulseResponse).yield_per(100)
-    for i,r in enumerate(q):
-        data = Trace(r.data, sample_rate=20e3)
-        prs = tables['pulse_response_strength'](pulse_response=r)
+    max_pulse_id = ses.execute('select max(id) from pulse_response').fetchone()[0]
+    chunk = 1 + (max_pulse_id // workers)
+    parts = [(chunk*i, chunk*(i+1)) for i in range(4)]
+
+    if parallel:
+        pool = multiprocessing.Pool(processes=workers)
+        pool.map(compute_strength, parts)
+    else:
+        for part in parts:
+            compute_strength(part)
+
+
+def compute_strength(inds):
+    start_id, stop_id = inds
+    ses = db.Session()
+    q = """SELECT 
+        pulse_response.id AS pulse_response_id,
+        pulse_response.data AS pulse_response_data,
+        baseline.data AS baseline_data 
+    FROM 
+        pulse_response 
+        JOIN baseline ON baseline.id = pulse_response.baseline_id
+    WHERE pulse_response.id >= %d and pulse_response.id < %d
+    ORDER BY pulse_response.id
+    LIMIT 1000
+    """
+    
+    prof = pg.debug.Profiler(disabled=True, delayed=False)
+    
+    next_id = start_id
+    while True:
+        response = ses.execute(q % (next_id, stop_id))  # bottleneck here ~30 ms
+        prof('exec')
+        recs = response.fetchall()
+        prof('fetch')
+        if len(recs) == 0:
+            break
+        new_recs = []
+        for rec in recs:
+            pr_id, data, baseline = rec
+            data = np.load(io.BytesIO(data))
+            baseline = np.load(io.BytesIO(baseline))
+            #prof('load')
+            
+            new_rec = {'pulse_response_id': pr_id}
+            
+            data = Trace(data, sample_rate=20e3)
+            new_rec['pos_amp'] = measure_peak(data, '+')
+            new_rec['neg_amp'] = measure_peak(data, '-')
+            #prof('comp 1')
+            
+            base = Trace(baseline, sample_rate=20e3)
+            new_rec['pos_base_amp'] = measure_peak(base, '+')
+            new_rec['neg_base_amp'] = measure_peak(base, '-')
+            #prof('comp 2')
+
+            dec_data = deconv_filter(data)
+            new_rec['pos_dec_amp'] = measure_peak(dec_data, '+')
+            new_rec['neg_dec_amp'] = measure_peak(dec_data, '-')
+            #prof('comp 3')
+            
+            dec_base = deconv_filter(base)
+            new_rec['pos_dec_base_amp'] = measure_peak(dec_base, '+')
+            new_rec['neg_dec_base_amp'] = measure_peak(dec_base, '-')
+            #prof('comp 4')
+            new_recs.append(new_rec)
+        
+        next_id = pr_id + 1
+        
+        sys.stdout.write("%d / %d\r" % (next_id-start_id, stop_id-start_id))
+        sys.stdout.flush()
+
+        prof('process')
+        ses.bulk_insert_mappings(tables['pulse_response_strength'], new_recs)
+        prof('insert')
+        new_recs = []
+
+        ses.commit()
+        prof('commit')
+    
+
+
+def _rebuild_tables():
+    # ORM version (too slow)
+    tables.drop_tables()
+    tables.create_tables()
+    
+    ses = db.Session()
+    q = ses.query(db.PulseResponse.id, db.PulseResponse.data, db.Baseline.data).join(db.Baseline).yield_per(100)
+    for i,rec in enumerate(q):
+        pr_id, data, baseline = rec
+        data = Trace(data, sample_rate=20e3)
+        prs = tables['pulse_response_strength'](pulse_response_id=pr_id)
         prs.pos_amp = measure_peak(data, '+')
         prs.neg_amp = measure_peak(data, '-')
         
-        base = Trace(r.baseline.data, sample_rate=20e3)
+        base = Trace(baseline, sample_rate=20e3)
         prs.pos_base_amp = measure_peak(base, '+')
         prs.neg_base_amp = measure_peak(base, '-')
 
@@ -131,8 +221,8 @@ def rebuild_tables(process):
         
         if i%100 == 0:
             print("%d/%d" % (i, q.count()))
-
-    ses.commit()
+            
+        ses.commit()
 
 
 class ExperimentBrowser(pg.TreeWidget):
@@ -176,7 +266,7 @@ def get_amps(session, expt, devs, clamp_mode='ic'):
     pre_rec = aliased(db.Recording)
     post_rec = aliased(db.Recording)
     q = session.query(
-        tables['pulse_response_strength'],
+        tables['pulse_response_strength'].id,
         tables['pulse_response_strength'].pos_amp,
         tables['pulse_response_strength'].neg_amp,
         tables['pulse_response_strength'].pos_base_amp,
@@ -213,7 +303,8 @@ def get_amps(session, expt, devs, clamp_mode='ic'):
 
 if __name__ == '__main__':
     pg.dbg()
-    #rebuild_tables()
+    if '--rebuild' in sys.argv:
+        rebuild_tables()
     
     win = pg.QtGui.QSplitter()
     win.setOrientation(pg.QtCore.Qt.Horizontal)
@@ -239,20 +330,30 @@ if __name__ == '__main__':
         expt = sel.expt
         devs = sel.devs
         
+        prof = pg.debug.Profiler(disabled=False)
         q = get_amps(session, expt, devs)
+        prof('query')
         
-        ay = [rec.pos_dec_base_amp for rec in q]
+        recs = q.all()
+        prof('fetch')
+        
+        ay = [rec[7] for rec in recs]
+        prof('ay')
         ax = np.random.random(size=len(ay)) * 0.5
-        by = [rec.pos_dec_amp for rec in q]
+        by = [rec[5] for rec in recs]
+        prof('by')
         bx = 1 + np.random.random(size=len(by)) * 0.5
-        cy = [rec.neg_dec_base_amp for rec in q]
+        cy = [rec[8] for rec in recs]
+        prof('cy')
         cx = 2 + np.random.random(size=len(cy)) * 0.5
-        dy = [rec.neg_dec_amp for rec in q]
+        dy = [rec[6] for rec in recs]
+        prof('dy')
         dx = 3 + np.random.random(size=len(dy)) * 0.5
-        sp.setData(ax, ay, data=q.all(), brush=(255, 255, 255, 80))
-        sp.addPoints(bx, by, data=q.all(), brush=(255, 255, 255, 80))
-        sp.addPoints(cx, cy, data=q.all(), brush=(255, 255, 255, 80))
-        sp.addPoints(dx, dy, data=q.all(), brush=(255, 255, 255, 80))
+        sp.setData(ax, ay, data=recs, brush=(255, 255, 255, 80))
+        sp.addPoints(bx, by, data=recs, brush=(255, 255, 255, 80))
+        sp.addPoints(cx, cy, data=recs, brush=(255, 255, 255, 80))
+        sp.addPoints(dx, dy, data=recs, brush=(255, 255, 255, 80))
+        prof('plot')
         
 
     b.itemSelectionChanged.connect(selected)
