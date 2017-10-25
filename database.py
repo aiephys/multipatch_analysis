@@ -33,14 +33,16 @@ table_schemas = {
         ('slice_time', 'datetime', 'Time when this specimen was sliced'),
         ('slice_conditions', 'object', 'JSON containing solutions, perfusion, incubation time, etc.'),
         ('lims_specimen_name', 'str', 'Name of LIMS "slice" specimen'),
-        ('original_path', 'str', 'Original path of the slice folder on the acquisition rig'),
+        ('storage_path', 'str', 'Location of data within server or cache storage'),
         ('submission_data', 'object'),          # structure generated for original submission
     ],
     'experiment': [
         "A group of cells patched simultaneously in the same slice.",
-        ('original_path', 'str', 'Describes original location of raw data'),
+        ('original_path', 'str', 'Original location of raw data on rig.'),
+        ('storage_path', 'str', 'Location of data within server or cache storage.'),
+        ('ephys_file', 'str', 'Name of ephys NWB file relative to storage_path.'),
         ('rig_name', 'str', 'Identifier for the rig that generated these results.'),
-        ('acq_timestamp', 'datetime', 'Creation timestamp for site data acquisition folder.', {'unique': True}),
+        ('acq_timestamp', 'datetime', 'Creation timestamp for site data acquisition folder.', {'unique': True, 'index': True}),
         ('slice_id', 'slice.id'),
         ('target_region', 'str', 'The intended brain region for this experiment'),
         ('internal', 'str', 'The name of the internal solution used in this experiment. '
@@ -58,7 +60,7 @@ table_schemas = {
     'electrode': [
         "Each electrode records a patch attempt, whether or not it resulted in a "
         "successful cell recording.",
-        ('expt_id', 'experiment.id'),
+        ('expt_id', 'experiment.id', '', {'index': True}),
         ('patch_status', 'str', 'no seal, low seal, GOhm seal, tech fail, ...'),
         ('device_key', 'int'),
         ('initial_resistance', 'float'),
@@ -81,7 +83,6 @@ table_schemas = {
         ('depth', 'float'),
         ('position', 'object'),
     ],
-    
     'pair': [
         "All possible putative synaptic connections",
         ('pre_cell', 'cell.id'),
@@ -90,21 +91,21 @@ table_schemas = {
         ('electrical', 'bool', 'whether the experimenter thinks there is a gap junction'),
     ],
     'sync_rec': [
-        ('experiment_id', 'experiment.id'),
+        ('experiment_id', 'experiment.id', '', {'index': True}),
         ('sync_rec_key', 'object'),
         ('temperature', 'float'),
         ('meta', 'object'),
     ],
     'recording': [
-        ('sync_rec_id', 'sync_rec.id', 'References the synchronous recording to which this recording belongs.'),
-        ('device_key', 'int', 'Identifies the device that generated this recording (this is usually the MIES AD channel)'),
+        ('sync_rec_id', 'sync_rec.id', 'References the synchronous recording to which this recording belongs.', {'index': True}),
+        ('device_key', 'int', 'Identifies the device that generated this recording (this is usually the MIES AD channel)', {'index': True}),
         ('start_time', 'datetime', 'The clock time at the start of this recording'),
     ],
     'patch_clamp_recording': [
         "Extra data for recordings made with a patch clamp amplifier",
-        ('recording_id', 'recording.id'),
-        ('electrode_id', 'electrode.id', 'References the patch electrode that was used during this recording'),
-        ('clamp_mode', 'str', 'The mode used by the patch clamp amplifier: "ic" or "vc"'),
+        ('recording_id', 'recording.id', '', {'index': True}),
+        ('electrode_id', 'electrode.id', 'References the patch electrode that was used during this recording', {'index': True}),
+        ('clamp_mode', 'str', 'The mode used by the patch clamp amplifier: "ic" or "vc"', {'index': True}),
         ('patch_mode', 'str', "The state of the membrane patch. E.g. 'whole cell', 'cell attached', 'loose seal', 'bath', 'inside out', 'outside out'"),
         ('stim_name', 'object', "The name of the stimulus protocol"),
         ('baseline_potential', 'float'),
@@ -114,9 +115,9 @@ table_schemas = {
     ],
     'multi_patch_probe': [
         "Extra data for multipatch recordings intended to test synaptic connections.",
-        ('patch_clamp_recording_id', 'patch_clamp_recording.id'),
-        ('induction_frequency', 'float'),
-        ('recovery_delay', 'float'),
+        ('patch_clamp_recording_id', 'patch_clamp_recording.id', '', {'index': True}),
+        ('induction_frequency', 'float', '', {'index': True}),
+        ('recovery_delay', 'float', '', {'index': True}),
         ('n_spikes_evoked', 'int'),
     ],
     'test_pulse': [
@@ -131,8 +132,8 @@ table_schemas = {
     ],
     'stim_pulse': [
         "A pulse stimulus intended to evoke an action potential",
-        ('recording_id', 'recording.id'),
-        ('pulse_number', 'int'),
+        ('recording_id', 'recording.id', '', {'index': True}),
+        ('pulse_number', 'int', '', {'index': True}),
         ('onset_time', 'float'),
         ('onset_index', 'int'),
         ('next_pulse_index', 'int'),      # index of the next pulse on any channel in the sync rec
@@ -142,8 +143,8 @@ table_schemas = {
     ],
     'stim_spike': [
         "An evoked action potential",
-        ('recording_id', 'recording.id'),
-        ('pulse_id', 'stim_pulse.id'),
+        ('recording_id', 'recording.id', '', {'index': True}),
+        ('pulse_id', 'stim_pulse.id', '', {'index': True}),
         ('peak_index', 'int'),
         ('peak_diff', 'float'),
         ('peak_val', 'float'),
@@ -160,8 +161,8 @@ table_schemas = {
     ],
     'pulse_response': [
         "A postsynaptic recording taken during a presynaptic stimulus",
-        ('recording_id', 'recording.id'),
-        ('pulse_id', 'stim_pulse.id'),
+        ('recording_id', 'recording.id', '', {'index': True}),
+        ('pulse_id', 'stim_pulse.id', '', {'index': True}),
         ('pair_id', 'pair.id'),
         ('start_index', 'int'),
         ('stop_index', 'int'),
