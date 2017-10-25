@@ -62,7 +62,7 @@ class SliceSubmission(object):
                 'slice_time': slice_time,
                 'slice_conditions': {},
                 'lims_specimen_name': sid,
-                'original_path': '%s:%s' % (config.rig_name, self.dh.name()),
+                'storage_path': self.dh.name(relativeTo=self.dh.parent().parent()),
                 'submission_data': None,
             }
         return self._fields
@@ -165,9 +165,17 @@ class ExperimentDBSubmission(object):
                 except Exception:
                     temp = None
                     errors.append("Experiment temperature '%s' is invalid." % self._expt_info['temperature'])
+
+        if not os.path.isfile(self.nwb_file.name()):
+            errors.append('Could not find NWB file "%s"' % self.nwb_file.name())
+        if os.path.dirname(self.nwb_file.name()) != self.dh.name():
+            errors.append('NWB file "%s" is not inside site directory "%s"' % 
+                          (self.nwb_file.name(), self.dh.name()))
         
         self.fields = {
-            'original_path': self.dh.name(),
+            'original_path': open(self.dh['sync_source'].name(), 'rb').read(),
+            'storage_path': self.dh.name(relativeTo=expt_dir.parent()),
+            'ephys_file': self.nwb_file.name(relativeTo=self.dh),
             'rig_name': expt_info.get('rig_name', None),  # optional for now; make mandatory later
             'acq_timestamp': datetime.fromtimestamp(info['__timestamp__']),
             'target_region': expt_info.get('region'),
