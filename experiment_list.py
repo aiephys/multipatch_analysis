@@ -17,6 +17,15 @@ from experiment import Experiment
 from constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
 
 
+_expt_list = None
+def cached_experiments(self):
+    global _expt_list
+    if _expt_list is None:
+        _expt_list = ExperimentList(cache='expts_cache.pkl')
+    return _expt_list
+
+
+
 class Entry(object):
     def __init__(self, line, parent, file, lineno):
         self.indentation = indentation(line)
