@@ -41,7 +41,7 @@ for c in range(len(connection_types)):
         for pre, post in expt.connections:
             if expt.cells[pre].cre_type == cre_type[0] and expt.cells[post].cre_type == cre_type[1]:
                 pulse_response = cache_response(expt, pre, post, cache_file, response_cache, type='pulse')
-                response_subset = response_filter(pulse_response, freq_range=[0, 50], holding_range=[-68, -72])
+                response_subset = response_filter(pulse_response, freq_range=[0, 50], holding_range=[-68, -72], pulse=True)
                 if len(response_subset) >= 10:
                     avg_trace, avg_amp, amp_sign, peak_t = get_amplitude(response_subset)
                     if amp_sign is '-':
