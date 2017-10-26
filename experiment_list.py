@@ -290,6 +290,8 @@ class ExperimentList(object):
         w.show()
         self.matrix_widget = w
 
+        return bgcolor
+
     def n_connections_probed(self):
         """Return (total_probed, total_connected) for all experiments in this list.
         """
