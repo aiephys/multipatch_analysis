@@ -152,11 +152,15 @@ class ExperimentMetadataSubmission(object):
         cw_name = self.spec_info['carousel_well_name']
         
         # LIMS upload will fail if the specimen has not been given an ephys roi plan.
+        accepted_roi_plans = {
+            'mouse': 'Synaptic Physiology ROI Plan', 
+            'human': 'Synaptic Physiology Human ROI Plan'
+        }[slice_info['species']]
         roi_plans = lims.specimen_ephys_roi_plans(spec_name)
         lims_edit_href = '<a href="http://lims2/specimens/{sid}/edit">http://lims2/specimens/{sid}/edit</a>'.format(sid=sid)
         if len(roi_plans) == 0:
             errors.append('Specimen has no ephys roi plan. Edit:' + lims_edit_href)
-        elif len(roi_plans) == 1 and roi_plans[0]['name'] != 'Synaptic Physiology ROI Plan':
+        elif len(roi_plans) == 1 and roi_plans[0]['name'] not in accepted_roi_plans:
             errors.append('Specimen has wrong ephys roi plan '
                 '(expected "Synaptic Physiology ROI Plan"). Edit:' + lims_edit_href)
         elif len(roi_plans) > 1:
