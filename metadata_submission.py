@@ -155,7 +155,7 @@ class ExperimentMetadataSubmission(object):
         accepted_roi_plans = {
             'mouse': 'Synaptic Physiology ROI Plan', 
             'human': 'Synaptic Physiology Human ROI Plan'
-        }[self.spec__info['organism']]
+        }[self.spec_info['organism']]
         roi_plans = lims.specimen_ephys_roi_plans(spec_name)
         lims_edit_href = '<a href="http://lims2/specimens/{sid}/edit">http://lims2/specimens/{sid}/edit</a>'.format(sid=sid)
         if len(roi_plans) == 0:
