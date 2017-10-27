@@ -1,3 +1,4 @@
+import os
 import pickle
 import numpy as np
 import pyqtgraph as pg
@@ -11,7 +12,7 @@ from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from statsmodels.stats.multicomp import MultiComparison
 app = pg.mkQApp()
 
-def cache_response(expt, pre, post, cache_file, cache, type='pulse'):
+def cache_response(expt, pre, post, cache, type='pulse'):
         key = (expt.uid, pre, post)
         if key in cache:
             responses = cache[key]
@@ -24,8 +25,6 @@ def cache_response(expt, pre, post, cache_file, cache, type='pulse'):
         responses = get_response(expt, pre, post, type=type)
         cache[key] = responses
 
-        data = pickle.dumps(cache)
-        open(cache_file, 'wb').write(data)
         print ("cached connection %s, %d -> %d" % (key[0], key[1], key[2]))
         if type == 'pulse':
             response = format_responses(responses)
