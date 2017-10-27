@@ -175,3 +175,49 @@ def deconv_train(trace):
             deconv[i].append(n_dec)
 
     return deconv
+
+def induction_summary(train_response, freqs, holding, thresh=5, ind_dict=None):
+    pulse_offset_ind = {}
+    if ind_dict is None:
+        ind_dict = {}
+    for f, freq in enumerate(freqs):
+        induction_traces = {}
+        induction_traces['responses'] = response_filter(train_response['responses'], freq_range=[freq, freq],
+                                                        holding_range=holding, train=0)
+        induction_traces['pulse_offsets'] = response_filter(train_response['pulse_offsets'], freq_range=[freq, freq])
+        ind_rec_traces = response_filter(train_response['responses'], freq_range=[freq, freq], holding_range=holding,
+                                         train=1, delta_t=250)
+        if len(induction_traces['responses']) >= thresh:
+            induction_avg = trace_avg(induction_traces['responses'])
+            ind_rec_avg = trace_avg(ind_rec_traces)
+            ind_rec_avg.t0 = induction_avg.time_values[-1] + 0.1
+            if freq not in ind_dict.keys():
+                ind_dict[freq] = [[], []]
+            ind_dict[freq][0].append(induction_avg)
+            ind_dict[freq][1].append(ind_rec_avg)
+            pulse_offset_ind[freq] = induction_traces['pulse_offsets']
+
+    return ind_dict, pulse_offset_ind
+
+def recovery_summary(train_response, rec_t, holding, thresh=5, rec_dict=None):
+    if rec_dict is None:
+        rec_dict = {}
+    rec_ind_traces = response_filter(train_response['responses'], freq_range=[50, 50], holding_range=holding, train=0)
+    pulse_offset_rec = {}
+    for t, delta in enumerate(rec_t):
+        recovery_traces = {}
+        recovery_traces['responses'] = response_filter(train_response['responses'], freq_range=[50, 50],
+                                                       holding_range=holding, train=1, delta_t=delta)
+        recovery_traces['pulse_offsets'] = response_filter(train_response['pulse_offsets'], freq_range=[50, 50],
+                                                           delta_t=delta)
+        if len(recovery_traces['responses']) >= thresh:
+            recovery_avg = trace_avg(recovery_traces['responses'])
+            rec_ind_avg = trace_avg(rec_ind_traces)
+            recovery_avg.t0 = (rec_ind_avg.time_values[-1]) + 0.1
+            if delta not in rec_dict.keys():
+                rec_dict[delta] = [[], []]
+            rec_dict[delta][0].append(rec_ind_avg)
+            rec_dict[delta][1].append(recovery_avg)
+            pulse_offset_rec[delta] = recovery_traces['pulse_offsets']
+
+    return rec_dict, pulse_offset_rec
