@@ -3,7 +3,7 @@ import numpy as np
 import os
 import pickle
 from experiment_list import ExperimentList
-from manuscript_figures import cache_response, get_amplitude, response_filter, trace_plot, bsub, trace_avg, induction_summary, recovery_summary
+from manuscript_figures import cache_response, get_amplitude, response_filter, trace_plot, bsub, write_cache, induction_summary, recovery_summary
 from synapse_comparison import load_cache
 from graphics import MatrixItem
 from rep_connections import connections
@@ -30,8 +30,10 @@ sweep_threshold = 5
 
 pulse_cache_file = 'pulse_response_cache.pkl'
 pulse_response_cache = load_cache(pulse_cache_file)
-train_cache_file = 'D:\\train_response_cache.pkl'
+pulse_cache_change = []
+train_cache_file = 'train_response_cache.pkl'
 train_response_cache = load_cache(train_cache_file)
+train_cache_change = []
 
 e_plot = pg.GraphicsLayout()
 i_plot = pg.GraphicsLayout()
@@ -41,6 +43,8 @@ for c1, pre_type in enumerate(cre_types):
         grand_pulse_response = []
         grand_induction = {}
         grand_recovery = {}
+        offset_ind = {}
+        offset_rec = {}
         expt_list = all_expts.select(cre_type=[pre_type, post_type], calcium=calcium, age=age)
         if c1 in EXCITATORY_CRE_TYPES:
             p1 = e_plot.addPlot(row=e_plot.nextRow(), col=0)
@@ -58,7 +62,8 @@ for c1, pre_type in enumerate(cre_types):
         for expt in expt_list:
             for pre, post in expt.connections:
                 if expt.cells[pre].cre_type == pre_type and expt.cells[post].cre_type == post_type:
-                    pulse_response = cache_response(expt, pre, post, pulse_cache_file, pulse_response_cache, type='pulse')
+                    pulse_response, cache_change = cache_response(expt, pre, post, pulse_response_cache, type='pulse')
+                    pulse_cache_change.append(cache_change)
                     if pre_type in EXCITATORY_CRE_TYPES:
                        holding = holding_e
                     elif pre_type in INHIBITORY_CRE_TYPES:
@@ -81,9 +86,12 @@ for c1, pre_type in enumerate(cre_types):
                         else:
                            p2 = trace_plot(avg_trace, color=trace_color, plot=p2, x_range=[0, 27e-3])
 
-                    train_response = cache_response(expt, pre, post,train_cache_file, train_response_cache, type='train')
-                    grand_induction = induction_summary(train_response, freqs, holding, thresh=sweep_threshold, ind_dict=grand_induction)
-                    grand_recovery = recovery_summary(train_response, t_rec, holding, thresh=sweep_threshold, rec_dict=grand_recovery)
+                    train_response, cache_change = cache_response(expt, pre, post, train_response_cache, type='train')
+                    train_cache_change.append(cache_change)
+                    grand_induction = induction_summary(train_response, freqs, holding, thresh=sweep_threshold,
+                                                        ind_dict=grand_induction, offset_dict=offset_ind)
+                    grand_recovery = recovery_summary(train_response, t_rec, holding, thresh=sweep_threshold,
+                                                      rec_dict=grand_recovery, offset_dict=offset_rec)
 
         if len(grand_pulse_response) > 0:
             grand_pulse_trace = TraceList(grand_pulse_response).mean()
@@ -96,13 +104,8 @@ for c1, pre_type in enumerate(cre_types):
                     p3 = trace_plot(grand_ind_trace, color=avg_color, plot=p3)
                     p3 = trace_plot(grand_rec_trace, color=avg_color, plot=p3)
 
-    pickle.dump(pulse_response_cache, open(pulse_cache_file+'.new', 'wb'))
-    if os.path.exists(pulse_cache_file):
-        os.path.remove(pulse_cache_file)
-    os.rename(pulse_cache_file+'.new', pulse_cache_file)
-
-    pickle.dump(train_response_cache, open(train_cache_file + '.new', 'wb'))
-    if os.path.exists(train_cache_file):
-        os.path.remove(train_cache_file)
-    os.rename(train_cache_file + '.new', train_cache_file)
+    if sum(pulse_cache_change) > 0:
+        write_cache(pulse_response_cache, pulse_cache_file)
+    if sum(train_cache_change) > 0:
+        write_cache(train_response_cache, train_cache_file)
 

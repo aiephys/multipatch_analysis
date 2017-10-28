@@ -2,19 +2,19 @@ import pyqtgraph as pg
 import numpy as np
 import colorsys
 from experiment_list import ExperimentList
-from manuscript_figures import cache_response, train_amp, induction_summary, recovery_summary
+from manuscript_figures import cache_response, train_amp, induction_summary, recovery_summary, write_cache
 from synapse_comparison import load_cache
 from neuroanalysis.data import TraceList
 from neuroanalysis.ui.plot_grid import PlotGrid
 from synaptic_dynamics import RawDynamicsAnalyzer
-#pg.dbg()
+pg.dbg()
 app = pg.mkQApp()
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
 
 all_expts = ExperimentList(cache='expts_cache.pkl')
 
-connection_types = ['rorb-rorb']#, 'rorb-rorb', 'sim1-sim1', 'tlx3-tlx3']
+connection_types = ['L23pyr-L23pyr', 'rorb-rorb', 'sim1-sim1', 'tlx3-tlx3']
 
 connections = {'L23pyr': ['1501101571.17', 1, 5],
                'rorb': ['1502301827.80', 6, 8],
@@ -30,6 +30,7 @@ sweep_threshold = 5
 
 cache_file = 'train_response_cache.pkl'
 response_cache = load_cache(cache_file)
+cache_change = []
 
 ind_plot = PlotGrid()
 ind_plot.set_shape(4, len(connection_types))
@@ -56,11 +57,12 @@ for c in range(len(connection_types)):
     for expt in expt_list:
         for pre, post in expt.connections:
             if expt.cells[pre].cre_type == cre_type[0] and expt.cells[post].cre_type == cre_type[1]:
-                train_response = cache_response(expt, pre, post, cache_file, response_cache, type='train')
+                train_response, change = cache_response(expt, pre, post, response_cache, type='train')
+                cache_change.append(change)
                 induction_grand, pulse_offset_ind = induction_summary(train_response, freqs, holding, thresh=sweep_threshold,
-                                                                      ind_dict=induction_grand)
+                                                                ind_dict=induction_grand, offset_dict=pulse_offset_ind)
                 recovery_grand, pulse_offset_rec = recovery_summary(train_response, rec_t, holding, thresh=sweep_threshold,
-                                                                    rec_dict=recovery_grand)
+                                                                rec_dict=recovery_grand, offset_dict=pulse_offset_rec)
 
     for f, freq in enumerate(freqs):
         induction_grand_trace = TraceList(induction_grand[freq][0]).mean()
@@ -89,7 +91,7 @@ for c in range(len(connection_types)):
         ind_plot[f, c].setLabels(bottom=('t', 's'))
         summary_plot[c, 0].setLabels(left=('Norm Amp', ''))
         summary_plot[c, 0].setLabels(bottom=('Pulse Number', ''))
-        f_color = pg.hsvColor(color[0], sat=float(f+0.5)/len(freqs), val=1)
+        f_color = pg.hsvColor(1, sat=float(f+0.5)/len(freqs), val=1)
         summary_plot[c, 0].plot(ind_amp_grand/ind_amp_grand[0], name=('  %d Hz' % freq), pen=f_color, symbol=symbols[f],
                                 symbolBrush=f_color, symbolPen=None)
 
@@ -121,4 +123,5 @@ for c in range(len(connection_types)):
         summary_plot[c, 1].plot(rec_amp_grand/rec_amp_grand[0], name=('  %d ms' % delta), pen=f_color, symbol=symbols[t],
                                 symbolBrush=f_color, symbolPen=None)
 
-
+    if sum(cache_change) > 0:
+        write_cache(response_cache, cache_file)

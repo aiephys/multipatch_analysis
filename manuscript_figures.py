@@ -12,6 +12,14 @@ from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from statsmodels.stats.multicomp import MultiComparison
 app = pg.mkQApp()
 
+def write_cache(cache, cache_file):
+    print("writing cache to disk...")
+    pickle.dump(cache, open(cache_file + '.new', 'wb'))
+    if os.path.exists(cache_file):
+        os.remove(cache_file)
+    os.rename(cache_file + '.new', cache_file)
+    print("Done!")
+
 def cache_response(expt, pre, post, cache, type='pulse'):
         key = (expt.uid, pre, post)
         if key in cache:
@@ -20,17 +28,18 @@ def cache_response(expt, pre, post, cache, type='pulse'):
                 response = format_responses(responses)
             else:
                 response = responses
-            return response
+            cache_change = 0
+            return response, cache_change
 
         responses = get_response(expt, pre, post, type=type)
         cache[key] = responses
-
+        cache_change = 1
         print ("cached connection %s, %d -> %d" % (key[0], key[1], key[2]))
         if type == 'pulse':
             response = format_responses(responses)
         else:
             response = responses
-        return response
+        return response, cache_change
 
 
 def format_responses(responses):
@@ -175,10 +184,10 @@ def deconv_train(trace):
 
     return deconv
 
-def induction_summary(train_response, freqs, holding, thresh=5, ind_dict=None):
-    pulse_offset_ind = {}
+def induction_summary(train_response, freqs, holding, thresh=5, ind_dict=None, offset_dict=None):
     if ind_dict is None:
         ind_dict = {}
+        offset_dict = {}
     for f, freq in enumerate(freqs):
         induction_traces = {}
         induction_traces['responses'] = response_filter(train_response['responses'], freq_range=[freq, freq],
@@ -194,15 +203,15 @@ def induction_summary(train_response, freqs, holding, thresh=5, ind_dict=None):
                 ind_dict[freq] = [[], []]
             ind_dict[freq][0].append(induction_avg)
             ind_dict[freq][1].append(ind_rec_avg)
-            pulse_offset_ind[freq] = induction_traces['pulse_offsets']
+            offset_dict[freq] = induction_traces['pulse_offsets']
 
-    return ind_dict, pulse_offset_ind
+    return ind_dict, offset_dict
 
-def recovery_summary(train_response, rec_t, holding, thresh=5, rec_dict=None):
+def recovery_summary(train_response, rec_t, holding, thresh=5, rec_dict=None, offset_dict=None):
     if rec_dict is None:
         rec_dict = {}
+        offset_dict = {}
     rec_ind_traces = response_filter(train_response['responses'], freq_range=[50, 50], holding_range=holding, train=0)
-    pulse_offset_rec = {}
     for t, delta in enumerate(rec_t):
         recovery_traces = {}
         recovery_traces['responses'] = response_filter(train_response['responses'], freq_range=[50, 50],
@@ -217,6 +226,6 @@ def recovery_summary(train_response, rec_t, holding, thresh=5, rec_dict=None):
                 rec_dict[delta] = [[], []]
             rec_dict[delta][0].append(rec_ind_avg)
             rec_dict[delta][1].append(recovery_avg)
-            pulse_offset_rec[delta] = recovery_traces['pulse_offsets']
+            offset_dict[delta] = recovery_traces['pulse_offsets']
 
-    return rec_dict, pulse_offset_rec
+    return rec_dict, offset_dict
