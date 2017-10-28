@@ -11,7 +11,7 @@ from neuroanalysis.data import TraceList
 from constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
 
 
-#pg.dbg()
+pg.dbg()
 app = pg.mkQApp()
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
@@ -68,7 +68,7 @@ for c1, pre_type in enumerate(cre_types):
                        holding = holding_e
                     elif pre_type in INHIBITORY_CRE_TYPES:
                        holding = holding_i
-                    pulse_subset = response_filter(pulse_response, freq_range=[0, 50], holding_range=holding)
+                    pulse_subset = response_filter(pulse_response, freq_range=[0, 50], holding_range=holding, pulse=True)
                     if len(pulse_subset) >= sweep_threshold:
                         avg_trace, _, amp_sign, _ = get_amplitude(pulse_subset)
                         if pre_type in EXCITATORY_CRE_TYPES and amp_sign is '-':
@@ -88,9 +88,9 @@ for c1, pre_type in enumerate(cre_types):
 
                     train_response, cache_change = cache_response(expt, pre, post, train_response_cache, type='train')
                     train_cache_change.append(cache_change)
-                    grand_induction = induction_summary(train_response, freqs, holding, thresh=sweep_threshold,
+                    grand_induction, offset_ind = induction_summary(train_response, freqs, holding, thresh=sweep_threshold,
                                                         ind_dict=grand_induction, offset_dict=offset_ind)
-                    grand_recovery = recovery_summary(train_response, t_rec, holding, thresh=sweep_threshold,
+                    grand_recovery, offset_rec = recovery_summary(train_response, t_rec, holding, thresh=sweep_threshold,
                                                       rec_dict=grand_recovery, offset_dict=offset_rec)
 
         if len(grand_pulse_response) > 0:
@@ -99,8 +99,11 @@ for c1, pre_type in enumerate(cre_types):
             for f in freqs:
                 if f == 50:
                     grand_ind_trace = TraceList(grand_induction[f][0]).mean()
-                    grand_rec_trace = TraceList(grand_recovery[f][0]).mean()
-                    p3 = [trace_plot(ind, color=trace_color, plot=p3) for ind in grand_induction[f][0]]
+                    grand_rec_trace = TraceList(grand_induction[f][1]).mean()
+                    for ind in grand_induction[f][0]:
+                        p3 = trace_plot(ind, color=trace_color, plot=p3)
+                    for rec in grand_induction[f][1]:
+                        p3 = trace_plot(rec, color=trace_color, plot=p3)
                     p3 = trace_plot(grand_ind_trace, color=avg_color, plot=p3)
                     p3 = trace_plot(grand_rec_trace, color=avg_color, plot=p3)
 
