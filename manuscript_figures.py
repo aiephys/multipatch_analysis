@@ -140,9 +140,10 @@ def feature_anova(feature, data):
 def trace_plot(trace, color, plot=None, x_range=None, name=None):
     if plot is None:
         plot = pg.plot()
-    plot.setLabel(left=('Vm', 'V'))
-    plot.setLabel(bottom=('t', 's'))
-    plot.setXRange(x_range)
+    plot.setLabels(left=('Vm', 'V'))
+    plot.setLabels(bottom=('t', 's'))
+    if x_range is not None:
+        plot.setXRange(x_range[0], x_range[1])
     plot.plot(trace.time_values, trace.data, pen=color, name=name)
     app.processEvents()
     return plot

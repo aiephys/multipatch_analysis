@@ -33,8 +33,8 @@ sweep_threshold = 5
 pulse_cache_file = 'pulse_response_cache.pkl'
 pulse_response_cache = load_cache(pulse_cache_file)
 pulse_cache_change = []
-train_cache_file = 'train_response_cache.pkl'
-train_response_cache = load_cache(train_cache_file)
+# train_cache_file = 'train_response_cache.pkl'
+# train_response_cache = load_cache(train_cache_file)
 train_cache_change = []
 
 e_plot = pg.GraphicsWindow()
@@ -44,6 +44,8 @@ i_row = 0
 
 for c1, pre_type in enumerate(cre_types):
     for c2, post_type in enumerate(cre_types):
+        train_cache_file = ('%s-%s_train_response.pkl' % (pre_type, post_type))
+        train_response_cache = load_cache(train_cache_file)
         grand_pulse_response = []
         grand_induction = {}
         grand_recovery = {}
@@ -51,6 +53,7 @@ for c1, pre_type in enumerate(cre_types):
         offset_rec = {}
         expt_list = all_expts.select(cre_type=[pre_type, post_type], calcium=calcium, age=age)
         if pre_type in EXCITATORY_CRE_TYPES:
+           # todo: this all needs to move somewhere where we are sure there's a connection
             p1 = e_plot.addPlot(row=e_row, col=0)
             p2 = e_plot.addPlot(row=e_row, col=1)
             p3 = e_plot.addPlot(row=e_row, col=2)
@@ -59,7 +62,6 @@ for c1, pre_type in enumerate(cre_types):
             holding = holding_e
             sign = '+'
             avg_color = {'color': 'r', 'width': 2}
-            e_row += 1
         else:
             p1 = i_plot.addPlot(row=i_row, col=0)
             p2 = i_plot.addPlot(row=i_row, col=1)
@@ -69,7 +71,6 @@ for c1, pre_type in enumerate(cre_types):
             holding = holding_i
             sign = '-'
             avg_color = {'color': 'b', 'width': 2}
-            i_row += 1
         if e_row == 0 or i_row:
             p1.setTitle('First Pulse Response, Example Connection')
             p2.setTitle('First Pulse Response, All Connections')
@@ -109,41 +110,48 @@ for c1, pre_type in enumerate(cre_types):
 
                     train_response, cache_change = cache_response(expt, pre, post, train_response_cache, type='train')
                     train_cache_change.append(cache_change)
-                    grand_induction, offset_ind = induction_summary(train_response, freqs, holding, thresh=sweep_threshold,
-                                                        ind_dict=grand_induction, offset_dict=offset_ind)
-                    grand_recovery, offset_rec = recovery_summary(train_response, t_rec, holding, thresh=sweep_threshold,
-                                                      rec_dict=grand_recovery, offset_dict=offset_rec)
+                    if (50, 0.25) in [(k[0], np.round(k[1], 2)) for k in train_response['responses'].keys()]:
+                        grand_induction, offset_ind = induction_summary(train_response, freqs, holding, thresh=sweep_threshold,
+                                                            ind_dict=grand_induction, offset_dict=offset_ind)
+                        grand_recovery, offset_rec = recovery_summary(train_response, t_rec, holding, thresh=sweep_threshold,
+                                                        rec_dict=grand_recovery, offset_dict=offset_rec)
 
         if len(grand_pulse_response) > 0:
             grand_pulse_trace = TraceList(grand_pulse_response).mean()
             p2 = trace_plot(grand_pulse_trace, color=avg_color, plot=p2, x_range=[0, 27e-3])
             if len(grand_induction) > 0:
-                for f, freq in freqs:
-                    if freq == 50:
-                        grand_ind_trace = TraceList(grand_induction[freq][0]).mean()
-                        grand_rec_trace = TraceList(grand_induction[freq][1]).mean()
-                        for ind in grand_induction[freq][0]:
-                            p3 = trace_plot(ind, color=trace_color, plot=p3)
-                        for rec in grand_induction[freq][1]:
-                            p3 = trace_plot(rec, color=trace_color, plot=p3)
-                        p3 = trace_plot(grand_ind_trace, color=avg_color, plot=p3)
-                        p3 = trace_plot(grand_rec_trace, color=avg_color, plot=p3)
-                    offset = offset_ind[freq]
-                    ind_amp = train_amp(grand_induction[freq], offset, sign)
-                    grand_ind_amp = np.mean(ind_amp, 0)
-                    ind_amp_sem = stats.sem(ind_amp)
-                    f_color = pg.hsvColor(1, sat=float(f+0.5)/len(freqs), val=1)
-                    p4.plot(grand_ind_amp/grand_ind_amp[0], name=('  %d Hz' % freq), pen=f_color, symbol='t',
-                            symbolBrush=f_color, symbolPen=None)
+                for f, freq in enumerate(freqs):
+                    if freq in grand_induction:
+                        if freq == 50:
+                            grand_ind_trace = TraceList(grand_induction[freq][0]).mean()
+                            grand_rec_trace = TraceList(grand_induction[freq][1]).mean()
+                            for ind in grand_induction[freq][0]:
+                                p3 = trace_plot(ind, color=trace_color, plot=p3)
+                            for rec in grand_induction[freq][1]:
+                                p3 = trace_plot(rec, color=trace_color, plot=p3)
+                            p3 = trace_plot(grand_ind_trace, color=avg_color, plot=p3)
+                            p3 = trace_plot(grand_rec_trace, color=avg_color, plot=p3)
+                        offset = offset_ind[freq]
+                        ind_amp = train_amp(grand_induction[freq], offset, sign)
+                        grand_ind_amp = np.mean(ind_amp, 0)
+                        ind_amp_sem = stats.sem(ind_amp)
+                        f_color = pg.hsvColor(1, sat=float(f+0.5)/len(freqs), val=1)
+                        p4.plot(grand_ind_amp/grand_ind_amp[0], name=('  %d Hz' % freq), pen=f_color, symbol='t',
+                                symbolBrush=f_color, symbolPen=None)
             if len(grand_recovery) > 0:
-                for t, delta in t_rec:
-                    offset = offset_rec[delta]
-                    rec_amp = train_amp(grand_recovery, offset, sign)
-                    grand_rec_amp = np.mean(rec_amp)
-                    grand_rec_sem = stats.sem(rec_amp)
-                    t_color = pg.hsvColor(1, sat=float(t+0.5)/len(t_rec), val=1)
-                    p5.plot(grand_rec_amp/grand_rec_amp[0], name=('  %d ms' % delta), pen=t_color, symbol='t',
-                            symbolBrush=t_color, symbolPen=None)
+                for t, delta in enumerate(t_rec):
+                    if delta in grand_recovery:
+                        offset = offset_rec[delta]
+                        rec_amp = train_amp(grand_recovery[delta], offset, sign)
+                        grand_rec_amp = np.mean(rec_amp, 0)
+                        grand_rec_sem = stats.sem(rec_amp)
+                        t_color = pg.hsvColor(1, sat=float(t+0.5)/len(t_rec), val=1)
+                        p5.plot(grand_rec_amp/grand_rec_amp[0], name=('  %d ms' % delta), pen=t_color, symbol='t',
+                                symbolBrush=t_color, symbolPen=None)
+            if pre_type in EXCITATORY_CRE_TYPES:
+                e_row += 1
+            else:
+                i_row += 1
 
     if sum(pulse_cache_change) > 0:
         write_cache(pulse_response_cache, pulse_cache_file)
