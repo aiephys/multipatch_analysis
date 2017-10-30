@@ -137,13 +137,13 @@ def feature_anova(feature, data):
     print ('F value: %.3f' % f)
     print ('P value: %.5f \n' % p)
 
-def trace_plot(trace, color, plot=None, x_range=None):
+def trace_plot(trace, color, plot=None, x_range=None, name=None):
     if plot is None:
         plot = pg.plot()
-        plot.setLabels(left=('Vm', 'V'))
-        plot.set_labels(bottom=('t', 's'))
-        plot.setXRange(x_range)
-    plot.plot(trace.time_values, trace.data, pen=color)
+    plot.setLabel(left=('Vm', 'V'))
+    plot.setLabel(bottom=('t', 's'))
+    plot.setXRange(x_range)
+    plot.plot(trace.time_values, trace.data, pen=color, name=name)
     app.processEvents()
     return plot
 
