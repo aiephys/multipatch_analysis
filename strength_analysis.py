@@ -29,9 +29,32 @@ import database as db
 
 
 class TableGroup(object):
+    def __init__(self):
+        self.mappings = {}
+        self.create_mappings()
+
+    def __getitem__(self, item):
+        return self.mappings[item]
+
+    def create_mappings(self):
+        for k,schema in self.schemas.items():
+            self.mappings[k] = db.generate_mapping(k, schema)
+
+    def drop_tables(self):
+        for k in self.schemas:
+            if k in db.engine.table_names():
+                self[k].__table__.drop(bind=db.engine)
+
+    def create_tables(self):
+        for k in self.schemas:
+            if k not in db.engine.table_names():
+                self[k].__table__.create(bind=db.engine)
+
+
+class PulseResponseStrengthTableGroup(TableGroup):
     schemas = {
         'pulse_response_strength': [
-            ('pulse_response_id', 'pulse_response.id'),
+            ('pulse_response_id', 'pulse_response.id', '', {'index': True}),
             ('pos_amp', 'float'),
             ('neg_amp', 'float'),
             ('pos_base_amp', 'float'),
@@ -46,40 +69,55 @@ class TableGroup(object):
         #],
     }
 
-    def __init__(self):
-        self.mappings = {}
-        self.create_mappings()
-
-    def __getitem__(self, item):
-        return self.mappings[item]
 
     def create_mappings(self):
-        for k,schema in self.schemas.items():
-            self.mappings[k] = db.generate_mapping(k, schema)
-
+        TableGroup.create_mappings(self)
+        
         PulseResponseStrength = self['pulse_response_strength']
         
         db.PulseResponse.pulse_response_strength = db.relationship(PulseResponseStrength, back_populates="pulse_response", cascade="delete", single_parent=True)
         PulseResponseStrength.pulse_response = db.relationship(db.PulseResponse, back_populates="pulse_response_strength")
 
-    def drop_tables(self):
-        for k in self.schemas:
-            if k in db.engine.table_names():
-                self[k].__table__.drop(bind=db.engine)
 
-    def create_tables(self):
-        for k in self.schemas:
-            if k not in db.engine.table_names():
-                self[k].__table__.create(bind=db.engine)
+class ConnectionStrengthTableGroup(TableGroup):
+    schemas = {
+        'connection_strength': [
+            ('experiment_id', 'experiment.id', '', {'index': True}),
+            ('pre_id', 'int', '', {'index': True}),
+            ('post_id', 'int', '', {'index': True}),
+            ('user_connected', 'bool', 'Whether the experimenter marked this pair as connected.'),
+            ('synapse_type', 'str', '"ex" or "in"'),
+            ('n_samples', 'int'),
+            ('amp_mean', 'float'),
+            ('amp_stdev', 'float'),
+            ('base_amp_mean', 'float'),
+            ('base_amp_stdev', 'float'),
+            ('deconv_amp_mean', 'float'),
+            ('deconv_amp_stdev', 'float'),
+            ('deconv_base_amp_mean', 'float'),
+            ('deconv_base_amp_stdev', 'float'),
+            ('amp_ttest', 'float'),
+            ('deconv_amp_ttest', 'float'),
+            ('amp_ks2samp', 'float'),
+            ('deconv_amp_ks2samp', 'float'),
+        ],
+    }
 
 
-tables = TableGroup()
+pulse_response_strength_tables = PulseResponseStrengthTableGroup()
+connection_strength_tables = ConnectionStrengthTableGroup()
 
-if '--reset-db' in sys.argv:
-    tables.drop_tables()
+def init_tables():
+    global PulseResponseStrength, ConnectionStrength
+    pulse_response_strength_tables.create_tables()
+    connection_strength_tables.create_tables()
 
-tables.create_tables()
+    PulseResponseStrength = pulse_response_strength_tables['pulse_response_strength']
+    ConnectionStrength = pulse_response_strength_tables['connection_strength']
 
+def drop_tables():
+    connection_strength_tables.drop_tables()
+    pulse_response_strength_tables.drop_tables()
 
 
 def measure_peak(trace, sign, baseline=(0e-3, 9e-3), response=(11e-3, 17e-3)):
@@ -105,8 +143,8 @@ def deconv_filter(trace, tau=15e-3, lowpass=300.):
 
 
 def rebuild_tables(parallel=True, workers=6):
-    tables.drop_tables()
-    tables.create_tables()
+    drop_tables()
+    init_tables()
     
     ses = db.Session()
     max_pulse_id = ses.execute('select max(id) from pulse_response').fetchone()[0]
@@ -119,6 +157,8 @@ def rebuild_tables(parallel=True, workers=6):
     else:
         for part in parts:
             compute_strength(part)
+            
+    compute_connectivity()
 
 
 def compute_strength(inds):
@@ -182,47 +222,91 @@ def compute_strength(inds):
         sys.stdout.flush()
 
         prof('process')
-        ses.bulk_insert_mappings(tables['pulse_response_strength'], new_recs)
+        ses.bulk_insert_mappings(PulseResponseStrength, new_recs)
         prof('insert')
         new_recs = []
 
         ses.commit()
         prof('commit')
+
     
-
-
-def _rebuild_tables():
-    # ORM version (too slow)
-    tables.drop_tables()
-    tables.create_tables()
-    
-    ses = db.Session()
-    q = ses.query(db.PulseResponse.id, db.PulseResponse.data, db.Baseline.data).join(db.Baseline).yield_per(100)
-    for i,rec in enumerate(q):
-        pr_id, data, baseline = rec
-        data = Trace(data, sample_rate=20e3)
-        prs = tables['pulse_response_strength'](pulse_response_id=pr_id)
-        prs.pos_amp = measure_peak(data, '+')
-        prs.neg_amp = measure_peak(data, '-')
-        
-        base = Trace(baseline, sample_rate=20e3)
-        prs.pos_base_amp = measure_peak(base, '+')
-        prs.neg_base_amp = measure_peak(base, '-')
-
-        dec_data = deconv_filter(data)
-        prs.pos_dec_amp = measure_peak(dec_data, '+')
-        prs.neg_dec_amp = measure_peak(dec_data, '-')
-        
-        dec_base = deconv_filter(base)
-        prs.pos_dec_base_amp = measure_peak(dec_base, '+')
-        prs.neg_dec_base_amp = measure_peak(dec_base, '-')
-        
-        ses.add(prs)
-        
-        if i%100 == 0:
-            print("%d/%d" % (i, q.count()))
+def compute_connectivity():
+    for expt in list_experiments():
+        for devs in get_experiment_pairs(expt):
+            s = db.Session()
+            amps = get_amps(s, expt, devs)
             
-        ses.commit()
+            conn = ConnectionStrength(experiment_id=expt.id, pre_id=devs[0], post_id=devs[1])
+            
+            #('user_connected', 'bool', 'Whether the experimenter marked this pair as connected.'),
+            #('synapse_type', 'str', '"ex" or "in"'),
+            #('n_samples', 'int'),
+            #('amp_mean', 'float'),
+            #('amp_stdev', 'float'),
+            #('base_amp_mean', 'float'),
+            #('base_amp_stdev', 'float'),
+            #('deconv_amp_mean', 'float'),
+            #('deconv_amp_stdev', 'float'),
+            #('deconv_base_amp_mean', 'float'),
+            #('deconv_base_amp_stdev', 'float'),
+            #('amp_ttest', 'float'),
+            #('deconv_amp_ttest', 'float'),
+            #('amp_ks2samp', 'float'),
+            #('deconv_amp_ks2samp', 'float'),
+            
+            # decide whether to treat this connection as excitatory or inhibitory
+            # (probably we can do much better here)
+            pos_amp = amps['pos_dec_amp'].mean() - amps['pos_dec_base_amp'].mean()
+            neg_amp = amps['neg_dec_amp'].mean() - amps['neg_dec_base_amp'].mean()
+            if pos_amp > -neg_amp:
+                conn.synapse_type = 'ex'
+                pfx = 'pos_'
+            else:
+                conn.synapse_type = 'in'
+                pfx = 'neg_'
+            # select out positive or negative amplitude columns
+            amp, base_amp = amps[pfx+'amp'], amps[pfx+'base_amp']
+            dec_amp, dec_base_amp = amps[pfx+'dec_amp'], amps[pfx+'dec_base_amp']
+    
+            # compute mean/stdev of samples
+            conn.n_samples = len(amps)
+            conn.amp_mean = amp.mean()
+            conn.amp_stdev = amp.std()
+            conn.base_amp_mean = base_amp.mean()
+            conn.base_amp_stdev = base_amp.std()
+            conn.deconv_amp_mean = dec_amp.mean()
+            conn.deconv_amp_stdev = dec_amp.std()
+            conn.deconv_base_amp_mean = dec_base_amp.mean()
+            conn.deconv_base_amp_stdev = dec_base_amp.std()
+            
+            # do some statistical tests
+            conn.amp_ks2samp = scipy.stats.ks2samp(amp, base_amp)
+            conn.deconv_amp_ks2samp = scipy.stats.ks2samp(dec_amp, dec_base_amp)
+    
+
+def list_experiments():
+    s = db.Session()
+    return s.query(db.Experiment).all()
+
+
+def get_experiment_devs(expt):
+    s = db.Session()
+    devs = s.query(db.Recording.device_key).join(db.SyncRec).filter(db.SyncRec.experiment_id==expt.id)
+    
+    # Only keep channels with >2 recordings
+    counts = {}
+    for r in devs:
+        counts.setdefault(r[0], 0)
+        counts[r[0]] += 1
+    devs = [k for k,v in counts.items() if v > 2]
+    devs.sort()
+    
+    return devs
+
+
+def get_experiment_pairs(expt):
+    devs = get_experiment_devs(expt)
+    return [(pre, post) for pre in devs for post in devs if pre != post]
 
 
 class ExperimentBrowser(pg.TreeWidget):
@@ -237,8 +321,7 @@ class ExperimentBrowser(pg.TreeWidget):
         expts = experiment_list.cached_experiments()
         
         
-        s = db.Session()
-        for expt in s.query(db.Experiment):
+        for expt in list_experiments():
             date = expt.acq_timestamp
             date_str = date.strftime('%Y-%m-%d')
             slice = expt.slice
@@ -246,65 +329,53 @@ class ExperimentBrowser(pg.TreeWidget):
             expt_item.expt = expt
             self.addTopLevelItem(expt_item)
 
-            devs = s.query(db.Recording.device_key).join(db.SyncRec).filter(db.SyncRec.experiment_id==expt.id)
+            pairs = get_experiment_pairs(expt)
             
-            # Only keep channels with >2 recordings
-            counts = {}
-            for r in devs:
-                counts.setdefault(r[0], 0)
-                counts[r[0]] += 1
-            devs = [k for k,v in counts.items() if v > 2]
-            devs.sort()
-            
-            for d1 in devs:
-                for d2 in devs:
-                    if d1 == d2:
-                        continue
-                    
-                    pre_id = d1+1
-                    post_id = d1+2
-                    
-                    try:
-                        e = expts[date]
-                        conn = (pre_id, post_id) in e.connections
-                    except:
-                        conn = 'no expt'
-                    
-                    
-                    pair_item = pg.TreeWidgetItem(['%d => %d' % (d1, d2), str(conn)])
-                    expt_item.addChild(pair_item)
-                    pair_item.devs = (d1, d2)
-                    pair_item.expt = expt
+            for d1, d2 in pairs:
+                pre_id = d1+1
+                post_id = d1+2
+                
+                try:
+                    e = expts[date]
+                    conn = (pre_id, post_id) in e.connections
+                except:
+                    conn = 'no expt'
+                
+                
+                pair_item = pg.TreeWidgetItem(['%d => %d' % (d1, d2), str(conn)])
+                expt_item.addChild(pair_item)
+                pair_item.devs = (d1, d2)
+                pair_item.expt = expt
 
 
 def get_amps(session, expt, devs, clamp_mode='ic'):
     """Select records from pulse_response_strength table
     """
-    pre_rec = aliased(db.Recording)
-    post_rec = aliased(db.Recording)
     q = session.query(
-        tables['pulse_response_strength'].id,
-        tables['pulse_response_strength'].pos_amp,
-        tables['pulse_response_strength'].neg_amp,
-        tables['pulse_response_strength'].pos_base_amp,
-        tables['pulse_response_strength'].neg_base_amp,
-        tables['pulse_response_strength'].pos_dec_amp,
-        tables['pulse_response_strength'].neg_dec_amp,
-        tables['pulse_response_strength'].pos_dec_base_amp,
-        tables['pulse_response_strength'].neg_dec_base_amp,
-    )
-    
-    joins = [
-        (db.PulseResponse,),
-        (post_rec, db.PulseResponse.recording),
-        (db.PatchClampRecording,),
-        (db.SyncRec,),
-        (db.Experiment,),
-        (db.StimPulse, db.PulseResponse.stim_pulse),
-        (pre_rec, db.StimPulse.recording),
+        PulseResponseStrength.id,
+        PulseResponseStrength.pos_amp,
+        PulseResponseStrength.neg_amp,
+        PulseResponseStrength.pos_base_amp,
+        PulseResponseStrength.neg_base_amp,
+        PulseResponseStrength.pos_dec_amp,
+        PulseResponseStrength.neg_dec_amp,
+        PulseResponseStrength.pos_dec_base_amp,
+        PulseResponseStrength.neg_dec_base_amp,
+    ).join(db.PulseResponse)
+
+    dtype = [
+        ('id', 'int'),
+        ('pos_amp', 'float'),
+        ('neg_amp', 'float'),
+        ('pos_base_amp', 'float'),
+        ('neg_base_amp', 'float'),
+        ('pos_dec_amp', 'float'),
+        ('neg_dec_amp', 'float'),
+        ('pos_dec_base_amp', 'float'),
+        ('neg_dec_base_amp', 'float'),
     ]
-    for join_args in joins:
-        q = q.join(*join_args)
+    
+    q, pre_rec, post_rec = join_pulse_response_to_expt(q)
         
     filters = [
         (db.Experiment.id==expt.id,),
@@ -315,7 +386,32 @@ def get_amps(session, expt, devs, clamp_mode='ic'):
     for filter_args in filters:
         q = q.filter(*filter_args)
     
-    return q
+    # fetch all
+    recs = q.all()
+    
+    # fill numpy array
+    arr = np.empty(len(recs), dtype=dtype)
+    for i,rec in enumerate(recs):
+        arr[i] = rec
+    
+    return arr
+
+
+def join_pulse_response_to_expt(query):
+    pre_rec = aliased(db.Recording)
+    post_rec = aliased(db.Recording)
+    joins = [
+        (post_rec, db.PulseResponse.recording),
+        (db.PatchClampRecording,),
+        (db.SyncRec,),
+        (db.Experiment,),
+        (db.StimPulse, db.PulseResponse.stim_pulse),
+        (pre_rec, db.StimPulse.recording),
+    ]
+    for join_args in joins:
+        query = query.join(*join_args)
+
+    return q, pre_rec, post_rec
 
 
 if __name__ == '__main__':
@@ -348,22 +444,19 @@ if __name__ == '__main__':
         devs = sel.devs
         
         prof = pg.debug.Profiler(disabled=False)
-        q = get_amps(session, expt, devs)
+        recs = get_amps(session, expt, devs)
         prof('query')
         
-        recs = q.all()
-        prof('fetch')
-        
-        ay = [rec[7] for rec in recs]
+        ay = [rec['pos_dec_base_amp'] for rec in recs]
         prof('ay')
         ax = np.random.random(size=len(ay)) * 0.5
-        by = [rec[5] for rec in recs]
+        by = [rec['pos_dec_amp'] for rec in recs]
         prof('by')
         bx = 1 + np.random.random(size=len(by)) * 0.5
-        cy = [rec[8] for rec in recs]
+        cy = [rec['neg_dec_base_amp'] for rec in recs]
         prof('cy')
         cx = 2 + np.random.random(size=len(cy)) * 0.5
-        dy = [rec[6] for rec in recs]
+        dy = [rec['neg_dec_amp'] for rec in recs]
         prof('dy')
         dx = 3 + np.random.random(size=len(dy)) * 0.5
         sp.setData(ax, ay, data=recs, brush=(255, 255, 255, 80))
@@ -381,11 +474,11 @@ if __name__ == '__main__':
         clicked_points = points
         
         session = db.Session()
-        ids = [p.data()[0] for p in points]
+        ids = [p.data()['id'] for p in points]
         q = session.query(db.PulseResponse.data, db.Baseline.data)
         q = q.join(db.Baseline)
-        q = q.join(tables['pulse_response_strength'])
-        q = q.filter(tables['pulse_response_strength'].id.in_(ids))
+        q = q.join(PulseResponseStrength)
+        q = q.filter(PulseResponseStrength.id.in_(ids))
         recs = q.all()
         
         plt2.clear()
