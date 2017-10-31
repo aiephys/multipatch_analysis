@@ -228,15 +228,21 @@ def _rebuild_tables():
 class ExperimentBrowser(pg.TreeWidget):
     def __init__(self):
         pg.TreeWidget.__init__(self)
-        self.setColumnCount(4)
+        self.setColumnCount(6)
         self.populate()
         
     def populate(self):
+        # cheating:
+        import experiment_list
+        expts = experiment_list.cached_experiments()
+        
+        
         s = db.Session()
         for expt in s.query(db.Experiment):
-            date = expt.acq_timestamp.strftime('%Y-%m-%d')
+            date = expt.acq_timestamp
+            date_str = date.strftime('%Y-%m-%d')
             slice = expt.slice
-            expt_item = pg.TreeWidgetItem(map(str, [date, slice.species, expt.target_region, slice.genotype]))
+            expt_item = pg.TreeWidgetItem(map(str, [date_str, expt.rig_name, slice.species, expt.target_region, slice.genotype]))
             expt_item.expt = expt
             self.addTopLevelItem(expt_item)
 
@@ -254,7 +260,18 @@ class ExperimentBrowser(pg.TreeWidget):
                 for d2 in devs:
                     if d1 == d2:
                         continue
-                    pair_item = pg.TreeWidgetItem(['%d => %d' % (d1, d2)])
+                    
+                    pre_id = d1+1
+                    post_id = d1+2
+                    
+                    try:
+                        e = expts[date]
+                        conn = (pre_id, post_id) in e.connections
+                    except:
+                        conn = 'no expt'
+                    
+                    
+                    pair_item = pg.TreeWidgetItem(['%d => %d' % (d1, d2), str(conn)])
                     expt_item.addChild(pair_item)
                     pair_item.devs = (d1, d2)
                     pair_item.expt = expt
@@ -363,14 +380,21 @@ if __name__ == '__main__':
         global clicked_points
         clicked_points = points
         
+        session = db.Session()
+        ids = [p.data()[0] for p in points]
+        q = session.query(db.PulseResponse.data, db.Baseline.data)
+        q = q.join(db.Baseline)
+        q = q.join(tables['pulse_response_strength'])
+        q = q.filter(tables['pulse_response_strength'].id.in_(ids))
+        recs = q.all()
+        
         plt2.clear()
-        for p in points:
-            rec = p.data()
-            trace = Trace(rec[0].pulse_response.data, sample_rate=20e3)
+        for rec in recs:
+            trace = Trace(rec[0], sample_rate=20e3)
             dec_trace = deconv_filter(trace)
             plt2.plot(dec_trace.time_values, dec_trace.data)
             
-            base = Trace(rec[0].pulse_response.baseline.data, sample_rate=20e3)
+            base = Trace(rec[1], sample_rate=20e3)
             dec_base = deconv_filter(base)
             plt2.plot(dec_base.time_values, dec_base.data, pen='r')
         
