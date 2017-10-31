@@ -168,7 +168,9 @@ class ExperimentDBSubmission(object):
 
         if not os.path.isfile(self.nwb_file.name()):
             errors.append('Could not find NWB file "%s"' % self.nwb_file.name())
-        if os.path.dirname(self.nwb_file.name()) != self.dh.name():
+        rel_nwb_name = self.nwb_file.name(relativeTo=self.nwb_file.parent().parent().parent())
+        rel_site_path = self.dh.name(relativeTo=self.dh.parent().parent())
+        if not rel_nwb_name.startswith(rel_site_path):
             errors.append('NWB file "%s" is not inside site directory "%s"' % 
                           (self.nwb_file.name(), self.dh.name()))
         
