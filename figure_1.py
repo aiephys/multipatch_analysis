@@ -9,7 +9,7 @@ from neuroanalysis.filter import bessel_filter
 from neuroanalysis.event_detection import exp_deconvolve
 from neuroanalysis.ui.plot_grid import PlotGrid
 from synapse_comparison import load_cache
-from manuscript_figures import cache_response, response_filter, trace_avg
+from manuscript_figures import cache_response, response_filter, trace_avg, pulse_qc, write_cache
 from rep_connections import connections
 from constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
 
@@ -19,7 +19,8 @@ connection_types = connections.keys() #['L23pyr-L23pyr', 'rorb-rorb', 'sim1-sim1
 
 cache_file = 'pulse_response_cache.pkl'
 response_cache = load_cache(cache_file)
-
+cache_change = []
+pg.dbg()
 app = pg.mkQApp()
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
@@ -52,7 +53,7 @@ if plot_trains is True:
     tau = 15e-3
     lp = 1000
 else:
-    grid.set_shape(len(connection_types), 1)
+    grid.set_shape(len(connection_types), 2)
 grid.show()
 row = 0
 grid[0, 0].setTitle(title='First Pulse')
@@ -68,20 +69,24 @@ for row in range(len(connection_types)):
     expt = all_expts[expt_id]
     if connection_type[0] in EXCITATORY_CRE_TYPES:
         holding = holding_e
+        sign = '+'
     elif connection_type[0] in INHIBITORY_CRE_TYPES:
         holding = holding_i
-    pulse_response = cache_response(expt, pre_cell, post_cell, cache_file, response_cache, type='pulse')
-    sweep_list = response_filter(pulse_response, freq_range=[0, 50], holding_range=holding)
+        sign = '-'
+    pulse_response, change = cache_response(expt, pre_cell, post_cell, response_cache, type='pulse')
+    cache_change.append(change)
+    sweep_list = response_filter(pulse_response, freq_range=[0, 50], holding_range=holding, pulse=True)
     n_sweeps = len(sweep_list)
     if n_sweeps > 5:
+        qc_list = pulse_qc(sweep_list, baseline=3, pulse=3, plot=grid[row, 1])
+        avg_first_pulse = trace_avg(sweep_list)
+        avg_first_pulse.t0 = 0
         if plot_sweeps is True:
             for sweep in range(n_sweeps):
                 current_sweep = sweep_list[sweep]
                 current_sweep.t0 = 0
                 base = float_mode(current_sweep.data[:int(10e-3 / current_sweep.dt)])
                 grid[row, 0].plot(current_sweep.time_values, current_sweep.data - base, pen=sweep_color)
-        avg_first_pulse = trace_avg(sweep_list)
-        avg_first_pulse.t0 = 0
 
         grid[row, 0].setLabels(left=('Vm', 'V'))
         grid[row, 0].setLabels(bottom=('t', 's'))
@@ -146,6 +151,9 @@ if link_y_axis is True:
                     grid[g, 1].setYLink(grid[max_row_train, 1])
                 if g != max_row_dec:
                     grid[g, 2].setYLink(grid[max_row_dec, 2])
+
+# if sum(cache_change) > 0:
+#     write_cache(response_cache, cache_file)
 
 if sys.flags.interactive == 0:
     app.exec_()

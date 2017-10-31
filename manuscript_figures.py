@@ -23,22 +23,22 @@ def write_cache(cache, cache_file):
 def cache_response(expt, pre, post, cache, type='pulse'):
         key = (expt.uid, pre, post)
         if key in cache:
-            responses = cache[key]
-            if type == 'pulse':
-                response = format_responses(responses)
-            else:
-                response = responses
+            response = cache[key]
+            # if type == 'pulse':
+            #     response = format_responses(responses)
+            # else:
+            #     response = responses
             cache_change = 0
             return response, cache_change
 
-        responses = get_response(expt, pre, post, type=type)
-        cache[key] = responses
+        response = get_response(expt, pre, post, type=type)
+        cache[key] = response
         cache_change = 1
         print ("cached connection %s, %d -> %d" % (key[0], key[1], key[2]))
-        if type == 'pulse':
-            response = format_responses(responses)
-        else:
-            response = responses
+        # if type == 'pulse':
+        #     response = format_responses(responses)
+        # else:
+        #     response = responses
         return response, cache_change
 
 
@@ -57,31 +57,35 @@ def format_responses(responses):
 def get_response(expt, pre, post, type='pulse'):
     analyzer = DynamicsAnalyzer(expt, pre, post, method='deconv', align_to='spike')
     if type == 'pulse':
-        pulse = 0  # only pull first pulse
-        response = {'data': [], 'dt': [], 'stim_param': []}
-        responses = analyzer.pulse_responses
-        for i,stim_params in enumerate(responses.keys()):
-            resp = responses[stim_params]
-            for trial in resp:
-                r = trial[pulse]['response']
-                r.meta['stim_params'] = stim_params
-                response['data'].append(r.data)
-                response['dt'].append(r.dt)
-                response['stim_param'].append(r.meta['stim_params'])
+        response = analyzer.pulse_responses
+        # pulse = 0  # only pull first pulse
+        # response = {'data': [], 'dt': [], 'stim_param': []}
+        # responses = analyzer.pulse_responses
+        # for i,stim_params in enumerate(responses.keys()):
+        #     resp = responses[stim_params]
+        #     for trial in resp:
+        #         r = trial[pulse]['response']
+        #         r.meta['stim_params'] = stim_params
+        #         response['data'].append(r.data)
+        #         response['dt'].append(r.dt)
+        #         response['stim_param'].append(r.meta['stim_params'])
     elif type == 'train':
         responses = analyzer.train_responses
         pulse_offset = analyzer.pulse_offsets
         response = {'responses': responses, 'pulse_offsets': pulse_offset}
     else:
         "Must select either pulse responses or train responses"
-    if len(responses) == 0:
+    if len(response) == 0:
         print "No suitable data found for cell %d -> cell %d in expt %s" % (pre, post, expt.source_id)
         return response
 
     return response
 
 def get_amplitude(response_list):
-    bsub_mean = trace_avg(response_list)
+    if len(response_list) == 1:
+        bsub_mean = bsub(response_list[0])
+    else:
+        bsub_mean = trace_avg(response_list)
     dt = bsub_mean.dt
     neg = bsub_mean.data[int(13e-3/dt):].min()
     pos = bsub_mean.data[int(13e-3/dt):].max()
@@ -92,6 +96,8 @@ def get_amplitude(response_list):
     return bsub_mean, avg_amp, amp_sign, peak_t
 
 def trace_avg(response_list):
+    for trace in response_list:
+        trace.t0 = 0
     avg_trace = TraceList(response_list).mean()
     bsub_mean = bsub(avg_trace)
     return bsub_mean
@@ -118,7 +124,7 @@ def response_filter(response, freq_range=None, holding_range=None, pulse=False, 
             continue
         if pulse is True:
             for trial in trials:
-                new_responses.append(trial)
+                new_responses.append(trial[0]['response'])
         elif train is not None:
             for trial in trials[train].responses:
                 new_responses.append(trial)
@@ -230,3 +236,26 @@ def recovery_summary(train_response, rec_t, holding, thresh=5, rec_dict=None, of
             offset_dict[delta] = recovery_traces['pulse_offsets']
 
     return rec_dict, offset_dict
+
+def pulse_qc(responses, baseline=None, pulse=None, plot=None):
+    qc_pass = []
+    avg, amp, _, peak_t = get_amplitude(responses)
+    pulse_win = (int(peak_t + 1e-3))/avg.dt
+    pulse_std = np.std(avg.data[pulse_win:])
+    base_win = int(10e-3/avg.dt)
+    base_std = np.std(avg.data[:base_win])
+    for response in responses:
+        response = bsub(response)
+        data = response.data
+        if np.mean(data[:base_win]) > (baseline * base_std) and plot is not None:
+            plot.plot(response.time_values, response.data, pen='r')
+        elif np.mean(data[pulse_win:]) > (pulse * pulse_std) and plot is not None:
+            plot.plot(response.time_values, response.data, pen='b')
+        else:
+            if plot is not None:
+                plot.plot(response.time_values, response.data)
+            qc_pass.append(response)
+    qc_trace = trace_avg(qc_pass)
+    if plot is not None:
+        plot.plot(qc_trace.time_values, qc_trace.data, pen={'color':'k', 'width':2})
+    return qc_pass
