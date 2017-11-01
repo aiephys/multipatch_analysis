@@ -321,6 +321,8 @@ class ExperimentBrowser(pg.TreeWidget):
         self.populate()
         
     def populate(self):
+        self.items = {}
+        
         # cheating:
         import experiment_list
         expts = experiment_list.cached_experiments()
@@ -350,6 +352,14 @@ class ExperimentBrowser(pg.TreeWidget):
                 expt_item.addChild(pair_item)
                 pair_item.devs = (d1, d2)
                 pair_item.expt = expt
+                
+                self.items[(expt.id, d1, d2)] = pair_item
+                
+    def select(self, conn_id):
+        item = self.items[conn_id]
+        self.clearSelection()
+        item.setSelected(True)
+        item.parent().setExpanded(True)
 
 
 def get_amps(session, expt, devs, clamp_mode='ic'):
@@ -468,32 +478,24 @@ class ResponseStrengthPlots(object):
         sp.addPoints(dx, dy, data=recs, brush=(255, 255, 255, 80))
 
 
-
 if __name__ == '__main__':
-    import cProfile
-    p = cProfile.Profile()
-    p.enable()
+    pg.dbg()
     
-    try:
-        pg.dbg()
-        if '--rebuild' in sys.argv:
-            connection_strength_tables.drop_tables()
-            pulse_response_strength_tables.drop_tables()
-            init_tables()
-            rebuild_strength()
-            rebuild_connectivity()
-        elif '--rebuild-connectivity' in sys.argv:
-            print("drop tables..")
-            connection_strength_tables.drop_tables()
-            print("create tables..")
-            init_tables()
-            print("rebuild..")
-            rebuild_connectivity()
-        else:
-            init_tables()
-    finally:
-        p.disable()
-        #p.print_stats(sort='cumulative')
+    if '--rebuild' in sys.argv:
+        connection_strength_tables.drop_tables()
+        pulse_response_strength_tables.drop_tables()
+        init_tables()
+        rebuild_strength()
+        rebuild_connectivity()
+    elif '--rebuild-connectivity' in sys.argv:
+        print("drop tables..")
+        connection_strength_tables.drop_tables()
+        print("create tables..")
+        init_tables()
+        print("rebuild..")
+        rebuild_connectivity()
+    else:
+        init_tables()
     
     # global session for querying from DB
     session = db.Session()
@@ -514,9 +516,51 @@ if __name__ == '__main__':
     gl.addItem(rs_plots.trace_plot, row=1, col=0)
     
     def selected(*args):
-        sel = b.selectedItems()[0]
+        sel = b.selectedItems()
+        if len(sel) == 0:
+            return
+        sel = sel[0]
         expt = sel.expt
         devs = sel.devs
         rs_plots.load_conn(expt, devs)
 
     b.itemSelectionChanged.connect(selected)
+
+    spw = pg.ScatterPlotWidget()
+    spw.setFields([
+        ('user_connected', {'mode': 'enum', 'values': [True, False, None]}),
+        ('synapse_type', {'mode': 'enum', 'values': ['in', 'ex']}),
+        ('n_samples', {}),
+        ('amp_mean', {'units': 'V'}),
+        ('amp_stdev', {'units': 'V'}),
+        ('amp_vom', {'units': 'V'}),
+        ('base_amp_mean', {'units': 'V'}),
+        ('base_amp_stdev', {'units': 'V'}),
+        ('base_amp_vom', {'units': 'V'}),
+        ('deconv_amp_mean', {'units': 'V'}),
+        ('deconv_amp_stdev', {'units': 'V'}),
+        ('deconv_amp_vom', {'units': 'V'}),
+        ('deconv_base_amp_mean', {'units': 'V'}),
+        ('deconv_base_amp_stdev', {'units': 'V'}),
+        ('deconv_base_amp_vom', {'units': 'V'}),
+        ('amp_ttest', {}),
+        ('deconv_amp_ttest', {}),
+        ('amp_ks2samp', {}),
+        ('deconv_amp_ks2samp', {}),
+    ])
+    
+    spw.show()
+
+    import pandas
+    df = pandas.read_sql('select * from connection_strength', session.bind)
+    spw.setData(df.to_records())
+
+
+    def conn_clicked(spw, points):
+        d = points[0].data()
+        id = (d['experiment_id'], d['pre_id'], d['post_id'])
+        print(id)
+        b.select(id)
+        
+
+    spw.sigScatterPlotClicked.connect(conn_clicked)
