@@ -9,7 +9,6 @@ from constants import EXCITATORY_CRE_TYPES, INHIBITORY_CRE_TYPES
 
 import argparse
 import sys
-import pyqtgraph as pg
 import os
 import pickle
 import io
@@ -19,13 +18,16 @@ import scipy.stats
 
 from sqlalchemy.orm import aliased
 
+import mies_nwb_viewer
+import pyqtgraph as pg
+
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.filter import bessel_filter
 from neuroanalysis.event_detection import exp_deconvolve
 
 import database as db
-
+import config
 
 
 class TableGroup(object):
@@ -520,11 +522,25 @@ if __name__ == '__main__':
         if len(sel) == 0:
             return
         sel = sel[0]
-        expt = sel.expt
-        devs = sel.devs
-        rs_plots.load_conn(expt, devs)
+        if hasattr(sel, 'devs'):
+            expt = sel.expt
+            devs = sel.devs
+            rs_plots.load_conn(expt, devs)
+        else:
+            print(sel.expt.original_path)
 
     b.itemSelectionChanged.connect(selected)
+
+    nwb_viewer = mies_nwb_viewer.MultipatchNwbViewer()
+
+    def dbl_clicked(index):
+        item = b.itemFromIndex(index)[0]
+        print(item.expt.ephys_file)
+        nwb = os.path.join(config.synphys_data, item.expt.ephys_file)
+        nwb_viewer.load_nwb(nwb)
+        nwb_viewer.show()
+        
+    b.doubleClicked.connect(dbl_clicked)
 
     spw = pg.ScatterPlotWidget()
     spw.setFields([
