@@ -418,6 +418,57 @@ def join_pulse_response_to_expt(query):
     return query, pre_rec, post_rec
 
 
+class ResponseStrengthPlots(object):
+    def __init__(self, session):
+        self.session = session
+        
+        self.str_plot = pg.PlotItem()
+        self.sp = pg.ScatterPlotItem(pen=None, symbol='o', symbolPen=None)
+        self.str_plot.addItem(self.sp)
+        self.sp.sigClicked.connect(self.clicked)
+        
+        self.trace_plot = pg.PlotItem(labels={'bottom': ('time', 's'), 'left': ('Vm', 'V')})
+    
+    def clicked(self, sp, points):
+        self.clicked_points = points
+        
+        ids = [p.data()['id'] for p in points]
+        q = self.session.query(db.PulseResponse.data, db.Baseline.data)
+        q = q.join(db.Baseline)
+        q = q.join(PulseResponseStrength)
+        q = q.filter(PulseResponseStrength.id.in_(ids))
+        recs = q.all()
+        
+        self.trace_plot.clear()
+        for rec in recs:
+            trace = Trace(rec[0], sample_rate=20e3)
+            dec_trace = deconv_filter(trace)
+            self.trace_plot.plot(dec_trace.time_values, dec_trace.data)
+            
+            base = Trace(rec[1], sample_rate=20e3)
+            dec_base = deconv_filter(base)
+            self.trace_plot.plot(dec_base.time_values, dec_base.data, pen='r')
+        
+    def load_conn(self, expt, devs):
+        recs = get_amps(self.session, expt, devs)
+        
+        ay = [rec['pos_dec_base_amp'] for rec in recs]
+        ax = np.random.random(size=len(ay)) * 0.5
+        by = [rec['pos_dec_amp'] for rec in recs]
+        bx = 1 + np.random.random(size=len(by)) * 0.5
+        cy = [rec['neg_dec_base_amp'] for rec in recs]
+        cx = 2 + np.random.random(size=len(cy)) * 0.5
+        dy = [rec['neg_dec_amp'] for rec in recs]
+        dx = 3 + np.random.random(size=len(dy)) * 0.5
+        
+        sp = self.sp
+        sp.setData(ax, ay, data=recs, brush=(255, 255, 255, 80))
+        sp.addPoints(bx, by, data=recs, brush=(255, 255, 255, 80))
+        sp.addPoints(cx, cy, data=recs, brush=(255, 255, 255, 80))
+        sp.addPoints(dx, dy, data=recs, brush=(255, 255, 255, 80))
+
+
+
 if __name__ == '__main__':
     import cProfile
     p = cProfile.Profile()
@@ -444,6 +495,9 @@ if __name__ == '__main__':
         p.disable()
         #p.print_stats(sort='cumulative')
     
+    # global session for querying from DB
+    session = db.Session()
+    
     win = pg.QtGui.QSplitter()
     win.setOrientation(pg.QtCore.Qt.Horizontal)
     win.resize(1000, 800)
@@ -455,68 +509,14 @@ if __name__ == '__main__':
     gl = pg.GraphicsLayoutWidget()
     win.addWidget(gl)
     
-    plt = gl.addPlot()
-
-    sp = pg.ScatterPlotItem(pen=None, symbol='o', symbolPen=None)
-    plt.addItem(sp)
-    
-    plt2 = gl.addPlot(row=1, col=0, labels={'bottom': ('time', 's'), 'left': ('Vm', 'V')})
-
-    session = db.Session()
+    rs_plots = ResponseStrengthPlots(session)
+    gl.addItem(rs_plots.str_plot)
+    gl.addItem(rs_plots.trace_plot, row=1, col=0)
     
     def selected(*args):
-        global session
-        try:
-            sel = b.selectedItems()[0]
-            expt = sel.expt
-            devs = sel.devs
-            
-            prof = pg.debug.Profiler(disabled=False)
-            recs = get_amps(session, expt, devs)
-            prof('query')
-            
-            ay = [rec['pos_dec_base_amp'] for rec in recs]
-            prof('ay')
-            ax = np.random.random(size=len(ay)) * 0.5
-            by = [rec['pos_dec_amp'] for rec in recs]
-            prof('by')
-            bx = 1 + np.random.random(size=len(by)) * 0.5
-            cy = [rec['neg_dec_base_amp'] for rec in recs]
-            prof('cy')
-            cx = 2 + np.random.random(size=len(cy)) * 0.5
-            dy = [rec['neg_dec_amp'] for rec in recs]
-            prof('dy')
-            dx = 3 + np.random.random(size=len(dy)) * 0.5
-            sp.setData(ax, ay, data=recs, brush=(255, 255, 255, 80))
-            sp.addPoints(bx, by, data=recs, brush=(255, 255, 255, 80))
-            sp.addPoints(cx, cy, data=recs, brush=(255, 255, 255, 80))
-            sp.addPoints(dx, dy, data=recs, brush=(255, 255, 255, 80))
-            prof('plot')
-        finally:
-            session.close()
-        
+        sel = b.selectedItems()[0]
+        expt = sel.expt
+        devs = sel.devs
+        rs_plots.load_conn(expt, devs)
 
     b.itemSelectionChanged.connect(selected)
-    
-    def clicked(sp, points):
-        global clicked_points, session
-        clicked_points = points
-        
-        ids = [p.data()['id'] for p in points]
-        q = session.query(db.PulseResponse.data, db.Baseline.data)
-        q = q.join(db.Baseline)
-        q = q.join(PulseResponseStrength)
-        q = q.filter(PulseResponseStrength.id.in_(ids))
-        recs = q.all()
-        
-        plt2.clear()
-        for rec in recs:
-            trace = Trace(rec[0], sample_rate=20e3)
-            dec_trace = deconv_filter(trace)
-            plt2.plot(dec_trace.time_values, dec_trace.data)
-            
-            base = Trace(rec[1], sample_rate=20e3)
-            dec_base = deconv_filter(base)
-            plt2.plot(dec_base.time_values, dec_base.data, pen='r')
-        
-    sp.sigClicked.connect(clicked)
