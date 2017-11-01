@@ -179,7 +179,6 @@ def train_amp(trace, pulse_offset, sign):
                     imx = np.argmin(chunk)
                 mx = chunk[imx]
                 amps[i, j] = mx
-
     return amps
 
 def deconv_train(trace):
@@ -257,5 +256,35 @@ def pulse_qc(responses, baseline=None, pulse=None, plot=None):
             qc_pass.append(response)
     qc_trace = trace_avg(qc_pass)
     if plot is not None:
-        plot.plot(qc_trace.time_values, qc_trace.data, pen={'color':'k', 'width':2})
+        plot.addLegend()
+        plot.plot(qc_trace.time_values, qc_trace.data, pen={'color':'k', 'width':2}, name=('%d'% len(qc_pass)))
     return qc_pass
+
+def train_qc(responses, offset, amp=None, sign=None):
+    qc_pass = [[],[]]
+    amps = train_amp(responses, offset, sign=sign)
+    for n in range(amps.shape[0]):
+        if sign == '+' and np.any(amps[n, :] < 0):
+            continue
+        if sign == '-' and np.any(amps[n, :] > 0):
+            continue
+        if abs(np.mean(amps[n, :])) < amp:
+            continue
+        qc_pass[0].append(responses[0][n])
+        qc_pass[1].append(responses[1][n])
+    return qc_pass
+
+def subplots(name=None, row=None):
+    p1 = name.addPlot(row=row, col=0)
+    p2 = name.addPlot(row=row, col=1)
+    p3 = name.addPlot(row=row, col=2)
+    p4 = name.addPlot(row=row, col=3)
+    p5 = name.addPlot(row=row, col=4)
+    if row == 0:
+        p1.setTitle('First Pulse Response, Example Connection')
+        p2.setTitle('First Pulse Response, All Connections')
+        p3.setTitle('50 Hz Train Response')
+        p4.setTitle('Induction Amplitudes')
+        p5.setTitle('Recovery Amplitudes')
+    return p1, p2, p3, p4, p5
+

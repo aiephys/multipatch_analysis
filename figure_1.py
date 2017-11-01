@@ -78,12 +78,11 @@ for row in range(len(connection_types)):
     sweep_list = response_filter(pulse_response, freq_range=[0, 50], holding_range=holding, pulse=True)
     n_sweeps = len(sweep_list)
     if n_sweeps > 5:
-        qc_list = pulse_qc(sweep_list, baseline=3, pulse=3, plot=grid[row, 1])
+        qc_list = pulse_qc(sweep_list, baseline=4, pulse=4, plot=grid[row, 1])
         avg_first_pulse = trace_avg(sweep_list)
         avg_first_pulse.t0 = 0
         if plot_sweeps is True:
-            for sweep in range(n_sweeps):
-                current_sweep = sweep_list[sweep]
+            for current_sweep in sweep_list:
                 current_sweep.t0 = 0
                 base = float_mode(current_sweep.data[:int(10e-3 / current_sweep.dt)])
                 grid[row, 0].plot(current_sweep.time_values, current_sweep.data - base, pen=sweep_color)
