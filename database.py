@@ -339,9 +339,6 @@ else:
 Session = sessionmaker(bind=engine)
 
 
-
-
-
 def default_session(fn):
     def wrap_with_session(*args, **kwds):
         close = False

@@ -90,12 +90,16 @@ class ConnectionStrengthTableGroup(TableGroup):
             ('n_samples', 'int'),
             ('amp_mean', 'float'),
             ('amp_stdev', 'float'),
+            ('amp_vom', 'float'),
             ('base_amp_mean', 'float'),
             ('base_amp_stdev', 'float'),
+            ('base_amp_vom', 'float'),
             ('deconv_amp_mean', 'float'),
             ('deconv_amp_stdev', 'float'),
+            ('deconv_amp_vom', 'float'),
             ('deconv_base_amp_mean', 'float'),
             ('deconv_base_amp_stdev', 'float'),
+            ('deconv_base_amp_vom', 'float'),
             ('amp_ttest', 'float'),
             ('deconv_amp_ttest', 'float'),
             ('amp_ks2samp', 'float'),
@@ -113,12 +117,7 @@ def init_tables():
     connection_strength_tables.create_tables()
 
     PulseResponseStrength = pulse_response_strength_tables['pulse_response_strength']
-    ConnectionStrength = pulse_response_strength_tables['connection_strength']
-
-def drop_tables():
-    connection_strength_tables.drop_tables()
-    pulse_response_strength_tables.drop_tables()
-
+    ConnectionStrength = connection_strength_tables['connection_strength']
 
 def measure_peak(trace, sign, baseline=(0e-3, 9e-3), response=(11e-3, 17e-3)):
     baseline = trace.time_slice(*baseline).data.mean()
@@ -142,12 +141,11 @@ def deconv_filter(trace, tau=15e-3, lowpass=300.):
     return deconv
 
 
-def rebuild_tables(parallel=True, workers=6):
-    drop_tables()
-    init_tables()
+@db.default_session
+def rebuild_strength(parallel=True, workers=6, session=None):
+    print("Rebuilding response strength table..")
     
-    ses = db.Session()
-    max_pulse_id = ses.execute('select max(id) from pulse_response').fetchone()[0]
+    max_pulse_id = session.execute('select max(id) from pulse_response').fetchone()[0]
     chunk = 1 + (max_pulse_id // workers)
     parts = [(chunk*i, chunk*(i+1)) for i in range(4)]
 
@@ -157,13 +155,11 @@ def rebuild_tables(parallel=True, workers=6):
     else:
         for part in parts:
             compute_strength(part)
+
             
-    compute_connectivity()
-
-
-def compute_strength(inds):
+@db.default_session
+def compute_strength(inds, session=None):
     start_id, stop_id = inds
-    ses = db.Session()
     q = """SELECT 
         pulse_response.id AS pulse_response_id,
         pulse_response.data AS pulse_response_data,
@@ -230,13 +226,27 @@ def compute_strength(inds):
         prof('commit')
 
     
-def compute_connectivity():
+@db.default_session
+def rebuild_connectivity(session):
+    print("Rebuilding connectivity table..")
+    
+    # cheating:
+    import experiment_list
+    expt_cache = experiment_list.cached_experiments()
+    
     for expt in list_experiments():
+        try:
+            cached_expt = expt_cache[expt.acq_timestamp]
+        except:
+            cached_expt = None
+        
         for devs in get_experiment_pairs(expt):
-            s = db.Session()
-            amps = get_amps(s, expt, devs)
+            amps = get_amps(session, expt, devs)
             
             conn = ConnectionStrength(experiment_id=expt.id, pre_id=devs[0], post_id=devs[1])
+            
+            # Whether the user marked this as connected
+            conn.user_connected = None if cached_expt is None else (devs in cached_expt.connections)
             
             # decide whether to treat this connection as excitatory or inhibitory
             # (probably we can do much better here)
@@ -253,29 +263,40 @@ def compute_connectivity():
             dec_amp, dec_base_amp = amps[pfx+'dec_amp'], amps[pfx+'dec_base_amp']
     
             # compute mean/stdev of samples
-            conn.n_samples = len(amps)
+            n_samp = len(amps)
+            conn.n_samples = n_samp
+            if n_samp == 0:
+                continue
             conn.amp_mean = amp.mean()
             conn.amp_stdev = amp.std()
+            conn.amp_vom = amp.var() / n_samp
             conn.base_amp_mean = base_amp.mean()
             conn.base_amp_stdev = base_amp.std()
+            conn.base_amp_vom = base_amp.var() / n_samp
             conn.deconv_amp_mean = dec_amp.mean()
             conn.deconv_amp_stdev = dec_amp.std()
+            conn.deconv_amp_vom = dec_amp.var() / n_samp
             conn.deconv_base_amp_mean = dec_base_amp.mean()
             conn.deconv_base_amp_stdev = dec_base_amp.std()
+            conn.deconv_base_amp_vom = dec_base_amp.var() / n_samp
             
             # do some statistical tests
-            conn.amp_ks2samp = scipy.stats.ks2samp(amp, base_amp)
-            conn.deconv_amp_ks2samp = scipy.stats.ks2samp(dec_amp, dec_base_amp)
-    
+            conn.amp_ks2samp = scipy.stats.ks_2samp(amp, base_amp).pvalue
+            conn.deconv_amp_ks2samp = scipy.stats.ks_2samp(dec_amp, dec_base_amp).pvalue
+            conn.amp_ttest = scipy.stats.ttest_ind(amp, base_amp, equal_var=False).pvalue
+            conn.deconv_amp_ttest = scipy.stats.ttest_ind(dec_amp, dec_base_amp, equal_var=False).pvalue
+            session.add(conn)
+        
+        session.commit()
 
-def list_experiments():
-    s = db.Session()
-    return s.query(db.Experiment).all()
+@db.default_session
+def list_experiments(session):
+    return session.query(db.Experiment).all()
 
 
-def get_experiment_devs(expt):
-    s = db.Session()
-    devs = s.query(db.Recording.device_key).join(db.SyncRec).filter(db.SyncRec.experiment_id==expt.id)
+@db.default_session
+def get_experiment_devs(expt, session):
+    devs = session.query(db.Recording.device_key).join(db.SyncRec).filter(db.SyncRec.experiment_id==expt.id)
     
     # Only keep channels with >2 recordings
     counts = {}
@@ -304,8 +325,8 @@ class ExperimentBrowser(pg.TreeWidget):
         import experiment_list
         expts = experiment_list.cached_experiments()
         
-        
-        for expt in list_experiments():
+        self.session = db.Session()
+        for expt in list_experiments(session=self.session):
             date = expt.acq_timestamp
             date_str = date.strftime('%Y-%m-%d')
             slice = expt.slice
@@ -324,7 +345,6 @@ class ExperimentBrowser(pg.TreeWidget):
                     conn = (pre_id, post_id) in e.connections
                 except:
                     conn = 'no expt'
-                
                 
                 pair_item = pg.TreeWidgetItem(['%d => %d' % (d1, d2), str(conn)])
                 expt_item.addChild(pair_item)
@@ -395,13 +415,34 @@ def join_pulse_response_to_expt(query):
     for join_args in joins:
         query = query.join(*join_args)
 
-    return q, pre_rec, post_rec
+    return query, pre_rec, post_rec
 
 
 if __name__ == '__main__':
-    pg.dbg()
-    if '--rebuild' in sys.argv:
-        rebuild_tables()
+    import cProfile
+    p = cProfile.Profile()
+    p.enable()
+    
+    try:
+        pg.dbg()
+        if '--rebuild' in sys.argv:
+            connection_strength_tables.drop_tables()
+            pulse_response_strength_tables.drop_tables()
+            init_tables()
+            rebuild_strength()
+            rebuild_connectivity()
+        elif '--rebuild-connectivity' in sys.argv:
+            print("drop tables..")
+            connection_strength_tables.drop_tables()
+            print("create tables..")
+            init_tables()
+            print("rebuild..")
+            rebuild_connectivity()
+        else:
+            init_tables()
+    finally:
+        p.disable()
+        #p.print_stats(sort='cumulative')
     
     win = pg.QtGui.QSplitter()
     win.setOrientation(pg.QtCore.Qt.Horizontal)
@@ -422,42 +463,45 @@ if __name__ == '__main__':
     plt2 = gl.addPlot(row=1, col=0, labels={'bottom': ('time', 's'), 'left': ('Vm', 'V')})
 
     session = db.Session()
+    
     def selected(*args):
-        sel = b.selectedItems()[0]
-        expt = sel.expt
-        devs = sel.devs
-        
-        prof = pg.debug.Profiler(disabled=False)
-        recs = get_amps(session, expt, devs)
-        prof('query')
-        
-        ay = [rec['pos_dec_base_amp'] for rec in recs]
-        prof('ay')
-        ax = np.random.random(size=len(ay)) * 0.5
-        by = [rec['pos_dec_amp'] for rec in recs]
-        prof('by')
-        bx = 1 + np.random.random(size=len(by)) * 0.5
-        cy = [rec['neg_dec_base_amp'] for rec in recs]
-        prof('cy')
-        cx = 2 + np.random.random(size=len(cy)) * 0.5
-        dy = [rec['neg_dec_amp'] for rec in recs]
-        prof('dy')
-        dx = 3 + np.random.random(size=len(dy)) * 0.5
-        sp.setData(ax, ay, data=recs, brush=(255, 255, 255, 80))
-        sp.addPoints(bx, by, data=recs, brush=(255, 255, 255, 80))
-        sp.addPoints(cx, cy, data=recs, brush=(255, 255, 255, 80))
-        sp.addPoints(dx, dy, data=recs, brush=(255, 255, 255, 80))
-        prof('plot')
+        global session
+        try:
+            sel = b.selectedItems()[0]
+            expt = sel.expt
+            devs = sel.devs
+            
+            prof = pg.debug.Profiler(disabled=False)
+            recs = get_amps(session, expt, devs)
+            prof('query')
+            
+            ay = [rec['pos_dec_base_amp'] for rec in recs]
+            prof('ay')
+            ax = np.random.random(size=len(ay)) * 0.5
+            by = [rec['pos_dec_amp'] for rec in recs]
+            prof('by')
+            bx = 1 + np.random.random(size=len(by)) * 0.5
+            cy = [rec['neg_dec_base_amp'] for rec in recs]
+            prof('cy')
+            cx = 2 + np.random.random(size=len(cy)) * 0.5
+            dy = [rec['neg_dec_amp'] for rec in recs]
+            prof('dy')
+            dx = 3 + np.random.random(size=len(dy)) * 0.5
+            sp.setData(ax, ay, data=recs, brush=(255, 255, 255, 80))
+            sp.addPoints(bx, by, data=recs, brush=(255, 255, 255, 80))
+            sp.addPoints(cx, cy, data=recs, brush=(255, 255, 255, 80))
+            sp.addPoints(dx, dy, data=recs, brush=(255, 255, 255, 80))
+            prof('plot')
+        finally:
+            session.close()
         
 
     b.itemSelectionChanged.connect(selected)
     
-    
     def clicked(sp, points):
-        global clicked_points
+        global clicked_points, session
         clicked_points = points
         
-        session = db.Session()
         ids = [p.data()['id'] for p in points]
         q = session.query(db.PulseResponse.data, db.Baseline.data)
         q = q.join(db.Baseline)
