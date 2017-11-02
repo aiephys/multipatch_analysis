@@ -8,6 +8,7 @@ from neuroanalysis.baseline import float_mode
 from neuroanalysis.event_detection import exp_deconvolve
 from neuroanalysis.filter import bessel_filter
 from scipy import stats
+from constants import EXCITATORY_CRE_TYPES, INHIBITORY_CRE_TYPES
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from statsmodels.stats.multicomp import MultiComparison
 app = pg.mkQApp()
@@ -239,7 +240,7 @@ def recovery_summary(train_response, rec_t, holding, thresh=5, rec_dict=None, of
 def pulse_qc(responses, baseline=None, pulse=None, plot=None):
     qc_pass = []
     avg, amp, _, peak_t = get_amplitude(responses)
-    pulse_win = (int(peak_t + 1e-3))/avg.dt
+    pulse_win = int((peak_t + 1e-3)/avg.dt)
     pulse_std = np.std(avg.data[pulse_win:])
     base_win = int(10e-3/avg.dt)
     base_std = np.std(avg.data[:base_win])
@@ -288,3 +289,15 @@ def subplots(name=None, row=None):
         p5.setTitle('Recovery Amplitudes')
     return p1, p2, p3, p4, p5
 
+def get_color(pre_type, post_type):
+    if pre_type in EXCITATORY_CRE_TYPES and post_type in EXCITATORY_CRE_TYPES:
+        color = (255, 0, 0)
+    elif pre_type in EXCITATORY_CRE_TYPES and post_type in INHIBITORY_CRE_TYPES:
+        color = (255, 140, 0)
+    elif pre_type in INHIBITORY_CRE_TYPES and post_type in EXCITATORY_CRE_TYPES:
+        color = (138, 43, 226)
+    elif pre_type in INHIBITORY_CRE_TYPES and post_type in INHIBITORY_CRE_TYPES:
+        color = (0, 0, 255)
+
+
+    return color
