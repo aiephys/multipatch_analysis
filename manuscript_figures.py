@@ -249,16 +249,17 @@ def pulse_qc(responses, baseline=None, pulse=None, plot=None):
         data = response.data
         if np.mean(data[:base_win]) > (baseline * base_std) and plot is not None:
             plot.plot(response.time_values, response.data, pen='r')
-        elif np.mean(data[pulse_win:]) > (pulse * pulse_std) and plot is not None:
-            plot.plot(response.time_values, response.data, pen='b')
+        # elif np.mean(data[pulse_win:]) > (pulse * pulse_std) and plot is not None:
+        #     plot.plot(response.time_values, response.data, pen='b')
         else:
             if plot is not None:
                 plot.plot(response.time_values, response.data)
             qc_pass.append(response)
-    qc_trace = trace_avg(qc_pass)
-    if plot is not None:
-        plot.addLegend()
-        plot.plot(qc_trace.time_values, qc_trace.data, pen={'color':'k', 'width':2}, name=('%d'% len(qc_pass)))
+    if len(qc_pass) > 0:
+        qc_trace = trace_avg(qc_pass)
+        if plot is not None:
+            plot.addLegend()
+            plot.plot(qc_trace.time_values, qc_trace.data, pen={'color':'k', 'width':2}, name=('%d'% len(qc_pass)))
     return qc_pass
 
 def train_qc(responses, offset, amp=None, sign=None):

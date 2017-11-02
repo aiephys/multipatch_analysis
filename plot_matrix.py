@@ -20,7 +20,7 @@ pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
 
 all_expts = ExperimentList(cache='expts_cache.pkl')
-cre_types = ['tlx3', 'pvalb'] #['sim1', 'tlx3', 'pvalb', 'sst', 'vip']
+cre_types = ['sim1', 'tlx3', 'pvalb', 'sst', 'vip']
 no_connections = [('sim1', 'tlx3'), ('tlx3', 'sim1'), ('sim1', 'vip'), ('tlx3', 'vip'), ('sst', 'sim1'), ('vip', 'sim1'),
                   ('vip', 'tlx3'), ('vip', 'pvalb'), ('sim1', 'sst')]
 shape = (len(cre_types), len(cre_types))
@@ -144,53 +144,55 @@ for c1, pre_type in enumerate(cre_types):
                     if freq in grand_induction:
                         offset = offset_ind[freq]
                         ind_pass_qc = train_qc(grand_induction[freq], offset, amp=amp_thresh, sign=sign)
-                        ind_amp = train_amp(ind_pass_qc, offset, sign)
-                        grand_ind_amp = np.nanmean(ind_amp, 0)
-                        ind_amp_sem = stats.sem(ind_amp)
                         n = len(ind_pass_qc[0])
-                        if freq not in ind_index.keys():
-                            ind_index[freq] = {}
-                        if key not in ind_index[freq].keys():
-                            ind_index[freq][key] = []
-                        for n in range(ind_amp.shape[0]):
-                            ind_index[freq][key].append(ind_amp[n, 7] / ind_amp[n, 0])
-                        if freq == 50:
-                            grand_ind_trace = TraceList(ind_pass_qc[0]).mean()
-                            grand_rec_trace = TraceList(ind_pass_qc[1]).mean()
-                            for ind in ind_pass_qc[0]:
-                                p3 = trace_plot(ind, color=trace_color, plot=p3)
-                            for rec in ind_pass_qc[1]:
-                                p3 = trace_plot(rec, color=trace_color, plot=p3)
-                            p3 = trace_plot(grand_ind_trace, color=avg_color, plot=p3)
-                            p3 = trace_plot(grand_rec_trace, color=avg_color, plot=p3, name=('n = %d'% n))
+                        if n > 0:
+                            ind_amp = train_amp(ind_pass_qc, offset, sign)
+                            grand_ind_amp = np.nanmean(ind_amp, 0)
+                            ind_amp_sem = stats.sem(ind_amp)
+                            if freq not in ind_index.keys():
+                                ind_index[freq] = {}
+                            if key not in ind_index[freq].keys():
+                                ind_index[freq][key] = []
+                            for n in range(ind_amp.shape[0]):
+                                ind_index[freq][key].append(ind_amp[n, 7] / ind_amp[n, 0])
+                            if freq == 50:
+                                grand_ind_trace = TraceList(ind_pass_qc[0]).mean()
+                                grand_rec_trace = TraceList(ind_pass_qc[1]).mean()
+                                for ind in ind_pass_qc[0]:
+                                    p3 = trace_plot(ind, color=trace_color, plot=p3)
+                                for rec in ind_pass_qc[1]:
+                                    p3 = trace_plot(rec, color=trace_color, plot=p3)
+                                p3 = trace_plot(grand_ind_trace, color=avg_color, plot=p3)
+                                p3 = trace_plot(grand_rec_trace, color=avg_color, plot=p3, name=('n = %d'% n))
 
-                        f_color = pg.hsvColor(hue=hue, sat=float(f+0.5)/len(freqs), val=1)
-                        p4.plot(grand_ind_amp/grand_ind_amp[0], name=('  %d Hz, n = %d' % (freq, n)), pen=f_color, symbol='t',
-                                symbolBrush=f_color, symbolPen=None)
-                        ind_err = pg.ErrorBarItem(x=np.arange(12), y=np.array(grand_ind_amp/grand_ind_amp[0]),
-                                              height=np.array(ind_amp_sem), beam=0.3)
-                        p4.addItem(ind_err)
+                            f_color = pg.hsvColor(hue=hue, sat=float(f+0.5)/len(freqs), val=1)
+                            p4.plot(grand_ind_amp/grand_ind_amp[0], name=('  %d Hz, n = %d' % (freq, n)), pen=f_color, symbol='t',
+                                    symbolBrush=f_color, symbolPen=None)
+                            # ind_err = pg.ErrorBarItem(x=np.arange(12), y=np.array(grand_ind_amp/grand_ind_amp[0]),
+                            #                       height=np.array(ind_amp_sem), beam=0.3)
+                            # p4.addItem(ind_err)
             if len(grand_recovery) > 0:
                 for t, delta in enumerate(t_rec):
                     if delta in grand_recovery:
                         offset = offset_rec[delta]
                         rec_pass_qc = train_qc(grand_recovery[delta], offset, amp=amp_thresh, sign=sign)
                         n = len(rec_pass_qc[1])
-                        rec_amp = train_amp(rec_pass_qc, offset, sign)
-                        grand_rec_amp = np.mean(rec_amp, 0)
-                        rec_amp_sem = stats.sem(rec_amp)
-                        if delta not in rec_index.keys():
-                            rec_index[delta] = {}
-                        if key not in rec_index[delta].keys():
-                            rec_index[delta][key] = []
-                        for n in range(rec_amp.shape[0]):
-                            rec_index[delta][key].append(rec_amp[n, 8] / rec_amp[n, 7])
-                        t_color = pg.hsvColor(hue, sat=float(t+0.5)/len(t_rec), val=1)
-                        p5.plot(grand_rec_amp/grand_rec_amp[0], name=('  %d ms, n = %d' % (delta, n)), pen=t_color, symbol='t',
-                                symbolBrush=t_color, symbolPen=None)
-                        rec_err = pg.ErrorBarItem(x=np.arange(12),y=np.array(grand_rec_amp / grand_rec_amp[0]),
-                                                  height=np.array(rec_amp_sem), beam=0.3)
-                        p5.addItem(rec_err)
+                        if n > 0:
+                            rec_amp = train_amp(rec_pass_qc, offset, sign)
+                            grand_rec_amp = np.mean(rec_amp, 0)
+                            rec_amp_sem = stats.sem(rec_amp)
+                            if delta not in rec_index.keys():
+                                rec_index[delta] = {}
+                            if key not in rec_index[delta].keys():
+                                rec_index[delta][key] = []
+                            for n in range(rec_amp.shape[0]):
+                                rec_index[delta][key].append(rec_amp[n, 8] / rec_amp[n, 0])
+                            t_color = pg.hsvColor(hue, sat=float(t+0.5)/len(t_rec), val=1)
+                            p5.plot(grand_rec_amp/grand_rec_amp[0], name=('  %d ms, n = %d' % (delta, n)), pen=t_color, symbol='t',
+                                    symbolBrush=t_color, symbolPen=None)
+                            # rec_err = pg.ErrorBarItem(x=np.arange(12),y=np.array(grand_rec_amp / grand_rec_amp[0]),
+                            #                           height=np.array(rec_amp_sem), beam=0.3)
+                            # p5.addItem(rec_err)
         row += 1
     # if sum(pulse_cache_change) > 0:
     #     write_cache(pulse_response_cache, pulse_cache_file)
