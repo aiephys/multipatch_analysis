@@ -21,6 +21,8 @@ pg.setConfigOption('foreground', 'k')
 
 all_expts = ExperimentList(cache='expts_cache.pkl')
 cre_types = ['sim1', 'tlx3', 'pvalb', 'sst', 'vip']
+no_connections = [('sim1', 'tlx3'), ('tlx3', 'sim1'), ('sim1', 'vip'), ('tlx3', 'vip'), ('sst', 'sim1'), ('vip', 'sim1'),
+                  ('vip', 'tlx3'), ('vip', 'pvalb'), ('sim1', 'sst')]
 shape = (len(cre_types), len(cre_types))
 calcium = 'high'
 age = '40-60'
@@ -29,7 +31,7 @@ holding_i = [-53, -60]
 freqs = [10, 20, 50, 100, 200]
 t_rec = [250, 500, 1000, 2000, 4000]
 sweep_threshold = 5
-amp_thresh = 200e-6
+amp_thresh = 100e-6
 amp = None
 
 plt = pg.plot()
@@ -41,7 +43,8 @@ pulse_cache_change = []
 #train_response_cache = load_cache(train_cache_file)
 train_cache_change = []
 
-big_plot = pg.GraphicsWindow()
+big_plot = pg.GraphicsLayoutWidget()
+big_plot.show()
 row = 0
 
 pulse_amp = {}
@@ -50,6 +53,8 @@ rec_index = {}
 
 for c1, pre_type in enumerate(cre_types):
     for c2, post_type in enumerate(cre_types):
+        if (pre_type, post_type) in no_connections:
+            continue
         p1, p2, p3, p4, p5 = subplots(name=big_plot, row=row)
         key = (pre_type, post_type)
         train_cache_file = ('%s-%s_train_response.pkl' % (pre_type, post_type))
@@ -99,10 +104,10 @@ for c1, pre_type in enumerate(cre_types):
                     pulse_response, cache_change = cache_response(expt, pre, post, pulse_response_cache, type='pulse')
                     pulse_cache_change.append(cache_change)
                     pulse_subset = response_filter(pulse_response, freq_range=[0, 50], holding_range=holding, pulse=True)
-                    if len(pulse_subset) >= 2 * sweep_threshold:
+                    if len(pulse_subset) >= sweep_threshold:
                         plt.clear()
                         pass_qc = pulse_qc(pulse_subset, baseline=4, pulse=4, plot=plt)
-                        if len(pass_qc) >= 2 * sweep_threshold:
+                        if len(pass_qc) >= sweep_threshold:
                             avg_trace, amp, amp_sign, _ = get_amplitude(pass_qc)
                             if pre_type in EXCITATORY_CRE_TYPES and amp_sign is '-':
                                 continue
@@ -142,6 +147,7 @@ for c1, pre_type in enumerate(cre_types):
                         ind_amp = train_amp(ind_pass_qc, offset, sign)
                         grand_ind_amp = np.nanmean(ind_amp, 0)
                         ind_amp_sem = stats.sem(ind_amp)
+                        n = len(ind_pass_qc[0])
                         if freq not in ind_index.keys():
                             ind_index[freq] = {}
                         if key not in ind_index[freq].keys():
@@ -156,16 +162,17 @@ for c1, pre_type in enumerate(cre_types):
                             for rec in ind_pass_qc[1]:
                                 p3 = trace_plot(rec, color=trace_color, plot=p3)
                             p3 = trace_plot(grand_ind_trace, color=avg_color, plot=p3)
-                            p3 = trace_plot(grand_rec_trace, color=avg_color, plot=p3, name=('n = %d'% len(ind_pass_qc[0])))
+                            p3 = trace_plot(grand_rec_trace, color=avg_color, plot=p3, name=('n = %d'% n))
 
                         f_color = pg.hsvColor(hue=hue, sat=float(f+0.5)/len(freqs), val=1)
-                        p4.plot(grand_ind_amp/grand_ind_amp[0], name=('  %d Hz' % freq), pen=f_color, symbol='t',
+                        p4.plot(grand_ind_amp/grand_ind_amp[0], name=('  %d Hz, n = %d' % (freq, n)), pen=f_color, symbol='t',
                                 symbolBrush=f_color, symbolPen=None)
             if len(grand_recovery) > 0:
                 for t, delta in enumerate(t_rec):
                     if delta in grand_recovery:
                         offset = offset_rec[delta]
                         rec_pass_qc = train_qc(grand_recovery[delta], offset, amp=amp_thresh, sign=sign)
+                        n = len(rec_pass_qc[1])
                         rec_amp = train_amp(rec_pass_qc, offset, sign)
                         grand_rec_amp = np.mean(rec_amp, 0)
                         grand_rec_sem = stats.sem(rec_amp)
@@ -175,8 +182,8 @@ for c1, pre_type in enumerate(cre_types):
                             rec_index[delta][key] = []
                         for n in range(rec_amp.shape[0]):
                             rec_index[delta][key].append(rec_amp[n, 7] / rec_amp[n, 8])
-                        t_color = pg.hsvColor(1, sat=float(t+0.5)/len(t_rec), val=1)
-                        p5.plot(grand_rec_amp/grand_rec_amp[0], name=('  %d ms' % delta), pen=t_color, symbol='t',
+                        t_color = pg.hsvColor(hue, sat=float(t+0.5)/len(t_rec), val=1)
+                        p5.plot(grand_rec_amp/grand_rec_amp[0], name=('  %d ms, n = %d' % (delta, n)), pen=t_color, symbol='t',
                                 symbolBrush=t_color, symbolPen=None)
         row += 1
     # if sum(pulse_cache_change) > 0:
