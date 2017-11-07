@@ -54,23 +54,26 @@ class PulseResponseStrengthTableGroup(TableGroup):
             ('pulse_response_id', 'pulse_response.id', '', {'index': True}),
             ('pos_amp', 'float'),
             ('neg_amp', 'float'),
-            ('pos_base_amp', 'float'),
-            ('neg_base_amp', 'float'),
             ('pos_dec_amp', 'float'),
             ('neg_dec_amp', 'float'),
-            ('pos_dec_base_amp', 'float'),
-            ('neg_dec_base_amp', 'float'),
+        ],
+        'baseline_response_strength' : [
+            ('baseline_id', 'baseline.id', '', {'index': True}),
+            ('pos_amp', 'float'),
+            ('neg_amp', 'float'),
+            ('pos_dec_amp', 'float'),
+            ('neg_dec_amp', 'float'),
         ]
         #'deconv_pulse_response': [
             #"Exponentially deconvolved pulse responses",
         #],
     }
 
-
     def create_mappings(self):
         TableGroup.create_mappings(self)
         
         PulseResponseStrength = self['pulse_response_strength']
+        BaselineResponseStrength = self['baseline_response_strength']
         
         db.PulseResponse.pulse_response_strength = db.relationship(PulseResponseStrength, back_populates="pulse_response", cascade="delete", single_parent=True)
         PulseResponseStrength.pulse_response = db.relationship(db.PulseResponse, back_populates="pulse_response_strength")
@@ -109,11 +112,12 @@ pulse_response_strength_tables = PulseResponseStrengthTableGroup()
 connection_strength_tables = ConnectionStrengthTableGroup()
 
 def init_tables():
-    global PulseResponseStrength, ConnectionStrength
+    global PulseResponseStrength, BaselineResponseStrength, ConnectionStrength
     pulse_response_strength_tables.create_tables()
     connection_strength_tables.create_tables()
 
     PulseResponseStrength = pulse_response_strength_tables['pulse_response_strength']
+    BaselineResponseStrength = pulse_response_strength_tables['baseline_response_strength']
     ConnectionStrength = connection_strength_tables['connection_strength']
 
 def measure_peak(trace, sign, baseline=(0e-3, 9e-3), response=(11e-3, 17e-3)):
@@ -140,18 +144,19 @@ def deconv_filter(trace, tau=15e-3, lowpass=300.):
 
 @db.default_session
 def rebuild_strength(parallel=True, workers=6, session=None):
-    print("Rebuilding response strength table..")
-    
-    max_pulse_id = session.execute('select max(id) from pulse_response').fetchone()[0]
-    chunk = 1 + (max_pulse_id // workers)
-    parts = [(chunk*i, chunk*(i+1)) for i in range(4)]
+    for source in ['baseline', 'pulse_response']:
+        print("Rebuilding %s strength table.." % source)
+        
+        max_pulse_id = session.execute('select max(id) from %s' % source).fetchone()[0]
+        chunk = 1 + (max_pulse_id // workers)
+        parts = [(source, chunk*i, chunk*(i+1)) for i in range(4)]
 
-    if parallel:
-        pool = multiprocessing.Pool(processes=workers)
-        pool.map(compute_strength, parts)
-    else:
-        for part in parts:
-            compute_strength(part)
+        if parallel:
+            pool = multiprocessing.Pool(processes=workers)
+            pool.map(compute_strength, parts)
+        else:
+            for part in parts:
+                compute_strength(part)
 
 
 def compute_strength(inds, session=None):
@@ -161,24 +166,19 @@ def compute_strength(inds, session=None):
 
 @db.default_session
 def _compute_strength(inds, session=None):
-    start_id, stop_id = inds
-    q = """SELECT 
-        pulse_response.id AS pulse_response_id,
-        pulse_response.data AS pulse_response_data,
-        baseline.data AS baseline_data 
-    FROM 
-        pulse_response 
-        JOIN baseline ON baseline.id = pulse_response.baseline_id
-    WHERE pulse_response.id >= %d and pulse_response.id < %d
-    ORDER BY pulse_response.id
-    LIMIT 1000
+    source, start_id, stop_id = inds
+    q = """
+        SELECT id, data FROM %s
+        WHERE id >= %d and id < %d
+        ORDER BY id
+        LIMIT 1000
     """
     
     prof = pg.debug.Profiler(disabled=True, delayed=False)
     
     next_id = start_id
     while True:
-        response = session.execute(q % (next_id, stop_id))  # bottleneck here ~30 ms
+        response = session.execute(q % (source, next_id, stop_id))  # bottleneck here ~30 ms
         prof('exec')
         recs = response.fetchall()
         prof('fetch')
@@ -186,32 +186,22 @@ def _compute_strength(inds, session=None):
             break
         new_recs = []
         for rec in recs:
-            pr_id, data, baseline = rec
+            pr_id, data = rec
             data = np.load(io.BytesIO(data))
-            baseline = np.load(io.BytesIO(baseline))
             #prof('load')
             
-            new_rec = {'pulse_response_id': pr_id}
+            new_rec = {'%s_id'%source: pr_id}
             
             data = Trace(data, sample_rate=20e3)
             new_rec['pos_amp'] = measure_peak(data, '+')
             new_rec['neg_amp'] = measure_peak(data, '-')
             #prof('comp 1')
             
-            base = Trace(baseline, sample_rate=20e3)
-            new_rec['pos_base_amp'] = measure_peak(base, '+')
-            new_rec['neg_base_amp'] = measure_peak(base, '-')
-            #prof('comp 2')
-
             dec_data = deconv_filter(data)
             new_rec['pos_dec_amp'] = measure_peak(dec_data, '+')
             new_rec['neg_dec_amp'] = measure_peak(dec_data, '-')
             #prof('comp 3')
             
-            dec_base = deconv_filter(base)
-            new_rec['pos_dec_base_amp'] = measure_peak(dec_base, '+')
-            new_rec['neg_dec_base_amp'] = measure_peak(dec_base, '-')
-            #prof('comp 4')
             new_recs.append(new_rec)
         
         next_id = pr_id + 1
@@ -220,7 +210,10 @@ def _compute_strength(inds, session=None):
         sys.stdout.flush()
 
         prof('process')
-        session.bulk_insert_mappings(PulseResponseStrength, new_recs)
+        if source == 'pulse_response':
+            session.bulk_insert_mappings(PulseResponseStrength, new_recs)
+        else:
+            session.bulk_insert_mappings(BaselineResponseStrength, new_recs)
         prof('insert')
         new_recs = []
 
@@ -245,6 +238,7 @@ def rebuild_connectivity(session):
         
         for devs in get_experiment_pairs(expt):
             amps = get_amps(session, expt, devs)
+            base_amps = get_baseline_amps(session, expt, devs[1])
             
             conn = ConnectionStrength(experiment_id=expt.id, pre_id=devs[0], post_id=devs[1])
             
@@ -254,8 +248,8 @@ def rebuild_connectivity(session):
             
             # decide whether to treat this connection as excitatory or inhibitory
             # (probably we can do much better here)
-            pos_amp = amps['pos_dec_amp'].mean() - amps['pos_dec_base_amp'].mean()
-            neg_amp = amps['neg_dec_amp'].mean() - amps['neg_dec_base_amp'].mean()
+            pos_amp = amps['pos_dec_amp'].mean() - base_amps['pos_dec_amp'].mean()
+            neg_amp = amps['neg_dec_amp'].mean() - base_amps['neg_dec_amp'].mean()
             if pos_amp > -neg_amp:
                 conn.synapse_type = 'ex'
                 pfx = 'pos_'
@@ -263,8 +257,8 @@ def rebuild_connectivity(session):
                 conn.synapse_type = 'in'
                 pfx = 'neg_'
             # select out positive or negative amplitude columns
-            amp, base_amp = amps[pfx+'amp'], amps[pfx+'base_amp']
-            dec_amp, dec_base_amp = amps[pfx+'dec_amp'], amps[pfx+'dec_base_amp']
+            amp, base_amp = amps[pfx+'amp'], base_amps[pfx+'amp']
+            dec_amp, dec_base_amp = amps[pfx+'dec_amp'], base_amps[pfx+'dec_amp']
     
             # compute mean/stdev of samples
             n_samp = len(amps)
@@ -294,6 +288,7 @@ def rebuild_connectivity(session):
         session.commit()
         sys.stdout.write("%d / %d       \r" % (i, len(expts_in_db)))
         sys.stdout.flush()
+
 
 @db.default_session
 def list_experiments(session):
@@ -384,24 +379,16 @@ def get_amps(session, expt, devs, clamp_mode='ic'):
         PulseResponseStrength.id,
         PulseResponseStrength.pos_amp,
         PulseResponseStrength.neg_amp,
-        PulseResponseStrength.pos_base_amp,
-        PulseResponseStrength.neg_base_amp,
         PulseResponseStrength.pos_dec_amp,
         PulseResponseStrength.neg_dec_amp,
-        PulseResponseStrength.pos_dec_base_amp,
-        PulseResponseStrength.neg_dec_base_amp,
     ).join(db.PulseResponse)
 
     dtype = [
         ('id', 'int'),
         ('pos_amp', 'float'),
         ('neg_amp', 'float'),
-        ('pos_base_amp', 'float'),
-        ('neg_base_amp', 'float'),
         ('pos_dec_amp', 'float'),
         ('neg_dec_amp', 'float'),
-        ('pos_dec_base_amp', 'float'),
-        ('neg_dec_base_amp', 'float'),
     ]
     
     q, pre_rec, post_rec = join_pulse_response_to_expt(q)
@@ -410,6 +397,44 @@ def get_amps(session, expt, devs, clamp_mode='ic'):
         (db.Experiment.id==expt.id,),
         (pre_rec.device_key==devs[0],),
         (post_rec.device_key==devs[1],),
+        (db.PatchClampRecording.clamp_mode==clamp_mode,),
+    ]
+    for filter_args in filters:
+        q = q.filter(*filter_args)
+    
+    # fetch all
+    recs = q.all()
+    
+    # fill numpy array
+    arr = np.empty(len(recs), dtype=dtype)
+    for i,rec in enumerate(recs):
+        arr[i] = rec
+    
+    return arr
+
+
+def get_baseline_amps(session, expt, dev, clamp_mode='ic'):
+    """Select records from baseline_response_strength table
+    """
+    q = session.query(
+        BaselineResponseStrength.id,
+        BaselineResponseStrength.pos_amp,
+        BaselineResponseStrength.neg_amp,
+        BaselineResponseStrength.pos_dec_amp,
+        BaselineResponseStrength.neg_dec_amp,
+    ).join(db.Baseline).join(db.Recording).join(db.PatchClampRecording).join(db.SyncRec).join(db.Experiment)
+
+    dtype = [
+        ('id', 'int'),
+        ('pos_amp', 'float'),
+        ('neg_amp', 'float'),
+        ('pos_dec_amp', 'float'),
+        ('neg_dec_amp', 'float'),
+    ]
+    
+    filters = [
+        (db.Experiment.id==expt.id,),
+        (db.Recording.device_key==dev,),
         (db.PatchClampRecording.clamp_mode==clamp_mode,),
     ]
     for filter_args in filters:
@@ -448,49 +473,66 @@ class ResponseStrengthPlots(object):
         self.session = session
         
         self.str_plot = pg.PlotItem()
-        self.sp = pg.ScatterPlotItem(pen=None, symbol='o', symbolPen=None)
-        self.str_plot.addItem(self.sp)
-        self.sp.sigClicked.connect(self.clicked)
+
+        self.amp_sp = pg.ScatterPlotItem(pen=None, symbol='o', symbolPen=None)
+        self.str_plot.addItem(self.amp_sp)
+        self.amp_sp.sigClicked.connect(self.amp_clicked)
+
+        self.base_sp = pg.ScatterPlotItem(pen=None, symbol='o', symbolPen=None)
+        self.str_plot.addItem(self.base_sp)
+        self.base_sp.sigClicked.connect(self.base_clicked)
         
         self.trace_plot = pg.PlotItem(labels={'bottom': ('time', 's'), 'left': ('Vm', 'V')})
+        self.dec_plot = pg.PlotItem(labels={'bottom': ('time', 's'), 'left': ('Vm', 'V')})
     
-    def clicked(self, sp, points):
+    def amp_clicked(self, sp, points):
+        self.clicked('amp', points)
+
+    def base_clicked(self, sp, points):
+        self.clicked('base', points)
+
+    def clicked(self, source, points):
         self.clicked_points = points
         
         ids = [p.data()['id'] for p in points]
-        q = self.session.query(db.PulseResponse.data, db.Baseline.data)
-        q = q.join(db.Baseline)
-        q = q.join(PulseResponseStrength)
-        q = q.filter(PulseResponseStrength.id.in_(ids))
+        if source == 'amp':
+            q = self.session.query(db.PulseResponse.data)
+            q = q.join(PulseResponseStrength)
+            q = q.filter(PulseResponseStrength.id.in_(ids))
+        else:
+            q = self.session.query(db.Baseline.data)
+            q = q.join(BaselineResponseStrength)
+            q = q.filter(BaselineResponseStrength.id.in_(ids))
         recs = q.all()
         
         self.trace_plot.clear()
+        self.dec_plot.clear()
         for rec in recs:
             trace = Trace(rec[0], sample_rate=20e3)
+            self.trace_plot.plot(trace.time_values, trace.data)
             dec_trace = deconv_filter(trace)
-            self.trace_plot.plot(dec_trace.time_values, dec_trace.data)
-            
-            base = Trace(rec[1], sample_rate=20e3)
-            dec_base = deconv_filter(base)
-            self.trace_plot.plot(dec_base.time_values, dec_base.data, pen='r')
+            self.dec_plot.plot(dec_trace.time_values, dec_trace.data)
         
     def load_conn(self, expt, devs):
-        recs = get_amps(self.session, expt, devs)
+        amp_recs = get_amps(self.session, expt, devs)
+        base_recs = get_baseline_amps(self.session, expt, devs[1])
         
-        ay = [rec['pos_dec_base_amp'] for rec in recs]
+        ay = [rec['pos_dec_amp'] for rec in base_recs]
         ax = np.random.random(size=len(ay)) * 0.5
-        by = [rec['pos_dec_amp'] for rec in recs]
+        self.base_sp.setData(ax, ay, data=base_recs, brush=(255, 255, 255, 80))
+
+        by = [rec['pos_dec_amp'] for rec in amp_recs]
         bx = 1 + np.random.random(size=len(by)) * 0.5
-        cy = [rec['neg_dec_base_amp'] for rec in recs]
+        self.amp_sp.setData(bx, by, data=amp_recs, brush=(255, 255, 255, 80))
+
+        cy = [rec['neg_dec_amp'] for rec in base_recs]
         cx = 2 + np.random.random(size=len(cy)) * 0.5
-        dy = [rec['neg_dec_amp'] for rec in recs]
+        self.base_sp.addPoints(cx, cy, data=base_recs, brush=(255, 255, 255, 80))
+
+        dy = [rec['neg_dec_amp'] for rec in amp_recs]
         dx = 3 + np.random.random(size=len(dy)) * 0.5
+        self.amp_sp.addPoints(dx, dy, data=amp_recs, brush=(255, 255, 255, 80))
         
-        sp = self.sp
-        sp.setData(ax, ay, data=recs, brush=(255, 255, 255, 80))
-        sp.addPoints(bx, by, data=recs, brush=(255, 255, 255, 80))
-        sp.addPoints(cx, cy, data=recs, brush=(255, 255, 255, 80))
-        sp.addPoints(dx, dy, data=recs, brush=(255, 255, 255, 80))
 
 
 if __name__ == '__main__':
@@ -529,6 +571,7 @@ if __name__ == '__main__':
     rs_plots = ResponseStrengthPlots(session)
     gl.addItem(rs_plots.str_plot)
     gl.addItem(rs_plots.trace_plot, row=1, col=0)
+    gl.addItem(rs_plots.dec_plot, row=2, col=0)
     
     def selected(*args):
         global sel

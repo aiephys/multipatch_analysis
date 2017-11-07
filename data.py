@@ -2,6 +2,7 @@ import numpy as np
 
 from neuroanalysis.miesnwb import MiesNwb, MiesSyncRecording, MiesRecording
 from neuroanalysis.stimuli import square_pulses
+from neuroanalysis.spike_detection import detect_evoked_spike
 
 
 class MultiPatchExperiment(MiesNwb):
@@ -52,7 +53,6 @@ class MultiPatchSyncRecording(MiesSyncRecording):
             self._baseline_regions = zip(starts, stops)
 
         return self._baseline_regions
-
 
 
 class MultiPatchProbe(MiesRecording):

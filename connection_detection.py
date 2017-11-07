@@ -4,9 +4,7 @@ import scipy.signal
 import pyqtgraph as pg
 
 from data import MultiPatchProbe, Analyzer, PulseStimAnalyzer
-from neuroanalysis.spike_detection import detect_evoked_spike
 from neuroanalysis.stats import ragged_mean
-from neuroanalysis.stimuli import square_pulses
 from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.fitting import StackedPsp
 from neuroanalysis.ui.plot_grid import PlotGrid
@@ -101,22 +99,13 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
             pulse['command'] = pre_rec['command'][pulse['rec_start']:pulse['rec_stop']]
 
             # select baseline region between 8th and 9th pulses
-            # (ideally we should use more careful criteria for selecting a baseline region)
-            # baseline_dur = int(20e-3 / dt)
-            # stop = spikes[8]['pulse_ind'] - (i * baseline_dur)
-            # start = stop - baseline_dur
-            # pulse['baseline'] = post_rec['primary'][start:stop]
-            # pulse['baseline_start'] = start
-            # pulse['baseline_stop'] = stop
-            # assert len(pulse['baseline']) > 0
-
-            # Select the next available baseline chunk
-            base = baseline_dist.get_baseline_chunk(20e-3)
-            assert base is not None
-            pulse['baseline'] = base
-            start, stop = base.source_indices
+            baseline_dur = int(100e-3 / dt)
+            stop = spikes[8]['pulse_ind']
+            start = stop - baseline_dur
+            pulse['baseline'] = post_rec['primary'][start:stop]
             pulse['baseline_start'] = start
             pulse['baseline_stop'] = stop
+            assert len(pulse['baseline']) > 0
 
             result.append(pulse)
         

@@ -7,7 +7,7 @@ from neuroanalysis.baseline import float_mode
 from neuroanalysis.data import PatchClampRecording
 import lims
 from data import MultiPatchExperiment, MultiPatchProbe
-from connection_detection import PulseStimAnalyzer, MultiPatchSyncRecAnalyzer
+from connection_detection import PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
 import config
 import constants
 
@@ -164,7 +164,7 @@ class ExperimentDBSubmission(object):
                     temp = float(temp)
                 except Exception:
                     temp = None
-                    errors.append("Experiment temperature '%s' is invalid." % self._expt_info['temperature'])
+                    warnings.append("Experiment temperature '%s' is invalid." % self._expt_info['temperature'])
 
         if not os.path.isfile(self.nwb_file.name()):
             errors.append('Could not find NWB file "%s"' % self.nwb_file.name())
@@ -331,13 +331,34 @@ class ExperimentDBSubmission(object):
                         resp_entry = db.PulseResponse(
                             recording=rec_entries[post_dev],
                             stim_pulse=all_pulse_entries[pre_dev][resp['pulse_n']],
-                            baseline=base_entry,
+                            # baseline=base_entry,
                             start_index=resp['rec_start'],
                             stop_index=resp['rec_stop'],
                             data=resp['response'].resample(sample_rate=20000).data,
                         )
                         session.add(resp_entry)
                         
+            # generate up to 100 baseline snippets for each recording
+            for dev in srec.devices:
+                rec = srec[dev]
+                dist = BaselineDistributor.get(rec)
+                for i in range(100):
+                    base = dist.get_baseline_chunk(20e-3)
+                    if base is None:
+                        # all out!
+                        break
+                    start, stop = base.source_indices
+                    base_entry = db.Baseline(
+                        recording=rec_entries[dev],
+                        start_index=start,
+                        stop_index=stop,
+                        data=base.resample(sample_rate=20000).data,
+                        mode=float_mode(base.data),
+                    )
+                    session.add(base_entry)
+                    
+                    
+            
         return expt
         
     def submit(self):
