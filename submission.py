@@ -320,14 +320,14 @@ class ExperimentDBSubmission(object):
                     # get all responses, regardless of the presence of a spike
                     responses = mpa.get_spike_responses(srec[pre_dev], srec[post_dev], align_to='pulse', require_spike=False)
                     for resp in responses:
-                        base_entry = db.Baseline(
-                            recording=rec_entries[post_dev],
-                            start_index=resp['baseline_start'],
-                            stop_index=resp['baseline_stop'],
-                            data=resp['baseline'].resample(sample_rate=20000).data,
-                            mode=float_mode(resp['baseline'].data),
-                        )
-                        session.add(base_entry)
+                        # base_entry = db.Baseline(
+                        #     recording=rec_entries[post_dev],
+                        #     start_index=resp['baseline_start'],
+                        #     stop_index=resp['baseline_stop'],
+                        #     data=resp['baseline'].resample(sample_rate=20000).data,
+                        #     mode=float_mode(resp['baseline'].data),
+                        # )
+                        # session.add(base_entry)
                         resp_entry = db.PulseResponse(
                             recording=rec_entries[post_dev],
                             stim_pulse=all_pulse_entries[pre_dev][resp['pulse_n']],

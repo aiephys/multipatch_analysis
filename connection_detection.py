@@ -3,7 +3,7 @@ import numpy as np
 import scipy.signal
 import pyqtgraph as pg
 
-from data import MultiPatchProbe
+from data import MultiPatchProbe, Analyzer, PulseStimAnalyzer
 from neuroanalysis.spike_detection import detect_evoked_spike
 from neuroanalysis.stats import ragged_mean
 from neuroanalysis.stimuli import square_pulses
@@ -13,75 +13,6 @@ from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.filter import bessel_filter
 
 
-class Analyzer(object):
-    @classmethod
-    def get(cls, obj):
-        """Get the analyzer attached to a recording, or create a new one.
-        """
-        analyzer = getattr(obj, '_' + cls.__name__, None)
-        if analyzer is None:
-            analyzer = cls(obj)
-        return analyzer
-
-    def _attach(self, obj):
-        attr = '_' + self.__class__.__name__
-        if hasattr(obj, attr):
-            raise TypeError("Object %s already has attached %s" % (obj, self.__class__.__name__))
-        setattr(obj, attr, self)
-
-
-class PulseStimAnalyzer(Analyzer):
-    """Used for analyzing a patch clamp recording with square-pulse stimuli.
-    """
-    def __init__(self, rec):
-        self._attach(rec)
-        self.rec = rec
-        self._pulses = None
-        self._evoked_spikes = None
-        
-    def pulses(self):
-        """Return a list of (start, stop, amp) tuples describing square pulses
-        in the stimulus.
-        """
-        if self._pulses is None:
-            trace = self.rec['command'].data
-            self._pulses = square_pulses(trace)
-        return self._pulses
-
-    def evoked_spikes(self):
-        """Given presynaptic Recording, detect action potentials
-        evoked by current injection or unclamped spikes evoked by a voltage pulse.
-        """
-        if self._evoked_spikes is None:
-            pre_trace = self.rec['primary']
-
-            # Detect pulse times
-            pulses = self.pulses()
-
-            # detect spike times
-            spike_info = []
-            for i,pulse in enumerate(pulses):
-                on, off, amp = pulse
-                if amp < 0:
-                    # assume negative pulses do not evoke spikes
-                    # (todo: should be watching for rebound spikes as well)
-                    continue
-                spike = detect_evoked_spike(self.rec, [on, off])
-                spike_info.append({'pulse_n': i, 'pulse_ind': on, 'spike': spike})
-            self._evoked_spikes = spike_info
-        return self._evoked_spikes
-
-    def stim_params(self):
-        """Return induction frequency and recovery delay.
-        """
-        pulses = [p[0] for p in self.pulses() if p[2] > 0]
-        if len(pulses) < 2:
-            return None, None
-        dt = self.rec['command'].dt
-        ind_freq = np.round(1.0 / (dt * (pulses[1] - pulses[0])))
-        rec_delay = np.round(dt*np.diff(pulses).max(), 3)
-        
-        return ind_freq, rec_delay
 
 
 class BaselineDistributor(Analyzer):
