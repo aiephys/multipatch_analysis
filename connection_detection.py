@@ -84,6 +84,30 @@ class PulseStimAnalyzer(Analyzer):
         return ind_freq, rec_delay
 
 
+class BaselineDistributor(Analyzer):
+    """Used to find baseline regions in a trace and distribute them on request.
+    """
+    def __init__(self, rec):
+        self._attach(rec)
+        self.rec = rec
+        self.baselines = rec.baseline_regions
+        self.ptr = 0
+
+    def get_baseline_chunk(self, duration=20e-3):
+        while True:
+            if len(self.baselines) == 0:
+                return None
+            bl = self.baselines[0]
+            remain = bl.dt * (len(bl) - self.ptr)
+            if remain >= duration:
+                size = int(duration / bl.dt)
+                chunk = bl[self.ptr:self.ptr+size]
+                self.ptr += size
+                return chunk
+            else:
+                self.baselines.pop(0)
+
+
 class MultiPatchSyncRecAnalyzer(Analyzer):
     """Used for analyzing two or more synchronous patch clamp recordings where
     spikes are evoked in at least one and synaptic responses are recorded in
@@ -104,6 +128,8 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         pulse_stim = PulseStimAnalyzer.get(pre_rec)
         spikes = pulse_stim.evoked_spikes()
         
+        baseline_dist = BaselineDistributor.get(post_rec)
+
         if len(spikes) < 10:
             # this does not look like the correct kind of stimulus; bail out
             # Ideally we can make this agnostic to the exact stim type in the future,
@@ -145,13 +171,22 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
 
             # select baseline region between 8th and 9th pulses
             # (ideally we should use more careful criteria for selecting a baseline region)
-            baseline_dur = int(20e-3 / dt)
-            stop = spikes[8]['pulse_ind'] - (i * baseline_dur)
-            start = stop - baseline_dur
-            pulse['baseline'] = post_rec['primary'][start:stop]
+            # baseline_dur = int(20e-3 / dt)
+            # stop = spikes[8]['pulse_ind'] - (i * baseline_dur)
+            # start = stop - baseline_dur
+            # pulse['baseline'] = post_rec['primary'][start:stop]
+            # pulse['baseline_start'] = start
+            # pulse['baseline_stop'] = stop
+            # assert len(pulse['baseline']) > 0
+
+            # Select the next available baseline chunk
+            base = baseline_dist.get_baseline_chunk(20e-3)
+            assert base is not None
+            pulse['baseline'] = base
+            start, stop = base.source_indices
             pulse['baseline_start'] = start
             pulse['baseline_stop'] = stop
-            assert len(pulse['baseline']) > 0
+
             result.append(pulse)
         
         return result
@@ -258,7 +293,7 @@ class MultiPatchExperimentAnalyzer(Analyzer):
                     continue
                 resp = spike['response']
                 if resp.duration >= min_duration:
-                    responses.add(resp, spike['baseline'])
+                    responses.add(resp.copy(t0=0), spike['baseline'])
         
         return responses
  
@@ -397,25 +432,25 @@ def plot_response_averages(expt, show_baseline=False, **kwds):
                 plt.plot(t, y, antialias=True)
 
                 # fit!                
-                fit = responses[(dev1, dev2)].fit_psp(yoffset=0, mask_stim_artifact=(abs(dev1-dev2) < 3))
-                lsnr = np.log(fit.snr)
-                lerr = np.log(fit.nrmse())
+                #fit = responses[(dev1, dev2)].fit_psp(yoffset=0, mask_stim_artifact=(abs(dev1-dev2) < 3))
+                #lsnr = np.log(fit.snr)
+                #lerr = np.log(fit.nrmse())
                 
-                color = (
-                    np.clip(255 * (-lerr/3.), 0, 255),
-                    np.clip(50 * lsnr, 0, 255),
-                    np.clip(255 * (1+lerr/3.), 0, 255)
-                )
+                #color = (
+                    #np.clip(255 * (-lerr/3.), 0, 255),
+                    #np.clip(50 * lsnr, 0, 255),
+                    #np.clip(255 * (1+lerr/3.), 0, 255)
+                #)
 
-                plt.plot(t, fit.best_fit, pen=color)
-                # plt.plot(t, fit.init_fit, pen='y')
+                #plt.plot(t, fit.best_fit, pen=color)
+                ## plt.plot(t, fit.init_fit, pen='y')
 
-                points.append({'x': lerr, 'y': lsnr, 'brush': color})
+                #points.append({'x': lerr, 'y': lsnr, 'brush': color})
 
-                if show_baseline:
-                    # plot baseline for reference
-                    bl = avg_response.meta['baseline'] - avg_response.meta['baseline_med']
-                    plt.plot(np.arange(len(bl)) * avg_response.dt, bl, pen=(0, 100, 0), antialias=True)
+                #if show_baseline:
+                    ## plot baseline for reference
+                    #bl = avg_response.meta['baseline'] - avg_response.meta['baseline_med']
+                    #plt.plot(np.arange(len(bl)) * avg_response.dt, bl, pen=(0, 100, 0), antialias=True)
 
                 # keep track of data range across all plots
                 ranges[0][0].append(y.min())
@@ -491,7 +526,10 @@ class EvokedResponseGroup(object):
             # Attach some extra metadata to the result:
             result.meta['baseline'] = avg_baseline
             result.meta['baseline_med'] = baseline
-            result.meta['baseline_std'] = scipy.signal.detrend(avg_baseline).std()
+            if len(avg_baseline) == 0:
+                result.meta['baseline_std'] = None
+            else:
+                result.meta['baseline_std'] = scipy.signal.detrend(avg_baseline).std()
 
             self._bsub_mean = result
 

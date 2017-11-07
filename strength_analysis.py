@@ -7,12 +7,7 @@ from __future__ import print_function, division
 from collections import OrderedDict
 from constants import EXCITATORY_CRE_TYPES, INHIBITORY_CRE_TYPES
 
-import argparse
-import sys
-import os
-import pickle
-import io
-import multiprocessing
+import argparse, time, sys, os, pickle, io, multiprocessing
 import numpy as np
 import scipy.stats
 
@@ -158,9 +153,14 @@ def rebuild_strength(parallel=True, workers=6, session=None):
         for part in parts:
             compute_strength(part)
 
-            
-@db.default_session
+
 def compute_strength(inds, session=None):
+    # Thin wrapper just to allow calling from pool.map
+    return _compute_strength(inds, session=session)
+
+
+@db.default_session
+def _compute_strength(inds, session=None):
     start_id, stop_id = inds
     q = """SELECT 
         pulse_response.id AS pulse_response_id,
@@ -178,7 +178,7 @@ def compute_strength(inds, session=None):
     
     next_id = start_id
     while True:
-        response = ses.execute(q % (next_id, stop_id))  # bottleneck here ~30 ms
+        response = session.execute(q % (next_id, stop_id))  # bottleneck here ~30 ms
         prof('exec')
         recs = response.fetchall()
         prof('fetch')
@@ -220,11 +220,11 @@ def compute_strength(inds, session=None):
         sys.stdout.flush()
 
         prof('process')
-        ses.bulk_insert_mappings(PulseResponseStrength, new_recs)
+        session.bulk_insert_mappings(PulseResponseStrength, new_recs)
         prof('insert')
         new_recs = []
 
-        ses.commit()
+        session.commit()
         prof('commit')
 
     
@@ -236,7 +236,8 @@ def rebuild_connectivity(session):
     import experiment_list
     expt_cache = experiment_list.cached_experiments()
     
-    for expt in list_experiments():
+    expts_in_db = list_experiments()
+    for i,expt in enumerate(expts_in_db):
         try:
             cached_expt = expt_cache[expt.acq_timestamp]
         except:
@@ -248,7 +249,8 @@ def rebuild_connectivity(session):
             conn = ConnectionStrength(experiment_id=expt.id, pre_id=devs[0], post_id=devs[1])
             
             # Whether the user marked this as connected
-            conn.user_connected = None if cached_expt is None else (devs in cached_expt.connections)
+            cell_ids = (devs[0] + 1, devs[1] + 1)
+            conn.user_connected = None if cached_expt is None else (cell_ids in cached_expt.connections)
             
             # decide whether to treat this connection as excitatory or inhibitory
             # (probably we can do much better here)
@@ -290,6 +292,8 @@ def rebuild_connectivity(session):
             session.add(conn)
         
         session.commit()
+        sys.stdout.write("%d / %d       \r" % (i, len(expts_in_db)))
+        sys.stdout.flush()
 
 @db.default_session
 def list_experiments(session):
@@ -321,6 +325,7 @@ class ExperimentBrowser(pg.TreeWidget):
         pg.TreeWidget.__init__(self)
         self.setColumnCount(6)
         self.populate()
+        self._last_expanded = None
         
     def populate(self):
         self.items = {}
@@ -346,7 +351,7 @@ class ExperimentBrowser(pg.TreeWidget):
                 
                 try:
                     e = expts[date]
-                    conn = (pre_id, post_id) in e.connections
+                    conn = (pre_id+1, post_id+1) in e.connections
                 except:
                     conn = 'no expt'
                 
@@ -358,10 +363,18 @@ class ExperimentBrowser(pg.TreeWidget):
                 self.items[(expt.id, d1, d2)] = pair_item
                 
     def select(self, conn_id):
+        if self._last_expanded is not None:
+            self._last_expanded.setExpanded(False)
         item = self.items[conn_id]
         self.clearSelection()
         item.setSelected(True)
-        item.parent().setExpanded(True)
+        parent = item.parent()
+        if not parent.isExpanded():
+            parent.setExpanded(True)
+            self._last_expanded = parent
+        else:
+            self._last_expanded = None
+        self.scrollToItem(item)
 
 
 def get_amps(session, expt, devs, clamp_mode='ic'):
@@ -518,6 +531,7 @@ if __name__ == '__main__':
     gl.addItem(rs_plots.trace_plot, row=1, col=0)
     
     def selected(*args):
+        global sel
         sel = b.selectedItems()
         if len(sel) == 0:
             return
@@ -528,6 +542,9 @@ if __name__ == '__main__':
             rs_plots.load_conn(expt, devs)
         else:
             print(sel.expt.original_path)
+            ts = sel.expt.acq_timestamp
+            sec = time.mktime(ts.timetuple()) + ts.microsecond * 1e-6
+            print(sec)
 
     b.itemSelectionChanged.connect(selected)
 
@@ -535,8 +552,11 @@ if __name__ == '__main__':
 
     def dbl_clicked(index):
         item = b.itemFromIndex(index)[0]
-        print(item.expt.ephys_file)
-        nwb = os.path.join(config.synphys_data, item.expt.ephys_file)
+        nwb = item.expt.ephys_file
+        # temporary workaround:
+        nwb = os.path.join(config.cache_path, nwb.split('cache/')[1])
+        print(nwb)
+        
         nwb_viewer.load_nwb(nwb)
         nwb_viewer.show()
         
