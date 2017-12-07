@@ -70,36 +70,37 @@ def specimen_info(specimen_name):
     #        AAAAAA = donor ID
     #            BB = slice number
     #            CC = orientation and hemisphere
-    m = re.match(r'(.*)-(\d{6,7})(\.(\d{2}))(\.(\d{2}))$', sid)
-    if m is None:
-        raise Exception('Could not parse specimen name: "%s"' % sid)
+    if rec['organism'] == 'mouse':
+        m = re.match(r'(.*)-(\d{6,7})(\.(\d{2}))(\.(\d{2}))$', sid)
+        if m is None:
+            raise Exception('Could not parse mouse specimen name: "%s"' % sid)
     
-    rec['section_number'] = int(m.groups()[3])
-    
-    # The last number contains information about the orientation and hemisphere
-    orientation_num = m.groups()[5]
-    plane, hem, mount = {
-        '01': ('coronal', 'left', 'anterior'),
-        '02': ('coronal', 'right', 'anterior'),
-        '03': ('coronal', 'left', 'posterior'),
-        '04': ('coronal', 'right', 'posterior'),
-        '05': ('sagittal', 'left', 'right'),
-        '06': ('sagittal', 'right', 'left'),
-    }[orientation_num]
-    
-    if plane != rec['plane_of_section']:
-        raise ValueError("Slice orientation from specimen name (.%s=%s) does not match plane_of_section recorded in LIMS (%s)" % (orientation_num, plane, rec['plane_of_section']))
-    
-    rec['hemisphere'] = hem
-    rec['sectioning_mount_side'] = mount
-    
-    # decide which surface was patched
-    if rec['flipped'] is True:
-        rec['exposed_surface'] = mount
-    elif rec['flipped'] is False:
-        rec['exposed_surface'] = {'anterior': 'posterior', 'posterior': 'anterior', 'right': 'left', 'left': 'right'}[mount]
-    else:    
-        rec['exposed_surface'] = None
+        rec['section_number'] = int(m.groups()[3])
+        
+        # The last number contains information about the orientation and hemisphere
+        orientation_num = m.groups()[5]
+        plane, hem, mount = {
+            '01': ('coronal', 'left', 'anterior'),
+            '02': ('coronal', 'right', 'anterior'),
+            '03': ('coronal', 'left', 'posterior'),
+            '04': ('coronal', 'right', 'posterior'),
+            '05': ('sagittal', 'left', 'right'),
+            '06': ('sagittal', 'right', 'left'),
+        }[orientation_num]
+        
+        if plane != rec['plane_of_section']:
+            raise ValueError("Slice orientation from specimen name (.%s=%s) does not match plane_of_section recorded in LIMS (%s)" % (orientation_num, plane, rec['plane_of_section']))
+        
+        rec['hemisphere'] = hem
+        rec['sectioning_mount_side'] = mount
+        
+        # decide which surface was patched
+        if rec['flipped'] is True:
+            rec['exposed_surface'] = mount
+        elif rec['flipped'] is False:
+            rec['exposed_surface'] = {'anterior': 'posterior', 'posterior': 'anterior', 'right': 'left', 'left': 'right'}[mount]
+        else:    
+            rec['exposed_surface'] = None
     
     return rec
     

@@ -14,7 +14,7 @@ import sys
 import pyqtgraph as pg
 
 from experiment_list import ExperimentList
-
+from constants import HUMAN_LABELS
 
 def arg_to_date(arg):
     if arg is None:
@@ -94,6 +94,8 @@ types = ['unknown', 'rorb', 'sim1', 'tlx3', 'pvalb', 'sst', 'vip']
 #types = ['sim1', 'unknown']
 expts.matrix(types, types)
 
+h_types = HUMAN_LABELS
+expts.matrix(h_types, h_types)
 # cache everything!
 all_expts.write_cache()
 print("Cache successfully updated!")

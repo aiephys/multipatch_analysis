@@ -382,6 +382,7 @@ class Experiment(object):
                 os.path.join(root, date, "slice_%03d"%int(slice), "site_%03d"%int(site)),
                 os.path.join(root, 'V1', date, "slice_%03d"%int(slice), "site_%03d"%int(site)),
                 os.path.join(root, 'ALM', date, "slice_%03d"%int(slice), "site_%03d"%int(site)),
+                os.path.join(root, 'Human', date, "slice_%03d"%int(slice), "site_%03d"%int(site)),
                 # missing data, still in versioned backups
                 os.path.join(root, '..', '..', '..', 'version_backups', 'data', 'Alex', 'V1', date, "slice_%03d" % int(slice), "site_%03d" % int(site)),
             ]
@@ -474,10 +475,13 @@ class Experiment(object):
     @property
     def age(self):
         age = self.lims_record.get('age', 0)
-        if age == 0:
-            raise Exception("Donor age not set in LIMS for specimen %s" % self.specimen_id)
+        if self.lims_record['organism'] == 'mouse':
+            if age == 0:
+                raise Exception("Donor age not set in LIMS for specimen %s" % self.specimen_id)
             # data not entered in to lims
             age = (self.date - self.birth_date).days
+        else:
+            age = np.nan
         return age
 
     @property

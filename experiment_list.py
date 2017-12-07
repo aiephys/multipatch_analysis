@@ -356,7 +356,7 @@ class ExperimentList(object):
             print("[ skipped %d later experiments ]" % len(self.stop_skip))
         print("")
 
-        print("Mean age: %0.1f" % np.mean(ages))
+        print("Mean age: %0.1f" % np.nanmean(ages))
         print("")
 
     def connectivity_summary(self, cre_type):
