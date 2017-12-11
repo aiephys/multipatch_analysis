@@ -10,12 +10,12 @@ from neuroanalysis.event_detection import exp_deconvolve
 from neuroanalysis.ui.plot_grid import PlotGrid
 from synapse_comparison import load_cache
 from manuscript_figures import cache_response, response_filter, trace_avg, pulse_qc, get_response, format_responses
-from rep_connections import connections
+from rep_connections import connections, human_connections
 from constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
 
 ### Select synapses for representative traces as {Connection Type: [UID, Pre_cell, Post_cell], } ###
 
-connection_types = [('1504300627.31', 2, 8), ('1504300627.31', 8, 2)] #['L23pyr-L23pyr', 'rorb-rorb', 'sim1-sim1', 'tlx3-tlx3']
+connection_types = human_connections #[('1497580583.99', 4, 3)] #['L23pyr-L23pyr', 'rorb-rorb', 'sim1-sim1', 'tlx3-tlx3']
                     
 cache_file = 'pulse_response_cache.pkl'
 response_cache = load_cache(cache_file)
@@ -47,7 +47,6 @@ if plot_trains is True:
     grid.set_shape(len(connection_types), 3)
     train_cache_file = 'train_response_cache.pkl'
     #train_response_cache = load_cache(train_cache_file)
-    grid[0, 2].hideAxis('left')
     grid[0, 1].setTitle(title='50 Hz Train')
     grid[0, 2].setTitle(title='Exponential Deconvolution')
     tau = 15e-3
@@ -62,10 +61,10 @@ maxYpulse = []
 maxYtrain = []
 maxYdec = []
 for row in range(len(connection_types)):
-    connection_type = connection_types[row]
+    connection_type = connection_types.keys()[row]
     if type(connection_type) is not tuple:
         connection_type = tuple(connection_type.split('-'))
-    expt_id, pre_cell, post_cell = connection_type #connections[connection_type]
+    expt_id, pre_cell, post_cell = human_connections[connection_type]
     expt = all_expts[expt_id]
     if expt.cells[pre_cell].cre_type in EXCITATORY_CRE_TYPES:
         holding = holding_e
@@ -127,10 +126,11 @@ for row in range(len(connection_types)):
             label.setParentItem(grid[row, 1].vb)
             label.setPos(50, 0)
             grid[row, 1].label = label
+            grid[0, 2].hideAxis('left')
             maxYtrain.append((row, grid[row, 1].getAxis('left').range[1]))
             maxYdec.append((row, grid[row, 2].getAxis('left').range[1]))
         else:
-            print ("%s not enough sweeps for trains" % connection_type)
+            print ("%s -> %s not enough sweeps for first pulse" % (connection_type[0], connection_type[1]))
             grid[row, 0].setYLink(grid[2, 1])
             grid[row, 1].hideAxis('bottom')
             grid[row, 2].hideAxis('bottom')
