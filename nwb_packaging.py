@@ -13,14 +13,22 @@ import acq4.util.DataManager as adm
 import acq4.util.advancedTypes
 import h5py
 import shutil
+import tempfile
+import atexit
 
+# Requires the patched version of nwb-api from https://github.com/t-b/nwb-api/tree/local_fixes
 import nwb
 from nwb.nwbco import *
 
-# TODO
-# - Code layout
-# - integrate ai-nwb fixes from Keith into upstream version
-#   fixes are available in https://github.com/t-b/nwb-api/tree/local_fixes
+tmpdir = None
+
+def removeTmpdir():
+    global tmpdir
+    if tmpdir is not None:
+        shutil.rmtree(tmpdir)
+
+atexit.register(removeTmpdir)
+
 
 def appendMAFile(siteNWBs, filePath, filedesc):
     """ Split and append the given ma file from ACQ4 to the NWB files """
@@ -177,27 +185,16 @@ def getSiteNWBs(basepath):
 
             # base/slice/site
             all_nwbs = glob.glob(os.path.join(sitePath, '*.nwb'))
-            all_pxps = glob.glob(os.path.join(sitePath, '*.pxp'))
 
             if len(all_nwbs) != 1:
-                print "The site folder \"%s\" will be ignored as it holds more than one NWB file." % sitePath
+                print "The site folder \"%s\" will be ignored as it holds not exactly one NWB file." % sitePath
                 print all_nwbs
                 continue
 
-            if len(all_pxps) != 1:
-                print "The site folder \"%s\" will be ignored as it holds more than one PXP file." % sitePath
-                print all_pxps
-                continue
-
             siteNWB = all_nwbs[0]
-            sitePXP = all_pxps[0]
 
             if not os.path.isfile(siteNWB):
                 print "The site folder \"%s\" will be ignored as it is missing the mandatory NWB file." % sitePath
-                continue
-
-            if not os.path.isfile(sitePXP):
-                print "The site folder \"%s\" will be ignored as it is missing the mandatory PXP file." % sitePath
                 continue
 
             matches.append(os.path.abspath(siteNWB))
@@ -245,15 +242,22 @@ def appendPseudoYamlLog(siteNWBs, path, basename, filedesc):
     appendMiscFileToNWB(siteNWBs, basename + "_meta", content = filedesc)
     appendMiscFileToNWB(siteNWBs, basename, content = data)
 
-def addDataSource(siteNWBs, pxpFile):
+def addDataSource(siteNWBs):
     """ Add entries to site NWB file identifying the source Igor Experiment (PXP) """
 
-    filehandle = open(pxpFile, 'rb')
-    digest = hashlib.sha512(filehandle.read()).hexdigest()
-    filehandle.close()
+    try:
+        pxpFile = glob.glob(os.path.join(os.path.dirname(siteNWBs[0]), '*.pxp'))[0]
+        filehandle = open(pxpFile, 'rb')
+        digest = hashlib.sha512(filehandle.read()).hexdigest()
+        filehandle.close()
 
-    name    = os.path.basename(pxpFile)
-    mtime   = os.path.getmtime(pxpFile)
+        name    = os.path.basename(pxpFile)
+        mtime   = os.path.getmtime(pxpFile)
+    except IndexError:
+        name   = ""
+        mtime  = 0
+        digest = ""
+
     isotime = datetime.datetime.fromtimestamp(mtime).isoformat() + "Z"
 
     text = json.dumps({ 'name' : name, 'sha256' : digest, 'last_modification' : isotime})
@@ -270,9 +274,7 @@ def addSiteContents(siteNWBs, filesToInclude, slicePath, siteName):
         print "Expected exactly one NWB file belonging to site folder %s, skipping it." % sitePath
         return 1
 
-    sitePXP = glob.glob(os.path.join(sitePath, '*.pxp'))[0]
-
-    addDataSource(siteNWBs, sitePXP)
+    addDataSource(siteNWBs)
 
     dh = adm.getHandle(sitePath)
     dh.checkIndex()
@@ -364,13 +366,13 @@ def fileShouldBeSkipped(path, filesToInclude):
 
 def deriveOutputNWB(siteNWB):
     """ Derive the output NWB filename for a given site NWB """
-
-    directory = os.path.dirname(siteNWB)
+    global tmpdir
+    if tmpdir is None:
+        tmpdir = tempfile.mkdtemp(prefix="nwb-packaging")
+    
     filename  = os.path.splitext(os.path.basename(siteNWB))[0] + "_combined.nwb"
 
-    folder = os.path.join(directory, "../..")
-
-    return os.path.abspath(os.path.join(folder, filename))
+    return os.path.abspath(os.path.join(tmpdir, filename))
 
 def buildCombinedNWB(siteNWB, filesToInclude = []):
     """
@@ -401,7 +403,7 @@ def buildCombinedNWB(siteNWB, filesToInclude = []):
 
 # - base 1     # no NWB
 #   - slice 1  # no NWB
-#     - site 1 # one NWB and one PXP
+#     - site 1 # one NWB and maybe one PXP
 #     - ...
 #   - slice 2
 #   - ...
@@ -484,7 +486,7 @@ def main():
             print "The directory \"%s\" given in --basepath does not exist." % args.basePath
             return 1
 
-        basepath = args.basePath
+        basepath = os.path.abspath(args.basePath)
         siteNWBs = getSiteNWBs(basepath)
 
         if len(siteNWBs) == 0:

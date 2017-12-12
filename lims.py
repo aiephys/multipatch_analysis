@@ -12,20 +12,22 @@ def specimen_info(specimen_name):
     Returns
     -------
     organism : "mouse" or "human"
-    genotype : the full genotype of the donor as recorded in labtracks
     age : age of specimen in days at time of sectioning
     date_of_birth : donor's date of birth
+    genotype : the full genotype of the donor as recorded in labtracks
+    weight : weight in grams
+    sex : 'M', 'F', or 
     plane_of_section : 'coronal' or 'sagittal'
     hemisphere : 'left' or 'right'
     thickness : speimen slice thickness (unscaled meters)
-    sectioning_mount_side : the side of the tissue that was mounted during
-        sectioning
-    flipped : boolean; if True, then the slice was flipped relative to its 
-        blockface image during recording
-    exposed_surface : The surface that was exposed during the experiment (right, 
-        left, anterior, or posterior)
     section_instructions : description of the slice angle and target region
         used for sectioning
+    flipped : boolean; if True, then the slice was flipped relative to its 
+        blockface image during recording
+    sectioning_mount_side : the side of the tissue that was mounted during
+        sectioning
+    exposed_surface : The surface that was exposed during the experiment (right, 
+        left, anterior, or posterior)
     section_number : indicates the order this slice was sectioned (1=first)
     """
     
@@ -37,6 +39,8 @@ def specimen_info(specimen_name):
             ages.days as age,
             donors.date_of_birth as date_of_birth,
             donors.full_genotype as genotype,
+            donors.weight as weight,
+            genders.name as sex,
             tissue_processings.section_thickness_um as thickness,
             tissue_processings.instructions as section_instructions,
             plane_of_sections.name as plane_of_section,
@@ -47,6 +51,7 @@ def specimen_info(specimen_name):
             left join donors on specimens.donor_id=donors.id 
             left join organisms on donors.organism_id=organisms.id
             left join ages on donors.age_id=ages.id
+            left join genders on donors.gender_id=genders.id
             left join tissue_processings on specimens.tissue_processing_id=tissue_processings.id
             left join plane_of_sections on tissue_processings.plane_of_section_id=plane_of_sections.id
             left join flipped_specimens on flipped_specimens.id = specimens.flipped_specimen_id
@@ -65,11 +70,12 @@ def specimen_info(specimen_name):
     rec['flipped'] = {'flipped': True, 'not flipped': False, 'not checked': None}[rec['flipped']]
     
     # Parse the specimen name to extract more information about the plane of section.
-    # Format is:  
+    # Mouse format is:  
     #    driver1;reporter1;driver2;reporter2-AAAAAA.BB.CC
     #        AAAAAA = donor ID
     #            BB = slice number
     #            CC = orientation and hemisphere
+<<<<<<< HEAD
     if rec['organism'] == 'mouse':
         m = re.match(r'(.*)-(\d{6,7})(\.(\d{2}))(\.(\d{2}))$', sid)
         if m is None:
@@ -101,6 +107,89 @@ def specimen_info(specimen_name):
             rec['exposed_surface'] = {'anterior': 'posterior', 'posterior': 'anterior', 'right': 'left', 'left': 'right'}[mount]
         else:    
             rec['exposed_surface'] = None
+||||||| merged common ancestors
+    m = re.match(r'(.*)-(\d{6,7})(\.(\d{2}))(\.(\d{2}))$', sid)
+    if m is None:
+        raise Exception('Could not parse specimen name: "%s"' % sid)
+    
+    rec['section_number'] = int(m.groups()[3])
+    
+    # The last number contains information about the orientation and hemisphere
+    orientation_num = m.groups()[5]
+    plane, hem, mount = {
+        '01': ('coronal', 'left', 'anterior'),
+        '02': ('coronal', 'right', 'anterior'),
+        '03': ('coronal', 'left', 'posterior'),
+        '04': ('coronal', 'right', 'posterior'),
+        '05': ('sagittal', 'left', 'right'),
+        '06': ('sagittal', 'right', 'left'),
+    }[orientation_num]
+    
+    if plane != rec['plane_of_section']:
+        raise ValueError("Slice orientation from specimen name (.%s=%s) does not match plane_of_section recorded in LIMS (%s)" % (orientation_num, plane, rec['plane_of_section']))
+    
+    rec['hemisphere'] = hem
+    rec['sectioning_mount_side'] = mount
+    
+    # decide which surface was patched
+    if rec['flipped'] is True:
+        rec['exposed_surface'] = mount
+    elif rec['flipped'] is False:
+        rec['exposed_surface'] = {'anterior': 'posterior', 'posterior': 'anterior', 'right': 'left', 'left': 'right'}[mount]
+    else:    
+        rec['exposed_surface'] = None
+=======
+    if rec['organism'] == 'mouse':
+        m = re.match(r'(.*)(-(\d{6,7}))?(\.(\d{2}))(\.(\d{2}))$', sid)
+        if m is None:
+            raise Exception('Could not parse mouse specimen name: "%s"' % sid)
+        
+        rec['section_number'] = int(m.groups()[4])
+        
+        # The last number contains information about the orientation and hemisphere
+        orientation_num = m.groups()[6]
+        plane, hem, mount = {
+            '01': ('coronal', 'left', 'anterior'),
+            '02': ('coronal', 'right', 'anterior'),
+            '03': ('coronal', 'left', 'posterior'),
+            '04': ('coronal', 'right', 'posterior'),
+            '05': ('sagittal', 'left', 'right'),
+            '06': ('sagittal', 'right', 'left'),
+        }[orientation_num]
+        
+        if plane != rec['plane_of_section']:
+            raise ValueError("Slice orientation from specimen name (.%s=%s) does not match plane_of_section recorded in LIMS (%s)" % (orientation_num, plane, rec['plane_of_section']))
+        
+        rec['hemisphere'] = hem
+        rec['sectioning_mount_side'] = mount
+        
+        # decide which surface was patched
+        if rec['flipped'] is True:
+            rec['exposed_surface'] = mount
+        elif rec['flipped'] is False:
+            rec['exposed_surface'] = {'anterior': 'posterior', 'posterior': 'anterior', 'right': 'left', 'left': 'right'}[mount]
+        else:    
+            rec['exposed_surface'] = None
+            
+    # Human format is:
+    #   Haa.bb.ccc.dd.ee.ff
+    elif rec['organism'] == 'human':
+        m = re.match(r'H(\d+)\.(\d+)\.(\d+)\.(\d+)\.(\d+)(\.(\d+))?$', sid)
+        if m is None:
+            raise Exception('Could not parse human specimen name: "%s"' % sid)
+        rec['hemisphere'] = None
+        rec['sectioning_mount_side'] = None
+        rec['exposed_surface'] = None
+        rec['human_donor_site'] = int(m.groups()[1])
+        rec['human_donor_number'] = int(m.groups()[2])
+        rec['block_number'] = int(m.groups()[3])
+        rec['section_number'] = int(m.groups()[4])
+        rec['subsection_number'] = None if m.groups()[6] is None else int(m.groups()[6])
+        
+        
+    else:
+        raise Exception('Unsupported organism: "%s"' % rec['organism'])
+>>>>>>> master
     
     return rec
     
@@ -266,6 +355,7 @@ if __name__ == '__main__':
     spec_id = specimen_id_from_name(spec_name)
     cluster_ids = cell_cluster_ids(spec_id)
     print("Slice:", spec_id)
+    print(specimen_info(spec_name))
     for cid in cluster_ids:
         print("  %d %s" % (cid, specimen_metadata(cid)))
     #print(cell_cluster_data_paths(cluster_ids[0]))

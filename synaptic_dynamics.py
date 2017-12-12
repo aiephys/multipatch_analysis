@@ -131,7 +131,7 @@ class RawDynamicsAnalyzer(object):
         if self._spike_sets is None:
             self.prepare_spike_sets()
         return self._spike_sets
-    
+
     def _get_kinetics_groups(self):
         """Given a set of pulse responses, return EvokedResponseGroups that can be used to extract
         kinetic parameters.
@@ -593,7 +593,7 @@ class DynamicsAnalyzer(RawDynamicsAnalyzer):
                 # for dynamics, we require all 12 pulses to elicit a presynaptic spike
                 continue
 
-            stim_params = analyzer.stim_params(pre_rec) + (post_rec.rounded_holding_potential(),)
+            stim_params = analyzer.stim_params(pre_rec) + (post_rec.rounded_holding_potential,)
             pulse_responses.setdefault(stim_params, []).append(resp)
 
             ind, base, ind_spike, ind_command = analyzer.get_train_response(pre_rec, post_rec, 0, 7,

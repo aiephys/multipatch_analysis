@@ -104,6 +104,9 @@ class ExperimentList(object):
             else:
                 while current.indentation > ind:
                     current = current.parent
+                    if current is None:
+                        raise Exception("There seems to be an indentation issue around line %d in %s" % 
+                                        (i, filename))
                 ch = Entry(line, parent=current.parent, file=filename, lineno=i)
                 current = ch
                 continue
@@ -338,10 +341,15 @@ class ExperimentList(object):
             n_c = expt.n_connections
             tot_probed += n_p
             tot_connected += n_c
-            ages.append(expt.age)
+            try:
+                age = expt.age
+                ages.append(age)
+            except Exception:
+                age = None
+                
 
             fmt = "%s: %s %s %s %s"
-            fmt_args = [str(expt.uid).rjust(4), str(n_p).ljust(5), str(n_c).ljust(5), str(expt.age).ljust(7), ', '.join(expt.cre_types).ljust(15)]
+            fmt_args = [str(expt.uid).rjust(4), str(n_p).ljust(5), str(n_c).ljust(5), str(age).ljust(7), ', '.join(expt.cre_types).ljust(15)]
 
             # get list of stimuli
             if list_stims:

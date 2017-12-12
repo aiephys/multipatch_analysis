@@ -1,23 +1,29 @@
 from __future__ import print_function
 
-import sys, time
+import os, sys, time, glob
 from acq4.util.DataManager import getFileHandle
 import pyqtgraph.multiprocess as mp
 
 from experiment_list import ExperimentList
 from submission import SliceSubmission, ExperimentDBSubmission
+import database
+import config
+import synphys_cache
 
 
 if __name__ == '__main__':
     import pyqtgraph as pg
     pg.dbg()
     
-    cache_file = 'expts_cache.pkl'
-    all_expts = ExperimentList(cache=cache_file)
-
+    print("Reading experiment list..")
+    cache = synphys_cache.SynPhysCache()
+    
+    all_expts = cache.list_nwbs()
+    
     for expt in all_expts:
-        nwb_file = getFileHandle(expt.nwb_file)
-        nwb_cache_file = getFileHandle(expt.nwb_cache_file)
+        nwb_file = getFileHandle(expt)
+        
+        nwb_cache_file = getFileHandle(cache.get_cache(nwb_file.name()))
         site_dir = nwb_file.parent()
         slice_dir = site_dir.parent()
 
@@ -36,7 +42,7 @@ if __name__ == '__main__':
             start = time.time()
             
             print("submit site:", site_dir.name())
-            print(expt)
+            print("    " + expt)
             sub = ExperimentDBSubmission(site_dir, nwb_cache_file)
             if sub.submitted():
                 print("   already in DB")
@@ -51,8 +57,8 @@ if __name__ == '__main__':
                     proc = mp.Process(pyqtapis={'QString': 2, 'QVariant': 2})
                     try:
                         rdm = proc._import('acq4.util.DataManager')
-                        nwb_file = rdm.getFileHandle(expt.nwb_file)
-                        nwb_cache_file = rdm.getFileHandle(expt.nwb_cache_file)
+                        nwb_file = rdm.getFileHandle(nwb_file.name())
+                        nwb_cache_file = rdm.getFileHandle(nwb_cache_file.name())
                         site_dir = nwb_file.parent()
                         slice_dir = site_dir.parent()
                         

@@ -23,6 +23,8 @@ table_schemas = {
         ('acq_timestamp', 'datetime', 'Creation timestamp for slice data acquisition folder.', {'unique': True}),
         ('species', 'str', 'Human | mouse (from LIMS)'),
         ('age', 'int', 'Specimen age (in days) at time of dissection (from LIMS)'),
+        ('sex', 'str', 'Specimen sex ("M", "F", or "unknown"; from LIMS)'),
+        ('weight', 'str', 'Specimen weight (from LIMS)'),
         ('genotype', 'str', 'Specimen donor genotype (from LIMS)'),
         ('orientation', 'str', 'Orientation of the slice plane (eg "sagittal"; from LIMS specimen name)'),
         ('surface', 'str', 'The surface of the slice exposed during the experiment (eg "left"; from LIMS specimen name)'),
@@ -37,6 +39,7 @@ table_schemas = {
     'experiment': [
         "A group of cells patched simultaneously in the same slice.",
         ('original_path', 'str', 'Describes original location of raw data'),
+        ('rig_name', 'str', 'Identifier for the rig that generated these results.'),
         ('acq_timestamp', 'datetime', 'Creation timestamp for site data acquisition folder.', {'unique': True}),
         ('slice_id', 'slice.id'),
         ('target_region', 'str', 'The intended brain region for this experiment'),

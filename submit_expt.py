@@ -8,8 +8,7 @@ import acq4.util.Canvas, acq4.util.DataManager
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtGui, QtCore
 
-import database
-import submission, config
+import metadata_submission, config
 import ui
 
 
@@ -18,7 +17,7 @@ class ExperimentSubmitUi(QtGui.QWidget):
         self.path = None
         
         QtGui.QWidget.__init__(self)
-        self.setWindowTitle("pywhip (submission tool)")
+        self.setWindowTitle("Experiment metadata QC")
         
         self.layout = QtGui.QGridLayout()
         self.setLayout(self.layout)
@@ -34,6 +33,7 @@ class ExperimentSubmitUi(QtGui.QWidget):
 
         self.file_tree = FileTreeWidget(self)
         self.file_tree.itemSelectionChanged.connect(self.selection_changed)
+        self.file_tree.itemDoubleClicked.connect(self.load_clicked)
         self.left_layout.addWidget(self.file_tree)
         
         self.ctrl_widget = QtGui.QWidget()
@@ -67,14 +67,18 @@ class ExperimentSubmitUi(QtGui.QWidget):
         
     def set_path(self, path):
         self.path = path
+        if path.info()['dirType'] != 'Site':
+            raise Exception("Requested path is not a site directory: %s" % (path.name()))
         self.file_tree.set_path(path)
+        self.timeline.load_site(path)
+        self.canvas.clear()
 
     def load_clicked(self):
         sel = self.file_tree.selectedItems()
         for item in sel:
             fh = item.fh
             if isinstance(item, NwbTreeItem):
-                self.timeline.load_experiment(fh)
+                self.timeline.load_nwb(fh)
             else:
                 self.canvas.addFile(fh)
 
@@ -114,7 +118,7 @@ class FileTreeWidget(pg.TreeWidget):
     def _reload_file_tree(self):
         self.clear()
         
-        dh = acq4.util.DataManager.getDirHandle(self.path)
+        dh = self.path.parent()
         root = self.invisibleRootItem()
         self._fill_tree(dh, root)
         
@@ -122,6 +126,9 @@ class FileTreeWidget(pg.TreeWidget):
         self.items = {}
         for fname in dh.ls():
             fh = dh[fname]
+            if fh.isDir() and fh is not self.path:
+                # exclude everything outside the selected site
+                continue
             item = self._make_item(fh)
             self.items[fh] = item
             if hasattr(item, 'type_selected'):
@@ -212,12 +219,12 @@ class SliceTreeItem(pg.TreeWidgetItem):
         self.fh = fh
         self.is_submittable = False
         
-        in_db = database.slice_from_timestamp(datetime.fromtimestamp(fh.info()['__timestamp__']))
-        if len(in_db) == 0:
-            status = "NOT SUBMITTED"
-        else:
-            status = "submitted"
-        pg.TreeWidgetItem.__init__(self, [fh.shortName(), status])
+        #in_db = database.slice_from_timestamp(datetime.fromtimestamp(fh.info()['__timestamp__']))
+        #if len(in_db) == 0:
+            #status = "NOT SUBMITTED"
+        #else:
+            #status = "submitted"
+        pg.TreeWidgetItem.__init__(self, [fh.shortName(), ''])
 
 
 class SiteTreeItem(pg.TreeWidgetItem):
@@ -232,7 +239,7 @@ class SiteTreeItem(pg.TreeWidgetItem):
         pips = self.ui.timeline.save()
         files = self.list_files()
         
-        return submission.ExperimentSubmission(
+        return metadata_submission.ExperimentMetadataSubmission(
             site_dh=self.fh, 
             files=files,
             pipettes=pips,
@@ -396,7 +403,11 @@ class SubmitWindow(QtGui.QWidget):
         self.info_tree.setData(summary)
         
     def submit(self):
+        if len(self.submission.check()[0]) > 0:
+            raise Exception("Can't submit; experiment has errors.")
         self.submission.submit()
+        self.hide()
+        
         
 
 
@@ -412,7 +423,7 @@ if __name__ == '__main__':
     app = pg.mkQApp()
     pg.dbg()
     
-    path = sys.argv[1]
+    path = acq4.util.DataManager.getDirHandle(sys.argv[1])
     ui = ExperimentSubmitUi()
     ui.resize(1600, 1000)
     ui.show()

@@ -91,6 +91,7 @@ class Experiment(object):
 
         # pull donor/specimen info from LIMS
         self.age
+        
         # check for a single NWB file
         self.nwb_file
 
@@ -395,7 +396,11 @@ class Experiment(object):
         return self._site_path
 
     def __repr__(self):
-        return "<Experiment %s (%s:%d) uid=%s>" % (self.source_id[1], self.source_id[0], self.entry.lineno, self.uid)
+        try:
+            uid = self.uid
+        except Exception as exc:
+            uid = '?'
+        return "<Experiment %s (%s:%d) uid=%s>" % (self.source_id[1], self.source_id[0], self.entry.lineno, uid)
 
     @property
     def site_info(self):
