@@ -9,13 +9,14 @@ from neuroanalysis.filter import bessel_filter
 from neuroanalysis.event_detection import exp_deconvolve
 from neuroanalysis.ui.plot_grid import PlotGrid
 from synapse_comparison import load_cache
-from manuscript_figures import cache_response, response_filter, trace_avg, pulse_qc, get_response, format_responses
-from rep_connections import connections, human_connections
+from manuscript_figures import cache_response, response_filter, trace_avg, pulse_qc, get_response, bsub, trace_plot
+from rep_connections import all_connections, human_connections, ee_connections
 from constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
 
 ### Select synapses for representative traces as {Connection Type: [UID, Pre_cell, Post_cell], } ###
 
-connection_types = human_connections #[('1497580583.99', 4, 3)] #['L23pyr-L23pyr', 'rorb-rorb', 'sim1-sim1', 'tlx3-tlx3']
+connection_types = ee_connections
+
                     
 cache_file = 'pulse_response_cache.pkl'
 response_cache = load_cache(cache_file)
@@ -26,6 +27,7 @@ pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
 grey = (169, 169, 169)
 sweep_color = (0, 0, 0, 30)
+avg_color = {'color': (255, 0, 255), 'width': 2}
 holding_i = [-53, -60]
 holding_e = [-68, -72]
 
@@ -64,7 +66,7 @@ for row in range(len(connection_types)):
     connection_type = connection_types.keys()[row]
     if type(connection_type) is not tuple:
         connection_type = tuple(connection_type.split('-'))
-    expt_id, pre_cell, post_cell = human_connections[connection_type]
+    expt_id, pre_cell, post_cell = all_connections[connection_type]
     expt = all_expts[expt_id]
     if expt.cells[pre_cell].cre_type in EXCITATORY_CRE_TYPES:
         holding = holding_e
@@ -83,14 +85,9 @@ for row in range(len(connection_types)):
         if plot_sweeps is True:
             for current_sweep in sweep_list:
                 current_sweep.t0 = 0
-                base = float_mode(current_sweep.data[:int(10e-3 / current_sweep.dt)])
-                grid[row, 0].plot(current_sweep.time_values, current_sweep.data - base, pen=sweep_color)
-
-        grid[row, 0].setLabels(left=('Vm', 'V'))
-        grid[row, 0].setLabels(bottom=('t', 's'))
-        grid[row, 0].setXRange(-2e-3, 27e-3)
-        grid[row, 0].plot(avg_first_pulse.time_values, avg_first_pulse.data, pen={'color': (255, 0, 255), 'width': 2})
-        grid[row, 0].setLabels(left=('Vm', 'V'))
+                bsub_trace = bsub(current_sweep)
+                trace_plot(bsub_trace, sweep_color, plot=grid[row, 0], x_range=[-2e-3, 27e-3])
+        trace_plot(avg_first_pulse, avg_color, plot=grid[row, 0], x_range=[-2e-3, 27e-3])
         label = pg.LabelItem('%s, n = %d' % (connection_type, n_sweeps))
         label.setParentItem(grid[row, 0].vb)
         label.setPos(50, 0)
@@ -105,28 +102,24 @@ for row in range(len(connection_types)):
             dec_sweep_list = []
             for sweep in range(n_train_sweeps):
                 train_sweep = train_sweep_list[sweep]
-                train_base = float_mode(train_sweep.data[:int(10e-3 / train_sweep.dt)])
+                train_base = bsub(train_sweep)
                 dec_sweep = bessel_filter(exp_deconvolve(train_sweep, tau), lp)
-                dec_base = float_mode(dec_sweep.data[:int(10e-3 / dec_sweep.dt)])
-                dec_sweep_list.append(dec_sweep.copy(data=dec_sweep.data - dec_base))
+                dec_base = bsub(dec_sweep)
+                dec_sweep_list.append(dec_base)
                 if plot_sweeps is True:
-                    grid[row, 1].plot(train_sweep.time_values, train_sweep.data - train_base, pen=sweep_color)
-                    grid[row, 2].plot(dec_sweep.time_values, dec_sweep.data - dec_base, pen=sweep_color)
+                    trace_plot(train_base, sweep_color, plot=grid[row, 1])
+                    trace_plot(dec_base, sweep_color, plot=grid[row, 2])
             ind_avg = trace_avg(train_sweep_list)
             ind_avg.t0 = 0
             ind_dec = trace_avg(dec_sweep_list)
             ind_dec.t0 = 0
-            grid[row, 1].setLabels(left=('Vm','V'))
-            grid[row, 1].setLabels(bottom=('t', 's'))
-            grid[row, 2].setLabels(bottom=('t', 's'))
-            grid[row, 1].plot(ind_avg.time_values, ind_avg.data, pen={'color': (255, 0, 255), 'width': 2})
-            grid[row, 1].setLabels(left=('Vm', 'V'))
-            grid[row, 2].plot(ind_dec.time_values, ind_dec.data, pen={'color': (255, 0, 255), 'width': 2})
+            trace_plot(ind_avg, avg_color, plot=grid[row, 1])
+            trace_plot(ind_dec, avg_color, plot=grid[row, 2])
             label = pg.LabelItem('n = %d' % n_train_sweeps)
             label.setParentItem(grid[row, 1].vb)
             label.setPos(50, 0)
             grid[row, 1].label = label
-            grid[0, 2].hideAxis('left')
+            grid[row, 2].hideAxis('left')
             maxYtrain.append((row, grid[row, 1].getAxis('left').range[1]))
             maxYdec.append((row, grid[row, 2].getAxis('left').range[1]))
         else:

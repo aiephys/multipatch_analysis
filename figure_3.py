@@ -1,23 +1,24 @@
 import pyqtgraph as pg
 import numpy as np
 from experiment_list import ExperimentList
-from manuscript_figures import cache_response, get_amplitude, response_filter, feature_anova
+from manuscript_figures import cache_response, get_amplitude, response_filter, feature_anova, write_cache
 from synapse_comparison import load_cache, summary_plot_pulse
 from neuroanalysis.data import TraceList
 from neuroanalysis.ui.plot_grid import PlotGrid
 from connection_detection import fit_psp
+from rep_connections import ee_connections
 
 app = pg.mkQApp()
+pg.dbg()
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
 
 all_expts = ExperimentList(cache='expts_cache.pkl')
 
-connection_types = ['L23pyr-L23pyr', 'rorb-rorb', 'sim1-sim1', 'tlx3-tlx3']
-connections = {'L23pyr': ['1501101571.17', 1, 5],
-               'rorb': ['1502301827.80', 6, 8],
-               'sim1': ['1490642434.41', 3, 5],
-               'tlx3': ['1492545925.15', 8, 5]}
+#connection_types = ['L23pyr-L23pyr', 'rorb-rorb', 'sim1-sim1', 'tlx3-tlx3', 'ntsr1-ntsr1']
+connections = ee_connections
+connection_types = connections.keys()
+
 calcium = 'high'
 age = '40-50'
 
@@ -32,7 +33,7 @@ synapse_plot = (grid[0, 0], grid[1, 0], grid[2, 0], grid[3, 0])
 synapse_plot[0].grid = grid
 grid.show()
 for c in range(len(connection_types)):
-    cre_type = connection_types[c].split('-')
+    cre_type = connection_types[c]
     expt_list = all_expts.select(cre_type=cre_type, calcium=calcium, age=age)
     color = (c, len(connection_types)*1.3)
     grand_response[cre_type[0]] = {'trace': [], 'amp': [], 'latency': [], 'rise': [], 'decay':[]}
@@ -40,7 +41,7 @@ for c in range(len(connection_types)):
     for expt in expt_list:
         for pre, post in expt.connections:
             if expt.cells[pre].cre_type == cre_type[0] and expt.cells[post].cre_type == cre_type[1]:
-                pulse_response = cache_response(expt, pre, post, cache_file, response_cache, type='pulse')
+                pulse_response, cache_change = cache_response(expt, pre, post, response_cache, type='pulse')
                 response_subset = response_filter(pulse_response, freq_range=[0, 50], holding_range=[-68, -72], pulse=True)
                 if len(response_subset) >= 10:
                     avg_trace, avg_amp, amp_sign, peak_t = get_amplitude(response_subset)
@@ -88,3 +89,6 @@ for c in range(len(connection_types)):
 feature_anova('amp', grand_response)
 feature_anova('latency', grand_response)
 feature_anova('rise', grand_response)
+
+if sum(cache_change) > 0:
+    write_cache(response_cache, cache_file)
