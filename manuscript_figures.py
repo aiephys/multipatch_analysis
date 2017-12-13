@@ -115,7 +115,7 @@ def response_filter(response, freq_range=None, holding_range=None, pulse=False, 
     new_responses = []
     for stim_params, trials in response.items():
         ind_freq, rec_t, holding = stim_params
-        holding = holding * 1e3
+        holding = holding() * 1e3
         rec_t = int(np.round(rec_t * 1e3, -1))
         if freq_range is not None and (ind_freq < freq_range[0] or ind_freq > freq_range[1]):
             continue

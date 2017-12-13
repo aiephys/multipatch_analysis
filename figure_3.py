@@ -28,7 +28,7 @@ response_cache = load_cache(cache_file)
 grand_response = {}
 feature_plot = None
 grid = PlotGrid()
-grid.set_shape(4, 1)
+grid.set_shape(len(connection_types), 1)
 synapse_plot = (grid[0, 0], grid[1, 0], grid[2, 0], grid[3, 0])
 synapse_plot[0].grid = grid
 grid.show()
@@ -56,7 +56,7 @@ for c in range(len(connection_types)):
                     synapse_plot[c].setTitle('First Pulse Response')
                     synapse_plot[c].setLabels(left=('Vm', 'V'))
                     synapse_plot[c].setLabels(bottom=('t', 's'))
-                    if [expt.uid, pre, post] == connections[cre_type[0]]:
+                    if [expt.uid, pre, post] == connections[cre_type]:
                         trace_color = (255, 0, 255, 30)
                     else:
                         trace_color = (0, 0, 0, 30)
