@@ -13,6 +13,12 @@ from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from statsmodels.stats.multicomp import MultiComparison
 app = pg.mkQApp()
 
+color_palette = [(244, 66, 66),
+                 (244, 185, 66),
+                 (78, 244, 66),
+                 (66, 176, 244),
+                 (164, 66, 244)]
+
 def write_cache(cache, cache_file):
     print("writing cache to disk...")
     pickle.dump(cache, open(cache_file + '.new', 'wb'))
@@ -115,7 +121,7 @@ def response_filter(response, freq_range=None, holding_range=None, pulse=False, 
     new_responses = []
     for stim_params, trials in response.items():
         ind_freq, rec_t, holding = stim_params
-        holding = holding() * 1e3
+        holding = holding * 1e3
         rec_t = int(np.round(rec_t * 1e3, -1))
         if freq_range is not None and (ind_freq < freq_range[0] or ind_freq > freq_range[1]):
             continue

@@ -92,10 +92,13 @@ expts.distance_plot('pvalb', 'pvalb', plots=plots, color=(200, 0, 200))
 
 types = ['unknown', 'rorb', 'sim1', 'tlx3', 'pvalb', 'sst', 'vip']
 #types = ['sim1', 'unknown']
-expts.matrix(types, types)
+m1 = expts.matrix(types, types)
 
 h_types = HUMAN_LABELS
-expts.matrix(h_types, h_types)
+m2 = expts.matrix(h_types, h_types)
+
+ee_types = ['L23pyr', 'rorb', 'sim1', 'tlx3', 'ntsr1']
+m3 = expts.matrix(ee_types, ee_types)
 # cache everything!
 all_expts.write_cache()
 print("Cache successfully updated!")

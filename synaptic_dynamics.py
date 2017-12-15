@@ -527,7 +527,7 @@ class DynamicsAnalyzer(RawDynamicsAnalyzer):
         self.post_cell = post_cell
         self.method = method  # 'deconv' or 'fit'
         self.align_to = align_to
-        RawDynamicsAnalyzer.__init__(self, None, None, None)
+        RawDynamicsAnalyzer.__init__(self, None, None, None, method=method, align_to=align_to)
 
     def _reset(self):
         """Clear out cached analysis results
