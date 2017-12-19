@@ -2,34 +2,28 @@ import sys
 import argparse
 import pyqtgraph as pg
 from experiment_list import ExperimentList
-from synaptic_dynamics import DynamicsAnalyzer
-from neuroanalysis.data import TraceList
-from neuroanalysis.baseline import float_mode
 from neuroanalysis.filter import bessel_filter
 from neuroanalysis.event_detection import exp_deconvolve
 from neuroanalysis.ui.plot_grid import PlotGrid
-from synapse_comparison import load_cache
-from manuscript_figures import cache_response, response_filter, trace_avg, pulse_qc, get_response, bsub, trace_plot
+from manuscript_figures import response_filter, trace_avg, pulse_qc, get_response, bsub, trace_plot
 from rep_connections import all_connections, human_connections, ee_connections
 from constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
 
-### Select synapses for representative traces as {Connection Type: [UID, Pre_cell, Post_cell], } ###
+### Select synapses for representative traces as {('pre-type'), ('post-type'): [UID, Pre_cell, Post_cell], } ###
 
-connection_types = ee_connections
+connection_types = human_connections
 
-                    
-cache_file = 'pulse_response_cache.pkl'
-response_cache = load_cache(cache_file)
-cache_change = []
 pg.dbg()
 app = pg.mkQApp()
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
-grey = (169, 169, 169)
 sweep_color = (0, 0, 0, 30)
 avg_color = {'color': (255, 0, 255), 'width': 2}
 holding_i = [-53, -60]
 holding_e = [-68, -72]
+scale_offset = (-10, -10)
+scale_anchor = (0.45, 1)
+sweep_threshold = 5
 
 parser = argparse.ArgumentParser()
 # plot options
@@ -46,15 +40,13 @@ all_expts = ExperimentList(cache='expts_cache.pkl')
 
 grid = PlotGrid()
 if plot_trains is True:
-    grid.set_shape(len(connection_types), 3)
-    train_cache_file = 'train_response_cache.pkl'
-    #train_response_cache = load_cache(train_cache_file)
+    grid.set_shape(len(connection_types.keys()), 3)
     grid[0, 1].setTitle(title='50 Hz Train')
     grid[0, 2].setTitle(title='Exponential Deconvolution')
     tau = 15e-3
     lp = 1000
 else:
-    grid.set_shape(len(connection_types))
+    grid.set_shape(len(connection_types.keys()), 1)
 grid.show()
 row = 0
 grid[0, 0].setTitle(title='First Pulse')
@@ -74,11 +66,10 @@ for row in range(len(connection_types)):
     elif expt.cells[pre_cell].cre_type in INHIBITORY_CRE_TYPES:
         holding = holding_i
         sign = '-'
-    pulse_response, change = cache_response(expt, pre_cell, post_cell, response_cache, type='pulse')
-    cache_change.append(change)
+    pulse_response = get_response(expt, pre_cell, post_cell, type='pulse')
     sweep_list = response_filter(pulse_response, freq_range=[0, 50], holding_range=holding, pulse=True)
     n_sweeps = len(sweep_list)
-    if n_sweeps > 5:
+    if n_sweeps > sweep_threshold:
         qc_list = pulse_qc(sweep_list, baseline=4, pulse=4)
         avg_first_pulse = trace_avg(sweep_list)
         avg_first_pulse.t0 = 0
@@ -92,13 +83,18 @@ for row in range(len(connection_types)):
         label.setParentItem(grid[row, 0].vb)
         label.setPos(50, 0)
         maxYpulse.append((row, grid[row,0].getAxis('left').range[1]))
+        grid[row, 0].hideAxis('bottom')
     else:
         print ("%s -> %s not enough sweeps for first pulse" % (connection_type[0], connection_type[1]))
+    if row == len(connection_types) - 1:
+        x_scale = pg.ScaleBar(size=10e-3, suffix='s')
+        x_scale.setParentItem(grid[row, 0].vb)
+        x_scale.anchor(scale_anchor, scale_anchor, offset=scale_offset)
     if plot_trains is True:
-        train_responses = get_response(expt, pre_cell, post_cell, type='train')#cache_response(expt, pre_cell, post_cell, train_cache_file, type='train')
+        train_responses = get_response(expt, pre_cell, post_cell, type='train')
         train_sweep_list = response_filter(train_responses['responses'], freq_range=[50, 50], holding_range=holding, train=0)
         n_train_sweeps = len(train_sweep_list)
-        if n_train_sweeps > 5:
+        if n_train_sweeps > sweep_threshold:
             dec_sweep_list = []
             for sweep in range(n_train_sweeps):
                 train_sweep = train_sweep_list[sweep]
@@ -129,7 +125,6 @@ for row in range(len(connection_types)):
             grid[row, 2].hideAxis('bottom')
             grid[row, 1].hideAxis('left')
             grid[row, 2].hideAxis('left')
-    row += 1
 if link_y_axis is True:
     max_row = max(maxYpulse, key=lambda x:x[1])[0]
     for g in range(1, grid.shape[0], 2):
@@ -143,9 +138,6 @@ if link_y_axis is True:
                     grid[g, 1].setYLink(grid[max_row_train, 1])
                 if g != max_row_dec:
                     grid[g, 2].setYLink(grid[max_row_dec, 2])
-
-# if sum(cache_change) > 0:
-#     write_cache(response_cache, cache_file)
 
 if sys.flags.interactive == 0:
     app.exec_()
