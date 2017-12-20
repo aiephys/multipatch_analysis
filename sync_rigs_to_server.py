@@ -80,7 +80,7 @@ class RawDataSubmission(object):
                 #   - pxp > 10GB
                 #   - others > 5GB
                 src_stat = os.stat(src_path)
-                if (src_stat.st_size > 5e9 and not src_path.endswith('.pxp')) or  (src_stat.st_size > 10e9):
+                if (src_stat.st_size > 5e9 and not src_path.endswith('.pxp')) or  (src_stat.st_size > 15e9):
                     self.log("    err! %s => %s" % (src_path, dst_path))
                     self.changes.append(('error', src_path, 'file too large'))
                     continue
