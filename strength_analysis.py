@@ -94,12 +94,16 @@ class ConnectionStrengthTableGroup(TableGroup):
             ('base_amp_mean', 'float'),
             ('base_amp_stdev', 'float'),
             ('base_amp_vom', 'float'),
+            ('amp_mean_minus_base', 'float'),
+            ('amp_stdev_minus_base', 'float'),
             ('deconv_amp_mean', 'float'),
             ('deconv_amp_stdev', 'float'),
             ('deconv_amp_vom', 'float'),
             ('deconv_base_amp_mean', 'float'),
             ('deconv_base_amp_stdev', 'float'),
             ('deconv_base_amp_vom', 'float'),
+            ('deconv_amp_mean_minus_base', 'float'),
+            ('deconv_amp_stdev_minus_base', 'float'),
             ('amp_ttest', 'float'),
             ('deconv_amp_ttest', 'float'),
             ('amp_ks2samp', 'float'),
@@ -271,12 +275,17 @@ def rebuild_connectivity(session):
             conn.base_amp_mean = base_amp.mean()
             conn.base_amp_stdev = base_amp.std()
             conn.base_amp_vom = base_amp.var() / n_samp
+            conn.amp_mean_minus_base = conn.amp_mean - conn.base_amp_mean
+            conn.amp_stdev_minus_base = conn.amp_stdev - conn.base_amp_stdev
             conn.deconv_amp_mean = dec_amp.mean()
             conn.deconv_amp_stdev = dec_amp.std()
             conn.deconv_amp_vom = dec_amp.var() / n_samp
             conn.deconv_base_amp_mean = dec_base_amp.mean()
             conn.deconv_base_amp_stdev = dec_base_amp.std()
             conn.deconv_base_amp_vom = dec_base_amp.var() / n_samp
+            conn.deconv_amp_mean_minus_base = conn.deconv_amp_mean - conn.deconv_base_amp_mean
+            conn.deconv_amp_stdev_minus_base = conn.deconv_amp_stdev - conn.deconv_base_amp_stdev
+
             
             # do some statistical tests
             conn.amp_ks2samp = scipy.stats.ks_2samp(amp, base_amp).pvalue
@@ -398,6 +407,9 @@ def get_amps(session, expt, devs, clamp_mode='ic'):
         (pre_rec.device_key==devs[0],),
         (post_rec.device_key==devs[1],),
         (db.PatchClampRecording.clamp_mode==clamp_mode,),
+        (db.PatchClampRecording.baseline_potential<=-50e-3,),
+        (db.PatchClampRecording.baseline_current>-800e-12,),
+        (db.PatchClampRecording.baseline_current<400e-12,),
     ]
     for filter_args in filters:
         q = q.filter(*filter_args)
@@ -436,6 +448,9 @@ def get_baseline_amps(session, expt, dev, clamp_mode='ic'):
         (db.Experiment.id==expt.id,),
         (db.Recording.device_key==dev,),
         (db.PatchClampRecording.clamp_mode==clamp_mode,),
+        (db.PatchClampRecording.baseline_potential<=-50e-3,),
+        (db.PatchClampRecording.baseline_current>-800e-12,),
+        (db.PatchClampRecording.baseline_current<800e-12,),
     ]
     for filter_args in filters:
         q = q.filter(*filter_args)
@@ -509,7 +524,7 @@ class ResponseStrengthPlots(object):
         self.dec_plot.clear()
         for rec in recs:
             trace = Trace(rec[0], sample_rate=20e3)
-            self.trace_plot.plot(trace.time_values, trace.data)
+            self.trace_plot.plot(trace.time_values, trace.data - np.median(trace.time_slice(1e-3, 9e-3).data))
             dec_trace = deconv_filter(trace)
             self.dec_plot.plot(dec_trace.time_values, dec_trace.data)
         
@@ -517,27 +532,27 @@ class ResponseStrengthPlots(object):
         amp_recs = get_amps(self.session, expt, devs)
         base_recs = get_baseline_amps(self.session, expt, devs[1])
         
-        ay = [rec['pos_dec_amp'] for rec in base_recs]
-        ax = np.random.random(size=len(ay)) * 0.5
-        self.base_sp.setData(ax, ay, data=base_recs, brush=(255, 255, 255, 80))
-
         by = [rec['pos_dec_amp'] for rec in amp_recs]
         bx = 1 + np.random.random(size=len(by)) * 0.5
         self.amp_sp.setData(bx, by, data=amp_recs, brush=(255, 255, 255, 80))
 
-        cy = [rec['neg_dec_amp'] for rec in base_recs]
-        cx = 2 + np.random.random(size=len(cy)) * 0.5
-        self.base_sp.addPoints(cx, cy, data=base_recs, brush=(255, 255, 255, 80))
+        ay = [rec['pos_dec_amp'] for rec in base_recs[:len(by)]]
+        ax = np.random.random(size=len(ay)) * 0.5
+        self.base_sp.setData(ax, ay, data=base_recs[:len(by)], brush=(255, 255, 255, 80))
 
         dy = [rec['neg_dec_amp'] for rec in amp_recs]
         dx = 3 + np.random.random(size=len(dy)) * 0.5
         self.amp_sp.addPoints(dx, dy, data=amp_recs, brush=(255, 255, 255, 80))
         
+        cy = [rec['neg_dec_amp'] for rec in base_recs[:len(dy)]]
+        cx = 2 + np.random.random(size=len(cy)) * 0.5
+        self.base_sp.addPoints(cx, cy, data=base_recs[:len(dy)], brush=(255, 255, 255, 80))
+
 
 
 if __name__ == '__main__':
     pg.dbg()
-    
+
     if '--rebuild' in sys.argv:
         connection_strength_tables.drop_tables()
         pulse_response_strength_tables.drop_tables()
@@ -553,6 +568,7 @@ if __name__ == '__main__':
         rebuild_connectivity()
     else:
         init_tables()
+        
     
     # global session for querying from DB
     session = db.Session()
@@ -606,22 +622,34 @@ if __name__ == '__main__':
     b.doubleClicked.connect(dbl_clicked)
 
     spw = pg.ScatterPlotWidget()
+    spw.style['symbolPen'] = None
     spw.setFields([
         ('user_connected', {'mode': 'enum', 'values': [True, False, None]}),
         ('synapse_type', {'mode': 'enum', 'values': ['in', 'ex']}),
         ('n_samples', {}),
+        ('acq_timestamp', {}),
         ('amp_mean', {'units': 'V'}),
+        ('abs_amp_mean', {'units': 'V'}),
         ('amp_stdev', {'units': 'V'}),
         ('amp_vom', {'units': 'V'}),
         ('base_amp_mean', {'units': 'V'}),
+        ('abs_base_amp_mean', {'units': 'V'}),
         ('base_amp_stdev', {'units': 'V'}),
         ('base_amp_vom', {'units': 'V'}),
+        ('amp_mean_minus_base', {'units': 'V'}),
+        ('abs_amp_mean_minus_base', {'units': 'V'}),
+        ('amp_stdev_minus_base', {'units': 'V'}),
         ('deconv_amp_mean', {'units': 'V'}),
+        ('abs_deconv_amp_mean', {'units': 'V'}),
         ('deconv_amp_stdev', {'units': 'V'}),
         ('deconv_amp_vom', {'units': 'V'}),
         ('deconv_base_amp_mean', {'units': 'V'}),
+        ('abs_deconv_base_amp_mean', {'units': 'V'}),
         ('deconv_base_amp_stdev', {'units': 'V'}),
         ('deconv_base_amp_vom', {'units': 'V'}),
+        ('deconv_amp_mean_minus_base', {'units': 'V'}),
+        ('abs_deconv_amp_mean_minus_base', {'units': 'V'}),
+        ('deconv_amp_stdev_minus_base', {'units': 'V'}),
         ('amp_ttest', {}),
         ('deconv_amp_ttest', {}),
         ('amp_ks2samp', {}),
@@ -631,7 +659,23 @@ if __name__ == '__main__':
     spw.show()
 
     import pandas
-    df = pandas.read_sql('select * from connection_strength', session.bind)
+    query = """
+    select connection_strength.*, ((DATE_PART('day', experiment.acq_timestamp - '1970-01-01'::timestamp) * 24 + 
+                DATE_PART('hour', experiment.acq_timestamp - '1970-01-01'::timestamp)) * 60 +
+                DATE_PART('minute', experiment.acq_timestamp - '1970-01-01'::timestamp)) * 60 +
+                DATE_PART('second', experiment.acq_timestamp - '1970-01-01'::timestamp) as acq_timestamp,
+                ABS(connection_strength.amp_mean) as abs_amp_mean,
+                ABS(connection_strength.base_amp_mean) as abs_base_amp_mean,
+                ABS(connection_strength.amp_mean_minus_base) as abs_amp_mean_minus_base,
+                ABS(connection_strength.deconv_amp_mean) as abs_deconv_amp_mean,
+                ABS(connection_strength.deconv_base_amp_mean) as abs_deconv_base_amp_mean,
+                ABS(connection_strength.deconv_amp_mean_minus_base) as abs_deconv_amp_mean_minus_base
+    from connection_strength
+    join experiment on connection_strength.experiment_id=experiment.id
+    where abs(connection_strength.pre_id-connection_strength.post_id) > 1
+    """
+    df = pandas.read_sql(query, session.bind)
+    recs = df.to_records()
     spw.setData(df.to_records())
 
 
