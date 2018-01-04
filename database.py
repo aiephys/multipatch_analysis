@@ -100,6 +100,7 @@ table_schemas = {
         ('sync_rec_id', 'sync_rec.id', 'References the synchronous recording to which this recording belongs.', {'index': True}),
         ('device_key', 'int', 'Identifies the device that generated this recording (this is usually the MIES AD channel)', {'index': True}),
         ('start_time', 'datetime', 'The clock time at the start of this recording'),
+        ('sample_rate', 'int', 'Sample rate for this recording'),
     ],
     'patch_clamp_recording': [
         "Extra data for recordings made with a patch clamp amplifier",
@@ -133,13 +134,13 @@ table_schemas = {
     'stim_pulse': [
         "A pulse stimulus intended to evoke an action potential",
         ('recording_id', 'recording.id', '', {'index': True}),
-        ('pulse_number', 'int', '', {'index': True}),
+        ('pulse_number', 'int', '0-11 or 1-12?', {'index': True}),
         ('onset_time', 'float'),
         ('onset_index', 'int'),
-        ('next_pulse_index', 'int'),      # index of the next pulse on any channel in the sync rec
+        ('next_pulse_index', 'int', 'index of the next pulse on any channel in the sync rec'),
         ('amplitude', 'float'),
         ('length', 'int'),
-        ('n_spikes', 'int'),                           # number of spikes evoked
+        ('n_spikes', 'int', 'number of spikes evoked by this pulse'),
     ],
     'stim_spike': [
         "An evoked action potential",
@@ -153,7 +154,7 @@ table_schemas = {
     ],
     'baseline': [
         "A snippet of baseline data, matched to a postsynaptic recording",
-        ('recording_id', 'recording.id', 'The recording from which this baseline snippet was extracted.'),
+        ('recording_id', 'recording.id', 'The recording from which this baseline snippet was extracted.', {'index': True}),
         ('start_index', 'int', 'start index of this snippet, relative to the beginning of the recording'),
         ('stop_index', 'int', 'stop index of this snippet, relative to the beginning of the recording'),
         ('data', 'array', 'numpy array of baseline data sampled at 20kHz'),
@@ -164,8 +165,9 @@ table_schemas = {
         ('recording_id', 'recording.id', '', {'index': True}),
         ('pulse_id', 'stim_pulse.id', '', {'index': True}),
         ('pair_id', 'pair.id'),
-        ('start_index', 'int'),
+        ('start_index', 'int', "Starting index relative to the original recording."),
         ('stop_index', 'int'),
+        ('start_time', 'float', "Starting time of this chunk of the recording in seconds, relative to the beginning of the recording"),
         ('data', 'array', 'numpy array of response data sampled at 20kHz'),
         ('baseline_id', 'baseline.id'),
     ],
