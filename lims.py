@@ -189,6 +189,8 @@ def cell_cluster_data_paths(cluster_id):
 
 def specimen_metadata(spec_id):
     recs = lims.query("select data from specimen_metadata where specimen_id=%d" % spec_id)
+    if len(recs) == 0:
+        return None
     meta = recs[0]['data']
     if meta == '':
         return None
