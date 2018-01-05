@@ -1,4 +1,8 @@
-import os, sys, shutil, hashlib, time
+import os, sys, re, shutil, hashlib, time
+
+
+ignored_files = ['.*Thumbs.db']
+ignored_regex = [re.compile(x) for x in ignored_files]
 
 
 def conditional_delete(path1, path2):
@@ -62,6 +66,11 @@ def compare_paths(path1, path2):
         for f in files:
             rel_file = os.path.join(subpath, f)
             src_file = os.path.join(src_path, f)
+            for x in ignored_regex:
+                if x.match(src_file) is not None:
+                    # ignore this file
+                    print("Ignored file %s" % rel_file)
+                    continue
             dst_file = os.path.join(dst_path, f)
             if not os.path.isfile(dst_file):
                 match = False
