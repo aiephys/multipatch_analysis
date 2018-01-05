@@ -67,7 +67,7 @@ class ExperimentSubmitUi(QtGui.QWidget):
         
     def set_path(self, path):
         self.path = path
-        if path.info()['dirType'] != 'Site':
+        if path.info().get('dirType', None) != 'Site':
             raise Exception("Requested path is not a site directory: %s" % (path.name()))
         self.file_tree.set_path(path)
         self.timeline.load_site(path)

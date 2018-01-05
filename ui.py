@@ -255,17 +255,19 @@ class ExperimentTimeline(QtGui.QWidget):
                 start = self.start_time + datetime.timedelta(seconds=rgn[0])
                 stop = self.start_time + datetime.timedelta(seconds=rgn[1])
             
-            state[elec.id] = {
-                'pipette_status': elec['status'],
-                'got_data': elec['got data'],
-                'ad_channel': elec['channel'],
-                'patch_start': start,
-                'patch_stop': stop,
-                'cell_labels': {'biocytin': '', 'red': '', 'green': '', 'blue': ''},
-                'target_layer': '',
-                'internal_solution': elec['internal'],
-                'internal_dye': elec['internal dye'],
-            }
+            state[elec.id] = OrderedDict([
+                ('pipette_status', elec['status']),
+                ('got_data', elec['got data']),
+                ('ad_channel', elec['channel']),
+                ('patch_start', start),
+                ('patch_stop', stop),
+                ('cell_labels', {'biocytin': '', 'red': '', 'green': '', 'blue': ''}),
+                ('target_layer', ''),
+                ('internal_solution', elec['internal']),
+                ('internal_dye', elec['internal dye']),
+                ('synapse_to', None),
+                ('gap_to', None),
+            ])
         return state
 
 
