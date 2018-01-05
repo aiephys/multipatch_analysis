@@ -1,5 +1,19 @@
 """
 Used to synchronize raw data from rigs to central server.
+
+
+Practical note: The file synchronization implements an rsync-like
+functionality in Python. In theory we would have preferred to just use 
+rsync itself, but in practice this presents a few difficult issues:
+
+* Rsync on windows requires cygwin and sshd. These work in most cases,
+  but they are not as thoroughly developed as their linux counterparts.
+  Bugs encountered in this process can be showstoppers.
+* The actual file synchronization code here is simple and transparent,
+  allowing us to customize versioning, error checking, logging,
+  and file name transformations. Achieving the equivalent with rsync
+  actually requires more code than we have written here, just to handle
+  subprocessing, CLI flag generation, and fragile pipe communication.
 """
 
 import os, sys, shutil, glob, traceback, pickle, time
