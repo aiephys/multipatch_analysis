@@ -11,14 +11,17 @@ import pyqtgraph as pg
 import pyqtgraph.configfile
 
 from lims import specimen_info, specimen_images
-from constants import ALL_CRE_TYPES, ALL_LABELS
+from constants import ALL_CRE_TYPES, ALL_LABELS, FLUOROPHORES
 from cell import Cell
 from data import MultiPatchExperiment
+from pipette_metadata import PipetteMetadata
+from genotypes import Genotype
 
 
 class Experiment(object):
-    def __init__(self, entry):
+    def __init__(self, entry=None, yml_file=None):
         self.entry = entry
+        self.source_id = (None, None)
         self._connections = []
         self._region = None
         self._summary = None
@@ -34,35 +37,12 @@ class Experiment(object):
         self._nwb_file = None
         self._data = None
         self._stim_list = None
+        self._genotype = None
 
-        try:
-            self.source_id = self.id_from_entry(entry)
-            self.cells = {x:Cell(self,x) for x in range(1,9)}
-        except Exception as exc:
-            Exception("Error parsing experiment: %s\n%s" % (self, exc.args[0]))
-
-        for ch in entry.children:
-            try:
-                if ch.lines[0] == 'Labeling':
-                    self.parse_labeling(ch)
-                elif ch.lines[0] == 'Cell QC':
-                    self.parse_qc(ch)
-                elif ch.lines[0] == 'Connections':
-                    self.parse_connections(ch)
-                elif ch.lines[0] == 'Conditions':
-                    continue
-                elif ch.lines[0].startswith('Region '):
-                    self._region = ch.lines[0][7:]
-                elif ch.lines[0].startswith('Site path '):
-                    p = os.path.abspath(os.path.join(os.path.dirname(self.entry.file), ch.lines[0][10:]))
-                    if not os.path.isdir(p):
-                        raise Exception("Invalid site path: %s" % p)
-                    self._site_path = p
-                else:
-                    raise Exception('Invalid experiment entry "%s"' % ch.lines[0])
-
-            except Exception as exc:
-                raise Exception("Error parsing %s for experiment: %s\n%s" % (ch.lines[0], self, exc.args))
+        if entry is not None:
+            self._load_old_format(entry)
+        else:
+            self._load_yml(yml_file)
 
         # gather lists of all labels and cre types
         cre_types = set()
@@ -93,10 +73,11 @@ class Experiment(object):
         self.age
         
         # check for a single NWB file
-        self.nwb_file
+        if len(self.cells) > 0:
+            self.nwb_file
 
     @staticmethod
-    def id_from_entry(entry):
+    def _id_from_entry(entry):
         return (entry.file, entry.lines[0])
 
     @property
@@ -177,7 +158,144 @@ class Experiment(object):
             stim += 'z'
         return stim
 
-    def parse_labeling(self, entry):
+    def _load_yml(self, yml_file):
+        self.source_id = (yml_file, None)
+        self._site_path = os.path.dirname(yml_file)
+        self.cells = {}
+        
+        pips = PipetteMetadata(yml_file)
+        all_colors = set(FLUOROPHORES.values())
+        genotype = self.genotype
+        for pip_id, pip_meta in pips.meta.items():
+            if pip_meta['got_data'] is False:
+                continue
+            cell = Cell(self, pip_id)
+            self.cells[pip_id] = cell
+
+            cell._target_layer = pip_meta.get('target_layer', None)
+
+            # load labels
+            colors = {}
+            for label,positive in pip_meta['cell_labels'].items():
+                assert label not in cell.labels
+                if positive == '':
+                    continue
+                m = re.match('(x)?(\+|\-)?(\?)?', positive)
+                if m is None:
+                    raise Exception('Invalid label record for "%s": %s' % (label, positive))
+                grps = m.groups()
+                absent = grps[0] == 'x'
+                positive = grps[1] == '+'
+                uncertain = grps[2] == '?'
+
+                if label in ALL_LABELS:
+                    cell.labels[label] = positive
+                elif label in all_colors:
+                    colors[label] = None if (absent or uncertain) else positive
+                else:
+                    raise Exception("Invalid label or fluorescent color: %s" % label)
+
+            # decide whether each driver was expressed
+            if self.lims_record['organism'] == 'mouse':
+                if genotype is None:
+                    raise Exception("Mouse specimen has no genotype: %s\n  (from %r)" % (self.specimen_id, self))
+                for driver,positive in genotype.predict_driver_expression(colors).items():
+                    cell.labels[driver] = positive
+
+            # load QC keys
+            # (sets attributes: holding_qc, access_qc, spiking_qc)
+            if 'cell_qc' in pip_meta:
+                for k in ['holding', 'access', 'spiking']:
+                    qc_pass = pip_meta['cell_qc'][k]
+                    if qc_pass == '':
+                        qc_pass = None
+                    else:
+                        if qc_pass not in '+/-?':
+                            raise ValueError('Invalid cell %s QC string: "%s"' % (k, qc_pass))
+                        qc_pass = qc_pass in '+/'
+                    setattr(cell, k+'_qc', qc_pass)
+            else:
+                # derive from NWB
+                nwb = self.data
+                try:
+                    chan = pip_meta['ad_channel']
+                    passed_holding = 0
+                    for srec in nwb.contents:
+                        try:
+                            rec = srec[chan]
+                        except KeyError:
+                            continue
+                        if rec.clamp_mode == 'vc':
+                            if abs(rec.baseline_current) < 800e-12:
+                                passed_holding += 1
+                        else:
+                            vm = rec.baseline_potential
+                            if vm > -75e-3 and vm < -50e-3:
+                                passed_holding += 1
+                        if passed_holding >= 5:
+                            break
+                    if passed_holding >= 5:
+                        cell.holding_qc = True
+                        # need to fix these!
+                        cell.access_qc = True
+                        cell.spiking_qc = True
+                finally:
+                    self.close_data()
+                
+        # load connections
+        for cell in self.cells.values():
+            pip_meta = pips.meta[cell.cell_id]
+            synapses = pip_meta.get('synapse_to', None)
+            if synapses is None:
+                continue
+            for post_id in synapses:
+                # allow tentative connections like "4?"
+                if isinstance(post_id, str):
+                    m = re.match("^(\d+)(\?)?$", post_id)
+                    if m is None:
+                        post_id = None  # triggers ValueError below
+                    post_id = int(m.groups()[0])
+                    if m.groups()[1] == '?':
+                        # ignore questionable connections for now
+                        continue
+                if post_id not in self.cells:
+                    raise ValueError("Postsynaptic cell ID %r is invalid" % post_id)
+                self._connections.append((cell.cell_id, post_id))
+
+    def _load_old_format(self, entry):
+        """Load experiment metadata from an old-style summary file
+        """
+        try:
+            self.source_id = self._id_from_entry(entry)
+        except Exception as exc:
+            Exception("Error parsing experiment: %s\n%s" % (self, exc.args[0]))
+
+        self.cells = {x:Cell(self,x) for x in range(1,9)}
+
+        for ch in entry.children:
+            try:
+                if ch.lines[0] == 'Labeling':
+                    self._parse_labeling(ch)
+                elif ch.lines[0] == 'Cell QC':
+                    self._parse_qc(ch)
+                elif ch.lines[0] == 'Connections':
+                    self._parse_connections(ch)
+                elif ch.lines[0] == 'Conditions':
+                    continue
+                elif ch.lines[0].startswith('Region '):
+                    self._region = ch.lines[0][7:]
+                elif ch.lines[0].startswith('Site path '):
+                    p = os.path.abspath(os.path.join(os.path.dirname(self.entry.file), ch.lines[0][10:]))
+                    if not os.path.isdir(p):
+                        raise Exception("Invalid site path: %s" % p)
+                    self._site_path = p
+                else:
+                    raise Exception('Invalid experiment entry "%s"' % ch.lines[0])
+
+            except Exception as exc:
+                raise Exception("Error parsing %s for experiment: %s\n%s" % (ch.lines[0], self, exc.args))
+
+    def _parse_labeling(self, entry):
         """
         "Labeling" section should look like:
         
@@ -227,7 +345,7 @@ class Experiment(object):
                 assert cre not in cell.labels
                 cell.labels[cre] = positive
 
-    def parse_qc(self, entry):
+    def _parse_qc(self, entry):
         """Parse cell quality control. Looks like:
         
             Holding: 1- 2+ 3- 4- 6/ 7+
@@ -255,7 +373,7 @@ class Experiment(object):
                 else:
                     raise Exception("Invalid Cell QC line: %s" % ch.lines[0])
 
-    def parse_connections(self, entry):
+    def _parse_connections(self, entry):
         if len(entry.children) == 0 or entry.children[0].lines[0] == 'None':
             return
         for con in entry.children:
@@ -400,7 +518,14 @@ class Experiment(object):
             uid = self.uid
         except Exception as exc:
             uid = '?'
-        return "<Experiment %s (%s:%d) uid=%s>" % (self.source_id[1], self.source_id[0], self.entry.lineno, uid)
+        
+        if self.entry is None:
+            src = self.source_id[0]
+        else:
+            # old format
+            src = "%s (%s:%d)" % (self.source_id[1], self.source_id[0], self.entry.lineno)
+
+        return "<Experiment %s uid=%s>" % (src, uid)
 
     @property
     def site_info(self):
@@ -439,7 +564,16 @@ class Experiment(object):
             if len(files) == 0:
                 raise Exception("No NWB file found for %s" % self)
             elif len(files) > 1:
-                raise Exception("Multiple NWB files found for %s" % self)
+                # multiple NWB files here; try using the file manifest to resolve.
+                manifest = os.path.join(self.path, 'file_manifest.yml')
+                if os.path.isfile(manifest):
+                    manifest = yaml.load(open(manifest, 'rb'))
+                    for f in manifest:
+                        if f['category'] == 'MIES physiology':
+                            self._nwb_file = os.path.join(os.path.dirname(self.path), f['path'])
+                            break
+                if self._nwb_file is None:
+                    raise Exception("Multiple NWB files found for %s" % self)
             self._nwb_file = files[0]
         return self._nwb_file
 
@@ -500,6 +634,17 @@ class Experiment(object):
         if self._lims_record is None:
             self._lims_record = specimen_info(self.specimen_id)
         return self._lims_record
+
+    @property
+    def genotype(self):
+        """The genotype of this specimen.
+        """
+        if self._genotype is None:
+            gt_name = self.lims_record['genotype']
+            if gt_name is None:
+                return None
+            self._genotype = Genotype(gt_name)
+        return self._genotype
 
     @property
     def biocytin_image_url(self):

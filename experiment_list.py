@@ -1,7 +1,7 @@
 # *-* coding: utf-8 *-*
 from __future__ import print_function, division
 import numpy as np
-import os
+import os, glob
 import pickle
 import scipy.optimize
 import scipy.stats
@@ -15,6 +15,7 @@ import pyqtgraph as pg
 from graphics import MatrixItem, distance_plot
 from experiment import Experiment
 from constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
+import config
 
 
 class Entry(object):
@@ -68,6 +69,31 @@ class ExperimentList(object):
                 sys.excepthook(*sys.exc_info())
                 print('Error reading cache file "%s". (exception printed above)' % cache)
 
+    def load_from_server(self):
+        errs = []
+
+        # Load all pipettes.yml files found on server
+        yamls = glob.glob(os.path.join(config.synphys_data, '*', 'slice_*', 'site_*', 'pipettes.yml'))
+        for i,yml_file in enumerate(yamls):
+            # if i>10:
+            #     break
+            try:
+                expt = Experiment(yml_file=yml_file)
+                self._add_experiment(expt)
+            except Exception as exc:
+                if len(exc.args) > 0 and exc.args[0] == 'breakpoint':
+                    raise
+                errs.append((yml_file, sys.exc_info()))
+                continue
+
+        if len(errs) > 0:
+            print("Errors loading %d experiments from server:" % len(errs))
+            for yml_file, exc in errs:
+                print("=======================")
+                print(yml_file)
+                traceback.print_exception(*exc)
+                print("")
+
     def load(self, filename):
         if filename.endswith('.pkl'):
             self._load_pickle(filename)
@@ -116,7 +142,7 @@ class ExperimentList(object):
         cached = 0
         for entry in root.children:
             try:
-                expt_id = Experiment.id_from_entry(entry)
+                expt_id = Experiment._id_from_entry(entry)
                 if expt_id in self._expts_by_source_id:
                     # Already have this experiment cached
                     cached += 1

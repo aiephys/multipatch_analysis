@@ -24,6 +24,8 @@ def arg_to_date(arg):
 
 
 parser = argparse.ArgumentParser()
+parser.add_argument('--reload', action='store_true', default=False, dest='reload',
+                    help='Reload all experiment data fro the server.')
 parser.add_argument('--region', type=str)
 parser.add_argument('--organism', type=str, help='"mouse" or "human"')
 parser.add_argument('--start', type=arg_to_date)
@@ -46,6 +48,10 @@ args = parser.parse_args(sys.argv[1:])
 cache_file = 'expts_cache.pkl'
 all_expts = ExperimentList(cache=cache_file)
 
+pg.dbg()
+if args.reload:
+    all_expts.load_from_server()
+    
 for f in args.files:
     all_expts.load(f)
 
