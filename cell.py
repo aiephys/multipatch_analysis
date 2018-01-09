@@ -28,6 +28,28 @@ class Cell(object):
         return None
 
     @property
+    def cell_type(self):
+        """Dict describing the type of this cell like::
+
+            {
+                'layer': '5a',
+                'driver': 'tlx3',
+                'morphology': 'pyramidal',
+                'excitatory': True,
+            }
+
+        All keys are optional.
+        """
+        typ = {}
+        cre = self.cre_type
+        if cre is not None:
+            typ['driver'] = cre
+        layer = self.target_layer
+        if layer is not None:
+            typ['layer'] = layer
+        return typ
+
+    @property
     def cre_type(self):
         """Cre type string for this cell.
         
@@ -41,7 +63,7 @@ class Cell(object):
         for label,pos in self.labels.items():
             if label in ALL_LABELS:
                 continue
-            if pos == '+':
+            if pos in ('+', True):
                 ct.append(label)
         if len(ct) == 0:
             return default
