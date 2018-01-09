@@ -262,7 +262,7 @@ class ExperimentTimeline(QtGui.QWidget):
                 ('patch_start', start),
                 ('patch_stop', stop),
                 ('cell_labels', {'biocytin': '', 'red': '', 'green': '', 'blue': ''}),
-                ('cell_qc', {'holding': None, 'access': None, 'spiking': None}),
+                #('cell_qc', {'holding': None, 'access': None, 'spiking': None}),
                 ('target_layer', None),
                 ('internal_solution', elec['internal']),
                 ('internal_dye', elec['internal dye']),
