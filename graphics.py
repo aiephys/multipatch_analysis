@@ -29,14 +29,15 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
         pg.QtGui.QGraphicsItemGroup.__init__(self)
 
         for i,row in enumerate(rows):
-            txt = pg.QtGui.QGraphicsTextItem(row, parent=self)
+            txt = pg.QtGui.QGraphicsTextItem(str(row), parent=self)
             br = txt.boundingRect()
             txt.setPos(-br.width() - 10, i * size + size/2. - br.center().y())
             txt.setDefaultTextColor(pg.mkColor('w'))
 
         for i,col in enumerate(cols):
-            txt = pg.QtGui.QGraphicsTextItem(col, parent=self)
-            br = txt.boundingRect()
+            txt = pg.QtGui.QGraphicsTextItem(str(col), parent=self)
+            txt.rotate(90)
+            br = txt.mapRectToParent(txt.boundingRect())
             txt.setPos(i * size + size/2 - br.center().x(), -br.height() - 10)
             txt.setDefaultTextColor(pg.mkColor('w'))
 

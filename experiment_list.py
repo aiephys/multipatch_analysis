@@ -305,7 +305,7 @@ class ExperimentList(object):
                     fgcolor[i, j] = 0.3
 
         w.matrix = MatrixItem(text=text, fgcolor=fgcolor, bgcolor=bgcolor,
-                              rows=rows, cols=cols, size=size)
+                              rows=rows.values(), cols=cols.values(), size=size)
         v.addItem(w.matrix)
 
         # colormap is logarithmic; remap to linear for legend
@@ -391,11 +391,11 @@ class ExperimentList(object):
         print("Mean age: %0.1f" % np.mean(ages))
         print("")
 
-    def connectivity_summary(self, cre_type):
+    def connectivity_summary(self, cre_type=None):
         summary = {}
         for expt in self:
             for k,v in expt.summary().items():
-                if cre_type is not None and list(cre_type) != list(k):
+                if cre_type is not None and list(cre_type) != [x[1] for x in k]:
                     continue
                 if k not in summary:
                     summary[k] = {'connected':0, 'unconnected':0, 'cdist':[], 'udist':[]}
@@ -469,8 +469,8 @@ class ExperimentList(object):
                     pconn.append(c / t)
                 
                 totals.append((
-                    k[0],                        # pre type
-                    k[1],                        # post type
+                    "L%s %s"%k[0],               # pre type
+                    "L%s %s"%k[1],               # post type
                     v['connected'],              # n connected
                     probed,                      # n probed
                     reciprocal,                  # n reciprocal

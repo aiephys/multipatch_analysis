@@ -38,27 +38,19 @@ class Experiment(object):
         self._data = None
         self._stim_list = None
         self._genotype = None
-
+        self._cre_types = None
+        self._labels = None
+        
         if entry is not None:
             self._load_old_format(entry)
         else:
             self._load_yml(yml_file)
 
-        # gather lists of all labels and cre types
-        cre_types = set()
-        labels = set()
-        for cell in self.cells.values():
-            if cell.cre_type not in cre_types:
-                cre_types.add(cell.cre_type)
-            labels |= set(cell.labels.keys()) & set(ALL_LABELS)
-        self.cre_types = sorted(list(cre_types), key=lambda x: ALL_CRE_TYPES.index(x.split(',')[0]))
-        self.labels = sorted(list(labels), key=lambda x: ALL_LABELS.index(x))
-
         # make sure all cells have information for all labels
         for cell in self.cells.values():
             for label in labels:
                 assert label in cell.labels
-            for cre in cre_types:
+            for cre in self.cre_types:
                 for crepart in cre.split(','):
                     if crepart != 'unknown' and crepart not in cell.labels:
                         raise Exception('Cre type "%s" not in cell.labels: %s' % (crepart, cell.labels.keys()))
@@ -100,6 +92,26 @@ class Experiment(object):
         probed = self.connections_probed
         return [c for c in self._connections if c in probed]
 
+    @property
+    def cre_types(self):
+        """A list of all cre types in this experiment."""
+        if self._cre_types is None:
+            cre_types = set()
+            for cell in self.cells.values():
+                cre_types.add(cell.cre_type)
+            self._cre_types = sorted(list(cre_types), key=lambda x: ALL_CRE_TYPES.index(x.split(',')[0]))
+        return self._cre_types
+
+    @property
+    def labels(self):
+        """A list of all labels in this experiment."""
+        if self._labels is None:
+            labels = set()
+            for cell in self.cells.values():
+                labels |= set(cell.labels.keys()) & set(ALL_LABELS)
+            self._labels = sorted(list(labels), key=lambda x: ALL_LABELS.index(x))
+        return self._labels
+    
     @property
     def sweep_summary(self):
         """A structure providing basic metadata on all sweeps collected in this
@@ -403,7 +415,7 @@ class Experiment(object):
             csum = {}
             for i, j in self.connections_probed:
                 ci, cj = self.cells[i], self.cells[j]
-                typ = (ci.cre_type, cj.cre_type)
+                typ = ((ci.target_layer, ci.cre_type), (cj.target_layer, cj.cre_type))
                 if typ not in csum:
                     csum[typ] = {'connected': 0, 'unconnected': 0, 'cdist':[], 'udist':[]}
                 if (i, j) in self.connections:

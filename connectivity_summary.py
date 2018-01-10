@@ -10,6 +10,7 @@ import datetime
 import os
 import re
 import sys
+from collections import OrderedDict
 
 import pyqtgraph as pg
 
@@ -98,7 +99,29 @@ expts.distance_plot('pvalb', 'pvalb', plots=plots, color=(200, 0, 200))
 
 types = ['unknown', 'rorb', 'sim1', 'tlx3', 'pvalb', 'sst', 'vip']
 #types = ['sim1', 'unknown']
-expts.matrix(types, types)
+mouse_types = [
+    ('2/3', 'unknown'),
+    ('2/3', 'pvalb'),
+    ('2/3', 'sst'),
+    ('2/3', 'vip'),
+    ('4', 'unknown'),
+    ('4', 'pvalb'),
+    ('4', 'sst'),
+    ('4', 'vip'),
+    ('5', 'unknown'),
+    ('5', 'sim1'),
+    ('5', 'tlx3'),
+    ('5', 'pvalb'),
+    ('5', 'sst'),
+    ('5', 'vip'),
+    ('6', 'unknown'),
+    ('6', 'ntsr1'),
+    ('6', 'pvalb'),
+    ('6', 'sst'),
+    ('6', 'vip'),
+]
+mouse_types = OrderedDict([(typ, "L%s %s" % typ) for typ in mouse_types])
+expts.matrix(mouse_types, mouse_types)
 
 # cache everything!
 all_expts.write_cache()
