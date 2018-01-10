@@ -49,7 +49,6 @@ args = parser.parse_args(sys.argv[1:])
 cache_file = 'expts_cache.pkl'
 all_expts = ExperimentList(cache=cache_file)
 
-pg.dbg()
 if args.reload:
     all_expts.load_from_server()
     
