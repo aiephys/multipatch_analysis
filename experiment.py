@@ -48,7 +48,7 @@ class Experiment(object):
 
         # make sure all cells have information for all labels
         for cell in self.cells.values():
-            for label in labels:
+            for label in self.labels:
                 assert label in cell.labels
             for cre in self.cre_types:
                 for crepart in cre.split(','):
@@ -176,6 +176,7 @@ class Experiment(object):
         self.cells = {}
         
         pips = PipetteMetadata(yml_file)
+        self._pipettes_yml = pips
         all_colors = set(FLUOROPHORES.values())
         genotype = self.genotype
         for pip_id, pip_meta in pips.meta.items():
@@ -184,7 +185,7 @@ class Experiment(object):
             cell = Cell(self, pip_id)
             self.cells[pip_id] = cell
 
-            cell._target_layer = pip_meta.get('target_layer', None)
+            cell._target_layer = pip_meta.get('target_layer', '')
 
             # load labels
             colors = {}

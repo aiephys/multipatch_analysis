@@ -75,8 +75,8 @@ class ExperimentList(object):
         # Load all pipettes.yml files found on server
         yamls = glob.glob(os.path.join(config.synphys_data, '*', 'slice_*', 'site_*', 'pipettes.yml'))
         for i,yml_file in enumerate(yamls):
-            # if i>10:
-            #     break
+            # if i>15:
+                # break
             try:
                 expt = Experiment(yml_file=yml_file)
                 self._add_experiment(expt)
