@@ -63,7 +63,7 @@ if len(all_expts) == 0:
 for i, ex in enumerate(all_expts):
     ex.summary_id = i
 
-expts = all_expts.select(start=args.start, stop=args.stop, region=args.region, cre_type=args.cre_type, calcium=args.calcium, age=args.age, temp=args.temp)
+expts = all_expts.select(start=args.start, stop=args.stop, region=args.region, cre_type=args.cre_type, calcium=args.calcium, age=args.age, temp=args.temp, organism=args.organism)
 if len(args.files) > 0:
     expts = expts.select(source_files=args.files)
 
@@ -93,12 +93,10 @@ expts.print_label_summary()
 
 pg.mkQApp()
 
-plots = expts.distance_plot('sim1', 'sim1', color=(0, 150, 255))
-expts.distance_plot('tlx3', 'tlx3', plots=plots, color=(200, 100, 0))
-expts.distance_plot('pvalb', 'pvalb', plots=plots, color=(200, 0, 200))
+#plots = expts.distance_plot('sim1', 'sim1', color=(0, 150, 255))
+#expts.distance_plot('tlx3', 'tlx3', plots=plots, color=(200, 100, 0))
+#expts.distance_plot('pvalb', 'pvalb', plots=plots, color=(200, 0, 200))
 
-types = ['unknown', 'rorb', 'sim1', 'tlx3', 'pvalb', 'sst', 'vip']
-#types = ['sim1', 'unknown']
 mouse_types = [
     ('2/3', 'unknown'),
     ('2/3', 'pvalb'),
@@ -121,7 +119,21 @@ mouse_types = [
     ('6', 'vip'),
 ]
 mouse_types = OrderedDict([(typ, "L%s %s" % typ) for typ in mouse_types])
-expts.matrix(mouse_types, mouse_types)
+
+human_types = [
+    ('1', 'unknown'),
+    ('2', 'unknown'),
+    ('3', 'unknown'),
+    ('4', 'unknown'),
+    ('5', 'unknown'),
+    ('6', 'unknown'),
+]
+human_types = OrderedDict([(typ, "L%s %s" % typ) for typ in human_types])
+
+if args.organism == 'mouse':
+    expts.matrix(mouse_types, mouse_types)
+elif args.organism == 'human':
+    expts.matrix(human_types, mouse_types)
 
 # cache everything!
 all_expts.write_cache()
