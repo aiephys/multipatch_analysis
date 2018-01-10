@@ -102,6 +102,19 @@ def get_amplitude(response_list):
     peak_t = bsub_mean.time_values[peak_ind]
     return bsub_mean, avg_amp, amp_sign, peak_t
 
+def fail_rate(response_list, sign, peak_t):
+    amps = []
+    for response in response_list:
+        bsub_mean = bsub(response)
+        dt = bsub_mean.dt
+        if sign == '+':
+            amp = bsub_mean.data[int(13e-3/dt): int((peak_t + 3e-3)/dt)].max()
+        else:
+            amp = bsub_mean.data[int(13e-3 / dt): int((peak_t + 3e-3) / dt)].max()
+        amps.append(amp)
+    return amps
+
+
 def trace_avg(response_list):
     for trace in response_list:
         trace.t0 = 0

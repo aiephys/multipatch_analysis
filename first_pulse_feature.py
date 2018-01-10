@@ -1,7 +1,7 @@
 import pyqtgraph as pg
 import numpy as np
 from experiment_list import ExperimentList
-from manuscript_figures import get_response, get_amplitude, response_filter, feature_anova, write_cache, trace_plot, color_palette
+from manuscript_figures import get_response, get_amplitude, response_filter, feature_anova, write_cache, trace_plot, colors_human, colors_mouse, fail_rate
 from synapse_comparison import load_cache, summary_plot_pulse
 from neuroanalysis.data import TraceList
 from neuroanalysis.ui.plot_grid import PlotGrid
@@ -26,17 +26,15 @@ scale_anchor = (0.4, 1)
 
 grand_response = {}
 feature_plot = None
-grid = PlotGrid()
-grid.set_shape(len(connection_types), 1)
-synapse_plot = []
-grid.show()
+synapse_plot = PlotGrid()
+synapse_plot.set_shape(len(connection_types), 2)
+synapse_plot.show()
 for c in range(len(connection_types)):
     cre_type = connection_types[c]
     expt_list = all_expts.select(cre_type=cre_type, calcium=calcium, age=age)
     color = color_palette[c]
-    grand_response[cre_type[0]] = {'trace': [], 'amp': [], 'latency': [], 'rise': [], 'decay':[]}
-    synapse_plot.append(grid[c, 0])
-    synapse_plot[c].addLegend()
+    grand_response[cre_type[0]] = {'trace': [], 'amp': [], 'latency': [], 'rise': [], 'decay':[], 'fail_rate': []}
+    synapse_plot[c, 0].addLegend()
     for expt in expt_list:
         for pre, post in expt.connections:
             if expt.cells[pre].cre_type == cre_type[0] and expt.cells[post].cre_type == cre_type[1]:
@@ -46,18 +44,19 @@ for c in range(len(connection_types)):
                     avg_trace, avg_amp, amp_sign, peak_t = get_amplitude(response_subset)
                     if amp_sign is '-':
                         continue
+                    grand_response[cre_type[0]]['fail_rate'].append(fail_rate(response_subset, '+', peak_t))
                     psp_fits = fit_psp(avg_trace, sign=amp_sign, yoffset=0, amp=avg_amp, method='leastsq', fit_kws={})
                     avg_trace.t0 = -(psp_fits.best_values['xoffset'] - 10e-3)
                     grand_response[cre_type[0]]['latency'].append(psp_fits.best_values['xoffset'] - 10e-3)
                     grand_response[cre_type[0]]['rise'].append(psp_fits.best_values['rise_time'])
                     grand_response[cre_type[0]]['trace'].append(avg_trace)
                     grand_response[cre_type[0]]['amp'].append(avg_amp)
-                    synapse_plot[c].setTitle('First Pulse Response')
+                    synapse_plot[c, 0].setTitle('First Pulse Response')
                     if [expt.uid, pre, post] == connections[cre_type]:
                         trace_color = (255, 0, 255, 30)
                     else:
                         trace_color = (0, 0, 0, 30)
-                    trace_plot(avg_trace, trace_color, plot=synapse_plot[c], x_range=[0, 27e-3])
+                    trace_plot(avg_trace, trace_color, plot=synapse_plot[c, 0], x_range=[0, 27e-3])
                     app.processEvents()
                 decay_response = response_filter(pulse_response, freq_range=[0, 20], holding_range=[-68, -72])
                 if len(response_subset) >= sweep_threshold:
@@ -74,9 +73,14 @@ for c in range(len(connection_types)):
     else:
         grand_trace = grand_response[cre_type[0]]['trace'][0]
     n_synapses = len(grand_response[cre_type[0]]['trace'])
-    trace_plot(grand_trace, color={'color': color, 'width': 2}, plot=synapse_plot[c], x_range=[0, 27e-3],
+    trace_plot(grand_trace, color={'color': color, 'width': 2}, plot=synapse_plot[c, 0], x_range=[0, 27e-3],
                name=('%s, n = %d' % (connection_types[c], n_synapses)))
-    synapse_plot[c].hideAxis('bottom')
+    synapse_plot[c, 0].hideAxis('bottom')
+    all_amps = np.hstack(np.asarray(grand_response[cre_type[0]]['fail_rate']))
+    y, x = np.histogram(all_amps, bins=np.linspace(0, 2e-3, 40))
+    synapse_plot[c, 1].plot(x, y, stepMode=True, fillLevel=0, brush='k')
+    synapse_plot[c, 1].setLabels(bottom=('Vm', 'V'))
+    synapse_plot[c, 1].setXRange(0, 2e-3)
     feature_list = (grand_response[cre_type[0]]['amp'], grand_response[cre_type[0]]['latency'], grand_response[cre_type[0]]['rise'])
     grand_amp = np.mean(np.array(grand_response[cre_type[0]]['amp']))
     grand_latency = np.mean(np.array(grand_response[cre_type[0]]['latency']))
