@@ -27,7 +27,8 @@ all_connections = {('sim1', 'sim1'): ['1490642434.41', 3, 5],
 human_connections = OrderedDict([(('human_L2', 'human_L2'), ['1504052194.49', 1, 5]),
                                  (('human_L3', 'human_L3'), ['1503372117.27', 6, 4]),
                                  (('human_L4', 'human_L4'), ['1497580583.99', 4, 3]),
-                                 (('human_L5', 'human_L5'), ['1503376975.16', 2, 4])])
+                                 (('human_L5', 'human_L5'), ['1503376975.16', 2, 4]),
+                                 (('human_L6', 'human_L6'), ['1512513429.49', 8, 1])])
 
 ee_connections = OrderedDict([(('L23pyr','L23pyr'), ['1501101571.17', 1, 5]),
                               (('rorb', 'rorb'), ['1502301827.80', 6, 8]),

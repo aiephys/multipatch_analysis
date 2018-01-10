@@ -1,17 +1,18 @@
 import sys
 import argparse
 import pyqtgraph as pg
+import numpy as np
 from experiment_list import ExperimentList
 from neuroanalysis.filter import bessel_filter
 from neuroanalysis.event_detection import exp_deconvolve
 from neuroanalysis.ui.plot_grid import PlotGrid
-from manuscript_figures import response_filter, trace_avg, pulse_qc, get_response, bsub, trace_plot
+from manuscript_figures import response_filter, trace_avg, pulse_qc, get_response, bsub, trace_plot, fail_rate, get_amplitude
 from rep_connections import all_connections, human_connections, ee_connections
 from constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
 
 ### Select synapses for representative traces as {('pre-type'), ('post-type'): [UID, Pre_cell, Post_cell], } ###
 
-connection_types = human_connections
+connection_types = ee_connections
 
 pg.dbg()
 app = pg.mkQApp()
@@ -38,6 +39,9 @@ plot_trains = args['trains']
 link_y_axis = args['link-y-axis']
 all_expts = ExperimentList(cache='expts_cache.pkl')
 
+test = PlotGrid()
+test.set_shape(len(connection_types.keys()), 1)
+test.show()
 grid = PlotGrid()
 if plot_trains is True:
     grid.set_shape(len(connection_types.keys()), 3)
@@ -84,6 +88,15 @@ for row in range(len(connection_types)):
         label.setPos(50, 0)
         maxYpulse.append((row, grid[row,0].getAxis('left').range[1]))
         grid[row, 0].hideAxis('bottom')
+
+        _, _, _, peak_t = get_amplitude(sweep_list)
+        all_amps = np.asarray(fail_rate(sweep_list, sign=sign, peak_t=peak_t))
+        # y = pg.pseudoScatter(all_amps, spacing=0.15)
+        # test[row, 0].plot(all_amps, y, pen=None, symbol='o', symbolSize=8, symbolPen=(255, 255, 255, 200), symbolBrush=(0, 0, 255, 150))
+        y,x = np.histogram(all_amps, bins=np.linspace(0, 2e-3, 40))
+        test[row, 0].plot(x, y, stepMode=True, fillLevel=0, brush='k')
+        test[row, 0].setLabels(bottom=('Vm', 'V'))
+        test[row, 0].setXRange(0, 2e-3)
     else:
         print ("%s -> %s not enough sweeps for first pulse" % (connection_type[0], connection_type[1]))
     if row == len(connection_types) - 1:
