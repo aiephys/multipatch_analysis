@@ -12,11 +12,14 @@ def conditional_delete(path1, path2):
 
     This is used for recovering disk space after verifying the contents of a backup.
     """
+    print("Comparing %s..." % path1)
     if not compare_paths(path1, path2):
+        print("    Skipping %s" % path1)
         return False
 
+    print("    Removing %s..." % path1)
     shutil.rmtree(path1)
-    print("Removed %s" % path1)
+    print("    Done.")
     return True
 
 
@@ -44,6 +47,7 @@ def conditional_delete_old(path1, path2, min_age=120):
             deleted_paths.append(src_path)
         else:
             invalid_paths.append(src_path)
+    print("-----------------")
     print("Deleted %d;  skipped %d  (%d too young, %d not backed up)" % (len(deleted_paths), len(too_young)+len(invalid_paths), len(too_young), len(invalid_paths)))
 
 
@@ -61,28 +65,35 @@ def compare_paths(path1, path2):
         dst_path = os.path.join(path2, subpath)
         if not os.path.isdir(dst_path):
             match = False
-            print("Missing directory %s" % subpath)
+            print("      Missing directory %s" % subpath)
             continue
         for f in files:
             rel_file = os.path.join(subpath, f)
             src_file = os.path.join(src_path, f)
+
+            # Some files (like Thumbs.db) should be ignored
+            ignore = False
             for x in ignored_regex:
                 if x.match(src_file) is not None:
                     # ignore this file
-                    print("Ignored file %s" % rel_file)
-                    continue
+                    print("      Ignored file %s" % rel_file)
+                    ignore = True
+                    break
+            if ignore:
+                continue
+
             dst_file = os.path.join(dst_path, f)
             if not os.path.isfile(dst_file):
                 match = False
-                print("Missing file %s" % rel_file)
+                print("      Missing file %s" % rel_file)
                 continue
             if os.stat(src_file).st_size != os.stat(dst_file).st_size:
                 match = False
-                print("Wrong size %s" % rel_file)
+                print("      Wrong size %s" % rel_file)
                 continue
             if file_hash(src_file) != file_hash(dst_file):
                 match = False
-                print("Hash mismatch %s" % rel_file)
+                print("      Hash mismatch %s" % rel_file)
                 continue
 
     return match
