@@ -1,5 +1,5 @@
 
-ALL_LABELS = ['biocytin', 'af488', 'cascade_blue', 'human_L23', 'human_L2', 'human_L3', 'human_L4', 'human_L5']
+ALL_LABELS = ['biocytin', 'af488', 'cascade_blue']
 INHIBITORY_CRE_TYPES = ['sst','pvalb', 'vip', 'ndnf', 'chat', 'htr3a', 'nos1', 'chrna2']
 EXCITATORY_CRE_TYPES = ['tlx3', 'sim1', 'rorb', 'ntsr1', 'rbp4', 'ctgf', 'glt25d2', 'L23pyr']
 ALL_CRE_TYPES = INHIBITORY_CRE_TYPES + EXCITATORY_CRE_TYPES + ['unknown']
@@ -15,6 +15,7 @@ FLUOROPHORES = {
     'ZsGreen': 'green',
 }
 
+LAYERS = ['1', '2', '2/3', '3', '4', '5', '5a', '5b', '6']
 
 ACSF_RECIPES = ["2mM Ca & Mg", "1.3mM Ca & 1mM Mg"]
 INTERNAL_RECIPES = ["Standard K-Gluc"]

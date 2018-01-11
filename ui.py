@@ -245,7 +245,6 @@ class ExperimentTimeline(QtGui.QWidget):
 
     def save(self):
         state = {}
-        cell = {'target_layer': None, 'biocytin': None}
         for elec in self.params.children():
             rgn = elec.region.getRegion()
             if self.start_time is None:
@@ -263,7 +262,7 @@ class ExperimentTimeline(QtGui.QWidget):
                 ('patch_stop', stop),
                 ('cell_labels', {'biocytin': '', 'red': '', 'green': '', 'blue': ''}),
                 #('cell_qc', {'holding': None, 'access': None, 'spiking': None}),
-                ('target_layer', None),
+                ('target_layer', elec['target layer']),
                 ('internal_solution', elec['internal']),
                 ('internal_dye', elec['internal dye']),
                 ('synapse_to', None),
@@ -273,7 +272,7 @@ class ExperimentTimeline(QtGui.QWidget):
 
 
 class PipetteParameter(pg.parametertree.parameterTypes.GroupParameter):
-    def __init__(self, ui, channel, start=None, stop=None, status=None, got_data=None, internal=None, internal_dye=None):
+    def __init__(self, ui, channel, start=None, stop=None, status=None, got_data=None, internal=None, internal_dye=None, target_layer=None):
         self.ui = ui
         params = [
             {'name': 'channel', 'type': 'list', 'values': ui.list_channels()},
@@ -281,6 +280,7 @@ class PipetteParameter(pg.parametertree.parameterTypes.GroupParameter):
             {'name': 'got data', 'type': 'bool'},
             {'name': 'internal', 'type': 'list', 'values': [''] + constants.INTERNAL_RECIPES},
             {'name': 'internal dye', 'type': 'list', 'values': [''] + constants.INTERNAL_DYES},
+            {'name': 'target layer', 'type': 'list', 'values': [''] + constants.LAYERS},
         ]
         pg.parametertree.parameterTypes.GroupParameter.__init__(self, name="Pipette?", children=params, removable=True)
         self.child('got data').sigValueChanged.connect(self._got_data_changed)
@@ -304,6 +304,8 @@ class PipetteParameter(pg.parametertree.parameterTypes.GroupParameter):
             self['internal'] = internal
         if internal_dye is not None:
             self['internal dye'] = internal_dye
+        if target_layer is not None:
+            self['target layer'] = target_layer
     
     def _got_data_changed(self):
         if self['got data'] is True:
