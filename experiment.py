@@ -7,6 +7,7 @@ import numpy as np
 import os
 import re
 
+import yaml
 import pyqtgraph as pg
 import pyqtgraph.configfile
 
@@ -16,6 +17,8 @@ from cell import Cell
 from data import MultiPatchExperiment
 from pipette_metadata import PipetteMetadata
 from genotypes import Genotype
+from synphys_cache import SynPhysCache
+import yaml_local
 
 
 class Experiment(object):
@@ -175,13 +178,14 @@ class Experiment(object):
         self._site_path = os.path.dirname(yml_file)
         self.cells = {}
         
-        pips = PipetteMetadata(yml_file)
+        pips = PipetteMetadata(os.path.dirname(yml_file))
         self._pipettes_yml = pips
         all_colors = set(FLUOROPHORES.values())
         genotype = self.genotype
-        for pip_id, pip_meta in pips.meta.items():
+        for pip_id, pip_meta in pips.pipettes.items():
             if pip_meta['got_data'] is False:
                 continue
+
             cell = Cell(self, pip_id)
             self.cells[pip_id] = cell
 
@@ -257,7 +261,7 @@ class Experiment(object):
                 
         # load connections
         for cell in self.cells.values():
-            pip_meta = pips.meta[cell.cell_id]
+            pip_meta = pips.pipettes[cell.cell_id]
             synapses = pip_meta.get('synapse_to', None)
             if synapses is None:
                 continue
@@ -336,6 +340,7 @@ class Experiment(object):
             # first part is label / cre type and a colon
             assert parts[0].endswith(':')
             cre = parts[0][:-1]
+
             if not (cre in ALL_LABELS or cre in ALL_CRE_TYPES):
                 raise Exception("Invalid label or cre type: %s" % cre)
 
@@ -355,8 +360,15 @@ class Experiment(object):
                 positive = grps[2]
                 uncertain = grps[3] == '?'
 
-                assert cre not in cell.labels
-                cell.labels[cre] = positive
+                # some target layers have been entered as a label (old data)
+                if cre.startswith('human_') and positive == '+':
+                    layer = cre[7:]
+                    if layer == 'L23':
+                        layer = 'L2/3'
+                    cell._target_layer = layer
+                else:
+                    assert cre not in cell.labels
+                    cell.labels[cre] = positive
 
     def _parse_qc(self, entry):
         """Parse cell quality control. Looks like:
@@ -592,19 +604,20 @@ class Experiment(object):
 
     @property
     def nwb_cache_file(self):
-        if not os.path.isdir('cache'):
-            os.mkdir('cache')
-        cf = os.path.join('cache', self.nwb_file.replace('/', '_').replace(':', '_').replace('\\', '_'))
-        if not os.path.isfile(cf) or os.stat(self.nwb_file).st_mtime > os.stat(cf).st_mtime:
-            try:
-                import shutil
-                print("copying to cache:", cf)
-                shutil.copyfile(self.nwb_file, cf)
-            except:
-                if os.path.isfile(cf):
-                    os.remove(cf)
-                raise
-        return cf
+        # if not os.path.isdir('cache'):
+        #     os.mkdir('cache')
+        # cf = os.path.join('cache', self.nwb_file.replace('/', '_').replace(':', '_').replace('\\', '_'))
+        # if not os.path.isfile(cf) or os.stat(self.nwb_file).st_mtime > os.stat(cf).st_mtime:
+        #     try:
+        #         import shutil
+        #         print("copying to cache:", cf)
+        #         shutil.copyfile(self.nwb_file, cf)
+        #     except:
+        #         if os.path.isfile(cf):
+        #             os.remove(cf)
+        #         raise
+        # return cf
+        return SynPhysCache().get_cache(self.nwb_file)
 
     @property
     def data(self):

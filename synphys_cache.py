@@ -38,4 +38,3 @@ class SynPhysCache(object):
             if root != '':
                 self.mkdir(root)
             os.mkdir(path)
-            

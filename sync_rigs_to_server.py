@@ -214,6 +214,7 @@ def safe_copy(src, dst):
     tmp_dst = dst + '.partial'
     try:
         new_name = None
+        print("copy: %s => %s" % (src, dst))
         chunk_copy(src, tmp_dst)
         if os.path.exists(dst):
             # rename destination file to avoid overwriting
