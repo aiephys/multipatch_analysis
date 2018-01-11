@@ -98,7 +98,8 @@ class ExperimentMetadataSubmission(object):
         # or 0-1 log files if there is no nwb
         source_log_files = [f['path'] for f in self.files if f['category'] == 'Multipatch log']
         if have_nwb and len(source_log_files) == 0:
-            errors.append("No MultiPatch log files specified")
+            # Occasionally user forgets to record this data; usually we can work with it
+            warnings.append("No MultiPatch log files specified")
         if len(source_log_files) > 1:
             errors.append("%d MultiPatch log files specified (should be 0 or 1)" % len(source_log_files))
 
