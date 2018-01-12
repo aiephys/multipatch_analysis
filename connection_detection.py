@@ -3,85 +3,38 @@ import numpy as np
 import scipy.signal
 import pyqtgraph as pg
 
-from data import MultiPatchProbe
-from neuroanalysis.spike_detection import detect_evoked_spike
+from data import MultiPatchProbe, Analyzer, PulseStimAnalyzer
 from neuroanalysis.stats import ragged_mean
-from neuroanalysis.stimuli import square_pulses
 from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.fitting import StackedPsp
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.filter import bessel_filter
 
 
-class Analyzer(object):
-    @classmethod
-    def get(cls, obj):
-        """Get the analyzer attached to a recording, or create a new one.
-        """
-        analyzer = getattr(obj, '_' + cls.__name__, None)
-        if analyzer is None:
-            analyzer = cls(obj)
-        return analyzer
-
-    def _attach(self, obj):
-        attr = '_' + self.__class__.__name__
-        if hasattr(obj, attr):
-            raise TypeError("Object %s already has attached %s" % (obj, self.__class__.__name__))
-        setattr(obj, attr, self)
 
 
-class PulseStimAnalyzer(Analyzer):
-    """Used for analyzing a patch clamp recording with square-pulse stimuli.
+class BaselineDistributor(Analyzer):
+    """Used to find baseline regions in a trace and distribute them on request.
     """
     def __init__(self, rec):
         self._attach(rec)
         self.rec = rec
-        self._pulses = None
-        self._evoked_spikes = None
-        
-    def pulses(self):
-        """Return a list of (start, stop, amp) tuples describing square pulses
-        in the stimulus.
-        """
-        if self._pulses is None:
-            trace = self.rec['command'].data
-            self._pulses = square_pulses(trace)
-        return self._pulses
+        self.baselines = rec.baseline_regions
+        self.ptr = 0
 
-    def evoked_spikes(self):
-        """Given presynaptic Recording, detect action potentials
-        evoked by current injection or unclamped spikes evoked by a voltage pulse.
-        """
-        if self._evoked_spikes is None:
-            pre_trace = self.rec['primary']
-
-            # Detect pulse times
-            pulses = self.pulses()
-
-            # detect spike times
-            spike_info = []
-            for i,pulse in enumerate(pulses):
-                on, off, amp = pulse
-                if amp < 0:
-                    # assume negative pulses do not evoke spikes
-                    # (todo: should be watching for rebound spikes as well)
-                    continue
-                spike = detect_evoked_spike(self.rec, [on, off])
-                spike_info.append({'pulse_n': i, 'pulse_ind': on, 'spike': spike})
-            self._evoked_spikes = spike_info
-        return self._evoked_spikes
-
-    def stim_params(self):
-        """Return induction frequency and recovery delay.
-        """
-        pulses = [p[0] for p in self.pulses() if p[2] > 0]
-        if len(pulses) < 2:
-            return None, None
-        dt = self.rec['command'].dt
-        ind_freq = np.round(1.0 / (dt * (pulses[1] - pulses[0])))
-        rec_delay = np.round(dt*np.diff(pulses).max(), 3)
-        
-        return ind_freq, rec_delay
+    def get_baseline_chunk(self, duration=20e-3):
+        while True:
+            if len(self.baselines) == 0:
+                return None
+            bl = self.baselines[0]
+            remain = bl.dt * (len(bl) - self.ptr)
+            if remain >= duration:
+                size = int(duration / bl.dt)
+                chunk = bl[self.ptr:self.ptr+size]
+                self.ptr += size
+                return chunk
+            else:
+                self.baselines.pop(0)
 
 
 class MultiPatchSyncRecAnalyzer(Analyzer):
@@ -104,6 +57,8 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         pulse_stim = PulseStimAnalyzer.get(pre_rec)
         spikes = pulse_stim.evoked_spikes()
         
+        baseline_dist = BaselineDistributor.get(post_rec)
+
         if len(spikes) < 10:
             # this does not look like the correct kind of stimulus; bail out
             # Ideally we can make this agnostic to the exact stim type in the future,
@@ -144,14 +99,14 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
             pulse['command'] = pre_rec['command'][pulse['rec_start']:pulse['rec_stop']]
 
             # select baseline region between 8th and 9th pulses
-            # (ideally we should use more careful criteria for selecting a baseline region)
-            baseline_dur = int(10e-3 / dt)
-            stop = spikes[8]['pulse_ind'] - (i * baseline_dur)
+            baseline_dur = int(100e-3 / dt)
+            stop = spikes[8]['pulse_ind']
             start = stop - baseline_dur
             pulse['baseline'] = post_rec['primary'][start:stop]
             pulse['baseline_start'] = start
             pulse['baseline_stop'] = stop
             assert len(pulse['baseline']) > 0
+
             result.append(pulse)
         
         return result
@@ -258,7 +213,7 @@ class MultiPatchExperimentAnalyzer(Analyzer):
                     continue
                 resp = spike['response']
                 if resp.duration >= min_duration:
-                    responses.add(resp, spike['baseline'])
+                    responses.add(resp.copy(t0=0), spike['baseline'])
         
         return responses
  
@@ -397,25 +352,25 @@ def plot_response_averages(expt, show_baseline=False, **kwds):
                 plt.plot(t, y, antialias=True)
 
                 # fit!                
-                fit = responses[(dev1, dev2)].fit_psp(yoffset=0, mask_stim_artifact=(abs(dev1-dev2) < 3))
-                lsnr = np.log(fit.snr)
-                lerr = np.log(fit.nrmse())
+                #fit = responses[(dev1, dev2)].fit_psp(yoffset=0, mask_stim_artifact=(abs(dev1-dev2) < 3))
+                #lsnr = np.log(fit.snr)
+                #lerr = np.log(fit.nrmse())
                 
-                color = (
-                    np.clip(255 * (-lerr/3.), 0, 255),
-                    np.clip(50 * lsnr, 0, 255),
-                    np.clip(255 * (1+lerr/3.), 0, 255)
-                )
+                #color = (
+                    #np.clip(255 * (-lerr/3.), 0, 255),
+                    #np.clip(50 * lsnr, 0, 255),
+                    #np.clip(255 * (1+lerr/3.), 0, 255)
+                #)
 
-                plt.plot(t, fit.best_fit, pen=color)
-                # plt.plot(t, fit.init_fit, pen='y')
+                #plt.plot(t, fit.best_fit, pen=color)
+                ## plt.plot(t, fit.init_fit, pen='y')
 
-                points.append({'x': lerr, 'y': lsnr, 'brush': color})
+                #points.append({'x': lerr, 'y': lsnr, 'brush': color})
 
-                if show_baseline:
-                    # plot baseline for reference
-                    bl = avg_response.meta['baseline'] - avg_response.meta['baseline_med']
-                    plt.plot(np.arange(len(bl)) * avg_response.dt, bl, pen=(0, 100, 0), antialias=True)
+                #if show_baseline:
+                    ## plot baseline for reference
+                    #bl = avg_response.meta['baseline'] - avg_response.meta['baseline_med']
+                    #plt.plot(np.arange(len(bl)) * avg_response.dt, bl, pen=(0, 100, 0), antialias=True)
 
                 # keep track of data range across all plots
                 ranges[0][0].append(y.min())
@@ -491,7 +446,10 @@ class EvokedResponseGroup(object):
             # Attach some extra metadata to the result:
             result.meta['baseline'] = avg_baseline
             result.meta['baseline_med'] = baseline
-            result.meta['baseline_std'] = scipy.signal.detrend(avg_baseline).std()
+            if len(avg_baseline) == 0:
+                result.meta['baseline_std'] = None
+            else:
+                result.meta['baseline_std'] = scipy.signal.detrend(avg_baseline).std()
 
             self._bsub_mean = result
 

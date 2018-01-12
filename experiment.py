@@ -83,6 +83,10 @@ class Experiment(object):
         very likely to be unique for any site.
         """
         return '%0.2f' % (self.site_info['__timestamp__'])
+    
+    @property
+    def datetime(self):
+        return datetime.datetime.fromtimestamp(self.site_info['__timestamp__'])
 
     @property
     def connections(self):

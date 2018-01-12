@@ -18,6 +18,15 @@ from constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
 import config
 
 
+_expt_list = None
+def cached_experiments():
+    global _expt_list
+    if _expt_list is None:
+        _expt_list = ExperimentList(cache='expts_cache.pkl')
+    return _expt_list
+
+
+
 class Entry(object):
     def __init__(self, line, parent, file, lineno):
         self.indentation = indentation(line)
@@ -54,6 +63,7 @@ class ExperimentList(object):
         self._cache_version = 6
         self._cache = cache
         self._expts = []
+        self._expts_by_datetime = {}
         self._expts_by_uid = {}
         self._expts_by_source_id = {}
         self.start_skip = []
@@ -171,6 +181,7 @@ class ExperimentList(object):
             return
         self._expts.append(expt)
         self._expts_by_uid[expt.uid] = expt
+        self._expts_by_datetime[expt.datetime] = expt
         self._expts_by_source_id[expt.source_id] = expt
         self._expts.sort(key=lambda ex: ex.uid)
 
@@ -228,6 +239,8 @@ class ExperimentList(object):
                 except Exception:
                     raise KeyError("No experiment in this list with UID '%s'" % (item,))
                 raise KeyError("No experiment in this list with UID '%s' (%s)" % (item, date))
+        elif isinstance(item, datetime.datetime):
+            return self._expts_by_datetime[item]
         else:
             return self._expts[item]
 
