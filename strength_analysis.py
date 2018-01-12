@@ -90,18 +90,14 @@ class ConnectionStrengthTableGroup(TableGroup):
             ('n_samples', 'int'),
             ('amp_mean', 'float'),
             ('amp_stdev', 'float'),
-            ('amp_vom', 'float'),
             ('base_amp_mean', 'float'),
             ('base_amp_stdev', 'float'),
-            ('base_amp_vom', 'float'),
             ('amp_mean_minus_base', 'float'),
             ('amp_stdev_minus_base', 'float'),
             ('deconv_amp_mean', 'float'),
             ('deconv_amp_stdev', 'float'),
-            ('deconv_amp_vom', 'float'),
             ('deconv_base_amp_mean', 'float'),
             ('deconv_base_amp_stdev', 'float'),
-            ('deconv_base_amp_vom', 'float'),
             ('deconv_amp_mean_minus_base', 'float'),
             ('deconv_amp_stdev_minus_base', 'float'),
             ('amp_ttest', 'float'),
@@ -271,18 +267,14 @@ def rebuild_connectivity(session):
                 continue
             conn.amp_mean = amp.mean()
             conn.amp_stdev = amp.std()
-            conn.amp_vom = amp.var() / n_samp
             conn.base_amp_mean = base_amp.mean()
             conn.base_amp_stdev = base_amp.std()
-            conn.base_amp_vom = base_amp.var() / n_samp
             conn.amp_mean_minus_base = conn.amp_mean - conn.base_amp_mean
             conn.amp_stdev_minus_base = conn.amp_stdev - conn.base_amp_stdev
             conn.deconv_amp_mean = dec_amp.mean()
             conn.deconv_amp_stdev = dec_amp.std()
-            conn.deconv_amp_vom = dec_amp.var() / n_samp
             conn.deconv_base_amp_mean = dec_base_amp.mean()
             conn.deconv_base_amp_stdev = dec_base_amp.std()
-            conn.deconv_base_amp_vom = dec_base_amp.var() / n_samp
             conn.deconv_amp_mean_minus_base = conn.deconv_amp_mean - conn.deconv_base_amp_mean
             conn.deconv_amp_stdev_minus_base = conn.deconv_amp_stdev - conn.deconv_base_amp_stdev
 
@@ -631,22 +623,18 @@ if __name__ == '__main__':
         ('amp_mean', {'units': 'V'}),
         ('abs_amp_mean', {'units': 'V'}),
         ('amp_stdev', {'units': 'V'}),
-        ('amp_vom', {'units': 'V'}),
         ('base_amp_mean', {'units': 'V'}),
         ('abs_base_amp_mean', {'units': 'V'}),
         ('base_amp_stdev', {'units': 'V'}),
-        ('base_amp_vom', {'units': 'V'}),
         ('amp_mean_minus_base', {'units': 'V'}),
         ('abs_amp_mean_minus_base', {'units': 'V'}),
         ('amp_stdev_minus_base', {'units': 'V'}),
         ('deconv_amp_mean', {'units': 'V'}),
         ('abs_deconv_amp_mean', {'units': 'V'}),
         ('deconv_amp_stdev', {'units': 'V'}),
-        ('deconv_amp_vom', {'units': 'V'}),
         ('deconv_base_amp_mean', {'units': 'V'}),
         ('abs_deconv_base_amp_mean', {'units': 'V'}),
         ('deconv_base_amp_stdev', {'units': 'V'}),
-        ('deconv_base_amp_vom', {'units': 'V'}),
         ('deconv_amp_mean_minus_base', {'units': 'V'}),
         ('abs_deconv_amp_mean_minus_base', {'units': 'V'}),
         ('deconv_amp_stdev_minus_base', {'units': 'V'}),
