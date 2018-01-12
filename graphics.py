@@ -24,22 +24,24 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
         Strings to display as col header
     size : float
         Width of each cell
+    header_color : str | tuple
+        Color of header text
     """
-    def __init__(self, text, fgcolor, bgcolor, rows, cols, size=50):
+    def __init__(self, text, fgcolor, bgcolor, rows, cols, size=50, header_color='w'):
         pg.QtGui.QGraphicsItemGroup.__init__(self)
 
         for i,row in enumerate(rows):
             txt = pg.QtGui.QGraphicsTextItem(str(row), parent=self)
             br = txt.boundingRect()
             txt.setPos(-br.width() - 10, i * size + size/2. - br.center().y())
-            txt.setDefaultTextColor(pg.mkColor('w'))
+            txt.setDefaultTextColor(pg.mkColor(header_color))
 
         for i,col in enumerate(cols):
             txt = pg.QtGui.QGraphicsTextItem(str(col), parent=self)
             txt.rotate(90)
             br = txt.mapRectToParent(txt.boundingRect())
             txt.setPos(i * size + size/2 - br.center().x(), -br.height() - 10)
-            txt.setDefaultTextColor(pg.mkColor('w'))
+            txt.setDefaultTextColor(pg.mkColor(header_color))
 
         for i,row in enumerate(rows):
             for j,col in enumerate(cols):
@@ -63,7 +65,7 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
         return self._bounding_rect
     
     
-def distance_plot(connected, distance, plots=None, color=(100, 100, 255), window=40e-6, spacing=None, name=None):
+def distance_plot(connected, distance, plots=None, color=(100, 100, 255), window=40e-6, spacing=None, name=None, fill_alpha=30):
     """Draw connectivity vs distance profiles with confidence intervals.
     
     Parameters
@@ -107,14 +109,15 @@ def distance_plot(connected, distance, plots=None, color=(100, 100, 255), window
         plots[0].addLegend()
         grid.show()
     plots[0].setLabels(bottom=('distance', 'm'), left='connection probability')
-    plots[1].setXLink(plots[0])
-    #plots[1].setLabels(bottom=('distance', 'm'), left='connections found / probed')
-    plots[1].hideAxis('bottom')
-    plots[1].hideAxis('left')
 
-    color2 = color + (100,)
-    scatter = plots[1].plot(pts[:,0], pts[:,1], pen=None, symbol='o', labels={'bottom': ('distance', 'm')}, symbolBrush=color2, symbolPen=None, name=name)
-    scatter.scatter.opts['compositionMode'] = pg.QtGui.QPainter.CompositionMode_Plus
+    if plots[1] is not None:
+        plots[1].setXLink(plots[0])
+        plots[1].hideAxis('bottom')
+        plots[1].hideAxis('left')
+
+        color2 = color + (100,)
+        scatter = plots[1].plot(pts[:,0], pts[:,1], pen=None, symbol='o', labels={'bottom': ('distance', 'm')}, symbolBrush=color2, symbolPen=None, name=name)
+        scatter.scatter.opts['compositionMode'] = pg.QtGui.QPainter.CompositionMode_Plus
 
     # use a sliding window to plot the proportion of connections found along with a 95% confidence interval
     # for connection probability
@@ -147,12 +150,12 @@ def distance_plot(connected, distance, plots=None, color=(100, 100, 255), window
 
     # plot connection probability and confidence intervals
     color2 = [c / 3.0 for c in color]
-    mid_curve = plots[0].plot(xvals, prop, pen=color, antialias=True, name=name)
-    upper_curve = plots[0].plot(ci_xvals, upper, pen=color2, antialias=True)
-    lower_curve = plots[0].plot(ci_xvals, lower, pen=color2, antialias=True)
+    mid_curve = plots[0].plot(xvals, prop, pen={'color': color, 'width': 3}, antialias=True, name=name)
+    upper_curve = plots[0].plot(ci_xvals, upper, pen=(0, 0, 0, 0), antialias=True)
+    lower_curve = plots[0].plot(ci_xvals, lower, pen=(0, 0, 0, 0), antialias=True)
     upper_curve.setVisible(False)
     lower_curve.setVisible(False)
-    color2 = color + (50,)
+    color2 = color + (fill_alpha,)
     fill = pg.FillBetweenItem(upper_curve, lower_curve, brush=color2)
     fill.setZValue(-10)
     plots[0].addItem(fill, ignoreBounds=True)
