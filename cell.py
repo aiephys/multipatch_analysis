@@ -12,6 +12,7 @@ class Cell(object):
         self.holding_qc = None
         self.spiking_qc = None
         self.labels = {}
+        self._raw_labels = {}
         self.position = None
         self._target_layer = None
 

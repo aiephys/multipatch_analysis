@@ -7,6 +7,7 @@ import lims
 import constants
 import genotypes
 import yaml_local  # adds support for OrderedDict
+import experiment_list
 
 
 class ExperimentMetadataSubmission(object):
@@ -34,8 +35,7 @@ class ExperimentMetadataSubmission(object):
         """Singleton ExperimentList used to access old metadata information for import
         """
         if self._expt_list is None:
-            import experiment_list
-            ExperimentMetadataSubmission._expt_list = experiment_list.ExperimentList()
+            ExperimentMetadataSubmission._expt_list = experiment_list.ExperimentList(cache='expts_cache.pkl')
         return self._expt_list
 
     def check(self):
@@ -274,9 +274,9 @@ class ExperimentMetadataSubmission(object):
         manifest_file = self.site_dh['file_manifest.yml'].name()
         yaml.dump(self.files, open(manifest_file, 'wb'), default_flow_style=False, indent=4)
 
-    def _import_old_metadata(site_info, warnings, errors):
+    def _import_old_metadata(self, site_info, warnings, errors):
         expts = self.old_expt_list
-        uid = '%0.02f' % site_info.__timestamp__
+        uid = '%0.02f' % site_info['__timestamp__']
         try:
             genotype = genotypes.Genotype(self.spec_info['genotype'])
         except Exception:
@@ -285,74 +285,75 @@ class ExperimentMetadataSubmission(object):
         
         try:
             expt = expts[uid]
-            connections = expt.connections[:]
-            for cell in expt.cells.values():
-                if cell.cell_id not in self.pipettes:
-                    warnings.append("Old-format metadata contains a cell ID %s, but this does not exist in the current submission." % cell.cell_id)
+        except KeyError:
+            warnings.append("Could not import any old-format metadata (uid=%s)." % uid)
+            return
+
+        connections = expt.connections[:]
+        for cell in expt.cells.values():
+            if cell.cell_id not in self.pipettes:
+                warnings.append("Old-format metadata contains a cell ID %s, but this does not exist in the current submission." % cell.cell_id)
+                continue
+
+            pid = cell.cell_id
+            pip = self.pipettes[pid]
+
+            # import labels
+            labels = {}
+            for label,pos in cell._raw_labels.items():
+                if pos not in ['', '+', '-', '+?', '-?', 'x']:
+                    warnings.append('Pipette %d: ignoring old label "%s" because the value "%s" is unrecognized' % (pid, label, pos))
                     continue
 
-                pid = cell.cell_id
-                pip = self.pipettes[pid]
-
-                # import labels
-                labels = {}
-                for label,pos in cell.labels.items():
-                    if pos not in ['', '+', '-', '+?', '-?', 'x']:
-                        warnings.append('Pipette %d: ignoring old label "%s" because the value "%s" is unrecognized' % (pid, label, pos))
+                # biocytin or fluorophore
+                if label in constants.ALL_LABELS:
+                    labels[label] = pos
+                # human_L layer call
+                elif label.startswith('human_L'):
+                    layer = label[7:]
+                    if pip['target_layer'] == '':
+                        pip['target_layer'] = layer
+                        warnings.append("Pipette %d: imported layer %s from old metadata." % (pid, layer))
+                    elif pip['target_layer'] != layer:
+                        warnings.append("Pipette %d: old metadata layer %s conflicts with current layer: %s." % (pid, layer, pip['target_layer']))
+                # cre type; convert to color(s)
+                elif label in constants.ALL_CRE_TYPES:
+                    if genotype is None:
+                        warnings.append("Pipette %d: ignoring old cre label %s" % (pid, label))
                         continue
-
-                    # biocytin or fluorophore
-                    if label in constants.ALL_LABELS:
-                        labels[label] = pos
-                    # human_L layer call
-                    elif label.startswith('human_L'):
-                        layer = label[7:]
-                        if pip['target_layer'] == '':
-                            pip['target_layer'] = layer
-                            warnings.append("Pipette %d: imported layer %s from old metadata." % (pid, layer))
-                        elif pip['target_layer'] != layer:
-                            warnings.append("Pipette %d: old metadata layer %s conflicts with current layer: %s." % (pid, layer, pip['target_layer']))
-                    # cre type; convert to color(s)
-                    elif label in constants.ALL_CRE_TYPES:
-                        if genotype is None:
-                            warnings.append("Pipette %d: ignoring old cre label %s" % (pid, label))
-                            continue
-                        if label not in genotype.drivers():
-                            warnings.append("Pipette %d: old cre label %s is not in genotype!" % (pid, label))
-                            continue
-                        for color in genotype.colors(driver=label):
-                            labels[color] = pos
-                    else:
-                        warnings.append("Pipette %d: old metadata has unrecognized label: %s." % (pid, label))
-                
-                # now make sure there are no conflicts
-                for label, pos in labels.items():
-                    val = pip['cell_labels'].get(label, '')
-                    if val == '':
-                        pip['cell_labels'][label] = pos
-                        warnings.append("Pipette %d: imported label %s=%s from old metadata." % (pid, label, pos))
-                    elif val != pos:
-                        warnings.append("Pipette %d: old metadata laybel %s=%s conflicts with current value: %s." % (pid, label, pos, val))
-
-                # import old QC (we can be more lax here because this is deprecated data)
-                pip['cell_qc'] = {'holding': cell.holding_qc, 'access': cell.access_qc, 'spiking': cell.spiking_qc}
-
-                # import connections
-                cell_connects = []
-                for pre, post in connections[:]:
-                    if pre != pid:
+                    if label not in genotype.drivers():
+                        warnings.append("Pipette %d: old cre label %s is not in genotype!" % (pid, label))
                         continue
-                    connections.remove((pre, post))
-                    cell_connects.append(post)
-                if pip['synapse_to'] is None:
-                    pip['synapse_to'] = cell_connects
-                    warnings.append("Pipette %d: imported connections %s from old metadata." % (pid, cell_connects))
+                    for color in genotype.colors(driver=label):
+                        labels[color] = pos
                 else:
-                    if list(sorted(pip['synapse_to'])) != list(sorted(cell_connects)):
-                        warnings.append("Pipette %d: old metadata connections %s conflicts with current value: %s." % (pid, cell_connects, pip['synapse_to']))
+                    warnings.append("Pipette %d: old metadata has unrecognized label: %s." % (pid, label))
+            
+            # now make sure there are no conflicts
+            for label, pos in labels.items():
+                val = pip['cell_labels'].get(label, '')
+                if val == '':
+                    pip['cell_labels'][label] = pos
+                    warnings.append("Pipette %d: imported label %s=%s from old metadata." % (pid, label, pos))
+                elif val != pos:
+                    warnings.append("Pipette %d: old metadata laybel %s=%s conflicts with current value: %s." % (pid, label, pos, val))
 
-            if len(connections) > 0:
-                warnings.append("Could not import old metadata connections:" % (connections)
+            # import old QC (we can be more lax here because this is deprecated data)
+            pip['cell_qc'] = {'holding': cell.holding_qc, 'access': cell.access_qc, 'spiking': cell.spiking_qc}
 
-        except KeyError:
-            warnings.append("Could not import any old-format metadata.")
+            # import connections
+            cell_connects = []
+            for pre, post in connections[:]:
+                if pre != pid:
+                    continue
+                connections.remove((pre, post))
+                cell_connects.append(post)
+            if pip['synapse_to'] is None:
+                pip['synapse_to'] = cell_connects
+                warnings.append("Pipette %d: imported connections %s from old metadata." % (pid, cell_connects))
+            else:
+                if list(sorted(pip['synapse_to'])) != list(sorted(cell_connects)):
+                    warnings.append("Pipette %d: old metadata connections %s conflicts with current value: %s." % (pid, cell_connects, pip['synapse_to']))
+
+        if len(connections) > 0:
+            warnings.append("Could not import old metadata connections:" % (connections))

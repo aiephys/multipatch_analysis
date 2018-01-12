@@ -193,13 +193,14 @@ class Experiment(object):
 
             # load labels
             colors = {}
-            for label,positive in pip_meta['cell_labels'].items():
+            for label,value in pip_meta['cell_labels'].items():
                 assert label not in cell.labels
-                if positive == '':
+                if value == '':
                     continue
-                m = re.match('(x)?(\+|\-)?(\?)?', positive)
+                m = re.match('(x)?(\+|\-)?(\?)?', value)
                 if m is None:
-                    raise Exception('Invalid label record for "%s": %s' % (label, positive))
+                    raise Exception('Invalid label record for "%s": %s' % (label, value))
+
                 grps = m.groups()
                 absent = grps[0] == 'x'
                 positive = grps[1] == '+'
@@ -359,6 +360,7 @@ class Experiment(object):
                 absent = grps[1] == 'x'
                 positive = grps[2]
                 uncertain = grps[3] == '?'
+                cell._raw_labels[cre] = ''.join([x or '' for x in grps[1:]])
 
                 # some target layers have been entered as a label (old data)
                 if cre.startswith('human_') and positive == '+':
