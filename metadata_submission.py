@@ -306,8 +306,11 @@ class ExperimentMetadataSubmission(object):
                     continue
 
                 # biocytin or fluorophore
-                if label in constants.ALL_LABELS:
+                if label == 'biocytin':
                     labels[label] = pos
+                elif label in constants.FLUOROPHORES:
+                    color = constants.FLUOROPHORES[label]
+                    labels[color] = pos
                 # human_L layer call
                 elif label.startswith('human_L'):
                     layer = label[7:]
@@ -325,6 +328,8 @@ class ExperimentMetadataSubmission(object):
                         warnings.append("Pipette %d: old cre label %s is not in genotype!" % (pid, label))
                         continue
                     for color in genotype.colors(driver=label):
+                        if color in labels:
+                            warnings.append("Pipette %d: color %s is specified twice!" % (pid, color))
                         labels[color] = pos
                 else:
                     warnings.append("Pipette %d: old metadata has unrecognized label: %s." % (pid, label))
