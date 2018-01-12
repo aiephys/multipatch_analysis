@@ -464,11 +464,10 @@ class EvokedResponseGroup(object):
             # yarg: how does this change SNR?
             avg = TraceList(responses).mean()
             avg_baseline = TraceList(baselines).mean().data
-
+            
             # subtract baseline
             baseline = np.median(avg_baseline)
             bsub = avg.data - baseline
-
             result = avg.copy(data=bsub)
             assert len(result.time_values) == len(result)
 
