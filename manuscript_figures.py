@@ -2,22 +2,32 @@ import os
 import pickle
 import numpy as np
 import pyqtgraph as pg
+import seaborn as sns
+import time
 from synaptic_dynamics import DynamicsAnalyzer
 from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.event_detection import exp_deconvolve
 from neuroanalysis.filter import bessel_filter
+from neuroanalysis.spike_detection import detect_ic_evoked_spike
 from scipy import stats
 from constants import EXCITATORY_CRE_TYPES, INHIBITORY_CRE_TYPES
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from statsmodels.stats.multicomp import MultiComparison
 app = pg.mkQApp()
 
-color_palette = [(244, 66, 66),
-                 (244, 185, 66),
-                 (78, 244, 66),
-                 (66, 176, 244),
-                 (164, 66, 244)]
+colors_human = [(247, 118, 118),
+                (246, 197, 97), # (211, 143, 198)
+                (100, 202, 103),
+                (107, 155, 250),
+                (162, 62, 247)]
+
+colors_mouse = [(249, 144, 92), #(202, 168, 220)
+                (100, 202, 103),
+                (81, 221, 209),
+                (45, 77, 247),
+                (107, 155, 250),
+                (162, 62, 247)]
 
 def write_cache(cache, cache_file):
     print("writing cache to disk...")
@@ -84,9 +94,9 @@ def get_response(expt, pre, post, type='pulse'):
         "Must select either pulse responses or train responses"
     if len(response) == 0:
         print "No suitable data found for cell %d -> cell %d in expt %s" % (pre, post, expt.source_id)
-        return response
-
-    return response
+        return response, None
+    artifact = analyzer.cross_talk()
+    return response, artifact
 
 def get_amplitude(response_list):
     if len(response_list) == 1:
@@ -177,7 +187,7 @@ def trace_plot(trace, color, plot=None, x_range=None, name=None):
 def train_amp(trace, pulse_offset, sign):
     deconv_trace = deconv_train(trace)
     pulses = np.array(pulse_offset)[0]
-    ind_pulses = pulses[:8] + 10e-3
+    ind_pulses = pulses[:8] + 13e-3
     rec_pulses = pulses[8:].copy()
     rec_pulses += 10e-3 - rec_pulses[0]
     ind = deconv_trace[0]
@@ -210,26 +220,36 @@ def deconv_train(trace):
 
     return deconv
 
-def induction_summary(train_response, freqs, holding, thresh=5, ind_dict=None, offset_dict=None):
+def induction_summary(train_response, freqs, holding, thresh=5, ind_dict=None, offset_dict=None, qc=None):
     if ind_dict is None:
         ind_dict = {}
         offset_dict = {}
     for f, freq in enumerate(freqs):
         induction_traces = {}
-        induction_traces['responses'] = response_filter(train_response['responses'], freq_range=[freq, freq],
+        traces = response_filter(train_response['responses'], freq_range=[freq, freq],
                                                         holding_range=holding, train=0)
         induction_traces['pulse_offsets'] = response_filter(train_response['pulse_offsets'], freq_range=[freq, freq])
-        ind_rec_traces = response_filter(train_response['responses'], freq_range=[freq, freq], holding_range=holding,
+        traces2 = response_filter(train_response['responses'], freq_range=[freq, freq], holding_range=holding,
                                          train=1, delta_t=250)
-        if len(induction_traces['responses']) >= thresh:
-            induction_avg = trace_avg(induction_traces['responses'])
-            ind_rec_avg = trace_avg(ind_rec_traces)
-            ind_rec_avg.t0 = induction_avg.time_values[-1] + 0.1
-            if freq not in ind_dict.keys():
-                ind_dict[freq] = [[], []]
-            ind_dict[freq][0].append(induction_avg)
-            ind_dict[freq][1].append(ind_rec_avg)
-            offset_dict[freq] = induction_traces['pulse_offsets']
+        if len(traces) >= thresh:
+            if qc is not None:
+                sign = qc[0]
+                amp = qc[1]
+                qc_traces = train_qc([traces, traces2], induction_traces['pulse_offsets'], amp=amp, sign=sign)
+                induction_traces['responses'] = qc_traces[0]
+                ind_rec_traces = qc_traces[1]
+            else:
+                induction_traces['responses'] = traces
+                ind_rec_traces = traces2
+            if len(induction_traces['responses']) > 0:
+                induction_avg = trace_avg(induction_traces['responses'])
+                ind_rec_avg = trace_avg(ind_rec_traces)
+                ind_rec_avg.t0 = induction_avg.time_values[-1] + 0.1
+                if freq not in ind_dict.keys():
+                    ind_dict[freq] = [[], []]
+                ind_dict[freq][0].append(induction_avg)
+                ind_dict[freq][1].append(ind_rec_avg)
+                offset_dict[freq] = induction_traces['pulse_offsets']
 
     return ind_dict, offset_dict
 
@@ -281,10 +301,13 @@ def pulse_qc(responses, baseline=None, pulse=None, plot=None):
             plot.plot(qc_trace.time_values, qc_trace.data, pen={'color':'k', 'width':2}, name=('%d'% len(qc_pass)))
     return qc_pass
 
-def train_qc(responses, offset, amp=None, sign=None):
+def train_qc(responses, offset, amp=None, sign=None, plot=None):
     qc_pass = [[],[]]
     amps = train_amp(responses, offset, sign=sign)
     for n in range(amps.shape[0]):
+        if plot is not None:
+            plot.plot(responses[0][n].time_values, responses[0][n].data, pen='r')
+            plot.plot(responses[1][n].time_values, responses[1][n].data, pen='r')
         if sign == '+' and np.any(amps[n, :] < 0):
             continue
         if sign == '-' and np.any(amps[n, :] > 0):
@@ -293,6 +316,11 @@ def train_qc(responses, offset, amp=None, sign=None):
             continue
         qc_pass[0].append(responses[0][n])
         qc_pass[1].append(responses[1][n])
+        if plot is not None:
+            plot.plot(responses[0][n].time_values, responses[0][n].data, pen=[0, 0, 0, 100])
+            plot.plot(responses[1][n].time_values, responses[1][n].data, pen=[0, 0, 0, 100])
+            app.processEvents()
+            time.sleep(2)
     return qc_pass
 
 def subplots(name=None, row=None):
@@ -318,6 +346,4 @@ def get_color(pre_type, post_type):
         color = (138, 43, 226)
     elif pre_type in INHIBITORY_CRE_TYPES and post_type in INHIBITORY_CRE_TYPES:
         color = (0, 0, 255)
-
-
     return color

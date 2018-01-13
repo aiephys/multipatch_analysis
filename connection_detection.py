@@ -196,6 +196,16 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         baseline = post_trace[bstart:bstop]
         
         return response, baseline, pre_spike, command
+
+    def find_artifacts(self, rec, freq=None, threshold=-10e-3):
+        """Find contaminating artifacts in recording such as spontaneous spikes or electrical noise, return True
+        state if anything is found"""
+
+        artifacts = False
+        # find anything that crosses a max threshold of -10mV
+        if np.any(rec >= threshold):
+            artifacts = True
+        return artifacts
         
 
 

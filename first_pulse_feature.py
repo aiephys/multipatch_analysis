@@ -7,6 +7,7 @@ from neuroanalysis.data import TraceList
 from neuroanalysis.ui.plot_grid import PlotGrid
 from connection_detection import fit_psp
 from rep_connections import ee_connections, human_connections
+from synaptic_dynamics import DynamicsAnalyzer
 
 app = pg.mkQApp()
 pg.dbg()
@@ -14,13 +15,14 @@ pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
 
 all_expts = ExperimentList(cache='expts_cache.pkl')
-
-connections = human_connections
+connections = ee_connections
+color_palette = colors_mouse
 connection_types = connections.keys()
 
-calcium = None
-age = None
+calcium = 'high'
+age = '40-60'
 sweep_threshold = 5
+threshold = 0.03e-3
 scale_offset = (-20, -20)
 scale_anchor = (0.4, 1)
 
@@ -38,13 +40,15 @@ for c in range(len(connection_types)):
     for expt in expt_list:
         for pre, post in expt.connections:
             if expt.cells[pre].cre_type == cre_type[0] and expt.cells[post].cre_type == cre_type[1]:
-                pulse_response = get_response(expt, pre, post, type='pulse')
+                pulse_response, artifact = get_response(expt, pre, post, type='pulse')
+                if threshold is not None and artifact > threshold:
+                    continue
                 response_subset = response_filter(pulse_response, freq_range=[0, 50], holding_range=[-68, -72], pulse=True)
                 if len(response_subset) >= sweep_threshold:
                     avg_trace, avg_amp, amp_sign, peak_t = get_amplitude(response_subset)
                     if amp_sign is '-':
                         continue
-                    grand_response[cre_type[0]]['fail_rate'].append(fail_rate(response_subset, '+', peak_t))
+                    #grand_response[cre_type[0]]['fail_rate'].append(fail_rate(response_subset, '+', peak_t))
                     psp_fits = fit_psp(avg_trace, sign=amp_sign, yoffset=0, amp=avg_amp, method='leastsq', fit_kws={})
                     avg_trace.t0 = -(psp_fits.best_values['xoffset'] - 10e-3)
                     grand_response[cre_type[0]]['latency'].append(psp_fits.best_values['xoffset'] - 10e-3)
@@ -76,11 +80,11 @@ for c in range(len(connection_types)):
     trace_plot(grand_trace, color={'color': color, 'width': 2}, plot=synapse_plot[c, 0], x_range=[0, 27e-3],
                name=('%s, n = %d' % (connection_types[c], n_synapses)))
     synapse_plot[c, 0].hideAxis('bottom')
-    all_amps = np.hstack(np.asarray(grand_response[cre_type[0]]['fail_rate']))
-    y, x = np.histogram(all_amps, bins=np.linspace(0, 2e-3, 40))
-    synapse_plot[c, 1].plot(x, y, stepMode=True, fillLevel=0, brush='k')
-    synapse_plot[c, 1].setLabels(bottom=('Vm', 'V'))
-    synapse_plot[c, 1].setXRange(0, 2e-3)
+    # all_amps = np.hstack(np.asarray(grand_response[cre_type[0]]['fail_rate']))
+    # y, x = np.histogram(all_amps, bins=np.linspace(0, 2e-3, 40))
+    # synapse_plot[c, 1].plot(x, y, stepMode=True, fillLevel=0, brush='k')
+    # synapse_plot[c, 1].setLabels(bottom=('Vm', 'V'))
+    # synapse_plot[c, 1].setXRange(0, 2e-3)
     feature_list = (grand_response[cre_type[0]]['amp'], grand_response[cre_type[0]]['latency'], grand_response[cre_type[0]]['rise'])
     grand_amp = np.mean(np.array(grand_response[cre_type[0]]['amp']))
     grand_latency = np.mean(np.array(grand_response[cre_type[0]]['latency']))
@@ -92,8 +96,10 @@ for c in range(len(connection_types)):
                                   color=color, name=connection_types[c])
     if c == len(connection_types) - 1:
         x_scale = pg.ScaleBar(size=10e-3, suffix='s')
-        x_scale.setParentItem(synapse_plot[c].vb)
+        x_scale.setParentItem(synapse_plot[c, 0].vb)
         x_scale.anchor(scale_anchor, scale_anchor, offset=scale_offset)
 feature_anova('amp', grand_response)
 feature_anova('latency', grand_response)
 feature_anova('rise', grand_response)
+
+#write_cache(grand_response, 'feature_summary_EE.pkl')

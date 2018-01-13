@@ -519,6 +519,22 @@ class RawDynamicsAnalyzer(object):
         rel_plots.show()
         return rel_plots
 
+    def cross_talk(self):
+        artifact = []
+        for stim, responses in self.pulse_responses.items():
+            for response in responses:
+                for pulse in response:
+                    dt = pulse['response'].dt
+                    start = int(10e-3/dt)
+                    chunk = int(1e-3/dt)
+                    data = pulse['response'].data
+                    pre = data[start-chunk:start]
+                    post = data[start:start+chunk]
+                    artifact.append(np.mean(post)-np.mean(pre))
+
+        cc_artifact = abs(np.mean(artifact))
+        return cc_artifact
+
 
 class DynamicsAnalyzer(RawDynamicsAnalyzer):
     def __init__(self, expt, pre_cell, post_cell, method='deconv', align_to='pulse'):
@@ -594,7 +610,6 @@ class DynamicsAnalyzer(RawDynamicsAnalyzer):
                 continue
 
             stim_params = analyzer.stim_params(pre_rec) + (post_rec.rounded_holding_potential,)
-            pulse_responses.setdefault(stim_params, []).append(resp)
 
             ind, base, ind_spike, ind_command = analyzer.get_train_response(pre_rec, post_rec, 0, 7,
                                                                             padding=(-pre_pad, post_pad))
@@ -602,11 +617,14 @@ class DynamicsAnalyzer(RawDynamicsAnalyzer):
                                                                             padding=(-pre_pad, post_pad))
             ind.t0 = 0
             rec.t0 = 0
+            if analyzer.find_artifacts(ind.data, threshold=-10e-3) is True or analyzer.find_artifacts(rec.data,
+                threshold=-10e-3) is True:
+                continue
             if stim_params not in train_responses:
                 train_responses[stim_params] = (EvokedResponseGroup(), EvokedResponseGroup())
             train_responses[stim_params][0].add(ind, base, ind_spike, ind_command)
             train_responses[stim_params][1].add(rec, base, rec_spike, rec_command)
-
+            pulse_responses.setdefault(stim_params, []).append(resp)
             dt = pre_rec['command'].dt
             if stim_params not in pulse_offsets:
                 i0 = resp[0]['pulse_ind']
