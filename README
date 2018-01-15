@@ -1,3 +1,7 @@
+Analysis tools used by multipatch pipeline; not recommended for external use.
+
+
+
 Requirements:
 
 * scientific python stack (Anaconda recommended)
