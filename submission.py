@@ -7,7 +7,7 @@ from neuroanalysis.baseline import float_mode
 from neuroanalysis.data import PatchClampRecording
 import lims
 from data import MultiPatchExperiment, MultiPatchProbe
-from connection_detection import PulseStimAnalyzer, MultiPatchSyncRecAnalyzer
+from connection_detection import PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
 import config
 import constants
 
@@ -62,7 +62,7 @@ class SliceSubmission(object):
                 'slice_time': slice_time,
                 'slice_conditions': {},
                 'lims_specimen_name': sid,
-                'original_path': '%s:%s' % (config.rig_name, self.dh.name()),
+                'storage_path': self.dh.name(relativeTo=self.dh.parent().parent()),
                 'submission_data': None,
             }
         return self._fields
@@ -164,10 +164,20 @@ class ExperimentDBSubmission(object):
                     temp = float(temp)
                 except Exception:
                     temp = None
-                    errors.append("Experiment temperature '%s' is invalid." % self._expt_info['temperature'])
+                    warnings.append("Experiment temperature '%s' is invalid." % self._expt_info['temperature'])
+
+        if not os.path.isfile(self.nwb_file.name()):
+            errors.append('Could not find NWB file "%s"' % self.nwb_file.name())
+        rel_nwb_name = self.nwb_file.name(relativeTo=self.nwb_file.parent().parent().parent())
+        rel_site_path = self.dh.name(relativeTo=self.dh.parent().parent())
+        if not rel_nwb_name.startswith(rel_site_path):
+            errors.append('NWB file "%s" is not inside site directory "%s"' % 
+                          (self.nwb_file.name(), self.dh.name()))
         
         self.fields = {
-            'original_path': self.dh.name(),
+            'original_path': open(self.dh['sync_source'].name(), 'rb').read(),
+            'storage_path': self.dh.name(relativeTo=expt_dir.parent()),
+            'ephys_file': self.nwb_file.name(relativeTo=self.dh),
             'rig_name': expt_info.get('rig_name', None),  # optional for now; make mandatory later
             'acq_timestamp': datetime.fromtimestamp(info['__timestamp__']),
             'target_region': expt_info.get('region'),
@@ -310,24 +320,45 @@ class ExperimentDBSubmission(object):
                     # get all responses, regardless of the presence of a spike
                     responses = mpa.get_spike_responses(srec[pre_dev], srec[post_dev], align_to='pulse', require_spike=False)
                     for resp in responses:
-                        base_entry = db.Baseline(
-                            recording=rec_entries[post_dev],
-                            start_index=resp['baseline_start'],
-                            stop_index=resp['baseline_stop'],
-                            data=resp['baseline'].resample(sample_rate=20000).data,
-                            mode=float_mode(resp['baseline'].data),
-                        )
-                        session.add(base_entry)
+                        # base_entry = db.Baseline(
+                        #     recording=rec_entries[post_dev],
+                        #     start_index=resp['baseline_start'],
+                        #     stop_index=resp['baseline_stop'],
+                        #     data=resp['baseline'].resample(sample_rate=20000).data,
+                        #     mode=float_mode(resp['baseline'].data),
+                        # )
+                        # session.add(base_entry)
                         resp_entry = db.PulseResponse(
                             recording=rec_entries[post_dev],
                             stim_pulse=all_pulse_entries[pre_dev][resp['pulse_n']],
-                            baseline=base_entry,
+                            # baseline=base_entry,
                             start_index=resp['rec_start'],
                             stop_index=resp['rec_stop'],
                             data=resp['response'].resample(sample_rate=20000).data,
                         )
                         session.add(resp_entry)
                         
+            # generate up to 100 baseline snippets for each recording
+            for dev in srec.devices:
+                rec = srec[dev]
+                dist = BaselineDistributor.get(rec)
+                for i in range(100):
+                    base = dist.get_baseline_chunk(20e-3)
+                    if base is None:
+                        # all out!
+                        break
+                    start, stop = base.source_indices
+                    base_entry = db.Baseline(
+                        recording=rec_entries[dev],
+                        start_index=start,
+                        stop_index=stop,
+                        data=base.resample(sample_rate=20000).data,
+                        mode=float_mode(base.data),
+                    )
+                    session.add(base_entry)
+                    
+                    
+            
         return expt
         
     def submit(self):

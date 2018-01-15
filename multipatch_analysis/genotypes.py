@@ -1,3 +1,4 @@
+from __future__ import print_function
 import sys
 from constants import GENOTYPES, REPORTER_LINES, DRIVER_LINES, FLUOROPHORES
 
@@ -38,8 +39,11 @@ class Genotype(object):
     def __init__(self, gtype):
         self.gtype = gtype
         self._parse()
+
+    def __repr__(self):
+        return "<Genotype %s>" % self.gtype
     
-    def drivers(self, reporter=None):
+    def drivers(self, reporter=None, colors=None):
         """Return a list of drivers in this genotype (such as pvalb, sst, etc.)
 
         Parameters
@@ -47,9 +51,20 @@ class Genotype(object):
         reporter : str or None
             If specified, then only the drivers linked to this reporter are returned.
             Otherwise, all drivers are returned.
+        colors : list or None
+            If specified, a list of colors that are detected together. The return
+            value contains any drivers that could have produced all of the detected
+            colors.
         """
         if reporter is None:
+            assert colors is None
             return list(self._driver_reporter_map.keys())
+        elif colors is not None:
+            drivers = []
+            for d in self.drivers():
+                d_colors = self.colors(driver=d)
+                if sorted(d_colors) == sorted(colors):
+                    drivers.append(d)
         else:
             return self._reporter_driver_map[reporter]
     
@@ -79,6 +94,45 @@ class Genotype(object):
         """
         reporters = self.reporters(driver)
         return list(set([FLUOROPHORES[r] for r in reporters]))
+
+    def predict_driver_expression(self, colors):
+        """Given information about fluorescent colors expressed in a cell,
+        return predictions about whether each driver could have been active.
+
+        Parameters
+        ----------
+        colors : dict
+            Describes whether each color observed in a cell was expressed (True),
+            not expressed (False), or ambiguous (None).
+
+        Returns
+        -------
+        driver_expression : dict
+            Dict indicating whether each driver in the genotype could be expressed
+            (True), could not be expressed (False), or has no information (None).
+
+        Notes
+        -----
+
+        Example colors dict::
+
+            colors = {
+                'red':   True,   # cell is red
+                'green': False,  # cell is not green
+                'blue':  None,   # cell may or may not be blue (no information, or ambiguous appearance)
+            }
+        """
+        drivers = {}
+        for driver in self.drivers():
+            driver_active = None  # start with no information
+            for dcolor in self.colors(driver):
+                color_expressed = colors.get(dcolor, None)
+                if color_expressed is True and driver_active is not False:
+                    driver_active = True
+                if color_expressed is False:
+                    driver_active = False
+            drivers[driver] = driver_active
+        return drivers
 
     def _parse(self):
         """Attempt to predict phenotype information from a genotype string
@@ -150,3 +204,4 @@ if __name__ == '__main__':
         g = Genotype(gt)
         print("    " + "   ".join(["%s: %s" % (d, ','.join(g.colors(d))) for d in g.drivers()]))
         print("")
+    print(g.predict_driver_expression({'green': True, 'red': False}))

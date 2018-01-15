@@ -1,8 +1,9 @@
 from __future__ import print_function
 
-import os, sys, time, glob
+import os, sys, time, glob, argparse
 from acq4.util.DataManager import getFileHandle
 import pyqtgraph.multiprocess as mp
+import multiprocessing
 
 from experiment_list import ExperimentList
 from submission import SliceSubmission, ExperimentDBSubmission
@@ -12,15 +13,41 @@ import synphys_cache
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--limit', type=int, default=None)
+    parser.add_argument('--local', action='store_true', default=False)
+    args, extra = parser.parse_known_args(sys.argv[1:])
+    
     import pyqtgraph as pg
     pg.dbg()
     
     print("Reading experiment list..")
     cache = synphys_cache.SynPhysCache()
     
-    all_expts = cache.list_nwbs()
+    all_nwbs = cache.list_nwbs()
     
-    for expt in all_expts:
+    # Just a dirty trick to give a wider variety of experiments when we are testing
+    # on a small subset
+    import random
+    random.seed(0)
+    random.shuffle(all_nwbs)
+    
+    # clean out experiments with multiple NWB files for now
+    all_sites = [os.path.dirname(nwb) for nwb in all_nwbs]
+    n_sites = len(set(all_sites))
+    all_sites = [expt for expt in all_sites if all_sites.count(expt) == 1]
+    all_expts = [nwb for nwb in all_nwbs if os.path.dirname(nwb) in all_sites]
+    
+    if args.limit > 0:
+        selected_expts = all_expts[:args.limit]
+    else:
+        selected_expts = all_expts
+        
+    print("Found %d nwb files in %d sites, will import %d experiments." % 
+          (len(all_nwbs), n_sites, len(selected_expts)))
+    
+    for i, expt in enumerate(selected_expts):
+        
         nwb_file = getFileHandle(expt)
         
         nwb_cache_file = getFileHandle(cache.get_cache(nwb_file.name()))

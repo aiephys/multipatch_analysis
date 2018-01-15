@@ -13,6 +13,9 @@ class SynPhysCache(object):
     def list_nwbs(self):
         return glob.glob(os.path.join(self.remote_path, '*', 'slice_*', 'site_*', '*.nwb'))
     
+    def list_pip_yamls(self):
+        return glob.glob(os.path.join(self.remote_path, '*', 'slice_*', 'site_*', 'pipettes.yml'))
+    
     def get_cache(self, filename):
         filename = os.path.abspath(filename)
         if not filename.startswith(self.remote_path):
@@ -35,4 +38,3 @@ class SynPhysCache(object):
             if root != '':
                 self.mkdir(root)
             os.mkdir(path)
-            

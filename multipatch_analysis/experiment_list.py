@@ -1,7 +1,7 @@
 # *-* coding: utf-8 *-*
 from __future__ import print_function, division
 import numpy as np
-import os
+import os, glob
 import pickle
 import scipy.optimize
 import scipy.stats
@@ -15,6 +15,16 @@ import pyqtgraph as pg
 from graphics import MatrixItem, distance_plot
 from experiment import Experiment
 from constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
+import config
+
+
+_expt_list = None
+def cached_experiments():
+    global _expt_list
+    if _expt_list is None:
+        _expt_list = ExperimentList(cache='expts_cache.pkl')
+    return _expt_list
+
 
 
 class Entry(object):
@@ -53,6 +63,7 @@ class ExperimentList(object):
         self._cache_version = 6
         self._cache = cache
         self._expts = []
+        self._expts_by_datetime = {}
         self._expts_by_uid = {}
         self._expts_by_source_id = {}
         self.start_skip = []
@@ -67,6 +78,31 @@ class ExperimentList(object):
             except Exception:
                 sys.excepthook(*sys.exc_info())
                 print('Error reading cache file "%s". (exception printed above)' % cache)
+
+    def load_from_server(self):
+        errs = []
+
+        # Load all pipettes.yml files found on server
+        yamls = glob.glob(os.path.join(config.synphys_data, '*', 'slice_*', 'site_*', 'pipettes.yml'))
+        for i,yml_file in enumerate(yamls):
+            # if i>15:
+                # break
+            try:
+                expt = Experiment(yml_file=yml_file)
+                self._add_experiment(expt)
+            except Exception as exc:
+                if len(exc.args) > 0 and exc.args[0] == 'breakpoint':
+                    raise
+                errs.append((yml_file, sys.exc_info()))
+                continue
+
+        if len(errs) > 0:
+            print("Errors loading %d experiments from server:" % len(errs))
+            for yml_file, exc in errs:
+                print("=======================")
+                print(yml_file)
+                traceback.print_exception(*exc)
+                print("")
 
     def load(self, filename):
         if filename.endswith('.pkl'):
@@ -116,7 +152,7 @@ class ExperimentList(object):
         cached = 0
         for entry in root.children:
             try:
-                expt_id = Experiment.id_from_entry(entry)
+                expt_id = Experiment._id_from_entry(entry)
                 if expt_id in self._expts_by_source_id:
                     # Already have this experiment cached
                     cached += 1
@@ -145,6 +181,7 @@ class ExperimentList(object):
             return
         self._expts.append(expt)
         self._expts_by_uid[expt.uid] = expt
+        self._expts_by_datetime[expt.datetime] = expt
         self._expts_by_source_id[expt.source_id] = expt
         self._expts.sort(key=lambda ex: ex.uid)
 
@@ -202,6 +239,8 @@ class ExperimentList(object):
                 except Exception:
                     raise KeyError("No experiment in this list with UID '%s'" % (item,))
                 raise KeyError("No experiment in this list with UID '%s' (%s)" % (item, date))
+        elif isinstance(item, datetime.datetime):
+            return self._expts_by_datetime[item]
         else:
             return self._expts[item]
 
@@ -228,23 +267,35 @@ class ExperimentList(object):
             if expt.region is None:
                 print("Warning: Experiment %s has no region" % str(expt.source_id))
 
-    def distance_plot(self, pre_type, post_type, plots=None, color=(100, 100, 255), name=None):
+    def distance_plot(self, pre_types=None, post_types=None, connection_types=None, plots=None, color=(100, 100, 255), name=None):
         # get all connected and unconnected distances for pre->post
         probed = []
         connected = []
+
+        if isinstance(pre_types, str):
+            pre_types = [pre_types]
+        if isinstance(post_types, str):
+            post_types = [post_types]
+
         for expt in self:
             for i,j in expt.connections_probed:
                 ci, cj = expt.cells[i], expt.cells[j]
-                if ci.cre_type != pre_type or cj.cre_type != post_type:
-                    continue
+                if connection_types is not None:
+                    if (ci.cre_type, cj.cre_type) not in connection_types:
+                        continue
+                else:
+                    pre_ok = pre_types is None or ci.cre_type in pre_types
+                    post_ok = post_types is None or cj.cre_type in post_types
+                    if not (pre_ok and post_ok):
+                        continue
                 dist = ci.distance(cj)
                 probed.append(dist)
                 connected.append((i, j) in expt.connections)
         if name is None:
-            name = ("%s->%s "%(pre_type, post_type))
-        return distance_plot(connected, distance=probed, plots=plots, color=color, name=name)
+            name = ("%s->%s "%(','.join(pre_types), ','.join(post_types)))
+        return distance_plot(connected, distance=probed, plots=plots, color=color, name=name, window=60e-6, spacing=10e-6)
 
-    def matrix(self, rows, cols, size=50):
+    def matrix(self, rows, cols, size=50, header_color='w', no_data_color='k'):
         w = pg.GraphicsLayoutWidget()
         v = w.addViewBox()
         v.setAspectLocked()
@@ -254,7 +305,7 @@ class ExperimentList(object):
             [0, 0.01, 0.03, 0.1, 0.3, 1.0],
             [(0,0,100), (80,0,80), (140,0,0), (255,100,0), (255,255,100), (255,255,255)],
         )
-        default = (0, 0, 0)
+        default = no_data_color
 
         summary = self.connectivity_summary(cre_type=None)
 
@@ -272,14 +323,16 @@ class ExperimentList(object):
                 else:
                     conn, uconn = 0, 0
                     color = default
+                color = pg.colorTuple(pg.mkColor(color))
                 bgcolor[i, j] = color
                 text[i, j] = "%d/%d" % (conn, conn+uconn)
-                fgcolor[i, j] = 'w' if sum(color) < 300 else 'k'
+                fgcolor[i, j] = 'w' if sum(color[:3]) < 200 else 'k'
                 if conn == uconn == 0:
                     fgcolor[i, j] = 0.3
 
         w.matrix = MatrixItem(text=text, fgcolor=fgcolor, bgcolor=bgcolor,
-                              rows=rows, cols=cols, size=size)
+                              rows=rows.values(), cols=cols.values(), size=size,
+                              header_color=header_color)
         v.addItem(w.matrix)
 
         # colormap is logarithmic; remap to linear for legend
@@ -367,11 +420,11 @@ class ExperimentList(object):
         print("Mean age: %0.1f" % np.nanmean(ages))
         print("")
 
-    def connectivity_summary(self, cre_type):
+    def connectivity_summary(self, cre_type=None):
         summary = {}
         for expt in self:
             for k,v in expt.summary().items():
-                if cre_type is not None and list(cre_type) != list(k):
+                if cre_type is not None and list(cre_type) != [x[1] for x in k]:
                     continue
                 if k not in summary:
                     summary[k] = {'connected':0, 'unconnected':0, 'cdist':[], 'udist':[]}
@@ -445,8 +498,8 @@ class ExperimentList(object):
                     pconn.append(c / t)
                 
                 totals.append((
-                    k[0],                        # pre type
-                    k[1],                        # post type
+                    "L%s %s"%k[0],               # pre type
+                    "L%s %s"%k[1],               # post type
                     v['connected'],              # n connected
                     probed,                      # n probed
                     reciprocal,                  # n reciprocal
