@@ -52,7 +52,8 @@ class Experiment(object):
         # make sure all cells have information for all labels
         for cell in self.cells.values():
             for label in self.labels:
-                assert label in cell.labels
+                if label not in cell.labels:
+                    raise Exception("Cell %s is missing label %s" % (cell, label))
             for cre in self.cre_types:
                 for crepart in cre.split(','):
                     if crepart != 'unknown' and crepart not in cell.labels:
@@ -65,7 +66,9 @@ class Experiment(object):
             print("Warning: Could not load cell positions for %s:\n    %s" % (self, exc.args[0]))
 
         # pull donor/specimen info from LIMS
-        self.age
+        if self.lims_record['organism'] == 'mouse':
+            # lots of human donors are missing age.
+            self.age
         
         # check for a single NWB file
         if len(self.cells) > 0:
@@ -346,7 +349,7 @@ class Experiment(object):
             assert parts[0].endswith(':')
             cre = parts[0][:-1]
 
-            if not (cre in ALL_LABELS or cre in ALL_CRE_TYPES):
+            if not (cre in ALL_LABELS or cre in ALL_CRE_TYPES or cre.lower().startswith('human_l')):
                 raise Exception("Invalid label or cre type: %s" % cre)
 
             # parse the remainder of the line
@@ -368,7 +371,7 @@ class Experiment(object):
 
                 # some target layers have been entered as a label (old data)
                 if cre.startswith('human_') and positive == '+':
-                    layer = cre[7:]
+                    layer = cre[7:].upper()
                     if layer == 'L23':
                         layer = 'L2/3'
                     cell._target_layer = layer
@@ -593,7 +596,7 @@ class Experiment(object):
             if len(files) == 0:
                 files = glob.glob(os.path.join(p, '*.NWB'))
             if len(files) == 0:
-                raise Exception("No NWB file found for %s" % self)
+                raise Exception("No NWB file found for %s\nSearched in path %s" % (self, self.path))
             elif len(files) > 1:
                 # multiple NWB files here; try using the file manifest to resolve.
                 manifest = os.path.join(self.path, 'file_manifest.yml')
@@ -610,20 +613,23 @@ class Experiment(object):
 
     @property
     def nwb_cache_file(self):
-        # if not os.path.isdir('cache'):
-        #     os.mkdir('cache')
-        # cf = os.path.join('cache', self.nwb_file.replace('/', '_').replace(':', '_').replace('\\', '_'))
-        # if not os.path.isfile(cf) or os.stat(self.nwb_file).st_mtime > os.stat(cf).st_mtime:
-        #     try:
-        #         import shutil
-        #         print("copying to cache:", cf)
-        #         shutil.copyfile(self.nwb_file, cf)
-        #     except:
-        #         if os.path.isfile(cf):
-        #             os.remove(cf)
-        #         raise
-        # return cf
-        return SynPhysCache().get_cache(self.nwb_file)
+        try:
+            return SynPhysCache().get_cache(self.nwb_file)
+        except:
+            # deprecated soon..
+            if not os.path.isdir('cache'):
+                os.mkdir('cache')
+            cf = os.path.join('cache', self.nwb_file.replace('/', '_').replace(':', '_').replace('\\', '_'))
+            if not os.path.isfile(cf) or os.stat(self.nwb_file).st_mtime > os.stat(cf).st_mtime:
+                try:
+                    import shutil
+                    print("copying to cache:", cf)
+                    shutil.copyfile(self.nwb_file, cf)
+                except:
+                    if os.path.isfile(cf):
+                        os.remove(cf)
+                    raise
+            return cf
 
     @property
     def data(self):
