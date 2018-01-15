@@ -30,31 +30,42 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
     def __init__(self, text, fgcolor, bgcolor, rows, cols, size=50, header_color='w'):
         pg.QtGui.QGraphicsItemGroup.__init__(self)
 
+        self.row_labels = []
         for i,row in enumerate(rows):
             txt = pg.QtGui.QGraphicsTextItem(str(row), parent=self)
             br = txt.boundingRect()
             txt.setPos(-br.width() - 10, i * size + size/2. - br.center().y())
             txt.setDefaultTextColor(pg.mkColor(header_color))
+            self.row_labels.append(txt)
 
+        self.col_labels = []
         for i,col in enumerate(cols):
             txt = pg.QtGui.QGraphicsTextItem(str(col), parent=self)
             txt.rotate(90)
             br = txt.mapRectToParent(txt.boundingRect())
             txt.setPos(i * size + size/2 - br.center().x(), -br.height() - 10)
             txt.setDefaultTextColor(pg.mkColor(header_color))
+            self.col_labels.append(txt)
 
+        self.cell_labels = []
+        self.cells = []
         for i,row in enumerate(rows):
+            self.cells.append([])
+            self.cell_labels.append([])
             for j,col in enumerate(cols):
                 x = j * size
                 y = i * size
-                rect = pg.QtGui.QGraphicsRectItem(x, y, size, size, parent=self)
+                rect = pg.QtGui.QGraphicsRectItem(0, 0, size, size, parent=self)
+                rect.setPos(x, y)
                 rect.setBrush(pg.mkBrush(bgcolor[i][j]))
                 rect.setZValue(-10)
+                self.cells[-1].append(rect)
 
                 txt = pg.QtGui.QGraphicsTextItem(text[i][j], parent=self)
                 br = txt.boundingRect()
                 txt.setPos(x + size/2 - br.center().x(), y + size/2 - br.center().y())
                 txt.setDefaultTextColor(pg.mkColor(fgcolor[i][j]))
+                self.cell_labels[-1].append(txt)
 
         br = pg.QtCore.QRectF()
         for item in self.childItems():

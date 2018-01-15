@@ -12,11 +12,12 @@ from neuroanalysis.event_detection import exp_deconvolve
 from neuroanalysis.filter import bessel_filter
 
 
-class DynamicsAnalyzer(object):
-    def __init__(self, expt, pre_cell, post_cell, method='deconv', align_to='pulse'):
-        self.expt = expt
-        self.pre_cell = pre_cell
-        self.post_cell = post_cell
+class RawDynamicsAnalyzer(object):
+    def __init__(self, pulse_responses, train_responses, pulse_offsets, method='deconv', align_to='pulse'):
+        self._pulse_responses = pulse_responses
+        self._train_responses = train_responses
+        self._pulse_offsets = pulse_offsets
+
         self.method = method  # 'deconv' or 'fit'
         self.align_to = align_to
 
@@ -34,9 +35,6 @@ class DynamicsAnalyzer(object):
     def _reset(self):
         """Clear out cached analysis results
         """
-        self._pulse_responses = None
-        self._train_responses = None
-        self._pulse_offsets = None
 
         self._deconvolved_trains = None
         
@@ -55,20 +53,14 @@ class DynamicsAnalyzer(object):
 
     @property
     def pulse_responses(self):
-        if self._pulse_responses is None:
-            self._collect_stim_trains()
         return self._pulse_responses
 
     @property
     def train_responses(self):
-        if self._train_responses is None:
-            self._collect_stim_trains()
         return self._train_responses
 
     @property
     def pulse_offsets(self):
-        if self._pulse_offsets is None:
-            self._collect_stim_trains()
         return self._pulse_offsets
 
     @property
@@ -123,7 +115,7 @@ class DynamicsAnalyzer(object):
             if self._fit_train_amps is None:
                 self.measure_train_amps_from_fit()
             return self._fit_train_amps
-        elif method == 'deconv':
+        elif self.method == 'deconv':
             if self._deconv_train_amps is None:
                 self.measure_train_amps_from_deconv()
             return self._deconv_train_amps
@@ -139,70 +131,6 @@ class DynamicsAnalyzer(object):
         if self._spike_sets is None:
             self.prepare_spike_sets()
         return self._spike_sets
-    
-    def _collect_stim_trains(self):
-        """Collect all stimulus-response recordings from an experiment between a
-        specific pre- and post-synaptic cell.
-        
-        Returns data in 3 dicts, each keyed with the stimulus parameters (induction
-        frequency, recovery delay, and holding potential):
-            pulse_responses : {stim_params: [(pulse1, ..., pulse12), ...], ...}
-                Postsynaptic responses separated into small chunks for each stimulus pulse
-            train_responses : {stim_params: [(induction, recovery), ...], ...} 
-                Postsynaptic responses, separated into larger chunks of multiple pulses for induction and recovery
-            pulse_offsets : {stim_params: [pulse_offsets], ...}
-                Offset times of pulses for each set of stimulus parameters
-        """
-        expt = self.expt
-        
-        # convert cell ID to headstage ID
-        pre = self.pre_cell-1
-        post = self.post_cell-1
-        
-        pre_pad, post_pad = self.pre_pad, self.post_pad
-        pulse_responses = {}
-        train_responses = {}
-        pulse_offsets = {}
-        for srec in expt.data.contents:
-            if pre not in srec.devices or post not in srec.devices:
-                continue
-            pre_rec = srec[pre]
-            post_rec = srec[post]
-            if post_rec.clamp_mode != 'ic':
-                continue
-            
-            analyzer = MultiPatchSyncRecAnalyzer.get(srec)
-            resp = analyzer.get_spike_responses(pre_rec, post_rec, pre_pad=pre_pad, align_to=self.align_to)
-            if len(resp) != 12:
-                # for dynamics, we require all 12 pulses to elicit a presynaptic spike
-                continue
-            
-            stim_params = analyzer.stim_params(pre_rec) + (post_rec.rounded_holding_potential,)
-            pulse_responses.setdefault(stim_params, []).append(resp)
-            
-            ind, base, ind_spike, ind_command = analyzer.get_train_response(pre_rec, post_rec, 0, 7, padding=(-pre_pad, post_pad))
-            rec, base, rec_spike, rec_command = analyzer.get_train_response(pre_rec, post_rec, 8, 11, padding=(-pre_pad, post_pad))
-            ind.t0 = 0
-            rec.t0 = 0
-            if stim_params not in train_responses:
-                train_responses[stim_params] = (EvokedResponseGroup(), EvokedResponseGroup())
-            train_responses[stim_params][0].add(ind, base, ind_spike, ind_command)
-            train_responses[stim_params][1].add(rec, base, rec_spike, rec_command)
-            
-            dt = pre_rec['command'].dt
-            if stim_params not in pulse_offsets:
-                i0 = resp[0]['pulse_ind']
-                pulse_offsets[stim_params] = [(r['pulse_ind'] - i0)*dt for r in resp]
-        
-        # re-write as ordered dicts
-        stim_param_order = sorted(pulse_offsets.keys())
-        pulse_responses = OrderedDict([(k, pulse_responses[k]) for k in stim_param_order])
-        train_responses = OrderedDict([(k, train_responses[k]) for k in stim_param_order])
-        pulse_offsets = OrderedDict([(k, pulse_offsets[k]) for k in stim_param_order])
-        
-        self._pulse_responses = pulse_responses
-        self._train_responses = train_responses
-        self._pulse_offsets = pulse_offsets
 
     def _get_kinetics_groups(self):
         """Given a set of pulse responses, return EvokedResponseGroups that can be used to extract
@@ -225,6 +153,10 @@ class DynamicsAnalyzer(object):
                     b = trial[j]['baseline']
                     s = trial[j]['pre_rec']
                     c = trial[j]['command']
+                    r.t0 = 0
+                    b.t0 = 0
+                    s.t0 = 0
+                    c.t0 = 0
                     s.meta['spike'] = trial[j]['spike']
 
                     all_group.add(r, b)
@@ -448,12 +380,13 @@ class DynamicsAnalyzer(object):
             amps = np.array(amps)
             self._fit_train_amps[stim_params] = (t, amps)
 
-    def measure_train_amps_from_deconv(self, plot_grid=None):
+    def measure_train_amps_from_deconv(self, amp_sign=None, plot_grid=None):
         """Generate structure describing timing and amplitude of averaged pulse responses
         using exponential deconvolution peaks rather than curve fit amplitudes
         """
-        psp_est = self.psp_estimate
-        
+        if amp_sign is None:
+            amp_sign = self.psp_estimate
+
         pulse_offsets = self.pulse_offsets
         deconv = self.deconvolved_trains
         self._deconv_train_amps = OrderedDict()
@@ -467,7 +400,7 @@ class DynamicsAnalyzer(object):
             ind = deconv[stim_params][0]
             rec = deconv[stim_params][1]
             dt = ind.dt
-            
+
             all_amps = []
             # collect peak amplitudes from induction and recovery traces
             for k, part_pulses, part_trace in [(0, ind_pulses, ind), (1, rec_pulses, rec)]:
@@ -477,18 +410,18 @@ class DynamicsAnalyzer(object):
                     start = int(pulse/dt)
                     stop = start + int(4e-3/dt)
                     chunk = part_trace.data[start:stop]
-                    if psp_est['amp'] > 0:
+                    if amp_sign['amp_sign'] == '+':
                         imx = np.argmax(chunk)
                     else:
                         imx = np.argmin(chunk)
                     mx = chunk[imx]
                     amps.append(mx)
-                    
+
                 if plot_grid is not None:
                     plot_grid[i,k].plot(part_pulses, amps, pen=None, symbol='o')
-                
+
                 all_amps.extend(amps)
-                
+
             t = np.array(pulses)
             amps = np.array(all_amps)
             self._deconv_train_amps[stim_params] = (t, amps)
@@ -586,6 +519,126 @@ class DynamicsAnalyzer(object):
         rel_plots.show()
         return rel_plots
 
+    def cross_talk(self):
+        artifact = []
+        for stim, responses in self.pulse_responses.items():
+            for response in responses:
+                for pulse in response:
+                    dt = pulse['response'].dt
+                    start = int(10e-3/dt)
+                    chunk = int(1e-3/dt)
+                    data = pulse['response'].data
+                    pre = data[start-chunk:start]
+                    post = data[start:start+chunk]
+                    artifact.append(np.mean(post)-np.mean(pre))
+
+        cc_artifact = abs(np.mean(artifact))
+        return cc_artifact
+
+
+class DynamicsAnalyzer(RawDynamicsAnalyzer):
+    def __init__(self, expt, pre_cell, post_cell, method='deconv', align_to='pulse'):
+        self.expt = expt
+        self.pre_cell = pre_cell
+        self.post_cell = post_cell
+        self.method = method  # 'deconv' or 'fit'
+        self.align_to = align_to
+        RawDynamicsAnalyzer.__init__(self, None, None, None, method=method, align_to=align_to)
+
+    def _reset(self):
+        """Clear out cached analysis results
+        """
+        self._pulse_responses = None
+        self._train_responses = None
+        self._pulse_offsets = None
+
+        RawDynamicsAnalyzer._reset(self)
+
+    @property
+    def pulse_responses(self):
+        if self._pulse_responses is None:
+            self._collect_stim_trains()
+        return self._pulse_responses
+
+    @property
+    def train_responses(self):
+        if self._train_responses is None:
+            self._collect_stim_trains()
+        return self._train_responses
+
+    @property
+    def pulse_offsets(self):
+        if self._pulse_offsets is None:
+            self._collect_stim_trains()
+        return self._pulse_offsets
+
+    def _collect_stim_trains(self):
+        """Collect all stimulus-response recordings from an experiment between a
+        specific pre- and post-synaptic cell.
+
+        Returns data in 3 dicts, each keyed with the stimulus parameters (induction
+        frequency, recovery delay, and holding potential):
+            pulse_responses : {stim_params: [(pulse1, ..., pulse12), ...], ...}
+                Postsynaptic responses separated into small chunks for each stimulus pulse
+            train_responses : {stim_params: [(induction, recovery), ...], ...}
+                Postsynaptic responses, separated into larger chunks of multiple pulses for induction and recovery
+            pulse_offsets : {stim_params: [pulse_offsets], ...}
+                Offset times of pulses for each set of stimulus parameters
+        """
+        expt = self.expt
+
+        # convert cell ID to headstage ID
+        pre = self.pre_cell - 1
+        post = self.post_cell - 1
+
+        pre_pad, post_pad = self.pre_pad, self.post_pad
+        pulse_responses = {}
+        train_responses = {}
+        pulse_offsets = {}
+        for srec in expt.data.contents:
+            if pre not in srec.devices or post not in srec.devices:
+                continue
+            pre_rec = srec[pre]
+            post_rec = srec[post]
+            if post_rec.clamp_mode != 'ic':
+                continue
+
+            analyzer = MultiPatchSyncRecAnalyzer.get(srec)
+            resp = analyzer.get_spike_responses(pre_rec, post_rec, pre_pad=pre_pad, align_to=self.align_to)
+            if len(resp) != 12:
+                # for dynamics, we require all 12 pulses to elicit a presynaptic spike
+                continue
+
+            stim_params = analyzer.stim_params(pre_rec) + (post_rec.rounded_holding_potential,)
+
+            ind, base, ind_spike, ind_command = analyzer.get_train_response(pre_rec, post_rec, 0, 7,
+                                                                            padding=(-pre_pad, post_pad))
+            rec, base, rec_spike, rec_command = analyzer.get_train_response(pre_rec, post_rec, 8, 11,
+                                                                            padding=(-pre_pad, post_pad))
+            ind.t0 = 0
+            rec.t0 = 0
+            if analyzer.find_artifacts(ind.data, threshold=-10e-3) is True or analyzer.find_artifacts(rec.data,
+                threshold=-10e-3) is True:
+                continue
+            if stim_params not in train_responses:
+                train_responses[stim_params] = (EvokedResponseGroup(), EvokedResponseGroup())
+            train_responses[stim_params][0].add(ind, base, ind_spike, ind_command)
+            train_responses[stim_params][1].add(rec, base, rec_spike, rec_command)
+            pulse_responses.setdefault(stim_params, []).append(resp)
+            dt = pre_rec['command'].dt
+            if stim_params not in pulse_offsets:
+                i0 = resp[0]['pulse_ind']
+                pulse_offsets[stim_params] = [(r['pulse_ind'] - i0) * dt for r in resp]
+
+        # re-write as ordered dicts
+        stim_param_order = sorted(pulse_offsets.keys())
+        pulse_responses = OrderedDict([(k, pulse_responses[k]) for k in stim_param_order])
+        train_responses = OrderedDict([(k, train_responses[k]) for k in stim_param_order])
+        pulse_offsets = OrderedDict([(k, pulse_offsets[k]) for k in stim_param_order])
+
+        self._pulse_responses = pulse_responses
+        self._train_responses = train_responses
+        self._pulse_offsets = pulse_offsets
 
 
 if __name__ == '__main__':

@@ -59,7 +59,7 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         
         baseline_dist = BaselineDistributor.get(post_rec)
 
-        if len(spikes) < 10:
+        if not isinstance(pre_rec, MultiPatchProbe):
             # this does not look like the correct kind of stimulus; bail out
             # Ideally we can make this agnostic to the exact stim type in the future,
             # but for now we rely on the delay period between pulses 8 and 9 to get
@@ -151,6 +151,16 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         baseline = post_trace[bstart:bstop]
         
         return response, baseline, pre_spike, command
+
+    def find_artifacts(self, rec, freq=None, threshold=-10e-3):
+        """Find contaminating artifacts in recording such as spontaneous spikes or electrical noise, return True
+        state if anything is found"""
+
+        artifacts = False
+        # find anything that crosses a max threshold of -10mV
+        if np.any(rec >= threshold):
+            artifacts = True
+        return artifacts
         
 
 
@@ -291,10 +301,10 @@ class NDDict(object):
         data = self._data
         for i,key in enumerate(item[:-1]):
             data = data.setdefault(key, {})
-            self.keys[i].add(key)
+            self.keys()[i].add(key)
 
         data[item[-1]] = value
-        self.keys[ndim-1].add(item[-1])
+        self.keys()[ndim-1].add(item[-1])
 
     def keys(self):
         return self._keys

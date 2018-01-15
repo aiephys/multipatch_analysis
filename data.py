@@ -67,6 +67,8 @@ class MultiPatchProbe(MiesRecording):
         return len(self._parent_rec)
 
     def __getattr__(self, attr):
+        if '_parent_rec' not in self.__dict__:
+            raise AttributeError(attr)
         return getattr(self._parent_rec, attr)
 
     @property

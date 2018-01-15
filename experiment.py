@@ -652,10 +652,13 @@ class Experiment(object):
     @property
     def age(self):
         age = self.lims_record.get('age', 0)
-        if age == 0:
-            raise Exception("Donor age not set in LIMS for specimen %s" % self.specimen_id)
+        if self.lims_record['organism'] == 'mouse':
+            if age == 0:
+                raise Exception("Donor age not set in LIMS for specimen %s" % self.specimen_id)
             # data not entered in to lims
             age = (self.date - self.birth_date).days
+        else:
+            age = np.nan
         return age
 
     @property

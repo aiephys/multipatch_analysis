@@ -134,6 +134,8 @@ if args.organism == 'mouse':
 elif args.organism == 'human':
     expts.matrix(human_types, mouse_types)
 
+ee_types = ['L23pyr', 'rorb', 'sim1', 'tlx3', 'ntsr1']
+m3 = expts.matrix(ee_types, ee_types)
 # cache everything!
 all_expts.write_cache()
 print("Cache successfully updated!")
