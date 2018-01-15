@@ -88,17 +88,17 @@ class ConnectionStrengthTableGroup(TableGroup):
             ('user_connected', 'bool', 'Whether the experimenter marked this pair as connected.'),
             ('synapse_type', 'str', '"ex" or "in"'),
             ('n_samples', 'int'),
-            ('amp_mean', 'float'),
+            ('amp_med', 'float'),
             ('amp_stdev', 'float'),
-            ('base_amp_mean', 'float'),
+            ('base_amp_med', 'float'),
             ('base_amp_stdev', 'float'),
-            ('amp_mean_minus_base', 'float'),
+            ('amp_med_minus_base', 'float'),
             ('amp_stdev_minus_base', 'float'),
-            ('deconv_amp_mean', 'float'),
+            ('deconv_amp_med', 'float'),
             ('deconv_amp_stdev', 'float'),
-            ('deconv_base_amp_mean', 'float'),
+            ('deconv_base_amp_med', 'float'),
             ('deconv_base_amp_stdev', 'float'),
-            ('deconv_amp_mean_minus_base', 'float'),
+            ('deconv_amp_med_minus_base', 'float'),
             ('deconv_amp_stdev_minus_base', 'float'),
             ('amp_ttest', 'float'),
             ('deconv_amp_ttest', 'float'),
@@ -137,7 +137,7 @@ def measure_sum(trace, sign, baseline=(0e-3, 9e-3), response=(12e-3, 17e-3)):
         
 def deconv_filter(trace, tau=15e-3, lowpass=300.):
     dec = exp_deconvolve(trace, tau)
-    baseline = np.median(dec.time_slice(trace.t0, trace.t0+10e-3).data)
+    baseline = np.median(dec.time_slice(dec.t0, dec.t0+10e-3).data)
     deconv = bessel_filter(dec-baseline, lowpass)
     return deconv
 
@@ -265,17 +265,17 @@ def rebuild_connectivity(session):
             conn.n_samples = n_samp
             if n_samp == 0:
                 continue
-            conn.amp_mean = amp.mean()
+            conn.amp_med = np.median(amp)
             conn.amp_stdev = amp.std()
-            conn.base_amp_mean = base_amp.mean()
+            conn.base_amp_med = np.median(base_amp)
             conn.base_amp_stdev = base_amp.std()
-            conn.amp_mean_minus_base = conn.amp_mean - conn.base_amp_mean
+            conn.amp_med_minus_base = conn.amp_med - conn.base_amp_med
             conn.amp_stdev_minus_base = conn.amp_stdev - conn.base_amp_stdev
-            conn.deconv_amp_mean = dec_amp.mean()
+            conn.deconv_amp_med = np.median(dec_amp)
             conn.deconv_amp_stdev = dec_amp.std()
-            conn.deconv_base_amp_mean = dec_base_amp.mean()
+            conn.deconv_base_amp_med = np.median(dec_base_amp)
             conn.deconv_base_amp_stdev = dec_base_amp.std()
-            conn.deconv_amp_mean_minus_base = conn.deconv_amp_mean - conn.deconv_base_amp_mean
+            conn.deconv_amp_med_minus_base = conn.deconv_amp_med - conn.deconv_base_amp_med
             conn.deconv_amp_stdev_minus_base = conn.deconv_amp_stdev - conn.deconv_base_amp_stdev
 
             
@@ -327,11 +327,12 @@ class ExperimentBrowser(pg.TreeWidget):
         self.items = {}
         
         # cheating:
-        import experiment_list
         expts = experiment_list.cached_experiments()
         
         self.session = db.Session()
-        for expt in list_experiments(session=self.session):
+        db_expts = list_experiments(session=self.session)
+        db_expts.sort(key=lambda e: e.acq_timestamp)
+        for expt in db_expts:
             date = expt.acq_timestamp
             date_str = date.strftime('%Y-%m-%d')
             slice = expt.slice
@@ -342,16 +343,16 @@ class ExperimentBrowser(pg.TreeWidget):
             pairs = get_experiment_pairs(expt)
             
             for d1, d2 in pairs:
-                pre_id = d1+1
-                post_id = d1+2
+                pre_id = d1 + 1
+                post_id = d2 + 1
                 
                 try:
                     e = expts[date]
-                    conn = (pre_id+1, post_id+1) in e.connections
+                    conn = (pre_id, post_id) in e.connections
                 except:
                     conn = 'no expt'
                 
-                pair_item = pg.TreeWidgetItem(['%d => %d' % (d1, d2), str(conn)])
+                pair_item = pg.TreeWidgetItem(['%d => %d' % (pre_id, post_id), str(conn)])
                 expt_item.addChild(pair_item)
                 pair_item.devs = (d1, d2)
                 pair_item.expt = expt
@@ -543,6 +544,9 @@ class ResponseStrengthPlots(object):
 
 
 if __name__ == '__main__':
+    import experiment_list
+    expts = experiment_list.cached_experiments()
+
     pg.dbg()
 
     if '--rebuild' in sys.argv:
@@ -591,11 +595,10 @@ if __name__ == '__main__':
             expt = sel.expt
             devs = sel.devs
             rs_plots.load_conn(expt, devs)
-        else:
-            print(sel.expt.original_path)
-            ts = sel.expt.acq_timestamp
-            sec = time.mktime(ts.timetuple()) + ts.microsecond * 1e-6
-            print(sec)
+        print(sel.expt.original_path)
+        ts = sel.expt.acq_timestamp
+        sec = time.mktime(ts.timetuple()) + ts.microsecond * 1e-6
+        print(sec)
 
     b.itemSelectionChanged.connect(selected)
 
@@ -620,23 +623,23 @@ if __name__ == '__main__':
         ('synapse_type', {'mode': 'enum', 'values': ['in', 'ex']}),
         ('n_samples', {}),
         ('acq_timestamp', {}),
-        ('amp_mean', {'units': 'V'}),
-        ('abs_amp_mean', {'units': 'V'}),
+        ('amp_med', {'units': 'V'}),
+        ('abs_amp_med', {'units': 'V'}),
         ('amp_stdev', {'units': 'V'}),
-        ('base_amp_mean', {'units': 'V'}),
-        ('abs_base_amp_mean', {'units': 'V'}),
+        ('base_amp_med', {'units': 'V'}),
+        ('abs_base_amp_med', {'units': 'V'}),
         ('base_amp_stdev', {'units': 'V'}),
-        ('amp_mean_minus_base', {'units': 'V'}),
-        ('abs_amp_mean_minus_base', {'units': 'V'}),
+        ('amp_med_minus_base', {'units': 'V'}),
+        ('abs_amp_med_minus_base', {'units': 'V'}),
         ('amp_stdev_minus_base', {'units': 'V'}),
-        ('deconv_amp_mean', {'units': 'V'}),
-        ('abs_deconv_amp_mean', {'units': 'V'}),
+        ('deconv_amp_med', {'units': 'V'}),
+        ('abs_deconv_amp_med', {'units': 'V'}),
         ('deconv_amp_stdev', {'units': 'V'}),
-        ('deconv_base_amp_mean', {'units': 'V'}),
-        ('abs_deconv_base_amp_mean', {'units': 'V'}),
+        ('deconv_base_amp_med', {'units': 'V'}),
+        ('abs_deconv_base_amp_med', {'units': 'V'}),
         ('deconv_base_amp_stdev', {'units': 'V'}),
-        ('deconv_amp_mean_minus_base', {'units': 'V'}),
-        ('abs_deconv_amp_mean_minus_base', {'units': 'V'}),
+        ('deconv_amp_med_minus_base', {'units': 'V'}),
+        ('abs_deconv_amp_med_minus_base', {'units': 'V'}),
         ('deconv_amp_stdev_minus_base', {'units': 'V'}),
         ('amp_ttest', {}),
         ('deconv_amp_ttest', {}),
@@ -652,12 +655,12 @@ if __name__ == '__main__':
                 DATE_PART('hour', experiment.acq_timestamp - '1970-01-01'::timestamp)) * 60 +
                 DATE_PART('minute', experiment.acq_timestamp - '1970-01-01'::timestamp)) * 60 +
                 DATE_PART('second', experiment.acq_timestamp - '1970-01-01'::timestamp) as acq_timestamp,
-                ABS(connection_strength.amp_mean) as abs_amp_mean,
-                ABS(connection_strength.base_amp_mean) as abs_base_amp_mean,
-                ABS(connection_strength.amp_mean_minus_base) as abs_amp_mean_minus_base,
-                ABS(connection_strength.deconv_amp_mean) as abs_deconv_amp_mean,
-                ABS(connection_strength.deconv_base_amp_mean) as abs_deconv_base_amp_mean,
-                ABS(connection_strength.deconv_amp_mean_minus_base) as abs_deconv_amp_mean_minus_base
+                ABS(connection_strength.amp_med) as abs_amp_med,
+                ABS(connection_strength.base_amp_med) as abs_base_amp_med,
+                ABS(connection_strength.amp_med_minus_base) as abs_amp_med_minus_base,
+                ABS(connection_strength.deconv_amp_med) as abs_deconv_amp_med,
+                ABS(connection_strength.deconv_base_amp_med) as abs_deconv_base_amp_med,
+                ABS(connection_strength.deconv_amp_med_minus_base) as abs_deconv_amp_med_minus_base
     from connection_strength
     join experiment on connection_strength.experiment_id=experiment.id
     where abs(connection_strength.pre_id-connection_strength.post_id) > 1
