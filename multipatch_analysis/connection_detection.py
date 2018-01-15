@@ -593,25 +593,3 @@ def detect_connections(expt):
             if lsnr > lnrmse + 6:
                 print "Connection:", pre_id, post_id, fit.snr, fit.nrmse()
 
-
-if __name__ == '__main__':
-
-    import user
-    import pyqtgraph as pg
-    pg.dbg()
-
-    from neuroanalysis.miesnwb import MiesNwb
-    import sys
-    arg = sys.argv[1]
-    try:
-        expt_ind = arg
-        from experiment_list import ExperimentList
-        all_expts = ExperimentList(cache='expts_cache.pkl')
-        expt = all_expts[expt_ind].data
-    except ValueError:
-        expt_file = arg
-        expt = MiesNwb(expt_file)
-    
-    plots = plot_response_averages(expt, show_baseline=True, clamp_mode='ic', min_duration=25e-3, pulse_ids=None)
-
-    detect_connections(expt)
