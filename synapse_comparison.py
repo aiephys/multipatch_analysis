@@ -202,10 +202,13 @@ def summary_plot_pulse(grand_trace, feature_list, feature_mean, labels, titles, 
         plot[feature, 0].setTitle(title)
         plot[feature, 1].plot(grand_trace.time_values, grand_trace.data, pen=color, name=name)
         dx = pg.pseudoScatter(np.array(features).astype(float), 0.3, bidir=True)
-        plot[feature, 0].plot((0.3 * dx / dx.max()) + i, features, pen=None, symbol='x', symbolSize=5, symbolBrush=color,
-                         symbolPen=None)
-        plot[feature, 0].plot([i], [mean], pen=None, symbol='o', symbolBrush=color, symbolPen='w',
-                     symbolSize=10)
+        bar = pg.BarGraphItem(x=[i], height=mean, width=0.7, brush='w', pen={'color': color, 'width': 2})
+        plot[feature, 0].addItem(bar)
+        sem = stats.sem(features)
+        err = pg.ErrorBarItem(x=np.asarray([i]), y=np.asarray([mean]), height=sem, beam=0.3)
+        plot[feature, 0].addItem(err)
+        plot[feature, 0].plot((0.3 * dx / dx.max()) + i, features, pen=None, symbol='o', symbolSize=10, symbolPen='w',
+                         symbolBrush=color)
     return plot
 
 def get_expts(all_expts, cre_type, calcium=None, age=None, start=None, dist_plot=None, color=None):
