@@ -1,8 +1,19 @@
 ALL_LABELS = ['biocytin', 'af488', 'cascade_blue']
-INHIBITORY_CRE_TYPES = ['sst','pvalb', 'vip', 'ndnf', 'chat', 'htr3a', 'nos1', 'chrna2']
-EXCITATORY_CRE_TYPES = ['tlx3', 'sim1', 'rorb', 'ntsr1', 'rbp4', 'ctgf', 'glt25d2', 'L23pyr', 'slc17a8', 'cux2', 'nr5a1']
+INHIBITORY_CRE_TYPES = ['sst', 'pvalb', 'vip', 'ndnf', 'chat', 'htr3a', 'nos1', 'chrna2']
+EXCITATORY_CRE_TYPES = ['tlx3', 'sim1', 'rorb', 'ntsr1', 'rbp4', 'ctgf', 'glt25d2', 'slc17a8', 'cux2', 'nr5a1']
 ALL_CRE_TYPES = INHIBITORY_CRE_TYPES + EXCITATORY_CRE_TYPES + ['unknown']
 
+DRIVER_LAYERS = {
+    'cux2':    ['2', '2/3', '3', '4'],
+    'rorb':    ['4'],
+    'nr5a1':   ['4'],
+    'tlx3':    ['5'],
+    'sim1':    ['5'],
+    'rbp4':    ['5'],
+    'slc17a8': ['5', '6'],
+    'ntsr1':   ['6'],
+    'ctgf':    ['6'],
+}
 
 FLUOROPHORES = {
     'tdTomato': 'red',

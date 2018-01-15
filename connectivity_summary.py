@@ -59,6 +59,11 @@ if len(all_expts) == 0:
     print("No experiments loaded; bailing out.")
     sys.exit(-1)
 
+# cache everything!
+all_expts.write_cache()
+print("Cache successfully updated!")
+
+
 for i, ex in enumerate(all_expts):
     ex.summary_id = i
 
@@ -119,6 +124,30 @@ mouse_types = [
 ]
 mouse_types = OrderedDict([(typ, "L%s %s" % typ) for typ in mouse_types])
 
+mouse_ee_types = OrderedDict([
+    (('2/3', 'unknown'), 'L23pyr'),
+    (('4', 'rorb'), 'rorb'),
+    (('5', 'sim1'), 'sim1'),
+    (('5', 'tlx3'), 'tlx3'),
+    (('6', 'ntsr1'), 'ntsr1'),
+])
+
+mouse_nolayer_types = OrderedDict([
+    ((None, 'unknown'), 'L23pyr'),
+    ((None, 'cux2'), 'cux2'),
+    ((None, 'rorb'), 'rorb'),
+    ((None, 'nr5a1'), 'nr5a1'),
+    ((None, 'sim1'), 'sim1'),
+    ((None, 'tlx3'), 'tlx3'),
+    ((None, 'rbp4'), 'rbp4'),
+    ((None, 'slc17a8'), 'slc17a8'),
+    ((None, 'ntsr1'), 'ntsr1'),
+    ((None, 'ctgf'), 'ctgf'),
+    ((None, 'pvalb'), 'pvalb'),
+    ((None, 'sst'), 'sst'),
+    ((None, 'vip'), 'vip'),
+])
+
 human_types = [
     ('1', 'unknown'),
     ('2', 'unknown'),
@@ -130,12 +159,9 @@ human_types = [
 human_types = OrderedDict([(typ, "L%s %s" % typ) for typ in human_types])
 
 if args.organism == 'mouse':
-    expts.matrix(mouse_types, mouse_types)
+    m1 = expts.matrix(mouse_types, mouse_types)
+    m2 = expts.matrix(mouse_ee_types, mouse_ee_types)
+    m3 = expts.matrix(mouse_nolayer_types, mouse_nolayer_types)
 elif args.organism == 'human':
-    expts.matrix(human_types, mouse_types)
+    m1 = expts.matrix(human_types, human_types)
 
-ee_types = ['L23pyr', 'rorb', 'sim1', 'tlx3', 'ntsr1']
-m3 = expts.matrix(ee_types, ee_types)
-# cache everything!
-all_expts.write_cache()
-print("Cache successfully updated!")

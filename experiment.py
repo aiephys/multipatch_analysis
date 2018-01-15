@@ -349,7 +349,9 @@ class Experiment(object):
             assert parts[0].endswith(':')
             cre = parts[0][:-1]
 
-            if not (cre in ALL_LABELS or cre in ALL_CRE_TYPES or cre.lower().startswith('human_l')):
+            # old labels used to mark target layer
+            layer_labels = ['L1', 'L23pyr', 'L4pyr', 'L5pyr', 'L6pyr']
+            if not (cre in ALL_LABELS or cre in ALL_CRE_TYPES or cre.lower().startswith('human_l') or cre in layer_labels):
                 raise Exception("Invalid label or cre type: %s" % cre)
 
             # parse the remainder of the line
@@ -372,8 +374,13 @@ class Experiment(object):
                 # some target layers have been entered as a label (old data)
                 if cre.startswith('human_') and positive == '+':
                     layer = cre[7:].upper()
-                    if layer == 'L23':
-                        layer = 'L2/3'
+                    if layer == '23':
+                        layer = '2/3'
+                    cell._target_layer = layer
+                elif cre in layer_labels:
+                    layer = cre.lstrip('L').rstrip('pyr')
+                    if layer == '23':
+                        layer = '2/3'
                     cell._target_layer = layer
                 else:
                     assert cre not in cell.labels
