@@ -116,12 +116,11 @@ if __name__ == '__main__':
     cache_file = 'expts_cache.pkl'
     expts = ExperimentList(cache=cache_file)
 
-    connection_list=[['ntsr1', 'ntsr1'],
+    connection_list=[['rorb', 'rorb'],
+                     ['tlx3', 'tlx3'],
+                     ['ntsr1', 'ntsr1'],
                      ['L23pyr', 'L23pyr'],
                      ['sim1','sim1']]
-#                     ['rorb', 'rorb']]
-#                     ['tlx3', 'tlx3']]
-
 
     dictionary={}
     for synapic_pairs in connection_list:
@@ -139,13 +138,14 @@ if __name__ == '__main__':
         title_str= pre_synaptic+' to '+post_synaptic
         p = pg.plot(labels={'left': 'peak of synaptic deflection (mV)', 
                             'bottom': 'time since first recorded synapse (s)', 
-                            'top':(title_str, 'connections')})    
+                            'top':(title_str+' connections: progression of synaptic defection over an experiment')})    
         a = pg.plot(labels={'top':('average base-line subtracted first pulse synaptic deflection ('+ title_str+ ')'), 
                           'bottom': 'time (s)', 
                           'left':'voltage (mV)'}) 
         
         filtered=[]
         time_list=[]
+        num_of_synapses=len(synapses)
         for i,syn in enumerate(synapses):
             expt, pre_id, post_id = syn
             analyzer = DynamicsAnalyzer(expt, pre_id, post_id, align_to='spike')
@@ -192,7 +192,7 @@ if __name__ == '__main__':
                 peak.append(measure_amp(rr, min_or_max=max_min, baseline=(6e-3, 8e-3), response=(12e-3, 16e-3)))
                 base.append(measure_amp(rr, min_or_max=max_min, baseline=(0e-3, 2e-3), response=(6e-3, 10e-3)))
                 time.append(rr.start_time)        
-    #        plt.figure()
+
     #        for trace in responses.responses:
     #            plt.plot(trace.time_values, trace.data)
     #            plt.title('responses')
@@ -218,9 +218,8 @@ if __name__ == '__main__':
         time_points, avg_data, std_err=average_via_bins(time_list, filtered, bin_size=60)
         p.plot(time_points, avg_data, pen=pg.mkPen(color='w', width=5)) #plots average of the data
         
-        dictionary[title_str]={'time_points': time_points, 'avg_data':avg_data, 'std_err':std_err}
-    
-    ju.write("PSP_vs_time_output_data/psp_vs_time1_12_18_R_drive_data.json", dictionary)
+        dictionary[title_str]={'time_points': time_points, 'avg_data':avg_data, 'std_err':std_err, 'num_of_synapses':num_of_synapses}
+    ju.write("PSP_vs_time_output_data/psp_vs_time.json", dictionary)
 
     for key in dictionary.keys():
         plt.errorbar(dictionary[key]['time_points'], dictionary[key]['avg_data'],  yerr=dictionary[key]['std_err'], label=key)
