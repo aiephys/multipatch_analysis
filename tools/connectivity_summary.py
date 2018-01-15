@@ -14,7 +14,7 @@ from collections import OrderedDict
 
 import pyqtgraph as pg
 
-from experiment_list import ExperimentList
+from multipatch_analysis.experiment_list import ExperimentList
 
 
 def arg_to_date(arg):
