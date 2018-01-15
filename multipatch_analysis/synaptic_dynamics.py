@@ -3,6 +3,7 @@ from collections import OrderedDict
 import numpy as np
 import pyqtgraph as pg
 from .connection_detection import MultiPatchSyncRecAnalyzer, EvokedResponseGroup, fit_psp
+from .data import MultiPatchProbe
 from neuroanalysis.stats import ragged_mean
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.ui.plot_grid import PlotGrid
@@ -601,6 +602,8 @@ class DynamicsAnalyzer(RawDynamicsAnalyzer):
             pre_rec = srec[pre]
             post_rec = srec[post]
             if post_rec.clamp_mode != 'ic':
+                continue
+            if not isinstance(post_rec, MultiPatchProbe):
                 continue
 
             analyzer = MultiPatchSyncRecAnalyzer.get(srec)

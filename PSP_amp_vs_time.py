@@ -18,11 +18,11 @@ import numpy as np
 import scipy.ndimage as ndi
 import matplotlib.pyplot as plt
 
-from constants import INHIBITORY_CRE_TYPES
-from constants import EXCITATORY_CRE_TYPES
-from connection_detection import MultiPatchExperimentAnalyzer
-from synaptic_dynamics import DynamicsAnalyzer
-from experiment_list import ExperimentList
+from multipatch_analysis.constants import INHIBITORY_CRE_TYPES
+from multipatch_analysis.constants import EXCITATORY_CRE_TYPES
+from multipatch_analysis.connection_detection import MultiPatchExperimentAnalyzer
+from multipatch_analysis.synaptic_dynamics import DynamicsAnalyzer
+from multipatch_analysis.experiment_list import cached_experiments
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.data import TraceList
 from neuroanalysis.filter import bessel_filter
@@ -111,10 +111,10 @@ def average_via_bins(time_list, data_list, bin_size=10):
 
 if __name__ == '__main__':
     app = pg.mkQApp()
+    pg.dbg()
     
     # Load experiment index
-    cache_file = 'expts_cache.pkl'
-    expts = ExperimentList(cache=cache_file)
+    expts = cached_experiments()
 
     connection_list=[['rorb', 'rorb'],
                      ['tlx3', 'tlx3'],
