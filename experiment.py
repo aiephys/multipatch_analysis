@@ -5,6 +5,7 @@ import glob
 import json
 import numpy as np
 import os
+import sys
 import re
 
 import yaml
@@ -63,7 +64,8 @@ class Experiment(object):
         try:
             self.load_cell_positions()
         except Exception as exc:
-            print("Warning: Could not load cell positions for %s:\n    %s" % (self, exc.args[0]))
+            sys.excepthook(*sys.exc_info())
+            print("Warning: Could not load cell positions for %s (exception printed above)" % (self,))
 
         # pull donor/specimen info from LIMS
         if self.lims_record['organism'] == 'mouse':
@@ -90,6 +92,10 @@ class Experiment(object):
     @property
     def datetime(self):
         return datetime.datetime.fromtimestamp(self.site_info['__timestamp__'])
+
+    @property
+    def date(self):
+        return self.datetime.date()
 
     @property
     def connections(self):
@@ -734,11 +740,6 @@ class Experiment(object):
             return None
         line = lines[-1].rstrip(',\r\n')
         return json.loads(line)['surface_depth']
-
-    @property
-    def date(self):
-        y,m,d = self.source_id[1].split('-')[0].split('_')[0].split('.')
-        return datetime.date(int(y), int(m), int(d))
 
     def show(self):
         if self._view is None:
