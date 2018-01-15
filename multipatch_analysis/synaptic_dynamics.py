@@ -2,7 +2,7 @@ import sys
 from collections import OrderedDict
 import numpy as np
 import pyqtgraph as pg
-from connection_detection import MultiPatchSyncRecAnalyzer, EvokedResponseGroup, fit_psp
+from .connection_detection import MultiPatchSyncRecAnalyzer, EvokedResponseGroup, fit_psp
 from neuroanalysis.stats import ragged_mean
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.ui.plot_grid import PlotGrid

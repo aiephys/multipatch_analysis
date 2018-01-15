@@ -1,6 +1,6 @@
 import os, sys, glob
 import config
-from sync_rigs_to_server import sync_file
+from .util import sync_file
 
 
 class SynPhysCache(object):

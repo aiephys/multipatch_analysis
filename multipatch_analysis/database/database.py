@@ -14,7 +14,7 @@ from sqlalchemy.types import TypeDecorator
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql.expression import func
 
-from config import synphys_db_host, synphys_db
+from .. config import synphys_db_host, synphys_db
 
 
 table_schemas = {

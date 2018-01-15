@@ -1,7 +1,7 @@
 from acq4.pyqtgraph.Qt import QtCore, QtGui
 from acq4.modules.Module import Module
 from acq4.Manager import getManager
-import submit_expt
+from . import submit_expt
 
 
 class MultipatchSubmissionModule(Module):

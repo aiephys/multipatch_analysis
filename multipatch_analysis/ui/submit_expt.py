@@ -8,8 +8,8 @@ import acq4.util.Canvas, acq4.util.DataManager
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtGui, QtCore
 
-import metadata_submission, config
-import ui
+from .. import metadata_submission, config
+from . import ui
 
 
 class ExperimentSubmitUi(QtGui.QWidget):

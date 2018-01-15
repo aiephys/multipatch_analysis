@@ -4,7 +4,7 @@ import numpy as np
 import pyqtgraph as pg
 from neuroanalysis.data import Trace, TraceList
 import datetime
-import database as db
+import multipatch_analysis.database.database as db
 
 
 session = db.Session()

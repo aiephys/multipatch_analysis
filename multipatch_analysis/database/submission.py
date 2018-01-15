@@ -2,14 +2,14 @@ import os, re, json, yaml, shutil
 from collections import OrderedDict
 from datetime import datetime, timedelta
 import pyqtgraph as pg
-import database as db
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.data import PatchClampRecording
-import lims
-from data import MultiPatchExperiment, MultiPatchProbe
-from connection_detection import PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
-import config
-import constants
+from . import database as db
+from .. import lims
+from ..data import MultiPatchExperiment, MultiPatchProbe
+from ..connection_detection import PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
+from .. import config
+from .. import constants
 
 
 class SliceSubmission(object):

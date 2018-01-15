@@ -12,10 +12,10 @@ import datetime
 
 import pyqtgraph as pg
 
-from graphics import MatrixItem, distance_plot
-from experiment import Experiment
-from constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
-import config
+from .ui.graphics import MatrixItem, distance_plot
+from .experiment import Experiment
+from .constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
+from . import config
 
 
 _expt_list = None

@@ -1,7 +1,7 @@
 from __future__ import print_function, division
 import numpy as np
 
-from constants import ALL_CRE_TYPES, ALL_LABELS
+from .constants import ALL_CRE_TYPES, ALL_LABELS
 
 
 class Cell(object):

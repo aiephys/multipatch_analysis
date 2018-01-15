@@ -1,6 +1,6 @@
 from __future__ import print_function
 import sys
-from constants import GENOTYPES, REPORTER_LINES, DRIVER_LINES, FLUOROPHORES
+from .constants import GENOTYPES, REPORTER_LINES, DRIVER_LINES, FLUOROPHORES
 
 
 class Genotype(object):

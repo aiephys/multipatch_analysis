@@ -5,8 +5,8 @@ import pyqtgraph as pg
 from pyqtgraph.Qt import QtGui
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.miesnwb import MiesNwb
-import constants
-import config
+from .. import constants
+from .. import config
 
 
 class SynapseTreeWidget(QtGui.QTreeWidget):

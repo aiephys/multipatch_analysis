@@ -12,14 +12,14 @@ import yaml
 import pyqtgraph as pg
 import pyqtgraph.configfile
 
-from lims import specimen_info, specimen_images
-from constants import ALL_CRE_TYPES, ALL_LABELS, FLUOROPHORES
-from cell import Cell
-from data import MultiPatchExperiment
-from pipette_metadata import PipetteMetadata
-from genotypes import Genotype
-from synphys_cache import SynPhysCache
-import yaml_local
+from .lims import specimen_info, specimen_images
+from .constants import ALL_CRE_TYPES, ALL_LABELS, FLUOROPHORES
+from .cell import Cell
+from .data import MultiPatchExperiment
+from .pipette_metadata import PipetteMetadata
+from .genotypes import Genotype
+from .synphys_cache import SynPhysCache
+from . import yaml_local
 
 
 class Experiment(object):

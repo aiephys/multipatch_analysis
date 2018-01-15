@@ -3,7 +3,7 @@ import numpy as np
 import scipy.signal
 import pyqtgraph as pg
 
-from data import MultiPatchProbe, Analyzer, PulseStimAnalyzer
+from .data import MultiPatchProbe, Analyzer, PulseStimAnalyzer
 from neuroanalysis.stats import ragged_mean
 from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.fitting import StackedPsp
