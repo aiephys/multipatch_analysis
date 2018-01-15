@@ -4,14 +4,14 @@ import numpy as np
 import pyqtgraph as pg
 import seaborn as sns
 import time
-from synaptic_dynamics import DynamicsAnalyzer
+from multipatch_analysis.synaptic_dynamics import DynamicsAnalyzer
 from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.event_detection import exp_deconvolve
 from neuroanalysis.filter import bessel_filter
 from neuroanalysis.spike_detection import detect_ic_evoked_spike
 from scipy import stats
-from constants import EXCITATORY_CRE_TYPES, INHIBITORY_CRE_TYPES
+from multipatch_analysis.constants import EXCITATORY_CRE_TYPES, INHIBITORY_CRE_TYPES
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from statsmodels.stats.multicomp import MultiComparison
 app = pg.mkQApp()

@@ -17,8 +17,8 @@ import numpy as np
 import datetime
 import re
 
-from synaptic_dynamics import DynamicsAnalyzer
-from experiment_list import ExperimentList
+from multipatch_analysis.synaptic_dynamics import DynamicsAnalyzer
+from multipatch_analysis.experiment_list import cached_experiments
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.filter import bessel_filter
@@ -244,8 +244,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args(sys.argv[1:])
 
-    cache_file = 'expts_cache.pkl'
-    all_expts = ExperimentList(cache=cache_file)
+    all_expts = cached_experiments()
     app = pg.mkQApp()
 
     result_cache_file = 'synapse_comparison_cache.pkl'

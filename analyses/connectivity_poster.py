@@ -1,11 +1,10 @@
 # coding=utf-8
 import pyqtgraph as pg
 
-from experiment_list import ExperimentList
+from multipatch_analysis.experiment_list import cached_experiments
 
 
-cache_file = 'expts_cache.pkl'
-expts = ExperimentList(cache=cache_file)
+expts = cached_experiments()
 
 
 pg.mkQApp()

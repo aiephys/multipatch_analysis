@@ -1,6 +1,6 @@
 import pyqtgraph as pg
-from experiment_list import ExperimentList
-from connection_detection import MultiPatchExperimentAnalyzer, MultiPatchSyncRecAnalyzer, EvokedResponseGroup, trace_mean
+from multipatch_analysis.experiment_list import cached_experiments
+from multipatch_analysis.connection_detection import MultiPatchExperimentAnalyzer, MultiPatchSyncRecAnalyzer, EvokedResponseGroup, trace_mean
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.data import Trace
 
@@ -101,6 +101,6 @@ if __name__ == '__main__':
     app = pg.mkQApp()
     pg.dbg()
 
-    all_expts = ExperimentList(cache='expts_cache.pkl')
+    all_expts = cached_experiments()
     
     results = trace_average_matrix(all_expts, clamp_mode='ic', stim_filter='50Hz', min_traces=25)

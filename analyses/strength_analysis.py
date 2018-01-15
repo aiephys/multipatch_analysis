@@ -5,7 +5,7 @@ Big question: what's the best way to measure synaptic strength / connectivity?
 from __future__ import print_function, division
 
 from collections import OrderedDict
-from constants import EXCITATORY_CRE_TYPES, INHIBITORY_CRE_TYPES
+from multipatch_analysis.constants import EXCITATORY_CRE_TYPES, INHIBITORY_CRE_TYPES
 
 import argparse, time, sys, os, pickle, io, multiprocessing
 import numpy as np
@@ -13,7 +13,7 @@ import scipy.stats
 
 from sqlalchemy.orm import aliased
 
-import mies_nwb_viewer
+from multipatch_analysis.ui import mies_nwb_viewer
 import pyqtgraph as pg
 
 from neuroanalysis.ui.plot_grid import PlotGrid
@@ -21,8 +21,8 @@ from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.filter import bessel_filter
 from neuroanalysis.event_detection import exp_deconvolve
 
-import database as db
-import config
+from multipatch_analysis.database import database as db
+from multipatch_analysis import config
 
 
 class TableGroup(object):

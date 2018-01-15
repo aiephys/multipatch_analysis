@@ -26,9 +26,9 @@ import pickle
 import pyqtgraph.multiprocess as mp
 import numpy as np
 
-from connection_detection import MultiPatchExperimentAnalyzer
-from synaptic_dynamics import DynamicsAnalyzer
-from experiment_list import ExperimentList
+from multipatch_analysis.connection_detection import MultiPatchExperimentAnalyzer
+from multipatch_analysis.synaptic_dynamics import DynamicsAnalyzer
+from multipatch_analysis.experiment_list import cached_experiments
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.data import TraceList
 from neuroanalysis.filter import bessel_filter
@@ -43,8 +43,7 @@ if __name__ == '__main__':
     pre_id, post_id = map(int, sys.argv[2:4])
     
     # Load experiment index
-    cache_file = 'expts_cache.pkl'
-    expts = ExperimentList(cache=cache_file)
+    expts = cached_experiments()
 
     expt = expts[expt_index]
     

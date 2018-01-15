@@ -1,9 +1,9 @@
 from __future__ import division
 import numpy as np
 import pyqtgraph as pg
-from experiment_list import ExperimentList
+from multipatch_analysis.experiment_list import cached_experiments
 
-expts = ExperimentList(cache='expts_cache.pkl')
+expts = cached_experiments()
 
 
 dates = [(e.date - expts[0].date).days for e in expts]

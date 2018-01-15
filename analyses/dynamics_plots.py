@@ -1,19 +1,19 @@
 import pyqtgraph as pg
 import numpy as np
 import colorsys
-from experiment_list import ExperimentList
+from multipatch_analysis.experiment_list import cached_experiments
 from manuscript_figures import cache_response, train_amp, induction_summary, recovery_summary, write_cache, get_response, train_qc
 from synapse_comparison import load_cache
 from neuroanalysis.data import TraceList
 from neuroanalysis.ui.plot_grid import PlotGrid
-from synaptic_dynamics import RawDynamicsAnalyzer
+from multipatch_analysis.synaptic_dynamics import RawDynamicsAnalyzer
 from rep_connections import ee_connections, human_connections
 pg.dbg()
 app = pg.mkQApp()
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
 
-all_expts = ExperimentList(cache='expts_cache.pkl')
+all_expts = cached_experiments()
 
 connections = ee_connections[('sim1', 'sim1')]
 connection_types = [('sim1', 'sim1')] #connections.keys()

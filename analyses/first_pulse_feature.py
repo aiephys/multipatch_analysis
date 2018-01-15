@@ -1,20 +1,20 @@
 import pyqtgraph as pg
 import numpy as np
-from experiment_list import ExperimentList
+from multipatch_analysis.experiment_list import cached_experiments
 from manuscript_figures import get_response, get_amplitude, response_filter, feature_anova, write_cache, trace_plot, colors_human, colors_mouse, fail_rate
 from synapse_comparison import load_cache, summary_plot_pulse
 from neuroanalysis.data import TraceList
 from neuroanalysis.ui.plot_grid import PlotGrid
-from connection_detection import fit_psp
+from multipatch_analysis.connection_detection import fit_psp
 from rep_connections import ee_connections, human_connections
-from synaptic_dynamics import DynamicsAnalyzer
+from multipatch_analysis.synaptic_dynamics import DynamicsAnalyzer
 
 app = pg.mkQApp()
 pg.dbg()
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
 
-all_expts = ExperimentList(cache='expts_cache.pkl')
+all_expts = cached_experiments()
 connections = ee_connections
 color_palette = colors_mouse
 connection_types = connections.keys()

@@ -2,13 +2,13 @@ import sys
 import argparse
 import pyqtgraph as pg
 import numpy as np
-from experiment_list import ExperimentList
+from multipatch_analysis.experiment_list import cached_experiments
 from neuroanalysis.filter import bessel_filter
 from neuroanalysis.event_detection import exp_deconvolve
 from neuroanalysis.ui.plot_grid import PlotGrid
 from manuscript_figures import response_filter, trace_avg, pulse_qc, get_response, bsub, trace_plot, fail_rate, get_amplitude
 from rep_connections import all_connections, human_connections, ee_connections
-from constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
+from multipatch_analysis.constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
 
 ### Select synapses for representative traces as {('pre-type'), ('post-type'): [UID, Pre_cell, Post_cell], } ###
 
@@ -37,7 +37,7 @@ args = vars(parser.parse_args(sys.argv[1:]))
 plot_sweeps = args['sweeps']
 plot_trains = args['trains']
 link_y_axis = args['link-y-axis']
-all_expts = ExperimentList(cache='expts_cache.pkl')
+all_expts = cached_experiments()
 
 test = PlotGrid()
 test.set_shape(len(connection_types.keys()), 1)

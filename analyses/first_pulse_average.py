@@ -3,8 +3,8 @@ import pyqtgraph as pg
 import numpy as np
 import os, sys, pickle, tempfile, resource
 from neuroanalysis.ui.plot_grid import PlotGrid
-from experiment_list import ExperimentList
-from connection_detection import MultiPatchExperimentAnalyzer, EvokedResponseGroup, fit_psp
+from multipatch_analysis.experiment_list import cached_experiments()
+from multipatch_analysis.connection_detection import MultiPatchExperimentAnalyzer, EvokedResponseGroup, fit_psp
 from synaptic_properties import find_connections
 
 
@@ -64,7 +64,7 @@ if __name__ == '__main__':
     app = pg.mkQApp()
     pg.dbg()
 
-    all_expts = ExperimentList(cache='expts_cache.pkl')
+    all_expts = cached_experiments()
     
     # results = pulse_average_matrix(all_expts, clamp_mode='ic', min_duration=25e-3, pulse_ids=[0, 8])
 
