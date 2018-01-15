@@ -5,8 +5,8 @@ import acq4.pyqtgraph.console
 from neuroanalysis.ui.nwb_viewer import MiesNwbViewer
 from neuroanalysis.miesnwb import MiesNwb
 
-from multipatch_view import MultipatchMatrixView
-from pair_view import PairView
+from multipatch_analysis.ui.multipatch_view import MultipatchMatrixView
+from multipatch_analysis.ui.pair_view import PairView
 
 
 class MultipatchNwbViewer(MiesNwbViewer):
