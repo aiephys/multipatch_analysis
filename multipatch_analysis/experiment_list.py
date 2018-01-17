@@ -448,7 +448,8 @@ class ExperimentList(object):
             if len(expt.connections) == 0:
                 continue
             for pre, post in expt.connections:
-                connection_type = (expt.cells[pre].cre_type, expt.cells[post].cre_type)
+                connection_type = ((expt.cells[pre].target_layer, expt.cells[pre].cre_type),
+                                   (expt.cells[post].target_layer, expt.cells[post].cre_type))
                 if pre_type is not None and post_type is not None:
                     if connection_type != (pre_type, post_type):
                         continue
@@ -485,8 +486,8 @@ class ExperimentList(object):
             for k,v in summary.items():
                 probed = v['connected'] + v['unconnected']
                 if k in reciprocal_summary:
-                    if reciprocal_summary[k]['Total_connections'] == v['connected']:
-                        reciprocal = str(reciprocal_summary[k]['Reciprocal'])
+                    #if reciprocal_summary[k]['Total_connections'] == v['connected']:
+                    reciprocal = str(reciprocal_summary[k]['Reciprocal'])
                 else:
                     reciprocal = 'nan'
 
