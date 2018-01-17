@@ -22,7 +22,8 @@ _expt_list = None
 def cached_experiments():
     global _expt_list
     if _expt_list is None:
-        _expt_list = ExperimentList(cache='expts_cache.pkl')
+        cache_file = os.path.join(os.path.dirname(__file__), '..', 'expts_cache.pkl')
+        _expt_list = ExperimentList(cache=cache_file)
     return _expt_list
 
 
