@@ -220,7 +220,7 @@ def _compute_strength(inds, session=None):
         session.commit()
         prof('commit')
 
-    
+
 @db.default_session
 def rebuild_connectivity(session):
     print("Rebuilding connectivity table..")
@@ -231,20 +231,15 @@ def rebuild_connectivity(session):
     
     expts_in_db = list_experiments()
     for i,expt in enumerate(expts_in_db):
-        p = pg.debug.Profiler(disabled=False, delayed=False)
         try:
             cached_expt = expt_cache[expt.acq_timestamp]
         except:
             cached_expt = None
-        p()
         for devs in get_experiment_pairs(expt):
-            p('get pairs')
             amps = get_amps(session, expt, devs)
-            p('get amps')
             base_amps = get_baseline_amps(session, expt, devs[1], limit=len(amps))
-            p('get base amps')
+            
             conn = ConnectionStrength(experiment_id=expt.id, pre_id=devs[0], post_id=devs[1])
-            p('connectionstrength')
             # Whether the user marked this as connected
             cell_ids = (devs[0] + 1, devs[1] + 1)
             conn.user_connected = None if cached_expt is None else (cell_ids in cached_expt.connections)
@@ -288,12 +283,9 @@ def rebuild_connectivity(session):
             conn.amp_ttest = scipy.stats.ttest_ind(amp, base_amp, equal_var=False).pvalue
             conn.deconv_amp_ttest = scipy.stats.ttest_ind(dec_amp, dec_base_amp, equal_var=False).pvalue
 
-            p('compute')
             session.add(conn)
-            p('add')
         
         session.commit()
-        p('commit')
         sys.stdout.write("%d / %d       \r" % (i, len(expts_in_db)))
         sys.stdout.flush()
 
@@ -334,6 +326,7 @@ class ExperimentBrowser(pg.TreeWidget):
         self.items = {}
         
         # cheating:
+        from multipatch_analysis import experiment_list
         expts = experiment_list.cached_experiments()
         
         self.session = db.Session()
@@ -580,6 +573,7 @@ class ResponseStrengthPlots(object):
 
 
 if __name__ == '__main__':
+    from multipatch_analysis.ui.multipatch_nwb_viewer import MultipatchNwbViewer    
     from multipatch_analysis.experiment_list import cached_experiments
     expts = cached_experiments()
 
@@ -638,7 +632,7 @@ if __name__ == '__main__':
 
     b.itemSelectionChanged.connect(selected)
 
-    nwb_viewer = mies_nwb_viewer.MultipatchNwbViewer()
+    nwb_viewer = MultipatchNwbViewer()
 
     def dbl_clicked(index):
         item = b.itemFromIndex(index)[0]
