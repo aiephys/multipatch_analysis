@@ -11,6 +11,7 @@ class Cell(object):
         self.access_qc = None
         self.holding_qc = None
         self.spiking_qc = None
+        self._morphology = {}
         self.labels = {}
         self._raw_labels = {}
         self.position = None
@@ -49,6 +50,14 @@ class Cell(object):
         if layer is not None:
             typ['layer'] = layer
         return typ
+
+    @property
+    def morphology(self):
+        """Dictionary of morphology metrics for this cell.
+
+            {'pyramidal': True, 'spiny': True}
+        """
+        return self._morphology.copy()
 
     @property
     def cre_type(self):

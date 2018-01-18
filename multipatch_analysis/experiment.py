@@ -379,11 +379,15 @@ class Experiment(object):
 
                 # some target layers have been entered as a label (old data)
                 if cre.startswith('human_') and positive == '+':
+                    # positive=='+' is actually currently used to mean that the cell is in this layer and excitatory,
+                    # but for now we are just recording the layer and excluding all other cells.
                     layer = cre[7:].upper()
                     if layer == '23':
                         layer = '2/3'
                     cell._target_layer = layer
                 elif cre in layer_labels:
+                    # labels like "L23pyr" were used to denote unlabeled cells that are likely pyramidal,
+                    # but where the morphology may not have been verified.
                     layer = cre.lstrip('L').rstrip('pyr')
                     if layer == '23':
                         layer = '2/3'
