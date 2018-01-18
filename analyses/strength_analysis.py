@@ -13,7 +13,6 @@ import scipy.stats
 
 from sqlalchemy.orm import aliased
 
-from multipatch_analysis.ui import mies_nwb_viewer
 import pyqtgraph as pg
 
 from neuroanalysis.ui.plot_grid import PlotGrid
@@ -23,6 +22,7 @@ from neuroanalysis.event_detection import exp_deconvolve
 
 from multipatch_analysis.database import database as db
 from multipatch_analysis import config
+from multipatch_analysis.ui.multipatch_nwb_viewer import MultipatchNwbViewer
 
 
 class TableGroup(object):
@@ -174,7 +174,7 @@ def _compute_strength(inds, session=None):
         LIMIT 1000
     """
     
-    prof = pg.debug.Profiler(disabled=True, delayed=False)
+    prof = pg.debug.Profiler(delayed=False)
     
     next_id = start_id
     while True:
@@ -226,22 +226,25 @@ def rebuild_connectivity(session):
     print("Rebuilding connectivity table..")
     
     # cheating:
-    import experiment_list
+    from multipatch_analysis import experiment_list
     expt_cache = experiment_list.cached_experiments()
     
     expts_in_db = list_experiments()
     for i,expt in enumerate(expts_in_db):
+        p = pg.debug.Profiler(disabled=False, delayed=False)
         try:
             cached_expt = expt_cache[expt.acq_timestamp]
         except:
             cached_expt = None
-        
+        p()
         for devs in get_experiment_pairs(expt):
+            p('get pairs')
             amps = get_amps(session, expt, devs)
-            base_amps = get_baseline_amps(session, expt, devs[1])
-            
+            p('get amps')
+            base_amps = get_baseline_amps(session, expt, devs[1], limit=len(amps))
+            p('get base amps')
             conn = ConnectionStrength(experiment_id=expt.id, pre_id=devs[0], post_id=devs[1])
-            
+            p('connectionstrength')
             # Whether the user marked this as connected
             cell_ids = (devs[0] + 1, devs[1] + 1)
             conn.user_connected = None if cached_expt is None else (cell_ids in cached_expt.connections)
@@ -284,9 +287,13 @@ def rebuild_connectivity(session):
             conn.deconv_amp_ks2samp = scipy.stats.ks_2samp(dec_amp, dec_base_amp).pvalue
             conn.amp_ttest = scipy.stats.ttest_ind(amp, base_amp, equal_var=False).pvalue
             conn.deconv_amp_ttest = scipy.stats.ttest_ind(dec_amp, dec_base_amp, equal_var=False).pvalue
+
+            p('compute')
             session.add(conn)
+            p('add')
         
         session.commit()
+        p('commit')
         sys.stdout.write("%d / %d       \r" % (i, len(expts_in_db)))
         sys.stdout.flush()
 
@@ -414,11 +421,37 @@ def get_amps(session, expt, devs, clamp_mode='ic'):
     arr = np.empty(len(recs), dtype=dtype)
     for i,rec in enumerate(recs):
         arr[i] = rec
-    
+
     return arr
 
 
-def get_baseline_amps(session, expt, dev, clamp_mode='ic'):
+def get_baseline_amps_NO_ORM_VERSION(session, expt, dev, clamp_mode='ic'):
+    # Tested this against the ORM version below; no difference in performance.
+    import pandas
+    query = """
+    select 
+        brs.id, brs.pos_amp, brs.neg_amp, brs.pos_dec_amp, brs.neg_dec_amp
+    from 
+        baseline_response_strength brs
+    join baseline on brs.baseline_id = baseline.id
+    join recording on baseline.recording_id = recording.id
+    join patch_clamp_recording on patch_clamp_recording.recording_id = recording.id
+    join sync_rec on recording.sync_rec_id = sync_rec.id
+    join experiment on sync_rec.experiment_id = experiment.id
+    where 
+        experiment.id={expt_id} and
+        recording.device_key={dev_key} and
+        patch_clamp_recording.clamp_mode='{clamp_mode}' and
+        patch_clamp_recording.baseline_potential<=-50e-3 and
+        patch_clamp_recording.baseline_current>-800e-12 and
+        patch_clamp_recording.baseline_current<800e-12
+    """.format(expt_id=expt.id, dev_key=dev, clamp_mode=clamp_mode)
+    df = pandas.read_sql(query, session.bind)
+    recs = df.to_records()
+    return recs
+
+
+def get_baseline_amps(session, expt, dev, clamp_mode='ic', limit=None):
     """Select records from baseline_response_strength table
     """
     q = session.query(
@@ -448,6 +481,9 @@ def get_baseline_amps(session, expt, dev, clamp_mode='ic'):
     for filter_args in filters:
         q = q.filter(*filter_args)
     
+    if limit is not None:
+        q = q.limit(limit)
+
     # fetch all
     recs = q.all()
     
@@ -455,7 +491,7 @@ def get_baseline_amps(session, expt, dev, clamp_mode='ic'):
     arr = np.empty(len(recs), dtype=dtype)
     for i,rec in enumerate(recs):
         arr[i] = rec
-    
+
     return arr
 
 
@@ -523,7 +559,7 @@ class ResponseStrengthPlots(object):
         
     def load_conn(self, expt, devs):
         amp_recs = get_amps(self.session, expt, devs)
-        base_recs = get_baseline_amps(self.session, expt, devs[1])
+        base_recs = get_baseline_amps(self.session, expt, devs[1], limit=len(amp_recs))
         
         by = [rec['pos_dec_amp'] for rec in amp_recs]
         bx = 1 + np.random.random(size=len(by)) * 0.5
@@ -544,8 +580,8 @@ class ResponseStrengthPlots(object):
 
 
 if __name__ == '__main__':
-    import experiment_list
-    expts = experiment_list.cached_experiments()
+    from multipatch_analysis.experiment_list import cached_experiments
+    expts = cached_experiments()
 
     pg.dbg()
 
