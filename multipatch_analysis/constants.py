@@ -70,6 +70,8 @@ GENOTYPES = OrderedDict([
     ("Vip-IRES-Cre/wt;Pvalb-T2A-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'pvalb': ['tdTomato'], 'vip': ['EGFP']}),
     ("Sim1-Cre_KJ18/wt;Sst-IRES-FlpO/wt;Ai65F/wt;Ai139(TIT2L-GFP-ICL-TPT)/wt", {'sst': ['tdTomato'], 'sim1': ['EGFP', 'tdTomato']}),
     ("Tlx3-Cre_PL56/wt;Sst-IRES-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'sst': ['tdTomato'], 'tlx3': ['EGFP']}),
+    ("Ntsr1-Cre_GN220/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt;Ai65F/wt", {'ntsr1': ['EGFP']}),
+    ("Slc17a8-IRES2-Cre/wt;Ai14(RCL-tdT)/wt", {'slc17a8': ['tdTomato']}),
 ])    
 
 
@@ -111,7 +113,7 @@ REPORTER_LINES = {
     'Ai6':                        ('',           ['ZsGreen']),
     'Ai9':                        ('',           ['tdTomato']),
     'Ai14':                       ('',           ['tdTomato']),
-    'Ai14(RCL-tdT)':              ('?',          ['tdTomato?']),
+    'Ai14(RCL-tdT)':              ('cre',        ['tdTomato']),
     'Ai27':                       ('',           ['hChR2(H134R)','tdTomato']),
     'Ai31':                       ('',           ['Syp','Emerald']),
     'Ai32':                       ('',           ['ChR2(H134R)','EYFP']),
@@ -155,5 +157,6 @@ DRIVER_LINES = {
     'Pvalb-T2A-FlpO':             (['flp'],        'pvalb'),
     'Sst-IRES-FlpO':              (['flp'],        'sst'),
     'Vip-IRES-FlpO':              (['flp'],        'vip'),
+    'Slc17a8-IRES2-Cre':          (['cre'],        'slc17a8'),
 }
 
