@@ -2,28 +2,6 @@ import os, sys
 import acq4
 from acq4.pyqtgraph.Qt import QtCore, QtGui
 import acq4.pyqtgraph.console
-from neuroanalysis.ui.nwb_viewer import MiesNwbViewer
-from neuroanalysis.miesnwb import MiesNwb
-
-from multipatch_analysis.ui.multipatch_view import MultipatchMatrixView
-from multipatch_analysis.ui.pair_view import PairView
-
-
-class MultipatchNwbViewer(MiesNwbViewer):
-    def create_views(self):
-        MiesNwbViewer.create_views(self)
-        
-        add_views = [
-            ('Matrix', MultipatchMatrixView(self)),
-            ('Pair', PairView(self)),
-        ]
-        for name, view in add_views:
-            self.tabs.addTab(view, name)
-    
-    def load_nwb(self, filename):
-        nwb = MiesNwb(filename)
-        self.set_nwb(nwb)
-        return nwb
 
 
 if __name__ == '__main__':
