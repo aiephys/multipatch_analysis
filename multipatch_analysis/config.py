@@ -12,7 +12,7 @@ raw_data_paths:
     - '/raw/data/path/2'
 """
 
-configfile = os.path.join(os.path.dirname(__file__), 'config.yml')
+configfile = os.path.join(os.path.dirname(__file__), '..', 'config.yml')
 if not os.path.isfile(configfile):
     open(configfile, 'wb').write(template)
 

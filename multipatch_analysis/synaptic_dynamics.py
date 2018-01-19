@@ -620,8 +620,8 @@ class DynamicsAnalyzer(RawDynamicsAnalyzer):
                                                                             padding=(-pre_pad, post_pad))
             ind.t0 = 0
             rec.t0 = 0
-            if analyzer.find_artifacts(ind.data, threshold=-10e-3) is True or analyzer.find_artifacts(rec.data,
-                threshold=-10e-3) is True:
+            if analyzer.find_artifacts(ind.data, pos_threshold=-10e-3, neg_threshold=-100e-3) is True or \
+                            analyzer.find_artifacts(rec.data,pos_threshold=-10e-3, neg_threshold=-100e-3) is True:
                 continue
             if stim_params not in train_responses:
                 train_responses[stim_params] = (EvokedResponseGroup(), EvokedResponseGroup())

@@ -22,7 +22,8 @@ _expt_list = None
 def cached_experiments():
     global _expt_list
     if _expt_list is None:
-        _expt_list = ExperimentList(cache='expts_cache.pkl')
+        cache_file = os.path.join(os.path.dirname(__file__), '..', 'expts_cache.pkl')
+        _expt_list = ExperimentList(cache=cache_file)
     return _expt_list
 
 
@@ -190,7 +191,8 @@ class ExperimentList(object):
             raise Exception("ExperimentList has no cache file; cannot write cache.")
         pickle.dump(self, open(self._cache, 'w'))
 
-    def select(self, start=None, stop=None, region=None, source_files=None, cre_type=None, calcium=None, age=None, temp=None, organism=None):
+    def select(self, start=None, stop=None, region=None, source_files=None, cre_type=None, target_layer=None, calcium=None,
+               age=None, temp=None, organism=None):
         expts = []
         for ex in self._expts:
             # filter experiments by experimental date and conditions
@@ -214,6 +216,8 @@ class ExperimentList(object):
             elif source_files is not None and ex.source_id[0] not in source_files:
                 continue
             elif cre_type is not None and len(set(cre_type) & set(ex.cre_types)) == 0:
+                continue
+            elif target_layer is not None and len(set(target_layer) & set(ex.target_layers)) == 0:
                 continue
             elif calcium is not None and calcium.lower() != ex_calcium:
                 continue
@@ -447,7 +451,8 @@ class ExperimentList(object):
             if len(expt.connections) == 0:
                 continue
             for pre, post in expt.connections:
-                connection_type = (expt.cells[pre].cre_type, expt.cells[post].cre_type)
+                connection_type = ((expt.cells[pre].target_layer, expt.cells[pre].cre_type),
+                                   (expt.cells[post].target_layer, expt.cells[post].cre_type))
                 if pre_type is not None and post_type is not None:
                     if connection_type != (pre_type, post_type):
                         continue
@@ -484,8 +489,8 @@ class ExperimentList(object):
             for k,v in summary.items():
                 probed = v['connected'] + v['unconnected']
                 if k in reciprocal_summary:
-                    if reciprocal_summary[k]['Total_connections'] == v['connected']:
-                        reciprocal = str(reciprocal_summary[k]['Reciprocal'])
+                    #if reciprocal_summary[k]['Total_connections'] == v['connected']:
+                    reciprocal = str(reciprocal_summary[k]['Reciprocal'])
                 else:
                     reciprocal = 'nan'
 

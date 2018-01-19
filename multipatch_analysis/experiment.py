@@ -13,7 +13,7 @@ import pyqtgraph as pg
 import pyqtgraph.configfile
 
 from .lims import specimen_info, specimen_images
-from .constants import ALL_CRE_TYPES, ALL_LABELS, FLUOROPHORES
+from .constants import ALL_CRE_TYPES, ALL_LABELS, FLUOROPHORES, LAYERS
 from .cell import Cell
 from .data import MultiPatchExperiment
 from .pipette_metadata import PipetteMetadata
@@ -44,6 +44,7 @@ class Experiment(object):
         self._genotype = None
         self._cre_types = None
         self._labels = None
+        self._target_layers = None
         
         if entry is not None:
             self._load_old_format(entry)
@@ -117,6 +118,16 @@ class Experiment(object):
                 cre_types.add(cell.cre_type)
             self._cre_types = sorted(list(cre_types), key=lambda x: ALL_CRE_TYPES.index(x.split(',')[0]))
         return self._cre_types
+
+    @property
+    def target_layers(self):
+        """A list of all target layers in this experiment, similar to cre_types above"""
+        if self._target_layers is None:
+            target_layers = set()
+            for cell in self.cells.values():
+                target_layers.add(cell.target_layer)
+            self._target_layers = list(target_layers)
+        return self._target_layers
 
     @property
     def labels(self):
@@ -379,11 +390,15 @@ class Experiment(object):
 
                 # some target layers have been entered as a label (old data)
                 if cre.startswith('human_') and positive == '+':
+                    # positive=='+' is actually currently used to mean that the cell is in this layer and excitatory,
+                    # but for now we are just recording the layer and excluding all other cells.
                     layer = cre[7:].upper()
                     if layer == '23':
                         layer = '2/3'
                     cell._target_layer = layer
                 elif cre in layer_labels:
+                    # labels like "L23pyr" were used to denote unlabeled cells that are likely pyramidal,
+                    # but where the morphology may not have been verified.
                     layer = cre.lstrip('L').rstrip('pyr')
                     if layer == '23':
                         layer = '2/3'
