@@ -1,5 +1,5 @@
 """
-Question: how does PSP height change with sweep number.
+Question: how does PSP height change during the duration of the experiment.
 
 """
 
@@ -29,7 +29,39 @@ from neuroanalysis.filter import bessel_filter
 from neuroanalysis.event_detection import exp_deconvolve
 from scipy import stats
 import allensdk.core.json_utilities as ju
+relative_path=os.path.dirname(os.getcwd())
+sys.path.insert(1, os.path.join(relative_path))
 
+
+def get_response(expt, pre, post, type='pulse'):
+    '''This function was originally Stephanie's (analyses.manuscript_figures.get_response.
+    I copy it here to play with it
+    '''
+    analyzer = DynamicsAnalyzer(expt, pre, post, method='deconv', align_to='spike')
+    if type == 'pulse':
+        response = analyzer.pulse_responses
+        # pulse = 0  # only pull first pulse
+        # response = {'data': [], 'dt': [], 'stim_param': []}
+        # responses = analyzer.pulse_responses
+        # for i,stim_params in enumerate(responses.keys()):
+        #     resp = responses[stim_params]
+        #     for trial in resp:
+        #         r = trial[pulse]['response']
+        #         r.meta['stim_params'] = stim_params
+        #         response['data'].append(r.data)
+        #         response['dt'].append(r.dt)
+        #         response['stim_param'].append(r.meta['stim_params'])
+    elif type == 'train':
+        responses = analyzer.train_responses
+        pulse_offset = analyzer.pulse_offsets
+        response = {'responses': responses, 'pulse_offsets': pulse_offset}
+    else:
+        print ("Must select either pulse responses or train responses")
+    if len(response) == 0:
+        print ("No suitable data found for cell %d -> cell %d in expt %s" % (pre, post, expt.source_id))
+        return response, None
+    artifact = analyzer.cross_talk()
+    return response, artifact
 
 def measure_amp(trace, min_or_max, baseline=(6e-3, 8e-3), response=(13e-3, 17e-3)):
     '''get the max or min of the data in the trace object and subtract out the baseline

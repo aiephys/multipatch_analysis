@@ -4,3 +4,7 @@ config.yml
 .directory
 .idea
 cache
+allensdk_internal
+PSP_vs_time_output_data
+mounted_data
+multipatch_analysis.egg-info
