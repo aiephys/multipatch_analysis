@@ -2,7 +2,7 @@ import sys
 import argparse
 import pyqtgraph as pg
 import numpy as np
-from multipatch_analysis.experiment_list import cached_experiments
+from multipatch_analysis.experiment_list import ExperimentList
 from neuroanalysis.filter import bessel_filter
 from neuroanalysis.event_detection import exp_deconvolve
 from neuroanalysis.ui.plot_grid import PlotGrid
@@ -12,7 +12,7 @@ from multipatch_analysis.constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_T
 
 ### Select synapses for representative traces as {('pre-type'), ('post-type'): [UID, Pre_cell, Post_cell], } ###
 
-connection_types = ee_connections
+connection_types = human_connections
 
 pg.dbg()
 app = pg.mkQApp()
@@ -22,6 +22,8 @@ sweep_color = (0, 0, 0, 30)
 avg_color = {'color': (255, 0, 255), 'width': 2}
 holding_i = [-53, -60]
 holding_e = [-68, -72]
+holding = [-68, -72]
+sign = '+'
 scale_offset = (-10, -10)
 scale_anchor = (0.45, 1)
 sweep_threshold = 5
@@ -37,7 +39,8 @@ args = vars(parser.parse_args(sys.argv[1:]))
 plot_sweeps = args['sweeps']
 plot_trains = args['trains']
 link_y_axis = args['link-y-axis']
-all_expts = cached_experiments()
+expt_cache = 'C:/Users/Stephanies/multipatch_analysis/tools/expts_cache.pkl'
+all_expts = ExperimentList(cache=expt_cache)
 
 test = PlotGrid()
 test.set_shape(len(connection_types.keys()), 1)
@@ -50,7 +53,7 @@ if plot_trains is True:
     tau = 15e-3
     lp = 1000
 else:
-    grid.set_shape(len(connection_types.keys()), 1)
+    grid.set_shape(len(connection_types.keys()), 2)
 grid.show()
 row = 0
 grid[0, 0].setTitle(title='First Pulse')
@@ -70,15 +73,15 @@ for row in range(len(connection_types)):
     elif expt.cells[pre_cell].cre_type in INHIBITORY_CRE_TYPES:
         holding = holding_i
         sign = '-'
-    pulse_response = get_response(expt, pre_cell, post_cell, type='pulse')
+    pulse_response, artifact = get_response(expt, pre_cell, post_cell, type='pulse')
     sweep_list = response_filter(pulse_response, freq_range=[0, 50], holding_range=holding, pulse=True)
     n_sweeps = len(sweep_list)
     if n_sweeps > sweep_threshold:
-        qc_list = pulse_qc(sweep_list, baseline=4, pulse=4)
-        avg_first_pulse = trace_avg(sweep_list)
+        qc_list = pulse_qc(sweep_list, baseline=2.5, pulse=None, plot=grid[row, 1])
+        avg_first_pulse = trace_avg(qc_list)
         avg_first_pulse.t0 = 0
         if plot_sweeps is True:
-            for current_sweep in sweep_list:
+            for current_sweep in qc_list:
                 current_sweep.t0 = 0
                 bsub_trace = bsub(current_sweep)
                 trace_plot(bsub_trace, sweep_color, plot=grid[row, 0], x_range=[-2e-3, 27e-3])
