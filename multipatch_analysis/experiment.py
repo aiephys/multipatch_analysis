@@ -7,6 +7,8 @@ import numpy as np
 import os
 import sys
 import re
+import traceback
+from collections import OrderedDict
 
 import yaml
 import pyqtgraph as pg
@@ -15,6 +17,7 @@ import pyqtgraph.configfile
 from .lims import specimen_info, specimen_images
 from .constants import ALL_CRE_TYPES, ALL_LABELS, FLUOROPHORES, LAYERS
 from .cell import Cell
+from .electrode import Electrode
 from .data import MultiPatchExperiment
 from .pipette_metadata import PipetteMetadata
 from .genotypes import Genotype
@@ -26,6 +29,8 @@ class Experiment(object):
     def __init__(self, entry=None, yml_file=None):
         self.entry = entry
         self.source_id = (None, None)
+        self.electrodes = None
+        self._cells = None
         self._connections = []
         self._region = None
         self._summary = None
@@ -197,21 +202,32 @@ class Experiment(object):
             stim += 'z'
         return stim
 
+    @property
+    def cells(self):
+        if self._cells is None:
+            if self.electrodes is None:
+                return None
+            self._cells = {e.cell.cell_id:e.cell for e in self.electrodes.values() if e.cell is not None}
+        return self._cells
+
     def _load_yml(self, yml_file):
         self.source_id = (yml_file, None)
         self._site_path = os.path.dirname(yml_file)
-        self.cells = {}
+        self.electrodes = OrderedDict()
         
         pips = PipetteMetadata(os.path.dirname(yml_file))
         self._pipettes_yml = pips
         all_colors = set(FLUOROPHORES.values())
         genotype = self.genotype
         for pip_id, pip_meta in pips.pipettes.items():
+            elec = Electrode(self, pip_id, pip_meta['start_datetime'], pip_meta['stop_datetime'], pip_meta['ad_channel'])
+            self.electrodes[pip_id] = elec
+
             if pip_meta['got_data'] is False:
                 continue
 
+            elec.cell = cell
             cell = Cell(self, pip_id)
-            self.cells[pip_id] = cell
 
             cell._target_layer = pip_meta.get('target_layer', '')
 
@@ -312,7 +328,14 @@ class Experiment(object):
         except Exception as exc:
             Exception("Error parsing experiment: %s\n%s" % (self, exc.args[0]))
 
-        self.cells = {x:Cell(self,x) for x in range(1,9)}
+        self.electrodes = OrderedDict()
+        for i in range(1,9):
+            # Ideally, this is the only place we would bake in this assumption:
+            ad_channel = i - 1
+
+            elec = Electrode(i, None, None, ad_channel)
+            self.electrodes[i] = elec
+            elec.cell = Cell(self, i)
 
         for ch in entry.children:
             try:
@@ -335,6 +358,7 @@ class Experiment(object):
                     raise Exception('Invalid experiment entry "%s"' % ch.lines[0])
 
             except Exception as exc:
+                traceback.print_exc()
                 raise Exception("Error parsing %s for experiment: %s\n%s" % (ch.lines[0], self, exc.args))
 
     def _parse_labeling(self, entry):
@@ -608,6 +632,10 @@ class Experiment(object):
         return self._slice_info
 
     @property
+    def slice_timestamp(self):
+        return datetime.fromtimestamp(self.slice_info['__timestamp__'])
+
+    @property
     def expt_info(self):
         if self._expt_info is None:
             index = os.path.join(self.path, '..', '..', '.index')
@@ -755,6 +783,43 @@ class Experiment(object):
             return None
         line = lines[-1].rstrip(',\r\n')
         return json.loads(line)['surface_depth']
+
+    @property
+    def target_temperature(self):
+        """The intended temperature of the experiment in °C, or None.
+
+        If the temperature was recorded as "RT", then 22.0 is returned.
+        """
+        temp = self.expt_info.get('temperature')
+        if temp is not None:
+            temp = temp.lower().rstrip(' c').strip()
+            if temp == 'rt':
+                temp = 22.0
+            elif temp == '':
+                temp = None
+            else:
+                try:
+                    temp = float(temp)
+                except Exception:
+                    raise ValueError('Invalid temperature: "%s"' % self.expt_info.get('temperature'))
+        return temp
+
+    @property
+    def original_path(self):
+        """The original path where this experiment was acquired. 
+        """
+        ss = os.path.join(self.path, 'sync_source')
+        if os.path.isfile(ss):
+            return open(ss, 'rb').read()
+        else:
+            return self.path
+
+    @property
+    def relative_path(self):
+        """The path of this experiment relative to the data repository it lives in.
+        """
+        repo_path = os.path.abspath(os.path.join(self.path, '..', '..', '..'))
+        return os.path.relpath(self.path, repo_path)
 
     def show(self):
         if self._view is None:
