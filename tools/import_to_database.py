@@ -1,15 +1,12 @@
 from __future__ import print_function
 
 import os, sys, time, glob, argparse
-from acq4.util.DataManager import getFileHandle
 import pyqtgraph.multiprocess as mp
 import multiprocessing
 
-from experiment_list import ExperimentList
-from submission import SliceSubmission, ExperimentDBSubmission
-import database
-import config
-import synphys_cache
+from multipatch_analysis.database.submission import SliceSubmission, ExperimentDBSubmission
+from multipatch_analysis.database import database
+from multipatch_analysis import config, synphys_cache, experiment_list
 
 
 if __name__ == '__main__':
@@ -21,44 +18,28 @@ if __name__ == '__main__':
     import pyqtgraph as pg
     pg.dbg()
     
-    print("Reading experiment list..")
-    cache = synphys_cache.SynPhysCache()
-    
-    all_nwbs = cache.list_nwbs()
+    all_expts = list(experiment_list.cached_experiments())
     
     # Just a dirty trick to give a wider variety of experiments when we are testing
     # on a small subset
     import random
     random.seed(0)
-    random.shuffle(all_nwbs)
-    
-    # clean out experiments with multiple NWB files for now
-    all_sites = [os.path.dirname(nwb) for nwb in all_nwbs]
-    n_sites = len(set(all_sites))
-    all_sites = [expt for expt in all_sites if all_sites.count(expt) == 1]
-    all_expts = [nwb for nwb in all_nwbs if os.path.dirname(nwb) in all_sites]
+    random.shuffle(all_expts)
     
     if args.limit > 0:
         selected_expts = all_expts[:args.limit]
     else:
         selected_expts = all_expts
         
-    print("Found %d nwb files in %d sites, will import %d experiments." % 
-          (len(all_nwbs), n_sites, len(selected_expts)))
+    print("Found %d cached experiments, will import %d." % 
+          (len(all_expts), len(selected_expts)))
     
     for i, expt in enumerate(selected_expts):
-        
-        nwb_file = getFileHandle(expt)
-        
-        nwb_cache_file = getFileHandle(cache.get_cache(nwb_file.name()))
-        site_dir = nwb_file.parent()
-        slice_dir = site_dir.parent()
-
         try:
             start = time.time()
             
-            
-            print("submit slice:", slice_dir.name())
+            slice_dir = expt.slice_dir
+            print("submit slice:", slice_dir)
             sub = SliceSubmission(slice_dir)
             if sub.submitted():
                 print("   already in DB")
@@ -68,9 +49,9 @@ if __name__ == '__main__':
             print("    %g sec" % (time.time()-start))
             start = time.time()
             
-            print("submit site:", site_dir.name())
-            print("    " + expt)
-            sub = ExperimentDBSubmission(site_dir, nwb_cache_file)
+            print("submit experiment:")
+            print("    ", expt)
+            sub = ExperimentDBSubmission(expt)
             if sub.submitted():
                 print("   already in DB")
             else:
@@ -83,14 +64,12 @@ if __name__ == '__main__':
                     # usage.
                     proc = mp.Process(pyqtapis={'QString': 2, 'QVariant': 2})
                     try:
-                        rdm = proc._import('acq4.util.DataManager')
-                        nwb_file = rdm.getFileHandle(nwb_file.name())
-                        nwb_cache_file = rdm.getFileHandle(nwb_cache_file.name())
-                        site_dir = nwb_file.parent()
-                        slice_dir = site_dir.parent()
-                        
-                        rsub = proc._import('submission')
-                        sub = rsub.ExperimentDBSubmission(site_dir, nwb_cache_file)
+                        rxl = proc._import('multipatch_analysis.experiment_list')
+                        all_expts = rxl.cached_experiments()
+                        expt = all_expts[expt.uid]
+
+                        rsub = proc._import('multipatch_analysis.database.submission')
+                        sub = rsub.ExperimentDBSubmission(expt)
                         fn = sub.submit(_timeout=None)
                         
                     finally:

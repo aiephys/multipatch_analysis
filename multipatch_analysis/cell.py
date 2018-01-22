@@ -1,7 +1,7 @@
 from __future__ import print_function, division
 import numpy as np
 
-from .constants import ALL_CRE_TYPES, ALL_LABELS
+from .constants import ALL_CRE_TYPES, ALL_LABELS, EXCITATORY_CRE_TYPES, INHIBITORY_CRE_TYPES
 
 
 class Cell(object):
@@ -107,6 +107,16 @@ class Cell(object):
         different.
         """
         return self._target_layer
+
+    @property
+    def is_excitatory(self):
+        ct = self.cre_type
+        if ct in EXCITATORY_CRE_TYPES:
+            return True
+        elif ct in INHIBITORY_CRE_TYPES:
+            return False
+        else:
+            return None
 
     @property
     def depth(self):
