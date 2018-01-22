@@ -310,6 +310,8 @@ class ExperimentMetadataSubmission(object):
                     labels[color] = pos
                 # human_L layer call
                 elif label.startswith('human_L'):
+                    if pos == 'x':
+                        continue
                     layer = label[7:]
                     if pip['target_layer'] == '':
                         pip['target_layer'] = layer

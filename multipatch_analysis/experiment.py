@@ -633,7 +633,11 @@ class Experiment(object):
 
     @property
     def slice_timestamp(self):
-        return datetime.fromtimestamp(self.slice_info['__timestamp__'])
+        return datetime.datetime.fromtimestamp(self.slice_info['__timestamp__'])
+
+    @property
+    def slice_dir(self):
+        return os.path.join(self.path, '..')
 
     @property
     def expt_info(self):

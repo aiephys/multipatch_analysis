@@ -62,17 +62,22 @@ table_schemas = {
         "successful cell recording.",
         ('expt_id', 'experiment.id', '', {'index': True}),
         ('patch_status', 'str', 'no seal, low seal, GOhm seal, tech fail, ...'),
-        ('device_key', 'int'),
+        ('start_time', 'datetime'),
+        ('stop_time', 'datetime'),
+        ('device_id', 'int', 'External identifier for the device attached to this electrode (usually the MIES A/D channel)'),
         ('initial_resistance', 'float'),
         ('initial_current', 'float'),
         ('pipette_offset', 'float'),
         ('final_resistance', 'float'),
         ('final_current', 'float'),
         ('notes', 'str'),
+        ('ext_id', 'int', 'Electrode ID referenced in external metadata records'),
     ],
     'cell': [
         ('electrode_id', 'electrode.id'),
         ('cre_type', 'str'),
+        ('target_layer', 'str'),
+        ('is_excitatory', 'str'),
         ('patch_start', 'float'),
         ('patch_stop', 'float'),
         ('seal_resistance', 'float'),
@@ -80,8 +85,9 @@ table_schemas = {
         ('has_dye_fill', 'bool'),
         ('pass_qc', 'bool'),
         ('pass_spike_qc', 'bool'),
-        ('depth', 'float'),
+        ('depth', 'float', 'Depth of the cell (in m) from the cut surface of the slice.'),
         ('position', 'object'),
+        ('ext_id', 'int', 'Cell ID referenced in external metadata records'),
     ],
     'pair': [
         "All possible putative synaptic connections",
@@ -98,7 +104,7 @@ table_schemas = {
     ],
     'recording': [
         ('sync_rec_id', 'sync_rec.id', 'References the synchronous recording to which this recording belongs.', {'index': True}),
-        ('device_key', 'int', 'Identifies the device that generated this recording (this is usually the MIES AD channel)', {'index': True}),
+        ('electrode_id', 'electrode.id', 'Identifies the electrode that generated this recording', {'index': True}),
         ('start_time', 'datetime', 'The clock time at the start of this recording'),
         ('sample_rate', 'int', 'Sample rate for this recording'),
     ],
@@ -281,6 +287,15 @@ Experiment.slice = relationship("Slice", back_populates="experiments")
 Experiment.sync_recs = relationship(SyncRec, order_by=SyncRec.id, back_populates="experiment", cascade='delete', single_parent=True)
 SyncRec.experiment = relationship(Experiment, back_populates='sync_recs')
 
+Experiment.electrodes = relationship(Electrode, order_by=Electrode.id, back_populates="experiment", cascade="delete", single_parent=True)
+Electrode.experiment = relationship(Experiment, back_populates="electrodes")
+
+Electrode.cell = relationship(Cell, back_populates="electrode", cascade="delete", single_parent=True)
+Cell.electrode = relationship(Electrode, back_populates="cell")
+
+Electrode.recordings = relationship(Recording, back_populates="electrode", cascade="delete", single_parent=True)
+Recording.electrode = relationship(Electrode, back_populates="recordings")
+
 SyncRec.recordings = relationship(Recording, order_by=Recording.id, back_populates="sync_rec", cascade="delete", single_parent=True)
 Recording.sync_rec = relationship(SyncRec, back_populates="recordings")
 
@@ -320,11 +335,24 @@ if '--reset-db' in sys.argv:
     conn = engine.connect()
     conn.connection.set_isolation_level(0)
     try:
-        conn.execute('drop database synphys')
+        conn.execute('drop database %s' % synphys_db)
     except sqlalchemy.exc.ProgrammingError as err:
         if 'does not exist' not in err.message:
             raise
-    conn.execute('create database synphys')
+
+    # Rename old database before starting over
+    # dbs = [r[0] for r in conn.execute('select datname from pg_database where datistemplate = false;')]
+    # if synphys_db in dbs:
+    #     i = 1
+    #     while True:
+    #         new_name = synphys_db + '_%d' % i
+    #         if new_name not in dbs:
+    #             break
+    #         new_name += 1
+    #     print("Renaming existing database %s => %s" % (synphys_db, new_name))
+    #     conn.execute('alter database %s rename to %s' % (synphys_db, new_name))
+
+    conn.execute('create database %s' % synphys_db)
     conn.close()
     
     # connect to DB
