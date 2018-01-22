@@ -50,6 +50,7 @@ class Experiment(object):
         self._cre_types = None
         self._labels = None
         self._target_layers = None
+        self._rig_name = None
         
         if entry is not None:
             self._load_old_format(entry)
@@ -824,6 +825,19 @@ class Experiment(object):
         """
         repo_path = os.path.abspath(os.path.join(self.path, '..', '..', '..'))
         return os.path.relpath(self.path, repo_path)
+
+    @property
+    def rig_name(self):
+        """The name of the rig used to acquire this experiment.
+        """
+        if self._rig_name is None:
+            self._rig_name = self.expt_info.get('rig_name', None)
+            if self._rig_name is None:
+                path = self.original_path
+                m = re.search(r'\/(MP\d)', self.original_path)
+                if m is not None:
+                   self._rig_name = m.groups()[0]
+        return self._rig_name
 
     def show(self):
         if self._view is None:

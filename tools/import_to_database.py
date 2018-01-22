@@ -4,6 +4,9 @@ import os, sys, time, glob, argparse
 import pyqtgraph.multiprocess as mp
 import multiprocessing
 
+import pyqtgraph as pg
+pg.dbg()
+
 from multipatch_analysis.database.submission import SliceSubmission, ExperimentDBSubmission
 from multipatch_analysis.database import database
 from multipatch_analysis import config, synphys_cache, experiment_list
@@ -15,8 +18,6 @@ if __name__ == '__main__':
     parser.add_argument('--local', action='store_true', default=False)
     args, extra = parser.parse_known_args(sys.argv[1:])
     
-    import pyqtgraph as pg
-    pg.dbg()
     
     all_expts = list(experiment_list.cached_experiments())
     
