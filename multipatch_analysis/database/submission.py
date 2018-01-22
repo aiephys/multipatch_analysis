@@ -168,7 +168,7 @@ class ExperimentDBSubmission(object):
             'original_path': expt.original_path,
             'storage_path': expt.relative_path,
             'ephys_file': os.path.relpath(expt.nwb_file, expt.path),
-            'rig_name': expt_info.get('rig_name', None),  # optional for now; make mandatory later
+            'rig_name': expt.rig_name,
             'acq_timestamp': expt.datetime,
             'target_region': expt_info.get('region'),
             'internal': expt_info.get('internal'),
@@ -199,6 +199,7 @@ class ExperimentDBSubmission(object):
 
         # create pipette and cell entries
         elecs_by_ad_channel = {}
+        cell_entries = {}
         for e_id, elec in self.expt.electrodes.items():
             elec_entry = db.Electrode(experiment=expt_entry, ext_id=elec.electrode_id, device_id=elec.device_id)
             for k in ['patch_status', 'start_time', 'stop_time',  
@@ -222,9 +223,26 @@ class ExperimentDBSubmission(object):
                     depth=cell.depth,
                 )
                 session.add(cell_entry)
+                cell_entries[cell] = cell_entry
 
-        
+        # create pairs
+        for i, pre_cell in self.expt.cells.items():
+            for j, post_cell in self.expt.cells.items():
+                synapse = (i, j) in self.expt.connections
+                pair_entry = db.Pair(
+                    experiment=expt_entry,
+                    pre_cell=cell_entries[pre_cell], 
+                    post_cell=cell_entries[post_cell],
+                    synapse=synapse,
+                )
+                session.add(pair_entry)
+
         # Load NWB file and create data entries
+        self._load_nwb(session, expt_entry, elecs_by_ad_channel)
+
+        return expt_entry
+
+    def _load_nwb(self, session, expt_entry, elecs_by_ad_channel):
         nwb = self.expt.data
         
         for srec in nwb.contents:
@@ -354,11 +372,11 @@ class ExperimentDBSubmission(object):
                         )
                         session.add(resp_entry)
                         
-            # generate up to 100 baseline snippets for each recording
+            # generate up to 20 baseline snippets for each recording
             for dev in srec.devices:
                 rec = srec[dev]
                 dist = BaselineDistributor.get(rec)
-                for i in range(100):
+                for i in range(20):
                     base = dist.get_baseline_chunk(20e-3)
                     if base is None:
                         # all out!
@@ -372,10 +390,7 @@ class ExperimentDBSubmission(object):
                         mode=float_mode(base.data),
                     )
                     session.add(base_entry)
-                    
-                    
             
-        return expt_entry
         
     def submit(self):
         session = db.Session()

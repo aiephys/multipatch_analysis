@@ -71,7 +71,7 @@ table_schemas = {
         ('final_resistance', 'float'),
         ('final_current', 'float'),
         ('notes', 'str'),
-        ('ext_id', 'int', 'Electrode ID referenced in external metadata records'),
+        ('ext_id', 'int', 'Electrode ID (usually 1-8) referenced in external metadata records'),
     ],
     'cell': [
         ('electrode_id', 'electrode.id'),
@@ -87,19 +87,21 @@ table_schemas = {
         ('pass_spike_qc', 'bool'),
         ('depth', 'float', 'Depth of the cell (in m) from the cut surface of the slice.'),
         ('position', 'object'),
-        ('ext_id', 'int', 'Cell ID referenced in external metadata records'),
+        ('ext_id', 'int', 'Cell ID (usually 1-8) referenced in external metadata records'),
     ],
     'pair': [
         "All possible putative synaptic connections",
-        ('pre_cell', 'cell.id'),
-        ('post_cell', 'cell.id'),
-        ('synapse', 'bool', 'Whether the experimenter thinks there is a synapse'),
-        ('electrical', 'bool', 'whether the experimenter thinks there is a gap junction'),
+        ('expt_id', 'experiment.id', '', {'index': True}),
+        ('pre_cell_id', 'cell.id', 'ID of the presynaptic cell', {'index': True}),
+        ('post_cell_id', 'cell.id', 'ID of the postsynaptic cell', {'index': True}),
+        ('synapse', 'bool', 'Whether the experimenter thinks there is a synapse', {'index': True}),
+        ('electrical', 'bool', 'Whether the experimenter thinks there is a gap junction', {'index': True}),
+        ('crosstalk_artifact', 'float', 'Amplitude of crosstalk artifact measured in current clamp'),
     ],
     'sync_rec': [
         ('experiment_id', 'experiment.id', '', {'index': True}),
-        ('sync_rec_key', 'object'),
-        ('temperature', 'float'),
+        ('sync_rec_key', 'object', 'External ID of the SyncRecording'),
+        ('temperature', 'float', 'Bath temperature during this recording'),
         ('meta', 'object'),
     ],
     'recording': [
@@ -291,7 +293,16 @@ Experiment.electrodes = relationship(Electrode, order_by=Electrode.id, back_popu
 Electrode.experiment = relationship(Experiment, back_populates="electrodes")
 
 Electrode.cell = relationship(Cell, back_populates="electrode", cascade="delete", single_parent=True)
-Cell.electrode = relationship(Electrode, back_populates="cell")
+Cell.electrode = relationship(Electrode, back_populates="cell", single_parent=True)
+
+Experiment.pairs = relationship(Pair, back_populates="experiment", cascade="delete", single_parent=True)
+Pair.experiment = relationship(Experiment, back_populates="pairs")
+
+Pair.pre_cell = relationship(Cell, foreign_keys=[Pair.pre_cell_id])
+#Cell.pre_pairs = relationship(Pair, back_populates="pre_cell", single_parent=True, foreign_keys=[Pair.pre_cell])
+
+Pair.post_cell = relationship(Cell, foreign_keys=[Pair.post_cell_id])
+#Cell.post_pairs = relationship(Pair, back_populates="post_cell", single_parent=True, foreign_keys=[Pair.post_cell])
 
 Electrode.recordings = relationship(Recording, back_populates="electrode", cascade="delete", single_parent=True)
 Recording.electrode = relationship(Electrode, back_populates="recordings")
