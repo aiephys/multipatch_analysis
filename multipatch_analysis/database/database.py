@@ -170,9 +170,9 @@ table_schemas = {
     ],
     'pulse_response': [
         "A postsynaptic recording taken during a presynaptic stimulus",
-        ('recording_id', 'recording.id', '', {'index': True}),
-        ('pulse_id', 'stim_pulse.id', '', {'index': True}),
-        ('pair_id', 'pair.id'),
+        ('recording_id', 'recording.id', 'The full recording from which this pulse was extracted', {'index': True}),
+        ('pulse_id', 'stim_pulse.id', 'The presynaptic pulse', {'index': True}),
+        ('pair_id', 'pair.id', 'The pre-post cell pair involved in this pulse response', {'index': True}),
         ('start_index', 'int', "Starting index relative to the original recording."),
         ('stop_index', 'int'),
         ('start_time', 'float', "Starting time of this chunk of the recording in seconds, relative to the beginning of the recording"),
@@ -332,6 +332,8 @@ Baseline.recording = relationship(Recording, back_populates="baselines")
 
 PulseResponse.recording = relationship(Recording)
 PulseResponse.stim_pulse = relationship(StimPulse)
+Pair.pulse_responses = relationship(PulseResponse, back_populates='pair', single_parent=True)
+PulseResponse.pair = relationship(Pair, back_populates='pulse_responses')
 PulseResponse.baseline = relationship(Baseline)
 
 
