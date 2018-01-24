@@ -134,7 +134,7 @@ class ExperimentDBSubmission(object):
         self._fields = None
 
     def submitted(self):
-        ts = self.expt.slice_timestamp
+        ts = self.expt.datetime
         try:
             expt_entry = db.experiment_from_timestamp(ts)
             return True
@@ -172,10 +172,13 @@ class ExperimentDBSubmission(object):
             'acq_timestamp': expt.datetime,
             'target_region': expt_info.get('region'),
             'internal': expt_info.get('internal'),
-            'acsf': expt_info.get('acsf'),
+            'acsf': expt_info.get('solution'),
             'target_temperature': temp,
         }
-                
+        
+        if self.submitted():
+            errors.append("Experiment is already submitted.")
+
         return errors, warnings
     
     def summary(self):
@@ -226,23 +229,32 @@ class ExperimentDBSubmission(object):
                 cell_entries[cell] = cell_entry
 
         # create pairs
+        pairs_by_device_id = {}
         for i, pre_cell in self.expt.cells.items():
             for j, post_cell in self.expt.cells.items():
+                if i == j:
+                    continue
                 synapse = (i, j) in self.expt.connections
+                pre_cell_entry = cell_entries[pre_cell]
+                post_cell_entry = cell_entries[post_cell]
                 pair_entry = db.Pair(
                     experiment=expt_entry,
-                    pre_cell=cell_entries[pre_cell], 
-                    post_cell=cell_entries[post_cell],
+                    pre_cell=pre_cell_entry,
+                    post_cell=post_cell_entry,
                     synapse=synapse,
                 )
                 session.add(pair_entry)
 
+                pre_id = pre_cell_entry.electrode.device_id
+                post_id = post_cell_entry.electrode.device_id
+                pairs_by_device_id[(pre_id, post_id)] = pair_entry
+
         # Load NWB file and create data entries
-        self._load_nwb(session, expt_entry, elecs_by_ad_channel)
+        self._load_nwb(session, expt_entry, elecs_by_ad_channel, pairs_by_device_id)
 
         return expt_entry
 
-    def _load_nwb(self, session, expt_entry, elecs_by_ad_channel):
+    def _load_nwb(self, session, expt_entry, elecs_by_ad_channel, pairs_by_device_id):
         nwb = self.expt.data
         
         for srec in nwb.contents:
@@ -351,6 +363,9 @@ class ExperimentDBSubmission(object):
             mpa = MultiPatchSyncRecAnalyzer(srec)
             for pre_dev in srec.devices:
                 for post_dev in srec.devices:
+                    if pre_dev == post_dev:
+                        continue
+
                     # get all responses, regardless of the presence of a spike
                     responses = mpa.get_spike_responses(srec[pre_dev], srec[post_dev], align_to='pulse', require_spike=False)
                     for resp in responses:
@@ -365,6 +380,7 @@ class ExperimentDBSubmission(object):
                         resp_entry = db.PulseResponse(
                             recording=rec_entries[post_dev],
                             stim_pulse=all_pulse_entries[pre_dev][resp['pulse_n']],
+                            pair=pairs_by_device_id[(pre_dev, post_dev)],
                             # baseline=base_entry,
                             start_index=resp['rec_start'],
                             stop_index=resp['rec_stop'],
