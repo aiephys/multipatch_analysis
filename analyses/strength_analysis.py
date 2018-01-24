@@ -14,6 +14,7 @@ import scipy.stats
 from sqlalchemy.orm import aliased
 
 import pyqtgraph as pg
+from pyqtgraph.Qt import QtGui, QtCore
 
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.data import Trace, TraceList
@@ -517,22 +518,53 @@ def join_pulse_response_to_expt(query):
     return query, pre_rec, post_rec
 
 
-class ResponseStrengthPlots(object):
+class ResponseStrengthPlots(QtGui.QWidget):
     def __init__(self, session):
+        QtGui.QWidget.__init__(self)
         self.session = session
-        
-        self.str_plot = pg.PlotItem()
 
-        self.amp_sp = pg.ScatterPlotItem(pen=None, symbol='o', symbolPen=None)
-        self.str_plot.addItem(self.amp_sp)
-        self.amp_sp.sigClicked.connect(self.amp_clicked)
+        self.gl = pg.GraphicsLayoutWidget()
+        self.layout = QtGui.QGridLayout()
+        self.setLayout(self.layout)
+        self.layout.addWidget(self.gl, 0, 0)
+        self.layout.setContentsMargins(0, 0, 0, 0)
 
-        self.base_sp = pg.ScatterPlotItem(pen=None, symbol='o', symbolPen=None)
-        self.str_plot.addItem(self.base_sp)
-        self.base_sp.sigClicked.connect(self.base_clicked)
+        self.analyses = ['neg', 'pos']
+        self.hist_plots = []
+        self.scatter_plots = []
+        self.bg_scatters = []
+        self.fg_scatters = []
+
+        for col, analysis in enumerate(self.analyses):
+            hist_plot = self.gl.addPlot(row=0, col=col, title=analysis+":")
+            hist_plot.hideAxis('bottom')
+            self.hist_plots.append(hist_plot)
+
+            scatter_plot = self.gl.addPlot(row=1, col=col)
+            scatter_plot.getAxis('left').setTicks([[(1.4, 'fg'), (0.4, 'bg')], []])
+            scatter_plot.setFixedHeight(200)
+            hist_plot.setXLink(scatter_plot)
+            self.scatter_plots.append(scatter_plot)
+
+            bg_scatter = pg.ScatterPlotItem(pen=None, symbol='o', symbolPen=None)
+            fg_scatter = pg.ScatterPlotItem(pen=None, symbol='o', symbolPen=None)
+            scatter_plot.addItem(bg_scatter)
+            scatter_plot.addItem(fg_scatter)
+            self.bg_scatters.append(bg_scatter)
+            self.fg_scatters.append(fg_scatter)
+
+        # self.str_plot = pg.PlotItem()
+
+        # self.amp_sp = pg.ScatterPlotItem(pen=None, symbol='o', symbolPen=None)
+        # self.str_plot.addItem(self.amp_sp)
+        # self.amp_sp.sigClicked.connect(self.amp_clicked)
+
+        # self.base_sp = pg.ScatterPlotItem(pen=None, symbol='o', symbolPen=None)
+        # self.str_plot.addItem(self.base_sp)
+        # self.base_sp.sigClicked.connect(self.base_clicked)
         
-        self.trace_plot = pg.PlotItem(labels={'bottom': ('time', 's'), 'left': ('Vm', 'V')})
-        self.dec_plot = pg.PlotItem(labels={'bottom': ('time', 's'), 'left': ('Vm', 'V')})
+        # self.trace_plot = pg.PlotItem(labels={'bottom': ('time', 's'), 'left': ('Vm', 'V')})
+        # self.dec_plot = pg.PlotItem(labels={'bottom': ('time', 's'), 'left': ('Vm', 'V')})
     
     def amp_clicked(self, sp, points):
         self.clicked('amp', points)
@@ -565,22 +597,40 @@ class ResponseStrengthPlots(object):
     def load_conn(self, pair):
         amp_recs = get_amps(self.session, pair)
         base_recs = get_baseline_amps(self.session, pair, limit=len(amp_recs))
-        
-        by = [rec['pos_dec_amp'] for rec in amp_recs]
-        bx = 1 + np.random.random(size=len(by)) * 0.5
-        self.amp_sp.setData(bx, by, data=amp_recs, brush=(255, 255, 255, 80))
 
-        ay = [rec['pos_dec_amp'] for rec in base_recs[:len(by)]]
-        ax = np.random.random(size=len(ay)) * 0.5
-        self.base_sp.setData(ax, ay, data=base_recs[:len(by)], brush=(255, 255, 255, 80))
+        for col, analysis in enumerate(self.analyses):
+            # select fg/bg data
+            fg_data = amp_recs
+            bg_data = base_recs[:len(fg_data)]
+            if analysis == 'pos':
+                fg_x = [rec['pos_dec_amp'] for rec in fg_data]
+                bg_x = [rec['pos_dec_amp'] for rec in bg_data]
+            elif analysis == 'neg':
+                fg_x = [rec['neg_dec_amp'] for rec in fg_data]
+                bg_x = [rec['neg_dec_amp'] for rec in bg_data]
+            
+            if len(fg_x) == 0:
+                self.fg_scatters[col].setData([])
+                self.bg_scatters[col].setData([])
+                self.hist_plots[col].clear()
+                continue
 
-        dy = [rec['neg_dec_amp'] for rec in amp_recs]
-        dx = 3 + np.random.random(size=len(dy)) * 0.5
-        self.amp_sp.addPoints(dx, dy, data=amp_recs, brush=(255, 255, 255, 80))
-        
-        cy = [rec['neg_dec_amp'] for rec in base_recs[:len(dy)]]
-        cx = 2 + np.random.random(size=len(cy)) * 0.5
-        self.base_sp.addPoints(cx, cy, data=base_recs[:len(dy)], brush=(255, 255, 255, 80))
+            # scatter plots of fg/bg data
+            fg_y = 1 + np.random.random(size=len(fg_x)) * 0.8
+            bg_y = np.random.random(size=len(bg_x)) * 0.8
+            self.fg_scatters[col].setData(fg_x, fg_y, data=fg_data, brush=(255, 255, 255, 80))
+            self.bg_scatters[col].setData(bg_x, bg_y, data=bg_data, brush=(255, 255, 255, 80))
+
+            # plot histograms
+            bins = max(5, int(len(fg_x)**0.5))
+            fg_hist = np.histogram(fg_x, bins=bins)
+            bg_hist = np.histogram(bg_x, bins=fg_hist[1])
+            self.hist_plots[col].clear()
+            self.hist_plots[col].plot(bg_hist[1], bg_hist[0], stepMode=True, fillLevel=0, brush=(0, 0, 255, 100), pen=0.5)
+            self.hist_plots[col].plot(fg_hist[1], fg_hist[0], stepMode=True, fillLevel=0, brush=(0, 255, 255, 100), pen=1.0)
+
+            ks = scipy.stats.ks_2samp(fg_x, bg_x)
+            self.hist_plots[col].setTitle("%s: KS=%0.02g" % (analysis, ks.pvalue))
 
 
 
@@ -622,13 +672,8 @@ if __name__ == '__main__':
     b = ExperimentBrowser()
     win.addWidget(b)
     
-    gl = pg.GraphicsLayoutWidget()
-    win.addWidget(gl)
-    
     rs_plots = ResponseStrengthPlots(session)
-    gl.addItem(rs_plots.str_plot)
-    gl.addItem(rs_plots.trace_plot, row=1, col=0)
-    gl.addItem(rs_plots.dec_plot, row=2, col=0)
+    win.addWidget(rs_plots)
     
     def selected(*args):
         """A pair was selected; update the event plots
