@@ -530,53 +530,61 @@ class ResponseStrengthPlots(QtGui.QWidget):
         self.layout.setContentsMargins(0, 0, 0, 0)
 
         self.analyses = ['neg', 'pos']
-        self.hist_plots = []
-        self.scatter_plots = []
-        self.bg_scatters = []
-        self.fg_scatters = []
-
+        self.analyzers = []
         for col, analysis in enumerate(self.analyses):
-            hist_plot = self.gl.addPlot(row=0, col=col, title=analysis+":")
-            hist_plot.hideAxis('bottom')
-            self.hist_plots.append(hist_plot)
+            analyzer = ResponseStrengthAnalyzer(analysis)
+            self.analyzers.append(analyzer)
+            self.gl.addItem(analyzer.hist_plot, row=0, col=col)
+            self.gl.addItem(analyzer.scatter_plot, row=1, col=col)
+            self.gl.addItem(analyzer.fg_trace_plot, row=2, col=col)
+            self.gl.addItem(analyzer.bg_trace_plot, row=3, col=col)
+                
+    def load_conn(self, pair):
+        amp_recs = get_amps(self.session, pair)
+        base_recs = get_baseline_amps(self.session, pair, limit=len(amp_recs))
 
-            scatter_plot = self.gl.addPlot(row=1, col=col)
-            scatter_plot.getAxis('left').setTicks([[(1.4, 'fg'), (0.4, 'bg')], []])
-            scatter_plot.setFixedHeight(200)
-            hist_plot.setXLink(scatter_plot)
-            self.scatter_plots.append(scatter_plot)
+        for analyzer in self.analyzers:
+            analyzer.load_conn(pair, amp_recs, base_recs)
 
-            bg_scatter = pg.ScatterPlotItem(pen=None, symbol='o', symbolPen=None)
-            fg_scatter = pg.ScatterPlotItem(pen=None, symbol='o', symbolPen=None)
-            scatter_plot.addItem(bg_scatter)
-            scatter_plot.addItem(fg_scatter)
-            self.bg_scatters.append(bg_scatter)
-            self.fg_scatters.append(fg_scatter)
 
-        # self.str_plot = pg.PlotItem()
+class ResponseStrengthAnalyzer(object):
+    def __init__(self, analysis):
+        self.analysis = analysis  # 'pos' or 'neg'
 
-        # self.amp_sp = pg.ScatterPlotItem(pen=None, symbol='o', symbolPen=None)
-        # self.str_plot.addItem(self.amp_sp)
-        # self.amp_sp.sigClicked.connect(self.amp_clicked)
+        # histogram plots
+        self.hist_plot = pg.PlotItem(title=analysis+":")
+        self.hist_plot.hideAxis('bottom')
 
-        # self.base_sp = pg.ScatterPlotItem(pen=None, symbol='o', symbolPen=None)
-        # self.str_plot.addItem(self.base_sp)
-        # self.base_sp.sigClicked.connect(self.base_clicked)
-        
-        # self.trace_plot = pg.PlotItem(labels={'bottom': ('time', 's'), 'left': ('Vm', 'V')})
-        # self.dec_plot = pg.PlotItem(labels={'bottom': ('time', 's'), 'left': ('Vm', 'V')})
+        # event scatter plots
+        self.scatter_plot = pg.PlotItem()
+        self.scatter_plot.getAxis('left').setTicks([[(1.4, 'fg'), (0.4, 'bg')], []])
+        self.scatter_plot.setFixedHeight(200)
+        self.hist_plot.setXLink(self.scatter_plot)
+
+        self.bg_scatter = pg.ScatterPlotItem(pen=None, symbol='o', symbolPen=None)
+        self.fg_scatter = pg.ScatterPlotItem(pen=None, symbol='o', symbolPen=None)
+        self.scatter_plot.addItem(self.bg_scatter)
+        self.scatter_plot.addItem(self.fg_scatter)
+        self.fg_scatter.sigClicked.connect(self.fg_scatter_clicked)
+        self.bg_scatter.sigClicked.connect(self.bg_scatter_clicked)
+
+        # trace plots
+        self.fg_trace_plot = pg.PlotItem()
+        self.bg_trace_plot = pg.PlotItem()
+        self.bg_trace_plot.setXLink(self.fg_trace_plot)
+        self.bg_trace_plot.setYLink(self.fg_trace_plot)
     
-    def amp_clicked(self, sp, points):
-        self.clicked('amp', points)
+    def fg_scatter_clicked(self, sp, points):
+        self.clicked('fg', points)
 
-    def base_clicked(self, sp, points):
-        self.clicked('base', points)
+    def bg_scatter_clicked(self, sp, points):
+        self.clicked('bg', points)
 
     def clicked(self, source, points):
         self.clicked_points = points
         
         ids = [p.data()['id'] for p in points]
-        if source == 'amp':
+        if source == 'fg':
             q = self.session.query(db.PulseResponse.data)
             q = q.join(PulseResponseStrength)
             q = q.filter(PulseResponseStrength.id.in_(ids))
@@ -594,43 +602,39 @@ class ResponseStrengthPlots(QtGui.QWidget):
             dec_trace = deconv_filter(trace)
             self.dec_plot.plot(dec_trace.time_values, dec_trace.data)
         
-    def load_conn(self, pair):
-        amp_recs = get_amps(self.session, pair)
-        base_recs = get_baseline_amps(self.session, pair, limit=len(amp_recs))
+    def load_conn(self, pair, amp_recs, base_recs):
+        # select fg/bg data
+        fg_data = amp_recs
+        bg_data = base_recs[:len(fg_data)]
+        if self.analysis == 'pos':
+            fg_x = [rec['pos_dec_amp'] for rec in fg_data]
+            bg_x = [rec['pos_dec_amp'] for rec in bg_data]
+        elif self.analysis == 'neg':
+            fg_x = [rec['neg_dec_amp'] for rec in fg_data]
+            bg_x = [rec['neg_dec_amp'] for rec in bg_data]
+        
+        if len(fg_x) == 0:
+            self.fg_scatter.setData([])
+            self.bg_scatter.setData([])
+            self.hist_plot.clear()
+            return
 
-        for col, analysis in enumerate(self.analyses):
-            # select fg/bg data
-            fg_data = amp_recs
-            bg_data = base_recs[:len(fg_data)]
-            if analysis == 'pos':
-                fg_x = [rec['pos_dec_amp'] for rec in fg_data]
-                bg_x = [rec['pos_dec_amp'] for rec in bg_data]
-            elif analysis == 'neg':
-                fg_x = [rec['neg_dec_amp'] for rec in fg_data]
-                bg_x = [rec['neg_dec_amp'] for rec in bg_data]
-            
-            if len(fg_x) == 0:
-                self.fg_scatters[col].setData([])
-                self.bg_scatters[col].setData([])
-                self.hist_plots[col].clear()
-                continue
+        # scatter plots of fg/bg data
+        fg_y = 1 + np.random.random(size=len(fg_x)) * 0.8
+        bg_y = np.random.random(size=len(bg_x)) * 0.8
+        self.fg_scatter.setData(fg_x, fg_y, data=fg_data, brush=(255, 255, 255, 80))
+        self.bg_scatter.setData(bg_x, bg_y, data=bg_data, brush=(255, 255, 255, 80))
 
-            # scatter plots of fg/bg data
-            fg_y = 1 + np.random.random(size=len(fg_x)) * 0.8
-            bg_y = np.random.random(size=len(bg_x)) * 0.8
-            self.fg_scatters[col].setData(fg_x, fg_y, data=fg_data, brush=(255, 255, 255, 80))
-            self.bg_scatters[col].setData(bg_x, bg_y, data=bg_data, brush=(255, 255, 255, 80))
+        # plot histograms
+        bins = max(5, int(len(fg_x)**0.5))
+        fg_hist = np.histogram(fg_x, bins=bins)
+        bg_hist = np.histogram(bg_x, bins=fg_hist[1])
+        self.hist_plot.clear()
+        self.hist_plot.plot(bg_hist[1], bg_hist[0], stepMode=True, fillLevel=0, brush=(255, 0, 0, 100), pen=0.5)
+        self.hist_plot.plot(fg_hist[1], fg_hist[0], stepMode=True, fillLevel=0, brush=(0, 255, 255, 100), pen=1.0)
 
-            # plot histograms
-            bins = max(5, int(len(fg_x)**0.5))
-            fg_hist = np.histogram(fg_x, bins=bins)
-            bg_hist = np.histogram(bg_x, bins=fg_hist[1])
-            self.hist_plots[col].clear()
-            self.hist_plots[col].plot(bg_hist[1], bg_hist[0], stepMode=True, fillLevel=0, brush=(0, 0, 255, 100), pen=0.5)
-            self.hist_plots[col].plot(fg_hist[1], fg_hist[0], stepMode=True, fillLevel=0, brush=(0, 255, 255, 100), pen=1.0)
-
-            ks = scipy.stats.ks_2samp(fg_x, bg_x)
-            self.hist_plots[col].setTitle("%s: KS=%0.02g" % (analysis, ks.pvalue))
+        ks = scipy.stats.ks_2samp(fg_x, bg_x)
+        self.hist_plot.setTitle("%s: KS=%0.02g" % (self.analysis, ks.pvalue))
 
 
 
