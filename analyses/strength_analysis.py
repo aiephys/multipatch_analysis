@@ -82,16 +82,13 @@ class PulseResponseStrengthTableGroup(TableGroup):
         BaselineResponseStrength = self['baseline_response_strength']
         
         db.PulseResponse.pulse_response_strength = db.relationship(PulseResponseStrength, back_populates="pulse_response", cascade="delete", single_parent=True)
-        PulseResponseStrength.pulse_response = db.relationship(db.PulseResponse, back_populates="pulse_response_strength")
+        PulseResponseStrength.pulse_response = db.relationship(db.PulseResponse, back_populates="pulse_response_strength", single_parent=True)
 
 
 class ConnectionStrengthTableGroup(TableGroup):
     schemas = {
         'connection_strength': [
-            ('experiment_id', 'experiment.id', '', {'index': True}),
-            ('pre_id', 'int', '', {'index': True}),
-            ('post_id', 'int', '', {'index': True}),
-            ('user_connected', 'bool', 'Whether the experimenter marked this pair as connected.'),
+            ('pair_id', 'pair.id', '', {'index': True}),
             ('synapse_type', 'str', '"ex" or "in"'),
             ('n_samples', 'int'),
             ('amp_med', 'float'),
@@ -112,6 +109,14 @@ class ConnectionStrengthTableGroup(TableGroup):
             ('deconv_amp_ks2samp', 'float'),
         ],
     }
+
+    def create_mappings(self):
+        TableGroup.create_mappings(self)
+        
+        ConnectionStrength = self['connection_strength']
+        
+        db.Pair.connection_strength = db.relationship(ConnectionStrength, back_populates="pair", cascade="delete", single_parent=True)
+        ConnectionStrength.pair = db.relationship(db.Pair, back_populates="connection_strength", single_parent=True)
 
 
 pulse_response_strength_tables = PulseResponseStrengthTableGroup()
@@ -235,24 +240,15 @@ def _compute_strength(inds, session=None):
 def rebuild_connectivity(session):
     print("Rebuilding connectivity table..")
     
-    # cheating:
-    from multipatch_analysis import experiment_list
-    expt_cache = experiment_list.cached_experiments()
-    
     expts_in_db = list_experiments()
     for i,expt in enumerate(expts_in_db):
-        try:
-            cached_expt = expt_cache[expt.acq_timestamp]
-        except:
-            cached_expt = None
-        for devs in get_experiment_pairs(expt):
+        for pair in expt.pairs:
             amps = get_amps(session, expt, devs)
             base_amps = get_baseline_amps(session, expt, devs[1], limit=len(amps))
             
-            conn = ConnectionStrength(experiment_id=expt.id, pre_id=devs[0], post_id=devs[1])
+            conn = ConnectionStrength(pair_id=pair.id)
             # Whether the user marked this as connected
             cell_ids = (devs[0] + 1, devs[1] + 1)
-            conn.user_connected = None if cached_expt is None else (cell_ids in cached_expt.connections)
             
             # decide whether to treat this connection as excitatory or inhibitory
             # (probably we can do much better here)
@@ -393,6 +389,8 @@ def get_amps(session, expt, devs, clamp_mode='ic'):
         PulseResponseStrength.neg_amp,
         PulseResponseStrength.pos_dec_amp,
         PulseResponseStrength.neg_dec_amp,
+        PulseResponseStrength.pos_dec_latency,
+        PulseResponseStrength.neg_dec_latency,
     ).join(db.PulseResponse)
 
     dtype = [
@@ -401,6 +399,8 @@ def get_amps(session, expt, devs, clamp_mode='ic'):
         ('neg_amp', 'float'),
         ('pos_dec_amp', 'float'),
         ('neg_dec_amp', 'float'),
+        ('pos_dec_latency', 'float'),
+        ('neg_dec_latency', 'float'),
     ]
     
     q, pre_rec, post_rec = join_pulse_response_to_expt(q)
@@ -463,6 +463,8 @@ def get_baseline_amps(session, expt, dev, clamp_mode='ic', limit=None):
         BaselineResponseStrength.neg_amp,
         BaselineResponseStrength.pos_dec_amp,
         BaselineResponseStrength.neg_dec_amp,
+        BaselineResponseStrength.pos_dec_latency,
+        BaselineResponseStrength.neg_dec_latency,
     ).join(db.Baseline).join(db.Recording).join(db.PatchClampRecording).join(db.SyncRec).join(db.Experiment)
 
     dtype = [
@@ -471,6 +473,8 @@ def get_baseline_amps(session, expt, dev, clamp_mode='ic', limit=None):
         ('neg_amp', 'float'),
         ('pos_dec_amp', 'float'),
         ('neg_dec_amp', 'float'),
+        ('pos_dec_latency', 'float'),
+        ('neg_dec_latency', 'float'),
     ]
     
     filters = [
@@ -479,7 +483,7 @@ def get_baseline_amps(session, expt, dev, clamp_mode='ic', limit=None):
         (db.PatchClampRecording.clamp_mode==clamp_mode,),
         (db.PatchClampRecording.baseline_potential<=-50e-3,),
         (db.PatchClampRecording.baseline_current>-800e-12,),
-        (db.PatchClampRecording.baseline_current<800e-12,),
+        (db.PatchClampRecording.baseline_current<400e-12,),
     ]
     for filter_args in filters:
         q = q.filter(*filter_args)
@@ -662,7 +666,7 @@ if __name__ == '__main__':
     spw = pg.ScatterPlotWidget()
     spw.style['symbolPen'] = None
     spw.setFields([
-        ('user_connected', {'mode': 'enum', 'values': [True, False, None]}),
+        ('synapse', {'mode': 'enum', 'values': [True, False, None]}),
         ('synapse_type', {'mode': 'enum', 'values': ['in', 'ex']}),
         ('n_samples', {}),
         ('acq_timestamp', {}),
@@ -688,6 +692,7 @@ if __name__ == '__main__':
         ('deconv_amp_ttest', {}),
         ('amp_ks2samp', {}),
         ('deconv_amp_ks2samp', {}),
+        ('crosstalk_artifact', {'units': 'V'}),
     ])
     
     spw.show()
@@ -703,10 +708,20 @@ if __name__ == '__main__':
                 ABS(connection_strength.amp_med_minus_base) as abs_amp_med_minus_base,
                 ABS(connection_strength.deconv_amp_med) as abs_deconv_amp_med,
                 ABS(connection_strength.deconv_base_amp_med) as abs_deconv_base_amp_med,
-                ABS(connection_strength.deconv_amp_med_minus_base) as abs_deconv_amp_med_minus_base
+                ABS(connection_strength.deconv_amp_med_minus_base) as abs_deconv_amp_med_minus_base,
+                experiment.rig_name,
+                experiment.acsf,
+                pre_cell.cre_type,
+                pre_cell.target_layer,
+                post_cell.cre_type,
+                post_cell.target_layer,
+                pair.synapse,
+                pair.crosstalk_artifact,
     from connection_strength
-    join experiment on connection_strength.experiment_id=experiment.id
-    where abs(connection_strength.pre_id-connection_strength.post_id) > 1
+    join pair on connection_strength.pair_id=pair.id
+    join cell pre_cell on pair.pre_cell_id=cell.id
+    join cell post_cell on pair.post_cell_id=cell.id
+    join experiment on pair.expt_id=experiment.id
     """
     df = pandas.read_sql(query, session.bind)
     recs = df.to_records()
