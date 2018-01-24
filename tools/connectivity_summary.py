@@ -15,7 +15,7 @@ from collections import OrderedDict
 import pyqtgraph as pg
 
 from multipatch_analysis.experiment_list import ExperimentList
-
+from multipatch_analysis import config
 
 def arg_to_date(arg):
     if arg is None:
@@ -26,7 +26,9 @@ def arg_to_date(arg):
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--reload', action='store_true', default=False, dest='reload',
-                    help='Reload all experiment data fro the server.')
+                    help='Reload all experiment data from the server.')
+parser.add_argument('--reload-old', action='store_true', default=False, dest='reload_old',
+                    help='Reload all experiment data from old summary files.')
 parser.add_argument('--region', type=str)
 parser.add_argument('--organism', type=str, help='"mouse" or "human"')
 parser.add_argument('--start', type=arg_to_date)
@@ -51,6 +53,14 @@ all_expts = ExperimentList(cache=cache_file)
 
 if args.reload:
     all_expts.load_from_server()
+
+if args.reload_old:
+    files = config.summary_files
+    if len(files) == 0:
+        print("No old-format summary files given in config.yml:summary_files")
+        sys.exit(-1)
+    for f in files:
+        all_expts.load(f)
     
 for f in args.files:
     all_expts.load(f)
