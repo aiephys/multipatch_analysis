@@ -49,6 +49,8 @@ class TableGroup(object):
 
 
 class PulseResponseStrengthTableGroup(TableGroup):
+    """Measures pulse amplitudes for each pulse response and background chunk.
+    """
     schemas = {
         'pulse_response_strength': [
             ('pulse_response_id', 'pulse_response.id', '', {'index': True}),
@@ -56,6 +58,8 @@ class PulseResponseStrengthTableGroup(TableGroup):
             ('neg_amp', 'float'),
             ('pos_dec_amp', 'float'),
             ('neg_dec_amp', 'float'),
+            ('pos_dec_latency', 'float'),
+            ('neg_dec_latency', 'float'),
         ],
         'baseline_response_strength' : [
             ('baseline_id', 'baseline.id', '', {'index': True}),
@@ -63,6 +67,8 @@ class PulseResponseStrengthTableGroup(TableGroup):
             ('neg_amp', 'float'),
             ('pos_dec_amp', 'float'),
             ('neg_dec_amp', 'float'),
+            ('pos_dec_latency', 'float'),
+            ('neg_dec_latency', 'float'),
         ]
         #'deconv_pulse_response': [
             #"Exponentially deconvolved pulse responses",
@@ -120,13 +126,17 @@ def init_tables():
     BaselineResponseStrength = pulse_response_strength_tables['baseline_response_strength']
     ConnectionStrength = connection_strength_tables['connection_strength']
 
+
 def measure_peak(trace, sign, baseline=(0e-3, 9e-3), response=(11e-3, 17e-3)):
     baseline = trace.time_slice(*baseline).data.mean()
+    response = trace.time_slice(*response)
     if sign == '+':
-        peak = trace.time_slice(*response).data.max()
+        i = np.argmax(response.data)
     else:
-        peak = trace.time_slice(*response).data.min()
-    return peak - baseline
+        i = np.argmin(response.data)
+    peak = response.data[i]
+    latency = response.time_values[i]
+    return peak - baseline, latency
 
 
 def measure_sum(trace, sign, baseline=(0e-3, 9e-3), response=(12e-3, 17e-3)):
@@ -193,13 +203,13 @@ def _compute_strength(inds, session=None):
             new_rec = {'%s_id'%source: pr_id}
             
             data = Trace(data, sample_rate=20e3)
-            new_rec['pos_amp'] = measure_peak(data, '+')
-            new_rec['neg_amp'] = measure_peak(data, '-')
+            new_rec['pos_amp'], _ = measure_peak(data, '+')
+            new_rec['neg_amp'], _ = measure_peak(data, '-')
             #prof('comp 1')
             
             dec_data = deconv_filter(data)
-            new_rec['pos_dec_amp'] = measure_peak(dec_data, '+')
-            new_rec['neg_dec_amp'] = measure_peak(dec_data, '-')
+            new_rec['pos_dec_amp'], new_rec['pos_dec_latency'] = measure_peak(dec_data, '+')
+            new_rec['neg_dec_amp'], new_rec['neg_dec_latency'] = measure_peak(dec_data, '-')
             #prof('comp 3')
             
             new_recs.append(new_rec)
@@ -573,6 +583,9 @@ class ResponseStrengthPlots(object):
 
 
 if __name__ == '__main__':
+    #tt = pg.debug.ThreadTrace()
+
+
     from multipatch_analysis.ui.multipatch_nwb_viewer import MultipatchNwbViewer    
     from multipatch_analysis.experiment_list import cached_experiments
     expts = cached_experiments()
