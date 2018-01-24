@@ -1,3 +1,4 @@
+from acq4.util.DataManager import getDirHandle
 import os, re, json, yaml, shutil
 from collections import OrderedDict
 from datetime import datetime, timedelta
@@ -17,9 +18,9 @@ class SliceSubmission(object):
     """
     message = "Generating slice DB entries"
     
-    def __init__(self, dh):
-        self.dh = dh
-        
+    def __init__(self, slice_dir):
+        self.slice_dir = slice_dir
+        self.dh = getDirHandle(self.slice_dir)
         self._fields = None
 
     @property
@@ -128,14 +129,12 @@ class ExperimentDBSubmission(object):
     """
     message = "Generating database entries"
 
-    def __init__(self, dh, nwb_file):
-        self.dh = dh
-        self.nwb_file = nwb_file
+    def __init__(self, expt):
+        self.expt = expt
         self._fields = None
 
     def submitted(self):
-        site_dir = self.dh
-        ts = datetime.fromtimestamp(site_dir.info()['__timestamp__'])
+        ts = self.expt.datetime
         try:
             expt_entry = db.experiment_from_timestamp(ts)
             return True
@@ -145,47 +144,41 @@ class ExperimentDBSubmission(object):
     def check(self):
         warnings = []
         errors = []
+        expt = self.expt
+        # info = self.dh.info()
         
-        info = self.dh.info()
+        # slice_dir = self.dh.parent()
         
-        slice_dir = self.dh.parent()
-        
-        expt_dir = slice_dir.parent()
-        expt_info = expt_dir.info()
-        self._expt_info = expt_info
+        # expt_dir = slice_dir.parent()
+        # expt_info = expt_dir.info()
+        # self._expt_info = expt_info
 
-        temp = expt_info.get('temperature')
-        if temp is not None:
-            temp = temp.lower().rstrip(' c').strip()
-            if temp == 'rt':
-                temp = 22.0
-            else:
-                try:
-                    temp = float(temp)
-                except Exception:
-                    temp = None
-                    warnings.append("Experiment temperature '%s' is invalid." % self._expt_info['temperature'])
+        try:
+            temp = expt.target_temperature
+        except:
+            warnings.append("Experiment temperature '%s' is invalid." % self.expt.expt_info['temperature'])
 
-        if not os.path.isfile(self.nwb_file.name()):
-            errors.append('Could not find NWB file "%s"' % self.nwb_file.name())
-        rel_nwb_name = self.nwb_file.name(relativeTo=self.nwb_file.parent().parent().parent())
-        rel_site_path = self.dh.name(relativeTo=self.dh.parent().parent())
-        if not rel_nwb_name.startswith(rel_site_path):
-            errors.append('NWB file "%s" is not inside site directory "%s"' % 
-                          (self.nwb_file.name(), self.dh.name()))
+        nwb_file = expt.nwb_file
+        if not os.path.isfile(nwb_file):
+            errors.append('Could not find NWB file "%s"' % nwb_file)
         
+        expt_info = expt.expt_info
+
         self.fields = {
-            'original_path': open(self.dh['sync_source'].name(), 'rb').read(),
-            'storage_path': self.dh.name(relativeTo=expt_dir.parent()),
-            'ephys_file': self.nwb_file.name(relativeTo=self.dh),
-            'rig_name': expt_info.get('rig_name', None),  # optional for now; make mandatory later
-            'acq_timestamp': datetime.fromtimestamp(info['__timestamp__']),
+            'original_path': expt.original_path,
+            'storage_path': expt.relative_path,
+            'ephys_file': os.path.relpath(expt.nwb_file, expt.path),
+            'rig_name': expt.rig_name,
+            'acq_timestamp': expt.datetime,
             'target_region': expt_info.get('region'),
             'internal': expt_info.get('internal'),
-            'acsf': expt_info.get('acsf'),
+            'acsf': expt_info.get('solution'),
             'target_temperature': temp,
         }
-                
+        
+        if self.submitted():
+            errors.append("Experiment is already submitted.")
+
         return errors, warnings
     
     def summary(self):
@@ -197,23 +190,76 @@ class ExperimentDBSubmission(object):
             raise Exception("Submission has errors:\n%s" % '\n'.join(err))
 
         # look up slice record in DB
-        slice_dir = self.dh.parent()
-        ts = datetime.fromtimestamp(slice_dir.info()['__timestamp__'])
+        ts = self.expt.slice_timestamp
         slice_entry = db.slice_from_timestamp(ts, session=session)
         
         # Create entry in experiment table
         data = self.fields
-        expt = db.Experiment(**data)
-        expt.slice = slice_entry
-        self.expt_entry = expt
-        session.add(expt)
-        
+        expt_entry = db.Experiment(**data)
+        expt_entry.slice = slice_entry
+        self.expt_entry = expt_entry
+        session.add(expt_entry)
+
+        # create pipette and cell entries
+        elecs_by_ad_channel = {}
+        cell_entries = {}
+        for e_id, elec in self.expt.electrodes.items():
+            elec_entry = db.Electrode(experiment=expt_entry, ext_id=elec.electrode_id, device_id=elec.device_id)
+            for k in ['patch_status', 'start_time', 'stop_time',  
+                      'initial_resistance', 'initial_current', 'pipette_offset',
+                      'final_resistance', 'final_current']:
+                if hasattr(elec, k):
+                    setattr(elec_entry, k, getattr(elec, k))
+            session.add(elec_entry)
+
+            # store so recordings can reference this later on..
+            elecs_by_ad_channel[elec.device_id] = elec_entry
+
+            if elec.cell is not None:
+                cell = elec.cell
+                cell_entry = db.Cell(
+                    electrode=elec_entry,
+                    ext_id=cell.cell_id,
+                    cre_type=cell.cre_type,
+                    target_layer=cell.target_layer,
+                    is_excitatory=cell.is_excitatory,
+                    depth=cell.depth,
+                )
+                session.add(cell_entry)
+                cell_entries[cell] = cell_entry
+
+        # create pairs
+        pairs_by_device_id = {}
+        for i, pre_cell in self.expt.cells.items():
+            for j, post_cell in self.expt.cells.items():
+                if i == j:
+                    continue
+                synapse = (i, j) in self.expt.connections
+                pre_cell_entry = cell_entries[pre_cell]
+                post_cell_entry = cell_entries[post_cell]
+                pair_entry = db.Pair(
+                    experiment=expt_entry,
+                    pre_cell=pre_cell_entry,
+                    post_cell=post_cell_entry,
+                    synapse=synapse,
+                )
+                session.add(pair_entry)
+
+                pre_id = pre_cell_entry.electrode.device_id
+                post_id = post_cell_entry.electrode.device_id
+                pairs_by_device_id[(pre_id, post_id)] = pair_entry
+
         # Load NWB file and create data entries
-        nwb = MultiPatchExperiment(self.nwb_file.name())
+        self._load_nwb(session, expt_entry, elecs_by_ad_channel, pairs_by_device_id)
+
+        return expt_entry
+
+    def _load_nwb(self, session, expt_entry, elecs_by_ad_channel, pairs_by_device_id):
+        nwb = self.expt.data
         
         for srec in nwb.contents:
             temp = srec.meta.get('temperature', None)
-            srec_entry = db.SyncRec(sync_rec_key=srec.key, experiment=expt, temperature=temp)
+            srec_entry = db.SyncRec(sync_rec_key=srec.key, experiment=expt_entry, temperature=temp)
             session.add(srec_entry)
             
             srec_has_mp_probes = False
@@ -225,7 +271,7 @@ class ExperimentDBSubmission(object):
                 # import all recordings
                 rec_entry = db.Recording(
                     sync_rec=srec_entry,
-                    device_key=rec.device_id, 
+                    electrode=elecs_by_ad_channel[rec.device_id],  # should probably just skip if this causes KeyError?
                     start_time=rec.start_time,
                 )
                 session.add(rec_entry)
@@ -317,6 +363,9 @@ class ExperimentDBSubmission(object):
             mpa = MultiPatchSyncRecAnalyzer(srec)
             for pre_dev in srec.devices:
                 for post_dev in srec.devices:
+                    if pre_dev == post_dev:
+                        continue
+
                     # get all responses, regardless of the presence of a spike
                     responses = mpa.get_spike_responses(srec[pre_dev], srec[post_dev], align_to='pulse', require_spike=False)
                     for resp in responses:
@@ -331,6 +380,7 @@ class ExperimentDBSubmission(object):
                         resp_entry = db.PulseResponse(
                             recording=rec_entries[post_dev],
                             stim_pulse=all_pulse_entries[pre_dev][resp['pulse_n']],
+                            pair=pairs_by_device_id[(pre_dev, post_dev)],
                             # baseline=base_entry,
                             start_index=resp['rec_start'],
                             stop_index=resp['rec_stop'],
@@ -338,11 +388,11 @@ class ExperimentDBSubmission(object):
                         )
                         session.add(resp_entry)
                         
-            # generate up to 100 baseline snippets for each recording
+            # generate up to 20 baseline snippets for each recording
             for dev in srec.devices:
                 rec = srec[dev]
                 dist = BaselineDistributor.get(rec)
-                for i in range(100):
+                for i in range(20):
                     base = dist.get_baseline_chunk(20e-3)
                     if base is None:
                         # all out!
@@ -356,10 +406,7 @@ class ExperimentDBSubmission(object):
                         mode=float_mode(base.data),
                     )
                     session.add(base_entry)
-                    
-                    
             
-        return expt
         
     def submit(self):
         session = db.Session()
