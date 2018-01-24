@@ -354,7 +354,10 @@ class ExperimentBrowser(pg.TreeWidget):
             self.addTopLevelItem(expt_item)
 
             for pair in expt.pairs:
-                pair_item = pg.TreeWidgetItem(['%d => %d' % (pair.pre_cell.ext_id, pair.post_cell.ext_id), str(pair.synapse)])
+                cells = '%d => %d' % (pair.pre_cell.ext_id, pair.post_cell.ext_id)
+                conn = {True:"connected", False:"unconnected", None:"?"}[pair.synapse]
+                types = 'L%s %s => L%s %s' % (pair.pre_cell.target_layer or "?", pair.pre_cell.cre_type, pair.post_cell.target_layer or "?", pair.post_cell.cre_type)
+                pair_item = pg.TreeWidgetItem([cells, conn, types])
                 expt_item.addChild(pair_item)
                 pair_item.pair = pair
                 pair_item.expt = expt
