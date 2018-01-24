@@ -8,7 +8,7 @@ pg.dbg()
 
 from multipatch_analysis.database.submission import SliceSubmission, ExperimentDBSubmission
 from multipatch_analysis.database import database
-from multipatch_analysis import config, synphys_cache, experiment_list
+from multipatch_analysis import config, synphys_cache, experiment_list, constants
 
 
 all_expts = experiment_list.cached_experiments()
@@ -51,6 +51,8 @@ if __name__ == '__main__':
     parser.add_argument('--local', action='store_true', default=False)
     parser.add_argument('--workers', type=int, default=6)
     parser.add_argument('--uid', type=str, default=None)
+    parser.add_argument('--ex-only', action='store_true', default=False, dest='ex_only')
+    
     args, extra = parser.parse_known_args(sys.argv[1:])
     
     if args.uid is not None:
@@ -60,14 +62,25 @@ if __name__ == '__main__':
         # on a small subset
         import random
         random.seed(0)
-        shuffled = list(all_expts)
-        random.shuffle(shuffled)
+        selected_expts = list(all_expts)
+        random.shuffle(selected_expts)
         
-        if args.limit > 0:
-            selected_expts = shuffled[:args.limit]
-        else:
-            selected_expts = shuffled
-        
+    if args.ex_only:
+        print("Selecting only excitatory experiments..")
+        ex = []
+        for expt in selected_expts:
+            include = False
+            for cell in expt.cells.values():
+                if (cell.cre_type is None and cell.target_layer == '2/3') or (cell.cre_type in constants.EXCITATORY_CRE_TYPES):
+                    include = True
+                    break
+            if include:
+                ex.append(expt)                
+        selected_expts = ex
+
+    if args.limit > 0:
+        selected_expts = selected_expts[:args.limit]
+
     print("Found %d cached experiments, will import %d." % 
           (len(all_expts), len(selected_expts)))
     print([ex.uid for ex in selected_expts])
