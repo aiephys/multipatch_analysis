@@ -22,7 +22,7 @@ from neuroanalysis.filter import bessel_filter
 from neuroanalysis.event_detection import exp_deconvolve
 
 from multipatch_analysis.database import database as db
-from multipatch_analysis import config
+from multipatch_analysis import config, synphys_cache
 from multipatch_analysis.ui.multipatch_nwb_viewer import MultipatchNwbViewer
 
 
@@ -249,8 +249,8 @@ def rebuild_connectivity(session):
     for i,expt in enumerate(expts_in_db):
         for pair in expt.pairs:
             devs = pair.pre_cell.electrode.device_id, pair.post_cell.electrode.device_id
-            amps = get_amps(session, expt, pair)
-            base_amps = get_baseline_amps(session, expt, pair, limit=len(amps))
+            amps = get_amps(session, pair)
+            base_amps = get_baseline_amps(session, pair, limit=len(amps))
             
             conn = ConnectionStrength(pair_id=pair.id)
             # Whether the user marked this as connected
@@ -569,11 +569,18 @@ class ResponseStrengthAnalyzer(object):
         self.fg_scatter.sigClicked.connect(self.fg_scatter_clicked)
         self.bg_scatter.sigClicked.connect(self.bg_scatter_clicked)
 
+        # event selector
+        self.event_region = pg.LinearRegionItem()
+        self.scatter_plot.addItem(self.event_region)
+        self.event_region.setZValue(-10)
+        self.event_region.sigRegionChangeFinished.connect(self.region_changed)
+
         # trace plots
         self.fg_trace_plot = pg.PlotItem()
         self.bg_trace_plot = pg.PlotItem()
         self.bg_trace_plot.setXLink(self.fg_trace_plot)
         self.bg_trace_plot.setYLink(self.fg_trace_plot)
+        self.fg_trace_plot.setXRange(0, 20e-3)
 
         self.selected_fg_traces = []
         self.selected_bg_traces = []
@@ -608,28 +615,29 @@ class ResponseStrengthAnalyzer(object):
             plot.removeItem(i)
             traces.remove(i)
             
-        print(len(recs))
         for rec in recs:
             trace = Trace(rec[0], sample_rate=20e3)
             dec_trace = deconv_filter(trace)
             traces.append(plot.plot(dec_trace.time_values, dec_trace.data, pen='y'))
-
 
     def load_conn(self, pair, amp_recs, base_recs):
         # select fg/bg data
         fg_data = amp_recs
         bg_data = base_recs[:len(fg_data)]
         if self.analysis == 'pos':
-            fg_x = [rec['pos_dec_amp'] for rec in fg_data]
-            bg_x = [rec['pos_dec_amp'] for rec in bg_data]
+            fg_x = np.array([rec['pos_dec_amp'] for rec in fg_data])
+            bg_x = np.array([rec['pos_dec_amp'] for rec in bg_data])
         elif self.analysis == 'neg':
-            fg_x = [rec['neg_dec_amp'] for rec in fg_data]
-            bg_x = [rec['neg_dec_amp'] for rec in bg_data]
+            fg_x = np.array([rec['neg_dec_amp'] for rec in fg_data])
+            bg_x = np.array([rec['neg_dec_amp'] for rec in bg_data])
         
+        # clear old plots
+        self.fg_scatter.setData([])
+        self.bg_scatter.setData([])
+        self.hist_plot.clear()
+        self.clear_trace_plots()
+
         if len(fg_x) == 0:
-            self.fg_scatter.setData([])
-            self.bg_scatter.setData([])
-            self.hist_plot.clear()
             return
 
         # scatter plots of fg/bg data
@@ -649,6 +657,54 @@ class ResponseStrengthAnalyzer(object):
         ks = scipy.stats.ks_2samp(fg_x, bg_x)
         self.hist_plot.setTitle("%s: KS=%0.02g" % (self.analysis, ks.pvalue))
 
+        # record data for later use
+        self.fg_x = fg_x
+        self.bg_x = bg_x
+        self.fg_data = fg_data
+        self.bg_data = bg_data
+
+        # set event region, but don't update (it's too expensive)
+        try:
+            self.event_region.sigRegionChangeFinished.disconnect(self.region_changed)
+            self.event_region.setRegion([fg_x.min(), fg_x.max()])
+        finally:
+            self.event_region.sigRegionChangeFinished.connect(self.region_changed)
+
+    def clear_trace_plots(self):
+        self.fg_trace_plot.clear()
+        self.bg_trace_plot.clear()
+        self.selected_fg_traces = []
+        self.selected_bg_traces = []
+
+    def region_changed(self):
+        """Event selection region changed; replot selected traces
+        """
+        self.clear_trace_plots()
+        rgn = self.event_region.getRegion()
+
+        # Find selected events
+        mask = (self.fg_x > rgn[0]) & (self.fg_x < rgn[1])
+        fg_ids = self.fg_data['id'][mask]
+
+        mask = (self.bg_x > rgn[0]) & (self.bg_x < rgn[1])
+        bg_ids = self.bg_data['id'][mask]
+
+        # generate trace queries
+        fg_q = self.session.query(db.PulseResponse.data)
+        fg_q = fg_q.join(PulseResponseStrength)
+        fg_q = fg_q.filter(PulseResponseStrength.id.in_(fg_ids))
+
+        bg_q = self.session.query(db.Baseline.data)
+        bg_q = bg_q.join(BaselineResponseStrength)
+        bg_q = bg_q.filter(BaselineResponseStrength.id.in_(bg_ids))
+
+        for q, plot in [(fg_q, self.fg_trace_plot), (bg_q, self.bg_trace_plot)]:
+            recs = q.all()
+            alpha = np.clip(1000 / len(recs), 30, 255)
+            for rec in recs:
+                trace = Trace(rec[0], sample_rate=20e3)
+                dec_trace = deconv_filter(trace)
+                plot.plot(dec_trace.time_values, dec_trace.data, pen=(255, 255, 255, alpha))
 
 
 if __name__ == '__main__':
@@ -715,12 +771,11 @@ if __name__ == '__main__':
 
     def dbl_clicked(index):
         item = b.itemFromIndex(index)[0]
-        nwb = item.expt.ephys_file
-        # temporary workaround:
-        nwb = os.path.join(config.cache_path, nwb.split('cache/')[1])
+        nwb = os.path.join(item.expt.original_path, item.expt.ephys_file)
         print(nwb)
-        
-        nwb_viewer.load_nwb(nwb)
+        cache = synphys_cache.get_cache().get_cache(nwb)
+        print(cache)
+        nwb_viewer.load_nwb(cache)
         nwb_viewer.show()
         
     b.doubleClicked.connect(dbl_clicked)
