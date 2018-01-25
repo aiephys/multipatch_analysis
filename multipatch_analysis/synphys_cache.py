@@ -3,6 +3,14 @@ import config
 from .util import sync_file
 
 
+_cache = None
+def get_cache():
+    global _cache
+    if _cache is None:
+        _cache = SynPhysCache()
+    return _cache
+
+
 class SynPhysCache(object):
     """Maintains a local cache of files from the synphys raw data repository.
     """
@@ -19,7 +27,7 @@ class SynPhysCache(object):
     
     def list_pip_yamls(self):
         return glob.glob(os.path.join(self.remote_path, '*', 'slice_*', 'site_*', 'pipettes.yml'))
-    
+
     def get_cache(self, filename):
         filename = os.path.abspath(filename)
         if not filename.startswith(self.remote_path):
