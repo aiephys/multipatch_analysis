@@ -532,7 +532,7 @@ class ResponseStrengthPlots(QtGui.QWidget):
         self.analyses = ['neg', 'pos']
         self.analyzers = []
         for col, analysis in enumerate(self.analyses):
-            analyzer = ResponseStrengthAnalyzer(analysis)
+            analyzer = ResponseStrengthAnalyzer(analysis, session)
             self.analyzers.append(analyzer)
             self.gl.addItem(analyzer.hist_plot, row=0, col=col)
             self.gl.addItem(analyzer.scatter_plot, row=1, col=col)
@@ -548,8 +548,9 @@ class ResponseStrengthPlots(QtGui.QWidget):
 
 
 class ResponseStrengthAnalyzer(object):
-    def __init__(self, analysis):
+    def __init__(self, analysis, session):
         self.analysis = analysis  # 'pos' or 'neg'
+        self.session = session
 
         # histogram plots
         self.hist_plot = pg.PlotItem(title=analysis+":")
@@ -573,6 +574,9 @@ class ResponseStrengthAnalyzer(object):
         self.bg_trace_plot = pg.PlotItem()
         self.bg_trace_plot.setXLink(self.fg_trace_plot)
         self.bg_trace_plot.setYLink(self.fg_trace_plot)
+
+        self.selected_fg_traces = []
+        self.selected_bg_traces = []
     
     def fg_scatter_clicked(self, sp, points):
         self.clicked('fg', points)
@@ -581,6 +585,8 @@ class ResponseStrengthAnalyzer(object):
         self.clicked('bg', points)
 
     def clicked(self, source, points):
+        """Point(s) were clicked; plot their source traces in a different color.
+        """
         self.clicked_points = points
         
         ids = [p.data()['id'] for p in points]
@@ -588,20 +594,27 @@ class ResponseStrengthAnalyzer(object):
             q = self.session.query(db.PulseResponse.data)
             q = q.join(PulseResponseStrength)
             q = q.filter(PulseResponseStrength.id.in_(ids))
+            traces = self.selected_fg_traces
+            plot = self.fg_trace_plot
         else:
             q = self.session.query(db.Baseline.data)
             q = q.join(BaselineResponseStrength)
             q = q.filter(BaselineResponseStrength.id.in_(ids))
+            traces = self.selected_bg_traces
+            plot = self.bg_trace_plot
         recs = q.all()
         
-        self.trace_plot.clear()
-        self.dec_plot.clear()
+        for i in traces[:]:
+            plot.removeItem(i)
+            traces.remove(i)
+            
+        print(len(recs))
         for rec in recs:
             trace = Trace(rec[0], sample_rate=20e3)
-            self.trace_plot.plot(trace.time_values, trace.data - np.median(trace.time_slice(1e-3, 9e-3).data))
             dec_trace = deconv_filter(trace)
-            self.dec_plot.plot(dec_trace.time_values, dec_trace.data)
-        
+            traces.append(plot.plot(dec_trace.time_values, dec_trace.data, pen='y'))
+
+
     def load_conn(self, pair, amp_recs, base_recs):
         # select fg/bg data
         fg_data = amp_recs
