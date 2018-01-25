@@ -19,10 +19,10 @@ from . import config
 
 
 _expt_list = None
+cache_file = os.path.join(os.path.dirname(__file__), '..', 'expts_cache.pkl')
 def cached_experiments():
-    global _expt_list
+    global _expt_list, cache_file
     if _expt_list is None:
-        cache_file = os.path.join(os.path.dirname(__file__), '..', 'expts_cache.pkl')
         _expt_list = ExperimentList(cache=cache_file)
     return _expt_list
 

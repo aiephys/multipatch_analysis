@@ -14,7 +14,7 @@ from collections import OrderedDict
 
 import pyqtgraph as pg
 
-from multipatch_analysis.experiment_list import ExperimentList
+from multipatch_analysis.experiment_list import ExperimentList, cache_file
 from multipatch_analysis import config
 
 def arg_to_date(arg):
@@ -36,9 +36,9 @@ parser.add_argument('--stop', type=arg_to_date)
 parser.add_argument('--list-stims', action='store_true', default=False, dest='list_stims',
                     help='print a list of each connection and the stimulus sets acquired')
 parser.add_argument('--sweep-threshold', nargs = '*', type=int, action='store', default=[5,10], dest='sweep_threshold',
-                    help='Combined with --list-stims, for each connection type, prints the number of connections'
-                         '' 'for which there are >= sweep_threshold number of sweeps/stimulus set. Two thresholds'
-                         '' 'are set one for induction protocols (default=5) and one for recovery (default=10')
+                    help='Combined with --list-stims, for each connection type, prints the number of connections '
+                         'for which there are >= sweep_threshold number of sweeps/stimulus set. Two thresholds '
+                         'are set one for induction protocols (default=5) and one for recovery (default=10')
 parser.add_argument('files', nargs='*', type=os.path.abspath)
 parser.add_argument('--cre-type', nargs=2, type=str)
 parser.add_argument('--calcium', type=str,
@@ -48,7 +48,6 @@ parser.add_argument('--temp', type=int)
 
 args = parser.parse_args(sys.argv[1:])
 
-cache_file = 'expts_cache.pkl'
 all_expts = ExperimentList(cache=cache_file)
 
 if args.reload:
