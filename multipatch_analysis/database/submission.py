@@ -166,7 +166,7 @@ class ExperimentDBSubmission(object):
 
         self.fields = {
             'original_path': expt.original_path,
-            'storage_path': expt.relative_path,
+            'storage_path': expt.server_path,
             'ephys_file': os.path.relpath(expt.nwb_file, expt.path),
             'rig_name': expt.rig_name,
             'acq_timestamp': expt.datetime,

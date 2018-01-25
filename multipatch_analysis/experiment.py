@@ -8,6 +8,7 @@ import os
 import sys
 import re
 import traceback
+import pickle
 from collections import OrderedDict
 
 import yaml
@@ -22,7 +23,7 @@ from .data import MultiPatchExperiment
 from .pipette_metadata import PipetteMetadata
 from .genotypes import Genotype
 from .synphys_cache import SynPhysCache
-from . import yaml_local
+from . import yaml_local, config
 
 
 class Experiment(object):
@@ -825,6 +826,19 @@ class Experiment(object):
         """
         repo_path = os.path.abspath(os.path.join(self.path, '..', '..', '..'))
         return os.path.relpath(self.path, repo_path)
+
+    @property
+    def server_path(self):
+        """The path of this experiment relative to the server storage directory.
+        """
+        expt_timestamp = self.expt_info['__timestamp__']
+        path_file = os.path.join(config.synphys_data, 'experiment_path_cache.pkl')
+        paths = pickle.load(open(path_file, 'rb'))
+        expt_path = paths.get(expt_timestamp, None)
+        if expt_path is None:
+            return None
+        rel = self.path.split(os.path.sep)[-2:]
+        return os.path.join(expt_path, *rel)
 
     @property
     def rig_name(self):
