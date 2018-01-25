@@ -97,5 +97,4 @@ if __name__ == '__main__':
         database.engine.dispose()
         
         pool = multiprocessing.Pool(processes=args.workers, maxtasksperchild=1)
-        pool.map(submit_expt, ids)
-
+        pool.map(submit_expt, ids, chunksize=1)  # note: maxtasksperchild is broken unless we also force chunksize
