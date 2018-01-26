@@ -700,7 +700,11 @@ class Experiment(object):
         Contains all ephys recordings.
         """
         if self._data is None:
-            self._data = MultiPatchExperiment(self.nwb_cache_file)
+            try:
+                self._data = MultiPatchExperiment(self.nwb_cache_file)
+            except IOError:
+                os.remove(self.nwb_cache_file)
+                self._data = MultiPatchExperiment(self.nwb_cache_file)
         return self._data
 
     def close_data(self):
