@@ -338,20 +338,27 @@ class Experiment(object):
             elec = Electrode(i, None, None, ad_channel)
             self.electrodes[i] = elec
             elec.cell = Cell(self, i)
-
+    
+        have_connections = False
+        have_labels = False
         for ch in entry.children:
             try:
                 if ch.lines[0] == 'Labeling':
                     self._parse_labeling(ch)
+                    have_labels = True
                 elif ch.lines[0] == 'Cell QC':
                     self._parse_qc(ch)
                 elif ch.lines[0] == 'Connections':
                     self._parse_connections(ch)
+                    have_connections = True
                 elif ch.lines[0] == 'Conditions':
                     continue
                 elif ch.lines[0].startswith('Region '):
+                    assert len(ch.children) == 0
                     self._region = ch.lines[0][7:]
                 elif ch.lines[0].startswith('Site path '):
+                    if len(ch.children) > 0:
+                        raise Exception("Site path entry should not have children in experiment %s" % self)
                     p = os.path.abspath(os.path.join(os.path.dirname(self.entry.file), ch.lines[0][10:]))
                     if not os.path.isdir(p):
                         raise Exception("Invalid site path: %s" % p)
@@ -362,6 +369,11 @@ class Experiment(object):
             except Exception as exc:
                 traceback.print_exc()
                 raise Exception("Error parsing %s for experiment: %s\n%s" % (ch.lines[0], self, exc.args))
+
+        if have_labels is False:
+            raise Exception("Experiment %s is missing Labeling section" % self)
+        if have_connections is False:
+            raise Exception("Experiment %s is missing Connections section" % self)
 
     def _parse_labeling(self, entry):
         """
