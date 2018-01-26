@@ -577,7 +577,8 @@ class ResponseStrengthAnalyzer(object):
 
         # trace plots
         self.fg_trace_plot = pg.PlotItem()
-        self.bg_trace_plot = pg.PlotItem()
+        self.fg_trace_plot.hideAxis('bottom')
+        self.bg_trace_plot = pg.PlotItem(labels={'bottom': ('time', 's')})
         self.bg_trace_plot.setXLink(self.fg_trace_plot)
         self.bg_trace_plot.setYLink(self.fg_trace_plot)
         self.fg_trace_plot.setXRange(0, 20e-3)
@@ -647,9 +648,11 @@ class ResponseStrengthAnalyzer(object):
         self.bg_scatter.setData(bg_x, bg_y, data=bg_data, brush=(255, 255, 255, 80))
 
         # plot histograms
-        bins = max(5, int(len(fg_x)**0.5))
+        n_bins = max(5, int(len(fg_x)**0.5))
+        all_x = np.concatenate([fg_x, bg_x])
+        bins = np.linspace(np.percentile(all_x, 2), np.percentile(all_x, 98), n_bins+1)
         fg_hist = np.histogram(fg_x, bins=bins)
-        bg_hist = np.histogram(bg_x, bins=fg_hist[1])
+        bg_hist = np.histogram(bg_x, bins=bins)
         self.hist_plot.clear()
         self.hist_plot.plot(bg_hist[1], bg_hist[0], stepMode=True, fillLevel=0, brush=(255, 0, 0, 100), pen=0.5)
         self.hist_plot.plot(fg_hist[1], fg_hist[0], stepMode=True, fillLevel=0, brush=(0, 255, 255, 100), pen=1.0)
@@ -700,6 +703,8 @@ class ResponseStrengthAnalyzer(object):
 
         for q, plot in [(fg_q, self.fg_trace_plot), (bg_q, self.bg_trace_plot)]:
             recs = q.all()
+            if len(recs) == 0:
+                continue
             alpha = np.clip(1000 / len(recs), 30, 255)
             for rec in recs:
                 trace = Trace(rec[0], sample_rate=20e3)
