@@ -8,3 +8,4 @@ allensdk_internal
 PSP_vs_time_output_data
 mounted_data
 multipatch_analysis.egg-info
+analyses/PSP_vs_time_output_images

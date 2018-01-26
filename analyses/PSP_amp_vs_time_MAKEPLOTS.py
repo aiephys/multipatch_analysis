@@ -9,7 +9,7 @@ def convert_none_to_nan(data_list):
     new_data_list=[np.nan if value==None else value for value in data_list]
     return new_data_list
 
-dictionary=ju.read("PSP_vs_time_output_data/psp_vs_time.json")
+dictionary=ju.read("PSP_vs_time_output_data/psp_vs_time_2mMCa.json")
 for key0 in dictionary.keys():
     for key1 in dictionary[key0].keys():
         if key1!='num_of_synapses':
