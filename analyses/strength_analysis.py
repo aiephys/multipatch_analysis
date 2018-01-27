@@ -155,11 +155,14 @@ def measure_sum(trace, sign, baseline=(0e-3, 9e-3), response=(12e-3, 17e-3)):
     return peak - baseline
 
         
-def deconv_filter(trace, tau=15e-3, lowpass=300.):
+def deconv_filter(trace, tau=15e-3, lowpass=300., lpf=True):
     dec = exp_deconvolve(trace, tau)
     baseline = np.median(dec.time_slice(dec.t0, dec.t0+10e-3).data)
-    deconv = bessel_filter(dec-baseline, lowpass)
-    return deconv
+    if lpf:
+        deconv = bessel_filter(dec-baseline, lowpass)
+        return deconv
+    else:
+        return dec
 
 
 @db.default_session
@@ -523,10 +526,8 @@ class ResponseStrengthPlots(QtGui.QWidget):
         QtGui.QWidget.__init__(self)
         self.session = session
 
-        self.gl = pg.GraphicsLayoutWidget()
         self.layout = QtGui.QGridLayout()
         self.setLayout(self.layout)
-        self.layout.addWidget(self.gl, 0, 0)
         self.layout.setContentsMargins(0, 0, 0, 0)
 
         self.analyses = ['neg', 'pos']
@@ -534,17 +535,15 @@ class ResponseStrengthPlots(QtGui.QWidget):
         for col, analysis in enumerate(self.analyses):
             analyzer = ResponseStrengthAnalyzer(analysis, session)
             self.analyzers.append(analyzer)
-            self.gl.addItem(analyzer.hist_plot, row=0, col=col)
-            self.gl.addItem(analyzer.scatter_plot, row=1, col=col)
-            self.gl.addItem(analyzer.fg_trace_plot, row=2, col=col)
-            self.gl.addItem(analyzer.bg_trace_plot, row=3, col=col)
+            self.layout.addWidget(analyzer.widget, 0, col)
                 
     def load_conn(self, pair):
-        amp_recs = get_amps(self.session, pair)
-        base_recs = get_baseline_amps(self.session, pair, limit=len(amp_recs))
+        with pg.BusyCursor():
+            amp_recs = get_amps(self.session, pair)
+            base_recs = get_baseline_amps(self.session, pair, limit=len(amp_recs))
 
-        for analyzer in self.analyzers:
-            analyzer.load_conn(pair, amp_recs, base_recs)
+            for analyzer in self.analyzers:
+                analyzer.load_conn(pair, amp_recs, base_recs)
 
 
 class ResponseStrengthAnalyzer(object):
@@ -552,12 +551,22 @@ class ResponseStrengthAnalyzer(object):
         self.analysis = analysis  # 'pos' or 'neg'
         self.session = session
 
+        self.widget = QtGui.QWidget()
+        self.layout = QtGui.QGridLayout()
+        self.widget.setLayout(self.layout)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+
+        self.gl = pg.GraphicsLayoutWidget()
+        self.layout.addWidget(self.gl, 0, 0)
+
         # histogram plots
         self.hist_plot = pg.PlotItem(title=analysis+":")
+        self.gl.addItem(self.hist_plot, row=0, col=0)
         self.hist_plot.hideAxis('bottom')
 
         # event scatter plots
         self.scatter_plot = pg.PlotItem()
+        self.gl.addItem(self.scatter_plot, row=1, col=0)
         self.scatter_plot.getAxis('left').setTicks([[(1.4, 'fg'), (0.4, 'bg')], []])
         self.scatter_plot.setFixedHeight(200)
         self.hist_plot.setXLink(self.scatter_plot)
@@ -577,49 +586,59 @@ class ResponseStrengthAnalyzer(object):
 
         # trace plots
         self.fg_trace_plot = pg.PlotItem()
+        self.gl.addItem(self.fg_trace_plot, row=2, col=0)
         self.fg_trace_plot.hideAxis('bottom')
+        self.fg_trace_plot.addLine(x=10e-3, pen=(0, 0, 100), movable=False)
         self.bg_trace_plot = pg.PlotItem(labels={'bottom': ('time', 's')})
+        self.gl.addItem(self.bg_trace_plot, row=3, col=0)
         self.bg_trace_plot.setXLink(self.fg_trace_plot)
         self.bg_trace_plot.setYLink(self.fg_trace_plot)
+        self.bg_trace_plot.addLine(x=10e-3, pen=(0, 0, 100), movable=False)
         self.fg_trace_plot.setXRange(0, 20e-3)
+
+        self.ctrl = QtGui.QWidget()
+        self.layout.addWidget(self.ctrl, 1, 0)
+        self.ctrl_layout = QtGui.QGridLayout()
+        self.ctrl.setLayout(self.ctrl_layout)
+        self.ctrl_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.deconv_check = QtGui.QCheckBox('deconvolve')
+        self.deconv_check.setChecked(True)
+        self.ctrl_layout.addWidget(self.deconv_check, 0, 0)
+        self.deconv_check.toggled.connect(self.replot_all)
+
+        self.bsub_check = QtGui.QCheckBox('bsub')
+        self.bsub_check.setChecked(True)
+        self.ctrl_layout.addWidget(self.bsub_check, 0, 1)
+        self.bsub_check.toggled.connect(self.replot_all)
+
+        self.lpf_check = QtGui.QCheckBox('lpf')
+        self.lpf_check.setChecked(True)
+        self.ctrl_layout.addWidget(self.lpf_check, 0, 2)
+        self.lpf_check.toggled.connect(self.replot_all)
 
         self.selected_fg_traces = []
         self.selected_bg_traces = []
+        self.clicked_fg_traces = []
+        self.clicked_bg_traces = []
+        self._selected_fg_ids = []
+        self._selected_bg_ids = []
+        self._clicked_fg_ids = []
+        self._clicked_bg_ids = []
     
     def fg_scatter_clicked(self, sp, points):
-        self.clicked('fg', points)
-
-    def bg_scatter_clicked(self, sp, points):
-        self.clicked('bg', points)
-
-    def clicked(self, source, points):
         """Point(s) were clicked; plot their source traces in a different color.
         """
-        self.clicked_points = points
-        
         ids = [p.data()['id'] for p in points]
-        if source == 'fg':
-            q = self.session.query(db.PulseResponse.data)
-            q = q.join(PulseResponseStrength)
-            q = q.filter(PulseResponseStrength.id.in_(ids))
-            traces = self.selected_fg_traces
-            plot = self.fg_trace_plot
-        else:
-            q = self.session.query(db.Baseline.data)
-            q = q.join(BaselineResponseStrength)
-            q = q.filter(BaselineResponseStrength.id.in_(ids))
-            traces = self.selected_bg_traces
-            plot = self.bg_trace_plot
-        recs = q.all()
-        
-        for i in traces[:]:
-            plot.removeItem(i)
-            traces.remove(i)
-            
-        for rec in recs:
-            trace = Trace(rec[0], sample_rate=20e3)
-            dec_trace = deconv_filter(trace)
-            traces.append(plot.plot(dec_trace.time_values, dec_trace.data, pen='y'))
+        self._clicked_fg_ids = ids
+        self.plot_prd_ids(ids, 'fg', trace_list=self.clicked_fg_traces, pen='y')
+
+    def bg_scatter_clicked(self, sp, points):
+        """Point(s) were clicked; plot their source traces in a different color.
+        """
+        ids = [p.data()['id'] for p in points]
+        self._clicked_bg_ids = ids
+        self.plot_prd_ids(ids, 'bg', trace_list=self.clicked_bg_traces, pen='y')
 
     def load_conn(self, pair, amp_recs, base_recs):
         # select fg/bg data
@@ -688,28 +707,63 @@ class ResponseStrengthAnalyzer(object):
         # Find selected events
         mask = (self.fg_x > rgn[0]) & (self.fg_x < rgn[1])
         fg_ids = self.fg_data['id'][mask]
+        self._selected_fg_ids = fg_ids
 
         mask = (self.bg_x > rgn[0]) & (self.bg_x < rgn[1])
         bg_ids = self.bg_data['id'][mask]
+        self._selected_bg_ids = bg_ids
 
         # generate trace queries
-        fg_q = self.session.query(db.PulseResponse.data)
-        fg_q = fg_q.join(PulseResponseStrength)
-        fg_q = fg_q.filter(PulseResponseStrength.id.in_(fg_ids))
+        self.plot_prd_ids(fg_ids, 'fg', trace_list=self.selected_fg_traces)
+        self.plot_prd_ids(bg_ids, 'bg', trace_list=self.selected_bg_traces)
 
-        bg_q = self.session.query(db.Baseline.data)
-        bg_q = bg_q.join(BaselineResponseStrength)
-        bg_q = bg_q.filter(BaselineResponseStrength.id.in_(bg_ids))
+    def replot_all(self):
+        self.plot_prd_ids(self._selected_fg_ids, 'fg', pen=None, trace_list=self.selected_fg_traces)
+        self.plot_prd_ids(self._selected_bg_ids, 'bg', pen=None, trace_list=self.selected_bg_traces)
+        self.plot_prd_ids(self._clicked_fg_ids, 'fg', pen='y', trace_list=self.clicked_fg_traces)
+        self.plot_prd_ids(self._clicked_bg_ids, 'bg', pen='y', trace_list=self.clicked_bg_traces)
 
-        for q, plot in [(fg_q, self.fg_trace_plot), (bg_q, self.bg_trace_plot)]:
+    def plot_prd_ids(self, ids, source, pen=None, trace_list=None):
+        """Plot raw or decolvolved PulseResponse data, given IDs of records in
+        a PulseResponseStrength table.
+        """
+        with pg.BusyCursor():
+            if source == 'fg':
+                q = self.session.query(db.PulseResponse.data)
+                q = q.join(PulseResponseStrength)
+                q = q.filter(PulseResponseStrength.id.in_(ids))
+                traces = self.selected_fg_traces
+                plot = self.fg_trace_plot
+            else:
+                q = self.session.query(db.Baseline.data)
+                q = q.join(BaselineResponseStrength)
+                q = q.filter(BaselineResponseStrength.id.in_(ids))
+                traces = self.selected_bg_traces
+                plot = self.bg_trace_plot
             recs = q.all()
             if len(recs) == 0:
-                continue
-            alpha = np.clip(1000 / len(recs), 30, 255)
+                return
+            
+            for i in trace_list[:]:
+                plot.removeItem(i)
+                trace_list.remove(i)
+                
+            if pen is None:
+                alpha = np.clip(1000 / len(recs), 30, 255)
+                pen = (255, 255, 255, alpha)
+                
             for rec in recs:
                 trace = Trace(rec[0], sample_rate=20e3)
-                dec_trace = deconv_filter(trace)
-                plot.plot(dec_trace.time_values, dec_trace.data, pen=(255, 255, 255, alpha))
+                if self.deconv_check.isChecked():
+                    dec_trace = deconv_filter(trace, lpf=self.lpf_check.isChecked())
+                else:
+                    dec_trace = trace
+                
+                y = dec_trace.data
+                if self.bsub_check.isChecked():
+                    y -= np.median(dec_trace.time_slice(0, 9e-3).data)
+                
+                trace_list.append(plot.plot(dec_trace.time_values, y, pen=pen))
 
 
 if __name__ == '__main__':
@@ -778,9 +832,13 @@ if __name__ == '__main__':
         item = b.itemFromIndex(index)[0]
         nwb = os.path.join(item.expt.original_path, item.expt.ephys_file)
         print(nwb)
-        cache = synphys_cache.get_cache().get_cache(nwb)
-        print(cache)
-        nwb_viewer.load_nwb(cache)
+        try:
+            cache = synphys_cache.get_cache().get_cache(nwb)
+            print("load cached:", cache)
+            nwb_viewer.load_nwb(cache)
+        except Exception:
+            print("load remote:", nwb)
+            nwb_viewer.load_nwb(nwb)
         nwb_viewer.show()
         
     b.doubleClicked.connect(dbl_clicked)
@@ -809,7 +867,8 @@ if __name__ == '__main__':
                 post_cell.cre_type as post_cre_type,
                 post_cell.target_layer as post_target_layer,
                 pair.synapse,
-                pair.crosstalk_artifact
+                pair.crosstalk_artifact,
+                abs(post_cell.ext_id - pre_cell.ext_id) as electrode_distance
     from connection_strength
     join pair on connection_strength.pair_id=pair.id
     join cell pre_cell on pair.pre_cell_id=pre_cell.id
@@ -858,6 +917,7 @@ if __name__ == '__main__':
         ('latency_stdev', {'units': 's'}),
         ('base_latency_med', {'units': 's'}),
         ('base_latency_stdev', {'units': 's'}),
+        ('electrode_distance', {}),
     ])
 
     spw.setData(recs)
