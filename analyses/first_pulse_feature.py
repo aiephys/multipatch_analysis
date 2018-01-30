@@ -10,7 +10,7 @@ from synapse_comparison import load_cache, summary_plot_pulse
 from neuroanalysis.data import TraceList
 from neuroanalysis.ui.plot_grid import PlotGrid
 from multipatch_analysis.connection_detection import fit_psp
-from rep_connections import ee_connections, human_connections, no_include, all_connections
+from rep_connections import ee_connections, human_connections, no_include, all_connections, ie_connections, ii_connections, ei_connections
 from multipatch_analysis.synaptic_dynamics import DynamicsAnalyzer
 
 app = pg.mkQApp()
@@ -33,6 +33,12 @@ if args['organism'] == 'mouse':
     connection = args['connection']
     if connection == 'ee':
         connection_types = ee_connections.keys()
+    elif connection == 'ii':
+        connection_types = ii_connections.keys()
+    elif connection == 'ei':
+        connection_types = ei_connections.keys()
+    elif connection == 'ie':
+        connection_types == ie_connections.keys()
     elif connection == 'all':
         connection_types = all_connections.keys()
     elif len(connection.split('-')) == 2:

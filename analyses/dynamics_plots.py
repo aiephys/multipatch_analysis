@@ -10,7 +10,7 @@ from synapse_comparison import load_cache
 from neuroanalysis.data import TraceList
 from neuroanalysis.ui.plot_grid import PlotGrid
 from multipatch_analysis.synaptic_dynamics import RawDynamicsAnalyzer
-from rep_connections import ee_connections, human_connections, all_connections
+from rep_connections import ee_connections, human_connections, all_connections, ii_connections, ei_connections, ie_connections
 pg.dbg()
 app = pg.mkQApp()
 pg.setConfigOption('background', 'w')
@@ -31,8 +31,19 @@ if args['organism'] == 'mouse':
     connection = args['connection']
     if connection == 'ee':
         connection_types = ee_connections.keys()
+        sign = '+'
+    elif connection =='ii':
+        connection_types = ii_connections.keys()
+        sign = '-'
+    elif connection == 'ei':
+        connection_types = ei_connections.keys()
+        sign = '+'
+    elif connection == 'ie':
+        connection_types == ie_connections.keys()
+        sign = '-'
     elif connection == 'all':
         connection_types = all_connections.keys()
+        sign = None
     elif len(connection.split('-')) == 2:
         c_type = connection.split('-')
         if c_type[0] == '2/3':
@@ -60,7 +71,7 @@ freqs = [10, 20, 50, 100]
 rec_t = [250, 500, 1000, 2000, 4000]
 sweep_threshold = 3
 threshold = [0.03e-3]
-qc_params = ('+', [0.5e-3])
+qc_params = (sign, [0.5e-3])
 deconv = False
 
 # cache_file = 'train_response_cache.pkl'
