@@ -104,49 +104,51 @@ def measure_amp(trace, min_or_max, baseline=(6e-3, 8e-3), response=(13e-3, 17e-3
         raise Exception('Are you looking for min or max')
     return peak - baseline
 
-def bin_data(time_list, data_list, bin_size=10):
+def bin_data(the_list, data_list, bin_size=10):
     '''bins time series data in time bins with a specified size.
     Time must be bigger than 0.
     inputs
-        time_list: list of arrays
+        the_list: list of arrays
             each array contains the times during the recording
         data_list: list of arrays
-            data corresponding to time_list
+            data corresponding to the_list
         bin_size:
             specifies the size of the time bin
     returns:
         data_in_bins: list of numpy arrays
             each array corresponds to a time bin. Values in array are 
             values in the time bin
-        time_bins: list
+        the_bins: list
             values in list denote bin edges
-        time_bins_middle: list
+        middle_of_bins: list
             values in list correspond to the center of time bins     
     '''
-    max_time=max([max(tt) for tt in time_list])
+    max_value=max([max(tt) for tt in the_list])
     # make sure time and bin_size make sense
-    if min([min(tt) for tt in time_list])<0: 
+    if min([min(tt) for tt in the_list])<0: 
         raise Exception('time values should not be negative')
-    if max_time<bin_size:
+    if max_value<bin_size:
         raise Exception('bin size is bigger than max time')
     
     #specify the time bins 
-    time_bins=np.arange(0, max_time+bin_size, bin_size) # this could potentially be broken depending on what the bin_size is
+    the_bins=np.arange(0, max_value+bin_size, bin_size) # this could potentially be broken depending on what the bin_size is
     
-    if time_bins[-1] < max_time:
+    if the_bins[-1] < max_value:
         raise Exception('Your largest time bin is less than max time.  Tweak your bin size.') 
     
-    time_bin_middle=np.mean(np.array([np.append(time_bins, 0), np.append(0, time_bins)]), axis=0)[1:-1]  #time bin is defined by middle of bin
-    data_in_bins=[np.array([]) for ii in range(len(time_bin_middle))] #initialize a data structure to receive data in bins
+    middle_of_bins=np.mean(np.array([np.append(the_bins, 0), np.append(0, the_bins)]), axis=0)[1:-1]  #time bin is defined by middle of bin
+    data_in_bins=[np.array([]) for ii in range(len(middle_of_bins))] #initialize a data structure to receive data in bins
     
     #assign data to correct time bins
-    for tt, ff in zip(time_list, data_list):
+    for tt, ff in zip(the_list, data_list):
         assert len(tt)==len(ff)
-        digits=np.digitize(tt, time_bins)-1 #note,digitize will assign values less than smallest timebin to a 0 index so -1 is used here
-        for ii in range(len(digits)):
+        digits=np.digitize(tt, the_bins)-1 #note,digitize will assign values less than smallest timebin to a 0 index so -1 is used here
+        for ii in range(len(digits)-1):  #note I just added this -1 for the sweep indexing so not sure if it makes sense 
+            print (ii, len(digits))
+            print (data_in_bins[digits[ii]], ff[ii])
             data_in_bins[digits[ii]]=np.append(data_in_bins[digits[ii]], ff[ii])
 
-    return data_in_bins, time_bins, time_bin_middle
+    return data_in_bins, the_bins, middle_of_bins
 
 def test_bin_data():
     '''meant to tests the bin_data() module but really just using a simple input so one can watch what is happening
@@ -219,15 +221,20 @@ if __name__ == '__main__':
                     check_synapse(expt, cells)
         
         title_str= pre_synaptic+' to '+post_synaptic
-        p = pg.plot(labels={'left': 'peak of synaptic deflection (mV)', 
+        time_vs_psp_plot = pg.plot(labels={'left': 'peak of synaptic deflection (V)', 
                             'bottom': 'time since first recorded synapse (s)', 
                             'top':(title_str+' connections: progression of synaptic defection over an experiment')})    
-        a = pg.plot(labels={'top':('average base-line subtracted first pulse synaptic deflection ('+ title_str+ ')'), 
+        ave_psp_plot = pg.plot(labels={'top':('average base-line subtracted first pulse synaptic deflection ('+ title_str+ ')'), 
                           'bottom': 'time (s)', 
-                          'left':'voltage (mV)'}) 
+                          'left':'voltage (V)'}) 
+        sweep_vs_psp_plot = pg.plot(labels={'left': 'peak of synaptic deflection (V)', 
+                            'bottom': 'sweep number', 
+                            'top':(title_str+' connections: progression of synaptic defection over an experiment')})  
         
+        raw=[]
         filtered=[]
         time_list=[]
+        sweep_number_list=[]
         num_of_synapses=0
         for i,syn in enumerate(synapses):
             expt, pre_id, post_id = syn
@@ -235,14 +242,15 @@ if __name__ == '__main__':
             
             # collect all first pulse responses
             amp_responses = analyzer.amp_group
-            amp_responses.holding_potential()
             if len(amp_responses) == 0:
                 print("Skipping %s %d %d; no responses" % (expt.uid, pre_id, post_id))
                 continue
             
-            train_responses=analyzer.train_responses
-            good_holding_responses=response_filter(train_responses,  holding_range=[-68, -72], pulse=True)
             
+            # this doesnt work yet it has a pyqt error
+#            train_responses=analyzer.train_responses
+#            good_holding_responses=response_filter(train_responses,  holding_range=[-68, -72], pulse=True)
+#            
             
             
 # some other options to potentially be able to choose from            
@@ -260,33 +268,34 @@ if __name__ == '__main__':
     #            plt.title('baselines')         
     #        plt.show(block=False)
     
-            # figure out whether the trough or peak of the average synaptic trace is bigger and if that corresponds to the synapse type.  
+            # figure out whether the trough or peak of the average synaptic trace is bigger and if that corresponds to the excitation of the neurons.  
             # i.e. if it is an excitatory synapse we would expect the max defection to be positive
             average = amp_responses.bsub_mean() #returns average synaptic response with the average baseline subtracted
-            print ('holding potential', average.all_meta['holding_potential'])
-            a.plot(average.time_values, average.data) #plot average of first pulse in each epoch of spikes of individual synapses
             max_peak = measure_amp(average, min_or_max='max', baseline=(6e-3, 8e-3), response=(12e-3, 16e-3))
             min_peak = measure_amp(average, min_or_max='min', baseline=(6e-3, 8e-3), response=(12e-3, 16e-3))
             max_min = "max" if abs(max_peak)> abs(min_peak) else "min"  #find whether the peak or trough of the first pulse average is larger 
             wrong_synapse_type_flag = False
-            
-            #if the largest deflection is in the negative direction 
             if max_min == "min" and expt.cells[pre_id].cre_type in EXCITATORY_CRE_TYPES: 
                 print ("Whoa this synapse looks inhibitory when cre line would say it should be excitatory!!!" )  
                 wrong_synapse_type_flag = True
             if max_min == "max" and expt.cells[pre_id].cre_type in INHIBITORY_CRE_TYPES: 
                 print ("Whoa this synapse looks excitatory when cre line would say it should be inhibitory!!!" )    
                 wrong_synapse_type_flag = True  
-            
+       
             # find the peak or trough of every potential event and plot their amplitude over time of the experiment
             peak=[]
             base=[]
             time=[]
+            holding_potential=[]
+            sweep_number=[]
             ordered=sorted(amp_responses.responses, key=lambda rr:rr.start_time) #order the traces by time during the experiment
             for rr in ordered:
                 peak.append(measure_amp(rr, min_or_max=max_min, baseline=(6e-3, 8e-3), response=(12e-3, 16e-3)))
                 base.append(measure_amp(rr, min_or_max=max_min, baseline=(0e-3, 2e-3), response=(6e-3, 10e-3)))
-                time.append(rr.start_time)        
+                time.append(rr.start_time)  
+                holding_potential.append(rr.parent.holding_potential)
+                sweep_number.append(rr.parent.parent._sweep_id)
+                print ('for each pulse of a synapse: peak', peak[-1], 'base', base[-1], 'time', time[-1], 'holding potential', holding_potential[-1], 'sweep_number', sweep_number[-1])      
 
     #        for trace in amp_responses.responses:
     #            plt.plot(trace.time_values, trace.data)
@@ -297,35 +306,83 @@ if __name__ == '__main__':
     #            plt.title('baselines')         
     #        plt.show()
     
-            mean_base=np.mean(base)
-            time=np.array(time) - time[0]
-            
-            if wrong_synapse_type_flag == False:
-                time_list.append(time)
-                peak_minus_base_average=np.array(peak)-mean_base
-                filtered.append(ndi.gaussian_filter(peak_minus_base_average, 2))    
-                p.plot(time, filtered[-1], pen=(i, len(synapses)*1.3))
-                num_of_synapses=num_of_synapses+1
+            # check if holding potential is within a desired range
+            holding=np.mean(holding_potential) # average holding potential across plots
+            print ('holding potential is', holding)
+            if holding>-0.072 and holding<-0.068:
+                holding_good_flag=True
+            else:
+                holding_good_flag=False
+            print ('\tholding potential flag set to ', holding_good_flag)
 
-            elif wrong_synapse_type_flag == True:
-                pass
-#                p.plot(time, filtered[-1], pen=pg.mkPen(color=(i, len(synapses)*1.3),style=pg.QtCore.Qt.DashLine))
-                            
+            # if a neuron passes the criterea for inclusion add the synapse to the list
+            mean_base=np.mean(base) # average base across pulses of a synapse
+            time=np.array(time) - time[0] # remap time basis to be in reference to start of experiment
+            peak_minus_base_average=np.array(peak)-mean_base # take each peak and put it in reference to the average base
+            smoothed=ndi.gaussian_filter(peak_minus_base_average, 2) # 
+            if wrong_synapse_type_flag == False and holding_good_flag ==True:
+                print('recording synapse')
+                time_list.append(time)  
+                filtered.append(smoothed)
+                raw.append(peak_minus_base_average)
+                sweep_number_list.append(sweep_number)
+                ave_psp_plot.plot(average.time_values, average.data, pen=pg.mkPen(color=(0, 128, 0))) #plot average of first pulse in each epoch of spikes of individual synapses
+                time_vs_psp_plot.plot(time, smoothed, pen=pg.mkPen(color=(0, 128, 0))) # (i, len(synapses)*1.3))
+                sweep_vs_psp_plot.plot(sweep_number, smoothed, pen=pg.mkPen(color=(0, 128, 0)))
+                num_of_synapses=num_of_synapses+1
+            else: 
+                print ('wrong_synapse_type_flag', wrong_synapse_type_flag)
+                print ('holding_good_flag', holding_good_flag)
+                if wrong_synapse_type_flag==True and holding_good_flag==False:
+                    ave_psp_plot.plot(average.time_values, average.data, pen=pg.mkPen(color=(255, 0, 0))) #plot average of first pulse in each epoch of spikes of individual synapses
+                    time_vs_psp_plot.plot(time, smoothed, pen=pg.mkPen(color=(255, 0, 0)))#pen=pg.mkPen(color=(i, len(synapses)*1.3),style=pg.QtCore.Qt.DashDotLine))             
+                    sweep_vs_psp_plot.plot(sweep_number, smoothed, pen=pg.mkPen(color=(0, 128, 0)))
+                elif wrong_synapse_type_flag==True and holding_good_flag==True:
+                    ave_psp_plot.plot(average.time_values, average.data, pen=pg.mkPen(color=(0,191,255))) #plot average of first pulse in each epoch of spikes of individual synapses
+                    time_vs_psp_plot.plot(time, smoothed, pen=pg.mkPen(color=(0,191,255)))#pen=pg.mkPen(color=(i, len(synapses)*1.3),style=pg.QtCore.Qt.DashDotLine))
+                    sweep_vs_psp_plot.plot(sweep_number, smoothed, pen=pg.mkPen(color=(0, 191, 255)))
+                elif wrong_synapse_type_flag==False and holding_good_flag==False:
+                    ave_psp_plot.plot(average.time_values, average.data, pen=pg.mkPen(color=(138,43,226))) #plot average of first pulse in each epoch of spikes of individual synapses
+                    time_vs_psp_plot.plot(time, smoothed, pen=pg.mkPen(color=(138,43,226)))#pen=pg.mkPen(color=(i, len(synapses)*1.3),style=pg.QtCore.Qt.DashDotLine))
+                    sweep_vs_psp_plot.plot(sweep_number, smoothed, pen=pg.mkPen(color=(138, 43, 226)))
+                else:
+                    raise Exception('This flag combo doesnt exist')
             app.processEvents()
         
         #because times of events aren't all at the same time, time binning is needed to get average time course
-        time_points, avg_data, std_err=average_via_bins(time_list, filtered, bin_size=60)
-        p.plot(time_points, avg_data, pen=pg.mkPen(color='w', width=5)) #plots average of the data
+        time_points, time_avg_data, time_std_err=average_via_bins(time_list, raw, bin_size=60)
+        time_vs_psp_plot.plot(time_points, time_avg_data, pen=pg.mkPen(color='w', width=5)) #plots average of the data
         
-        dictionary[title_str]={'time_points': time_points, 'avg_data':avg_data, 'std_err':std_err, 'num_of_synapses':num_of_synapses}
-    ju.write("PSP_vs_time_output_data/psp_vs_time_2mMCa.json", dictionary)
+        sweeps, sweep_avg_data, sweep_std_err=average_via_bins(sweep_number_list, raw, bin_size=5)
+        sweep_vs_psp_plot.plot(sweeps, sweep_avg_data, pen=pg.mkPen(color='w', width=5)) #plots average of the data
+        
+        dictionary[title_str]={'time_points': time_points, 
+                               'time_avg_data':time_avg_data, 
+                               'time_std_err':time_std_err, 
+                               'num_of_synapses':num_of_synapses,
+                               'sweeps':sweeps,
+                               'sweep_avg_data':sweep_avg_data,
+                               'sweep_std_err':sweep_std_err}
+        
+    ju.write("PSP_vs_time_output_data/goodpsp_vs_time or_sweep_1_29_18.json", dictionary)
 
+    plt.figure()
     for key in dictionary.keys():
-        plt.errorbar(dictionary[key]['time_points'], dictionary[key]['avg_data'],  yerr=dictionary[key]['std_err'], label=key)
+        plt.errorbar(dictionary[key]['time_points'], dictionary[key]['time_avg_data'],  yerr=dictionary[key]['time_std_err'], label=key+', n='+str(dictionary[key]['num_of_synapses']))
     plt.title('average base-line subtracted first pulse synaptic deflection')
-    plt.legend()
+    plt.legend(loc=4)
     plt.ylabel('voltage (mV)')
     plt.xlabel('time since first recorded synapse (s)')
+
+    plt.figure()
+    for key in dictionary.keys():
+        plt.errorbar(dictionary[key]['sweeps'], dictionary[key]['sweep_avg_data'],  yerr=dictionary[key]['sweep_std_err'], label=key+', n='+str(dictionary[key]['num_of_synapses']))
+    plt.title('average base-line subtracted first pulse synaptic deflection')
+    plt.legend(loc=4)
+    plt.ylabel('voltage (mV)')
+    plt.xlabel('sweep number')    
+    
+    
     plt.show(block=False)
 
 #        app.processEvents()    
