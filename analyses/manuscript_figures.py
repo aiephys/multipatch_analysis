@@ -26,7 +26,7 @@ colors_mouse = [(249, 144, 92), #(202, 168, 220)
                 (100, 202, 103),
                 (81, 221, 209),
                 (45, 77, 247),
-                (107, 155, 250),
+                #(107, 155, 250),
                 (162, 62, 247)]
 
 def write_cache(cache, cache_file):
@@ -172,6 +172,7 @@ def feature_anova(feature, data):
 
     print ('F value: %.3f' % f)
     print ('P value: %.5f \n' % p)
+    return feature_list
 
 def trace_plot(trace, color, plot=None, x_range=None, name=None):
     if plot is None:
@@ -185,7 +186,7 @@ def trace_plot(trace, color, plot=None, x_range=None, name=None):
     return plot
 
 def train_amp(trace, pulse_offset, sign):
-    deconv_trace = deconv_train(trace)
+    deconv_trace = deconv_train(trace[:2])
     pulses = np.array(pulse_offset)[0]
     ind_pulses = pulses[:8] + 13e-3
     rec_pulses = pulses[8:].copy()
@@ -220,40 +221,31 @@ def deconv_train(trace):
 
     return deconv
 
-def induction_summary(train_response, freqs, holding, thresh=5, ind_dict=None, offset_dict=None, qc=None):
+def induction_summary(train_response, freqs, holding, thresh=5, ind_dict=None, offset_dict=None, uid=None):
     if ind_dict is None:
         ind_dict = {}
         offset_dict = {}
     for f, freq in enumerate(freqs):
         induction_traces = {}
-        traces = response_filter(train_response['responses'], freq_range=[freq, freq],
+        induction_traces['responses'] = response_filter(train_response['responses'], freq_range=[freq, freq],
                                                         holding_range=holding, train=0)
         induction_traces['pulse_offsets'] = response_filter(train_response['pulse_offsets'], freq_range=[freq, freq])
-        traces2 = response_filter(train_response['responses'], freq_range=[freq, freq], holding_range=holding,
+        ind_rec_traces = response_filter(train_response['responses'], freq_range=[freq, freq], holding_range=holding,
                                          train=1, delta_t=250)
-        if len(traces) >= thresh:
-            if qc is not None:
-                sign = qc[0]
-                amp = qc[1]
-                qc_traces = train_qc([traces, traces2], induction_traces['pulse_offsets'], amp=amp, sign=sign)
-                induction_traces['responses'] = qc_traces[0]
-                ind_rec_traces = qc_traces[1]
-            else:
-                induction_traces['responses'] = traces
-                ind_rec_traces = traces2
-            if len(induction_traces['responses']) > 0:
-                induction_avg = trace_avg(induction_traces['responses'])
-                ind_rec_avg = trace_avg(ind_rec_traces)
-                ind_rec_avg.t0 = induction_avg.time_values[-1] + 0.1
-                if freq not in ind_dict.keys():
-                    ind_dict[freq] = [[], []]
-                ind_dict[freq][0].append(induction_avg)
-                ind_dict[freq][1].append(ind_rec_avg)
-                offset_dict[freq] = induction_traces['pulse_offsets']
+        if len(induction_traces['responses']) >= thresh:
+            induction_avg = trace_avg(induction_traces['responses'])
+            ind_rec_avg = trace_avg(ind_rec_traces)
+            ind_rec_avg.t0 = induction_avg.time_values[-1] + 0.1
+            if freq not in ind_dict.keys():
+                ind_dict[freq] = [[], [], []]
+            ind_dict[freq][0].append(induction_avg)
+            ind_dict[freq][1].append(ind_rec_avg)
+            ind_dict[freq][2].append(uid)
+            offset_dict[freq] = induction_traces['pulse_offsets']
 
     return ind_dict, offset_dict
 
-def recovery_summary(train_response, rec_t, holding, thresh=5, rec_dict=None, offset_dict=None):
+def recovery_summary(train_response, rec_t, holding, thresh=5, rec_dict=None, offset_dict=None, uid=None):
     if rec_dict is None:
         rec_dict = {}
         offset_dict = {}
@@ -262,6 +254,8 @@ def recovery_summary(train_response, rec_t, holding, thresh=5, rec_dict=None, of
         recovery_traces = {}
         recovery_traces['responses'] = response_filter(train_response['responses'], freq_range=[50, 50],
                                                        holding_range=holding, train=1, delta_t=delta)
+        #rec_ind_traces = response_filter(train_response['responses'], freq_range=[50, 50],
+        #                                               holding_range=holding, train=0, delta_t=delta)
         recovery_traces['pulse_offsets'] = response_filter(train_response['pulse_offsets'], freq_range=[50, 50],
                                                            delta_t=delta)
         if len(recovery_traces['responses']) >= thresh:
@@ -269,9 +263,10 @@ def recovery_summary(train_response, rec_t, holding, thresh=5, rec_dict=None, of
             rec_ind_avg = trace_avg(rec_ind_traces)
             recovery_avg.t0 = (rec_ind_avg.time_values[-1]) + 0.1
             if delta not in rec_dict.keys():
-                rec_dict[delta] = [[], []]
+                rec_dict[delta] = [[], [], []]
             rec_dict[delta][0].append(rec_ind_avg)
             rec_dict[delta][1].append(recovery_avg)
+            rec_dict[delta][2].append(uid)
             offset_dict[delta] = recovery_traces['pulse_offsets']
 
     return rec_dict, offset_dict
@@ -286,7 +281,7 @@ def pulse_qc(responses, baseline=None, pulse=None, plot=None):
     for response in responses:
         response = bsub(response)
         data = response.data
-        if np.mean(data[:base_win]) > (baseline * base_std) and plot is not None:
+        if np.mean(data[:base_win]) > (baseline * base_std):
             plot.plot(response.time_values, response.data, pen='r')
         # elif np.mean(data[pulse_win:]) > (pulse * pulse_std) and plot is not None:
         #     plot.plot(response.time_values, response.data, pen='b')
@@ -302,8 +297,8 @@ def pulse_qc(responses, baseline=None, pulse=None, plot=None):
     return qc_pass
 
 def train_qc(responses, offset, amp=None, sign=None, plot=None):
-    qc_pass = [[],[]]
-    amps = train_amp(responses, offset, sign=sign)
+    qc_pass = [[],[], []]
+    amps = train_amp(responses[:2], offset, sign=sign)
     for n in range(amps.shape[0]):
         if plot is not None:
             plot.plot(responses[0][n].time_values, responses[0][n].data, pen='r')
@@ -316,11 +311,12 @@ def train_qc(responses, offset, amp=None, sign=None, plot=None):
             continue
         qc_pass[0].append(responses[0][n])
         qc_pass[1].append(responses[1][n])
+        qc_pass[2].append(responses[2][n])
         if plot is not None:
             plot.plot(responses[0][n].time_values, responses[0][n].data, pen=[0, 0, 0, 100])
             plot.plot(responses[1][n].time_values, responses[1][n].data, pen=[0, 0, 0, 100])
             app.processEvents()
-            time.sleep(2)
+            time.sleep(1)
     return qc_pass
 
 def subplots(name=None, row=None):

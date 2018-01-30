@@ -621,7 +621,8 @@ class ExperimentList(object):
             distance = (c1.distance(c2))*10**6
             expt = conn['expt']
             i = self._expts.index(expt)
-            print(u"%s %d->%d: \t%s -> %s; %.0f um" % (expt.uid, c1.cell_id, c2.cell_id, c1.cre_type, c2.cre_type, distance))
+            print(u"%s %d->%d: \t%s,%s -> %s,%s; %.0f um" % (expt.uid, c1.cell_id, c2.cell_id, c1.target_layer, c1.cre_type,
+                                                             c2.target_layer, c2.cre_type, distance))
             if 'stims' in conn:
                 stims = conn['stims']
                 if len(stims) == 0:
