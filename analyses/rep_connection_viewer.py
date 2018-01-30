@@ -65,7 +65,7 @@ for row in range(len(connection_types)):
     connection_type = connection_types.keys()[row]
     if type(connection_type) is not tuple:
         connection_type = tuple(connection_type.split('-'))
-    expt_id, pre_cell, post_cell = all_connections[connection_type]
+    expt_id, pre_cell, post_cell = connection_types[connection_type] #all_connections[connection_type]
     expt = all_expts[expt_id]
     if expt.cells[pre_cell].cre_type in EXCITATORY_CRE_TYPES:
         holding = holding_e
@@ -78,22 +78,24 @@ for row in range(len(connection_types)):
     n_sweeps = len(sweep_list)
     if n_sweeps > sweep_threshold:
         qc_list = pulse_qc(sweep_list, baseline=2.5, pulse=None, plot=grid[row, 1])
-        avg_first_pulse = trace_avg(qc_list)
-        avg_first_pulse.t0 = 0
-        if plot_sweeps is True:
-            for current_sweep in qc_list:
-                current_sweep.t0 = 0
-                bsub_trace = bsub(current_sweep)
-                trace_plot(bsub_trace, sweep_color, plot=grid[row, 0], x_range=[-2e-3, 27e-3])
-        trace_plot(avg_first_pulse, avg_color, plot=grid[row, 0], x_range=[-2e-3, 27e-3])
-        label = pg.LabelItem('%s, n = %d' % (connection_type, n_sweeps))
-        label.setParentItem(grid[row, 0].vb)
-        label.setPos(50, 0)
-        maxYpulse.append((row, grid[row,0].getAxis('left').range[1]))
-        grid[row, 0].hideAxis('bottom')
+        qc_sweeps = len(qc_list)
+        if qc_sweeps > sweep_threshold:
+            avg_first_pulse = trace_avg(qc_list)
+            avg_first_pulse.t0 = 0
+            if plot_sweeps is True:
+                for current_sweep in qc_list:
+                    current_sweep.t0 = 0
+                    bsub_trace = bsub(current_sweep)
+                    trace_plot(bsub_trace, sweep_color, plot=grid[row, 0], x_range=[-2e-3, 27e-3])
+            trace_plot(avg_first_pulse, avg_color, plot=grid[row, 0], x_range=[-2e-3, 27e-3])
+            label = pg.LabelItem('%s, n = %d' % (connection_type, qc_sweeps))
+            label.setParentItem(grid[row, 0].vb)
+            label.setPos(50, 0)
+            maxYpulse.append((row, grid[row,0].getAxis('left').range[1]))
+            grid[row, 0].hideAxis('bottom')
 
-        _, _, _, peak_t = get_amplitude(sweep_list)
-        all_amps = np.asarray(fail_rate(sweep_list, sign=sign, peak_t=peak_t))
+        _, _, _, peak_t = get_amplitude(qc_list)
+        all_amps = np.asarray(fail_rate(qc_list, sign=sign, peak_t=peak_t))
         # y = pg.pseudoScatter(all_amps, spacing=0.15)
         # test[row, 0].plot(all_amps, y, pen=None, symbol='o', symbolSize=8, symbolPen=(255, 255, 255, 200), symbolBrush=(0, 0, 255, 150))
         y,x = np.histogram(all_amps, bins=np.linspace(0, 2e-3, 40))
