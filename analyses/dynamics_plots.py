@@ -70,8 +70,8 @@ holding = [-65, -75]
 freqs = [10, 20, 50, 100]
 rec_t = [250, 500, 1000, 2000, 4000]
 sweep_threshold = 3
-threshold = [0.03e-3]
-qc_params = (sign, [0.5e-3])
+threshold = 0.03e-3
+qc_params = (sign, 0.5e-3)
 deconv = False
 
 # cache_file = 'train_response_cache.pkl'
@@ -120,7 +120,7 @@ for c in range(len(connection_types)):
         for pre, post in expt.connections:
             if expt.cells[pre].cre_type == cre_type[0] and expt.cells[post].cre_type == cre_type[1]:
                 train_response, artifact = get_response(expt, pre, post, type='train')
-                if threshold[c] is not None and artifact > threshold[c]:
+                if threshold is not None and artifact > threshold:
                     continue
                 induction_grand, pulse_offset_ind = induction_summary(train_response, freqs, holding, thresh=sweep_threshold,
                                                                 ind_dict=induction_grand, offset_dict=pulse_offset_ind,
@@ -187,7 +187,7 @@ for c in range(len(connection_types)):
             print ("%d ms not represented in data set" % delta)
             continue
         rec_offsets = pulse_offset_rec[delta]
-        rec_pass_qc = train_qc(recovery_grand[delta], rec_offsets, amp=qc_params[1][c], sign=qc_params[0], plot=None)
+        rec_pass_qc = train_qc(recovery_grand[delta], rec_offsets, amp=qc_params[1], sign=qc_params[0], plot=None)
         n_synapses = len(rec_pass_qc[0])
         if n_synapses > 0:
             recovery_grand_trace = TraceList(rec_pass_qc[1]).mean()
