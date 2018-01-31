@@ -4,3 +4,9 @@ config.yml
 .directory
 .idea
 cache
+#not exactly sure why these are here, but they were in the status when I made this branch
+allensdk_internal/
+analyses/PSP_vs_time_output_data/
+analyses/PSP_vs_time_output_images/
+mounted_data/
+multipatch_analysis.egg-info/
