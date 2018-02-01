@@ -277,9 +277,9 @@ class ExperimentList(object):
         connected = []
 
         if isinstance(pre_types, str):
-            pre_types = [pre_types]
+            pre_types = [(None, pre_types)]
         if isinstance(post_types, str):
-            post_types = [post_types]
+            post_types = [(None, post_types)]
 
         for expt in self:
             for i,j in expt.connections_probed:
@@ -288,15 +288,33 @@ class ExperimentList(object):
                     if (ci.cre_type, cj.cre_type) not in connection_types:
                         continue
                 else:
-                    pre_ok = pre_types is None or ci.cre_type in pre_types
-                    post_ok = post_types is None or cj.cre_type in post_types
+                    if pre_types is None:
+                        pre_ok = True
+                    else:
+                        pre_ok = False
+                        for layer, cre_type in pre_types:
+                            if (layer is None or ci.target_layer == layer) and (cre_type is None or ci.cre_type == cre_type):
+                                pre_ok = True
+                                continue
+
+                    if post_types is None:
+                        post_ok = True
+                    else:
+                        post_ok = False
+                        for layer, cre_type in post_types:
+                            if (layer is None or cj.target_layer == layer) and (cre_type is None or cj.cre_type == cre_type):
+                                post_ok = True
+                                continue
+
                     if not (pre_ok and post_ok):
                         continue
                 dist = ci.distance(cj)
                 probed.append(dist)
                 connected.append((i, j) in expt.connections)
         if name is None:
-            name = ("%s->%s "%(','.join(pre_types), ','.join(post_types)))
+            pre_strs = [("" if layer is None else ("L" + layer + " ")) + (cre_type or "") for layer, cre_type in pre_types]
+            post_strs = [("" if layer is None else ("L" + layer + " ")) + (cre_type or "") for layer, cre_type in post_types]
+            name = ("%s->%s "%(','.join(pre_strs), ','.join(post_strs)))
         return distance_plot(connected, distance=probed, plots=plots, color=color, name=name, window=60e-6, spacing=10e-6)
 
     def matrix(self, rows, cols, size=50, header_color='w', no_data_color='k'):
