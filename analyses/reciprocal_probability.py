@@ -66,11 +66,17 @@ def run_expt(Wab, n_cells=4, n_expts=100, n_trials=1000):
         
     Returns
     -------
-    cprobs : array
-        The overall connection probability measured for each trial
-    rprobs : array
-        The overall reciprocal connection probability measured for each trial
-    ratios
+    results : array
+        An array of all experiment results. The shape is (n_trials, n_expts),
+        and each element contains the results of a single experiment.
+        the dtype is compound with three fields:
+        
+            * conn : the number of connections found
+            * recip : the number of reciprocal connections found
+            * probed : the number of connections probed
+            
+        For example, the total connection probability for the 5th trial can be
+        calculated as ``results[4]['conn'].sum() / results[4]['probed'].sum()``.
     """
     Wab = np.array(Wab)
     print("-----------")
@@ -106,12 +112,22 @@ def run_expt(Wab, n_cells=4, n_expts=100, n_trials=1000):
     rprobs = results['recip'].sum(axis=1) / results['probed'].sum(axis=1)
     ex_rprobs = cprobs**2
     ratios = rprobs / ex_rprobs
+    
+    # Connection probability we expect to measure, given Wab:
     print("  expected connection probability: %0.04f" % Wab.mean())
+    # Actual connection probability measured across all trials:
     print("  measured connection probability: %0.4f±%0.4f" % (np.mean(cprobs), np.std(cprobs)))
-    print("  expected reciprocal probability: %0.4f" % (Wab**2).mean())
+    
+    # reciprocal connection probability we expect to measure, given Wab:
+    # print("  expected reciprocal probability: %0.4f" % (Wab**2).mean())  # this is not right
+    # Actual reciprocal connection probability measured across all trials:
     print("  measured reciprocal probability: %0.4f±%0.4f" % (np.mean(rprobs), np.std(rprobs)))
-    print("  expected reciprocal estimate   : %0.4f" % Wab.mean()**2)
+    # Null-hypothesis estimated reciprocal connection probability measured across all trials (Pc^2)
+    # (this is the value that the experimenter would compare to their measured reciprocal connection probability) 
     print("  estimatd reciprocal probability: %0.4f±%0.4f" % (np.mean(ex_rprobs), np.std(ex_rprobs)))
+ 
+    # Ratio of measured versus estimated reciprocal connection probability. A value > 1 is
+    # meant to indicate that reciprocal connections are "preferred" above random chance
     print("  measured/estimated ratio: %0.4f±%0.4f" % (np.mean(ratios), np.std(ratios)))
 
     return results
@@ -148,13 +164,16 @@ if __name__ == '__main__':
     c_plt = gl.addPlot(0, 0, labels={'bottom': 'measured connection probability'})
     r_plt = gl.addPlot(0, 1, labels={'bottom': 'measured reciprocal probability'})
     rr_plt = gl.addPlot(1, 0, labels={'bottom': 'cp^2', 'left':'measured reciprocal probability'})
+    rr_plt.setAspectLocked(1)
     ratio_plt = gl.addPlot(1, 1, labels={'bottom': 'measured reciprocal / cp^2'})
     hs.show()
 
     def run():
+        global results  # allow inspection from console
         n_types = params['n_types']
         Wab = np.array([[float(str(wab_table.item(i, j).text())) for j in range(n_types)] for i in range(n_types)])
-        results = run_expt(Wab, n_cells=params['n_cells'], n_expts=params['n_expts'], n_trials=params['n_trials'])
+        with pg.BusyCursor():
+            results = run_expt(Wab, n_cells=params['n_cells'], n_expts=params['n_expts'], n_trials=params['n_trials'])
 
         cprobs = results['conn'].sum(axis=1) / results['probed'].sum(axis=1)
         rprobs = results['recip'].sum(axis=1) / results['probed'].sum(axis=1)
@@ -163,14 +182,19 @@ if __name__ == '__main__':
         
         y = pg.pseudoScatter(cprobs)
         c_plt.plot(cprobs, y, clear=True, pen=None, symbol='o')
+        c_plt.addLine(x=Wab.mean())
+        
 
         y = pg.pseudoScatter(rprobs)
         r_plt.plot(rprobs, y, clear=True, pen=None, symbol='o')
 
         y = pg.pseudoScatter(ratios)
         ratio_plt.plot(ratios, y, clear=True, pen=None, symbol='o')
+        ratio_plt.addLine(x=1)
         
         rr_plt.plot(ex_rprobs, rprobs, clear=True, pen=None, symbol='o')
+        l = pg.InfiniteLine(angle=45)
+        rr_plt.addItem(l)
 
     def set_rc():
         n_types = params['n_types']
@@ -180,9 +204,13 @@ if __name__ == '__main__':
             for j in range(n_types):
                 item = pg.QtGui.QTableWidgetItem('0.1')
                 wab_table.setItem(i, j, item)
+            wab_table.setColumnWidth(i, 40)
+            wab_table.setRowHeight(i, 40)
         
     set_rc()
+    run()
+    
     params.child('run').sigActivated.connect(run)
     params.child('n_types').sigValueChanged.connect(set_rc)
-
+    
 
