@@ -204,6 +204,9 @@ class MultiPatchExperimentAnalyzer(Analyzer):
         """
         all_spikes = self._all_evoked_responses()
         responses = EvokedResponseGroup(pre_id, post_id)
+        if pre_id not in all_spikes or post_id not in all_spikes[pre_id]:
+            return responses
+        
         for rec in all_spikes[pre_id][post_id]:
             
             # do filtering here:

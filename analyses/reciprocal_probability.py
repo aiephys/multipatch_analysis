@@ -164,7 +164,7 @@ if __name__ == '__main__':
     c_plt = gl.addPlot(0, 0, labels={'bottom': 'measured connection probability'})
     r_plt = gl.addPlot(0, 1, labels={'bottom': 'measured reciprocal probability'})
     rr_plt = gl.addPlot(1, 0, labels={'bottom': 'cp^2', 'left':'measured reciprocal probability'})
-    rr_plt.setAspectLocked(1)
+    # rr_plt.setAspectLocked(1)
     ratio_plt = gl.addPlot(1, 1, labels={'bottom': 'measured reciprocal / cp^2'})
     hs.show()
 
