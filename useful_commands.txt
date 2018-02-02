@@ -1,0 +1,1 @@
+python tools/connectivity_summary.py mounted_data/MP1_backup/D_drive/Steph/DataSummary mounted_data/MP2_backup/D_drive/data/Pasha/connection_analysis mounted_data/MP3_backup/D_drive/data/Alex/connection_analysis

@@ -445,13 +445,13 @@ class EvokedResponseGroup(object):
             
             # downsample all traces to the same rate
             # yarg: how does this change SNR?
+
             avg = TraceList([r.copy(t0=0) for r in responses]).mean()
             avg_baseline = TraceList([b.copy(t0=0) for b in baselines]).mean().data
 
             # subtract baseline
             baseline = np.median(avg_baseline)
             bsub = avg.data - baseline
-
             result = avg.copy(data=bsub)
             assert len(result.time_values) == len(result)
 
