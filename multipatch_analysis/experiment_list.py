@@ -19,10 +19,10 @@ from . import config
 
 
 _expt_list = None
+cache_file = os.path.join(os.path.dirname(__file__), '..', 'expts_cache.pkl')
 def cached_experiments():
-    global _expt_list
+    global _expt_list, cache_file
     if _expt_list is None:
-        cache_file = os.path.join(os.path.dirname(__file__), '..', 'expts_cache.pkl')
         _expt_list = ExperimentList(cache=cache_file)
     return _expt_list
 
@@ -61,7 +61,7 @@ def indentation(line):
 class ExperimentList(object):
 
     def __init__(self, expts=None, cache=None):
-        self._cache_version = 6
+        self._cache_version = 8
         self._cache = cache
         self._expts = []
         self._expts_by_datetime = {}
@@ -277,9 +277,9 @@ class ExperimentList(object):
         connected = []
 
         if isinstance(pre_types, str):
-            pre_types = [pre_types]
+            pre_types = [(None, pre_types)]
         if isinstance(post_types, str):
-            post_types = [post_types]
+            post_types = [(None, post_types)]
 
         for expt in self:
             for i,j in expt.connections_probed:
@@ -288,15 +288,33 @@ class ExperimentList(object):
                     if (ci.cre_type, cj.cre_type) not in connection_types:
                         continue
                 else:
-                    pre_ok = pre_types is None or ci.cre_type in pre_types
-                    post_ok = post_types is None or cj.cre_type in post_types
+                    if pre_types is None:
+                        pre_ok = True
+                    else:
+                        pre_ok = False
+                        for layer, cre_type in pre_types:
+                            if (layer is None or ci.target_layer == layer) and (cre_type is None or ci.cre_type == cre_type):
+                                pre_ok = True
+                                continue
+
+                    if post_types is None:
+                        post_ok = True
+                    else:
+                        post_ok = False
+                        for layer, cre_type in post_types:
+                            if (layer is None or cj.target_layer == layer) and (cre_type is None or cj.cre_type == cre_type):
+                                post_ok = True
+                                continue
+
                     if not (pre_ok and post_ok):
                         continue
                 dist = ci.distance(cj)
                 probed.append(dist)
                 connected.append((i, j) in expt.connections)
         if name is None:
-            name = ("%s->%s "%(','.join(pre_types), ','.join(post_types)))
+            pre_strs = [("" if layer is None else ("L" + layer + " ")) + (cre_type or "") for layer, cre_type in pre_types]
+            post_strs = [("" if layer is None else ("L" + layer + " ")) + (cre_type or "") for layer, cre_type in post_types]
+            name = ("%s->%s "%(','.join(pre_strs), ','.join(post_strs)))
         return distance_plot(connected, distance=probed, plots=plots, color=color, name=name, window=60e-6, spacing=10e-6)
 
     def matrix(self, rows, cols, size=50, header_color='w', no_data_color='k'):
@@ -621,7 +639,8 @@ class ExperimentList(object):
             distance = (c1.distance(c2))*10**6
             expt = conn['expt']
             i = self._expts.index(expt)
-            print(u"%s %d->%d: \t%s -> %s; %.0f um" % (expt.uid, c1.cell_id, c2.cell_id, c1.cre_type, c2.cre_type, distance))
+            print(u"%s %d->%d: \t%s,%s -> %s,%s; %.0f um" % (expt.uid, c1.cell_id, c2.cell_id, c1.target_layer, c1.cre_type,
+                                                             c2.target_layer, c2.cre_type, distance))
             if 'stims' in conn:
                 stims = conn['stims']
                 if len(stims) == 0:

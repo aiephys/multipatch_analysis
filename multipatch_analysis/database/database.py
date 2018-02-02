@@ -62,17 +62,22 @@ table_schemas = {
         "successful cell recording.",
         ('expt_id', 'experiment.id', '', {'index': True}),
         ('patch_status', 'str', 'no seal, low seal, GOhm seal, tech fail, ...'),
-        ('device_key', 'int'),
+        ('start_time', 'datetime'),
+        ('stop_time', 'datetime'),
+        ('device_id', 'int', 'External identifier for the device attached to this electrode (usually the MIES A/D channel)'),
         ('initial_resistance', 'float'),
         ('initial_current', 'float'),
         ('pipette_offset', 'float'),
         ('final_resistance', 'float'),
         ('final_current', 'float'),
         ('notes', 'str'),
+        ('ext_id', 'int', 'Electrode ID (usually 1-8) referenced in external metadata records'),
     ],
     'cell': [
         ('electrode_id', 'electrode.id'),
         ('cre_type', 'str'),
+        ('target_layer', 'str'),
+        ('is_excitatory', 'str'),
         ('patch_start', 'float'),
         ('patch_stop', 'float'),
         ('seal_resistance', 'float'),
@@ -80,25 +85,28 @@ table_schemas = {
         ('has_dye_fill', 'bool'),
         ('pass_qc', 'bool'),
         ('pass_spike_qc', 'bool'),
-        ('depth', 'float'),
+        ('depth', 'float', 'Depth of the cell (in m) from the cut surface of the slice.'),
         ('position', 'object'),
+        ('ext_id', 'int', 'Cell ID (usually 1-8) referenced in external metadata records'),
     ],
     'pair': [
         "All possible putative synaptic connections",
-        ('pre_cell', 'cell.id'),
-        ('post_cell', 'cell.id'),
-        ('synapse', 'bool', 'Whether the experimenter thinks there is a synapse'),
-        ('electrical', 'bool', 'whether the experimenter thinks there is a gap junction'),
+        ('expt_id', 'experiment.id', '', {'index': True}),
+        ('pre_cell_id', 'cell.id', 'ID of the presynaptic cell', {'index': True}),
+        ('post_cell_id', 'cell.id', 'ID of the postsynaptic cell', {'index': True}),
+        ('synapse', 'bool', 'Whether the experimenter thinks there is a synapse', {'index': True}),
+        ('electrical', 'bool', 'Whether the experimenter thinks there is a gap junction', {'index': True}),
+        ('crosstalk_artifact', 'float', 'Amplitude of crosstalk artifact measured in current clamp'),
     ],
     'sync_rec': [
         ('experiment_id', 'experiment.id', '', {'index': True}),
-        ('sync_rec_key', 'object'),
-        ('temperature', 'float'),
+        ('sync_rec_key', 'object', 'External ID of the SyncRecording'),
+        ('temperature', 'float', 'Bath temperature during this recording'),
         ('meta', 'object'),
     ],
     'recording': [
         ('sync_rec_id', 'sync_rec.id', 'References the synchronous recording to which this recording belongs.', {'index': True}),
-        ('device_key', 'int', 'Identifies the device that generated this recording (this is usually the MIES AD channel)', {'index': True}),
+        ('electrode_id', 'electrode.id', 'Identifies the electrode that generated this recording', {'index': True}),
         ('start_time', 'datetime', 'The clock time at the start of this recording'),
         ('sample_rate', 'int', 'Sample rate for this recording'),
     ],
@@ -162,9 +170,9 @@ table_schemas = {
     ],
     'pulse_response': [
         "A postsynaptic recording taken during a presynaptic stimulus",
-        ('recording_id', 'recording.id', '', {'index': True}),
-        ('pulse_id', 'stim_pulse.id', '', {'index': True}),
-        ('pair_id', 'pair.id'),
+        ('recording_id', 'recording.id', 'The full recording from which this pulse was extracted', {'index': True}),
+        ('pulse_id', 'stim_pulse.id', 'The presynaptic pulse', {'index': True}),
+        ('pair_id', 'pair.id', 'The pre-post cell pair involved in this pulse response', {'index': True}),
         ('start_index', 'int', "Starting index relative to the original recording."),
         ('stop_index', 'int'),
         ('start_time', 'float', "Starting time of this chunk of the recording in seconds, relative to the beginning of the recording"),
@@ -281,6 +289,24 @@ Experiment.slice = relationship("Slice", back_populates="experiments")
 Experiment.sync_recs = relationship(SyncRec, order_by=SyncRec.id, back_populates="experiment", cascade='delete', single_parent=True)
 SyncRec.experiment = relationship(Experiment, back_populates='sync_recs')
 
+Experiment.electrodes = relationship(Electrode, order_by=Electrode.id, back_populates="experiment", cascade="delete", single_parent=True)
+Electrode.experiment = relationship(Experiment, back_populates="electrodes")
+
+Electrode.cell = relationship(Cell, back_populates="electrode", cascade="delete", single_parent=True)
+Cell.electrode = relationship(Electrode, back_populates="cell", single_parent=True)
+
+Experiment.pairs = relationship(Pair, back_populates="experiment", cascade="delete", single_parent=True)
+Pair.experiment = relationship(Experiment, back_populates="pairs")
+
+Pair.pre_cell = relationship(Cell, foreign_keys=[Pair.pre_cell_id])
+#Cell.pre_pairs = relationship(Pair, back_populates="pre_cell", single_parent=True, foreign_keys=[Pair.pre_cell])
+
+Pair.post_cell = relationship(Cell, foreign_keys=[Pair.post_cell_id])
+#Cell.post_pairs = relationship(Pair, back_populates="post_cell", single_parent=True, foreign_keys=[Pair.post_cell])
+
+Electrode.recordings = relationship(Recording, back_populates="electrode", cascade="delete", single_parent=True)
+Recording.electrode = relationship(Electrode, back_populates="recordings")
+
 SyncRec.recordings = relationship(Recording, order_by=Recording.id, back_populates="sync_rec", cascade="delete", single_parent=True)
 Recording.sync_rec = relationship(SyncRec, back_populates="recordings")
 
@@ -306,6 +332,8 @@ Baseline.recording = relationship(Recording, back_populates="baselines")
 
 PulseResponse.recording = relationship(Recording)
 PulseResponse.stim_pulse = relationship(StimPulse)
+Pair.pulse_responses = relationship(PulseResponse, back_populates='pair', single_parent=True)
+PulseResponse.pair = relationship(Pair, back_populates='pulse_responses')
 PulseResponse.baseline = relationship(Baseline)
 
 
@@ -320,11 +348,24 @@ if '--reset-db' in sys.argv:
     conn = engine.connect()
     conn.connection.set_isolation_level(0)
     try:
-        conn.execute('drop database synphys')
+        conn.execute('drop database %s' % synphys_db)
     except sqlalchemy.exc.ProgrammingError as err:
         if 'does not exist' not in err.message:
             raise
-    conn.execute('create database synphys')
+
+    # Rename old database before starting over
+    # dbs = [r[0] for r in conn.execute('select datname from pg_database where datistemplate = false;')]
+    # if synphys_db in dbs:
+    #     i = 1
+    #     while True:
+    #         new_name = synphys_db + '_%d' % i
+    #         if new_name not in dbs:
+    #             break
+    #         new_name += 1
+    #     print("Renaming existing database %s => %s" % (synphys_db, new_name))
+    #     conn.execute('alter database %s rename to %s' % (synphys_db, new_name))
+
+    conn.execute('create database %s' % synphys_db)
     conn.close()
     
     # connect to DB

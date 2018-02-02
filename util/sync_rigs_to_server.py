@@ -118,7 +118,7 @@ def get_experiment_server_path(dh):
     # First check the cache
     cache = experiment_path_cache()
     if acq_timestamp in cache:
-        return cache[acq_timestamp]
+        return os.path.join(server_path, cache[acq_timestamp])
     
     # We have not already submitted a site from this experiment folder;
     # look for a suitable new directory name on the server
@@ -143,7 +143,7 @@ def get_experiment_server_path(dh):
             shutil.rmtree(server_expt_path)
         raise
     
-    cache[acq_timestamp] = server_expt_path
+    cache[acq_timestamp] = expt_name
     write_expt_path_cache()
     
     return server_expt_path
@@ -171,13 +171,19 @@ def generate_expt_path_cache():
     _expt_path_cache = {}
     root = getDirHandle(config.synphys_data)
     for f in root.ls():
+        if 'recycle' in f.lower():
+            continue
         dh = root[f]
         if not dh.isDir():
             continue
-        acq_timestamp = dh.info()['__timestamp__']
+        try:
+            acq_timestamp = dh.info()['__timestamp__']
+        except KeyError:
+            print("NO TIMESTAMP:", dh.name())
+            sys.exit(-1)
         if acq_timestamp in _expt_path_cache:
             raise Exception("timestamp %s appears twice in synphys data!!" % acq_timestamp)
-        _expt_path_cache[acq_timestamp] = dh.name()
+        _expt_path_cache[acq_timestamp] = dh.name(relativeTo=root)
     write_expt_path_cache()
     
     
