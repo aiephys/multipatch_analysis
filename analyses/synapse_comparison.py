@@ -172,7 +172,7 @@ def summary_plot_train(ind_grand_mean, plot=None, color=None, name=None):
     plot.plot(ind_grand_mean.time_values, ind_grand_mean.data, pen=color, name=name)
     return plot
 
-def summary_plot_pulse(grand_trace, feature_list, feature_mean, labels, titles, i, plot=None, color=None, name=None):
+def summary_plot_pulse(feature_list, feature_mean, labels, titles, i, grand_trace=None, plot=None, color=None, name=None):
     if type(feature_list) is tuple:
         n_features = len(feature_list)
     else:
@@ -200,15 +200,21 @@ def summary_plot_pulse(grand_trace, feature_list, feature_mean, labels, titles, 
         plot[feature, 0].setLabels(left=(label[0], label[1]))
         plot[feature, 0].hideAxis('bottom')
         plot[feature, 0].setTitle(title)
-        plot[feature, 1].plot(grand_trace.time_values, grand_trace.data, pen=color, name=name)
-        dx = pg.pseudoScatter(np.array(features).astype(float), 0.3, bidir=True)
-        bar = pg.BarGraphItem(x=[i], height=mean, width=0.7, brush='w', pen={'color': color, 'width': 2})
-        plot[feature, 0].addItem(bar)
-        sem = stats.sem(features)
-        err = pg.ErrorBarItem(x=np.asarray([i]), y=np.asarray([mean]), height=sem, beam=0.3)
-        plot[feature, 0].addItem(err)
-        plot[feature, 0].plot((0.3 * dx / dx.max()) + i, features, pen=None, symbol='o', symbolSize=10, symbolPen='w',
-                         symbolBrush=color)
+        if grand_trace is not None:
+            plot[feature, 1].plot(grand_trace.time_values, grand_trace.data, pen=color, name=name)
+        if len(features) > 1:
+            dx = pg.pseudoScatter(np.array(features).astype(float), 0.3, bidir=True)
+            bar = pg.BarGraphItem(x=[i], height=mean, width=0.7, brush='w', pen={'color': color, 'width': 2})
+            plot[feature, 0].addItem(bar)
+            sem = stats.sem(features)
+            err = pg.ErrorBarItem(x=np.asarray([i]), y=np.asarray([mean]), height=sem, beam=0.3)
+            plot[feature, 0].addItem(err)
+            plot[feature, 0].plot((0.3 * dx / dx.max()) + i, features, pen=None, symbol='o', symbolSize=10, symbolPen='w',
+                                symbolBrush=color)
+        else:
+            plot[feature, 0].plot([i], features, pen=None, symbol='o', symbolSize=10, symbolPen='w',
+                                symbolBrush=color)
+
     return plot
 
 def get_expts(all_expts, cre_type, calcium=None, age=None, start=None, dist_plot=None, color=None):

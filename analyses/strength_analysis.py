@@ -14,6 +14,7 @@ import scipy.stats
 from sqlalchemy.orm import aliased
 
 import pyqtgraph as pg
+from pyqtgraph.Qt import QtGui, QtCore
 
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.data import Trace, TraceList
@@ -21,7 +22,7 @@ from neuroanalysis.filter import bessel_filter
 from neuroanalysis.event_detection import exp_deconvolve
 
 from multipatch_analysis.database import database as db
-from multipatch_analysis import config
+from multipatch_analysis import config, synphys_cache
 from multipatch_analysis.ui.multipatch_nwb_viewer import MultipatchNwbViewer
 
 
@@ -49,6 +50,8 @@ class TableGroup(object):
 
 
 class PulseResponseStrengthTableGroup(TableGroup):
+    """Measures pulse amplitudes for each pulse response and background chunk.
+    """
     schemas = {
         'pulse_response_strength': [
             ('pulse_response_id', 'pulse_response.id', '', {'index': True}),
@@ -56,6 +59,8 @@ class PulseResponseStrengthTableGroup(TableGroup):
             ('neg_amp', 'float'),
             ('pos_dec_amp', 'float'),
             ('neg_dec_amp', 'float'),
+            ('pos_dec_latency', 'float'),
+            ('neg_dec_latency', 'float'),
         ],
         'baseline_response_strength' : [
             ('baseline_id', 'baseline.id', '', {'index': True}),
@@ -63,6 +68,8 @@ class PulseResponseStrengthTableGroup(TableGroup):
             ('neg_amp', 'float'),
             ('pos_dec_amp', 'float'),
             ('neg_dec_amp', 'float'),
+            ('pos_dec_latency', 'float'),
+            ('neg_dec_latency', 'float'),
         ]
         #'deconv_pulse_response': [
             #"Exponentially deconvolved pulse responses",
@@ -76,16 +83,13 @@ class PulseResponseStrengthTableGroup(TableGroup):
         BaselineResponseStrength = self['baseline_response_strength']
         
         db.PulseResponse.pulse_response_strength = db.relationship(PulseResponseStrength, back_populates="pulse_response", cascade="delete", single_parent=True)
-        PulseResponseStrength.pulse_response = db.relationship(db.PulseResponse, back_populates="pulse_response_strength")
+        PulseResponseStrength.pulse_response = db.relationship(db.PulseResponse, back_populates="pulse_response_strength", single_parent=True)
 
 
 class ConnectionStrengthTableGroup(TableGroup):
     schemas = {
         'connection_strength': [
-            ('experiment_id', 'experiment.id', '', {'index': True}),
-            ('pre_id', 'int', '', {'index': True}),
-            ('post_id', 'int', '', {'index': True}),
-            ('user_connected', 'bool', 'Whether the experimenter marked this pair as connected.'),
+            ('pair_id', 'pair.id', '', {'index': True}),
             ('synapse_type', 'str', '"ex" or "in"'),
             ('n_samples', 'int'),
             ('amp_med', 'float'),
@@ -104,8 +108,20 @@ class ConnectionStrengthTableGroup(TableGroup):
             ('deconv_amp_ttest', 'float'),
             ('amp_ks2samp', 'float'),
             ('deconv_amp_ks2samp', 'float'),
+            ('latency_med', 'float'),
+            ('latency_stdev', 'float'),
+            ('base_latency_med', 'float'),
+            ('base_latency_stdev', 'float'),
         ],
     }
+
+    def create_mappings(self):
+        TableGroup.create_mappings(self)
+        
+        ConnectionStrength = self['connection_strength']
+        
+        db.Pair.connection_strength = db.relationship(ConnectionStrength, back_populates="pair", cascade="delete", single_parent=True)
+        ConnectionStrength.pair = db.relationship(db.Pair, back_populates="connection_strength", single_parent=True)
 
 
 pulse_response_strength_tables = PulseResponseStrengthTableGroup()
@@ -120,13 +136,17 @@ def init_tables():
     BaselineResponseStrength = pulse_response_strength_tables['baseline_response_strength']
     ConnectionStrength = connection_strength_tables['connection_strength']
 
+
 def measure_peak(trace, sign, baseline=(0e-3, 9e-3), response=(11e-3, 17e-3)):
     baseline = trace.time_slice(*baseline).data.mean()
+    response = trace.time_slice(*response)
     if sign == '+':
-        peak = trace.time_slice(*response).data.max()
+        i = np.argmax(response.data)
     else:
-        peak = trace.time_slice(*response).data.min()
-    return peak - baseline
+        i = np.argmin(response.data)
+    peak = response.data[i]
+    latency = response.time_values[i]
+    return peak - baseline, latency
 
 
 def measure_sum(trace, sign, baseline=(0e-3, 9e-3), response=(12e-3, 17e-3)):
@@ -135,11 +155,14 @@ def measure_sum(trace, sign, baseline=(0e-3, 9e-3), response=(12e-3, 17e-3)):
     return peak - baseline
 
         
-def deconv_filter(trace, tau=15e-3, lowpass=300.):
+def deconv_filter(trace, tau=15e-3, lowpass=300., lpf=True):
     dec = exp_deconvolve(trace, tau)
     baseline = np.median(dec.time_slice(dec.t0, dec.t0+10e-3).data)
-    deconv = bessel_filter(dec-baseline, lowpass)
-    return deconv
+    if lpf:
+        deconv = bessel_filter(dec-baseline, lowpass)
+        return deconv
+    else:
+        return dec
 
 
 @db.default_session
@@ -193,13 +216,13 @@ def _compute_strength(inds, session=None):
             new_rec = {'%s_id'%source: pr_id}
             
             data = Trace(data, sample_rate=20e3)
-            new_rec['pos_amp'] = measure_peak(data, '+')
-            new_rec['neg_amp'] = measure_peak(data, '-')
+            new_rec['pos_amp'], _ = measure_peak(data, '+')
+            new_rec['neg_amp'], _ = measure_peak(data, '-')
             #prof('comp 1')
             
             dec_data = deconv_filter(data)
-            new_rec['pos_dec_amp'] = measure_peak(dec_data, '+')
-            new_rec['neg_dec_amp'] = measure_peak(dec_data, '-')
+            new_rec['pos_dec_amp'], new_rec['pos_dec_latency'] = measure_peak(dec_data, '+')
+            new_rec['neg_dec_amp'], new_rec['neg_dec_latency'] = measure_peak(dec_data, '-')
             #prof('comp 3')
             
             new_recs.append(new_rec)
@@ -225,24 +248,16 @@ def _compute_strength(inds, session=None):
 def rebuild_connectivity(session):
     print("Rebuilding connectivity table..")
     
-    # cheating:
-    from multipatch_analysis import experiment_list
-    expt_cache = experiment_list.cached_experiments()
-    
-    expts_in_db = list_experiments()
+    expts_in_db = list_experiments(session=session)
     for i,expt in enumerate(expts_in_db):
-        try:
-            cached_expt = expt_cache[expt.acq_timestamp]
-        except:
-            cached_expt = None
-        for devs in get_experiment_pairs(expt):
-            amps = get_amps(session, expt, devs)
-            base_amps = get_baseline_amps(session, expt, devs[1], limit=len(amps))
+        for pair in expt.pairs:
+            devs = pair.pre_cell.electrode.device_id, pair.post_cell.electrode.device_id
+            amps = get_amps(session, pair)
+            base_amps = get_baseline_amps(session, pair, limit=len(amps))
             
-            conn = ConnectionStrength(experiment_id=expt.id, pre_id=devs[0], post_id=devs[1])
+            conn = ConnectionStrength(pair_id=pair.id)
             # Whether the user marked this as connected
             cell_ids = (devs[0] + 1, devs[1] + 1)
-            conn.user_connected = None if cached_expt is None else (cell_ids in cached_expt.connections)
             
             # decide whether to treat this connection as excitatory or inhibitory
             # (probably we can do much better here)
@@ -257,6 +272,7 @@ def rebuild_connectivity(session):
             # select out positive or negative amplitude columns
             amp, base_amp = amps[pfx+'amp'], base_amps[pfx+'amp']
             dec_amp, dec_base_amp = amps[pfx+'dec_amp'], base_amps[pfx+'dec_amp']
+            latency, base_latency = amps[pfx+'dec_latency'], base_amps[pfx+'dec_latency']
     
             # compute mean/stdev of samples
             n_samp = len(amps)
@@ -276,12 +292,17 @@ def rebuild_connectivity(session):
             conn.deconv_amp_med_minus_base = conn.deconv_amp_med - conn.deconv_base_amp_med
             conn.deconv_amp_stdev_minus_base = conn.deconv_amp_stdev - conn.deconv_base_amp_stdev
 
-            
             # do some statistical tests
             conn.amp_ks2samp = scipy.stats.ks_2samp(amp, base_amp).pvalue
             conn.deconv_amp_ks2samp = scipy.stats.ks_2samp(dec_amp, dec_base_amp).pvalue
             conn.amp_ttest = scipy.stats.ttest_ind(amp, base_amp, equal_var=False).pvalue
             conn.deconv_amp_ttest = scipy.stats.ttest_ind(dec_amp, dec_base_amp, equal_var=False).pvalue
+
+            # deconvolved peak latencies
+            conn.latency_med = np.median(latency)
+            conn.latency_stdev = np.std(latency)
+            conn.base_latency_med = np.median(base_latency)
+            conn.base_latency_stdev = np.std(base_latency)
 
             session.add(conn)
         
@@ -295,24 +316,24 @@ def list_experiments(session):
     return session.query(db.Experiment).all()
 
 
-@db.default_session
-def get_experiment_devs(expt, session):
-    devs = session.query(db.Recording.device_key).join(db.SyncRec).filter(db.SyncRec.experiment_id==expt.id)
+# @db.default_session
+# def get_experiment_devs(expt, session):
+#     devs = session.query(db.Recording.electr_id).join(db.SyncRec).filter(db.SyncRec.experiment_id==expt.id)
     
-    # Only keep channels with >2 recordings
-    counts = {}
-    for r in devs:
-        counts.setdefault(r[0], 0)
-        counts[r[0]] += 1
-    devs = [k for k,v in counts.items() if v > 2]
-    devs.sort()
+#     # Only keep channels with >2 recordings
+#     counts = {}
+#     for r in devs:
+#         counts.setdefault(r[0], 0)
+#         counts[r[0]] += 1
+#     devs = [k for k,v in counts.items() if v > 2]
+#     devs.sort()
     
-    return devs
+#     return devs
 
 
-def get_experiment_pairs(expt):
-    devs = get_experiment_devs(expt)
-    return [(pre, post) for pre in devs for post in devs if pre != post]
+# def get_experiment_pairs(expt):
+#     devs = get_experiment_devs(expt)
+#     return [(pre, post) for pre in devs for post in devs if pre != post]
 
 
 class ExperimentBrowser(pg.TreeWidget):
@@ -323,11 +344,7 @@ class ExperimentBrowser(pg.TreeWidget):
         self._last_expanded = None
         
     def populate(self):
-        self.items = {}
-        
-        # cheating:
-        from multipatch_analysis import experiment_list
-        expts = experiment_list.cached_experiments()
+        self.items_by_pair_id = {}
         
         self.session = db.Session()
         db_expts = list_experiments(session=self.session)
@@ -340,29 +357,22 @@ class ExperimentBrowser(pg.TreeWidget):
             expt_item.expt = expt
             self.addTopLevelItem(expt_item)
 
-            pairs = get_experiment_pairs(expt)
-            
-            for d1, d2 in pairs:
-                pre_id = d1 + 1
-                post_id = d2 + 1
-                
-                try:
-                    e = expts[date]
-                    conn = (pre_id, post_id) in e.connections
-                except:
-                    conn = 'no expt'
-                
-                pair_item = pg.TreeWidgetItem(['%d => %d' % (pre_id, post_id), str(conn)])
+            for pair in expt.pairs:
+                cells = '%d => %d' % (pair.pre_cell.ext_id, pair.post_cell.ext_id)
+                conn = {True:"connected", False:"unconnected", None:"?"}[pair.synapse]
+                types = 'L%s %s => L%s %s' % (pair.pre_cell.target_layer or "?", pair.pre_cell.cre_type, pair.post_cell.target_layer or "?", pair.post_cell.cre_type)
+                pair_item = pg.TreeWidgetItem([cells, conn, types])
                 expt_item.addChild(pair_item)
-                pair_item.devs = (d1, d2)
+                pair_item.pair = pair
                 pair_item.expt = expt
+                self.items_by_pair_id[pair.id] = pair_item
                 
-                self.items[(expt.id, d1, d2)] = pair_item
-                
-    def select(self, conn_id):
+    def select(self, pair_id):
+        """Select a specific pair from the list
+        """
         if self._last_expanded is not None:
             self._last_expanded.setExpanded(False)
-        item = self.items[conn_id]
+        item = self.items_by_pair_id[pair_id]
         self.clearSelection()
         item.setSelected(True)
         parent = item.parent()
@@ -374,7 +384,7 @@ class ExperimentBrowser(pg.TreeWidget):
         self.scrollToItem(item)
 
 
-def get_amps(session, expt, devs, clamp_mode='ic'):
+def get_amps(session, pair, clamp_mode='ic'):
     """Select records from pulse_response_strength table
     """
     q = session.query(
@@ -383,6 +393,8 @@ def get_amps(session, expt, devs, clamp_mode='ic'):
         PulseResponseStrength.neg_amp,
         PulseResponseStrength.pos_dec_amp,
         PulseResponseStrength.neg_dec_amp,
+        PulseResponseStrength.pos_dec_latency,
+        PulseResponseStrength.neg_dec_latency,
     ).join(db.PulseResponse)
 
     dtype = [
@@ -391,14 +403,15 @@ def get_amps(session, expt, devs, clamp_mode='ic'):
         ('neg_amp', 'float'),
         ('pos_dec_amp', 'float'),
         ('neg_dec_amp', 'float'),
+        ('pos_dec_latency', 'float'),
+        ('neg_dec_latency', 'float'),
     ]
     
     q, pre_rec, post_rec = join_pulse_response_to_expt(q)
         
     filters = [
-        (db.Experiment.id==expt.id,),
-        (pre_rec.device_key==devs[0],),
-        (post_rec.device_key==devs[1],),
+        (pre_rec.electrode==pair.pre_cell.electrode,),
+        (post_rec.electrode==pair.post_cell.electrode,),
         (db.PatchClampRecording.clamp_mode==clamp_mode,),
         (db.PatchClampRecording.baseline_potential<=-50e-3,),
         (db.PatchClampRecording.baseline_current>-800e-12,),
@@ -444,7 +457,7 @@ def get_baseline_amps_NO_ORM_VERSION(session, expt, dev, clamp_mode='ic'):
     return recs
 
 
-def get_baseline_amps(session, expt, dev, clamp_mode='ic', limit=None):
+def get_baseline_amps(session, pair, clamp_mode='ic', limit=None):
     """Select records from baseline_response_strength table
     """
     q = session.query(
@@ -453,6 +466,8 @@ def get_baseline_amps(session, expt, dev, clamp_mode='ic', limit=None):
         BaselineResponseStrength.neg_amp,
         BaselineResponseStrength.pos_dec_amp,
         BaselineResponseStrength.neg_dec_amp,
+        BaselineResponseStrength.pos_dec_latency,
+        BaselineResponseStrength.neg_dec_latency,
     ).join(db.Baseline).join(db.Recording).join(db.PatchClampRecording).join(db.SyncRec).join(db.Experiment)
 
     dtype = [
@@ -461,15 +476,16 @@ def get_baseline_amps(session, expt, dev, clamp_mode='ic', limit=None):
         ('neg_amp', 'float'),
         ('pos_dec_amp', 'float'),
         ('neg_dec_amp', 'float'),
+        ('pos_dec_latency', 'float'),
+        ('neg_dec_latency', 'float'),
     ]
     
     filters = [
-        (db.Experiment.id==expt.id,),
-        (db.Recording.device_key==dev,),
+        (db.Recording.electrode==pair.post_cell.electrode,),
         (db.PatchClampRecording.clamp_mode==clamp_mode,),
         (db.PatchClampRecording.baseline_potential<=-50e-3,),
         (db.PatchClampRecording.baseline_current>-800e-12,),
-        (db.PatchClampRecording.baseline_current<800e-12,),
+        (db.PatchClampRecording.baseline_current<400e-12,),
     ]
     for filter_args in filters:
         q = q.filter(*filter_args)
@@ -505,74 +521,255 @@ def join_pulse_response_to_expt(query):
     return query, pre_rec, post_rec
 
 
-class ResponseStrengthPlots(object):
+class ResponseStrengthPlots(QtGui.QWidget):
     def __init__(self, session):
+        QtGui.QWidget.__init__(self)
         self.session = session
-        
-        self.str_plot = pg.PlotItem()
 
-        self.amp_sp = pg.ScatterPlotItem(pen=None, symbol='o', symbolPen=None)
-        self.str_plot.addItem(self.amp_sp)
-        self.amp_sp.sigClicked.connect(self.amp_clicked)
+        self.layout = QtGui.QGridLayout()
+        self.setLayout(self.layout)
+        self.layout.setContentsMargins(0, 0, 0, 0)
 
-        self.base_sp = pg.ScatterPlotItem(pen=None, symbol='o', symbolPen=None)
-        self.str_plot.addItem(self.base_sp)
-        self.base_sp.sigClicked.connect(self.base_clicked)
-        
-        self.trace_plot = pg.PlotItem(labels={'bottom': ('time', 's'), 'left': ('Vm', 'V')})
-        self.dec_plot = pg.PlotItem(labels={'bottom': ('time', 's'), 'left': ('Vm', 'V')})
+        self.analyses = ['neg', 'pos']
+        self.analyzers = []
+        for col, analysis in enumerate(self.analyses):
+            analyzer = ResponseStrengthAnalyzer(analysis, session)
+            self.analyzers.append(analyzer)
+            self.layout.addWidget(analyzer.widget, 0, col)
+                
+    def load_conn(self, pair):
+        with pg.BusyCursor():
+            amp_recs = get_amps(self.session, pair)
+            base_recs = get_baseline_amps(self.session, pair, limit=len(amp_recs))
+
+            for analyzer in self.analyzers:
+                analyzer.load_conn(pair, amp_recs, base_recs)
+
+
+class ResponseStrengthAnalyzer(object):
+    def __init__(self, analysis, session):
+        self.analysis = analysis  # 'pos' or 'neg'
+        self.session = session
+
+        self.widget = QtGui.QWidget()
+        self.layout = QtGui.QGridLayout()
+        self.widget.setLayout(self.layout)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+
+        self.gl = pg.GraphicsLayoutWidget()
+        self.layout.addWidget(self.gl, 0, 0)
+
+        # histogram plots
+        self.hist_plot = pg.PlotItem(title=analysis+":")
+        self.gl.addItem(self.hist_plot, row=0, col=0)
+        self.hist_plot.hideAxis('bottom')
+
+        # event scatter plots
+        self.scatter_plot = pg.PlotItem()
+        self.gl.addItem(self.scatter_plot, row=1, col=0)
+        self.scatter_plot.getAxis('left').setTicks([[(1.4, 'fg'), (0.4, 'bg')], []])
+        self.scatter_plot.setFixedHeight(200)
+        self.hist_plot.setXLink(self.scatter_plot)
+
+        self.bg_scatter = pg.ScatterPlotItem(pen=None, symbol='o', symbolPen=None)
+        self.fg_scatter = pg.ScatterPlotItem(pen=None, symbol='o', symbolPen=None)
+        self.scatter_plot.addItem(self.bg_scatter)
+        self.scatter_plot.addItem(self.fg_scatter)
+        self.fg_scatter.sigClicked.connect(self.fg_scatter_clicked)
+        self.bg_scatter.sigClicked.connect(self.bg_scatter_clicked)
+
+        # event selector
+        self.event_region = pg.LinearRegionItem()
+        self.scatter_plot.addItem(self.event_region)
+        self.event_region.setZValue(-10)
+        self.event_region.sigRegionChangeFinished.connect(self.region_changed)
+
+        # trace plots
+        self.fg_trace_plot = pg.PlotItem()
+        self.gl.addItem(self.fg_trace_plot, row=2, col=0)
+        self.fg_trace_plot.hideAxis('bottom')
+        self.fg_trace_plot.addLine(x=10e-3, pen=(0, 0, 100), movable=False)
+        self.bg_trace_plot = pg.PlotItem(labels={'bottom': ('time', 's')})
+        self.gl.addItem(self.bg_trace_plot, row=3, col=0)
+        self.bg_trace_plot.setXLink(self.fg_trace_plot)
+        self.bg_trace_plot.setYLink(self.fg_trace_plot)
+        self.bg_trace_plot.addLine(x=10e-3, pen=(0, 0, 100), movable=False)
+        self.fg_trace_plot.setXRange(0, 20e-3)
+
+        self.ctrl = QtGui.QWidget()
+        self.layout.addWidget(self.ctrl, 1, 0)
+        self.ctrl_layout = QtGui.QGridLayout()
+        self.ctrl.setLayout(self.ctrl_layout)
+        self.ctrl_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.deconv_check = QtGui.QCheckBox('deconvolve')
+        self.deconv_check.setChecked(True)
+        self.ctrl_layout.addWidget(self.deconv_check, 0, 0)
+        self.deconv_check.toggled.connect(self.replot_all)
+
+        self.bsub_check = QtGui.QCheckBox('bsub')
+        self.bsub_check.setChecked(True)
+        self.ctrl_layout.addWidget(self.bsub_check, 0, 1)
+        self.bsub_check.toggled.connect(self.replot_all)
+
+        self.lpf_check = QtGui.QCheckBox('lpf')
+        self.lpf_check.setChecked(True)
+        self.ctrl_layout.addWidget(self.lpf_check, 0, 2)
+        self.lpf_check.toggled.connect(self.replot_all)
+
+        self.selected_fg_traces = []
+        self.selected_bg_traces = []
+        self.clicked_fg_traces = []
+        self.clicked_bg_traces = []
+        self._selected_fg_ids = []
+        self._selected_bg_ids = []
+        self._clicked_fg_ids = []
+        self._clicked_bg_ids = []
     
-    def amp_clicked(self, sp, points):
-        self.clicked('amp', points)
-
-    def base_clicked(self, sp, points):
-        self.clicked('base', points)
-
-    def clicked(self, source, points):
-        self.clicked_points = points
-        
+    def fg_scatter_clicked(self, sp, points):
+        """Point(s) were clicked; plot their source traces in a different color.
+        """
         ids = [p.data()['id'] for p in points]
-        if source == 'amp':
-            q = self.session.query(db.PulseResponse.data)
-            q = q.join(PulseResponseStrength)
-            q = q.filter(PulseResponseStrength.id.in_(ids))
-        else:
-            q = self.session.query(db.Baseline.data)
-            q = q.join(BaselineResponseStrength)
-            q = q.filter(BaselineResponseStrength.id.in_(ids))
-        recs = q.all()
-        
-        self.trace_plot.clear()
-        self.dec_plot.clear()
-        for rec in recs:
-            trace = Trace(rec[0], sample_rate=20e3)
-            self.trace_plot.plot(trace.time_values, trace.data - np.median(trace.time_slice(1e-3, 9e-3).data))
-            dec_trace = deconv_filter(trace)
-            self.dec_plot.plot(dec_trace.time_values, dec_trace.data)
-        
-    def load_conn(self, expt, devs):
-        amp_recs = get_amps(self.session, expt, devs)
-        base_recs = get_baseline_amps(self.session, expt, devs[1], limit=len(amp_recs))
-        
-        by = [rec['pos_dec_amp'] for rec in amp_recs]
-        bx = 1 + np.random.random(size=len(by)) * 0.5
-        self.amp_sp.setData(bx, by, data=amp_recs, brush=(255, 255, 255, 80))
+        self._clicked_fg_ids = ids
+        self.plot_prd_ids(ids, 'fg', trace_list=self.clicked_fg_traces, pen='y')
 
-        ay = [rec['pos_dec_amp'] for rec in base_recs[:len(by)]]
-        ax = np.random.random(size=len(ay)) * 0.5
-        self.base_sp.setData(ax, ay, data=base_recs[:len(by)], brush=(255, 255, 255, 80))
+    def bg_scatter_clicked(self, sp, points):
+        """Point(s) were clicked; plot their source traces in a different color.
+        """
+        ids = [p.data()['id'] for p in points]
+        self._clicked_bg_ids = ids
+        self.plot_prd_ids(ids, 'bg', trace_list=self.clicked_bg_traces, pen='y')
 
-        dy = [rec['neg_dec_amp'] for rec in amp_recs]
-        dx = 3 + np.random.random(size=len(dy)) * 0.5
-        self.amp_sp.addPoints(dx, dy, data=amp_recs, brush=(255, 255, 255, 80))
+    def load_conn(self, pair, amp_recs, base_recs):
+        # select fg/bg data
+        fg_data = amp_recs
+        bg_data = base_recs[:len(fg_data)]
+        if self.analysis == 'pos':
+            fg_x = np.array([rec['pos_dec_amp'] for rec in fg_data])
+            bg_x = np.array([rec['pos_dec_amp'] for rec in bg_data])
+        elif self.analysis == 'neg':
+            fg_x = np.array([rec['neg_dec_amp'] for rec in fg_data])
+            bg_x = np.array([rec['neg_dec_amp'] for rec in bg_data])
         
-        cy = [rec['neg_dec_amp'] for rec in base_recs[:len(dy)]]
-        cx = 2 + np.random.random(size=len(cy)) * 0.5
-        self.base_sp.addPoints(cx, cy, data=base_recs[:len(dy)], brush=(255, 255, 255, 80))
+        # clear old plots
+        self.fg_scatter.setData([])
+        self.bg_scatter.setData([])
+        self.hist_plot.clear()
+        self.clear_trace_plots()
 
+        if len(fg_x) == 0:
+            return
+
+        # scatter plots of fg/bg data
+        fg_y = 1 + np.random.random(size=len(fg_x)) * 0.8
+        bg_y = np.random.random(size=len(bg_x)) * 0.8
+        self.fg_scatter.setData(fg_x, fg_y, data=fg_data, brush=(255, 255, 255, 80))
+        self.bg_scatter.setData(bg_x, bg_y, data=bg_data, brush=(255, 255, 255, 80))
+
+        # plot histograms
+        n_bins = max(5, int(len(fg_x)**0.5))
+        all_x = np.concatenate([fg_x, bg_x])
+        bins = np.linspace(np.percentile(all_x, 2), np.percentile(all_x, 98), n_bins+1)
+        fg_hist = np.histogram(fg_x, bins=bins)
+        bg_hist = np.histogram(bg_x, bins=bins)
+        self.hist_plot.clear()
+        self.hist_plot.plot(bg_hist[1], bg_hist[0], stepMode=True, fillLevel=0, brush=(255, 0, 0, 100), pen=0.5)
+        self.hist_plot.plot(fg_hist[1], fg_hist[0], stepMode=True, fillLevel=0, brush=(0, 255, 255, 100), pen=1.0)
+
+        ks = scipy.stats.ks_2samp(fg_x, bg_x)
+        self.hist_plot.setTitle("%s: KS=%0.02g" % (self.analysis, ks.pvalue))
+
+        # record data for later use
+        self.fg_x = fg_x
+        self.bg_x = bg_x
+        self.fg_data = fg_data
+        self.bg_data = bg_data
+
+        # set event region, but don't update (it's too expensive)
+        try:
+            self.event_region.sigRegionChangeFinished.disconnect(self.region_changed)
+            self.event_region.setRegion([fg_x.min(), fg_x.max()])
+        finally:
+            self.event_region.sigRegionChangeFinished.connect(self.region_changed)
+
+    def clear_trace_plots(self):
+        self.fg_trace_plot.clear()
+        self.bg_trace_plot.clear()
+        self.selected_fg_traces = []
+        self.selected_bg_traces = []
+
+    def region_changed(self):
+        """Event selection region changed; replot selected traces
+        """
+        self.clear_trace_plots()
+        rgn = self.event_region.getRegion()
+
+        # Find selected events
+        mask = (self.fg_x > rgn[0]) & (self.fg_x < rgn[1])
+        fg_ids = self.fg_data['id'][mask]
+        self._selected_fg_ids = fg_ids
+
+        mask = (self.bg_x > rgn[0]) & (self.bg_x < rgn[1])
+        bg_ids = self.bg_data['id'][mask]
+        self._selected_bg_ids = bg_ids
+
+        # generate trace queries
+        self.plot_prd_ids(fg_ids, 'fg', trace_list=self.selected_fg_traces)
+        self.plot_prd_ids(bg_ids, 'bg', trace_list=self.selected_bg_traces)
+
+    def replot_all(self):
+        self.plot_prd_ids(self._selected_fg_ids, 'fg', pen=None, trace_list=self.selected_fg_traces)
+        self.plot_prd_ids(self._selected_bg_ids, 'bg', pen=None, trace_list=self.selected_bg_traces)
+        self.plot_prd_ids(self._clicked_fg_ids, 'fg', pen='y', trace_list=self.clicked_fg_traces)
+        self.plot_prd_ids(self._clicked_bg_ids, 'bg', pen='y', trace_list=self.clicked_bg_traces)
+
+    def plot_prd_ids(self, ids, source, pen=None, trace_list=None):
+        """Plot raw or decolvolved PulseResponse data, given IDs of records in
+        a PulseResponseStrength table.
+        """
+        with pg.BusyCursor():
+            if source == 'fg':
+                q = self.session.query(db.PulseResponse.data)
+                q = q.join(PulseResponseStrength)
+                q = q.filter(PulseResponseStrength.id.in_(ids))
+                traces = self.selected_fg_traces
+                plot = self.fg_trace_plot
+            else:
+                q = self.session.query(db.Baseline.data)
+                q = q.join(BaselineResponseStrength)
+                q = q.filter(BaselineResponseStrength.id.in_(ids))
+                traces = self.selected_bg_traces
+                plot = self.bg_trace_plot
+            recs = q.all()
+            if len(recs) == 0:
+                return
+            
+            for i in trace_list[:]:
+                plot.removeItem(i)
+                trace_list.remove(i)
+                
+            if pen is None:
+                alpha = np.clip(1000 / len(recs), 30, 255)
+                pen = (255, 255, 255, alpha)
+                
+            for rec in recs:
+                trace = Trace(rec[0], sample_rate=20e3)
+                if self.deconv_check.isChecked():
+                    dec_trace = deconv_filter(trace, lpf=self.lpf_check.isChecked())
+                else:
+                    dec_trace = trace
+                
+                y = dec_trace.data
+                if self.bsub_check.isChecked():
+                    y -= np.median(dec_trace.time_slice(0, 9e-3).data)
+                
+                trace_list.append(plot.plot(dec_trace.time_values, y, pen=pen))
 
 
 if __name__ == '__main__':
+    #tt = pg.debug.ThreadTrace()
+
+
     from multipatch_analysis.ui.multipatch_nwb_viewer import MultipatchNwbViewer    
     from multipatch_analysis.experiment_list import cached_experiments
     expts = cached_experiments()
@@ -607,24 +804,21 @@ if __name__ == '__main__':
     b = ExperimentBrowser()
     win.addWidget(b)
     
-    gl = pg.GraphicsLayoutWidget()
-    win.addWidget(gl)
-    
     rs_plots = ResponseStrengthPlots(session)
-    gl.addItem(rs_plots.str_plot)
-    gl.addItem(rs_plots.trace_plot, row=1, col=0)
-    gl.addItem(rs_plots.dec_plot, row=2, col=0)
+    win.addWidget(rs_plots)
     
     def selected(*args):
+        """A pair was selected; update the event plots
+        """
         global sel
         sel = b.selectedItems()
         if len(sel) == 0:
             return
         sel = sel[0]
-        if hasattr(sel, 'devs'):
-            expt = sel.expt
-            devs = sel.devs
-            rs_plots.load_conn(expt, devs)
+        if hasattr(sel, 'pair'):
+            pair = sel.pair
+            expt = pair.experiment
+            rs_plots.load_conn(pair)
         print(sel.expt.original_path)
         ts = sel.expt.acq_timestamp
         sec = time.mktime(ts.timetuple()) + ts.microsecond * 1e-6
@@ -636,22 +830,65 @@ if __name__ == '__main__':
 
     def dbl_clicked(index):
         item = b.itemFromIndex(index)[0]
-        nwb = item.expt.ephys_file
-        # temporary workaround:
-        nwb = os.path.join(config.cache_path, nwb.split('cache/')[1])
+        nwb = os.path.join(item.expt.original_path, item.expt.ephys_file)
         print(nwb)
-        
-        nwb_viewer.load_nwb(nwb)
+        try:
+            cache = synphys_cache.get_cache().get_cache(nwb)
+            print("load cached:", cache)
+            nwb_viewer.load_nwb(cache)
+        except Exception:
+            print("load remote:", nwb)
+            nwb_viewer.load_nwb(nwb)
         nwb_viewer.show()
         
     b.doubleClicked.connect(dbl_clicked)
 
     spw = pg.ScatterPlotWidget()
     spw.style['symbolPen'] = None
+    
+    spw.show()
+
+    import pandas
+    query = """
+    select connection_strength.*, ((DATE_PART('day', experiment.acq_timestamp - '1970-01-01'::timestamp) * 24 + 
+                DATE_PART('hour', experiment.acq_timestamp - '1970-01-01'::timestamp)) * 60 +
+                DATE_PART('minute', experiment.acq_timestamp - '1970-01-01'::timestamp)) * 60 +
+                DATE_PART('second', experiment.acq_timestamp - '1970-01-01'::timestamp) as acq_timestamp,
+                ABS(connection_strength.amp_med) as abs_amp_med,
+                ABS(connection_strength.base_amp_med) as abs_base_amp_med,
+                ABS(connection_strength.amp_med_minus_base) as abs_amp_med_minus_base,
+                ABS(connection_strength.deconv_amp_med) as abs_deconv_amp_med,
+                ABS(connection_strength.deconv_base_amp_med) as abs_deconv_base_amp_med,
+                ABS(connection_strength.deconv_amp_med_minus_base) as abs_deconv_amp_med_minus_base,
+                experiment.rig_name,
+                experiment.acsf,
+                pre_cell.cre_type as pre_cre_type,
+                pre_cell.target_layer as pre_target_layer,
+                post_cell.cre_type as post_cre_type,
+                post_cell.target_layer as post_target_layer,
+                pair.synapse,
+                pair.crosstalk_artifact,
+                abs(post_cell.ext_id - pre_cell.ext_id) as electrode_distance
+    from connection_strength
+    join pair on connection_strength.pair_id=pair.id
+    join cell pre_cell on pair.pre_cell_id=pre_cell.id
+    join cell post_cell on pair.post_cell_id=post_cell.id
+    join experiment on pair.expt_id=experiment.id
+    """
+    df = pandas.read_sql(query, session.bind)
+    recs = df.to_records()
+
+
     spw.setFields([
-        ('user_connected', {'mode': 'enum', 'values': [True, False, None]}),
+        ('synapse', {'mode': 'enum', 'values': [True, False, None]}),
         ('synapse_type', {'mode': 'enum', 'values': ['in', 'ex']}),
+        ('pre_cre_type', {'mode': 'enum', 'values': list(set(recs['pre_cre_type']))}),
+        ('post_cre_type', {'mode': 'enum', 'values': list(set(recs['post_cre_type']))}),
+        ('pre_target_layer', {'mode': 'enum'}),
+        ('post_target_layer', {'mode': 'enum'}),
         ('n_samples', {}),
+        ('rig_name', {'mode': 'enum', 'values': list(set(recs['rig_name']))}),
+        ('acsf', {'mode': 'enum', 'values': list(set(recs['acsf']))}),
         ('acq_timestamp', {}),
         ('amp_med', {'units': 'V'}),
         ('abs_amp_med', {'units': 'V'}),
@@ -675,36 +912,18 @@ if __name__ == '__main__':
         ('deconv_amp_ttest', {}),
         ('amp_ks2samp', {}),
         ('deconv_amp_ks2samp', {}),
+        ('crosstalk_artifact', {'units': 'V'}),
+        ('latency_med', {'units': 's'}),
+        ('latency_stdev', {'units': 's'}),
+        ('base_latency_med', {'units': 's'}),
+        ('base_latency_stdev', {'units': 's'}),
+        ('electrode_distance', {}),
     ])
-    
-    spw.show()
 
-    import pandas
-    query = """
-    select connection_strength.*, ((DATE_PART('day', experiment.acq_timestamp - '1970-01-01'::timestamp) * 24 + 
-                DATE_PART('hour', experiment.acq_timestamp - '1970-01-01'::timestamp)) * 60 +
-                DATE_PART('minute', experiment.acq_timestamp - '1970-01-01'::timestamp)) * 60 +
-                DATE_PART('second', experiment.acq_timestamp - '1970-01-01'::timestamp) as acq_timestamp,
-                ABS(connection_strength.amp_med) as abs_amp_med,
-                ABS(connection_strength.base_amp_med) as abs_base_amp_med,
-                ABS(connection_strength.amp_med_minus_base) as abs_amp_med_minus_base,
-                ABS(connection_strength.deconv_amp_med) as abs_deconv_amp_med,
-                ABS(connection_strength.deconv_base_amp_med) as abs_deconv_base_amp_med,
-                ABS(connection_strength.deconv_amp_med_minus_base) as abs_deconv_amp_med_minus_base
-    from connection_strength
-    join experiment on connection_strength.experiment_id=experiment.id
-    where abs(connection_strength.pre_id-connection_strength.post_id) > 1
-    """
-    df = pandas.read_sql(query, session.bind)
-    recs = df.to_records()
-    spw.setData(df.to_records())
-
+    spw.setData(recs)
 
     def conn_clicked(spw, points):
         d = points[0].data()
-        id = (d['experiment_id'], d['pre_id'], d['post_id'])
-        print(id)
-        b.select(id)
-        
+        b.select(pair_id=d['pair_id'])
 
     spw.sigScatterPlotClicked.connect(conn_clicked)

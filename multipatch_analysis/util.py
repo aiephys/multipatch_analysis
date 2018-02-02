@@ -1,4 +1,4 @@
-import os, sys
+import os, sys, time
 
 
 def sync_file(src, dst):

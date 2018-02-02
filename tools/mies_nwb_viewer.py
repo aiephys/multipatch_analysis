@@ -3,6 +3,8 @@ import acq4
 from acq4.pyqtgraph.Qt import QtCore, QtGui
 import acq4.pyqtgraph.console
 
+from multipatch_analysis.ui.multipatch_nwb_viewer import MultipatchNwbViewer
+
 
 if __name__ == '__main__':
     # open a console for debugging

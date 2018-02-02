@@ -72,6 +72,9 @@ GENOTYPES = OrderedDict([
     ("Tlx3-Cre_PL56/wt;Sst-IRES-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'sst': ['tdTomato'], 'tlx3': ['EGFP']}),
     ("Ntsr1-Cre_GN220/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt;Ai65F/wt", {'ntsr1': ['EGFP']}),
     ("Slc17a8-IRES2-Cre/wt;Ai14(RCL-tdT)/wt", {'slc17a8': ['tdTomato']}),
+    ("Ntsr1-Cre_GN220/wt;Vip-IRES-FlpO/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt;Ai65F/wt", {'vip': ['tdTomato'], 'ntsr1': ['EGFP']}),
+    ("Sst-IRES-Cre/wt;Pvalb-T2A-FlpO/wt;Ai65F/Ai65F", {'pvalb': ['tdTomato']}),
+    ("Sst-IRES-Cre/wt;Pvalb-T2A-FlpO/wt;Ai65F/wt", {'pvalb': ['tdTomato']})
 ])    
 
 
