@@ -95,6 +95,15 @@ if __name__ == '__main__':
         num_of_synapses=0
         for i,syn in enumerate(synapses):
             expt, pre_id, post_id = syn
-            ERG=EvokedResponseGroup(pre_id, post_id)
+            analyzer = DynamicsAnalyzer(expt, pre_id, post_id, align_to='spike')
+            
+            # collect all first pulse responses
+            amp_responses = analyzer.amp_group
+            if len(amp_responses) == 0:
+                print("Skipping %s %d %d; no responses" % (expt.uid, pre_id, post_id))
+                continue
+            
+            EvokedResponseGroup(amp_responses)
+            ERG=EvokedResponseGroup(pre_id, post_id).amp_responses
             model=ERG.fit_psp()
             print (model)
