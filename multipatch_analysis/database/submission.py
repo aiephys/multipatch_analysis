@@ -326,24 +326,43 @@ class ExperimentDBSubmission(object):
                 pulse_entries = {}
                 all_pulse_entries[rec.device_id] = pulse_entries
                 
+                rec_tvals = rec['primary'].time_values
+
                 for i,pulse in enumerate(pulses):
                     # Record information about all pulses, including test pulse.
+                    t0 = rec_tvals[pulse[0]]
+                    t1 = rec_tvals[pulse[1]]
+                    data_start = max(0, t0 - 10e-3)
+                    data_stop = t0 + 10e-3
                     pulse_entry = db.StimPulse(
                         recording=rec_entry,
                         pulse_number=i,
-                        onset_index=pulse[0],
+                        onset_time=t0,
                         amplitude=pulse[2],
-                        length=pulse[1]-pulse[0],
+                        duration=t1-t0,
+                        data=rec['primary'].time_slice(data_start, data_stop).resample(sample_rate=20000).data,
+                        data_start_time=data_start,
                     )
                     session.add(pulse_entry)
                     pulse_entries[i] = pulse_entry
+                    
 
                 # import presynaptic evoked spikes
                 spikes = psa.evoked_spikes()
                 for i,sp in enumerate(spikes):
                     pulse = pulse_entries[sp['pulse_n']]
                     if sp['spike'] is not None:
-                        extra = sp['spike']
+                        spinfo = sp['spike']
+                        extra = {
+                            'peak_time': rec_tvals[spinfo['peak_index']],
+                            'max_dvdt_time': rec_tvals[spinfo['rise_index']],
+                            'max_dvdt': spinfo['max_dvdt'],
+                        }
+                        if 'peak_diff' in spinfo:
+                            extra['peak_diff'] = spinfo['peak_diff']
+                        if 'peak_value' in spinfo:
+                            extra['peak_value'] = spinfo['peak_value']
+                        
                         pulse.n_spikes = 1
                     else:
                         extra = {}
@@ -368,6 +387,7 @@ class ExperimentDBSubmission(object):
 
                     # get all responses, regardless of the presence of a spike
                     responses = mpa.get_spike_responses(srec[pre_dev], srec[post_dev], align_to='pulse', require_spike=False)
+                    post_tvals = srec[post_dev]['primary'].time_values
                     for resp in responses:
                         # base_entry = db.Baseline(
                         #     recording=rec_entries[post_dev],
@@ -382,8 +402,7 @@ class ExperimentDBSubmission(object):
                             stim_pulse=all_pulse_entries[pre_dev][resp['pulse_n']],
                             pair=pairs_by_device_id[(pre_dev, post_dev)],
                             # baseline=base_entry,
-                            start_index=resp['rec_start'],
-                            stop_index=resp['rec_stop'],
+                            start_time=post_tvals[resp['rec_start']],
                             data=resp['response'].resample(sample_rate=20000).data,
                         )
                         session.add(resp_entry)
@@ -391,6 +410,7 @@ class ExperimentDBSubmission(object):
             # generate up to 20 baseline snippets for each recording
             for dev in srec.devices:
                 rec = srec[dev]
+                rec_tvals = rec['primary'].time_values
                 dist = BaselineDistributor.get(rec)
                 for i in range(20):
                     base = dist.get_baseline_chunk(20e-3)
@@ -400,8 +420,7 @@ class ExperimentDBSubmission(object):
                     start, stop = base.source_indices
                     base_entry = db.Baseline(
                         recording=rec_entries[dev],
-                        start_index=start,
-                        stop_index=stop,
+                        start_time=rec_tvals[start],
                         data=base.resample(sample_rate=20000).data,
                         mode=float_mode(base.data),
                     )
