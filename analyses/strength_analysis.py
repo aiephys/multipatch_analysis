@@ -1,5 +1,10 @@
+# coding: utf8
 """
 Big question: what's the best way to measure synaptic strength / connectivity?
+
+1. Whatever method we use to measure connectivity, we also need to characterize the detection limit (per synapse)
+2. Any method we choose should be run on both pulse response and background data, and the distributions of
+   these results must be compared to make the connectivity call
 
 """
 from __future__ import print_function, division
@@ -18,7 +23,7 @@ from pyqtgraph.Qt import QtGui, QtCore
 
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.data import Trace, TraceList
-from neuroanalysis.filter import bessel_filter
+from neuroanalysis import filter
 from neuroanalysis.event_detection import exp_deconvolve
 
 from multipatch_analysis.database import database as db
@@ -137,9 +142,18 @@ def init_tables():
     ConnectionStrength = connection_strength_tables['connection_strength']
 
 
-def measure_peak(trace, sign, baseline=(0e-3, 9e-3), response=(11e-3, 17e-3)):
-    baseline = trace.time_slice(*baseline).data.mean()
-    response = trace.time_slice(*response)
+def measure_peak(trace, sign, spike_time, pulse_times, spike_delay=1e-3, response_window=4e-3):
+    # Start measuring response after the pulse has finished, and no earlier than 1 ms after spike onset
+    response_start = max(spike_time + spike_delay, pulse_times[1])
+    response_stop = response_start + response_window
+
+    # measure baseline from beginning of data until 50µs before pulse onset
+    baseline_start = 0
+    baseline_stop = pulse_times[0] - 50e-6
+
+    baseline = trace.time_slice(baseline_start, baseline_stop).data.mean()
+    response = trace.time_slice(response_start, response_stop)
+
     if sign == '+':
         i = np.argmax(response.data)
     else:
@@ -155,14 +169,26 @@ def measure_sum(trace, sign, baseline=(0e-3, 9e-3), response=(12e-3, 17e-3)):
     return peak - baseline
 
         
-def deconv_filter(trace, tau=15e-3, lowpass=300., lpf=True):
+def deconv_filter(trace, pulse_times, tau=15e-3, lowpass=300., lpf=True, remove_artifacts=True):
     dec = exp_deconvolve(trace, tau)
-    baseline = np.median(dec.time_slice(dec.t0, dec.t0+10e-3).data)
+
+    if remove_artifacts:
+        # after deconvolution, the pulse causes two sharp artifacts; these
+        # must be removed before LPF
+        dt = dec.dt
+        r = 60e-6
+        edges = [(int((t-r)/dt), int((t+r)/dt)) for t in pulse_times]
+        cleaned = filter.remove_artifacts(trace, edges, window=200e-6)
+    else:
+        cleaned = dec
+
+    baseline = np.median(cleaned.time_slice(cleaned.t0, cleaned.t0+10e-3).data)    
+
     if lpf:
-        deconv = bessel_filter(dec-baseline, lowpass)
+        deconv = filter.bessel_filter(cleaned-baseline, lowpass)
         return deconv
     else:
-        return dec
+        return cleaned
 
 
 @db.default_session
@@ -190,18 +216,32 @@ def compute_strength(inds, session=None):
 @db.default_session
 def _compute_strength(inds, session=None):
     source, start_id, stop_id = inds
-    q = """
-        SELECT id, data FROM %s
-        WHERE id >= %d and id < %d
-        ORDER BY id
-        LIMIT 1000
-    """
-    
+    q = {
+        'baseline': """
+            SELECT id, data FROM baseline
+            WHERE id >= %d and id < %d
+            ORDER BY id
+            LIMIT 1000
+        """,
+        'pulse_response': """
+            SELECT 
+                pulse_response.id, pulse_response.data, pulse_response.start_time,
+                stim_pulse.onset_time, stim_pulse.duration, stim_pulse.n_spikes, 
+                stim_spike.max_dvdt_time
+            FROM pulse_response
+            JOIN stim_pulse on stim_pulse.id=pulse_response.pulse_id
+            JOIN stim_spike on stim_spike.pulse_id=stim_pulse.id
+            WHERE id >= %d and id < %d and n_spikes == 1
+            ORDER BY id
+            LIMIT 1000
+        """ 
+    }[source]
+
     prof = pg.debug.Profiler(delayed=False)
     
     next_id = start_id
     while True:
-        response = session.execute(q % (source, next_id, stop_id))  # bottleneck here ~30 ms
+        response = session.execute(q % (next_id, stop_id))  # bottleneck here ~30 ms
         prof('exec')
         recs = response.fetchall()
         prof('fetch')
@@ -209,21 +249,38 @@ def _compute_strength(inds, session=None):
             break
         new_recs = []
         for rec in recs:
-            pr_id, data = rec
+            if source == 'pulse_response':
+                pr_id, data, rec_start, pulse_start, pulse_dur, n_spikes, spike_time = rec
+            else:
+                pr_id, data = rec
+                # Fake stimulus information to ensure that background data receives
+                # the same filtering / windowing treatment
+                rec_start = 0
+                pulse_start = 10e-3
+                pulse_dur = 2e-3
+                spike_time = 11e-3
+
+            # Load postsynaptic response snippet
             data = np.load(io.BytesIO(data))
-            #prof('load')
-            
-            new_rec = {'%s_id'%source: pr_id}
-            
             data = Trace(data, sample_rate=20e3)
-            new_rec['pos_amp'], _ = measure_peak(data, '+')
-            new_rec['neg_amp'], _ = measure_peak(data, '-')
-            #prof('comp 1')
             
-            dec_data = deconv_filter(data)
-            new_rec['pos_dec_amp'], new_rec['pos_dec_latency'] = measure_peak(dec_data, '+')
-            new_rec['neg_dec_amp'], new_rec['neg_dec_latency'] = measure_peak(dec_data, '-')
-            #prof('comp 3')
+            # Find stimulus pulse edges for artifact removal
+            start = pulse_start - rec_start
+            pulse_times = [start, start + pulse_dur]
+            spike_time = spike_time - rec_start
+
+            new_rec = {'%s_id'%source: pr_id}
+
+            # Measure deflection on raw data
+            new_rec['pos_amp'], _ = measure_peak(data, '+', spike_time, pulse_times)
+            new_rec['neg_amp'], _ = measure_peak(data, '-', spike_time, pulse_times)
+
+            # Deconvolution / artifact removal / filtering
+            dec_data = deconv_filter(data, pulse_times)
+
+            # Measure deflection on deconvolved data
+            new_rec['pos_dec_amp'], new_rec['pos_dec_latency'] = measure_peak(dec_data, '+', spike_time, pulse_times)
+            new_rec['neg_dec_amp'], new_rec['neg_dec_latency'] = measure_peak(dec_data, '-', spike_time, pulse_times)
             
             new_recs.append(new_rec)
         
@@ -339,7 +396,8 @@ def list_experiments(session):
 class ExperimentBrowser(pg.TreeWidget):
     def __init__(self):
         pg.TreeWidget.__init__(self)
-        self.setColumnCount(6)
+        self.setColumnCount(7)
+        self.setHeaderLabels(['date', 'rig', 'organism', 'region', 'genotype', 'acsf'])
         self.populate()
         self._last_expanded = None
         
@@ -353,7 +411,7 @@ class ExperimentBrowser(pg.TreeWidget):
             date = expt.acq_timestamp
             date_str = date.strftime('%Y-%m-%d')
             slice = expt.slice
-            expt_item = pg.TreeWidgetItem(map(str, [date_str, expt.rig_name, slice.species, expt.target_region, slice.genotype]))
+            expt_item = pg.TreeWidgetItem(map(str, [date_str, expt.rig_name, slice.species, expt.target_region, slice.genotype, expt.acsf]))
             expt_item.expt = expt
             self.addTopLevelItem(expt_item)
 
@@ -714,16 +772,16 @@ class ResponseStrengthAnalyzer(object):
         self._selected_bg_ids = bg_ids
 
         # generate trace queries
-        self.plot_prd_ids(fg_ids, 'fg', trace_list=self.selected_fg_traces)
-        self.plot_prd_ids(bg_ids, 'bg', trace_list=self.selected_bg_traces)
+        self.plot_prd_ids(fg_ids, 'fg', trace_list=self.selected_fg_traces, avg=True)
+        self.plot_prd_ids(bg_ids, 'bg', trace_list=self.selected_bg_traces, avg=True)
 
     def replot_all(self):
-        self.plot_prd_ids(self._selected_fg_ids, 'fg', pen=None, trace_list=self.selected_fg_traces)
-        self.plot_prd_ids(self._selected_bg_ids, 'bg', pen=None, trace_list=self.selected_bg_traces)
+        self.plot_prd_ids(self._selected_fg_ids, 'fg', pen=None, trace_list=self.selected_fg_traces, avg=True)
+        self.plot_prd_ids(self._selected_bg_ids, 'bg', pen=None, trace_list=self.selected_bg_traces, avg=True)
         self.plot_prd_ids(self._clicked_fg_ids, 'fg', pen='y', trace_list=self.clicked_fg_traces)
         self.plot_prd_ids(self._clicked_bg_ids, 'bg', pen='y', trace_list=self.clicked_bg_traces)
 
-    def plot_prd_ids(self, ids, source, pen=None, trace_list=None):
+    def plot_prd_ids(self, ids, source, pen=None, trace_list=None, avg=False):
         """Plot raw or decolvolved PulseResponse data, given IDs of records in
         a PulseResponseStrength table.
         """
@@ -752,6 +810,7 @@ class ResponseStrengthAnalyzer(object):
                 alpha = np.clip(1000 / len(recs), 30, 255)
                 pen = (255, 255, 255, alpha)
                 
+            traces = []
             for rec in recs:
                 trace = Trace(rec[0], sample_rate=20e3)
                 if self.deconv_check.isChecked():
@@ -759,12 +818,18 @@ class ResponseStrengthAnalyzer(object):
                 else:
                     dec_trace = trace
                 
-                y = dec_trace.data
                 if self.bsub_check.isChecked():
-                    y -= np.median(dec_trace.time_slice(0, 9e-3).data)
+                    bsub_trace = dec_trace - np.median(dec_trace.time_slice(0, 9e-3).data)
+                else:
+                    bsub_trace = dec_trace
                 
-                trace_list.append(plot.plot(dec_trace.time_values, y, pen=pen))
+                traces.append(bsub_trace)
+                trace_list.append(plot.plot(bsub_trace.time_values, bsub_trace.data, pen=pen))
 
+            if avg:
+                mean = TraceList(traces).mean()
+                trace_list.append(plot.plot(mean.time_values, mean.data, pen='g'))
+                trace_list[-1].setZValue(10)
 
 if __name__ == '__main__':
     #tt = pg.debug.ThreadTrace()
@@ -780,7 +845,7 @@ if __name__ == '__main__':
         connection_strength_tables.drop_tables()
         pulse_response_strength_tables.drop_tables()
         init_tables()
-        rebuild_strength()
+        rebuild_strength(parallel='--local' not in sys.argv)
         rebuild_connectivity()
     elif '--rebuild-connectivity' in sys.argv:
         print("drop tables..")
