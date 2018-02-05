@@ -348,6 +348,8 @@ class ExperimentDBSubmission(object):
                     
 
                 # import presynaptic evoked spikes
+                # For now, we only detect up to 1 spike per pulse, but eventually
+                # this may be adapted for more.
                 spikes = psa.evoked_spikes()
                 for i,sp in enumerate(spikes):
                     pulse = pulse_entries[sp['pulse_n']]
@@ -369,11 +371,11 @@ class ExperimentDBSubmission(object):
                         pulse.n_spikes = 0
                     
                     spike_entry = db.StimSpike(
-                        recording=rec_entry,
                         pulse=pulse,
                         **extra
                     )
                     session.add(spike_entry)
+                    pulse.first_spike = spike_entry
             
             if not srec_has_mp_probes:
                 continue
