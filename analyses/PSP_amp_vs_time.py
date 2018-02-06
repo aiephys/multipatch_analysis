@@ -34,6 +34,12 @@ relative_path=os.path.dirname(os.getcwd())
 sys.path.insert(1, os.path.join(relative_path))
 import scipy.stats as stats
 
+colors={}
+colors['correct_amp_good_HP']=(0, 128, 0) #green
+colors['correct_amp_bad_HP']=(138,43,226) #purple
+colors['wrong_amp_good_HP']=(0,191,255) #cyan
+colors['wrong_amp_bad_HP']=(255, 0, 0) #red
+
 def response_filter(response, freq_range=None, holding_range=None, pulse=False, train=None, delta_t=None):
     '''this is from Stephanie's manuscript_figures.py
     '''
@@ -285,13 +291,13 @@ if __name__ == '__main__':
             max_peak = measure_amp(average, min_or_max='max', baseline=(6e-3, 8e-3), response=(12e-3, 16e-3))
             min_peak = measure_amp(average, min_or_max='min', baseline=(6e-3, 8e-3), response=(12e-3, 16e-3))
             max_min = "max" if abs(max_peak)> abs(min_peak) else "min"  #find whether the peak or trough of the first pulse average is larger 
-            wrong_synapse_type_flag = False
+            correct_syn_amp_dir = True
             if max_min == "min" and expt.cells[pre_id].cre_type in EXCITATORY_CRE_TYPES: 
                 print ("Whoa this synapse looks inhibitory when cre line would say it should be excitatory!!!" )  
-                wrong_synapse_type_flag = True
+                correct_syn_amp_dir = False
             if max_min == "max" and expt.cells[pre_id].cre_type in INHIBITORY_CRE_TYPES: 
                 print ("Whoa this synapse looks excitatory when cre line would say it should be inhibitory!!!" )    
-                wrong_synapse_type_flag = True  
+                correct_syn_amp_dir = False  
        
             # find the peak or trough of every potential event and plot their amplitude over time of the experiment
             peak=[]
@@ -306,7 +312,7 @@ if __name__ == '__main__':
                 time.append(rr.start_time)  
                 holding_potential.append(rr.parent.holding_potential)
                 sweep_number.append(float(rr.parent.parent._sweep_id))
-                print ('for each pulse of a synapse: peak', peak[-1], 'base', base[-1], 'time', time[-1], 'holding potential', holding_potential[-1], 'sweep_number', sweep_number[-1])      
+                print ('for each first pulse of a synapse: peak', peak[-1], 'base', base[-1], 'time', time[-1], 'holding potential', holding_potential[-1], 'sweep_number', sweep_number[-1])      
 
     #        for trace in amp_responses.responses:
     #            plt.plot(trace.time_values, trace.data)
@@ -334,53 +340,43 @@ if __name__ == '__main__':
             smoothed=ndi.gaussian_filter(peak_minus_base_average, 2) # 
             t_slope, t_intercept, _,_,_=stats.linregress(time, peak_minus_base_average)
             sn_slope, sn_intercept, _,_,_=stats.linregress(sweep_number, peak_minus_base_average)
-            if wrong_synapse_type_flag == False and holding_good_flag ==True:
+            
+            def update_plots_and_slopes(qc_key):
+                ave_psp_plot.plot(average.time_values, average.data, pen=pg.mkPen(color=colors[qc_key])) #plot average of first pulse in each epoch of spikes of individual synapses
+                time_vs_psp_plot.plot(time, smoothed, pen=pg.mkPen(color=colors[qc_key])) # (i, len(synapses)*1.3))
+                time_vs_psp_plot.plot(time, t_slope*time+t_intercept, pen=pg.mkPen(color=colors[qc_key], style=pg.QtCore.Qt.DashLine)) # (i, len(synapses)*1.3))
+                sweep_vs_psp_plot.plot(sweep_number, smoothed, pen=pg.mkPen(color=colors[qc_key]))
+                sweep_vs_psp_plot.plot(sweep_number, sn_slope*sweep_number+sn_intercept, pen=pg.mkPen(color=colors[qc_key],style=pg.QtCore.Qt.DashLine)) # (i, len(synapses)*1.3))
+                slopes['sweep_number'][qc_key].append(sn_slope)
+                slopes['time'][qc_key].append(t_slope)
+               
+            
+            if correct_syn_amp_dir == True and holding_good_flag ==True:
                 print('recording synapse')
                 time_list.append(time)  
                 filtered.append(smoothed)
                 raw.append(peak_minus_base_average)
                 sweep_number_list.append(sweep_number)
-                ave_psp_plot.plot(average.time_values, average.data, pen=pg.mkPen(color=(0, 128, 0))) #plot average of first pulse in each epoch of spikes of individual synapses
-                time_vs_psp_plot.plot(time, smoothed, pen=pg.mkPen(color=(0, 128, 0))) # (i, len(synapses)*1.3))
-                time_vs_psp_plot.plot(time, t_slope*time+t_intercept, pen=pg.mkPen(color=(0, 128, 0), style=pg.QtCore.Qt.DashLine)) # (i, len(synapses)*1.3))
-                sweep_vs_psp_plot.plot(sweep_number, smoothed, pen=pg.mkPen(color=(0, 128, 0)))
-                sweep_vs_psp_plot.plot(sweep_number, sn_slope*sweep_number+sn_intercept, pen=pg.mkPen(color=(0, 128, 0),style=pg.QtCore.Qt.DashLine)) # (i, len(synapses)*1.3))
                 num_of_synapses=num_of_synapses+1
-                slopes['sweep_number']['correct_amp_good_HP'].append(sn_slope)
-                slopes['time']['correct_amp_good_HP'].append(t_slope)
-
-                
+                update_plots_and_slopes('correct_amp_good_HP')
+         
             else: 
-                print ('wrong_synapse_type_flag', wrong_synapse_type_flag)
-                print ('holding_good_flag', holding_good_flag)
-                if wrong_synapse_type_flag==True and holding_good_flag==False:
-                    ave_psp_plot.plot(average.time_values, average.data, pen=pg.mkPen(color=(255, 0, 0))) #plot average of first pulse in each epoch of spikes of individual synapses
-                    time_vs_psp_plot.plot(time, smoothed, pen=pg.mkPen(color=(255, 0, 0)))#pen=pg.mkPen(color=(i, len(synapses)*1.3),style=pg.QtCore.Qt.DashDotLine))             
-                    time_vs_psp_plot.plot(time, t_slope*time+t_intercept, pen=pg.mkPen(color=(255, 0, 0),style=pg.QtCore.Qt.DashLine))#pen=pg.mkPen(color=(i, len(synapses)*1.3),style=pg.QtCore.Qt.DashDotLine))             
-                    sweep_vs_psp_plot.plot(sweep_number, smoothed, pen=pg.mkPen(color=(0, 128, 0)))
-                    sweep_vs_psp_plot.plot(sweep_number, sn_slope*sweep_number+sn_intercept, pen=pg.mkPen(color=(0, 128, 0), style=pg.QtCore.Qt.DashLine))
-                    slopes['sweep_number']['wrong_amp_bad_HP'].append(sn_slope)
-                    slopes['time']['wrong_amp_bad_HP'].append(t_slope)
-                elif wrong_synapse_type_flag==True and holding_good_flag==True:
-                    ave_psp_plot.plot(average.time_values, average.data, pen=pg.mkPen(color=(0,191,255))) #plot average of first pulse in each epoch of spikes of individual synapses
-                    time_vs_psp_plot.plot(time, smoothed, pen=pg.mkPen(color=(0,191,255)))#pen=pg.mkPen(color=(i, len(synapses)*1.3),style=pg.QtCore.Qt.DashDotLine))
-                    sweep_vs_psp_plot.plot(sweep_number, smoothed, pen=pg.mkPen(color=(0, 191, 255)))
-                    time_vs_psp_plot.plot(time, sn_slope*time+t_intercept, pen=pg.mkPen(color=(0,191,255), style=pg.QtCore.Qt.DashLine))#pen=pg.mkPen(color=(i, len(synapses)*1.3),style=pg.QtCore.Qt.DashDotLine))
-                    sweep_vs_psp_plot.plot(sweep_number, sn_slope*sweep_number+sn_intercept, pen=pg.mkPen(color=(0, 191, 255),style=pg.QtCore.Qt.DashLine))
-                    slopes['sweep_number']['wrong_amp_good_HP'].append(sn_slope)
-                    slopes['time']['wrong_amp_good_HP'].append(t_slope)
+                if correct_syn_amp_dir==True and holding_good_flag==False:
 
-                elif wrong_synapse_type_flag==False and holding_good_flag==False:
-                    ave_psp_plot.plot(average.time_values, average.data, pen=pg.mkPen(color=(138,43,226))) #plot average of first pulse in each epoch of spikes of individual synapses
-                    time_vs_psp_plot.plot(time, smoothed, pen=pg.mkPen(color=(138,43,226)))#pen=pg.mkPen(color=(i, len(synapses)*1.3),style=pg.QtCore.Qt.DashDotLine))
-                    sweep_vs_psp_plot.plot(sweep_number, smoothed, pen=pg.mkPen(color=(138, 43, 226)))
-                    time_vs_psp_plot.plot(time, t_slope*time+t_intercept, pen=pg.mkPen(color=(138,43,226),style=pg.QtCore.Qt.DashLine))#pen=pg.mkPen(color=(i, len(synapses)*1.3),style=pg.QtCore.Qt.DashDotLine))
-                    sweep_vs_psp_plot.plot(sweep_number, sn_slope*sweep_number+sn_intercept, pen=pg.mkPen(color=(138, 43, 226), style=pg.QtCore.Qt.DashLine))
-                    slopes['sweep_number']['correct_amp_bad_HP'].append(sn_slope)
-                    slopes['time']['correct_amp_bad_HP'].append(t_slope)
+                    update_plots_and_slopes('correct_amp_bad_HP')
+                elif correct_syn_amp_dir==False and holding_good_flag==True:
+                    update_plots_and_slopes('wrong_amp_good_HP')
+
+                elif correct_syn_amp_dir==False and holding_good_flag==False:
+                    update_plots_and_slopes('wrong_amp_bad_HP')
                 else:
-                    raise Exception('This flag combo doesnt exist')
+                    print(correct_syn_amp_dir)
+                    print(holding_good_flag)
+                    raise Exception("This flag combo doesn't exist")
+            
+            print('done with one synapse')
             app.processEvents()
+
         
         #because times of events aren't all at the same time, time binning is needed to get average time course
         time_points, time_avg_data, time_std_err=average_via_bins(time_list, raw, bin_size=60)
@@ -396,16 +392,16 @@ if __name__ == '__main__':
                                'sweeps':sweeps,
                                'sweep_avg_data':sweep_avg_data,
                                'sweep_std_err':sweep_std_err,
-                               'sweep_slopes':slopes}
+                               'slopes':slopes}
         
-    ju.write("PSP_vs_time_output_data/goodpsp_vs_time or_sweep_2_02_18.json", dictionary)
+    ju.write("PSP_vs_time_output_data/goodpsp_vs_time or_sweep_2_05_18.json", dictionary)
 
     plt.figure()
     for key in dictionary.keys():
         plt.errorbar(dictionary[key]['time_points'], dictionary[key]['time_avg_data'],  yerr=dictionary[key]['time_std_err'], label=key+', n='+str(dictionary[key]['num_of_synapses']))
     plt.title('average base-line subtracted first pulse synaptic deflection')
     plt.legend(loc=4)
-    plt.ylabel('voltage (mV)')
+    plt.ylabel('voltage (V)')
     plt.xlabel('time since first recorded synapse (s)')
 
     plt.figure()
@@ -413,7 +409,7 @@ if __name__ == '__main__':
         plt.errorbar(dictionary[key]['sweeps'], dictionary[key]['sweep_avg_data'],  yerr=dictionary[key]['sweep_std_err'], label=key+', n='+str(dictionary[key]['num_of_synapses']))
     plt.title('average base-line subtracted first pulse synaptic deflection')
     plt.legend(loc=4)
-    plt.ylabel('voltage (mV)')
+    plt.ylabel('voltage (V)')
     plt.xlabel('sweep number')    
     
     
