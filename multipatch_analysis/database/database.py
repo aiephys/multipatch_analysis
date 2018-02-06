@@ -320,10 +320,8 @@ PatchClampRecording.nearest_test_pulse = relationship(TestPulse, cascade="delete
 Recording.stim_pulses = relationship(StimPulse, back_populates="recording", cascade="delete", single_parent=True)
 StimPulse.recording = relationship(Recording, back_populates="stim_pulses")
 
-Recording.stim_spikes = relationship(StimSpike, back_populates="recording", cascade="delete", single_parent=True)
-StimSpike.recording = relationship(Recording, back_populates="stim_spikes")
-
-StimSpike.pulse = relationship(StimPulse)
+StimSpike.pulse = relationship(StimPulse, back_populates="spikes")
+StimPulse.spikes = relationship(StimSpike, back_populates="pulse", single_parent=True)
 
 Recording.baselines = relationship(Baseline, back_populates="recording", cascade="delete", single_parent=True)
 Baseline.recording = relationship(Recording, back_populates="baselines")

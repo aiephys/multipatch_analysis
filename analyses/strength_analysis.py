@@ -193,7 +193,7 @@ def deconv_filter(trace, pulse_times, tau=15e-3, lowpass=300., lpf=True, remove_
 
 @db.default_session
 def rebuild_strength(parallel=True, workers=6, session=None):
-    for source in ['baseline', 'pulse_response']:
+    for source in ['pulse_response', 'baseline']:
         print("Rebuilding %s strength table.." % source)
         
         max_pulse_id = session.execute('select max(id) from %s' % source).fetchone()[0]
@@ -214,6 +214,42 @@ def compute_strength(inds, session=None):
 
 
 @db.default_session
+def response_query(session=None):
+    """
+    Build a query to get all pulse responses along with presynaptic pulse and spike timing
+    """
+    q = session.query(
+        db.PulseResponse.id,
+        db.PulseResponse.data,
+        db.PulseResponse.start_time,
+        db.StimPulse.onset_time,
+        db.StimPulse.duration,
+        db.StimPulse.n_spikes,
+        db.StimSpike.max_dvdt_time,
+    )
+    q = q.join(db.StimPulse)
+    q = q.join(db.StimSpike)
+
+    # For now we only care about pulses that evoke exactly 1 spike
+    q = q.filter(db.StimPulse.n_spikes==1)
+
+    return q
+
+
+@db.default_session
+def baseline_query(session=None):
+    """
+    Build a query to get all baseline responses
+    """
+    q = session.query(
+        db.Baseline.id,
+        db.Baseline.data,
+    )
+
+    return q
+
+
+@db.default_session
 def _compute_strength(inds, session=None):
     source, start_id, stop_id = inds
     q = {
@@ -231,7 +267,7 @@ def _compute_strength(inds, session=None):
             FROM pulse_response
             JOIN stim_pulse on stim_pulse.id=pulse_response.pulse_id
             JOIN stim_spike on stim_spike.pulse_id=stim_pulse.id
-            WHERE id >= %d and id < %d and n_spikes == 1
+            WHERE pulse_response.id >= %d and pulse_response.id < %d and n_spikes=1
             ORDER BY id
             LIMIT 1000
         """ 
