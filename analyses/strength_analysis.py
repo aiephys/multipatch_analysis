@@ -169,26 +169,29 @@ def measure_sum(trace, sign, baseline=(0e-3, 9e-3), response=(12e-3, 17e-3)):
     return peak - baseline
 
         
-def deconv_filter(trace, pulse_times, tau=15e-3, lowpass=300., lpf=True, remove_artifacts=True):
+def deconv_filter(trace, pulse_times, tau=15e-3, lowpass=300., lpf=True, remove_artifacts=True, bsub=True):
     dec = exp_deconvolve(trace, tau)
 
     if remove_artifacts:
         # after deconvolution, the pulse causes two sharp artifacts; these
         # must be removed before LPF
         dt = dec.dt
-        r = 60e-6
-        edges = [(int((t-r)/dt), int((t+r)/dt)) for t in pulse_times]
-        cleaned = filter.remove_artifacts(trace, edges, window=200e-6)
+        r = [-50e-6, 250e-6]
+        edges = [(int((t+r[0])/dt), int((t+r[1])/dt)) for t in pulse_times]
+        cleaned = filter.remove_artifacts(dec, edges, window=200e-6)
     else:
         cleaned = dec
 
-    baseline = np.median(cleaned.time_slice(cleaned.t0, cleaned.t0+10e-3).data)    
+    if bsub:
+        baseline = np.median(cleaned.time_slice(cleaned.t0, cleaned.t0+10e-3).data)
+        b_subbed = cleaned-baseline
+    else:
+        b_subbed = cleaned
 
     if lpf:
-        deconv = filter.bessel_filter(cleaned-baseline, lowpass)
-        return deconv
+        return filter.bessel_filter(b_subbed, lowpass)
     else:
-        return cleaned
+        return b_subbed
 
 
 @db.default_session
@@ -213,19 +216,17 @@ def compute_strength(inds, session=None):
     return _compute_strength(inds, session=session)
 
 
-@db.default_session
-def response_query(session=None):
+def response_query(session):
     """
     Build a query to get all pulse responses along with presynaptic pulse and spike timing
     """
     q = session.query(
         db.PulseResponse.id,
         db.PulseResponse.data,
-        db.PulseResponse.start_time,
-        db.StimPulse.onset_time,
-        db.StimPulse.duration,
-        db.StimPulse.n_spikes,
-        db.StimSpike.max_dvdt_time,
+        db.PulseResponse.start_time.label('rec_start'),
+        db.StimPulse.onset_time.label('pulse_start'),
+        db.StimPulse.duration.label('pulse_dur'),
+        db.StimSpike.max_dvdt_time.label('spike_time'),
     )
     q = q.join(db.StimPulse)
     q = q.join(db.StimSpike)
@@ -236,8 +237,7 @@ def response_query(session=None):
     return q
 
 
-@db.default_session
-def baseline_query(session=None):
+def baseline_query(session):
     """
     Build a query to get all baseline responses
     """
@@ -249,75 +249,81 @@ def baseline_query(session=None):
     return q
 
 
+def analyze_response_strength(rec, source, remove_artifacts=True, lpf=True, bsub=True):
+    """Perform a standardized strength analysis on a record selected by response_query or baseline_query.
+
+    1. Determine timing of presynaptic stimulus pulse edges and spike
+    2. Measure peak deflection on raw trace
+    3. Apply deconvolution / artifact removal / lpf
+    4. Measure peak deflection on deconvolved trace
+    """
+    data = Trace(rec.data, sample_rate=20e3)
+    if source == 'pulse_response':
+        # Find stimulus pulse edges for artifact removal
+        start = rec.pulse_start - rec.rec_start
+        pulse_times = [start, start + rec.pulse_dur]
+        spike_time = rec.spike_time - rec.rec_start
+    elif source == 'baseline':
+        # Fake stimulus information to ensure that background data receives
+        # the same filtering / windowing treatment
+        pulse_times = [10e-3, 12e-3]
+        spike_time = 11e-3
+    else:
+        raise ValueError("Invalid source %s" % source)
+
+    results = {}
+
+    results['raw_trace'] = data
+    results['pulse_times'] = pulse_times
+    results['spike_time'] = spike_time
+
+    # Measure deflection on raw data
+    results['pos_amp'], _ = measure_peak(data, '+', spike_time, pulse_times)
+    results['neg_amp'], _ = measure_peak(data, '-', spike_time, pulse_times)
+
+    # Deconvolution / artifact removal / filtering
+    dec_data = deconv_filter(data, pulse_times, lpf=lpf, remove_artifacts=remove_artifacts, bsub=bsub)
+    results['dec_trace'] = dec_data
+
+    # Measure deflection on deconvolved data
+    results['pos_dec_amp'], results['pos_dec_latency'] = measure_peak(dec_data, '+', spike_time, pulse_times)
+    results['neg_dec_amp'], results['neg_dec_latency'] = measure_peak(dec_data, '-', spike_time, pulse_times)
+    
+    return results
+
+
 @db.default_session
 def _compute_strength(inds, session=None):
     source, start_id, stop_id = inds
-    q = {
-        'baseline': """
-            SELECT id, data FROM baseline
-            WHERE id >= %d and id < %d
-            ORDER BY id
-            LIMIT 1000
-        """,
-        'pulse_response': """
-            SELECT 
-                pulse_response.id, pulse_response.data, pulse_response.start_time,
-                stim_pulse.onset_time, stim_pulse.duration, stim_pulse.n_spikes, 
-                stim_spike.max_dvdt_time
-            FROM pulse_response
-            JOIN stim_pulse on stim_pulse.id=pulse_response.pulse_id
-            JOIN stim_spike on stim_spike.pulse_id=stim_pulse.id
-            WHERE pulse_response.id >= %d and pulse_response.id < %d and n_spikes=1
-            ORDER BY id
-            LIMIT 1000
-        """ 
-    }[source]
+    if source == 'baseline':
+        q = baseline_query(session)
+    elif source == 'pulse_response':
+        q = response_query(session)
+    else:
+        raise ValueError("Invalid source %s" % source)
+
+    q = q.order_by(db.PulseResponse.id)
+    # q = q.limit(1000)
 
     prof = pg.debug.Profiler(delayed=False)
     
     next_id = start_id
     while True:
-        response = session.execute(q % (next_id, stop_id))  # bottleneck here ~30 ms
+        # Request just a chunk of all pulse responses based on ID range
+        q1 = q.filter(db.PulseResponse.id>=next_id).filter(db.PulseResponse.id<stop_id)
         prof('exec')
-        recs = response.fetchall()
+        recs = q1.all()
         prof('fetch')
         if len(recs) == 0:
             break
         new_recs = []
+
         for rec in recs:
-            if source == 'pulse_response':
-                pr_id, data, rec_start, pulse_start, pulse_dur, n_spikes, spike_time = rec
-            else:
-                pr_id, data = rec
-                # Fake stimulus information to ensure that background data receives
-                # the same filtering / windowing treatment
-                rec_start = 0
-                pulse_start = 10e-3
-                pulse_dur = 2e-3
-                spike_time = 11e-3
-
-            # Load postsynaptic response snippet
-            data = np.load(io.BytesIO(data))
-            data = Trace(data, sample_rate=20e3)
-            
-            # Find stimulus pulse edges for artifact removal
-            start = pulse_start - rec_start
-            pulse_times = [start, start + pulse_dur]
-            spike_time = spike_time - rec_start
-
-            new_rec = {'%s_id'%source: pr_id}
-
-            # Measure deflection on raw data
-            new_rec['pos_amp'], _ = measure_peak(data, '+', spike_time, pulse_times)
-            new_rec['neg_amp'], _ = measure_peak(data, '-', spike_time, pulse_times)
-
-            # Deconvolution / artifact removal / filtering
-            dec_data = deconv_filter(data, pulse_times)
-
-            # Measure deflection on deconvolved data
-            new_rec['pos_dec_amp'], new_rec['pos_dec_latency'] = measure_peak(dec_data, '+', spike_time, pulse_times)
-            new_rec['neg_dec_amp'], new_rec['neg_dec_latency'] = measure_peak(dec_data, '-', spike_time, pulse_times)
-            
+            result = analyze_response_strength(rec, source)
+            new_rec = {'%s_id'%source: rec.id}
+            # copy a subset of results over to new record
+            for k in ['pos_amp', 'neg_amp', 'pos_dec_amp', 'neg_dec_amp', 'pos_dec_latency','neg_dec_latency']:
+                new_rec[k] = result[k]
             new_recs.append(new_rec)
         
         next_id = pr_id + 1
@@ -711,6 +717,11 @@ class ResponseStrengthAnalyzer(object):
         self.ctrl_layout.addWidget(self.lpf_check, 0, 2)
         self.lpf_check.toggled.connect(self.replot_all)
 
+        self.ar_check = QtGui.QCheckBox('crosstalk')
+        self.ar_check.setChecked(True)
+        self.ctrl_layout.addWidget(self.ar_check, 0, 3)
+        self.ar_check.toggled.connect(self.replot_all)
+
         self.selected_fg_traces = []
         self.selected_bg_traces = []
         self.clicked_fg_traces = []
@@ -750,6 +761,9 @@ class ResponseStrengthAnalyzer(object):
         self.bg_scatter.setData([])
         self.hist_plot.clear()
         self.clear_trace_plots()
+        # clear click-selected plots
+        self._clicked_fg_ids = []
+        self._clicked_bg_ids = []
 
         if len(fg_x) == 0:
             return
@@ -823,13 +837,13 @@ class ResponseStrengthAnalyzer(object):
         """
         with pg.BusyCursor():
             if source == 'fg':
-                q = self.session.query(db.PulseResponse.data)
+                q = response_query(self.session)
                 q = q.join(PulseResponseStrength)
                 q = q.filter(PulseResponseStrength.id.in_(ids))
                 traces = self.selected_fg_traces
                 plot = self.fg_trace_plot
             else:
-                q = self.session.query(db.Baseline.data)
+                q = baseline_query(self.session)
                 q = q.join(BaselineResponseStrength)
                 q = q.filter(BaselineResponseStrength.id.in_(ids))
                 traces = self.selected_bg_traces
@@ -848,19 +862,24 @@ class ResponseStrengthAnalyzer(object):
                 
             traces = []
             for rec in recs:
-                trace = Trace(rec[0], sample_rate=20e3)
+                s = {'fg': 'pulse_response', 'bg': 'baseline'}[source]
+                result = analyze_response_strength(rec, source=s, lpf=self.lpf_check.isChecked(), 
+                                                   remove_artifacts=self.ar_check.isChecked(), bsub=self.bsub_check.isChecked())
+
                 if self.deconv_check.isChecked():
-                    dec_trace = deconv_filter(trace, lpf=self.lpf_check.isChecked())
+                    trace = result['dec_trace']
                 else:
-                    dec_trace = trace
+                    trace = result['raw_trace']
+                    if self.bsub_check.isChecked():
+                        trace = trace - np.median(trace.time_slice(0, 9e-3).data)
+                    if self.lpf_check.isChecked():
+                        trace = filter.bessel_filter(trace, 500)
                 
-                if self.bsub_check.isChecked():
-                    bsub_trace = dec_trace - np.median(dec_trace.time_slice(0, 9e-3).data)
-                else:
-                    bsub_trace = dec_trace
-                
-                traces.append(bsub_trace)
-                trace_list.append(plot.plot(bsub_trace.time_values, bsub_trace.data, pen=pen))
+                traces.append(trace)
+                trace_list.append(plot.plot(trace.time_values, trace.data, pen=pen))
+                st = [result['spike_time']]
+                trace_list[-1].spike_marker = pg.ScatterPlotItem(st, trace.value_at(st), size=3, pen=None, brush='y')
+                trace_list[-1].spike_marker.setParentItem(trace_list[-1])
 
             if avg:
                 mean = TraceList(traces).mean()
