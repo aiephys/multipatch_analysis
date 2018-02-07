@@ -196,9 +196,10 @@ def deconv_filter(trace, pulse_times, tau=15e-3, lowpass=300., lpf=True, remove_
 
 @db.default_session
 def rebuild_strength(parallel=True, workers=6, session=None):
-    for source in ['pulse_response', 'baseline']:
+    for source in ['baseline', 'pulse_response']:
         print("Rebuilding %s strength table.." % source)
         
+        # Divide workload into equal parts for each worker
         max_pulse_id = session.execute('select max(id) from %s' % source).fetchone()[0]
         chunk = 1 + (max_pulse_id // workers)
         parts = [(source, chunk*i, chunk*(i+1)) for i in range(4)]
@@ -221,7 +222,7 @@ def response_query(session):
     Build a query to get all pulse responses along with presynaptic pulse and spike timing
     """
     q = session.query(
-        db.PulseResponse.id,
+        db.PulseResponse.id.label('response_id'),
         db.PulseResponse.data,
         db.PulseResponse.start_time.label('rec_start'),
         db.StimPulse.onset_time.label('pulse_start'),
@@ -242,7 +243,7 @@ def baseline_query(session):
     Build a query to get all baseline responses
     """
     q = session.query(
-        db.Baseline.id,
+        db.Baseline.id.label('response_id'),
         db.Baseline.data,
     )
 
@@ -307,8 +308,12 @@ def _compute_strength(inds, session=None):
     next_id = start_id
     while True:
         # Request just a chunk of all pulse responses based on ID range
-        q1 = q.filter(db.PulseResponse.id>=next_id).filter(db.PulseResponse.id<stop_id)
-        q1 = q1.order_by(db.PulseResponse.id)
+        if source == 'pulse_response':
+            q1 = q.filter(db.PulseResponse.id>=next_id).filter(db.PulseResponse.id<stop_id)
+            q1 = q1.order_by(db.PulseResponse.id)
+        else:
+            q1 = q.filter(db.Baseline.id>=next_id).filter(db.Baseline.id<stop_id)
+            q1 = q1.order_by(db.Baseline.id)
         q1 = q1.limit(1000)  # process in 1000-record chunks
 
         prof('exec')
@@ -320,13 +325,13 @@ def _compute_strength(inds, session=None):
 
         for rec in recs:
             result = analyze_response_strength(rec, source)
-            new_rec = {'%s_id'%source: rec.id}
+            new_rec = {'%s_id'%source: rec.response_id}
             # copy a subset of results over to new record
             for k in ['pos_amp', 'neg_amp', 'pos_dec_amp', 'neg_dec_amp', 'pos_dec_latency','neg_dec_latency']:
                 new_rec[k] = result[k]
             new_recs.append(new_rec)
         
-        next_id = rec.id + 1
+        next_id = rec.response_id + 1
         
         sys.stdout.write("%d / %d\r" % (next_id-start_id, stop_id-start_id))
         sys.stdout.flush()
