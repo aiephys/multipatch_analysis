@@ -302,15 +302,15 @@ def _compute_strength(inds, session=None):
     else:
         raise ValueError("Invalid source %s" % source)
 
-    q = q.order_by(db.PulseResponse.id)
-    # q = q.limit(1000)
-
     prof = pg.debug.Profiler(delayed=False)
     
     next_id = start_id
     while True:
         # Request just a chunk of all pulse responses based on ID range
         q1 = q.filter(db.PulseResponse.id>=next_id).filter(db.PulseResponse.id<stop_id)
+        q1 = q1.order_by(db.PulseResponse.id)
+        q1 = q1.limit(1000)  # process in 1000-record chunks
+
         prof('exec')
         recs = q1.all()
         prof('fetch')
@@ -326,7 +326,7 @@ def _compute_strength(inds, session=None):
                 new_rec[k] = result[k]
             new_recs.append(new_rec)
         
-        next_id = pr_id + 1
+        next_id = rec.id + 1
         
         sys.stdout.write("%d / %d\r" % (next_id-start_id, stop_id-start_id))
         sys.stdout.flush()
