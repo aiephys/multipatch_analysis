@@ -722,6 +722,11 @@ class ResponseStrengthAnalyzer(object):
         self.ctrl_layout.addWidget(self.ar_check, 0, 3)
         self.ar_check.toggled.connect(self.replot_all)
 
+        self.align_check = QtGui.QCheckBox('align')
+        self.align_check.setChecked(True)
+        self.ctrl_layout.addWidget(self.align_check, 0, 4)
+        self.align_check.toggled.connect(self.replot_all)
+
         self.selected_fg_traces = []
         self.selected_bg_traces = []
         self.clicked_fg_traces = []
@@ -861,6 +866,8 @@ class ResponseStrengthAnalyzer(object):
                 pen = (255, 255, 255, alpha)
                 
             traces = []
+            spike_times = []
+            spike_values = []
             for rec in recs:
                 s = {'fg': 'pulse_response', 'bg': 'baseline'}[source]
                 result = analyze_response_strength(rec, source=s, lpf=self.lpf_check.isChecked(), 
@@ -875,16 +882,26 @@ class ResponseStrengthAnalyzer(object):
                     if self.lpf_check.isChecked():
                         trace = filter.bessel_filter(trace, 500)
                 
+                spike_values.append(trace.value_at([result['spike_time']])[0])
+                if self.align_check.isChecked():
+                    trace.t0 = -result['spike_time']
+                    spike_times.append(0)
+                else:
+                    spike_times.append(result['spike_time'])
+
                 traces.append(trace)
                 trace_list.append(plot.plot(trace.time_values, trace.data, pen=pen))
-                st = [result['spike_time']]
-                trace_list[-1].spike_marker = pg.ScatterPlotItem(st, trace.value_at(st), size=3, pen=None, brush='y')
-                trace_list[-1].spike_marker.setParentItem(trace_list[-1])
 
             if avg:
                 mean = TraceList(traces).mean()
                 trace_list.append(plot.plot(mean.time_values, mean.data, pen='g'))
                 trace_list[-1].setZValue(10)
+
+            spike_scatter = pg.ScatterPlotItem(spike_times, spike_values, size=4, pen=None, brush=(200, 200, 0))
+            spike_scatter.setZValue(-100)
+            plot.addItem(spike_scatter)
+            trace_list.append(spike_scatter)
+
 
 if __name__ == '__main__':
     #tt = pg.debug.ThreadTrace()
