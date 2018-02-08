@@ -159,7 +159,7 @@ def measure_peak(trace, sign, spike_time, pulse_times, spike_delay=1e-3, respons
     else:
         i = np.argmin(response.data)
     peak = response.data[i]
-    latency = response.time_values[i]
+    latency = response.time_values[i] - spike_time
     return peak - baseline, latency
 
 
@@ -169,7 +169,7 @@ def measure_sum(trace, sign, baseline=(0e-3, 9e-3), response=(12e-3, 17e-3)):
     return peak - baseline
 
         
-def deconv_filter(trace, pulse_times, tau=15e-3, lowpass=300., lpf=True, remove_artifacts=True, bsub=True):
+def deconv_filter(trace, pulse_times, tau=15e-3, lowpass=1000., lpf=True, remove_artifacts=True, bsub=True):
     dec = exp_deconvolve(trace, tau)
 
     if remove_artifacts:
