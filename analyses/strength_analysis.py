@@ -1069,3 +1069,86 @@ if __name__ == '__main__':
         b.select(pair_id=d['pair_id'])
 
     spw.sigScatterPlotClicked.connect(conn_clicked)
+
+
+
+    # attempt a little machine learning. 
+    # this could work if we can generate better features:
+    #     KS measured on latency
+    #     Gaussian fit to deconvolved trace (amp, time, width, nrmse)
+    #         Seed by fitting average first
+    #     KS on fit parameters
+    #     Maybe something better than KS? Mixed gaussian model?
+    #          Histogram values on the above features?  (might need a lot more data for this)
+    from sklearn import svm, preprocessing
+
+    features = recs[[
+        'n_samples', 
+        #'amp_med', 'amp_stdev', 'base_amp_med', 'base_amp_stdev', 'amp_med_minus_base', 'amp_stdev_minus_base', 
+        #'deconv_amp_med', 'deconv_amp_stdev', 'deconv_base_amp_med', 'deconv_base_amp_stdev', 'deconv_amp_med_minus_base', 'deconv_amp_stdev_minus_base', 
+        #'amp_ttest',
+        #'deconv_amp_ttest',
+        #'amp_ks2samp', 
+        'deconv_amp_ks2samp',
+        'latency_med', 'latency_stdev', 
+        'base_latency_med', 'base_latency_stdev',
+        #'abs_amp_med', 'abs_base_amp_med', 'abs_amp_med_minus_base', 
+        'abs_deconv_amp_med', 'abs_deconv_base_amp_med', #'abs_deconv_amp_med_minus_base', 
+        'electrode_distance'
+    ]]
+
+    features['deconv_amp_ks2samp'] = np.log(-np.log(features['deconv_amp_ks2samp']))
+    # for k in ['deconv_amp_ks2samp']:
+    #     features[k] = np.log(features[k])
+
+    mask = features['n_samples'] > 100
+
+    x = np.array([tuple(r) for r in features[mask]])
+    y = recs['synapse'][mask]
+
+    order = np.arange(len(y))
+    np.random.shuffle(order)
+    x = x[order]
+    y = y[order]
+
+    mask = np.all(np.isfinite(x), axis=1) & np.isfinite(y)
+    x = x[mask]
+    y = y[mask]
+
+    x = preprocessing.normalize(x, axis=0)
+
+    # train on equal parts connected and non-connected
+    train_mask = np.zeros(len(y), dtype='bool')
+    syn = np.argwhere(y)
+    n = len(syn) // 4 * 3
+    train_mask[syn[:n]] = True
+    other = np.arange(len(y))[~train_mask]
+    np.random.shuffle(other)
+    train_mask[other[:n]] = True
+
+    train_x = x[train_mask]
+    train_y = y[train_mask]
+    test_x = x[~train_mask]
+    test_y = y[~train_mask]
+    print("Train: %d  test: %d" % (len(train_y), len(test_y)))
+
+    clf = svm.LinearSVC()
+    clf.fit(train_x, train_y)
+
+    def test(clf, test_x, test_y):
+        pred = clf.predict(test_x)
+        def pr(name, pred, test_y):
+            print("%s:  %d/%d  %0.2f%%" % (name, (pred & test_y).sum(), test_y.sum(), 100 * (pred & test_y).sum() / test_y.sum()))
+            
+        pr(" True positive", pred, test_y)
+        pr("False positive", pred, ~test_y)
+        pr(" True negative", ~pred, ~test_y)
+        pr("False negative", ~pred, test_y)
+
+    print("TRAIN:")
+    test(clf, train_x, train_y)
+
+    print("TEST:")
+    test(clf, test_x, test_y)
+
+    
