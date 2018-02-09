@@ -169,7 +169,7 @@ def measure_sum(trace, sign, baseline=(0e-3, 9e-3), response=(12e-3, 17e-3)):
     return peak - baseline
 
         
-def deconv_filter(trace, pulse_times, tau=15e-3, lowpass=1000., lpf=True, remove_artifacts=True, bsub=True):
+def deconv_filter(trace, pulse_times, tau=15e-3, lowpass=1000., lpf=True, remove_artifacts=False, bsub=True):
     dec = exp_deconvolve(trace, tau)
 
     if remove_artifacts:
@@ -178,7 +178,7 @@ def deconv_filter(trace, pulse_times, tau=15e-3, lowpass=1000., lpf=True, remove
         dt = dec.dt
         r = [-50e-6, 250e-6]
         edges = [(int((t+r[0])/dt), int((t+r[1])/dt)) for t in pulse_times]
-        cleaned = filter.remove_artifacts(dec, edges, window=200e-6)
+        cleaned = filter.remove_artifacts(dec, edges, window=400e-6)
     else:
         cleaned = dec
 
@@ -250,7 +250,7 @@ def baseline_query(session):
     return q
 
 
-def analyze_response_strength(rec, source, remove_artifacts=True, lpf=True, bsub=True):
+def analyze_response_strength(rec, source, remove_artifacts=False, lpf=True, bsub=True):
     """Perform a standardized strength analysis on a record selected by response_query or baseline_query.
 
     1. Determine timing of presynaptic stimulus pulse edges and spike
@@ -908,6 +908,58 @@ class ResponseStrengthAnalyzer(object):
             trace_list.append(spike_scatter)
 
 
+def query_all_pairs():
+    import pandas
+    query = ("""
+    select """
+        # ((DATE_PART('day', experiment.acq_timestamp - '1970-01-01'::timestamp) * 24 + 
+        # DATE_PART('hour', experiment.acq_timestamp - '1970-01-01'::timestamp)) * 60 +
+        # DATE_PART('minute', experiment.acq_timestamp - '1970-01-01'::timestamp)) * 60 +
+        # DATE_PART('second', experiment.acq_timestamp - '1970-01-01'::timestamp) as acq_timestamp,
+        """
+        connection_strength.*, 
+        experiment.acq_timestamp as acq_timestamp,
+        ABS(connection_strength.amp_med) as abs_amp_med,
+        ABS(connection_strength.base_amp_med) as abs_base_amp_med,
+        ABS(connection_strength.amp_med_minus_base) as abs_amp_med_minus_base,
+        ABS(connection_strength.deconv_amp_med) as abs_deconv_amp_med,
+        ABS(connection_strength.deconv_base_amp_med) as abs_deconv_base_amp_med,
+        ABS(connection_strength.deconv_amp_med_minus_base) as abs_deconv_amp_med_minus_base,
+        experiment.rig_name,
+        experiment.acsf,
+        slice.species,
+        slice.genotype,
+        slice.age,
+        slice.slice_time,
+        pre_cell.ext_id as pre_cell_id,
+        pre_cell.cre_type as pre_cre_type,
+        pre_cell.target_layer as pre_target_layer,
+        post_cell.ext_id as post_cell_id,
+        post_cell.cre_type as post_cre_type,
+        post_cell.target_layer as post_target_layer,
+        pair.synapse,
+        pair.crosstalk_artifact,
+        abs(post_cell.ext_id - pre_cell.ext_id) as electrode_distance
+    from connection_strength
+    join pair on connection_strength.pair_id=pair.id
+    join cell pre_cell on pair.pre_cell_id=pre_cell.id
+    join cell post_cell on pair.post_cell_id=post_cell.id
+    join experiment on pair.expt_id=experiment.id
+    join slice on experiment.slice_id=slice.id
+    order by acq_timestamp
+    """)
+    session = db.Session()
+    df = pandas.read_sql(query, session.bind)
+    ts = [datetime_to_timestamp(t) for t in df['acq_timestamp']]
+    df['acq_timestamp'] = ts
+    recs = df.to_records()
+    return recs
+
+
+def datetime_to_timestamp(d):
+    return time.mktime(d.timetuple()) + d.microsecond * 1e-6
+
+
 if __name__ == '__main__':
     #tt = pg.debug.ThreadTrace()
 
@@ -963,7 +1015,7 @@ if __name__ == '__main__':
             rs_plots.load_conn(pair)
         print(sel.expt.original_path)
         ts = sel.expt.acq_timestamp
-        sec = time.mktime(ts.timetuple()) + ts.microsecond * 1e-6
+        sec = datetime_to_timestamp(ts.timetuple())
         print(sec)
 
     b.itemSelectionChanged.connect(selected)
@@ -990,36 +1042,7 @@ if __name__ == '__main__':
     
     spw.show()
 
-    import pandas
-    query = """
-    select connection_strength.*, ((DATE_PART('day', experiment.acq_timestamp - '1970-01-01'::timestamp) * 24 + 
-                DATE_PART('hour', experiment.acq_timestamp - '1970-01-01'::timestamp)) * 60 +
-                DATE_PART('minute', experiment.acq_timestamp - '1970-01-01'::timestamp)) * 60 +
-                DATE_PART('second', experiment.acq_timestamp - '1970-01-01'::timestamp) as acq_timestamp,
-                ABS(connection_strength.amp_med) as abs_amp_med,
-                ABS(connection_strength.base_amp_med) as abs_base_amp_med,
-                ABS(connection_strength.amp_med_minus_base) as abs_amp_med_minus_base,
-                ABS(connection_strength.deconv_amp_med) as abs_deconv_amp_med,
-                ABS(connection_strength.deconv_base_amp_med) as abs_deconv_base_amp_med,
-                ABS(connection_strength.deconv_amp_med_minus_base) as abs_deconv_amp_med_minus_base,
-                experiment.rig_name,
-                experiment.acsf,
-                pre_cell.cre_type as pre_cre_type,
-                pre_cell.target_layer as pre_target_layer,
-                post_cell.cre_type as post_cre_type,
-                post_cell.target_layer as post_target_layer,
-                pair.synapse,
-                pair.crosstalk_artifact,
-                abs(post_cell.ext_id - pre_cell.ext_id) as electrode_distance
-    from connection_strength
-    join pair on connection_strength.pair_id=pair.id
-    join cell pre_cell on pair.pre_cell_id=pre_cell.id
-    join cell post_cell on pair.post_cell_id=post_cell.id
-    join experiment on pair.expt_id=experiment.id
-    """
-    df = pandas.read_sql(query, session.bind)
-    recs = df.to_records()
-
+    recs = query_all_pairs()
 
     spw.setFields([
         ('synapse', {'mode': 'enum', 'values': [True, False, None]}),
