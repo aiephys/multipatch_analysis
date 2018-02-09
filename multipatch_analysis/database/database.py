@@ -16,6 +16,10 @@ from sqlalchemy.sql.expression import func
 
 from .. config import synphys_db_host, synphys_db
 
+default_sample_rate = 20000
+
+
+_sample_rate_str = '%dkHz' % (default_sample_rate // 1000)
 
 table_schemas = {
     'slice': [
@@ -149,7 +153,7 @@ table_schemas = {
         ('duration', 'float', 'length of the pulse in seconds'),
         ('n_spikes', 'int', 'number of spikes evoked by this pulse'),
         # ('first_spike', 'stim_spike.id', 'The ID of the first spike evoked by this pulse'),
-        ('data', 'array', 'numpy array of presynaptic recording sampled at 20kHz'),
+        ('data', 'array', 'numpy array of presynaptic recording sampled at '+_sample_rate_str),
         ('data_start_time', 'float', "Starting time of the data chunk, relative to the beginning of the recording"),
     ],
     'stim_spike': [
@@ -165,7 +169,7 @@ table_schemas = {
         "A snippet of baseline data, matched to a postsynaptic recording",
         ('recording_id', 'recording.id', 'The recording from which this baseline snippet was extracted.', {'index': True}),
         ('start_time', 'float', "Starting time of this chunk of the recording in seconds, relative to the beginning of the recording"),
-        ('data', 'array', 'numpy array of baseline data sampled at 20kHz'),
+        ('data', 'array', 'numpy array of baseline data sampled at '+_sample_rate_str),
         ('mode', 'float', 'most common value in the baseline snippet'),
     ],
     'pulse_response': [
@@ -174,7 +178,7 @@ table_schemas = {
         ('pulse_id', 'stim_pulse.id', 'The presynaptic pulse', {'index': True}),
         ('pair_id', 'pair.id', 'The pre-post cell pair involved in this pulse response', {'index': True}),
         ('start_time', 'float', 'Starting time of this chunk of the recording in seconds, relative to the beginning of the recording'),
-        ('data', 'array', 'numpy array of response data sampled at 20kHz'),
+        ('data', 'array', 'numpy array of response data sampled at '+_sample_rate_str),
         ('baseline_id', 'baseline.id'),
     ],
 }
