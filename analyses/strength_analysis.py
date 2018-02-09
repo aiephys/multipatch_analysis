@@ -144,6 +144,10 @@ def init_tables():
 
 def measure_peak(trace, sign, spike_time, pulse_times, spike_delay=1e-3, response_window=4e-3):
     # Start measuring response after the pulse has finished, and no earlier than 1 ms after spike onset
+    # response_start = max(spike_time + spike_delay, pulse_times[1])
+
+    # Start measuring after spike and hope that the pulse offset doesn't get in the way
+    # (if we wait for the pulse to end, then we miss too many fast rise / short latency events)
     response_start = max(spike_time + spike_delay, pulse_times[1])
     response_stop = response_start + response_window
 
