@@ -41,7 +41,7 @@ if __name__ == '__main__':
     scatter_plot = win.addPlot(0, 0, rowspan=len(show_conns))
     scatter_plot.setLogMode(True, True)
     scatter_plot.setAspectLocked()
-    scatter_plot.setFixedWidth(600)
+    scatter_plot.setFixedWidth(400)
 
     # read all pair records from DB
     conns = strength_analysis.query_all_pairs()
@@ -54,8 +54,9 @@ if __name__ == '__main__':
     mask = filtered['abs_deconv_base_amp_med'] < 0.02
 
     # remove recordings likely to have high crosstalk
-    cutoff = strength_analysis.datetime_to_timestamp(datetime(2017,4,1))
-    mask &= (filtered['electrode_distance'] > 1) | (filtered['acq_timestamp'] > cutoff)
+    # cutoff = strength_analysis.datetime_to_timestamp(datetime(2017,4,1))
+    # mask &= (filtered['electrode_distance'] > 1) | (filtered['acq_timestamp'] > cutoff)
+    mask &= filtered['electrode_distance'] > 1
 
     # remove recordings with low sample count
     mask &= filtered['n_samples'] > 50
@@ -80,7 +81,7 @@ if __name__ == '__main__':
 
     c_plot = scatter_plot.plot(background[c_mask], signal[c_mask], pen=None, symbol='d', symbolPen='k', symbolBrush=(0, 255, 255), symbolSize=10, data=filtered[c_mask])
 
-    u_plot = scatter_plot.plot(background[u_mask], signal[u_mask], pen=None, symbol='o', symbolPen=None, symbolBrush=(50, 50, 50, 80), symbolSize=4)
+    u_plot = scatter_plot.plot(background[u_mask], signal[u_mask], pen=None, symbol='o', symbolPen=None, symbolBrush=(50, 50, 50, 80), symbolSize=4, data=filtered[u_mask])
     u_plot.setZValue(-10)
     # u_plot.scatter.setCompositionMode(pg.QtGui.QPainter.CompositionMode_Plus)
 
@@ -101,7 +102,7 @@ if __name__ == '__main__':
         hist_plots.append(hist_plot)
         limit_plot = win.addPlot(i, 4)
         limit_plot.addLegend()
-        
+        limit_plot.setLogMode(True, True)
         # Find this connection in the pair list
         idx = np.argwhere((abs(filtered['acq_timestamp'] - timestamp) < 1) & (filtered['pre_cell_id'] == pre_id) & (filtered['post_cell_id'] == post_id))
         if idx.size == 0:
@@ -176,7 +177,7 @@ if __name__ == '__main__':
 
         # bins = np.arange(-0.0005, 0.002, 0.0001) 
         # field = 'pos_amp'
-        bins = np.arange(-0.005, 0.02, 0.001) 
+        bins = np.arange(-0.001, 0.015, 0.0005) 
         field = 'pos_dec_amp'
         hist_y, hist_bins = np.histogram(base_amps[field], bins=bins, density=True)
         hist_plot.plot(hist_bins, hist_y, stepMode=True, pen=None, brush=(200, 0, 0, 150), fillLevel=0)
@@ -191,7 +192,7 @@ if __name__ == '__main__':
         q = strength_analysis.baseline_query(session)
         q = q.join(strength_analysis.BaselineResponseStrength)
         q = q.filter(strength_analysis.BaselineResponseStrength.id.in_(base_amps['id']))
-        q = q.limit(50)
+        # q = q.limit(100)
         recs = q.all()
 
         def clicked(sp, pts):
@@ -204,8 +205,8 @@ if __name__ == '__main__':
             mean = TraceList(bsub).mean()
             plt.plot(mean.time_values, mean.data, pen='g')
 
-        amps = 50e-6 * 2**np.arange(6)
-        rtimes = 1e-3 * 1.5**np.arange(6)
+        amps = 10e-6 * 2**np.arange(6)
+        rtimes = 1e-3 * 1.4**np.arange(6)
         dt = 1 / db.default_sample_rate
         results = np.empty((len(amps), len(rtimes)), dtype=[('pos_dec_amp', float), ('traces', object)])
         for i,amp in enumerate(amps):
@@ -215,24 +216,32 @@ if __name__ == '__main__':
                 r_amps = amp * 2**np.random.normal(size=len(recs), scale=0.5)
                 trial_results = []
                 traces = []
-                for k,rec in enumerate(recs):
+                np.random.shuffle(recs)
+                for k,rec in enumerate(recs[:100]):
                     data = rec.data.copy()
-                    start = int(11e-3 / dt)
+                    start = int(12.5e-3 / dt)
                     length = len(rec.data) - start
+                    bg_result = strength_analysis.analyze_response_strength(rec, 'baseline')
                     rec.data[start:] += template[:length] * r_amps[k]
-                    result = strength_analysis.analyze_response_strength(rec, 'baseline')
-                    trial_results.append(result['pos_dec_amp'])
+                    fg_result = strength_analysis.analyze_response_strength(rec, 'baseline')
+                    trial_results.append(fg_result['pos_dec_amp'] - bg_result['pos_dec_amp'])
                     traces.append(Trace(rec.data.copy(), dt=dt))
                     traces[-1].amp = r_amps[k]
                     rec.data[:] = data  # can't modify rec, so we have to muck with the array (and clean up afterward) instead
                 results[i,j]['pos_dec_amp'] = np.median(trial_results)
                 results[i,j]['traces'] = traces
-            
+
             assert all(np.isfinite(results[i]['pos_dec_amp']))
             print(i, rtimes, results[i]['pos_dec_amp'])
+            
+        for i,amp in enumerate(amps):
             c = limit_plot.plot(rtimes, results[i]['pos_dec_amp'], pen=(i, len(amps)*1.3), symbol='o', antialias=True, name="%duV"%(amp*1e6), data=results[i], symbolSize=4)
             c.scatter.sigClicked.connect(clicked)
             pg.QtGui.QApplication.processEvents()
+        # for j,rtime in enumerate(rtimes):
+        #     c = limit_plot.plot(amps, results[:,j]['pos_dec_amp'], pen=(j, len(rtimes)*1.3), symbol='o', antialias=True, name="%dms"%(rtime*1e3), data=results[i], symbolSize=4)
+        #     c.scatter.sigClicked.connect(clicked)
+        #     pg.QtGui.QApplication.processEvents()
 
                 
         pg.QtGui.QApplication.processEvents()
@@ -254,3 +263,4 @@ if __name__ == '__main__':
             next_row += 1
 
     c_plot.scatter.sigClicked.connect(clicked)
+    u_plot.scatter.sigClicked.connect(clicked)
