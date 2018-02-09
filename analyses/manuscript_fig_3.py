@@ -8,7 +8,8 @@ from datetime import datetime
 import pyqtgraph as pg
 import numpy as np
 
-from neuroanalysis.data import TraceList
+from neuroanalysis.data import Trace, TraceList
+from neuroanalysis.fitting import Psp
 import strength_analysis
 from multipatch_analysis.database import database as db
 
@@ -29,6 +30,7 @@ if __name__ == '__main__':
     ]
     
     pg.mkQApp()
+    pg.dbg()
     pg.setConfigOption('background', 'w')
     pg.setConfigOption('foreground', 'k')
 
@@ -52,7 +54,8 @@ if __name__ == '__main__':
     mask = filtered['abs_deconv_base_amp_med'] < 0.02
 
     # remove recordings likely to have high crosstalk
-    # mask &= filtered['electrode_distance'] > 1
+    cutoff = strength_analysis.datetime_to_timestamp(datetime(2017,4,1))
+    mask &= (filtered['electrode_distance'] > 1) | (filtered['acq_timestamp'] > cutoff)
 
     # remove recordings with low sample count
     mask &= filtered['n_samples'] > 50
@@ -82,6 +85,7 @@ if __name__ == '__main__':
     # u_plot.scatter.setCompositionMode(pg.QtGui.QPainter.CompositionMode_Plus)
 
     trace_plots = []
+    deconv_plots = []
     hist_plots = []
 
     session = db.Session()
@@ -91,10 +95,12 @@ if __name__ == '__main__':
         p = pg.debug.Profiler(disabled=False, delayed=False)
         trace_plot = win.addPlot(i, 1)
         trace_plots.append(trace_plot)
-        hist_plot = win.addPlot(i, 2)
+        deconv_plot = win.addPlot(i, 2)
+        deconv_plots.append(deconv_plot)
+        hist_plot = win.addPlot(i, 3)
         hist_plots.append(hist_plot)
-        limit_plot = win.addPlot(i, 3)
-
+        limit_plot = win.addPlot(i, 4)
+        limit_plot.addLegend()
         
         # Find this connection in the pair list
         idx = np.argwhere((abs(filtered['acq_timestamp'] - timestamp) < 1) & (filtered['pre_cell_id'] == pre_id) & (filtered['post_cell_id'] == post_id))
@@ -112,6 +118,10 @@ if __name__ == '__main__':
         trace_plot.setYLink(trace_plots[0])
         trace_plot.setXRange(-10e-3, 20e-3)
 
+        deconv_plot.setXLink(deconv_plots[0])
+        deconv_plot.setYLink(deconv_plots[0])
+        deconv_plot.setXRange(-10e-3, 20e-3)
+
         hist_plot.setXLink(hist_plots[0])
         
         pair = session.query(db.Pair).filter(db.Pair.id==filtered[idx]['pair_id']).all()[0]
@@ -121,11 +131,10 @@ if __name__ == '__main__':
         base_amps = strength_analysis.get_baseline_amps(session, pair)
         p()
         
-        ids = amps['id']
         q = strength_analysis.response_query(session)
         p()
         q = q.join(strength_analysis.PulseResponseStrength)
-        q = q.filter(strength_analysis.PulseResponseStrength.id.in_(ids))
+        q = q.filter(strength_analysis.PulseResponseStrength.id.in_(amps['id']))
         q = q.join(db.Recording, db.Recording.id==db.PulseResponse.recording_id).join(db.PatchClampRecording).join(db.MultiPatchProbe)
         q = q.filter(db.MultiPatchProbe.induction_frequency < 100)
         # pre_cell = db.aliased(db.Cell)
@@ -138,21 +147,29 @@ if __name__ == '__main__':
         q = q.limit(100)
         recs = q.all()
         p()
-        print(len(recs))
+
         traces = []
+        deconvs = []
         for rec in recs:
             result = strength_analysis.analyze_response_strength(rec, source='pulse_response', lpf=True, lowpass=2000,
                                                 remove_artifacts=False, bsub=True)
             trace = result['raw_trace']
             trace.t0 = -result['spike_time']
-            base = np.median(trace.time_slice(-0.5e-3, 0.5e-3).data)
-            trace = trace - base
-            traces.append(trace)
+            trace = trace - np.median(trace.time_slice(-0.5e-3, 0.5e-3).data)
+            traces.append(trace)            
             trace_plot.plot(trace.time_values, trace.data, pen=(0, 0, 0, 20))
+
+            trace = result['dec_trace']
+            trace.t0 = -result['spike_time']
+            trace = trace - np.median(trace.time_slice(-0.5e-3, 0.5e-3).data)
+            deconvs.append(trace)            
+            deconv_plot.plot(trace.time_values, trace.data, pen=(0, 0, 0, 20))
 
         # plot average trace
         mean = TraceList(traces).mean()
         trace_plot.plot(mean.time_values, mean.data, pen={'color':'g', 'width': 2}, antialias=True)
+        mean = TraceList(deconvs).mean()
+        deconv_plot.plot(mean.time_values, mean.data, pen={'color':'g', 'width': 2}, antialias=True)
 
 
         p("analyze_response_strength")
@@ -167,12 +184,56 @@ if __name__ == '__main__':
         hist_plot.plot(hist_bins, hist_y, stepMode=True, pen='k', brush=(0, 150, 150, 100), fillLevel=0)
         p()
 
-        # Plot detectability analysis
+        pg.QtGui.QApplication.processEvents()
 
-        # amps = np.arange(50e-6, 500e-6, 50e-6)
-        # rtimes = np.arange(1e-3, 2e-3, 0.1e-3)
-        # for amp in amps:
-        #     for rtime in rtimes:
+
+        # Plot detectability analysis
+        q = strength_analysis.baseline_query(session)
+        q = q.join(strength_analysis.BaselineResponseStrength)
+        q = q.filter(strength_analysis.BaselineResponseStrength.id.in_(base_amps['id']))
+        q = q.limit(50)
+        recs = q.all()
+
+        def clicked(sp, pts):
+            traces = pts[0].data()['traces']
+            print([t.amp for t in traces])
+            plt = pg.plot()
+            bsub = [t.copy(data=t.data - np.median(t.time_slice(0, 1e-3).data)) for t in traces]
+            for t in bsub:
+                plt.plot(t.time_values, t.data, pen=(0, 0, 0, 50))
+            mean = TraceList(bsub).mean()
+            plt.plot(mean.time_values, mean.data, pen='g')
+
+        amps = 50e-6 * 2**np.arange(6)
+        rtimes = 1e-3 * 1.5**np.arange(6)
+        dt = 1 / db.default_sample_rate
+        results = np.empty((len(amps), len(rtimes)), dtype=[('pos_dec_amp', float), ('traces', object)])
+        for i,amp in enumerate(amps):
+            for j,rtime in enumerate(rtimes):
+                t = np.arange(0, 10e-3, dt)
+                template = Psp.psp_func(t, xoffset=0, yoffset=0, rise_time=rtime, decay_tau=15e-3, amp=1, rise_power=2)
+                r_amps = amp * 2**np.random.normal(size=len(recs), scale=0.5)
+                trial_results = []
+                traces = []
+                for k,rec in enumerate(recs):
+                    data = rec.data.copy()
+                    start = int(11e-3 / dt)
+                    length = len(rec.data) - start
+                    rec.data[start:] += template[:length] * r_amps[k]
+                    result = strength_analysis.analyze_response_strength(rec, 'baseline')
+                    trial_results.append(result['pos_dec_amp'])
+                    traces.append(Trace(rec.data.copy(), dt=dt))
+                    traces[-1].amp = r_amps[k]
+                    rec.data[:] = data  # can't modify rec, so we have to muck with the array (and clean up afterward) instead
+                results[i,j]['pos_dec_amp'] = np.median(trial_results)
+                results[i,j]['traces'] = traces
+            
+            assert all(np.isfinite(results[i]['pos_dec_amp']))
+            print(i, rtimes, results[i]['pos_dec_amp'])
+            c = limit_plot.plot(rtimes, results[i]['pos_dec_amp'], pen=(i, len(amps)*1.3), symbol='o', antialias=True, name="%duV"%(amp*1e6), data=results[i], symbolSize=4)
+            c.scatter.sigClicked.connect(clicked)
+            pg.QtGui.QApplication.processEvents()
+
                 
         pg.QtGui.QApplication.processEvents()
 
