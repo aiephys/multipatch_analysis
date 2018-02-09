@@ -7,6 +7,7 @@ from __future__ import print_function, division
 from datetime import datetime
 import pyqtgraph as pg
 import numpy as np
+from scipy import stats
 
 from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.fitting import Psp
@@ -27,6 +28,7 @@ if __name__ == '__main__':
         ("low signal, low noise", (1502312765.01, 1, 4)),
         ("low signal, high noise", (1494969844.93, 6, 1)),
         ("high signal, low noise", (1499725138.07, 7, 4)),
+        ("high noise", (1489009391.46, 3, 5)),
     ]
     
     pg.mkQApp()
@@ -41,7 +43,7 @@ if __name__ == '__main__':
     scatter_plot = win.addPlot(0, 0, rowspan=len(show_conns))
     scatter_plot.setLogMode(True, True)
     scatter_plot.setAspectLocked()
-    scatter_plot.setFixedWidth(400)
+    scatter_plot.setFixedWidth(500)
 
     # read all pair records from DB
     conns = strength_analysis.query_all_pairs()
@@ -56,7 +58,7 @@ if __name__ == '__main__':
     # remove recordings likely to have high crosstalk
     # cutoff = strength_analysis.datetime_to_timestamp(datetime(2017,4,1))
     # mask &= (filtered['electrode_distance'] > 1) | (filtered['acq_timestamp'] > cutoff)
-    mask &= filtered['electrode_distance'] > 1
+    # mask &= filtered['electrode_distance'] > 1
 
     # remove recordings with low sample count
     mask &= filtered['n_samples'] > 50
@@ -205,16 +207,17 @@ if __name__ == '__main__':
             mean = TraceList(bsub).mean()
             plt.plot(mean.time_values, mean.data, pen='g')
 
-        amps = 10e-6 * 2**np.arange(6)
+        amps = 20e-6 * 2**np.arange(6)
         rtimes = 1e-3 * 1.4**np.arange(6)
         dt = 1 / db.default_sample_rate
-        results = np.empty((len(amps), len(rtimes)), dtype=[('pos_dec_amp', float), ('traces', object)])
+        results = np.empty((len(amps), len(rtimes)), dtype=[('pos_dec_amp', float), ('ks', float), ('traces', object)])
         for i,amp in enumerate(amps):
             for j,rtime in enumerate(rtimes):
                 t = np.arange(0, 10e-3, dt)
                 template = Psp.psp_func(t, xoffset=0, yoffset=0, rise_time=rtime, decay_tau=15e-3, amp=1, rise_power=2)
                 r_amps = amp * 2**np.random.normal(size=len(recs), scale=0.5)
-                trial_results = []
+                fg_results = []
+                bg_results = []
                 traces = []
                 np.random.shuffle(recs)
                 for k,rec in enumerate(recs[:100]):
@@ -224,18 +227,20 @@ if __name__ == '__main__':
                     bg_result = strength_analysis.analyze_response_strength(rec, 'baseline')
                     rec.data[start:] += template[:length] * r_amps[k]
                     fg_result = strength_analysis.analyze_response_strength(rec, 'baseline')
-                    trial_results.append(fg_result['pos_dec_amp'] - bg_result['pos_dec_amp'])
+                    fg_results.append(fg_result['pos_dec_amp'])
+                    bg_results.append(bg_result['pos_dec_amp'])
+
                     traces.append(Trace(rec.data.copy(), dt=dt))
                     traces[-1].amp = r_amps[k]
                     rec.data[:] = data  # can't modify rec, so we have to muck with the array (and clean up afterward) instead
-                results[i,j]['pos_dec_amp'] = np.median(trial_results)
+                results[i,j]['pos_dec_amp'] = np.median(fg_results)
+                results[i,j]['ks'] = stats.ks_2samp(fg_results, bg_results).pvalue
                 results[i,j]['traces'] = traces
 
             assert all(np.isfinite(results[i]['pos_dec_amp']))
             print(i, rtimes, results[i]['pos_dec_amp'])
             
-        for i,amp in enumerate(amps):
-            c = limit_plot.plot(rtimes, results[i]['pos_dec_amp'], pen=(i, len(amps)*1.3), symbol='o', antialias=True, name="%duV"%(amp*1e6), data=results[i], symbolSize=4)
+            c = limit_plot.plot(rtimes, 1.0 / results[i]['ks'], pen=(i, len(amps)*1.3), symbol='o', antialias=True, name="%duV"%(amp*1e6), data=results[i], symbolSize=4)
             c.scatter.sigClicked.connect(clicked)
             pg.QtGui.QApplication.processEvents()
         # for j,rtime in enumerate(rtimes):
