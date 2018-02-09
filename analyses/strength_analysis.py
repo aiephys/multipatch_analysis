@@ -250,7 +250,7 @@ def baseline_query(session):
     return q
 
 
-def analyze_response_strength(rec, source, remove_artifacts=False, lpf=True, bsub=True):
+def analyze_response_strength(rec, source, remove_artifacts=False, lpf=True, bsub=True, lowpass=1000):
     """Perform a standardized strength analysis on a record selected by response_query or baseline_query.
 
     1. Determine timing of presynaptic stimulus pulse edges and spike
@@ -283,7 +283,7 @@ def analyze_response_strength(rec, source, remove_artifacts=False, lpf=True, bsu
     results['neg_amp'], _ = measure_peak(data, '-', spike_time, pulse_times)
 
     # Deconvolution / artifact removal / filtering
-    dec_data = deconv_filter(data, pulse_times, lpf=lpf, remove_artifacts=remove_artifacts, bsub=bsub)
+    dec_data = deconv_filter(data, pulse_times, lpf=lpf, remove_artifacts=remove_artifacts, bsub=bsub, lowpass=lowpass)
     results['dec_trace'] = dec_data
 
     # Measure deflection on deconvolved data
@@ -918,6 +918,7 @@ def query_all_pairs():
         # DATE_PART('second', experiment.acq_timestamp - '1970-01-01'::timestamp) as acq_timestamp,
         """
         connection_strength.*, 
+        experiment.id as experiment_id,
         experiment.acq_timestamp as acq_timestamp,
         ABS(connection_strength.amp_med) as abs_amp_med,
         ABS(connection_strength.base_amp_med) as abs_base_amp_med,
@@ -958,6 +959,10 @@ def query_all_pairs():
 
 def datetime_to_timestamp(d):
     return time.mktime(d.timetuple()) + d.microsecond * 1e-6
+
+
+init_tables()
+
 
 
 if __name__ == '__main__':
