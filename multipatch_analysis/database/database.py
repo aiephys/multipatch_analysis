@@ -11,7 +11,7 @@ from sqlalchemy import Column, Integer, String, Boolean, Float, Date, DateTime, 
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import TypeDecorator
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, aliased
 from sqlalchemy.sql.expression import func
 
 from .. config import synphys_db_host, synphys_db
