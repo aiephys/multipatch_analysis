@@ -921,7 +921,7 @@ def query_all_pairs():
         # DATE_PART('minute', experiment.acq_timestamp - '1970-01-01'::timestamp)) * 60 +
         # DATE_PART('second', experiment.acq_timestamp - '1970-01-01'::timestamp) as acq_timestamp,
         """
-        connection_strength.*, 
+        connection_strength.*,
         experiment.id as experiment_id,
         experiment.acq_timestamp as acq_timestamp,
         ABS(connection_strength.amp_med) as abs_amp_med,
@@ -955,6 +955,11 @@ def query_all_pairs():
     """)
     session = db.Session()
     df = pandas.read_sql(query, session.bind)
+
+    # test out a new metric:
+    df['connection_signal'] = pandas.Series(df['deconv_amp_med'] / df['latency_stdev'], index=df.index)
+    df['connection_background'] = pandas.Series(df['deconv_base_amp_med'] / df['base_latency_stdev'], index=df.index)
+
     ts = [datetime_to_timestamp(t) for t in df['acq_timestamp']]
     df['acq_timestamp'] = ts
     recs = df.to_records()
