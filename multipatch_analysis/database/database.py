@@ -11,11 +11,15 @@ from sqlalchemy import Column, Integer, String, Boolean, Float, Date, DateTime, 
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import TypeDecorator
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, aliased
 from sqlalchemy.sql.expression import func
 
 from .. config import synphys_db_host, synphys_db
 
+default_sample_rate = 20000
+
+
+_sample_rate_str = '%dkHz' % (default_sample_rate // 1000)
 
 table_schemas = {
     'slice': [
@@ -142,41 +146,39 @@ table_schemas = {
     'stim_pulse': [
         "A pulse stimulus intended to evoke an action potential",
         ('recording_id', 'recording.id', '', {'index': True}),
-        ('pulse_number', 'int', '0-11 or 1-12?', {'index': True}),
-        ('onset_time', 'float'),
-        ('onset_index', 'int'),
-        ('next_pulse_index', 'int', 'index of the next pulse on any channel in the sync rec'),
+        ('pulse_number', 'int', 'The ordinal position of this pulse within a train of pulses.', {'index': True}),
+        ('onset_time', 'float', 'The starting time of the pulse, relative to the beginning of the recording'),
+        ('next_pulse_time', 'float', 'time of the next pulse on any channel in the sync rec'),
         ('amplitude', 'float'),
-        ('length', 'int'),
+        ('duration', 'float', 'length of the pulse in seconds'),
         ('n_spikes', 'int', 'number of spikes evoked by this pulse'),
+        # ('first_spike', 'stim_spike.id', 'The ID of the first spike evoked by this pulse'),
+        ('data', 'array', 'numpy array of presynaptic recording sampled at '+_sample_rate_str),
+        ('data_start_time', 'float', "Starting time of the data chunk, relative to the beginning of the recording"),
     ],
     'stim_spike': [
-        "An evoked action potential",
-        ('recording_id', 'recording.id', '', {'index': True}),
+        "An action potential evoked by a stimulus pulse",
         ('pulse_id', 'stim_pulse.id', '', {'index': True}),
-        ('peak_index', 'int'),
+        ('peak_time', 'float', "The time of the peak of the spike, relative to the beginning of the recording."),
         ('peak_diff', 'float'),
         ('peak_val', 'float'),
-        ('rise_index', 'int'),
+        ('max_dvdt_time', 'float', "The time of the max dv/dt of the spike, relative to the beginning of the recording."),
         ('max_dvdt', 'float'),
     ],
     'baseline': [
         "A snippet of baseline data, matched to a postsynaptic recording",
         ('recording_id', 'recording.id', 'The recording from which this baseline snippet was extracted.', {'index': True}),
-        ('start_index', 'int', 'start index of this snippet, relative to the beginning of the recording'),
-        ('stop_index', 'int', 'stop index of this snippet, relative to the beginning of the recording'),
-        ('data', 'array', 'numpy array of baseline data sampled at 20kHz'),
+        ('start_time', 'float', "Starting time of this chunk of the recording in seconds, relative to the beginning of the recording"),
+        ('data', 'array', 'numpy array of baseline data sampled at '+_sample_rate_str),
         ('mode', 'float', 'most common value in the baseline snippet'),
     ],
     'pulse_response': [
-        "A postsynaptic recording taken during a presynaptic stimulus",
+        "A chunk of postsynaptic recording taken during a presynaptic pulse stimulus",
         ('recording_id', 'recording.id', 'The full recording from which this pulse was extracted', {'index': True}),
         ('pulse_id', 'stim_pulse.id', 'The presynaptic pulse', {'index': True}),
         ('pair_id', 'pair.id', 'The pre-post cell pair involved in this pulse response', {'index': True}),
-        ('start_index', 'int', "Starting index relative to the original recording."),
-        ('stop_index', 'int'),
-        ('start_time', 'float', "Starting time of this chunk of the recording in seconds, relative to the beginning of the recording"),
-        ('data', 'array', 'numpy array of response data sampled at 20kHz'),
+        ('start_time', 'float', 'Starting time of this chunk of the recording in seconds, relative to the beginning of the recording'),
+        ('data', 'array', 'numpy array of response data sampled at '+_sample_rate_str),
         ('baseline_id', 'baseline.id'),
     ],
 }
@@ -322,10 +324,8 @@ PatchClampRecording.nearest_test_pulse = relationship(TestPulse, cascade="delete
 Recording.stim_pulses = relationship(StimPulse, back_populates="recording", cascade="delete", single_parent=True)
 StimPulse.recording = relationship(Recording, back_populates="stim_pulses")
 
-Recording.stim_spikes = relationship(StimSpike, back_populates="recording", cascade="delete", single_parent=True)
-StimSpike.recording = relationship(Recording, back_populates="stim_spikes")
-
-StimSpike.pulse = relationship(StimPulse)
+StimSpike.pulse = relationship(StimPulse, back_populates="spikes")
+StimPulse.spikes = relationship(StimSpike, back_populates="pulse", single_parent=True)
 
 Recording.baselines = relationship(Baseline, back_populates="recording", cascade="delete", single_parent=True)
 Baseline.recording = relationship(Recording, back_populates="baselines")
