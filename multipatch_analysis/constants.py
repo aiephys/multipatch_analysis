@@ -109,7 +109,7 @@ GENOTYPES = OrderedDict([
 # TRE : tetracycline response element - series of TetO sequences that
 #       require tTA or rtTA to increase downstream expression
 #         - dox binds tTa, which prevents further binding to TetO
-#         - dox binds tTa, which allows further binding to TetO
+#         - dox binds rtTa, which allows further binding to TetO
 
 
 REPORTER_LINES = {
@@ -164,4 +164,3 @@ DRIVER_LINES = {
     'Vip-IRES-FlpO':              (['flp'],        'vip'),
     'Slc17a8-IRES2-Cre':          (['cre'],        'slc17a8'),
 }
-
