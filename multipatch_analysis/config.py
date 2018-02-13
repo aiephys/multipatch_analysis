@@ -10,6 +10,7 @@ import os, yaml
 
 synphys_db_host = None
 synphys_db = "synphys"
+synphys_db_readonly_user = None
 synphys_data = None
 cache_path = "cache"
 rig_name = None

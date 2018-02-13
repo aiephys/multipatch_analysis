@@ -14,7 +14,7 @@ from sqlalchemy.types import TypeDecorator
 from sqlalchemy.orm import sessionmaker, aliased
 from sqlalchemy.sql.expression import func
 
-from .. config import synphys_db_host, synphys_db
+from .. import config
 
 default_sample_rate = 20000
 
@@ -47,14 +47,14 @@ table_schemas = {
         ('ephys_file', 'str', 'Name of ephys NWB file relative to storage_path.'),
         ('rig_name', 'str', 'Identifier for the rig that generated these results.'),
         ('acq_timestamp', 'datetime', 'Creation timestamp for site data acquisition folder.', {'unique': True, 'index': True}),
-        ('slice_id', 'slice.id'),
+        ('slice_id', 'slice.id', 'ID of the slice used for this experiment'),
         ('target_region', 'str', 'The intended brain region for this experiment'),
         ('internal', 'str', 'The name of the internal solution used in this experiment. '
                             'The solution should be described in the pycsf database.'),
         ('acsf', 'str', 'The name of the ACSF solution used in this experiment. '
                         'The solution should be described in the pycsf database.'),
-        ('target_temperature', 'float'),
-        ('date', 'datetime'),
+        ('target_temperature', 'float', 'The intended temperature of the experiment (but actual recording temperature is stored elsewhere)'),
+        ('date', 'datetime', 'The date of this experiment'),
         ('lims_specimen_id', 'int', 'ID of LIMS "CellCluster" specimen.'),
         ('submission_data', 'object', 'structure generated for original submission.'),
         ('lims_trigger_id', 'int', 'ID used to query status of LIMS upload.'),
@@ -78,6 +78,7 @@ table_schemas = {
         ('ext_id', 'int', 'Electrode ID (usually 1-8) referenced in external metadata records'),
     ],
     'cell': [
+        "Each row represents a single patched cell.",
         ('electrode_id', 'electrode.id'),
         ('cre_type', 'str'),
         ('target_layer', 'str'),
@@ -103,12 +104,16 @@ table_schemas = {
         ('crosstalk_artifact', 'float', 'Amplitude of crosstalk artifact measured in current clamp'),
     ],
     'sync_rec': [
+        """A synchronous recording represents a "sweep" -- multiple recordings that were made simultaneously
+        on different electrodes.""",
         ('experiment_id', 'experiment.id', '', {'index': True}),
         ('sync_rec_key', 'object', 'External ID of the SyncRecording'),
         ('temperature', 'float', 'Bath temperature during this recording'),
         ('meta', 'object'),
     ],
     'recording': [
+        """A recording represents a single contiguous sweep recorded from a single electrode. 
+        """,
         ('sync_rec_id', 'sync_rec.id', 'References the synchronous recording to which this recording belongs.', {'index': True}),
         ('electrode_id', 'electrode.id', 'Identifies the electrode that generated this recording', {'index': True}),
         ('start_time', 'datetime', 'The clock time at the start of this recording'),
@@ -134,6 +139,8 @@ table_schemas = {
         ('n_spikes_evoked', 'int'),
     ],
     'test_pulse': [
+        """A short, usually hyperpolarizing pulse used to test the resistance of pipette, cell access, or cell membrane.
+        """,
         ('start_index', 'int'),
         ('stop_index', 'int'),
         ('baseline_current', 'float'),
@@ -245,9 +252,6 @@ def generate_mapping(table, schema):
         '__tablename__': table,
         '__table_args__': table_args,
         'id': Column(Integer, primary_key=True),
-        'time_created': Column(DateTime, default=func.now()),
-        'time_modified': Column(DateTime, onupdate=func.current_timestamp()),
-        'meta': Column(JSONB),
     }
     for column in schema:
         colname, coltype = column[:2]
@@ -261,6 +265,11 @@ def generate_mapping(table, schema):
         else:
             ctyp = _coltypes[coltype]
             props[colname] = Column(ctyp, **kwds)
+    
+    props['time_created'] = Column(DateTime, default=func.now())
+    props['time_modified'] = Column(DateTime, onupdate=func.current_timestamp())
+    props['meta'] = Column(JSONB)
+
     return type(name, (ORMBase,), props)
 
 
@@ -268,118 +277,126 @@ def _generate_mapping(table):
     return generate_mapping(table, table_schemas[table])
 
 
-# Generate ORM mapping classes
-Slice = _generate_mapping('slice')
-Experiment = _generate_mapping('experiment')
-Electrode = _generate_mapping('electrode')
-Cell = _generate_mapping('cell')
-Pair = _generate_mapping('pair')
-SyncRec = _generate_mapping('sync_rec')
-Recording = _generate_mapping('recording')
-PatchClampRecording = _generate_mapping('patch_clamp_recording')
-MultiPatchProbe = _generate_mapping('multi_patch_probe')
-TestPulse = _generate_mapping('test_pulse')
-StimPulse = _generate_mapping('stim_pulse')
-StimSpike = _generate_mapping('stim_spike')
-PulseResponse = _generate_mapping('pulse_response')
-Baseline = _generate_mapping('baseline')
+def create_all_mappings():
+    global Slice, Experiment, Electrode, Cell, Pair, SyncRec, Recording, PatchClampRecording, MultiPatchProbe
+    global TestPulse, StimPulse, StimSpike, PulseResponse, Baseline
 
-# Set up relationships
-Slice.experiments = relationship("Experiment", order_by=Experiment.id, back_populates="slice")
-Experiment.slice = relationship("Slice", back_populates="experiments")
+    # Generate ORM mapping classes
+    Slice = _generate_mapping('slice')
+    Experiment = _generate_mapping('experiment')
+    Electrode = _generate_mapping('electrode')
+    Cell = _generate_mapping('cell')
+    Pair = _generate_mapping('pair')
+    SyncRec = _generate_mapping('sync_rec')
+    Recording = _generate_mapping('recording')
+    PatchClampRecording = _generate_mapping('patch_clamp_recording')
+    MultiPatchProbe = _generate_mapping('multi_patch_probe')
+    TestPulse = _generate_mapping('test_pulse')
+    StimPulse = _generate_mapping('stim_pulse')
+    StimSpike = _generate_mapping('stim_spike')
+    PulseResponse = _generate_mapping('pulse_response')
+    Baseline = _generate_mapping('baseline')
 
-Experiment.sync_recs = relationship(SyncRec, order_by=SyncRec.id, back_populates="experiment", cascade='delete', single_parent=True)
-SyncRec.experiment = relationship(Experiment, back_populates='sync_recs')
+    # Set up relationships
+    Slice.experiments = relationship("Experiment", order_by=Experiment.id, back_populates="slice")
+    Experiment.slice = relationship("Slice", back_populates="experiments")
 
-Experiment.electrodes = relationship(Electrode, order_by=Electrode.id, back_populates="experiment", cascade="delete", single_parent=True)
-Electrode.experiment = relationship(Experiment, back_populates="electrodes")
+    Experiment.sync_recs = relationship(SyncRec, order_by=SyncRec.id, back_populates="experiment", cascade='delete', single_parent=True)
+    SyncRec.experiment = relationship(Experiment, back_populates='sync_recs')
 
-Electrode.cell = relationship(Cell, back_populates="electrode", cascade="delete", single_parent=True)
-Cell.electrode = relationship(Electrode, back_populates="cell", single_parent=True)
+    Experiment.electrodes = relationship(Electrode, order_by=Electrode.id, back_populates="experiment", cascade="delete", single_parent=True)
+    Electrode.experiment = relationship(Experiment, back_populates="electrodes")
 
-Experiment.pairs = relationship(Pair, back_populates="experiment", cascade="delete", single_parent=True)
-Pair.experiment = relationship(Experiment, back_populates="pairs")
+    Electrode.cell = relationship(Cell, back_populates="electrode", cascade="delete", single_parent=True)
+    Cell.electrode = relationship(Electrode, back_populates="cell", single_parent=True)
 
-Pair.pre_cell = relationship(Cell, foreign_keys=[Pair.pre_cell_id])
-#Cell.pre_pairs = relationship(Pair, back_populates="pre_cell", single_parent=True, foreign_keys=[Pair.pre_cell])
+    Experiment.pairs = relationship(Pair, back_populates="experiment", cascade="delete", single_parent=True)
+    Pair.experiment = relationship(Experiment, back_populates="pairs")
 
-Pair.post_cell = relationship(Cell, foreign_keys=[Pair.post_cell_id])
-#Cell.post_pairs = relationship(Pair, back_populates="post_cell", single_parent=True, foreign_keys=[Pair.post_cell])
+    Pair.pre_cell = relationship(Cell, foreign_keys=[Pair.pre_cell_id])
+    #Cell.pre_pairs = relationship(Pair, back_populates="pre_cell", single_parent=True, foreign_keys=[Pair.pre_cell])
 
-Electrode.recordings = relationship(Recording, back_populates="electrode", cascade="delete", single_parent=True)
-Recording.electrode = relationship(Electrode, back_populates="recordings")
+    Pair.post_cell = relationship(Cell, foreign_keys=[Pair.post_cell_id])
+    #Cell.post_pairs = relationship(Pair, back_populates="post_cell", single_parent=True, foreign_keys=[Pair.post_cell])
 
-SyncRec.recordings = relationship(Recording, order_by=Recording.id, back_populates="sync_rec", cascade="delete", single_parent=True)
-Recording.sync_rec = relationship(SyncRec, back_populates="recordings")
+    Electrode.recordings = relationship(Recording, back_populates="electrode", cascade="delete", single_parent=True)
+    Recording.electrode = relationship(Electrode, back_populates="recordings")
 
-Recording.patch_clamp_recording = relationship(PatchClampRecording, back_populates="recording", cascade="delete", single_parent=True)
-PatchClampRecording.recording = relationship(Recording, back_populates="patch_clamp_recording")
+    SyncRec.recordings = relationship(Recording, order_by=Recording.id, back_populates="sync_rec", cascade="delete", single_parent=True)
+    Recording.sync_rec = relationship(SyncRec, back_populates="recordings")
 
-PatchClampRecording.multi_patch_probe = relationship(MultiPatchProbe, back_populates="patch_clamp_recording", cascade="delete", single_parent=True)
-MultiPatchProbe.patch_clamp_recording = relationship(PatchClampRecording, back_populates="multi_patch_probe")
+    Recording.patch_clamp_recording = relationship(PatchClampRecording, back_populates="recording", cascade="delete", single_parent=True)
+    PatchClampRecording.recording = relationship(Recording, back_populates="patch_clamp_recording")
 
-PatchClampRecording.nearest_test_pulse = relationship(TestPulse, cascade="delete", single_parent=True, foreign_keys=[PatchClampRecording.nearest_test_pulse_id])
-#TestPulse.patch_clamp_recording = relationship(PatchClampRecording)
+    PatchClampRecording.multi_patch_probe = relationship(MultiPatchProbe, back_populates="patch_clamp_recording", cascade="delete", single_parent=True)
+    MultiPatchProbe.patch_clamp_recording = relationship(PatchClampRecording, back_populates="multi_patch_probe")
 
-Recording.stim_pulses = relationship(StimPulse, back_populates="recording", cascade="delete", single_parent=True)
-StimPulse.recording = relationship(Recording, back_populates="stim_pulses")
+    PatchClampRecording.nearest_test_pulse = relationship(TestPulse, cascade="delete", single_parent=True, foreign_keys=[PatchClampRecording.nearest_test_pulse_id])
+    #TestPulse.patch_clamp_recording = relationship(PatchClampRecording)
 
-StimSpike.pulse = relationship(StimPulse, back_populates="spikes")
-StimPulse.spikes = relationship(StimSpike, back_populates="pulse", single_parent=True)
+    Recording.stim_pulses = relationship(StimPulse, back_populates="recording", cascade="delete", single_parent=True)
+    StimPulse.recording = relationship(Recording, back_populates="stim_pulses")
 
-Recording.baselines = relationship(Baseline, back_populates="recording", cascade="delete", single_parent=True)
-Baseline.recording = relationship(Recording, back_populates="baselines")
+    StimSpike.pulse = relationship(StimPulse, back_populates="spikes")
+    StimPulse.spikes = relationship(StimSpike, back_populates="pulse", single_parent=True)
 
-PulseResponse.recording = relationship(Recording)
-PulseResponse.stim_pulse = relationship(StimPulse)
-Pair.pulse_responses = relationship(PulseResponse, back_populates='pair', single_parent=True)
-PulseResponse.pair = relationship(Pair, back_populates='pulse_responses')
-PulseResponse.baseline = relationship(Baseline)
+    Recording.baselines = relationship(Baseline, back_populates="recording", cascade="delete", single_parent=True)
+    Baseline.recording = relationship(Recording, back_populates="baselines")
+
+    PulseResponse.recording = relationship(Recording)
+    PulseResponse.stim_pulse = relationship(StimPulse)
+    Pair.pulse_responses = relationship(PulseResponse, back_populates='pair', single_parent=True)
+    PulseResponse.pair = relationship(Pair, back_populates='pulse_responses')
+    PulseResponse.baseline = relationship(Baseline)
 
 
 #-------------- initial DB access ----------------
 
-# recreate all tables in DB
-# (just for initial development)
-import sys, sqlalchemy
-if '--reset-db' in sys.argv:
-    engine = create_engine(synphys_db_host + '/postgres')
-    #ORMBase.metadata.drop_all(engine)
-    conn = engine.connect()
-    conn.connection.set_isolation_level(0)
-    try:
-        conn.execute('drop database %s' % synphys_db)
-    except sqlalchemy.exc.ProgrammingError as err:
-        if 'does not exist' not in err.message:
-            raise
-
-    # Rename old database before starting over
-    # dbs = [r[0] for r in conn.execute('select datname from pg_database where datistemplate = false;')]
-    # if synphys_db in dbs:
-    #     i = 1
-    #     while True:
-    #         new_name = synphys_db + '_%d' % i
-    #         if new_name not in dbs:
-    #             break
-    #         new_name += 1
-    #     print("Renaming existing database %s => %s" % (synphys_db, new_name))
-    #     conn.execute('alter database %s rename to %s' % (synphys_db, new_name))
-
-    conn.execute('create database %s' % synphys_db)
-    conn.close()
-    
-    # connect to DB
-    engine = create_engine(synphys_db_host + '/' + synphys_db)
-    ORMBase.metadata.create_all(engine)
-else:
-
-    # connect to DB
-    engine = create_engine(synphys_db_host + '/' + synphys_db)
-
-
-
+engine = create_engine(config.synphys_db_host + '/' + config.synphys_db)
 # external users should create sessions from here.
 Session = sessionmaker(bind=engine)
+
+create_all_mappings()
+
+
+
+def reset_db():
+    """Drop the existing synphys database and initialize a new one.
+    """
+    pg_engine = create_engine(config.synphys_db_host + '/postgres')
+    with pg_engine.begin() as conn:
+        conn.connection.set_isolation_level(0)
+        try:
+            conn.execute('drop database %s' % config.synphys_db)
+        except sqlalchemy.exc.ProgrammingError as err:
+            if 'does not exist' not in err.message:
+                raise
+
+        conn.execute('create database %s' % config.synphys_db)
+
+    # reconnect to DB
+    global engine
+    engine = create_engine(config.synphys_db_host + '/' + config.synphys_db)
+
+    # Grant readonly permissions
+    ro_user = config.synphys_db_readonly_user
+    if ro_user is not None:
+        with engine.begin() as conn:
+            conn.execute('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO %s;' % ro_user)
+            # should only be needed if there are already tables present
+            #conn.execute('GRANT SELECT ON ALL TABLES IN SCHEMA public TO %s;' % ro_user)
+    
+    # Create all tables
+    global ORMBase
+    ORMBase = declarative_base()
+    create_all_mappings()
+    ORMBase.metadata.create_all(engine)
+
+
+def vacuum():
+    with engine.begin() as conn:
+        conn.connection.set_isolation_level(0)
+        conn.execute('vacuum analyze')
 
 
 def default_session(fn):
