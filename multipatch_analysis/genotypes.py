@@ -159,11 +159,13 @@ class Genotype(object):
         # Automatically determine driver-reporter mapping.
         try:
             for d in self.driver_lines:
-                driver_factors, driver = DRIVER_LINES[d]
+                driver, driver_factors = DRIVER_LINES[d]
                 # driver_factors is a list containing one or more of 'cre', 'flp', and 'tTA'
                 # (these are _provided_ by the driver)
                 for r in self.reporter_lines:
                     reporter_factors, reporters = REPORTER_LINES[r]
+                    reporters = [rr for rr in reporters if rr in FLUOROPHORES]
+                    
                     # reporter_factors is an '&'-delimited string with one or more 'cre', 'flp', and 'tTA'
                     # (these are _required_ by the reporter)
                     reporter_factors = reporter_factors.split('&')
