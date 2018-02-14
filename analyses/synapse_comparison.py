@@ -25,7 +25,9 @@ from neuroanalysis.filter import bessel_filter
 from neuroanalysis.event_detection import exp_deconvolve
 from scipy import stats
 from neuroanalysis.ui.plot_grid import PlotGrid
-from constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
+from multipatch_analysis.constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
+from manuscript_figures import get_response, get_amplitude, response_filter, train_amp, write_cache
+from multipatch_analysis.connection_detection import fit_psp
 
 
 def arg_to_date(arg):
@@ -48,81 +50,108 @@ def load_cache(cache_file):
 
     return result_cache
 
-def responses(expt, pre, post):
+def responses(expt, pre, post, thresh, filter=None):
     key = (expt.nwb_file, pre, post)
     result_cache = load_cache(result_cache_file)
     if key in result_cache:
         res = result_cache[key]
-        if 'avg_est' not in res:
+        if 'avg_amp' not in res:
             return None, None, None
-        avg_est = res['avg_est']
-        avg_amp = Trace(data=res['data'], dt=res['dt'])
+        avg_amp = res['avg_amp']
+        avg_trace = Trace(data=res['data'], dt=res['dt'])
         n_sweeps = res['n_sweeps']
-        return avg_est, avg_amp, n_sweeps
+        return avg_amp, avg_trace, n_sweeps
 
-    analyzer = DynamicsAnalyzer(expt, pre, post, align_to='spike')
-    avg_est, _, avg_amp, _, n_sweeps = analyzer.estimate_amplitude(plot=False)
-    if n_sweeps == 0:
+    if filter is not None:
+        responses, artifact = get_response(expt, pre, post, type='pulse')
+        response_subset = response_filter(responses, freq_range=filter[0], holding_range=filter[1], pulse=True)
+        if len(response_subset) > 0:
+            avg_trace, avg_amp, _, _ = get_amplitude(response_subset)
+        n_sweeps = len(response_subset)
+    else:
+        analyzer = DynamicsAnalyzer(expt, pre, post, align_to='spike')
+        avg_amp, _, avg_trace, _, n_sweeps = analyzer.estimate_amplitude(plot=False)
+        artifact = analyzer.cross_talk()
+    if n_sweeps == 0 or artifact > thresh:
         result_cache[key] = {}
         ret = None, None, n_sweeps
     else:
-        result_cache[key] = {'avg_est': avg_est, 'data': avg_amp.data, 'dt': avg_amp.dt, 'n_sweeps': n_sweeps}
-        ret = avg_est, avg_amp, n_sweeps
+        result_cache[key] = {'avg_amp': avg_amp, 'data': avg_trace.data, 'dt': avg_trace.dt, 'n_sweeps': n_sweeps}
+        ret = avg_amp, avg_trace, n_sweeps
 
     data = pickle.dumps(result_cache)
     open(result_cache_file, 'wb').write(data)
     print (key)
     return ret
 
-def first_pulse_plot(expt_list, name=None, summary_plot=None, color=None, scatter=0):
+def first_pulse_plot(expt_list, name=None, summary_plot=None, color=None, scatter=0, features=False):
     amp_plots = pg.plot()
     amp_plots.setLabels(left=('Vm', 'V'))
     amp_base_subtract = []
-    avg_ests = []
+    avg_amps = {'amp': [], 'latency': [], 'rise': []}
     for expt in expt_list:
         for pre, post in expt.connections:
             if expt.cells[pre].cre_type == cre_type[0] and expt.cells[post].cre_type == cre_type[1]:
-                avg_est, avg_amp, n_sweeps = responses(expt, pre, post)
-                if expt.cells[pre].cre_type in EXCITATORY_CRE_TYPES and avg_est < 0:
+                avg_amp, avg_trace, n_sweeps = responses(expt, pre, post, thresh=0.03e-3, filter=[[0, 50], [-68, -72]])
+                if expt.cells[pre].cre_type in EXCITATORY_CRE_TYPES and avg_amp < 0:
                     continue
-                elif expt.cells[pre].cre_type in INHIBITORY_CRE_TYPES and avg_est > 0:
+                elif expt.cells[pre].cre_type in INHIBITORY_CRE_TYPES and avg_amp > 0:
                     continue
                 if n_sweeps >= 10:
-                    avg_amp.t0 = 0
-                    avg_ests.append(avg_est)
-                    base = float_mode(avg_amp.data[:int(10e-3 / avg_amp.dt)])
-                    amp_base_subtract.append(avg_amp.copy(data=avg_amp.data - base))
+                    avg_trace.t0 = 0
+                    avg_amps['amp'].append(avg_amp)
+                    base = float_mode(avg_trace.data[:int(10e-3 / avg_trace.dt)])
+                    amp_base_subtract.append(avg_trace.copy(data=avg_trace.data - base))
+                    if features is True:
+                        if avg_amp > 0:
+                            amp_sign = '+'
+                        else:
+                            amp_sign = '-'
+                        psp_fits = fit_psp(avg_trace, sign=amp_sign, yoffset=0, amp=avg_amp, method='leastsq',
+                                           fit_kws={})
+                        avg_amps['latency'].append(psp_fits.best_values['xoffset'] - 10e-3)
+                        avg_amps['rise'].append(psp_fits.best_values['rise_time'])
 
                     current_connection_HS = post, pre
                     if len(expt.connections) > 1 and args.recip is True:
                         for i,x in enumerate(expt.connections):
                             if x == current_connection_HS:  # determine if a reciprocal connection
-                                amp_plots.plot(avg_amp.time_values, avg_amp.data - base, pen={'color': 'r', 'width': 1})
+                                amp_plots.plot(avg_trace.time_values, avg_trace.data - base, pen={'color': 'r', 'width': 1})
                                 break
                             elif x != current_connection_HS and i == len(expt.connections) - 1:  # reciprocal connection was not found
-                                amp_plots.plot(avg_amp.time_values, avg_amp.data - base)
+                                amp_plots.plot(avg_trace.time_values, avg_trace.data - base)
                     else:
-                        amp_plots.plot(avg_amp.time_values, avg_amp.data - base)
+                        amp_plots.plot(avg_trace.time_values, avg_trace.data - base)
 
                     app.processEvents()
 
     if len(amp_base_subtract) != 0:
         print(name + ' n = %d' % len(amp_base_subtract))
         grand_mean = TraceList(amp_base_subtract).mean()
-        grand_est = np.mean(np.array(avg_ests))
+        grand_amp = np.mean(np.array(avg_amps['amp']))
         amp_plots.addLegend()
         amp_plots.plot(grand_mean.time_values, grand_mean.data, pen={'color': 'g', 'width': 3}, name=name)
-        amp_plots.addLine(y=grand_est, pen={'color': 'g'})
+        amp_plots.addLine(y=grand_amp, pen={'color': 'g'})
         if grand_mean is not None:
-            print(legend + ' Grand mean amplitude = %f' % grand_est)
-            summary_plots = summary_plot_pulse(grand_mean, avg_ests, grand_est, labels=['Vm', 'V'], titles='Amplitude', i=scatter, plot=summary_plot, color=color, name=legend)
-            return avg_ests, summary_plots
+            print(legend + ' Grand mean amplitude = %f' % grand_amp)
+            if features is True:
+                feature_list = (avg_amps['amp'], avg_amps['latency'], avg_amps['rise'])
+                labels = (['Vm', 'V'], ['t', 's'], ['t', 's'])
+                titles = ('Amplitude', 'Latency', 'Rise time')
+            else:
+                feature_list = [avg_amps['amp']]
+                labels = (['Vm', 'V'])
+                titles = 'Amplitude'
+            summary_plots = summary_plot_pulse(feature_list, labels=labels, titles=titles, i=scatter,
+                                               grand_trace=grand_mean, plot=summary_plot, color=color, name=legend)
+            return avg_amps, summary_plots
     else:
         print ("No Traces")
-        return None, avg_ests, None, None
+        return None, avg_amps, None, None
 
 def train_response_plot(expt_list, name=None, summary_plots=[None, None], color=None):
     ind_base_subtract = []
+    rec_base_subtract = []
     train_plots = pg.plot()
     train_plots.setLabels(left=('Vm', 'V'))
     tau =15e-3
@@ -132,33 +161,49 @@ def train_response_plot(expt_list, name=None, summary_plots=[None, None], color=
             if expt.cells[pre].cre_type == cre_type[0] and expt.cells[post].cre_type == cre_type[1]:
                 print ('Processing experiment: %s' % (expt.nwb_file))
                 ind = []
+                rec = []
                 analyzer = DynamicsAnalyzer(expt, pre, post)
                 train_responses = analyzer.train_responses
+                artifact = analyzer.cross_talk()
+                if artifact > 0.03e-3:
+                    continue
                 for i, stim_params in enumerate(train_responses.keys()):
-                     if stim_params[0] == 50:
+                     rec_t = int(np.round(stim_params[1] * 1e3, -1))
+                     if stim_params[0] == 50 and rec_t == 250:
+                        pulse_offsets = analyzer.pulse_offsets
                         if len(train_responses[stim_params][0]) != 0:
                             ind_group = train_responses[stim_params][0]
+                            rec_group = train_responses[stim_params][1]
                             for j in range(len(ind_group)):
                                 ind.append(ind_group.responses[j])
+                                rec.append(rec_group.responses[j])
                 if len(ind) > 5:
                     ind_avg = TraceList(ind).mean()
+                    rec_avg = TraceList(rec).mean()
+                    rec_avg.t0 = 0.3
                     base = float_mode(ind_avg.data[:int(10e-3 / ind_avg.dt)])
                     ind_base_subtract.append(ind_avg.copy(data=ind_avg.data - base))
+                    rec_base_subtract.append(rec_avg.copy(data=rec_avg.data - base))
                     train_plots.plot(ind_avg.time_values, ind_avg.data - base)
+                    train_plots.plot(rec_avg.time_values, rec_avg.data - base)
                     app.processEvents()
     if len(ind_base_subtract) != 0:
         print (name + ' n = %d' % len(ind_base_subtract))
         ind_grand_mean = TraceList(ind_base_subtract).mean()
+        rec_grand_mean = TraceList(rec_base_subtract).mean()
         ind_grand_mean_dec = bessel_filter(exp_deconvolve(ind_grand_mean, tau), lp)
         train_plots.addLegend()
         train_plots.plot(ind_grand_mean.time_values, ind_grand_mean.data, pen={'color': 'g', 'width': 3}, name=name)
-        train_plots.plot(ind_grand_mean_dec.time_values, ind_grand_mean_dec.data, pen={'color': 'g', 'dash': [1,5,3,2]})
+        train_plots.plot(rec_grand_mean.time_values, rec_grand_mean.data, pen={'color': 'g', 'width': 3}, name=name)
+        #train_plots.plot(ind_grand_mean_dec.time_values, ind_grand_mean_dec.data, pen={'color': 'g', 'dash': [1,5,3,2]})
+        train_amps = train_amp([ind_base_subtract, rec_base_subtract], pulse_offsets, '+')
         if ind_grand_mean is not None:
             train_plots = summary_plot_train(ind_grand_mean, plot=summary_plots[0], color=color,
                                              name=(legend + ' 50 Hz induction'))
+            train_plots = summary_plot_train(rec_grand_mean, plot=summary_plots[0], color=color)
             train_plots2 = summary_plot_train(ind_grand_mean_dec, plot=summary_plots[1], color=color,
                                               name=(legend + ' 50 Hz induction'))
-            return train_plots, train_plots2
+            return train_plots, train_plots2, train_amps
     else:
         print ("No Traces")
         return None
@@ -172,7 +217,7 @@ def summary_plot_train(ind_grand_mean, plot=None, color=None, name=None):
     plot.plot(ind_grand_mean.time_values, ind_grand_mean.data, pen=color, name=name)
     return plot
 
-def summary_plot_pulse(feature_list, feature_mean, labels, titles, i, grand_trace=None, plot=None, color=None, name=None):
+def summary_plot_pulse(feature_list, labels, titles, i, grand_trace=None, plot=None, color=None, name=None):
     if type(feature_list) is tuple:
         n_features = len(feature_list)
     else:
@@ -183,18 +228,16 @@ def summary_plot_pulse(feature_list, feature_mean, labels, titles, i, grand_trac
         plot.show()
         for g in range(n_features):
             plot[g, 1].addLegend()
-            plot[g, 1].setLabels(left=('Vm', 'V'))
-            plot[g, 1].setLabels(bottom=('t', 's'))
 
     for feature in range(n_features):
         if n_features > 1:
-            features = feature_list[feature]
-            mean = feature_mean[feature]
+            current_feature = feature_list[feature]
+            mean = np.mean(current_feature)
             label = labels[feature]
             title = titles[feature]
         else:
-            features = feature_list
-            mean = feature_mean
+            current_feature = feature_list
+            mean = np.mean(current_feature)
             label = labels
             title = titles
         plot[feature, 0].setLabels(left=(label[0], label[1]))
@@ -202,17 +245,18 @@ def summary_plot_pulse(feature_list, feature_mean, labels, titles, i, grand_trac
         plot[feature, 0].setTitle(title)
         if grand_trace is not None:
             plot[feature, 1].plot(grand_trace.time_values, grand_trace.data, pen=color, name=name)
-        if len(features) > 1:
-            dx = pg.pseudoScatter(np.array(features).astype(float), 0.3, bidir=True)
-            bar = pg.BarGraphItem(x=[i], height=mean, width=0.7, brush='w', pen={'color': color, 'width': 2})
-            plot[feature, 0].addItem(bar)
-            sem = stats.sem(features)
-            err = pg.ErrorBarItem(x=np.asarray([i]), y=np.asarray([mean]), height=sem, beam=0.3)
+        if len(current_feature) > 1:
+            dx = pg.pseudoScatter(np.array(current_feature).astype(float), 0.3, bidir=True)
+            #bar = pg.BarGraphItem(x=[i], height=mean, width=0.7, brush='w', pen={'color': color, 'width': 2})
+            #plot[feature, 0].addItem(bar)
+            plot[feature, 0].plot([i], [mean], symbol='o', symbolSize=20, symbolPen='k', symbolBrush=color)
+            sem = stats.sem(current_feature)
+            err = pg.ErrorBarItem(x=np.asarray([i]), y=np.asarray([mean]), height=sem, beam=0.1)
             plot[feature, 0].addItem(err)
-            plot[feature, 0].plot((0.3 * dx / dx.max()) + i, features, pen=None, symbol='o', symbolSize=10, symbolPen='w',
-                                symbolBrush=color)
+            plot[feature, 0].plot((0.3 * dx / dx.max()) + i, current_feature, pen=None, symbol='o', symbolSize=10, symbolPen='w',
+                                symbolBrush=(color[0], color[1], color[2], 100))
         else:
-            plot[feature, 0].plot([i], features, pen=None, symbol='o', symbolSize=10, symbolPen='w',
+            plot[feature, 0].plot([i], current_feature, pen=None, symbol='o', symbolSize=10, symbolPen='w',
                                 symbolBrush=color)
 
     return plot
@@ -252,6 +296,9 @@ if __name__ == '__main__':
 
     all_expts = cached_experiments()
     app = pg.mkQApp()
+    pg.dbg()
+    pg.setConfigOption('background', 'w')
+    pg.setConfigOption('foreground', 'k')
 
     result_cache_file = 'synapse_comparison_cache.pkl'
     if args.cre_type is not None:
@@ -276,22 +323,28 @@ if __name__ == '__main__':
         elif args.age is not None and len(args.age.split(',')) >= 2 and len(cre_types) == 1:
             cre_type = args.cre_type.split('-')
             ages = args.age.split(',')
-            expts, legend, dist_plots = get_expts(all_expts, cre_type, calcium=args.calcium, age=ages[0], start=args.start,
+            expts, legend, dist_plots = get_expts(all_expts, cre_type, calcium='high', age=ages[0], start=args.start,
                                                   dist_plot=None, color=color[0])
-            avg_est_age1, summary_plots = first_pulse_plot(expts, name=legend, summary_plot=None, color=color[0], scatter=0)
+            avg_est_age1, summary_plots = first_pulse_plot(expts, name=legend, summary_plot=None, color=color[0], scatter=0,
+                                                           features=True)
             if args.trains is True:
                 summary_train, summary_dec = train_response_plot(expts, name=(legend + ' 50 Hz induction'), summary_plots=[None,None],
                                                                  color=color[0])
-            expts, legend, dist_plots = get_expts(all_expts, cre_type, calcium=args.calcium, age=ages[1], start=args.start,
+            expts, legend, dist_plots = get_expts(all_expts, cre_type, calcium='high', age=ages[1], start=args.start,
                                                   dist_plot=None, color=color[0])
             avg_est_age2, summary_plots = first_pulse_plot(expts, name=legend, summary_plot=summary_plots, color=color[1],
-                                                           scatter=1)
+                                                           scatter=1, features=True)
             if args.trains is True:
-                summary_train, summary_dec = train_response_plot(expts, name=(legend + ' 50 Hz induction'),
+                summary_train, summary_dec, summary_amps = train_response_plot(expts, name=(legend + ' 50 Hz induction'),
                                                                 summary_plots=[summary_train, summary_dec], color=color[1])
+                write_cache(summary_amps, 'age_train_amps.pkl')
 
-            ks = stats.ks_2samp(avg_est_age1, avg_est_age2)
-            print('p = %f (KS test)' % ks.pvalue)
+            ks = stats.ks_2samp(avg_est_age1['amp'], avg_est_age2['amp'])
+            print('p = %f (KS test, Amplitude)' % ks.pvalue)
+            ks = stats.ks_2samp(avg_est_age1['latency'], avg_est_age2['latency'])
+            print('p = %f (KS test, Latency)' % ks.pvalue)
+            ks = stats.ks_2samp(avg_est_age1['rise'], avg_est_age2['rise'])
+            print('p = %f (KS test, Rise time)' % ks.pvalue)
         elif args.cre_type is None and (args.calcium is not None or args.age is not None):
             print('Error: in order to compare across conditions a single cre-type connection must be specified')
         else:

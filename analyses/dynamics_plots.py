@@ -130,7 +130,7 @@ for c in range(len(connection_types)):
                                                                     uid=(expt.uid, pre, post))
     for f, freq in enumerate(freqs):
         if freq not in induction_grand.keys():
-            print ("%d Hz not represented in data set" % freq)
+            print ("%d Hz not represented in data set for %s" % (freq, c_type))
             continue
         ind_offsets = pulse_offset_ind[freq]
         qc_plot.clear()
@@ -184,7 +184,7 @@ for c in range(len(connection_types)):
 
     for t, delta in enumerate(rec_t):
         if delta not in recovery_grand.keys():
-            print ("%d ms not represented in data set" % delta)
+            print ("%d ms not represented in data set for %s" % (delta, c_type))
             continue
         rec_offsets = pulse_offset_rec[delta]
         rec_pass_qc = train_qc(recovery_grand[delta], rec_offsets, amp=qc_params[1], sign=qc_params[0], plot=None)
@@ -239,5 +239,5 @@ for c in range(len(connection_types)):
     #     write_cache(response_cache, cache_file)
 
 print ('Exporting train pulse amplitudes and experiment IDs for further analysis')
-write_cache([ind_amp_summary, rec_amp_summary], "train_amps.pkl")
-write_cache([ind_uid, rec_uid], "expt_ids.pkl")
+write_cache([ind_amp_summary, rec_amp_summary], "train_amps_2.pkl")
+write_cache([ind_uid, rec_uid], "expt_ids_2.pkl")
