@@ -397,10 +397,17 @@ def reset_db():
     ORMBase.metadata.create_all(engine)
 
 
-def vacuum():
+def vacuum(tables=None):
+    """Cleans up database and analyzes table statistics in order to improve query planning.
+    Should be run after any significant changes to the database.
+    """
     with engine.begin() as conn:
         conn.connection.set_isolation_level(0)
-        conn.execute('vacuum analyze')
+        if tables is None:
+            conn.execute('vacuum analyze')
+        else:
+            for table in tables:
+                conn.execute('vacuum analyze %s' % table)
 
 
 def default_session(fn):
