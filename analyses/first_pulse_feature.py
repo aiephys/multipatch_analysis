@@ -5,13 +5,14 @@ import sys
 import argparse
 from multipatch_analysis.experiment_list import cached_experiments
 from manuscript_figures import get_response, get_amplitude, response_filter, feature_anova, write_cache, trace_plot, \
-    colors_human, colors_mouse, fail_rate, pulse_qc
+    colors_human, colors_mouse, fail_rate, pulse_qc, feature_kw
 from synapse_comparison import load_cache, summary_plot_pulse
 from neuroanalysis.data import TraceList
 from neuroanalysis.ui.plot_grid import PlotGrid
 from multipatch_analysis.connection_detection import fit_psp
 from rep_connections import ee_connections, human_connections, no_include, all_connections, ie_connections, ii_connections, ei_connections
 from multipatch_analysis.synaptic_dynamics import DynamicsAnalyzer
+from scipy import stats
 
 app = pg.mkQApp()
 pg.dbg()
@@ -63,12 +64,13 @@ elif args['organism'] == 'human':
         c_type = connection.split('-')
         connection_types = [((c_type[0], 'unknown'), (c_type[1], 'unknown'))]
 
-sweep_threshold = 5
-threshold = 0.03e-3
+sweep_threshold = 3
+threshold = None
 scale_offset = (-20, -20)
 scale_anchor = (0.4, 1)
 qc_plot = pg.plot()
 grand_response = {}
+expt_ids = {}
 feature_plot = None
 synapse_plot = PlotGrid()
 synapse_plot.set_shape(len(connection_types), 1)
@@ -80,6 +82,7 @@ for c in range(len(connection_types)):
     expt_list = all_expts.select(cre_type=cre_type, target_layer=target_layer, calcium=calcium, age=age)
     color = color_palette[c]
     grand_response[type[0]] = {'trace': [], 'amp': [], 'latency': [], 'rise': [], 'decay':[], 'fail_rate': []}
+    expt_ids[type[0]] = []
     synapse_plot[c, 0].addLegend()
     for expt in expt_list:
         for pre, post in expt.connections:
@@ -106,6 +109,7 @@ for c in range(len(connection_types)):
                         grand_response[type[0]]['rise'].append(psp_fits.best_values['rise_time'])
                         grand_response[type[0]]['trace'].append(avg_trace)
                         grand_response[type[0]]['amp'].append(avg_amp)
+                        expt_ids[type[0]].append((pre, post, expt.uid, expt.source_id))
                         synapse_plot[c, 0].setTitle('First Pulse Response')
                         if [expt.uid, pre, post] == all_connections[type]:
                             trace_color = (255, 0, 255, 30)
@@ -144,14 +148,28 @@ for c in range(len(connection_types)):
     grand_rise = np.mean(np.array(grand_response[type[0]]['rise']))
     grand_decay = np.mean(np.array(grand_response[type[0]]['decay']))
     labels = (['Vm', 'V'], ['t', 's'], ['t', 's'], ['t', 's'])
-    feature_plot = summary_plot_pulse(feature_list,(grand_amp, grand_latency, grand_rise, grand_decay), labels,
-                                  ('Amplitude', 'Latency', 'Rise time', 'Decay Tau'), c, grand_trace, plot=feature_plot,
-                                  color=color, name=connection_types[c])
+    feature_plot = summary_plot_pulse(feature_list, labels, ('Amplitude', 'Latency', 'Rise time', 'Decay Tau'), c,
+                                      grand_trace, plot=feature_plot, color=color, name=connection_types[c])
     if c == len(connection_types) - 1:
         x_scale = pg.ScaleBar(size=10e-3, suffix='s')
         x_scale.setParentItem(synapse_plot[c, 0].vb)
         x_scale.anchor(scale_anchor, scale_anchor, offset=scale_offset)
 amp_list = feature_anova('amp', grand_response)
+feature_kw('amp', grand_response)
 latency_list = feature_anova('latency', grand_response)
 rise_list = feature_anova('rise', grand_response)
 decay_list = feature_anova('decay', grand_response)
+
+if args['organism'] == 'human':
+    t, p = stats.ttest_ind(grand_response[('3', 'unknown')]['amp'], grand_response[('5', 'unknown')]['amp'])
+    print ('T-test: Amp = %f' % p)
+    t, p = stats.ttest_ind(grand_response[('3', 'unknown')]['latency'],
+                           grand_response[('5', 'unknown')]['latency'])
+    print ('T-test: Latency = %f' % p)
+    t, p = stats.ttest_ind(grand_response[('3', 'unknown')]['rise'],
+                           grand_response[('5', 'unknown')]['rise'])
+    print ('T-test: Rise Time = %f' % p)
+features = (amp_list, latency_list, rise_list, decay_list)
+
+#write_cache(expt_ids, 'pulse_expt_ids.pkl')
+write_cache(features, 'pulse_features.pkl')
