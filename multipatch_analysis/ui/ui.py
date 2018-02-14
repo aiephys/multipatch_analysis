@@ -263,6 +263,7 @@ class ExperimentTimeline(QtGui.QWidget):
                 ('cell_labels', {'biocytin': '', 'red': '', 'green': '', 'blue': ''}),
                 #('cell_qc', {'holding': None, 'access': None, 'spiking': None}),
                 ('target_layer', elec['target layer']),
+                ('morphology', elec['morphology']),
                 ('internal_solution', elec['internal']),
                 ('internal_dye', elec['internal dye']),
                 ('synapse_to', None),
@@ -281,6 +282,7 @@ class PipetteParameter(pg.parametertree.parameterTypes.GroupParameter):
             {'name': 'internal', 'type': 'list', 'values': [''] + constants.INTERNAL_RECIPES},
             {'name': 'internal dye', 'type': 'list', 'values': [''] + constants.INTERNAL_DYES},
             {'name': 'target layer', 'type': 'list', 'values': [''] + constants.LAYERS},
+            {'name': 'morphology', 'type': 'list', 'values': ['', 'pyr']},
         ]
         pg.parametertree.parameterTypes.GroupParameter.__init__(self, name="Pipette?", children=params, removable=True)
         self.child('got data').sigValueChanged.connect(self._got_data_changed)
