@@ -2,6 +2,7 @@ from neuroanalysis.ui.nwb_viewer import MiesNwbViewer
 from neuroanalysis.miesnwb import MiesNwb
 
 from .multipatch_view import MultipatchMatrixView
+from multipatch_analysis.data import MultiPatchExperiment
 from .pair_view import PairView
 
 
@@ -17,6 +18,6 @@ class MultipatchNwbViewer(MiesNwbViewer):
             self.tabs.addTab(view, name)
     
     def load_nwb(self, filename):
-        nwb = MiesNwb(filename)
+        nwb = MultiPatchExperiment(filename)
         self.set_nwb(nwb)
         return nwb
