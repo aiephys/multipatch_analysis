@@ -13,6 +13,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.types import TypeDecorator
 from sqlalchemy.orm import sessionmaker, aliased
 from sqlalchemy.sql.expression import func
+from sqlalchemy import or_, and_
 
 from .. import config
 
@@ -182,6 +183,8 @@ table_schemas = {
         ('start_time', 'float', "Starting time of this chunk of the recording in seconds, relative to the beginning of the recording"),
         ('data', 'array', 'numpy array of baseline data sampled at '+_sample_rate_str),
         ('mode', 'float', 'most common value in the baseline snippet'),
+        ('ex_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for excitatory synapse probing'),
+        ('in_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for inhibitory synapse probing'),
     ],
     'pulse_response': [
         "A chunk of postsynaptic recording taken during a presynaptic pulse stimulus",

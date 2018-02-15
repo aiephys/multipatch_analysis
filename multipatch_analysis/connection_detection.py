@@ -22,14 +22,18 @@ class BaselineDistributor(Analyzer):
         self.ptr = 0
 
     def get_baseline_chunk(self, duration=20e-3):
+        """Return the (start, stop) indices of a chunk of unused baseline with the
+        given duration.
+        """
+        dt = self.rec['primary'].dt
         while True:
             if len(self.baselines) == 0:
                 return None
-            bl = self.baselines[0]
-            remain = bl.dt * (len(bl) - self.ptr)
+            start, stop = self.baselines[0]
+            remain = dt * ((stop-start) - self.ptr)
             if remain >= duration:
-                size = int(duration / bl.dt)
-                chunk = bl[self.ptr:self.ptr+size]
+                size = int(duration / dt)
+                chunk = (self.ptr, self.ptr+size)
                 self.ptr += size
                 return chunk
             else:
@@ -56,8 +60,6 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         pulse_stim = PulseStimAnalyzer.get(pre_rec)
         spikes = pulse_stim.evoked_spikes()
         
-        baseline_dist = BaselineDistributor.get(post_rec)
-
         if not isinstance(pre_rec, MultiPatchProbe):
             # this does not look like the correct kind of stimulus; bail out
             # Ideally we can make this agnostic to the exact stim type in the future,
