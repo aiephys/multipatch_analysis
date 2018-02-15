@@ -432,12 +432,19 @@ class ExperimentDBSubmission(object):
                     if base is None:
                         # all out!
                         break
-                    start, stop = base.source_indices
+                    start, stop = base
+                    data = rec['primary'][start:stop].resample(sample_rate=20000).data
+
+                    ex_qc_pass = qc.pulse_response_qc_pass(+1, rec, [start, stop], None)
+                    in_qc_pass = qc.pulse_response_qc_pass(-1, rec, [start, stop], None)
+
                     base_entry = db.Baseline(
                         recording=rec_entries[dev],
                         start_time=rec_tvals[start],
-                        data=base.resample(sample_rate=20000).data,
-                        mode=float_mode(base.data),
+                        data=data,
+                        mode=float_mode(data),
+                        ex_qc_pass=ex_qc_pass,
+                        in_qc_pass=in_qc_pass,
                     )
                     session.add(base_entry)
             

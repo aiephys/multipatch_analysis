@@ -57,13 +57,14 @@ def pulse_response_qc_pass(sign, post_rec, window, n_spikes):
         The postsynaptic Recording instance
     window : list
         [start, stop] indices indicating the region of the postsynaptic recording containing the pulse response
-    n_spikes : int
-        The number of presynaptic spikes evoked for this pulse response
+    n_spikes : int or None
+        The number of presynaptic spikes evoked for this pulse response. If None, then this
+        check is skipped (this is used for background data where we do not expect to have spikes).
     """
     if recording_qc_pass(post_rec) is False:
         return False
 
-    if n_spikes < 1:
+    if n_spikes == 0:
         return False
     
     if post_rec.clamp_mode == 'ic':
