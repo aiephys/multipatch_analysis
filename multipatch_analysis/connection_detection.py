@@ -4,13 +4,12 @@ import scipy.signal
 import pyqtgraph as pg
 
 from .data import MultiPatchProbe, Analyzer, PulseStimAnalyzer
+from . import qc
 from neuroanalysis.stats import ragged_mean
 from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.fitting import StackedPsp
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.filter import bessel_filter
-
-
 
 
 class BaselineDistributor(Analyzer):
@@ -105,6 +104,13 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
             pulse['baseline'] = post_rec['primary'][start:stop]
             pulse['baseline_start'] = start
             pulse['baseline_stop'] = stop
+
+            # Add minimal QC metrics for excitatory and inhibitory measurements
+            pulse_window = [pulse['rec_start'], pulse['rec_stop']]
+            n_spikes = 0 if spike is None else 1  # eventually should check for multiple spikes
+            pulse['ex_qc_pass'] = qc.pulse_response_qc_pass(sign=1, post_rec=post_rec, window=pulse_window, n_spikes=n_spikes)
+            pulse['in_qc_pass'] = qc.pulse_response_qc_pass(sign=-1, post_rec=post_rec, window=pulse_window, n_spikes=n_spikes)
+
             assert len(pulse['baseline']) > 0
 
             result.append(pulse)
