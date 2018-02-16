@@ -17,7 +17,7 @@ all_connections = {((None,'sim1'), (None,'sim1')): ['1490642434.41', 3, 5],
                ((None, 'vip'), (None, 'sst')): ['1490997794.08', 7, 8],
                ((None, 'vip'), (None, 'vip')): ['1500408589.73', 8, 1],
                (('2/3', 'unknown'), ('2/3', 'unknown')): ['1501101571.17', 1, 5],
-               ((None,'rorb'), (None,'rorb')): ['1502301827.80', 6, 8],
+               ((None,'rorb'), (None,'rorb')): ['1502312765.01', 2, 3],
                ((None,'ntsr1'), (None,'ntsr1')): ['1504737622.52', 8, 2],
                ((None,'slc17a8'), (None,'slc17a8')): ['1495833911.11', 1, 8],
                (('2', 'unknown'), ('2', 'unknown')): ['1504052194.49', 1, 5],
@@ -31,7 +31,7 @@ human_connections = OrderedDict([((('2', 'unknown'), ('2', 'unknown')), ['150405
                                  ((('5', 'unknown'), ('5', 'unknown')), ['1512513429.49', 8, 1])])
 
 ee_connections = OrderedDict([((('2/3', 'unknown'), ('2/3', 'unknown')), ['1501101571.17', 1, 5]),
-                              (((None,'rorb'), (None,'rorb')), ['1502301827.80', 6, 8]),
+                              (((None,'rorb'), (None,'rorb')), ['1502312765.01', 2, 3]),
                               (((None,'sim1'), (None,'sim1')), ['1490642434.41', 3, 5]),
                               (((None,'tlx3'), (None,'tlx3')), ['1492545925.15', 8, 5]),
                               #(((None,'slc17a8'), (None,'slc17a8')), ['1495833911.11', 1, 8]),
