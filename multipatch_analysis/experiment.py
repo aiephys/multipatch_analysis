@@ -68,21 +68,22 @@ class Experiment(object):
                     if crepart != 'unknown' and crepart not in cell.labels:
                         raise Exception('Cre type "%s" not in cell.labels: %s' % (crepart, cell.labels.keys()))
 
-        # read cell positions from mosaic files
-        try:
-            self.load_cell_positions()
-        except Exception as exc:
-            sys.excepthook(*sys.exc_info())
-            print("Warning: Could not load cell positions for %s (exception printed above)" % (self,))
-
         # pull donor/specimen info from LIMS
         if self.lims_record['organism'] == 'mouse':
             # lots of human donors are missing age.
             self.age
         
-        # check for a single NWB file
         if len(self.cells) > 0:
+            # check for a single NWB file
             self.nwb_file
+
+            # read cell positions from mosaic files
+            try:
+                self.load_cell_positions()
+            except Exception as exc:
+                sys.excepthook(*sys.exc_info())
+                print("Warning: Could not load cell positions for %s (exception printed above)" % (self,))
+
 
     @staticmethod
     def _id_from_entry(entry):
@@ -222,14 +223,14 @@ class Experiment(object):
         all_colors = set(FLUOROPHORES.values())
         genotype = self.genotype
         for pip_id, pip_meta in pips.pipettes.items():
-            elec = Electrode(self, pip_id, pip_meta['start_datetime'], pip_meta['stop_datetime'], pip_meta['ad_channel'])
+            elec = Electrode(pip_id, pip_meta['patch_start'], pip_meta['patch_stop'], pip_meta['ad_channel'])
             self.electrodes[pip_id] = elec
 
             if pip_meta['got_data'] is False:
                 continue
 
-            elec.cell = cell
             cell = Cell(self, pip_id)
+            elec.cell = cell
 
             cell._target_layer = pip_meta.get('target_layer', '')
 
@@ -567,7 +568,8 @@ class Experiment(object):
         for name, pos in cells:
             m = re.match("\D+(\d+)", name)
             cid = int(m.group(1))
-            self.cells[cid].position = pos
+            if cid in self.cells:
+                self.cells[cid].position = pos
 
     @property
     def mosaic_file(self):

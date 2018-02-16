@@ -232,12 +232,14 @@ def response_query(session):
         db.StimPulse.onset_time.label('pulse_start'),
         db.StimPulse.duration.label('pulse_dur'),
         db.StimSpike.max_dvdt_time.label('spike_time'),
+        db.PatchClampRecording.clamp_mode,
     )
     q = q.join(db.StimPulse)
     q = q.join(db.StimSpike)
+    q = q.join(db.PulseResponse.recording).join(db.PatchClampRecording) 
 
-    # For now we only care about pulses that evoke exactly 1 spike
-    q = q.filter(db.StimPulse.n_spikes==1)
+    # Ignore anything that failed QC
+    q = q.filter(db.or_(db.StimPulse.ex_qc_pass==True, db.StimPulse.in_qc_pass==True))
 
     return q
 
@@ -249,7 +251,12 @@ def baseline_query(session):
     q = session.query(
         db.Baseline.id.label('response_id'),
         db.Baseline.data,
+        db.PatchClampRecording.clamp_mode,
     )
+    q = q.join(db.Baseline.recording).join(db.PatchClampRecording) 
+
+    # Ignore anything that failed QC
+    q = q.filter(db.or_(db.Baseline.ex_qc_pass==True, db.Baseline.in_qc_pass==True))
 
     return q
 
@@ -299,6 +306,8 @@ def analyze_response_strength(rec, source, remove_artifacts=False, lpf=True, bsu
 
 @db.default_session
 def _compute_strength(inds, session=None):
+    """Comput per-pulse-response strength metrics
+    """
     source, start_id, stop_id = inds
     if source == 'baseline':
         q = baseline_query(session)

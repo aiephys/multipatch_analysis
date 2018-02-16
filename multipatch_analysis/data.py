@@ -50,7 +50,7 @@ class MultiPatchSyncRecording(MiesSyncRecording):
                 starts.insert(0, 0)
             if stops[-1] < starts[-1]:
                 stops.append(len(mask))
-            self._baseline_regions = zip(starts, stops)
+            self._baseline_regions = [r for r in zip(starts, stops) if r[1] > r[0]]
 
         return self._baseline_regions
 
@@ -76,8 +76,7 @@ class MultiPatchProbe(MiesRecording):
         # detect baseline regions from pulses rather than labnotebook
         # (can't always count on there being delay periods in the recording)
         if self._base_regions is None:
-            regions = self._parent_rec.parent.baseline_regions()
-            self._base_regions = [self['primary'][start:stop] for start,stop in regions]
+            self._base_regions = self._parent_rec.parent.baseline_regions()
         return self._base_regions
 
 

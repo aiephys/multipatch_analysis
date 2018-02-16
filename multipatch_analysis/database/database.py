@@ -13,6 +13,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.types import TypeDecorator
 from sqlalchemy.orm import sessionmaker, aliased
 from sqlalchemy.sql.expression import func
+from sqlalchemy import or_, and_
 
 from .. import config
 
@@ -112,7 +113,7 @@ table_schemas = {
         """A synchronous recording represents a "sweep" -- multiple recordings that were made simultaneously
         on different electrodes.""",
         ('experiment_id', 'experiment.id', '', {'index': True}),
-        ('sync_rec_key', 'object', 'External ID of the SyncRecording'),
+        ('ext_id', 'object', 'External ID of the SyncRecording'),
         ('temperature', 'float', 'Bath temperature during this recording'),
     ],
     'recording': [
@@ -126,7 +127,6 @@ table_schemas = {
     'patch_clamp_recording': [
         "Extra data for recordings made with a patch clamp amplifier",
         ('recording_id', 'recording.id', '', {'index': True}),
-        ('electrode_id', 'electrode.id', 'References the patch electrode that was used during this recording', {'index': True}),
         ('clamp_mode', 'str', 'The mode used by the patch clamp amplifier: "ic" or "vc"', {'index': True}),
         ('patch_mode', 'str', "The state of the membrane patch. E.g. 'whole cell', 'cell attached', 'loose seal', 'bath', 'inside out', 'outside out'"),
         ('stim_name', 'object', "The name of the stimulus protocol"),
@@ -134,6 +134,7 @@ table_schemas = {
         ('baseline_current', 'float', 'Median steady-state current (recorded for VC or commanded for IC) during the recording'),
         ('baseline_rms_noise', 'float', 'RMS noise of the steady-state part of the recording'),
         ('nearest_test_pulse_id', 'test_pulse.id', 'ID of the test pulse that was recorded closest to this recording (and possibly embedded within the recording)'),
+        ('qc_pass', 'bool', 'Indicates whether this recording passes a minimal ephys QC'),
     ],
     'multi_patch_probe': [
         "Extra data for multipatch recordings intended to test synaptic dynamics.",
@@ -182,6 +183,8 @@ table_schemas = {
         ('start_time', 'float', "Starting time of this chunk of the recording in seconds, relative to the beginning of the recording"),
         ('data', 'array', 'numpy array of baseline data sampled at '+_sample_rate_str),
         ('mode', 'float', 'most common value in the baseline snippet'),
+        ('ex_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for excitatory synapse probing'),
+        ('in_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for inhibitory synapse probing'),
     ],
     'pulse_response': [
         "A chunk of postsynaptic recording taken during a presynaptic pulse stimulus",
@@ -190,6 +193,8 @@ table_schemas = {
         ('pair_id', 'pair.id', 'The pre-post cell pair involved in this pulse response', {'index': True}),
         ('start_time', 'float', 'Starting time of this chunk of the recording in seconds, relative to the beginning of the recording'),
         ('data', 'array', 'numpy array of response data sampled at '+_sample_rate_str),
+        ('ex_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for excitatory synapse probing'),
+        ('in_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for inhibitory synapse probing'),
         ('baseline_id', 'baseline.id'),
     ],
 }
