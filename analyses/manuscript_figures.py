@@ -166,21 +166,23 @@ def response_filter(response, freq_range=None, holding_range=None, pulse=False, 
 
 def feature_anova(feature, data):
     feature_list = [(key, group[feature])for key, group in data.items()]
-    f, p = stats.f_oneway(feature_list[1][0], feature_list[1][1], feature_list[1][2], feature_list[1][3])
+    f, p = stats.f_oneway(feature_list[0][1], feature_list[1][1], feature_list[2][1], feature_list[3][1])
     print ('One-way ANOVA: %s' % feature)
     print ('=============')
     for i in feature_list:
-        print ('%s: %d +- %d' % (feature_list[0][i], np.mean(feature_list[1][i]), stats.sem(feature_list[1][i])))
+        print ('%s: %.3f +- %.3f' % (i[0], np.mean(i[1])*1e3, stats.sem(i[1])*1e3))
     print ('F value: %.3f' % f)
     print ('P value: %.5f \n' % p)
     return feature_list
 
 def feature_kw(feature, data):
-    feature_list = [data[group][feature] for group in data.keys()]
-    h, p = stats.kruskal(feature_list[0], feature_list[1], feature_list[2], feature_list[3])
+    feature_list = [(key, group[feature]) for key, group in data.items()]
+    h, p = stats.kruskal(feature_list[0][1], feature_list[1][1], feature_list[2][1], feature_list[3][1])
+
     print ('Kruskal-Wallace: %s' % feature)
     print ('=============')
-
+    for i in feature_list:
+        print ('%s: %.3f +- %.3f' % (i[0], np.median(i[1]) * 1e3, np.std(i[1]) * 1e3))
     print ('H value: %.3f' % h)
     print ('P value: %.5f \n' % p)
     return feature_list
@@ -260,13 +262,13 @@ def recovery_summary(train_response, rec_t, holding, thresh=5, rec_dict=None, of
     if rec_dict is None:
         rec_dict = {}
         offset_dict = {}
-    #rec_ind_traces = response_filter(train_response['responses'], freq_range=[50, 50], holding_range=holding, train=0)
+    rec_ind_traces = response_filter(train_response['responses'], freq_range=[50, 50], holding_range=holding, train=0)
     for t, delta in enumerate(rec_t):
         recovery_traces = {}
         recovery_traces['responses'] = response_filter(train_response['responses'], freq_range=[50, 50],
                                                        holding_range=holding, train=1, delta_t=delta)
-        rec_ind_traces = response_filter(train_response['responses'], freq_range=[50, 50],
-                                                       holding_range=holding, train=0, delta_t=delta)
+        #rec_ind_traces = response_filter(train_response['responses'], freq_range=[50, 50],
+        #                                               holding_range=holding, train=0, delta_t=delta)
         recovery_traces['pulse_offsets'] = response_filter(train_response['pulse_offsets'], freq_range=[50, 50],
                                                            delta_t=delta)
         if len(recovery_traces['responses']) >= thresh:
