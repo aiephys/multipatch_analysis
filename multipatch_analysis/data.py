@@ -50,7 +50,7 @@ class MultiPatchSyncRecording(MiesSyncRecording):
                 starts.insert(0, 0)
             if stops[-1] < starts[-1]:
                 stops.append(len(mask))
-            self._baseline_regions = zip(starts, stops)
+            self._baseline_regions = [r for r in zip(starts, stops) if r[1] > r[0]]
 
         return self._baseline_regions
 
