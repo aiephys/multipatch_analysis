@@ -11,6 +11,7 @@ from ..data import MultiPatchExperiment, MultiPatchProbe
 from ..connection_detection import PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
 from .. import config
 from .. import constants
+from .. import qc
 
 
 class SliceSubmission(object):
@@ -242,6 +243,8 @@ class ExperimentDBSubmission(object):
                     pre_cell=pre_cell_entry,
                     post_cell=post_cell_entry,
                     synapse=synapse,
+                    n_ex_test_spikes=0,  # will be counted later
+                    n_in_test_spikes=0,
                 )
                 session.add(pair_entry)
 
@@ -259,7 +262,7 @@ class ExperimentDBSubmission(object):
         
         for srec in nwb.contents:
             temp = srec.meta.get('temperature', None)
-            srec_entry = db.SyncRec(sync_rec_key=srec.key, experiment=expt_entry, temperature=temp)
+            srec_entry = db.SyncRec(ext_id=srec.key, experiment=expt_entry, temperature=temp)
             session.add(srec_entry)
             
             srec_has_mp_probes = False
@@ -280,6 +283,7 @@ class ExperimentDBSubmission(object):
                 # import patch clamp recording information
                 if not isinstance(rec, PatchClampRecording):
                     continue
+                qc_pass = qc.recording_qc_pass(rec)
                 pcrec_entry = db.PatchClampRecording(
                     recording=rec_entry,
                     clamp_mode=rec.clamp_mode,
@@ -288,6 +292,7 @@ class ExperimentDBSubmission(object):
                     baseline_potential=rec.baseline_potential,
                     baseline_current=rec.baseline_current,
                     baseline_rms_noise=rec.baseline_rms_noise,
+                    qc_pass=qc_pass,
                 )
                 session.add(pcrec_entry)
 
@@ -399,13 +404,21 @@ class ExperimentDBSubmission(object):
                         #     mode=float_mode(resp['baseline'].data),
                         # )
                         # session.add(base_entry)
+                        pair_entry = pairs_by_device_id[(pre_dev, post_dev)]
+                        if resp['ex_qc_pass']:
+                            pair_entry.n_ex_test_spikes += 1
+                        if resp['in_qc_pass']:
+                            pair_entry.n_in_test_spikes += 1
+                            
                         resp_entry = db.PulseResponse(
                             recording=rec_entries[post_dev],
                             stim_pulse=all_pulse_entries[pre_dev][resp['pulse_n']],
-                            pair=pairs_by_device_id[(pre_dev, post_dev)],
+                            pair=pair_entry,
                             # baseline=base_entry,
                             start_time=post_tvals[resp['rec_start']],
                             data=resp['response'].resample(sample_rate=20000).data,
+                            ex_qc_pass=resp['ex_qc_pass'],
+                            in_qc_pass=resp['in_qc_pass'],
                         )
                         session.add(resp_entry)
                         
@@ -419,12 +432,19 @@ class ExperimentDBSubmission(object):
                     if base is None:
                         # all out!
                         break
-                    start, stop = base.source_indices
+                    start, stop = base
+                    data = rec['primary'][start:stop].resample(sample_rate=20000).data
+
+                    ex_qc_pass = qc.pulse_response_qc_pass(+1, rec, [start, stop], None)
+                    in_qc_pass = qc.pulse_response_qc_pass(-1, rec, [start, stop], None)
+
                     base_entry = db.Baseline(
                         recording=rec_entries[dev],
                         start_time=rec_tvals[start],
-                        data=base.resample(sample_rate=20000).data,
-                        mode=float_mode(base.data),
+                        data=data,
+                        mode=float_mode(data),
+                        ex_qc_pass=ex_qc_pass,
+                        in_qc_pass=in_qc_pass,
                     )
                     session.add(base_entry)
             

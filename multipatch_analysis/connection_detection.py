@@ -4,13 +4,12 @@ import scipy.signal
 import pyqtgraph as pg
 
 from .data import MultiPatchProbe, Analyzer, PulseStimAnalyzer
+from . import qc
 from neuroanalysis.stats import ragged_mean
 from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.fitting import StackedPsp
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.filter import bessel_filter
-
-
 
 
 class BaselineDistributor(Analyzer):
@@ -23,14 +22,18 @@ class BaselineDistributor(Analyzer):
         self.ptr = 0
 
     def get_baseline_chunk(self, duration=20e-3):
+        """Return the (start, stop) indices of a chunk of unused baseline with the
+        given duration.
+        """
+        dt = self.rec['primary'].dt
         while True:
             if len(self.baselines) == 0:
                 return None
-            bl = self.baselines[0]
-            remain = bl.dt * (len(bl) - self.ptr)
+            start, stop = self.baselines[0]
+            remain = dt * ((stop-start) - self.ptr)
             if remain >= duration:
-                size = int(duration / bl.dt)
-                chunk = bl[self.ptr:self.ptr+size]
+                size = int(duration / dt)
+                chunk = (self.ptr, self.ptr+size)
                 self.ptr += size
                 return chunk
             else:
@@ -57,8 +60,6 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         pulse_stim = PulseStimAnalyzer.get(pre_rec)
         spikes = pulse_stim.evoked_spikes()
         
-        baseline_dist = BaselineDistributor.get(post_rec)
-
         if not isinstance(pre_rec, MultiPatchProbe):
             # this does not look like the correct kind of stimulus; bail out
             # Ideally we can make this agnostic to the exact stim type in the future,
@@ -105,6 +106,13 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
             pulse['baseline'] = post_rec['primary'][start:stop]
             pulse['baseline_start'] = start
             pulse['baseline_stop'] = stop
+
+            # Add minimal QC metrics for excitatory and inhibitory measurements
+            pulse_window = [pulse['rec_start'], pulse['rec_stop']]
+            n_spikes = 0 if spike is None else 1  # eventually should check for multiple spikes
+            pulse['ex_qc_pass'] = qc.pulse_response_qc_pass(sign=1, post_rec=post_rec, window=pulse_window, n_spikes=n_spikes)
+            pulse['in_qc_pass'] = qc.pulse_response_qc_pass(sign=-1, post_rec=post_rec, window=pulse_window, n_spikes=n_spikes)
+
             assert len(pulse['baseline']) > 0
 
             result.append(pulse)
