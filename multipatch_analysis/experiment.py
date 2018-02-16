@@ -568,7 +568,8 @@ class Experiment(object):
         for name, pos in cells:
             m = re.match("\D+(\d+)", name)
             cid = int(m.group(1))
-            self.cells[cid].position = pos
+            if cid in self.cells:
+                self.cells[cid].position = pos
 
     @property
     def mosaic_file(self):
