@@ -225,6 +225,7 @@ class ExperimentDBSubmission(object):
                     target_layer=cell.target_layer,
                     is_excitatory=cell.is_excitatory,
                     depth=cell.depth,
+                    position=cell.position,
                 )
                 session.add(cell_entry)
                 cell_entries[cell] = cell_entry
@@ -238,6 +239,12 @@ class ExperimentDBSubmission(object):
                 synapse = (i, j) in self.expt.connections
                 pre_cell_entry = cell_entries[pre_cell]
                 post_cell_entry = cell_entries[post_cell]
+                p1, p2 = pre_cell.position, post_cell.position
+                if None in [p1, p2]:
+                    distance = None
+                else:
+                    distance = np.linalg.norm(np.array(p1), np.array(p2))
+                
                 pair_entry = db.Pair(
                     experiment=expt_entry,
                     pre_cell=pre_cell_entry,
@@ -245,6 +252,7 @@ class ExperimentDBSubmission(object):
                     synapse=synapse,
                     n_ex_test_spikes=0,  # will be counted later
                     n_in_test_spikes=0,
+                    distance=distance,
                 )
                 session.add(pair_entry)
 
