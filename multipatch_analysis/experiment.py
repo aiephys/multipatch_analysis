@@ -233,6 +233,8 @@ class Experiment(object):
             elec.cell = cell
 
             cell._target_layer = pip_meta.get('target_layer', '')
+            if not isinstance(cell._target_layer, str):
+                raise Exception('Target layer must be str, not "%r"' % cell._target_layer)
 
             # load labels
             colors = {}

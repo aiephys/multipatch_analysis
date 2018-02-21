@@ -200,7 +200,7 @@ def deconv_filter(trace, pulse_times, tau=15e-3, lowpass=1000., lpf=True, remove
 
 @db.default_session
 def rebuild_strength(parallel=True, workers=6, session=None):
-    for source in ['baseline', 'pulse_response']:
+    for source in ['pulse_response', 'baseline']:
         print("Rebuilding %s strength table.." % source)
         
         # Divide workload into equal parts for each worker
@@ -239,7 +239,7 @@ def response_query(session):
     q = q.join(db.PulseResponse.recording).join(db.PatchClampRecording) 
 
     # Ignore anything that failed QC
-    q = q.filter(db.or_(db.StimPulse.ex_qc_pass==True, db.StimPulse.in_qc_pass==True))
+    q = q.filter(db.or_(db.PulseResponse.ex_qc_pass==True, db.PulseResponse.in_qc_pass==True))
 
     return q
 
@@ -476,6 +476,8 @@ class ExperimentBrowser(pg.TreeWidget):
             self.addTopLevelItem(expt_item)
 
             for pair in expt.pairs:
+                if pair.n_ex_test_spikes == 0 and pair.n_in_test_spikes == 0:
+                    continue
                 cells = '%d => %d' % (pair.pre_cell.ext_id, pair.post_cell.ext_id)
                 conn = {True:"connected", False:"unconnected", None:"?"}[pair.synapse]
                 types = 'L%s %s => L%s %s' % (pair.pre_cell.target_layer or "?", pair.pre_cell.cre_type, pair.post_cell.target_layer or "?", pair.post_cell.cre_type)
@@ -648,7 +650,7 @@ class ResponseStrengthPlots(QtGui.QWidget):
         self.setLayout(self.layout)
         self.layout.setContentsMargins(0, 0, 0, 0)
 
-        self.analyses = ['neg', 'pos']
+        self.analyses = [('neg', 'ic'), ('pos', 'ic'), ('neg', 'vc'), ('pos', 'vc')]
         self.analyzers = []
         for col, analysis in enumerate(self.analyses):
             analyzer = ResponseStrengthAnalyzer(analysis, session)
@@ -657,16 +659,14 @@ class ResponseStrengthPlots(QtGui.QWidget):
                 
     def load_conn(self, pair):
         with pg.BusyCursor():
-            amp_recs = get_amps(self.session, pair)
-            base_recs = get_baseline_amps(self.session, pair, limit=len(amp_recs))
 
             for analyzer in self.analyzers:
-                analyzer.load_conn(pair, amp_recs, base_recs)
+                analyzer.load_conn(pair)
 
 
 class ResponseStrengthAnalyzer(object):
     def __init__(self, analysis, session):
-        self.analysis = analysis  # 'pos' or 'neg'
+        self.analysis = analysis  # ('pos'|'neg', 'ic'|'vc')
         self.session = session
 
         self.widget = QtGui.QWidget()
@@ -678,7 +678,7 @@ class ResponseStrengthAnalyzer(object):
         self.layout.addWidget(self.gl, 0, 0)
 
         # histogram plots
-        self.hist_plot = pg.PlotItem(title=analysis+":")
+        self.hist_plot = pg.PlotItem(title=' '.join(analysis)+":")
         self.gl.addItem(self.hist_plot, row=0, col=0)
         self.hist_plot.hideAxis('bottom')
 
@@ -768,14 +768,22 @@ class ResponseStrengthAnalyzer(object):
         self._clicked_bg_ids = ids
         self.plot_prd_ids(ids, 'bg', trace_list=self.clicked_bg_traces, pen='y')
 
-    def load_conn(self, pair, amp_recs, base_recs):
+    def load_data(self):
+        amp_recs = get_amps(self.session, self.pair, clamp_mode=self.analysis[1])
+        base_recs = get_baseline_amps(self.session, self.pair, limit=len(amp_recs), clamp_mode=self.analysis[1])
+        return amp_recs, base_recs
+
+    def load_conn(self, pair):
+        self.pair = pair
+        amp_recs, base_recs = self.load_data()
+        
         # select fg/bg data
         fg_data = amp_recs
         bg_data = base_recs[:len(fg_data)]
-        if self.analysis == 'pos':
+        if self.analysis[0] == 'pos':
             fg_x = np.array([rec['pos_dec_amp'] for rec in fg_data])
             bg_x = np.array([rec['pos_dec_amp'] for rec in bg_data])
-        elif self.analysis == 'neg':
+        elif self.analysis[0] == 'neg':
             fg_x = np.array([rec['neg_dec_amp'] for rec in fg_data])
             bg_x = np.array([rec['neg_dec_amp'] for rec in bg_data])
         
@@ -808,7 +816,7 @@ class ResponseStrengthAnalyzer(object):
         self.hist_plot.plot(fg_hist[1], fg_hist[0], stepMode=True, fillLevel=0, brush=(0, 255, 255, 100), pen=1.0)
 
         ks = scipy.stats.ks_2samp(fg_x, bg_x)
-        self.hist_plot.setTitle("%s: KS=%0.02g" % (self.analysis, ks.pvalue))
+        self.hist_plot.setTitle("%s: KS=%0.02g" % (' '.join(self.analysis), ks.pvalue))
 
         # record data for later use
         self.fg_x = fg_x
@@ -1038,7 +1046,7 @@ if __name__ == '__main__':
             rs_plots.load_conn(pair)
         print(sel.expt.original_path)
         ts = sel.expt.acq_timestamp
-        sec = datetime_to_timestamp(ts.timetuple())
+        sec = datetime_to_timestamp(ts)
         print(sec)
 
     b.itemSelectionChanged.connect(selected)
