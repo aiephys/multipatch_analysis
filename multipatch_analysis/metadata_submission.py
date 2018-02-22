@@ -148,13 +148,12 @@ class ExperimentMetadataSubmission(object):
                 if int(h) < 7:
                     warnings.append("Dissection time appears to be very early. Did you mean %d:%s?" % (int(h)+12, m))
                 # interpret time of dissection
+                site_date = datetime.fromtimestamp(site_info['__timestamp__'])
                 if year is None:
-                    today = datetime.now().date()
-                    diss_time = datetime(today.year, today.month, today.day, int(h), int(m))
+                    diss_time = datetime(site_date.year, site_date.month, site_date.day, int(h), int(m))
                 else:
                     diss_time = datetime(int(year), int(mon), int(day), int(h), int(m))
                 # check time
-                site_date = datetime.fromtimestamp(site_info['__timestamp__'])
                 seconds_since_dissection = (site_date - diss_time).total_seconds()
                 if seconds_since_dissection < 30*60:
                     warnings.append("Time of dissection is later than experiment time - 30 minutes")
