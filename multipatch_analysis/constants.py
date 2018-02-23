@@ -74,7 +74,9 @@ GENOTYPES = OrderedDict([
     ("Slc17a8-IRES2-Cre/wt;Ai14(RCL-tdT)/wt", {'slc17a8': ['tdTomato']}),
     ("Ntsr1-Cre_GN220/wt;Vip-IRES-FlpO/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt;Ai65F/wt", {'vip': ['tdTomato'], 'ntsr1': ['EGFP']}),
     ("Sst-IRES-Cre/wt;Pvalb-T2A-FlpO/wt;Ai65F/Ai65F", {'pvalb': ['tdTomato']}),
-    ("Sst-IRES-Cre/wt;Pvalb-T2A-FlpO/wt;Ai65F/wt", {'pvalb': ['tdTomato']})
+    ("Sst-IRES-Cre/wt;Pvalb-T2A-FlpO/wt;Ai65F/wt", {'pvalb': ['tdTomato']}),
+    ("Ntsr1-Cre_GN220/wt;Sst-IRES-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'sst': ['tdTomato'], 'ntsr1': ['EGFP']}),
+    ("Sim1-Cre_KJ18/wt;Ai14(RCL-tdT)/wt", {'sim1': ['tdTomato']})
 ])    
 
 
@@ -102,15 +104,19 @@ GENOTYPES = OrderedDict([
 # FSF : frt-stop-frt (flp dependent)
 # RSR : rox-stop-rox (dre dependent, but also slightly activated by cre)
 
-# tTA : tet-off  (activates only in absence of doxycycline)
-# rtTA: tet-on   (activates only in presence of doxycycline)
 # TRE : tetracycline response element - series of TetO sequences that
 #       require tTA or rtTA to increase downstream expression
 #         - dox binds tTa, which prevents further binding to TetO
-#         - dox binds tTa, which allows further binding to TetO
+#         - dox binds rtTa, which allows further binding to TetO
+#       this system is also used for amplification.
+# tTA : tet-off  (activates TRE only in absence of doxycycline)
+# rtTA: tet-on   (activates TRE only in presence of doxycycline)
+# tTA2 : same behavior as tTA
 
 
-REPORTER_LINES = {
+EXPRESSION_FACTORS = ['cre', 'flp', 'dre', 'tTA']
+
+REPORTER_LINES = {                # dependencies # products
     'Ai2':                        ('',           ['EYFP']),
     'Ai3':                        ('',           ['EYFP']),
     'Ai6':                        ('',           ['ZsGreen']),
@@ -142,24 +148,22 @@ REPORTER_LINES = {
     'Ai85(TITL-iGluSnFR)':        ('cre&tTA',    ['iGluSnFR']),
     'Ai139(TIT2L-GFP-ICL-TPT)-D': ('cre',        ['EGFP','tdTomato']),
     'Ai139(TIT2L-GFP-ICL-TPT)':   ('cre',        ['EGFP','tdTomato']),
-    'Ai140(TIT2L-GFP-ICL-tTA2)':  ('cre',        ['EGFP']),
+    'Ai140(TIT2L-GFP-ICL-tTA2)':  ('cre',        ['EGFP', 'tTA']),
     'Snap25-LSL-F2A-GFP':         ('cre',        ['EGFP']),
 }
    
-   
-DRIVER_LINES = {
-    'Rorb-T2A-tTA2':              (['cre','tTA'],  'rorb'),
-    'Tlx3-Cre_PL56':              (['cre'],        'tlx3'),
-    'Sim1-Cre_KJ18':              (['cre'],        'sim1'),
-    'Ntsr1-Cre_GN220':            (['cre'],        'ntsr1'),
-    'Chat-IRES-Cre-neo':          (['cre'],        'chat'),
-    'Rbp4-Cre_KL100':             (['cre'],        'rbp4'),
-    'Pvalb-IRES-Cre':             (['cre'],        'pvalb'),
-    'Sst-IRES-Cre':               (['cre'],        'sst'),
-    'Vip-IRES-Cre':               (['cre'],        'vip'),
-    'Pvalb-T2A-FlpO':             (['flp'],        'pvalb'),
-    'Sst-IRES-FlpO':              (['flp'],        'sst'),
-    'Vip-IRES-FlpO':              (['flp'],        'vip'),
-    'Slc17a8-IRES2-Cre':          (['cre'],        'slc17a8'),
+DRIVER_LINES = {                  # dependencies   # products
+    'Rorb-T2A-tTA2':              ('rorb',         ['tTA']),
+    'Tlx3-Cre_PL56':              ('tlx3',         ['cre']),
+    'Sim1-Cre_KJ18':              ('sim1',         ['cre']),
+    'Ntsr1-Cre_GN220':            ('ntsr1',        ['cre']),
+    'Chat-IRES-Cre-neo':          ('chat',         ['cre']),
+    'Rbp4-Cre_KL100':             ('rbp4',         ['cre']),
+    'Pvalb-IRES-Cre':             ('pvalb',        ['cre']),
+    'Sst-IRES-Cre':               ('sst',          ['cre']),
+    'Vip-IRES-Cre':               ('vip',          ['cre']),
+    'Pvalb-T2A-FlpO':             ('pvalb',        ['flp']),
+    'Sst-IRES-FlpO':              ('sst',          ['flp']),
+    'Vip-IRES-FlpO':              ('vip',          ['flp']),
+    'Slc17a8-IRES2-Cre':          ('slc17a8',      ['cre']),
 }
-

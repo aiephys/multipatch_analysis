@@ -11,6 +11,7 @@ from ..data import MultiPatchExperiment, MultiPatchProbe
 from ..connection_detection import PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
 from .. import config
 from .. import constants
+from .. import qc
 
 
 class SliceSubmission(object):
@@ -41,7 +42,7 @@ class SliceSubmission(object):
             # Interpret slice time
             slice_time = info.get('slice time', None)
             if slice_time is not None:
-                m = re.match(r'((20\d\d)-(\d{1,2})-(\d{1,2})\s+)?(\d+):(\d+)', slice_time.strip())
+                m = re.match(r'((20\d\d)-(\d{1,2})-(\d{1,2}) )?(\d+):(\d+)', slice_time.strip())
                 if m is not None:
                     _, year, mon, day, hh, mm = m.groups()
                     if year is None:
@@ -224,6 +225,7 @@ class ExperimentDBSubmission(object):
                     target_layer=cell.target_layer,
                     is_excitatory=cell.is_excitatory,
                     depth=cell.depth,
+                    position=cell.position,
                 )
                 session.add(cell_entry)
                 cell_entries[cell] = cell_entry
@@ -237,11 +239,20 @@ class ExperimentDBSubmission(object):
                 synapse = (i, j) in self.expt.connections
                 pre_cell_entry = cell_entries[pre_cell]
                 post_cell_entry = cell_entries[post_cell]
+                p1, p2 = pre_cell.position, post_cell.position
+                if None in [p1, p2]:
+                    distance = None
+                else:
+                    distance = np.linalg.norm(np.array(p1), np.array(p2))
+                
                 pair_entry = db.Pair(
                     experiment=expt_entry,
                     pre_cell=pre_cell_entry,
                     post_cell=post_cell_entry,
                     synapse=synapse,
+                    n_ex_test_spikes=0,  # will be counted later
+                    n_in_test_spikes=0,
+                    distance=distance,
                 )
                 session.add(pair_entry)
 
@@ -259,7 +270,7 @@ class ExperimentDBSubmission(object):
         
         for srec in nwb.contents:
             temp = srec.meta.get('temperature', None)
-            srec_entry = db.SyncRec(sync_rec_key=srec.key, experiment=expt_entry, temperature=temp)
+            srec_entry = db.SyncRec(ext_id=srec.key, experiment=expt_entry, temperature=temp)
             session.add(srec_entry)
             
             srec_has_mp_probes = False
@@ -280,6 +291,7 @@ class ExperimentDBSubmission(object):
                 # import patch clamp recording information
                 if not isinstance(rec, PatchClampRecording):
                     continue
+                qc_pass = qc.recording_qc_pass(rec)
                 pcrec_entry = db.PatchClampRecording(
                     recording=rec_entry,
                     clamp_mode=rec.clamp_mode,
@@ -288,6 +300,7 @@ class ExperimentDBSubmission(object):
                     baseline_potential=rec.baseline_potential,
                     baseline_current=rec.baseline_current,
                     baseline_rms_noise=rec.baseline_rms_noise,
+                    qc_pass=qc_pass,
                 )
                 session.add(pcrec_entry)
 
@@ -326,35 +339,56 @@ class ExperimentDBSubmission(object):
                 pulse_entries = {}
                 all_pulse_entries[rec.device_id] = pulse_entries
                 
+                rec_tvals = rec['primary'].time_values
+
                 for i,pulse in enumerate(pulses):
                     # Record information about all pulses, including test pulse.
+                    t0 = rec_tvals[pulse[0]]
+                    t1 = rec_tvals[pulse[1]]
+                    data_start = max(0, t0 - 10e-3)
+                    data_stop = t0 + 10e-3
                     pulse_entry = db.StimPulse(
                         recording=rec_entry,
                         pulse_number=i,
-                        onset_index=pulse[0],
+                        onset_time=t0,
                         amplitude=pulse[2],
-                        length=pulse[1]-pulse[0],
+                        duration=t1-t0,
+                        data=rec['primary'].time_slice(data_start, data_stop).resample(sample_rate=20000).data,
+                        data_start_time=data_start,
                     )
                     session.add(pulse_entry)
                     pulse_entries[i] = pulse_entry
+                    
 
                 # import presynaptic evoked spikes
+                # For now, we only detect up to 1 spike per pulse, but eventually
+                # this may be adapted for more.
                 spikes = psa.evoked_spikes()
                 for i,sp in enumerate(spikes):
                     pulse = pulse_entries[sp['pulse_n']]
                     if sp['spike'] is not None:
-                        extra = sp['spike']
+                        spinfo = sp['spike']
+                        extra = {
+                            'peak_time': rec_tvals[spinfo['peak_index']],
+                            'max_dvdt_time': rec_tvals[spinfo['rise_index']],
+                            'max_dvdt': spinfo['max_dvdt'],
+                        }
+                        if 'peak_diff' in spinfo:
+                            extra['peak_diff'] = spinfo['peak_diff']
+                        if 'peak_value' in spinfo:
+                            extra['peak_value'] = spinfo['peak_value']
+                        
                         pulse.n_spikes = 1
                     else:
                         extra = {}
                         pulse.n_spikes = 0
                     
                     spike_entry = db.StimSpike(
-                        recording=rec_entry,
                         pulse=pulse,
                         **extra
                     )
                     session.add(spike_entry)
+                    pulse.first_spike = spike_entry
             
             if not srec_has_mp_probes:
                 continue
@@ -368,6 +402,7 @@ class ExperimentDBSubmission(object):
 
                     # get all responses, regardless of the presence of a spike
                     responses = mpa.get_spike_responses(srec[pre_dev], srec[post_dev], align_to='pulse', require_spike=False)
+                    post_tvals = srec[post_dev]['primary'].time_values
                     for resp in responses:
                         # base_entry = db.Baseline(
                         #     recording=rec_entries[post_dev],
@@ -377,33 +412,47 @@ class ExperimentDBSubmission(object):
                         #     mode=float_mode(resp['baseline'].data),
                         # )
                         # session.add(base_entry)
+                        pair_entry = pairs_by_device_id[(pre_dev, post_dev)]
+                        if resp['ex_qc_pass']:
+                            pair_entry.n_ex_test_spikes += 1
+                        if resp['in_qc_pass']:
+                            pair_entry.n_in_test_spikes += 1
+                            
                         resp_entry = db.PulseResponse(
                             recording=rec_entries[post_dev],
                             stim_pulse=all_pulse_entries[pre_dev][resp['pulse_n']],
-                            pair=pairs_by_device_id[(pre_dev, post_dev)],
+                            pair=pair_entry,
                             # baseline=base_entry,
-                            start_index=resp['rec_start'],
-                            stop_index=resp['rec_stop'],
+                            start_time=post_tvals[resp['rec_start']],
                             data=resp['response'].resample(sample_rate=20000).data,
+                            ex_qc_pass=resp['ex_qc_pass'],
+                            in_qc_pass=resp['in_qc_pass'],
                         )
                         session.add(resp_entry)
                         
             # generate up to 20 baseline snippets for each recording
             for dev in srec.devices:
                 rec = srec[dev]
+                rec_tvals = rec['primary'].time_values
                 dist = BaselineDistributor.get(rec)
                 for i in range(20):
                     base = dist.get_baseline_chunk(20e-3)
                     if base is None:
                         # all out!
                         break
-                    start, stop = base.source_indices
+                    start, stop = base
+                    data = rec['primary'][start:stop].resample(sample_rate=20000).data
+
+                    ex_qc_pass = qc.pulse_response_qc_pass(+1, rec, [start, stop], None)
+                    in_qc_pass = qc.pulse_response_qc_pass(-1, rec, [start, stop], None)
+
                     base_entry = db.Baseline(
                         recording=rec_entries[dev],
-                        start_index=start,
-                        stop_index=stop,
-                        data=base.resample(sample_rate=20000).data,
-                        mode=float_mode(base.data),
+                        start_time=rec_tvals[start],
+                        data=data,
+                        mode=float_mode(data),
+                        ex_qc_pass=ex_qc_pass,
+                        in_qc_pass=in_qc_pass,
                     )
                     session.add(base_entry)
             
@@ -418,180 +467,3 @@ class ExperimentDBSubmission(object):
             raise
         finally:
             session.close()
-
-
-class PipetteDBSubmission(object):
-    """Generates electrode / cell / pair entries in the synphys DB
-    """
-    message = "Generating pipette entries in DB"
-    
-    def __init__(self, site_dh):
-        self.site_dh = site_dh
-        
-    def check(self):
-        errors = []
-        info = self.site_dh.info()
-        if 'pipettes' not in info:
-            errors.append("No pipette information found in site metadata.")
-        return errors, []
-        
-    def summary(self):
-        return {'pipettes': None}
-        
-    def submit(self):
-        ts = datetime.fromtimestamp(self.site_dir.info()['__timestamp__'])
-        expt_entry = db.experiment_from_timestamp(ts)
-
-
-class SiteMosaicSubmission(object):
-    """Submit site mosaic data to multiple locations:
-    
-    * Copy site mosaic file to server
-    * Add cell position/label information to DB
-    * Update LIMS json
-    """
-    message = "Submitting site mosaic"
-    
-    def __init__(self, site_dh):
-        self.site_dh = site_dh
-        
-    def check(self):
-        return [], []
-        
-    def summary(self):
-        return {'mosaic': None}
-        
-    def submit(self):
-        pass
-
-
-class ExperimentSubmission(object):
-    def __init__(self, site_dh, files, pipettes):
-        """Handles the entire process of submitting an experiment, including:
-        
-        1. Storing submission metadata into ACQ4 index files
-        2. Copying all files to synphys data storage
-        3. Submitting combined NWB + metadata to LIMS
-        
-        Parameters
-        ----------
-        dh : DirHandle
-            Handle to the ACQ4 "site" folder to be submitted
-        files : list
-            Describes all files to be considered part of this experiment.
-            Each item in the list is a dict containing:
-               
-                * path: file path relative to slice folder
-                * category: the purpose of this file
-        pipettes : list
-            Describes all electrodes used during this experiment. Each item in
-            the list is a dict containing:
-            
-                * id: the ID of this pipette (usually 1-8)
-                * status: 'GOhm seal', 'Low seal', 'No seal', ...
-                * got_cell: bool, whether a cell was recorded from
-                * channel: AD channel number for this pipette
-                * start: starting datetime
-                * stop: ending datetime
-        """
-        self.site_dh = site_dh
-        self.files = files
-        self.pipettes = pipettes
-    
-        nwb_file = [f['path'] for f in files if f['category'] == 'MIES physiology'][0]
-        self.nwb_file = site_dh.parent()[nwb_file]
-    
-        self.stages = [
-            ExperimentMetadataSubmission(site_dh, files, pipettes),
-            #RawDataSubmission(site_dh),
-            #LIMSSubmission(site_dh, files),
-            #LIMSSubmission(site_dh, files, _override_spec_name="Ntsr1-Cre_GN220;Ai14-349905.03.06"),
-        ]
-        
-    def check(self):
-        errors = []
-        warnings = []
-
-        # sort files by category for counting
-        categories = {}
-        for f in self.files:
-            categories.setdefault(f['category'], []).append(f['path'])
-        n_files = {k:len(v) for k,v in categories.items()}
-        
-        # Make sure exactly one NWB file was selected
-        n_mp = n_files.get('MIES physiology', 0)
-        if n_mp != 1:
-            errors.append('selected %d NWB files (must have exactly 1)' % n_mp)
-        
-        # Make sure exactly one MP log file was selected
-        n_mpl = n_files.get('Multipatch log', 0)
-        if n_mpl != 1:
-            errors.append('selected %d multipatch log files (must have exactly 1)' % n_files['Multipatch log'])
-
-        # Check that we have at least 1 slice anatomy image, and warn if we have fewer
-        # than 4
-        n_sa = n_files.get('slice anatomy', 0)
-        if n_sa < 1:
-            errors.append('no slice anatomy images found.')
-        elif n_sa < 4:
-            warnings.append('only %d slice anatomy images found.' % n_sa)
-
-        # warn if there are no slice quality images
-        n_sq = n_files.get('slice quality stack', 0)
-        if n_sq < 1:
-            warnings.append('no slice quality stack found.')
-            
-        # todo: check for images covering all fluorescent reporters
-
-        # todo: make sure all images are associated with a light source
-        
-        # allow all submission stages to make their own checks
-        for stage in self.stages:
-            e,w = stage.check()
-            errors.extend(e)
-            warnings.extend(w)
-            
-        return errors, warnings
-
-    def summary(self):
-        summ = OrderedDict()
-        for stage in self.stages:
-            summ.update(stage.summary())
-        return summ
-    
-    def submit(self):
-        for stage in self.stages:
-            assert len(stage.check()[0]) == 0
-        with pg.ProgressDialog("Submitting experiment..", maximum=len(self.stages), nested=True) as dlg:
-            for stage in self.stages:
-                stage.submit()
-                dlg += 1
-                if dlg.wasCanceled():
-                    break
-
-
-def submit_site_mosaic(data):
-    """Submit a site mosaic and information about cell labeling
-    
-        data = {
-            'acquisition_site_uid': <unique site ID chosen by acquisition system>,
-            'mosaic_file': <path to mosaic file>,
-            'cells': [
-                {'cell_id':, 'fill_fluorophore':, 'cre_labels': [], 'position': (x,y,z)},
-            ],
-        }
-    
-    """
-    
-    
-def submit_biocytin_data(data):
-    """Submit metadata related to biocytin image.
-    
-        data = {
-            'cells': [
-                {'cell_id':, 'biocytin_filled': bool},
-            ],
-        }
-    
-    """
-    
