@@ -33,6 +33,7 @@ import allensdk.core.json_utilities as ju
 relative_path=os.path.dirname(os.getcwd())
 sys.path.insert(1, os.path.join(relative_path))
 import scipy.stats as stats
+import pickle
 
 colors={}
 colors['correct_amp_good_HP']=(0, 128, 0) #green
@@ -192,12 +193,23 @@ def check_synapse(expt, cells):
             synapses.append((expt, cells[0].cell_id, cells[1].cell_id))
     except:
         pass
-        
-    
+ 
+
+ 
 if __name__ == '__main__':
+
+    
     app = pg.mkQApp()
     pg.dbg()
-    
+
+    file=open('pulse_expt_ids.pkl')
+    Stephs_data=pickle.load(file)
+    file.close()
+    Steph_uids=np.array([])
+    for key in Stephs_data.keys():
+        print(key)
+        Steph_uids=np.append(Steph_uids, np.array([d[2] for d in Stephs_data[key]]))
+
     # Load experiment index
     expts = cached_experiments()
 #    expts.select(calcium='high')  #this is throwing datetime errors
@@ -214,9 +226,15 @@ if __name__ == '__main__':
         print(synapic_pairs)
     
         synapses = []
+        uid_skip=[]
         for connection in expts.connection_summary():
             cells = connection['cells']
             expt = connection['expt']
+            print (expt.uid)
+            if expt.uid not in Steph_uids:
+                uid_skip.append(expt.uid)
+                print('skipping ')
+                continue
             pre_synaptic=synapic_pairs[0]
             post_synaptic=synapic_pairs[1]
             if pre_synaptic=='L23pyr':
@@ -364,9 +382,11 @@ if __name__ == '__main__':
                     options: 'correct_amp_good_HP','correct_amp_bad_HP', 'wrong_amp_good_HP', 'wrong_amp_bad_HP'
                 '''
                 ave_psp_plot.plot(average.time_values, average.data, pen=pg.mkPen(color=colors[qc_key])) #plot average of first pulse in each epoch of spikes of individual synapses
-                time_vs_psp_plot.plot(individual_start_times, smoothed, pen=pg.mkPen(color=colors[qc_key])) # (i, len(synapses)*1.3))
+#                time_vs_psp_plot.plot(individual_start_times, smoothed, pen=pg.mkPen(color=colors[qc_key])) # (i, len(synapses)*1.3))
+                time_vs_psp_plot.plot(individual_start_times, peak_minus_base_average, pen=pg.mkPen(color=colors[qc_key])) # (i, len(synapses)*1.3))
                 time_vs_psp_plot.plot(individual_start_times, t_slope*individual_start_times+t_intercept, pen=pg.mkPen(color=colors[qc_key], style=pg.QtCore.Qt.DashLine)) # (i, len(synapses)*1.3))
-                sweep_vs_psp_plot.plot(sweep_numbers, smoothed, pen=pg.mkPen(color=colors[qc_key]))
+#                sweep_vs_psp_plot.plot(sweep_numbers, smoothed, pen=pg.mkPen(color=colors[qc_key]))
+                sweep_vs_psp_plot.plot(sweep_numbers, peak_minus_base_average, pen=pg.mkPen(color=colors[qc_key]))
                 sweep_vs_psp_plot.plot(sweep_numbers, sn_slope*sweep_numbers+sn_intercept, pen=pg.mkPen(color=colors[qc_key],style=pg.QtCore.Qt.DashLine)) # (i, len(synapses)*1.3))
                 slopes['sweep_numbers'][qc_key].append(sn_slope)
                 slopes['individual_start_times'][qc_key].append(t_slope)
@@ -423,9 +443,10 @@ if __name__ == '__main__':
                                'PSPs_amp_start':PSPs_amp_start,
                                'PSPs_amp_ave':PSPs_amp_ave,
                                'PSPs_amp_end':PSPs_amp_end,
-                               'length_of_experiment':length_of_experiment}
+                               'length_of_experiment':length_of_experiment,
+                               'uids_skipped':np.unique(uid_skip)}
         
-    ju.write("PSP_vs_time_output_data/goodpsp_vs_time or_sweep_2_07_18.json", dictionary)
+    ju.write("PSP_vs_time_output_data/uid_included_02_20_18.json", dictionary)
 
     plt.figure()
     for key in dictionary.keys():
