@@ -4,3 +4,9 @@ config.yml
 .directory
 .idea
 cache
+analyses/PSP_vs_time_output_data
+multipatch_analysis.egg-info/
+allensdk_internal
+mounted_data
+multipatch_analysis.egg-info
+analyses/PSP_vs_time_output_images
