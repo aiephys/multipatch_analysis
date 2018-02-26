@@ -5,6 +5,10 @@ import io
 import numpy as np
 
 import sqlalchemy
+version = map(int, sqlalchemy.__version__.split('.'))
+if version < [1, 2, 0]:
+    raise Exception('requires at least sqlalchemy 1.2')
+
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, Integer, String, Boolean, Float, Date, DateTime, LargeBinary, ForeignKey
@@ -453,31 +457,3 @@ def experiment_from_timestamp(ts, session=None):
 
 
 
-if __name__ == '__main__':
-    # start a session
-    session = Session()
-    
-    sl = Slice(lims_specimen_name="xxxxx", surface='medial')
-    exp1 = Experiment(slice=sl, acsf='MP ACSF 1')
-    exp2 = Experiment(slice=sl, acsf='MP ACSF 1')
-    
-    srec1 = SyncRec(experiment=exp1)
-    srec2 = SyncRec(experiment=exp2)
-    srec3 = SyncRec(experiment=exp2)
-    
-    rec1 = Recording(sync_rec=srec1)
-    rec2 = Recording(sync_rec=srec2)
-    rec3 = Recording(sync_rec=srec3)
-    rec4 = Recording(sync_rec=srec3)
-    
-    pcrec1 = PatchClampRecording(recording=rec1)
-    pcrec2 = PatchClampRecording(recording=rec2)
-    pcrec3 = PatchClampRecording(recording=rec3)
-    
-    tp1 = TestPulse()
-    tp2 = TestPulse()
-    pcrec1.nearest_test_pulse = tp1
-    pcrec2.nearest_test_pulse = tp2
-    
-    session.add_all([sl, exp1, exp2, srec1, srec2, srec3, rec1, rec2, rec3, rec4, pcrec1, pcrec2, pcrec3, tp1, tp2])
-    session.commit()
