@@ -3,7 +3,7 @@ import os, re, json
 from allensdk_internal.core import lims_utilities as lims
 
 
-def specimen_info(specimen_name):
+def specimen_info(specimen_name=None, specimen_id=None):
     """Return a dictionary of information about a specimen queried from LIMS.
     
     Also generates information about the hemisphere and which side of the slice
@@ -32,7 +32,6 @@ def specimen_info(specimen_name):
     """
     
     # Query all interesting information about this specimen from LIMS
-    sid = specimen_name.strip()
     query = """
         select 
             organisms.name as organism, 
@@ -46,7 +45,10 @@ def specimen_info(specimen_name):
             plane_of_sections.name as plane_of_section,
             flipped_specimens.name as flipped,
             specimens.histology_well_name as histology_well_name,
-            specimens.carousel_well_name as carousel_well_name
+            specimens.carousel_well_name as carousel_well_name,
+            specimens.parent_id as parent_id,
+            specimens.name as specimen_name,
+            specimens.id as specimen_id
         from specimens
             left join donors on specimens.donor_id=donors.id 
             left join organisms on donors.organism_id=organisms.id
@@ -55,8 +57,16 @@ def specimen_info(specimen_name):
             left join tissue_processings on specimens.tissue_processing_id=tissue_processings.id
             left join plane_of_sections on tissue_processings.plane_of_section_id=plane_of_sections.id
             left join flipped_specimens on flipped_specimens.id = specimens.flipped_specimen_id
-        where specimens.name='%s';
-    """ % sid
+    """
+    if specimen_name is not None:
+        sid = specimen_name.strip()
+        query += "where specimens.name='%s';" % sid
+    elif specimen_id is not None:
+        sid = specimen_id
+        query += "where specimens.id='%d';" % sid
+    else:
+        raise ValueError("Must specify specimen name or ID")
+        
     r = lims.query(query)
     if len(r) != 1:
         raise Exception("LIMS lookup for specimen '%s' returned %d results (expected 1)" % (sid, len(r)))
@@ -75,10 +85,11 @@ def specimen_info(specimen_name):
     #        AAAAAA = donor ID
     #            BB = slice number
     #            CC = orientation and hemisphere
+    spec_name = rec['specimen_name']
     if rec['organism'] == 'mouse':
-        m = re.match(r'(.*)(-(\d{6,7}))?(\.(\d{2}))(\.(\d{2}))$', sid)
+        m = re.match(r'(.*)(-(\d{6,7}))?(\.(\d{2}))(\.(\d{2}))$', spec_name)
         if m is None:
-            raise Exception('Could not parse mouse specimen name: "%s"' % sid)
+            raise Exception('Could not parse mouse specimen name: "%s"' % spec_name)
         
         rec['section_number'] = int(m.groups()[4])
         
@@ -110,9 +121,9 @@ def specimen_info(specimen_name):
     # Human format is:
     #   Haa.bb.ccc.dd.ee.ff
     elif rec['organism'] == 'human':
-        m = re.match(r'H(\d+)\.(\d+)\.(\d+)\.(\d+)\.(\d+)(\.(\d+))?$', sid)
+        m = re.match(r'H(\d+)\.(\d+)\.(\d+)\.(\d+)\.(\d+)(\.(\d+))?$', spec_name)
         if m is None:
-            raise Exception('Could not parse human specimen name: "%s"' % sid)
+            raise Exception('Could not parse human specimen name: "%s"' % spec_name)
         rec['hemisphere'] = None
         rec['sectioning_mount_side'] = None
         rec['exposed_surface'] = None
