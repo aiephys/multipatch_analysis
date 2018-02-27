@@ -42,7 +42,7 @@ class SliceSubmission(object):
             # Interpret slice time
             slice_time = info.get('slice time', None)
             if slice_time is not None:
-                m = re.match(r'((20\d\d)-(\d{1,2})-(\d{1,2})\s+)?(\d+):(\d+)', slice_time.strip())
+                m = re.match(r'((20\d\d)-(\d{1,2})-(\d{1,2}) )?(\d+):(\d+)', slice_time.strip())
                 if m is not None:
                     _, year, mon, day, hh, mm = m.groups()
                     if year is None:

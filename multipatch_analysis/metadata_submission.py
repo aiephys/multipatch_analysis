@@ -135,7 +135,33 @@ class ExperimentMetadataSubmission(object):
         
         # Is specimen from today?
         
-        
+        # Slice time ok?
+        tod = expt_info.get('time_of_dissection', '')
+        if tod == '':
+            errors.append("Time of dissection not specified")
+        else:
+            m = re.match(r'((20\d{2})-(\d{1,2})-(\d{1,2}) )?(\d{1,2}):(\d{1,2})', tod)
+            if m is None:
+                errors.append('Time of dissection must be "HH:MM" or "YYYY-MM-DD HH:MM"')
+            else:
+                _, year, mon, day, h, m = m.groups()
+                if int(h) < 7:
+                    warnings.append("Dissection time appears to be very early. Did you mean %d:%s?" % (int(h)+12, m))
+                # interpret time of dissection
+                site_date = datetime.fromtimestamp(site_info['__timestamp__'])
+                if year is None:
+                    diss_time = datetime(site_date.year, site_date.month, site_date.day, int(h), int(m))
+                else:
+                    diss_time = datetime(int(year), int(mon), int(day), int(h), int(m))
+                # check time
+                seconds_since_dissection = (site_date - diss_time).total_seconds()
+                if seconds_since_dissection < 30*60:
+                    warnings.append("Time of dissection is later than experiment time - 30 minutes")
+                if seconds_since_dissection < 0:
+                    errors.append("Time of dissection is later than experiment time")
+                if seconds_since_dissection > 6*3600:
+                    warnings.append("Time of dissection is more than 6 hours prior to experiment")
+
         # Sanity checks on pipette metadata:
         
         for pip_id, pip in self.pipettes.items():
@@ -166,8 +192,6 @@ class ExperimentMetadataSubmission(object):
         return errors, warnings
         
     def _check_lims(self, errors, warnings, spec_name, sid, site_info, slice_info):
-        cw_name = self.spec_info['carousel_well_name']
-        
         # LIMS upload will fail if the specimen has not been given an ephys roi plan.
         accepted_roi_plans = {
             'mouse': 'Synaptic Physiology ROI Plan', 
@@ -184,11 +208,14 @@ class ExperimentMetadataSubmission(object):
             errors.append('Specimen has multiple ephys roi plans '
                 '(expected 1). Edit:' + lims_edit_href)
 
-        # Check LIMS specimen has flipped field set and a sensible-looking 
-        # histology well name
-        
+        # Check LIMS specimen has flipped field set
         if self.spec_info['flipped'] not in (True, False):
-            errors.append("Must set flipped field for this specimen: %s" % lims_edit_href)
+            if self.spec_info['organism'] == 'human':
+                # human specimens can be symmetrical enough that "flipped" is meaningless
+                warnings.append("Flipped field was not set for this specimen: %s" % lims_edit_href)
+            else:
+                errors.append("Must set flipped field for this specimen: %s" % lims_edit_href)
+        
         # histology well name should look something like "multi_170911_21_A01"
         hist_well = self.spec_info['histology_well_name']
         if hist_well is None:
@@ -216,6 +243,13 @@ class ExperimentMetadataSubmission(object):
                     warnings.append("Histology plate number %s might be too high? %s" % (plate_n, lims_edit_href))
 
         # Check carousel ID matches the one in LIMS
+        if self.spec_info['organism'] == 'human' and self.spec_info['subsection_number'] is not None:
+            # this specimen was divided; ask about the parent carousel well name instead
+            parent_spec_info = lims.specimen_info(specimen_id=self.spec_info['parent_id'])
+            cw_name = parent_spec_info['carousel_well_name']
+        else:
+            cw_name = self.spec_info['carousel_well_name']
+        
         if cw_name is None or len(cw_name.strip()) == 0:
             errors.append('No LIMS carousel well name for this specimen!')
         else:
@@ -231,7 +265,7 @@ class ExperimentMetadataSubmission(object):
 
         # check specimen age
         if self.spec_info['age'] is None:
-            warnings.append("Donor age is nto set in LIMS.")
+            warnings.append("Donor age is not set in LIMS.")
 
     def summary(self):
         summ = OrderedDict()
