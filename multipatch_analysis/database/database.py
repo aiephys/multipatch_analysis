@@ -5,8 +5,8 @@ import io
 import numpy as np
 
 import sqlalchemy
-version = map(int, sqlalchemy.__version__.split('.'))
-if version < [1, 2, 0]:
+from distutils.version import LooseVersion
+if LooseVersion(sqlalchemy.__version__) < '1.2':
     raise Exception('requires at least sqlalchemy 1.2')
 
 from sqlalchemy import create_engine
