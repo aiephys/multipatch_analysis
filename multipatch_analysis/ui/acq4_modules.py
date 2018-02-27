@@ -1,5 +1,6 @@
 from acq4.pyqtgraph.Qt import QtCore, QtGui
 from acq4.modules.Module import Module
+from acq4.modules import registerModuleClass
 from acq4.Manager import getManager
 from . import submit_expt
 from . import multipatch_nwb_viewer
@@ -11,6 +12,9 @@ class MultipatchSubmissionModule(Module):
     This is primarily to ensure that metadata changes made via ACQ4 are immediately
     available to (and do noty collide with) the submission tool, and vice-versa. 
     """
+    moduleDisplayName = "MP Submission Tool"
+    moduleCategory = "Analysis"
+
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
         self.ui = submit_expt.ExperimentSubmitUi()
@@ -29,10 +33,15 @@ class MultipatchSubmissionModule(Module):
     def window(self):
         return self.ui
 
+registerModuleClass(MultipatchSubmissionModule)
+
         
 class NWBViewerModule(Module):
     """ACQ module for browsing data in NWB files.
     """
+    moduleDisplayName = "MP NWB Viewer"
+    moduleCategory = "Analysis"
+
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
         self.ui = multipatch_nwb_viewer.MultipatchNwbViewer()
@@ -51,3 +60,4 @@ class NWBViewerModule(Module):
     def window(self):
         return self.ui
 
+registerModuleClass(NWBViewerModule)
