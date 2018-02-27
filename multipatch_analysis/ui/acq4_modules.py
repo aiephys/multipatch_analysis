@@ -1,6 +1,5 @@
 from acq4.pyqtgraph.Qt import QtCore, QtGui
 from acq4.modules.Module import Module
-from acq4.modules import registerModuleClass
 from acq4.Manager import getManager
 from . import submit_expt
 from . import multipatch_nwb_viewer
@@ -33,8 +32,6 @@ class MultipatchSubmissionModule(Module):
     def window(self):
         return self.ui
 
-registerModuleClass(MultipatchSubmissionModule)
-
         
 class NWBViewerModule(Module):
     """ACQ module for browsing data in NWB files.
@@ -59,5 +56,3 @@ class NWBViewerModule(Module):
         
     def window(self):
         return self.ui
-
-registerModuleClass(NWBViewerModule)
