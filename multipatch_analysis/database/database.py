@@ -252,7 +252,7 @@ _coltypes = {
 }
 
 
-def generate_mapping(table, schema):
+def generate_mapping(table, schema, base=None):
     """Generate an ORM mapping class from an entry in table_schemas.
     """
     name = table.capitalize()
@@ -283,11 +283,14 @@ def generate_mapping(table, schema):
     props['time_modified'] = Column(DateTime, onupdate=func.current_timestamp())
     props['meta'] = Column(JSONB)
 
-    return type(name, (ORMBase,), props)
+    if base is None:
+        return type(name, (ORMBase,), props)
+    else:
+        return type(name, (base,ORMBase), props)
 
 
-def _generate_mapping(table):
-    return generate_mapping(table, table_schemas[table])
+def _generate_mapping(table, base=None):
+    return generate_mapping(table, table_schemas[table], base=base)
 
 
 def create_all_mappings():
@@ -295,8 +298,22 @@ def create_all_mappings():
     global TestPulse, StimPulse, StimSpike, PulseResponse, Baseline
 
     # Generate ORM mapping classes
+
+    class ExperimentBase(object):
+        def __getitem__(self, item):
+            # Easy cell/pair getters.
+            # They're inefficient, but meh.
+            if isinstance(item, int):
+                for cell in self.cells:
+                    if cell.ext_id == item:
+                        return cell
+            elif isinstance(item, tuple):
+                for pair in self.pairs:
+                    if item == (pair.pre_cell.ext_id, pair.post_cell.ext_id):
+                        return pair
+
     Slice = _generate_mapping('slice')
-    Experiment = _generate_mapping('experiment')
+    Experiment = _generate_mapping('experiment', base=ExperimentBase)
     Electrode = _generate_mapping('electrode')
     Cell = _generate_mapping('cell')
     Pair = _generate_mapping('pair')
@@ -339,7 +356,7 @@ def create_all_mappings():
     Recording.sync_rec = relationship(SyncRec, back_populates="recordings")
 
     Recording.patch_clamp_recording = relationship(PatchClampRecording, back_populates="recording", cascade="delete", single_parent=True)
-    PatchClampRecording.recording = relationship(Recording, back_populates="patch_clamp_recording")
+    PatchClampRecording.recording = relationship(Recording, back_populates="patch_clamp_recording", single_parent=True)
 
     PatchClampRecording.multi_patch_probe = relationship(MultiPatchProbe, back_populates="patch_clamp_recording", cascade="delete", single_parent=True)
     MultiPatchProbe.patch_clamp_recording = relationship(PatchClampRecording, back_populates="multi_patch_probe")
