@@ -2,6 +2,7 @@ from acq4.util.DataManager import getDirHandle
 import os, re, json, yaml, shutil
 from collections import OrderedDict
 from datetime import datetime, timedelta
+import numpy as np
 import pyqtgraph as pg
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.data import PatchClampRecording
@@ -243,7 +244,7 @@ class ExperimentDBSubmission(object):
                 if None in [p1, p2]:
                     distance = None
                 else:
-                    distance = np.linalg.norm(np.array(p1), np.array(p2))
+                    distance = np.linalg.norm(np.array(p1) - np.array(p2))
                 
                 pair_entry = db.Pair(
                     experiment=expt_entry,

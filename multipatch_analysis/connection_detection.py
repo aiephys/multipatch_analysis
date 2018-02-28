@@ -83,6 +83,7 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
             elif align_to == 'pulse':
                 # align to pulse onset
                 pulse['rec_start'] = pulse['pulse_ind'] - int(pre_pad / dt)
+            pulse['rec_start'] = max(0, pulse['rec_start'])
             
             max_stop = pulse['rec_start'] + int(50e-3 / dt)
             if i+1 < len(spikes):
@@ -94,6 +95,7 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
             
             # Extract data from postsynaptic recording
             pulse['response'] = post_rec['primary'][pulse['rec_start']:pulse['rec_stop']]
+            assert len(pulse['response']) > 0
 
             # Extract presynaptic spike and stimulus command
             pulse['pre_rec'] = pre_rec['primary'][pulse['rec_start']:pulse['rec_stop']]
