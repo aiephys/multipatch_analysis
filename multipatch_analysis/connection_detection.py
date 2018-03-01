@@ -26,16 +26,16 @@ class BaselineDistributor(Analyzer):
         given duration.
         """
         dt = self.rec['primary'].dt
+        chunk_size = int(np.round(duration / dt))
         while True:
             if len(self.baselines) == 0:
                 return None
             start, stop = self.baselines[0]
-            remain = dt * ((stop-start) - self.ptr)
-            if remain >= duration:
-                size = int(duration / dt)
-                chunk = (self.ptr, self.ptr+size)
-                self.ptr += size
-                return chunk
+            chunk_start = max(start, self.ptr)
+            chunk_stop = chunk_start + chunk_size
+            if chunk_stop <= stop:
+                self.ptr = chunk_stop
+                return chunk_start, chunk_stop
             else:
                 self.baselines.pop(0)
 
