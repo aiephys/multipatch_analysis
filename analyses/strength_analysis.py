@@ -762,17 +762,29 @@ class ResponseStrengthAnalyzer(object):
             qc_field = 'in_qc_pass' if self.analysis[1] == 'ic' else 'ex_qc_pass'
         fg_x = fg_data[data_field]
         bg_x = bg_data[data_field]
+        fg_qc = fg_data[qc_field]
+        bg_qc = bg_data[qc_field]
+
+        # record data for later use
+        self.fg_x = fg_x
+        self.bg_x = bg_x
+        self.fg_qc = fg_qc
+        self.bg_qc = bg_qc
+        self.qc_field = qc_field
+        self.fg_data = fg_data
+        self.bg_data = bg_data
 
         # select colors
         pass_brush = pg.mkBrush((255, 255, 255, 80))
         fail_brush = pg.mkBrush((150, 0, 0, 80))
-        fg_color = [(pass_brush if qc_pass else fail_brush) for qc_pass in fg_data[qc_field]]
-        bg_color = [(pass_brush if qc_pass else fail_brush) for qc_pass in bg_data[qc_field]]
+        fg_color = [(pass_brush if qc_pass else fail_brush) for qc_pass in fg_qc]
+        bg_color = [(pass_brush if qc_pass else fail_brush) for qc_pass in bg_qc]
         
         # clear old plots
         self.fg_scatter.setData([])
         self.bg_scatter.setData([])
         self.hist_plot.clear()
+        self.hist_plot.setTitle("")
         self.clear_trace_plots()
         # clear click-selected plots
         self._clicked_fg_ids = []
@@ -787,29 +799,29 @@ class ResponseStrengthAnalyzer(object):
         self.fg_scatter.setData(fg_x, fg_y, data=fg_data, brush=fg_color)
         self.bg_scatter.setData(bg_x, bg_y, data=bg_data, brush=bg_color)
 
-        # plot histograms
-        n_bins = max(5, int(len(fg_x)**0.5))
-        all_x = np.concatenate([fg_x, bg_x])
+        # show only qc-passed data in histogram
+        fg_x_qc = fg_x[fg_qc] 
+        bg_x_qc = bg_x[bg_qc]
+        if len(fg_x_qc) == 0 or len(bg_x_qc) == 0:
+            return
+        
+        # plot histograms        
+        n_bins = max(5, int(len(fg_x_qc)**0.5))
+        all_x = np.concatenate([fg_x_qc, bg_x_qc])
         bins = np.linspace(np.percentile(all_x, 2), np.percentile(all_x, 98), n_bins+1)
-        fg_hist = np.histogram(fg_x, bins=bins)
-        bg_hist = np.histogram(bg_x, bins=bins)
-        self.hist_plot.clear()
+        fg_hist = np.histogram(fg_x_qc, bins=bins)
+        bg_hist = np.histogram(bg_x_qc, bins=bins)
         self.hist_plot.plot(bg_hist[1], bg_hist[0], stepMode=True, fillLevel=0, brush=(255, 0, 0, 100), pen=0.5)
         self.hist_plot.plot(fg_hist[1], fg_hist[0], stepMode=True, fillLevel=0, brush=(0, 255, 255, 100), pen=1.0)
 
-        ks = scipy.stats.ks_2samp(fg_x, bg_x)
+        # measure distance between distributions
+        ks = scipy.stats.ks_2samp(fg_x_qc, bg_x_qc)
         self.hist_plot.setTitle("%s: KS=%0.02g" % (' '.join(self.analysis), ks.pvalue))
-
-        # record data for later use
-        self.fg_x = fg_x
-        self.bg_x = bg_x
-        self.fg_data = fg_data
-        self.bg_data = bg_data
 
         # set event region, but don't update (it's too expensive)
         try:
             self.event_region.sigRegionChangeFinished.disconnect(self.region_changed)
-            self.event_region.setRegion([fg_x.min(), fg_x.max()])
+            self.event_region.setRegion([fg_x_qc.min(), fg_x_qc.max()])
         finally:
             self.event_region.sigRegionChangeFinished.connect(self.region_changed)
 
@@ -883,6 +895,10 @@ class ResponseStrengthAnalyzer(object):
             if print_info:
                 print("Selected pulse responses:")
             for rec in recs:
+                # Filter by QC unless we selected just a single record
+                if len(recs) > 0 and getattr(rec, self.qc_field) is False:
+                    continue
+
                 # Make it a bit easier to trace individual reponses back to source..
                 global selected_response
                 selected_response = rec.response_id
@@ -1054,17 +1070,18 @@ if __name__ == '__main__':
     nwb_viewer = MultipatchNwbViewer()
 
     def dbl_clicked(index):
-        item = b.itemFromIndex(index)[0]
-        nwb = os.path.join(item.expt.original_path, item.expt.ephys_file)
-        print(nwb)
-        try:
-            cache = synphys_cache.get_cache().get_cache(nwb)
-            print("load cached:", cache)
-            nwb_viewer.load_nwb(cache)
-        except Exception:
-            print("load remote:", nwb)
-            nwb_viewer.load_nwb(nwb)
-        nwb_viewer.show()
+        with pg.BusyCursor():
+            item = b.itemFromIndex(index)[0]
+            nwb = os.path.join(item.expt.original_path, item.expt.ephys_file)
+            print(nwb)
+            try:
+                cache = synphys_cache.get_cache().get_cache(nwb)
+                print("load cached:", cache)
+                nwb_viewer.load_nwb(cache)
+            except Exception:
+                print("load remote:", nwb)
+                nwb_viewer.load_nwb(nwb)
+            nwb_viewer.show()
         
     b.doubleClicked.connect(dbl_clicked)
 
