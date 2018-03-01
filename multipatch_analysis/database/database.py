@@ -9,15 +9,12 @@ from distutils.version import LooseVersion
 if LooseVersion(sqlalchemy.__version__) < '1.2':
     raise Exception('requires at least sqlalchemy 1.2')
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, Float, Date, DateTime, LargeBinary, ForeignKey, or_, and_
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, Integer, String, Boolean, Float, Date, DateTime, LargeBinary, ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, deferred, sessionmaker, aliased
 from sqlalchemy.types import TypeDecorator
-from sqlalchemy.orm import sessionmaker, aliased
 from sqlalchemy.sql.expression import func
-from sqlalchemy import or_, and_
 
 from .. import config
 
@@ -169,7 +166,7 @@ table_schemas = {
         ('duration', 'float', 'Length of the pulse in seconds'),
         ('n_spikes', 'int', 'Number of spikes evoked by this pulse'),
         # ('first_spike', 'stim_spike.id', 'The ID of the first spike evoked by this pulse'),
-        ('data', 'array', 'Numpy array of presynaptic recording sampled at '+_sample_rate_str),
+        ('data', 'array', 'Numpy array of presynaptic recording sampled at '+_sample_rate_str, {'deferred': True}),
         ('data_start_time', 'float', "Starting time of the data chunk, relative to the beginning of the recording"),
     ],
     'stim_spike': [
@@ -185,7 +182,7 @@ table_schemas = {
         "A snippet of baseline data, matched to a postsynaptic recording",
         ('recording_id', 'recording.id', 'The recording from which this baseline snippet was extracted.', {'index': True}),
         ('start_time', 'float', "Starting time of this chunk of the recording in seconds, relative to the beginning of the recording"),
-        ('data', 'array', 'numpy array of baseline data sampled at '+_sample_rate_str),
+        ('data', 'array', 'numpy array of baseline data sampled at '+_sample_rate_str, {'deferred': True}),
         ('mode', 'float', 'most common value in the baseline snippet'),
         ('ex_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for excitatory synapse probing'),
         ('in_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for inhibitory synapse probing'),
@@ -196,7 +193,7 @@ table_schemas = {
         ('pulse_id', 'stim_pulse.id', 'The presynaptic pulse', {'index': True}),
         ('pair_id', 'pair.id', 'The pre-post cell pair involved in this pulse response', {'index': True}),
         ('start_time', 'float', 'Starting time of this chunk of the recording in seconds, relative to the beginning of the recording'),
-        ('data', 'array', 'numpy array of response data sampled at '+_sample_rate_str),
+        ('data', 'array', 'numpy array of response data sampled at '+_sample_rate_str, {'deferred': True}),
         ('ex_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for excitatory synapse probing'),
         ('in_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for inhibitory synapse probing'),
         ('baseline_id', 'baseline.id'),
@@ -270,7 +267,8 @@ def generate_mapping(table, schema, base=None):
         colname, coltype = column[:2]
         kwds = {} if len(column) < 4 else column[3]
         kwds['comment'] = None if len(column) < 3 else column[2]
-            
+        defer_col = kwds.pop('deferred', False)
+
         if coltype not in _coltypes:
             if not coltype.endswith('.id'):
                 raise ValueError("Unrecognized column type %s" % coltype)
@@ -278,7 +276,10 @@ def generate_mapping(table, schema, base=None):
         else:
             ctyp = _coltypes[coltype]
             props[colname] = Column(ctyp, **kwds)
-    
+
+        if defer_col:
+            props[colname] = deferred(props[colname])
+
     props['time_created'] = Column(DateTime, default=func.now())
     props['time_modified'] = Column(DateTime, onupdate=func.current_timestamp())
     props['meta'] = Column(JSONB)
