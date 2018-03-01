@@ -76,7 +76,10 @@ def chunk_copy(src, dst, chunk_size=100e6):
                         msg = ('[' + '#' * n + '-' * (50-n) + ']  %d / %d MB\r') % (int(tot/1e6), int(size/1e6))
                         msglen = len(msg)
                         sys.stdout.write(msg)
-                        sys.stdout.flush()
+                        try:
+                            sys.stdout.flush()
+                        except IOError:  # Why does this happen??
+                            pass
                     if len(chunk) < chunk_size:
                         break
                 sys.stdout.write("[###  flushing..  \r")
