@@ -15,6 +15,7 @@ from multipatch_analysis.constants import EXCITATORY_CRE_TYPES, INHIBITORY_CRE_T
 import argparse, time, sys, os, pickle, io, multiprocessing
 import numpy as np
 import scipy.stats
+import pandas
 
 from sqlalchemy.orm import aliased
 
@@ -206,7 +207,7 @@ def rebuild_strength(parallel=True, workers=6, session=None):
         # Divide workload into equal parts for each worker
         max_pulse_id = session.execute('select max(id) from %s' % source).fetchone()[0]
         chunk = 1 + (max_pulse_id // workers)
-        parts = [(source, chunk*i, chunk*(i+1)) for i in range(4)]
+        parts = [(source, chunk*i, chunk*(i+1)) for i in range(workers)]
 
         if parallel:
             pool = multiprocessing.Pool(processes=workers)
@@ -233,13 +234,15 @@ def response_query(session):
         db.StimPulse.duration.label('pulse_dur'),
         db.StimSpike.max_dvdt_time.label('spike_time'),
         db.PatchClampRecording.clamp_mode,
+        db.PulseResponse.ex_qc_pass,
+        db.PulseResponse.in_qc_pass,
     )
     q = q.join(db.StimPulse)
     q = q.join(db.StimSpike)
     q = q.join(db.PulseResponse.recording).join(db.PatchClampRecording) 
 
     # Ignore anything that failed QC
-    q = q.filter(db.or_(db.PulseResponse.ex_qc_pass==True, db.PulseResponse.in_qc_pass==True))
+    q = q.filter(((db.PulseResponse.ex_qc_pass==True) | (db.PulseResponse.in_qc_pass==True)))
 
     return q
 
@@ -252,11 +255,13 @@ def baseline_query(session):
         db.Baseline.id.label('response_id'),
         db.Baseline.data,
         db.PatchClampRecording.clamp_mode,
+        db.Baseline.ex_qc_pass,
+        db.Baseline.in_qc_pass,
     )
     q = q.join(db.Baseline.recording).join(db.PatchClampRecording) 
 
     # Ignore anything that failed QC
-    q = q.filter(db.or_(db.Baseline.ex_qc_pass==True, db.Baseline.in_qc_pass==True))
+    q = q.filter(((db.Baseline.ex_qc_pass==True) | (db.Baseline.in_qc_pass==True)))
 
     return q
 
@@ -371,6 +376,8 @@ def rebuild_connectivity(session):
             devs = pair.pre_cell.electrode.device_id, pair.post_cell.electrode.device_id
             amps = get_amps(session, pair)
             base_amps = get_baseline_amps(session, pair, limit=len(amps))
+            if len(amps) == 0 or len(base_amps) == 0:
+                continue
             
             conn = ConnectionStrength(pair_id=pair.id)
             # Whether the user marked this as connected
@@ -515,17 +522,9 @@ def get_amps(session, pair, clamp_mode='ic'):
         PulseResponseStrength.neg_dec_amp,
         PulseResponseStrength.pos_dec_latency,
         PulseResponseStrength.neg_dec_latency,
+        db.PulseResponse.ex_qc_pass,
+        db.PulseResponse.in_qc_pass,
     ).join(db.PulseResponse)
-
-    dtype = [
-        ('id', 'int'),
-        ('pos_amp', 'float'),
-        ('neg_amp', 'float'),
-        ('pos_dec_amp', 'float'),
-        ('neg_dec_amp', 'float'),
-        ('pos_dec_latency', 'float'),
-        ('neg_dec_latency', 'float'),
-    ]
     
     q, pre_rec, post_rec = join_pulse_response_to_expt(q)
         
@@ -533,27 +532,18 @@ def get_amps(session, pair, clamp_mode='ic'):
         (pre_rec.electrode==pair.pre_cell.electrode,),
         (post_rec.electrode==pair.post_cell.electrode,),
         (db.PatchClampRecording.clamp_mode==clamp_mode,),
-        (db.PatchClampRecording.baseline_potential<=-50e-3,),
-        (db.PatchClampRecording.baseline_current>-800e-12,),
-        (db.PatchClampRecording.baseline_current<400e-12,),
+        (db.PatchClampRecording.qc_pass==True,),
     ]
     for filter_args in filters:
         q = q.filter(*filter_args)
     
-    # fetch all
-    recs = q.all()
-    
-    # fill numpy array
-    arr = np.empty(len(recs), dtype=dtype)
-    for i,rec in enumerate(recs):
-        arr[i] = rec
-
-    return arr
+    df = pandas.read_sql_query(q.statement, q.session.bind)
+    recs = df.to_records()
+    return recs
 
 
 def get_baseline_amps_NO_ORM_VERSION(session, expt, dev, clamp_mode='ic'):
     # Tested this against the ORM version below; no difference in performance.
-    import pandas
     query = """
     select 
         brs.id, brs.pos_amp, brs.neg_amp, brs.pos_dec_amp, brs.neg_dec_amp
@@ -588,24 +578,14 @@ def get_baseline_amps(session, pair, clamp_mode='ic', limit=None):
         BaselineResponseStrength.neg_dec_amp,
         BaselineResponseStrength.pos_dec_latency,
         BaselineResponseStrength.neg_dec_latency,
+        db.Baseline.ex_qc_pass,
+        db.Baseline.in_qc_pass,
     ).join(db.Baseline).join(db.Recording).join(db.PatchClampRecording).join(db.SyncRec).join(db.Experiment)
-
-    dtype = [
-        ('id', 'int'),
-        ('pos_amp', 'float'),
-        ('neg_amp', 'float'),
-        ('pos_dec_amp', 'float'),
-        ('neg_dec_amp', 'float'),
-        ('pos_dec_latency', 'float'),
-        ('neg_dec_latency', 'float'),
-    ]
     
     filters = [
         (db.Recording.electrode==pair.post_cell.electrode,),
         (db.PatchClampRecording.clamp_mode==clamp_mode,),
-        (db.PatchClampRecording.baseline_potential<=-50e-3,),
-        (db.PatchClampRecording.baseline_current>-800e-12,),
-        (db.PatchClampRecording.baseline_current<400e-12,),
+        (db.PatchClampRecording.qc_pass==True,),
     ]
     for filter_args in filters:
         q = q.filter(*filter_args)
@@ -613,15 +593,9 @@ def get_baseline_amps(session, pair, clamp_mode='ic', limit=None):
     if limit is not None:
         q = q.limit(limit)
 
-    # fetch all
-    recs = q.all()
-    
-    # fill numpy array
-    arr = np.empty(len(recs), dtype=dtype)
-    for i,rec in enumerate(recs):
-        arr[i] = rec
-
-    return arr
+    df = pandas.read_sql_query(q.statement, q.session.bind)
+    recs = df.to_records()
+    return recs
 
 
 def join_pulse_response_to_expt(query):
@@ -759,14 +733,14 @@ class ResponseStrengthAnalyzer(object):
         """
         ids = [p.data()['id'] for p in points]
         self._clicked_fg_ids = ids
-        self.plot_prd_ids(ids, 'fg', trace_list=self.clicked_fg_traces, pen='y')
+        self.plot_prd_ids(ids, 'fg', trace_list=self.clicked_fg_traces, pen='y', print_info=True)
 
     def bg_scatter_clicked(self, sp, points):
         """Point(s) were clicked; plot their source traces in a different color.
         """
         ids = [p.data()['id'] for p in points]
         self._clicked_bg_ids = ids
-        self.plot_prd_ids(ids, 'bg', trace_list=self.clicked_bg_traces, pen='y')
+        self.plot_prd_ids(ids, 'bg', trace_list=self.clicked_bg_traces, pen='y', print_info=True)
 
     def load_data(self):
         amp_recs = get_amps(self.session, self.pair, clamp_mode=self.analysis[1])
@@ -781,11 +755,19 @@ class ResponseStrengthAnalyzer(object):
         fg_data = amp_recs
         bg_data = base_recs[:len(fg_data)]
         if self.analysis[0] == 'pos':
-            fg_x = np.array([rec['pos_dec_amp'] for rec in fg_data])
-            bg_x = np.array([rec['pos_dec_amp'] for rec in bg_data])
+            data_field = 'pos_dec_amp'
+            qc_field = 'ex_qc_pass' if self.analysis[1] == 'ic' else 'in_qc_pass'
         elif self.analysis[0] == 'neg':
-            fg_x = np.array([rec['neg_dec_amp'] for rec in fg_data])
-            bg_x = np.array([rec['neg_dec_amp'] for rec in bg_data])
+            data_field = 'neg_dec_amp'
+            qc_field = 'in_qc_pass' if self.analysis[1] == 'ic' else 'ex_qc_pass'
+        fg_x = fg_data[data_field]
+        bg_x = bg_data[data_field]
+
+        # select colors
+        pass_brush = pg.mkBrush((255, 255, 255, 80))
+        fail_brush = pg.mkBrush((150, 0, 0, 80))
+        fg_color = [(pass_brush if qc_pass else fail_brush) for qc_pass in fg_data[qc_field]]
+        bg_color = [(pass_brush if qc_pass else fail_brush) for qc_pass in bg_data[qc_field]]
         
         # clear old plots
         self.fg_scatter.setData([])
@@ -802,8 +784,8 @@ class ResponseStrengthAnalyzer(object):
         # scatter plots of fg/bg data
         fg_y = 1 + np.random.random(size=len(fg_x)) * 0.8
         bg_y = np.random.random(size=len(bg_x)) * 0.8
-        self.fg_scatter.setData(fg_x, fg_y, data=fg_data, brush=(255, 255, 255, 80))
-        self.bg_scatter.setData(bg_x, bg_y, data=bg_data, brush=(255, 255, 255, 80))
+        self.fg_scatter.setData(fg_x, fg_y, data=fg_data, brush=fg_color)
+        self.bg_scatter.setData(bg_x, bg_y, data=bg_data, brush=bg_color)
 
         # plot histograms
         n_bins = max(5, int(len(fg_x)**0.5))
@@ -862,7 +844,7 @@ class ResponseStrengthAnalyzer(object):
         self.plot_prd_ids(self._clicked_fg_ids, 'fg', pen='y', trace_list=self.clicked_fg_traces)
         self.plot_prd_ids(self._clicked_bg_ids, 'bg', pen='y', trace_list=self.clicked_bg_traces)
 
-    def plot_prd_ids(self, ids, source, pen=None, trace_list=None, avg=False):
+    def plot_prd_ids(self, ids, source, pen=None, trace_list=None, avg=False, print_info=False):
         """Plot raw or decolvolved PulseResponse data, given IDs of records in
         a PulseResponseStrength table.
         """
@@ -871,14 +853,18 @@ class ResponseStrengthAnalyzer(object):
                 q = response_query(self.session)
                 q = q.join(PulseResponseStrength)
                 q = q.filter(PulseResponseStrength.id.in_(ids))
+                q = q.add_column(db.PulseResponse.start_time)
                 traces = self.selected_fg_traces
                 plot = self.fg_trace_plot
             else:
                 q = baseline_query(self.session)
                 q = q.join(BaselineResponseStrength)
                 q = q.filter(BaselineResponseStrength.id.in_(ids))
+                q = q.add_column(db.Baseline.start_time)
                 traces = self.selected_bg_traces
                 plot = self.bg_trace_plot
+            
+            q = q.join(db.SyncRec).add_column(db.SyncRec.ext_id.label('sync_rec_ext_id'))
             recs = q.all()
             if len(recs) == 0:
                 return
@@ -894,7 +880,15 @@ class ResponseStrengthAnalyzer(object):
             traces = []
             spike_times = []
             spike_values = []
+            if print_info:
+                print("Selected pulse responses:")
             for rec in recs:
+                # Make it a bit easier to trace individual reponses back to source..
+                global selected_response
+                selected_response = rec.response_id
+                if print_info:
+                    print("   sweep %d @ %d ms" % (rec.sync_rec_ext_id, np.round(rec.start_time*1000)))
+                
                 s = {'fg': 'pulse_response', 'bg': 'baseline'}[source]
                 result = analyze_response_strength(rec, source=s, lpf=self.lpf_check.isChecked(), 
                                                    remove_artifacts=self.ar_check.isChecked(), bsub=self.bsub_check.isChecked())
@@ -930,7 +924,6 @@ class ResponseStrengthAnalyzer(object):
 
 
 def query_all_pairs():
-    import pandas
     query = ("""
     select """
         # ((DATE_PART('day', experiment.acq_timestamp - '1970-01-01'::timestamp) * 24 + 
@@ -993,6 +986,13 @@ init_tables()
 
 if __name__ == '__main__':
     #tt = pg.debug.ThreadTrace()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--rebuild', action='store_true', default=False)
+    parser.add_argument('--rebuild-connectivity', action='store_true', default=False, dest='rebuild_connectivity')
+    parser.add_argument('--local', action='store_true', default=False)
+    parser.add_argument('--workers', type=int, default=6)
+    
+    args, extra = parser.parse_known_args(sys.argv[1:])
 
 
     from multipatch_analysis.ui.multipatch_nwb_viewer import MultipatchNwbViewer    
@@ -1001,13 +1001,13 @@ if __name__ == '__main__':
 
     pg.dbg()
 
-    if '--rebuild' in sys.argv:
+    if args.rebuild:
         connection_strength_tables.drop_tables()
         pulse_response_strength_tables.drop_tables()
         init_tables()
-        rebuild_strength(parallel='--local' not in sys.argv)
+        rebuild_strength(parallel=(not args.local), workers=args.workers)
         rebuild_connectivity()
-    elif '--rebuild-connectivity' in sys.argv:
+    elif args.rebuild_connectivity:
         print("drop tables..")
         connection_strength_tables.drop_tables()
         print("create tables..")
