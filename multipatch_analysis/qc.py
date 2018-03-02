@@ -45,9 +45,10 @@ def pulse_response_qc_pass(sign, post_rec, window, n_spikes):
 
     * Postsynaptic recording passes recording_qc_pass()
     * Presynaptic cell must have at least 1 spike in response to pulse
-    * Inhibitory responses must be between -45 and -60 mV
-    * Excitatory responses must be between -45 and -80 mV
-    * Overall stdev for postsynaptic recording must be < 10 mV or < 400 pA
+    * Inhibitory response baseline potential must be between -45 and -60 mV
+    * Excitatory response baseline potential must be between -45 and -80 mV
+    * Overall stdev for postsynaptic recording must be < 1.5 mV or < 15 pA
+    * Current clamp response must never exceed -40 mV
 
     Parameters
     ----------
@@ -70,11 +71,14 @@ def pulse_response_qc_pass(sign, post_rec, window, n_spikes):
     if post_rec.clamp_mode == 'ic':
         data = post_rec['primary'][window[0]:window[1]]
         base = data.median()
-        if data.std() > 10e-3:
+        if data.std() > 1.5e-3:
+            return False
+        if data.data.max() > -40e-3:
             return False
     elif post_rec.clamp_mode == 'vc':
+        data = post_rec['primary'][window[0]:window[1]]
         base = post_rec['command'][window[0]:window[1]].median()
-        if post_rec['primary'][window[0]:window[1]].std() > 400e-12:
+        if data.std() > 15e-12:
             return False
     else:
         raise TypeError('Unsupported clamp mode %s' % post_rec.clamp_mode)
