@@ -1,7 +1,7 @@
 """
 Accumulate all experiment data into a set of linked tables.
 """
-import io
+import os, io
 import numpy as np
 
 import sqlalchemy
@@ -287,6 +287,10 @@ def generate_mapping(table, schema, base=None):
     if base is None:
         return type(name, (ORMBase,), props)
     else:
+        def init(self, *args, **kwds):
+            base.__init__(self)
+            ORMBase.__init__(self, *args, **kwds)
+        props['__init__'] = init  # doesn't work?
         return type(name, (base,ORMBase), props)
 
 
@@ -312,6 +316,31 @@ def create_all_mappings():
                 for pair in self.pairs:
                     if item == (pair.pre_cell.ext_id, pair.post_cell.ext_id):
                         return pair
+        
+        @property
+        def nwb_file(self):
+            return os.path.join(config.synphys_data, self.storage_path, self.ephys_file)
+
+        @property
+        def nwb_cache_file(self):
+            from ..synphys_cache import SynPhysCache
+            return SynPhysCache().get_cache(self.nwb_file)
+
+        @property
+        def data(self):
+            """Data object from NWB file. 
+            
+            Contains all ephys recordings.
+            """
+
+            if not hasattr(self, '_data'):
+                from ..data import MultiPatchExperiment
+                try:
+                    self._data = MultiPatchExperiment(self.nwb_cache_file)
+                except IOError:
+                    os.remove(self.nwb_cache_file)
+                    self._data = MultiPatchExperiment(self.nwb_cache_file)
+            return self._data
 
     Slice = _generate_mapping('slice')
     Experiment = _generate_mapping('experiment', base=ExperimentBase)

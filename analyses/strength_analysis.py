@@ -10,8 +10,6 @@ Big question: what's the best way to measure synaptic strength / connectivity?
 from __future__ import print_function, division
 
 from collections import OrderedDict
-from multipatch_analysis.constants import EXCITATORY_CRE_TYPES, INHIBITORY_CRE_TYPES
-
 import argparse, time, sys, os, pickle, io, multiprocessing
 import numpy as np
 import scipy.stats
@@ -30,6 +28,9 @@ from neuroanalysis.event_detection import exp_deconvolve
 from multipatch_analysis.database import database as db
 from multipatch_analysis import config, synphys_cache
 from multipatch_analysis.ui.multipatch_nwb_viewer import MultipatchNwbViewer
+from multipatch_analysis.constants import EXCITATORY_CRE_TYPES, INHIBITORY_CRE_TYPES
+import multipatch_analysis.qc as qc 
+
 
 
 class TableGroup(object):
@@ -90,6 +91,9 @@ class PulseResponseStrengthTableGroup(TableGroup):
         
         db.PulseResponse.pulse_response_strength = db.relationship(PulseResponseStrength, back_populates="pulse_response", cascade="delete", single_parent=True)
         PulseResponseStrength.pulse_response = db.relationship(db.PulseResponse, back_populates="pulse_response_strength", single_parent=True)
+
+        db.Baseline.baseline_response_strength = db.relationship(BaselineResponseStrength, back_populates="baseline", cascade="delete", single_parent=True)
+        BaselineResponseStrength.baseline = db.relationship(db.Baseline, back_populates="baseline_response_strength", single_parent=True)
 
 
 class ConnectionStrengthTableGroup(TableGroup):
@@ -452,7 +456,7 @@ def rebuild_connectivity(session):
                     fields[clamp_mode + '_base_' + val + '_med'] = np.median(bg)
                     fields[clamp_mode + '_base_' + val + '_stdev'] = np.std(bg)
                     fields[clamp_mode + '_' + val + '_ttest'] = scipy.stats.ttest_ind(fg, bg, equal_var=False).pvalue
-                    fields[clamp_mode + '_' + val + '_ks2samp'] = scipy.stats.ks2samp(fg, bg).pvalue
+                    fields[clamp_mode + '_' + val + '_ks2samp'] = scipy.stats.ks_2samp(fg, bg).pvalue
 
             conn = ConnectionStrength(pair_id=pair.id, **fields)
             session.add(conn)
@@ -762,14 +766,22 @@ class ResponseStrengthAnalyzer(object):
         """
         ids = [p.data()['id'] for p in points]
         self._clicked_fg_ids = ids
-        self.plot_prd_ids(ids, 'fg', trace_list=self.clicked_fg_traces, pen='y', print_info=True)
+        self.plot_prd_ids(ids, 'fg', trace_list=self.clicked_fg_traces, pen='y')
+
+        global selected_response
+        selected_response = self.session.query(PulseResponseStrength).filter(PulseResponseStrength.id==ids[0]).first()
+        prs_qc()
 
     def bg_scatter_clicked(self, sp, points):
         """Point(s) were clicked; plot their source traces in a different color.
         """
         ids = [p.data()['id'] for p in points]
         self._clicked_bg_ids = ids
-        self.plot_prd_ids(ids, 'bg', trace_list=self.clicked_bg_traces, pen='y', print_info=True)
+        self.plot_prd_ids(ids, 'bg', trace_list=self.clicked_bg_traces, pen='y')
+
+        global selected_response
+        selected_response = self.session.query(BaselineResponseStrength).filter(BaselineResponseStrength.id==ids[0]).first()
+        prs_qc()
 
     def load_data(self):
         amp_recs = get_amps(self.session, self.pair, clamp_mode=self.analysis[1])
@@ -885,7 +897,7 @@ class ResponseStrengthAnalyzer(object):
         self.plot_prd_ids(self._clicked_fg_ids, 'fg', pen='y', trace_list=self.clicked_fg_traces)
         self.plot_prd_ids(self._clicked_bg_ids, 'bg', pen='y', trace_list=self.clicked_bg_traces)
 
-    def plot_prd_ids(self, ids, source, pen=None, trace_list=None, avg=False, print_info=False):
+    def plot_prd_ids(self, ids, source, pen=None, trace_list=None, avg=False):
         """Plot raw or decolvolved PulseResponse data, given IDs of records in
         a PulseResponseStrength table.
         """
@@ -921,19 +933,11 @@ class ResponseStrengthAnalyzer(object):
             traces = []
             spike_times = []
             spike_values = []
-            if print_info:
-                print("Selected pulse responses:")
             for rec in recs:
                 # Filter by QC unless we selected just a single record
                 if len(recs) > 0 and getattr(rec, self.qc_field) is False:
                     continue
 
-                # Make it a bit easier to trace individual reponses back to source..
-                global selected_response
-                selected_response = rec.response_id
-                if print_info:
-                    print("   sweep %d @ %d ms" % (rec.sync_rec_ext_id, np.round(rec.start_time*1000)))
-                
                 s = {'fg': 'pulse_response', 'bg': 'baseline'}[source]
                 result = analyze_response_strength(rec, source=s, lpf=self.lpf_check.isChecked(), 
                                                    remove_artifacts=self.ar_check.isChecked(), bsub=self.bsub_check.isChecked())
@@ -979,12 +983,6 @@ def query_all_pairs():
         connection_strength.*,
         experiment.id as experiment_id,
         experiment.acq_timestamp as acq_timestamp,
-        ABS(connection_strength.amp_med) as abs_amp_med,
-        ABS(connection_strength.base_amp_med) as abs_base_amp_med,
-        ABS(connection_strength.amp_med_minus_base) as abs_amp_med_minus_base,
-        ABS(connection_strength.deconv_amp_med) as abs_deconv_amp_med,
-        ABS(connection_strength.deconv_base_amp_med) as abs_deconv_base_amp_med,
-        ABS(connection_strength.deconv_amp_med_minus_base) as abs_deconv_amp_med_minus_base,
         experiment.rig_name,
         experiment.acsf,
         slice.species,
@@ -1012,8 +1010,8 @@ def query_all_pairs():
     df = pandas.read_sql(query, session.bind)
 
     # test out a new metric:
-    df['connection_signal'] = pandas.Series(df['deconv_amp_med'] / df['latency_stdev'], index=df.index)
-    df['connection_background'] = pandas.Series(df['deconv_base_amp_med'] / df['base_latency_stdev'], index=df.index)
+    # df['connection_signal'] = pandas.Series(df['deconv_amp_med'] / df['latency_stdev'], index=df.index)
+    # df['connection_background'] = pandas.Series(df['deconv_base_amp_med'] / df['base_latency_stdev'], index=df.index)
 
     ts = [datetime_to_timestamp(t) for t in df['acq_timestamp']]
     df['acq_timestamp'] = ts
@@ -1023,6 +1021,35 @@ def query_all_pairs():
 
 def datetime_to_timestamp(d):
     return time.mktime(d.timetuple()) + d.microsecond * 1e-6
+
+
+def prs_qc():
+    """Convenience function for debugging QC: returns (recording, window) arguments
+    used for pulse response QC
+    """
+    global selected_response
+    sr = selected_response
+    if isinstance(sr, PulseResponseStrength):
+        resp = sr.pulse_response
+    else:
+        resp = sr.baseline
+    rec = resp.recording
+    start = resp.start_time
+    expt = rec.sync_rec.experiment
+    nwb = expt.data
+    rrec = nwb.contents[rec.sync_rec.ext_id][rec.electrode.device_id]
+    dt = rrec['primary'].dt
+    dur = len(resp.data) / db.default_sample_rate
+    w = [int(start/dt), int((start+dur)/dt)]
+
+    stdev = rrec[w[0]:w[1]]['primary'].std()
+    if rrec.clamp_mode == 'ic':
+        median = rrec[w[0]:w[1]]['primary'].median()
+    else:
+        median = rrec[w[0]:w[1]]['command'].median()
+    print("Selected:  sweep %d @ %d ms   stdev=%0.3g, med=%0.3g" % (rec.sync_rec.ext_id, np.round(start*1000), stdev, median))
+
+    return rrec, w
 
 
 init_tables()
@@ -1167,25 +1194,25 @@ if __name__ == '__main__':
     from sklearn import svm, preprocessing
 
     features = recs[[
-        'n_samples', 
+        'ic_n_samples', 
         #'amp_med', 'amp_stdev', 'base_amp_med', 'base_amp_stdev', 'amp_med_minus_base', 'amp_stdev_minus_base', 
         #'deconv_amp_med', 'deconv_amp_stdev', 'deconv_base_amp_med', 'deconv_base_amp_stdev', 'deconv_amp_med_minus_base', 'deconv_amp_stdev_minus_base', 
         #'amp_ttest',
         #'deconv_amp_ttest',
         #'amp_ks2samp', 
-        'deconv_amp_ks2samp',
-        'latency_med', 'latency_stdev', 
-        'base_latency_med', 'base_latency_stdev',
+        'ic_deconv_amp_ks2samp',
+        'ic_latency_med', 'ic_latency_stdev', 
+        'ic_base_latency_med', 'ic_base_latency_stdev',
         #'abs_amp_med', 'abs_base_amp_med', 'abs_amp_med_minus_base', 
-        'abs_deconv_amp_med', 'abs_deconv_base_amp_med', #'abs_deconv_amp_med_minus_base', 
+        'ic_deconv_amp_med', 'ic_base_deconv_amp_med', #'abs_deconv_amp_med_minus_base', 
         'electrode_distance'
     ]]
 
-    features['deconv_amp_ks2samp'] = np.log(-np.log(features['deconv_amp_ks2samp']))
+    features['ic_deconv_amp_ks2samp'] = np.log(-np.log(features['ic_deconv_amp_ks2samp']))
     # for k in ['deconv_amp_ks2samp']:
     #     features[k] = np.log(features[k])
 
-    mask = features['n_samples'] > 100
+    mask = features['ic_n_samples'] > 100
 
     x = np.array([tuple(r) for r in features[mask]])
     y = recs['synapse'][mask]
