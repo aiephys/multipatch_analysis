@@ -1121,7 +1121,7 @@ if __name__ == '__main__':
 
     recs = query_all_pairs()
 
-    spw.setFields([
+    fields = [
         ('synapse', {'mode': 'enum', 'values': [True, False, None]}),
         ('synapse_type', {'mode': 'enum', 'values': ['in', 'ex']}),
         ('pre_cre_type', {'mode': 'enum', 'values': list(set(recs['pre_cre_type']))}),
@@ -1132,36 +1132,20 @@ if __name__ == '__main__':
         ('rig_name', {'mode': 'enum', 'values': list(set(recs['rig_name']))}),
         ('acsf', {'mode': 'enum', 'values': list(set(recs['acsf']))}),
         ('acq_timestamp', {}),
-        ('amp_med', {'units': 'V'}),
-        ('abs_amp_med', {'units': 'V'}),
-        ('amp_stdev', {'units': 'V'}),
-        ('base_amp_med', {'units': 'V'}),
-        ('abs_base_amp_med', {'units': 'V'}),
-        ('base_amp_stdev', {'units': 'V'}),
-        ('amp_med_minus_base', {'units': 'V'}),
-        ('abs_amp_med_minus_base', {'units': 'V'}),
-        ('amp_stdev_minus_base', {'units': 'V'}),
-        ('deconv_amp_med', {'units': 'V'}),
-        ('abs_deconv_amp_med', {'units': 'V'}),
-        ('deconv_amp_stdev', {'units': 'V'}),
-        ('deconv_base_amp_med', {'units': 'V'}),
-        ('abs_deconv_base_amp_med', {'units': 'V'}),
-        ('deconv_base_amp_stdev', {'units': 'V'}),
-        ('deconv_amp_med_minus_base', {'units': 'V'}),
-        ('abs_deconv_amp_med_minus_base', {'units': 'V'}),
-        ('deconv_amp_stdev_minus_base', {'units': 'V'}),
-        ('amp_ttest', {}),
-        ('deconv_amp_ttest', {}),
-        ('amp_ks2samp', {}),
-        ('deconv_amp_ks2samp', {}),
         ('crosstalk_artifact', {'units': 'V'}),
-        ('latency_med', {'units': 's'}),
-        ('latency_stdev', {'units': 's'}),
-        ('base_latency_med', {'units': 's'}),
-        ('base_latency_stdev', {'units': 's'}),
         ('electrode_distance', {}),
-    ])
-
+    ]
+    fnames = [f[0] for f in fields]
+    for f in recs.dtype.names:
+        if f in fnames:
+            continue
+        if 'amp' in f:
+            fields.append((f, {'units': 'V'}))
+        elif 'latency' in f:
+            fields.append((f, {'units': 's'}))
+        else:
+            fields.append((f, {}))
+    spw.setFields(fields)
     spw.setData(recs)
 
     def conn_clicked(spw, points):
