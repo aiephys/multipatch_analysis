@@ -99,7 +99,7 @@ class ConnectionStrengthTableGroup(TableGroup):
             ('synapse_type', 'str', '"ex" or "in"'),
 
             # current clamp metrics
-            ('ic_n_samples', 'int')
+            ('ic_n_samples', 'int'),
             # amplitude,
             ('ic_amp_med', 'float'),
             ('ic_amp_stdev', 'float'),
@@ -123,7 +123,7 @@ class ConnectionStrengthTableGroup(TableGroup):
             ('ic_latency_ks2samp', 'float'),
             
             # voltage clamp metrics
-            ('vc_n_samples', 'int')
+            ('vc_n_samples', 'int'),
             # amplitude,
             ('vc_amp_med', 'float'),
             ('vc_amp_stdev', 'float'),
