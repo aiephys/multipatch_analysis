@@ -237,7 +237,9 @@ class ExperimentDBSubmission(object):
             for j, post_cell in self.expt.cells.items():
                 if i == j:
                     continue
-                synapse = (i, j) in self.expt.connections
+                # check to see if i,j is in manual connection calls
+                # (do not use expt.connections, which excludes some connections based on QC)
+                synapse = (i, j) in self.expt.connection_calls
                 pre_cell_entry = cell_entries[pre_cell]
                 post_cell_entry = cell_entries[post_cell]
                 p1, p2 = pre_cell.position, post_cell.position

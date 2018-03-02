@@ -115,7 +115,13 @@ class Experiment(object):
             [(pre_cell_id, post_cell_id), ...]
         """
         probed = self.connections_probed
-        return [c for c in self._connections if c in probed]
+        return [c for c in self.connection_calls if c in probed]
+
+    @property
+    def connection_calls(self):
+        """Manually curated list of connections seen in this experiment, without applying any QC.
+        """
+        return self._connections[:]
 
     @property
     def cre_types(self):
