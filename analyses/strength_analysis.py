@@ -97,27 +97,55 @@ class ConnectionStrengthTableGroup(TableGroup):
         'connection_strength': [
             ('pair_id', 'pair.id', '', {'index': True}),
             ('synapse_type', 'str', '"ex" or "in"'),
-            ('n_samples', 'int'),
-            ('amp_med', 'float'),
-            ('amp_stdev', 'float'),
-            ('base_amp_med', 'float'),
-            ('base_amp_stdev', 'float'),
-            ('amp_med_minus_base', 'float'),
-            ('amp_stdev_minus_base', 'float'),
-            ('deconv_amp_med', 'float'),
-            ('deconv_amp_stdev', 'float'),
-            ('deconv_base_amp_med', 'float'),
-            ('deconv_base_amp_stdev', 'float'),
-            ('deconv_amp_med_minus_base', 'float'),
-            ('deconv_amp_stdev_minus_base', 'float'),
-            ('amp_ttest', 'float'),
-            ('deconv_amp_ttest', 'float'),
-            ('amp_ks2samp', 'float'),
-            ('deconv_amp_ks2samp', 'float'),
-            ('latency_med', 'float'),
-            ('latency_stdev', 'float'),
-            ('base_latency_med', 'float'),
-            ('base_latency_stdev', 'float'),
+
+            # current clamp metrics
+            ('ic_n_samples', 'int')
+            # amplitude,
+            ('ic_amp_med', 'float'),
+            ('ic_amp_stdev', 'float'),
+            ('ic_base_amp_med', 'float'),
+            ('ic_base_amp_stdev', 'float'),
+            ('ic_amp_ttest', 'float'),
+            ('ic_amp_ks2samp', 'float'),
+            # deconvolved amplitide
+            ('ic_deconv_amp_med', 'float'),
+            ('ic_deconv_amp_stdev', 'float'),
+            ('ic_base_deconv_amp_med', 'float'),
+            ('ic_base_deconv_amp_stdev', 'float'),
+            ('ic_deconv_amp_ttest', 'float'),
+            ('ic_deconv_amp_ks2samp', 'float'),
+            # latency
+            ('ic_latency_med', 'float'),
+            ('ic_latency_stdev', 'float'),
+            ('ic_base_latency_med', 'float'),
+            ('ic_base_latency_stdev', 'float'),
+            ('ic_latency_ttest', 'float'),
+            ('ic_latency_ks2samp', 'float'),
+            
+            # voltage clamp metrics
+            ('vc_n_samples', 'int')
+            # amplitude,
+            ('vc_amp_med', 'float'),
+            ('vc_amp_stdev', 'float'),
+            ('vc_base_amp_med', 'float'),
+            ('vc_base_amp_stdev', 'float'),
+            ('vc_amp_ttest', 'float'),
+            ('vc_amp_ks2samp', 'float'),
+            # deconvolved amplitide
+            ('vc_deconv_amp_med', 'float'),
+            ('vc_deconv_amp_stdev', 'float'),
+            ('vc_base_deconv_amp_med', 'float'),
+            ('vc_base_deconv_amp_stdev', 'float'),
+            ('vc_deconv_amp_ttest', 'float'),
+            ('vc_deconv_amp_ks2samp', 'float'),
+            # latency
+            ('vc_latency_med', 'float'),
+            ('vc_latency_stdev', 'float'),
+            ('vc_base_latency_med', 'float'),
+            ('vc_base_latency_stdev', 'float'),
+            ('vc_latency_ttest', 'float'),
+            ('vc_latency_ks2samp', 'float'),
+            
         ],
     }
 
@@ -299,7 +327,8 @@ def analyze_response_strength(rec, source, remove_artifacts=False, lpf=True, bsu
     results['neg_amp'], _ = measure_peak(data, '-', spike_time, pulse_times)
 
     # Deconvolution / artifact removal / filtering
-    dec_data = deconv_filter(data, pulse_times, lpf=lpf, remove_artifacts=remove_artifacts, bsub=bsub, lowpass=lowpass)
+    tau = 15e-3 if rec.clamp_mode == 'ic' else 5e-3
+    dec_data = deconv_filter(data, pulse_times, tau=tau, lpf=lpf, remove_artifacts=remove_artifacts, bsub=bsub, lowpass=lowpass)
     results['dec_trace'] = dec_data
 
     # Measure deflection on deconvolved data
@@ -374,60 +403,58 @@ def rebuild_connectivity(session):
     for i,expt in enumerate(expts_in_db):
         for pair in expt.pairs:
             devs = pair.pre_cell.electrode.device_id, pair.post_cell.electrode.device_id
-            amps = get_amps(session, pair)
-            base_amps = get_baseline_amps(session, pair, limit=len(amps))
-            if len(amps) == 0 or len(base_amps) == 0:
-                continue
-            
-            conn = ConnectionStrength(pair_id=pair.id)
             # Whether the user marked this as connected
             cell_ids = (devs[0] + 1, devs[1] + 1)
             
-            # decide whether to treat this connection as excitatory or inhibitory
-            # (probably we can do much better here)
-            pos_amp = amps['pos_dec_amp'].mean() - base_amps['pos_dec_amp'].mean()
-            neg_amp = amps['neg_dec_amp'].mean() - base_amps['neg_dec_amp'].mean()
-            if pos_amp > -neg_amp:
-                conn.synapse_type = 'ex'
-                pfx = 'pos_'
-            else:
-                conn.synapse_type = 'in'
-                pfx = 'neg_'
-            # select out positive or negative amplitude columns
-            amp, base_amp = amps[pfx+'amp'], base_amps[pfx+'amp']
-            dec_amp, dec_base_amp = amps[pfx+'dec_amp'], base_amps[pfx+'dec_amp']
-            latency, base_latency = amps[pfx+'dec_latency'], base_amps[pfx+'dec_latency']
-    
-            # compute mean/stdev of samples
-            n_samp = len(amps)
-            conn.n_samples = n_samp
-            if n_samp == 0:
-                continue
-            conn.amp_med = np.median(amp)
-            conn.amp_stdev = amp.std()
-            conn.base_amp_med = np.median(base_amp)
-            conn.base_amp_stdev = base_amp.std()
-            conn.amp_med_minus_base = conn.amp_med - conn.base_amp_med
-            conn.amp_stdev_minus_base = conn.amp_stdev - conn.base_amp_stdev
-            conn.deconv_amp_med = np.median(dec_amp)
-            conn.deconv_amp_stdev = dec_amp.std()
-            conn.deconv_base_amp_med = np.median(dec_base_amp)
-            conn.deconv_base_amp_stdev = dec_base_amp.std()
-            conn.deconv_amp_med_minus_base = conn.deconv_amp_med - conn.deconv_base_amp_med
-            conn.deconv_amp_stdev_minus_base = conn.deconv_amp_stdev - conn.deconv_base_amp_stdev
+            fields = {}
+            
+            for clamp_mode in ['ic', 'vc']:
+                amps = get_amps(session, pair, clamp_mode=clamp_mode)
+                base_amps = get_baseline_amps(session, pair, limit=len(amps), clamp_mode=clamp_mode)
+                if len(amps) == 0 or len(base_amps) == 0:
+                    continue
+                
+                # decide whether to treat this connection as excitatory or inhibitory
+                # (probably we can do much better here)
+                pos_amp = amps['pos_dec_amp'].mean() - base_amps['pos_dec_amp'].mean()
+                neg_amp = amps['neg_dec_amp'].mean() - base_amps['neg_dec_amp'].mean()
+                if pos_amp > -neg_amp:
+                    conn.synapse_type = 'ex'
+                    pfx = 'pos_'
+                    qc_field = 'ex_qc_pass' if clamp_mode == 'ic' else 'in_qc_pass'
+                else:
+                    conn.synapse_type = 'in'
+                    pfx = 'neg_'
+                    qc_field = 'ex_qc_pass' if clamp_mode == 'vc' else 'in_qc_pass'
 
-            # do some statistical tests
-            conn.amp_ks2samp = scipy.stats.ks_2samp(amp, base_amp).pvalue
-            conn.deconv_amp_ks2samp = scipy.stats.ks_2samp(dec_amp, dec_base_amp).pvalue
-            conn.amp_ttest = scipy.stats.ttest_ind(amp, base_amp, equal_var=False).pvalue
-            conn.deconv_amp_ttest = scipy.stats.ttest_ind(dec_amp, dec_base_amp, equal_var=False).pvalue
+                # filter out responses that failed qc
+                amps_qc = amps[amps[qc_field]]
+                base_qc = base_amps[base_amps[qc_field]]
+                
+                # select out positive or negative amplitude columns
+                amp, base_amp = amps_qc[pfx+'amp'], base_qc[pfx+'amp']
+                dec_amp, dec_base_amp = amps_qc[pfx+'dec_amp'], base_qc[pfx+'dec_amp']
+                latency, base_latency = amps_qc[pfx+'dec_latency'], base_qc[pfx+'dec_latency']
+        
+                # compute mean/stdev of samples
+                n_samp = len(amp)
+                fields[clamp_mode + '_n_samples'] = n_samp
+                if n_samp == 0:
+                    continue
+                
+                # measure median, stdev, and statistical differences between
+                # fg and bg for each measurement
+                for (val, fg, bg) in [('amp', amp, base_amp), 
+                                      ('deconv_amp', dec_amp, dec_base_amp),
+                                      ('latency', latency, base_latency)]:
+                    fields[clamp_mode + '_' + val + '_med'] = np.median(fg)
+                    fields[clamp_mode + '_' + val + '_stdev'] = np.std(fg)
+                    fields[clamp_mode + '_base_' + val + '_med'] = np.median(bg)
+                    fields[clamp_mode + '_base_' + val + '_stdev'] = np.std(bg)
+                    fields[clamp_mode + '_' + val + '_ttest'] = scipy.stats.ttest_ind(fg, bg, equal_var=False).pvalue
+                    fields[clamp_mode + '_' + val + '_ks2samp'] = scipy.stats.ks2samp(fg, bg).pvalue
 
-            # deconvolved peak latencies
-            conn.latency_med = np.median(latency)
-            conn.latency_stdev = np.std(latency)
-            conn.base_latency_med = np.median(base_latency)
-            conn.base_latency_stdev = np.std(base_latency)
-
+            conn = ConnectionStrength(pair_id=pair.id, **fields)
             session.add(conn)
         
         session.commit()
@@ -524,6 +551,7 @@ def get_amps(session, pair, clamp_mode='ic'):
         PulseResponseStrength.neg_dec_latency,
         db.PulseResponse.ex_qc_pass,
         db.PulseResponse.in_qc_pass,
+        db.PatchClampRecording.clamp_mode,
     ).join(db.PulseResponse)
     
     q, pre_rec, post_rec = join_pulse_response_to_expt(q)
@@ -580,6 +608,7 @@ def get_baseline_amps(session, pair, clamp_mode='ic', limit=None):
         BaselineResponseStrength.neg_dec_latency,
         db.Baseline.ex_qc_pass,
         db.Baseline.in_qc_pass,
+        db.PatchClampRecording.clamp_mode,
     ).join(db.Baseline).join(db.Recording).join(db.PatchClampRecording).join(db.SyncRec).join(db.Experiment)
     
     filters = [
