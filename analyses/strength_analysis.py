@@ -212,15 +212,12 @@ def deconv_filter(trace, pulse_times, tau=15e-3, lowpass=1000., lpf=True, remove
     if remove_artifacts:
         # after deconvolution, the pulse causes two sharp artifacts; these
         # must be removed before LPF
-        dt = dec.dt
-        r = [-50e-6, 250e-6]
-        edges = [(int((t+r[0])/dt), int((t+r[1])/dt)) for t in pulse_times]
-        cleaned = filter.remove_artifacts(dec, edges, window=400e-6)
+        cleaned = remove_crosstalk_artifacts(dec, pulse_times)
     else:
         cleaned = dec
 
     if bsub:
-        baseline = np.median(cleaned.time_slice(cleaned.t0, cleaned.t0+10e-3).data)
+        baseline = np.median(cleaned.time_slice(cleaned.t0+5e-3, cleaned.t0+10e-3).data)
         b_subbed = cleaned-baseline
     else:
         b_subbed = cleaned
@@ -229,6 +226,13 @@ def deconv_filter(trace, pulse_times, tau=15e-3, lowpass=1000., lpf=True, remove
         return filter.bessel_filter(b_subbed, lowpass)
     else:
         return b_subbed
+
+
+def remove_crosstalk_artifacts(data, pulse_times):
+    dt = data.dt
+    r = [-50e-6, 250e-6]
+    edges = [(int((t+r[0])/dt), int((t+r[1])/dt)) for t in pulse_times]
+    return filter.remove_artifacts(data, edges, window=100e-6)
 
 
 @db.default_session
@@ -325,6 +329,11 @@ def analyze_response_strength(rec, source, remove_artifacts=False, lpf=True, bsu
     results['raw_trace'] = data
     results['pulse_times'] = pulse_times
     results['spike_time'] = spike_time
+
+    # crosstalk artifacts in VC are removed before deconvolution
+    if rec.clamp_mode == 'vc' and remove_artifacts is True:
+        data = remove_crosstalk_artifacts(data, pulse_times)
+        remove_artifacts = False
 
     # Measure deflection on raw data
     results['pos_amp'], _ = measure_peak(data, '+', spike_time, pulse_times)
@@ -677,6 +686,9 @@ class ResponseStrengthAnalyzer(object):
         self.analysis = analysis  # ('pos'|'neg', 'ic'|'vc')
         self.session = session
 
+        self._amp_recs = None
+        self._base_recs = None
+
         self.widget = QtGui.QWidget()
         self.layout = QtGui.QGridLayout()
         self.widget.setLayout(self.layout)
@@ -785,9 +797,10 @@ class ResponseStrengthAnalyzer(object):
         prs_qc()
 
     def load_data(self):
-        amp_recs = get_amps(self.session, self.pair, clamp_mode=self.analysis[1])
-        base_recs = get_baseline_amps(self.session, self.pair, limit=len(amp_recs), clamp_mode=self.analysis[1])
-        return amp_recs, base_recs
+        if self._amp_recs is None:
+            self._amp_recs = get_amps(self.session, self.pair, clamp_mode=self.analysis[1])
+            self._base_recs = get_baseline_amps(self.session, self.pair, limit=len(self._amp_recs), clamp_mode=self.analysis[1])
+        return self._amp_recs, self._base_recs
 
     def load_conn(self, pair):
         self.pair = pair
