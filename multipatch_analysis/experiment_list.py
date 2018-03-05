@@ -156,6 +156,7 @@ class ExperimentList(object):
                 expt_id = Experiment._id_from_entry(entry)
                 if expt_id in self._expts_by_source_id:
                     # Already have this experiment cached
+                    print("SKIPPED:", expt_id)
                     cached += 1
                     continue
                 expt = Experiment(entry)
