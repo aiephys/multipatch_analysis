@@ -496,6 +496,7 @@ class ExperimentBrowser(pg.TreeWidget):
         pg.TreeWidget.__init__(self)
         self.setColumnCount(7)
         self.setHeaderLabels(['date', 'rig', 'organism', 'region', 'genotype', 'acsf'])
+        self.setDragDropMode(self.NoDragDrop)
         self.populate()
         self._last_expanded = None
         
@@ -1012,10 +1013,13 @@ def query_all_pairs():
     # test out a new metric:
     # df['connection_signal'] = pandas.Series(df['deconv_amp_med'] / df['latency_stdev'], index=df.index)
     # df['connection_background'] = pandas.Series(df['deconv_base_amp_med'] / df['base_latency_stdev'], index=df.index)
-
     ts = [datetime_to_timestamp(t) for t in df['acq_timestamp']]
     df['acq_timestamp'] = ts
     recs = df.to_records()
+    # try to normalize p values
+    for f in recs.dtype.names:
+        if 'ttest' in f or 'ks2samp' in f:
+            recs[f] = np.log(1-np.log(recs[f]))
     return recs
 
 
@@ -1194,25 +1198,28 @@ if __name__ == '__main__':
     from sklearn import svm, preprocessing
 
     features = recs[[
-        'ic_n_samples', 
+        # 'ic_n_samples', 
         #'amp_med', 'amp_stdev', 'base_amp_med', 'base_amp_stdev', 'amp_med_minus_base', 'amp_stdev_minus_base', 
         #'deconv_amp_med', 'deconv_amp_stdev', 'deconv_base_amp_med', 'deconv_base_amp_stdev', 'deconv_amp_med_minus_base', 'deconv_amp_stdev_minus_base', 
         #'amp_ttest',
         #'deconv_amp_ttest',
         #'amp_ks2samp', 
         'ic_deconv_amp_ks2samp',
-        'ic_latency_med', 'ic_latency_stdev', 
-        'ic_base_latency_med', 'ic_base_latency_stdev',
+        'vc_amp_ks2samp',
+        'ic_latency_ks2samp',
+        'vc_latency_ks2samp',
+        # 'ic_latency_med', 'ic_latency_stdev', 
+        #'ic_base_latency_med', 'ic_base_latency_stdev',
         #'abs_amp_med', 'abs_base_amp_med', 'abs_amp_med_minus_base', 
-        'ic_deconv_amp_med', 'ic_base_deconv_amp_med', #'abs_deconv_amp_med_minus_base', 
-        'electrode_distance'
+        # 'ic_deconv_amp_med', 'ic_base_deconv_amp_med', #'abs_deconv_amp_med_minus_base', 
+        # 'vc_amp_med',
+        # 'electrode_distance'
     ]]
 
-    features['ic_deconv_amp_ks2samp'] = np.log(-np.log(features['ic_deconv_amp_ks2samp']))
     # for k in ['deconv_amp_ks2samp']:
     #     features[k] = np.log(features[k])
 
-    mask = features['ic_n_samples'] > 100
+    mask = recs['ic_n_samples'] > 100
 
     x = np.array([tuple(r) for r in features[mask]])
     y = recs['synapse'][mask]
