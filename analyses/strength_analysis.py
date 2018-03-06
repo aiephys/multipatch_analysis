@@ -232,6 +232,8 @@ def remove_crosstalk_artifacts(data, pulse_times):
     dt = data.dt
     r = [-50e-6, 250e-6]
     edges = [(int((t+r[0])/dt), int((t+r[1])/dt)) for t in pulse_times]
+    # If window is too shortm then it becomes seneitive to sample noise.
+    # If window is too long, then it becomes sensitive to slower signals (like the AP following pulse onset)
     return filter.remove_artifacts(data, edges, window=100e-6)
 
 
@@ -527,7 +529,7 @@ class ExperimentBrowser(pg.TreeWidget):
                 if pair.n_ex_test_spikes == 0 and pair.n_in_test_spikes == 0:
                     continue
                 cells = '%d => %d' % (pair.pre_cell.ext_id, pair.post_cell.ext_id)
-                conn = {True:"connected", False:"unconnected", None:"?"}[pair.synapse]
+                conn = {True:"syn", False:"-", None:"?"}[pair.synapse]
                 types = 'L%s %s => L%s %s' % (pair.pre_cell.target_layer or "?", pair.pre_cell.cre_type, pair.post_cell.target_layer or "?", pair.post_cell.cre_type)
                 pair_item = pg.TreeWidgetItem([cells, conn, types])
                 expt_item.addChild(pair_item)
@@ -566,6 +568,7 @@ def get_amps(session, pair, clamp_mode='ic'):
         db.PulseResponse.ex_qc_pass,
         db.PulseResponse.in_qc_pass,
         db.PatchClampRecording.clamp_mode,
+        db.StimPulse.pulse_number,
     ).join(db.PulseResponse)
     
     q, pre_rec, post_rec = join_pulse_response_to_expt(q)
@@ -676,7 +679,6 @@ class ResponseStrengthPlots(QtGui.QWidget):
                 
     def load_conn(self, pair):
         with pg.BusyCursor():
-
             for analyzer in self.analyzers:
                 analyzer.load_conn(pair)
 
@@ -685,7 +687,6 @@ class ResponseStrengthAnalyzer(object):
     def __init__(self, analysis, session):
         self.analysis = analysis  # ('pos'|'neg', 'ic'|'vc')
         self.session = session
-
         self._amp_recs = None
         self._base_recs = None
 
@@ -765,6 +766,26 @@ class ResponseStrengthAnalyzer(object):
         self.ctrl_layout.addWidget(self.align_check, 0, 4)
         self.align_check.toggled.connect(self.replot_all)
 
+        self.pulse_ctrl = QtGui.QWidget()
+        self.ctrl_layout.addWidget(self.pulse_ctrl, 1, 0, 1, 5)
+        self.pulse_layout = QtGui.QHBoxLayout()
+        self.pulse_ctrl.setLayout(self.pulse_layout)
+        self.pulse_layout.setContentsMargins(0, 0, 0, 0)
+        self.pulse_layout.setSpacing(0)
+
+        self.color_by_pulse_check = QtGui.QCheckBox('color pulse n')
+        self.pulse_layout.addWidget(self.color_by_pulse_check)
+        self.color_by_pulse_check.toggled.connect(self.update_scatter_plots)
+
+        self.pulse_checks = []
+        for i in range(12):
+            c = QtGui.QCheckBox()
+            c.setChecked(True)
+            self.pulse_checks.append(c)
+            self.pulse_layout.addWidget(c)
+            c.setMaximumWidth(20)
+            c.toggled.connect(self.update_scatter_plots)
+
         self.selected_fg_traces = []
         self.selected_bg_traces = []
         self.clicked_fg_traces = []
@@ -796,16 +817,18 @@ class ResponseStrengthAnalyzer(object):
         selected_response = self.session.query(BaselineResponseStrength).filter(BaselineResponseStrength.id==ids[0]).first()
         prs_qc()
 
-    def load_data(self):
-        if self._amp_recs is None:
-            self._amp_recs = get_amps(self.session, self.pair, clamp_mode=self.analysis[1])
-            self._base_recs = get_baseline_amps(self.session, self.pair, limit=len(self._amp_recs), clamp_mode=self.analysis[1])
-        return self._amp_recs, self._base_recs
-
     def load_conn(self, pair):
         self.pair = pair
-        amp_recs, base_recs = self.load_data()
-        
+        self._amp_recs = get_amps(self.session, self.pair, clamp_mode=self.analysis[1])
+        self._base_recs = get_baseline_amps(self.session, self.pair, limit=len(self._amp_recs), clamp_mode=self.analysis[1])
+        self.update_scatter_plots()
+
+    def update_scatter_plots(self): 
+        amp_recs = self._amp_recs
+        base_recs = self._base_recs
+        if amp_recs is None:
+            return
+
         # select fg/bg data
         fg_data = amp_recs
         bg_data = base_recs[:len(fg_data)]
@@ -817,8 +840,8 @@ class ResponseStrengthAnalyzer(object):
             qc_field = 'in_qc_pass' if self.analysis[1] == 'ic' else 'ex_qc_pass'
         fg_x = fg_data[data_field]
         bg_x = bg_data[data_field]
-        fg_qc = fg_data[qc_field]
-        bg_qc = bg_data[qc_field]
+        fg_qc = fg_data[qc_field].copy()
+        bg_qc = bg_data[qc_field].copy()
 
         # record data for later use
         self.fg_x = fg_x
@@ -834,6 +857,28 @@ class ResponseStrengthAnalyzer(object):
         fail_brush = pg.mkBrush((150, 0, 0, 80))
         fg_color = [(pass_brush if qc_pass else fail_brush) for qc_pass in fg_qc]
         bg_color = [(pass_brush if qc_pass else fail_brush) for qc_pass in bg_qc]
+        for i in range(len(fg_data)):
+            # QC failures are colored red
+            if not fg_qc[i]:
+                continue
+
+            pulse_n = fg_data['pulse_number'][i] - 1
+
+            # If a pulse number is deselected, then we just mark it as qc-failed and color the point orange
+            if not self.pulse_checks[pulse_n].isChecked():
+                fg_color[i] = pg.mkBrush(255, 150, 0, 80)
+                fg_qc[i] = False
+                continue
+
+            # Otherwise, we can color by pulse number if requested
+            if self.color_by_pulse_check.isChecked():
+                g = pulse_n * 255/7.
+                b = 255 - g
+                if pulse_n > 7:
+                    color = pg.mkColor(0, 0, 0, 0)
+                else:
+                    color = pg.mkColor(0, g, b, 80)
+                fg_color[i] = pg.mkBrush(color)
         
         # clear old plots
         self.fg_scatter.setData([])
@@ -849,8 +894,8 @@ class ResponseStrengthAnalyzer(object):
             return
 
         # scatter plots of fg/bg data
-        fg_y = 1 + np.random.random(size=len(fg_x)) * 0.8
-        bg_y = np.random.random(size=len(bg_x)) * 0.8
+        fg_y = np.linspace(1, 1.8, len(fg_x))
+        bg_y = np.linspace(0, 0.8, len(bg_x))
         self.fg_scatter.setData(fg_x, fg_y, data=fg_data, brush=fg_color)
         self.bg_scatter.setData(bg_x, bg_y, data=bg_data, brush=bg_color)
 
@@ -911,31 +956,42 @@ class ResponseStrengthAnalyzer(object):
         self.plot_prd_ids(self._clicked_fg_ids, 'fg', pen='y', trace_list=self.clicked_fg_traces)
         self.plot_prd_ids(self._clicked_bg_ids, 'bg', pen='y', trace_list=self.clicked_bg_traces)
 
+    def get_pulse_recs(self, ids, source):
+        if source == 'fg':
+            q = response_query(self.session)
+            q = q.join(PulseResponseStrength)
+            q = q.filter(PulseResponseStrength.id.in_(ids))
+            q = q.add_column(db.PulseResponse.start_time)
+            traces = self.selected_fg_traces
+            plot = self.fg_trace_plot
+        else:
+            q = baseline_query(self.session)
+            q = q.join(BaselineResponseStrength)
+            q = q.filter(BaselineResponseStrength.id.in_(ids))
+            q = q.add_column(db.Baseline.start_time)
+            traces = self.selected_bg_traces
+            plot = self.bg_trace_plot
+        
+        q = q.join(db.SyncRec).add_column(db.SyncRec.ext_id.label('sync_rec_ext_id'))
+        recs = q.all()
+        return recs
+
     def plot_prd_ids(self, ids, source, pen=None, trace_list=None, avg=False):
         """Plot raw or decolvolved PulseResponse data, given IDs of records in
         a PulseResponseStrength table.
         """
         with pg.BusyCursor():
+            recs = self.get_pulse_recs(ids, source)
+            if len(recs) == 0:
+                return
+
             if source == 'fg':
-                q = response_query(self.session)
-                q = q.join(PulseResponseStrength)
-                q = q.filter(PulseResponseStrength.id.in_(ids))
-                q = q.add_column(db.PulseResponse.start_time)
                 traces = self.selected_fg_traces
                 plot = self.fg_trace_plot
             else:
-                q = baseline_query(self.session)
-                q = q.join(BaselineResponseStrength)
-                q = q.filter(BaselineResponseStrength.id.in_(ids))
-                q = q.add_column(db.Baseline.start_time)
                 traces = self.selected_bg_traces
                 plot = self.bg_trace_plot
-            
-            q = q.join(db.SyncRec).add_column(db.SyncRec.ext_id.label('sync_rec_ext_id'))
-            recs = q.all()
-            if len(recs) == 0:
-                return
-            
+
             for i in trace_list[:]:
                 plot.removeItem(i)
                 trace_list.remove(i)
