@@ -87,6 +87,18 @@ def distance_plot(connected, distance, plots=None, color=(100, 100, 255), window
         Distance between cells for each probe
     plots : list of PlotWidget | PlotItem
         (optional) Two plots used to display distance profile and scatter plot.
+    color : tuple
+        (R, G, B) color values for line and confidence interval. The confidence interval
+        will be drawn with alpha=100
+    window : float
+        Width of distance window over which proportions are calculated for each point on
+        the profile line.
+    spacing : float
+        Distance spacing between points on the profile line
+
+
+    Note: using a spacing value that is smaller than the window size may cause an
+    otherwise smooth decrease over distance to instead look more like a series of downward steps.
     """
     color = pg.colorTuple(pg.mkColor(color))[:3]
     connected = np.array(connected).astype(float)

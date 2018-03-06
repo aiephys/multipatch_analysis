@@ -76,7 +76,10 @@ GENOTYPES = OrderedDict([
     ("Sst-IRES-Cre/wt;Pvalb-T2A-FlpO/wt;Ai65F/Ai65F", {'pvalb': ['tdTomato']}),
     ("Sst-IRES-Cre/wt;Pvalb-T2A-FlpO/wt;Ai65F/wt", {'pvalb': ['tdTomato']}),
     ("Ntsr1-Cre_GN220/wt;Sst-IRES-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'sst': ['tdTomato'], 'ntsr1': ['EGFP']}),
-    ("Sim1-Cre_KJ18/wt;Ai14(RCL-tdT)/wt", {'sim1': ['tdTomato']})
+    ("Sim1-Cre_KJ18/wt;Ai14(RCL-tdT)/wt", {'sim1': ['tdTomato']}),
+    ("Pvalb-IRES-Cre/wt;Ai14(RCL-tdT)/wt", {'pvalb': ['tdTomato']}),
+    ("Sst-IRES-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'sst': ['tdTomato']}),
+    ("Nr5a1-Cre/wt;Ai14(RCL-tdT)/wt", {'nr5a1': ['tdTomato']}),
 ])    
 
 
@@ -153,6 +156,7 @@ REPORTER_LINES = {                # dependencies # products
 }
    
 DRIVER_LINES = {                  # dependencies   # products
+    'Nr5a1-Cre':                  ('nr5a1',        ['cre']),
     'Rorb-T2A-tTA2':              ('rorb',         ['tTA']),
     'Tlx3-Cre_PL56':              ('tlx3',         ['cre']),
     'Sim1-Cre_KJ18':              ('sim1',         ['cre']),

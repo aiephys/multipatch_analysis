@@ -315,7 +315,7 @@ class ExperimentList(object):
             pre_strs = [("" if layer is None else ("L" + layer + " ")) + (cre_type or "") for layer, cre_type in pre_types]
             post_strs = [("" if layer is None else ("L" + layer + " ")) + (cre_type or "") for layer, cre_type in post_types]
             name = ("%s->%s "%(','.join(pre_strs), ','.join(post_strs)))
-        return distance_plot(connected, distance=probed, plots=plots, color=color, name=name, window=60e-6, spacing=10e-6)
+        return distance_plot(connected, distance=probed, plots=plots, color=color, name=name, window=40e-6, spacing=40e-6)
 
     def matrix(self, rows, cols, size=50, header_color='w', no_data_color='k'):
         w = pg.GraphicsLayoutWidget()
