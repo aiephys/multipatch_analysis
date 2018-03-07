@@ -68,6 +68,7 @@ class PulseResponseStrengthTableGroup(TableGroup):
             ('neg_dec_amp', 'float'),
             ('pos_dec_latency', 'float'),
             ('neg_dec_latency', 'float'),
+            ('crosstalk', 'float'),
         ],
         'baseline_response_strength' : [
             ('baseline_id', 'baseline.id', '', {'index': True}),
@@ -77,6 +78,7 @@ class PulseResponseStrengthTableGroup(TableGroup):
             ('neg_dec_amp', 'float'),
             ('pos_dec_latency', 'float'),
             ('neg_dec_latency', 'float'),
+            ('crosstalk', 'float'),
         ]
         #'deconv_pulse_response': [
             #"Exponentially deconvolved pulse responses",
@@ -104,48 +106,52 @@ class ConnectionStrengthTableGroup(TableGroup):
 
             # current clamp metrics
             ('ic_n_samples', 'int'),
+            ('ic_crosstalk_mean', 'float'),
+            ('ic_base_crosstalk_mean', 'float'),
             # amplitude,
-            ('ic_amp_med', 'float'),
+            ('ic_amp_mean', 'float'),
             ('ic_amp_stdev', 'float'),
-            ('ic_base_amp_med', 'float'),
+            ('ic_base_amp_mean', 'float'),
             ('ic_base_amp_stdev', 'float'),
             ('ic_amp_ttest', 'float'),
             ('ic_amp_ks2samp', 'float'),
             # deconvolved amplitide
-            ('ic_deconv_amp_med', 'float'),
+            ('ic_deconv_amp_mean', 'float'),
             ('ic_deconv_amp_stdev', 'float'),
-            ('ic_base_deconv_amp_med', 'float'),
+            ('ic_base_deconv_amp_mean', 'float'),
             ('ic_base_deconv_amp_stdev', 'float'),
             ('ic_deconv_amp_ttest', 'float'),
             ('ic_deconv_amp_ks2samp', 'float'),
             # latency
-            ('ic_latency_med', 'float'),
+            ('ic_latency_mean', 'float'),
             ('ic_latency_stdev', 'float'),
-            ('ic_base_latency_med', 'float'),
+            ('ic_base_latency_mean', 'float'),
             ('ic_base_latency_stdev', 'float'),
             ('ic_latency_ttest', 'float'),
             ('ic_latency_ks2samp', 'float'),
             
             # voltage clamp metrics
             ('vc_n_samples', 'int'),
+            ('vc_crosstalk_mean', 'float'),
+            ('vc_base_crosstalk_mean', 'float'),
             # amplitude,
-            ('vc_amp_med', 'float'),
+            ('vc_amp_mean', 'float'),
             ('vc_amp_stdev', 'float'),
-            ('vc_base_amp_med', 'float'),
+            ('vc_base_amp_mean', 'float'),
             ('vc_base_amp_stdev', 'float'),
             ('vc_amp_ttest', 'float'),
             ('vc_amp_ks2samp', 'float'),
             # deconvolved amplitide
-            ('vc_deconv_amp_med', 'float'),
+            ('vc_deconv_amp_mean', 'float'),
             ('vc_deconv_amp_stdev', 'float'),
-            ('vc_base_deconv_amp_med', 'float'),
+            ('vc_base_deconv_amp_mean', 'float'),
             ('vc_base_deconv_amp_stdev', 'float'),
             ('vc_deconv_amp_ttest', 'float'),
             ('vc_deconv_amp_ks2samp', 'float'),
             # latency
-            ('vc_latency_med', 'float'),
+            ('vc_latency_mean', 'float'),
             ('vc_latency_stdev', 'float'),
-            ('vc_base_latency_med', 'float'),
+            ('vc_base_latency_mean', 'float'),
             ('vc_base_latency_stdev', 'float'),
             ('vc_latency_ttest', 'float'),
             ('vc_latency_ks2samp', 'float'),
@@ -181,7 +187,7 @@ def measure_peak(trace, sign, spike_time, pulse_times, spike_delay=1e-3, respons
 
     # Start measuring after spike and hope that the pulse offset doesn't get in the way
     # (if we wait for the pulse to end, then we miss too many fast rise / short latency events)
-    response_start = max(spike_time + spike_delay, pulse_times[1])
+    response_start = spike_time + spike_delay
     response_stop = response_start + response_window
 
     # measure baseline from beginning of data until 50µs before pulse onset
@@ -332,6 +338,11 @@ def analyze_response_strength(rec, source, remove_artifacts=False, lpf=True, bsu
     results['pulse_times'] = pulse_times
     results['spike_time'] = spike_time
 
+    # Measure crosstalk from pulse onset
+    p1 = data.time_slice(pulse_times[0]-200e-6, pulse_times[0]).median()
+    p2 = data.time_slice(pulse_times[0], pulse_times[0]+200e-6).median()
+    results['crosstalk'] = p2 - p1
+
     # crosstalk artifacts in VC are removed before deconvolution
     if rec.clamp_mode == 'vc' and remove_artifacts is True:
         data = remove_crosstalk_artifacts(data, pulse_times)
@@ -389,7 +400,7 @@ def _compute_strength(inds, session=None):
             result = analyze_response_strength(rec, source)
             new_rec = {'%s_id'%source: rec.response_id}
             # copy a subset of results over to new record
-            for k in ['pos_amp', 'neg_amp', 'pos_dec_amp', 'neg_dec_amp', 'pos_dec_latency','neg_dec_latency']:
+            for k in ['pos_amp', 'neg_amp', 'pos_dec_amp', 'neg_dec_amp', 'pos_dec_latency', 'neg_dec_latency', 'crosstalk']:
                 new_rec[k] = result[k]
             new_recs.append(new_rec)
         
@@ -417,57 +428,77 @@ def rebuild_connectivity(session):
     expts_in_db = list_experiments(session=session)
     for i,expt in enumerate(expts_in_db):
         for pair in expt.pairs:
-            devs = pair.pre_cell.electrode.device_id, pair.post_cell.electrode.device_id
-            # Whether the user marked this as connected
-            cell_ids = (devs[0] + 1, devs[1] + 1)
+            fields = {}  # used to fill the new DB record
             
-            fields = {}
+            # Use KS p value to check for differences between foreground and background
             
-            for clamp_mode in ['ic', 'vc']:
-                amps = get_amps(session, pair, clamp_mode=clamp_mode)
-                base_amps = get_baseline_amps(session, pair, limit=len(amps), clamp_mode=clamp_mode)
-                if len(amps) == 0 or len(base_amps) == 0:
+            amps = {}
+            qc_amps = {}
+            ks_pvals = {}
+            #amp_means = {}
+            #amp_diffs = {}
+            for clamp_mode in ('ic', 'vc'):
+                # Query all pulse amplitude records for this clamp mode
+                clamp_mode_fg = get_amps(session, pair, clamp_mode=clamp_mode)
+                clamp_mode_bg = get_baseline_amps(session, pair, limit=len(clamp_mode_fg), clamp_mode=clamp_mode)
+                amps[clamp_mode, 'fg'] = clamp_mode_fg
+                amps[clamp_mode, 'bg'] = clamp_mode_bg
+                if (len(clamp_mode_fg) == 0 or len(clamp_mode_bg) == 0):
                     continue
                 
-                # decide whether to treat this connection as excitatory or inhibitory
-                # (probably we can do much better here)
-                pos_amp = amps['pos_dec_amp'].mean() - base_amps['pos_dec_amp'].mean()
-                neg_amp = amps['neg_dec_amp'].mean() - base_amps['neg_dec_amp'].mean()
-                if pos_amp > -neg_amp:
-                    conn.synapse_type = 'ex'
-                    pfx = 'pos_'
-                    qc_field = 'ex_qc_pass' if clamp_mode == 'ic' else 'in_qc_pass'
-                else:
-                    conn.synapse_type = 'in'
-                    pfx = 'neg_'
-                    qc_field = 'ex_qc_pass' if clamp_mode == 'vc' else 'in_qc_pass'
+                for sign in ('pos', 'neg'):
+                    # Separate into positive/negative tests and filter out responses that failed qc
+                    qc_field = {'vc': {'pos': 'in_qc_pass', 'neg': 'ex_qc_pass'}, 'ic': {'pos': 'ex_qc_pass', 'neg': 'in_qc_pass'}}[clamp_mode][sign]
+                    fg = clamp_mode_fg[clamp_mode_fg[qc_field]]
+                    bg = clamp_mode_bg[clamp_mode_bg[qc_field]]
+                    qc_amps[sign, clamp_mode, 'fg'] = fg
+                    qc_amps[sign, clamp_mode, 'bg'] = bg
+                    if (len(fg) == 0 or len(bg) == 0):
+                        continue
+                    
+                    # Measure some statistics from these records
+                    fg = fg[sign + '_dec_amp']
+                    bg = bg[sign + '_dec_amp']
+                    pval = scipy.stats.ks_2samp(fg, bg).pvalue
+                    ks_pvals[(sign, clamp_mode)] = pval
+                    # we could ensure that the average amplitude is in the right direction:
+                    #fg_mean = np.mean(fg)
+                    #bg_mean = np.mean(bg)
+                    #amp_means[sign, clamp_mode] = {'fg': fg_mean, 'bg': bg_mean}
+                    #amp_diffs[sign, clamp_mode] = fg_mean - bg_mean
 
-                # filter out responses that failed qc
-                amps_qc = amps[amps[qc_field]]
-                base_qc = base_amps[base_amps[qc_field]]
-                
-                # select out positive or negative amplitude columns
-                amp, base_amp = amps_qc[pfx+'amp'], base_qc[pfx+'amp']
-                dec_amp, dec_base_amp = amps_qc[pfx+'dec_amp'], base_qc[pfx+'dec_amp']
-                latency, base_latency = amps_qc[pfx+'dec_latency'], base_qc[pfx+'dec_latency']
-        
-                # compute mean/stdev of samples
-                n_samp = len(amp)
-                fields[clamp_mode + '_n_samples'] = n_samp
-                if n_samp == 0:
+            # decide whether to treat this connection as excitatory or inhibitory
+            # (probably we can do much better here)
+            if (ks_pvals.get(('pos', 'ic'), 1) < ks_pvals.get(('neg', 'ic'), 1)) or (ks_pvals.get(('neg', 'vc'), 1) < ks_pvals.get(('pos', 'vc'), 1)):
+                fields['synapse_type'] = 'ex'
+                sign = 'pos'
+            else:
+                fields['synapse_type'] = 'in'
+                sign = 'neg'
+
+            # compute the rest of statistics for only positive or negative deflections
+            for clamp_mode in ('ic', 'vc'):
+                fg = qc_amps.get((sign, clamp_mode, 'fg'))
+                bg = qc_amps.get((sign, clamp_mode, 'bg'))
+                if fg is None or bg is None or len(fg) == 0 or len(bg) == 0:
+                    fields[clamp_mode + '_n_samples'] = 0
                     continue
                 
-                # measure median, stdev, and statistical differences between
+                fields[clamp_mode + '_n_samples'] = len(fg)
+                fields[clamp_mode + '_crosstalk_mean'] = np.mean(fg['crosstalk'])
+                fields[clamp_mode + '_base_crosstalk_mean'] = np.mean(bg['crosstalk'])
+                
+                # measure mean, stdev, and statistical differences between
                 # fg and bg for each measurement
-                for (val, fg, bg) in [('amp', amp, base_amp), 
-                                      ('deconv_amp', dec_amp, dec_base_amp),
-                                      ('latency', latency, base_latency)]:
-                    fields[clamp_mode + '_' + val + '_med'] = np.median(fg)
-                    fields[clamp_mode + '_' + val + '_stdev'] = np.std(fg)
-                    fields[clamp_mode + '_base_' + val + '_med'] = np.median(bg)
-                    fields[clamp_mode + '_base_' + val + '_stdev'] = np.std(bg)
-                    fields[clamp_mode + '_' + val + '_ttest'] = scipy.stats.ttest_ind(fg, bg, equal_var=False).pvalue
-                    fields[clamp_mode + '_' + val + '_ks2samp'] = scipy.stats.ks_2samp(fg, bg).pvalue
+                for val, field in [('amp', 'amp'), ('deconv_amp', 'dec_amp'), ('latency', 'dec_latency')]:
+                    f = fg[sign + '_' + field]
+                    b = bg[sign + '_' + field]
+                    fields[clamp_mode + '_' + val + '_mean'] = np.mean(f)
+                    fields[clamp_mode + '_' + val + '_stdev'] = np.std(f)
+                    fields[clamp_mode + '_base_' + val + '_mean'] = np.mean(b)
+                    fields[clamp_mode + '_base_' + val + '_stdev'] = np.std(b)
+                    fields[clamp_mode + '_' + val + '_ttest'] = scipy.stats.ttest_ind(f, b, equal_var=False).pvalue
+                    fields[clamp_mode + '_' + val + '_ks2samp'] = scipy.stats.ks_2samp(f, b).pvalue
 
             conn = ConnectionStrength(pair_id=pair.id, **fields)
             session.add(conn)
@@ -565,6 +596,7 @@ def get_amps(session, pair, clamp_mode='ic'):
         PulseResponseStrength.neg_dec_amp,
         PulseResponseStrength.pos_dec_latency,
         PulseResponseStrength.neg_dec_latency,
+        PulseResponseStrength.crosstalk,
         db.PulseResponse.ex_qc_pass,
         db.PulseResponse.in_qc_pass,
         db.PatchClampRecording.clamp_mode,
@@ -623,6 +655,7 @@ def get_baseline_amps(session, pair, clamp_mode='ic', limit=None):
         BaselineResponseStrength.neg_dec_amp,
         BaselineResponseStrength.pos_dec_latency,
         BaselineResponseStrength.neg_dec_latency,
+        BaselineResponseStrength.crosstalk,
         db.Baseline.ex_qc_pass,
         db.Baseline.in_qc_pass,
         db.PatchClampRecording.clamp_mode,
@@ -1080,8 +1113,8 @@ def query_all_pairs():
     df = pandas.read_sql(query, session.bind)
 
     # test out a new metric:
-    # df['connection_signal'] = pandas.Series(df['deconv_amp_med'] / df['latency_stdev'], index=df.index)
-    # df['connection_background'] = pandas.Series(df['deconv_base_amp_med'] / df['base_latency_stdev'], index=df.index)
+    # df['connection_signal'] = pandas.Series(df['deconv_amp_mean'] / df['latency_stdev'], index=df.index)
+    # df['connection_background'] = pandas.Series(df['deconv_base_amp_mean'] / df['base_latency_stdev'], index=df.index)
     ts = [datetime_to_timestamp(t) for t in df['acq_timestamp']]
     df['acq_timestamp'] = ts
     recs = df.to_records()
@@ -1146,13 +1179,13 @@ if __name__ == '__main__':
 
     pg.dbg()
 
-    if args.rebuild:
+    if args.rebuild and raw_input("Rebuild strength tables? ") == 'y':
         connection_strength_tables.drop_tables()
         pulse_response_strength_tables.drop_tables()
         init_tables()
         rebuild_strength(parallel=(not args.local), workers=args.workers)
         rebuild_connectivity()
-    elif args.rebuild_connectivity:
+    elif args.rebuild_connectivity and raw_input("Rebuild connectivity table? ") == 'y':
         print("drop tables..")
         connection_strength_tables.drop_tables()
         print("create tables..")
@@ -1228,7 +1261,8 @@ if __name__ == '__main__':
         ('post_cre_type', {'mode': 'enum', 'values': list(set(recs['post_cre_type']))}),
         ('pre_target_layer', {'mode': 'enum'}),
         ('post_target_layer', {'mode': 'enum'}),
-        ('n_samples', {}),
+        ('ic_n_samples', {}),
+        ('vc_n_samples', {}),
         ('rig_name', {'mode': 'enum', 'values': list(set(recs['rig_name']))}),
         ('acsf', {'mode': 'enum', 'values': list(set(recs['acsf']))}),
         ('acq_timestamp', {}),
@@ -1268,8 +1302,8 @@ if __name__ == '__main__':
 
     features = recs[[
         # 'ic_n_samples', 
-        #'amp_med', 'amp_stdev', 'base_amp_med', 'base_amp_stdev', 'amp_med_minus_base', 'amp_stdev_minus_base', 
-        #'deconv_amp_med', 'deconv_amp_stdev', 'deconv_base_amp_med', 'deconv_base_amp_stdev', 'deconv_amp_med_minus_base', 'deconv_amp_stdev_minus_base', 
+        #'amp_mean', 'amp_stdev', 'base_amp_mean', 'base_amp_stdev', 'amp_mean_minus_base', 'amp_stdev_minus_base', 
+        #'deconv_amp_mean', 'deconv_amp_stdev', 'deconv_base_amp_mean', 'deconv_base_amp_stdev', 'deconv_amp_mean_minus_base', 'deconv_amp_stdev_minus_base', 
         #'amp_ttest',
         #'deconv_amp_ttest',
         #'amp_ks2samp', 
@@ -1277,18 +1311,18 @@ if __name__ == '__main__':
         'vc_amp_ks2samp',
         'ic_latency_ks2samp',
         'vc_latency_ks2samp',
-        # 'ic_latency_med', 'ic_latency_stdev', 
-        #'ic_base_latency_med', 'ic_base_latency_stdev',
-        #'abs_amp_med', 'abs_base_amp_med', 'abs_amp_med_minus_base', 
-        # 'ic_deconv_amp_med', 'ic_base_deconv_amp_med', #'abs_deconv_amp_med_minus_base', 
-        # 'vc_amp_med',
+        # 'ic_latency_mean', 'ic_latency_stdev', 
+        #'ic_base_latency_mean', 'ic_base_latency_stdev',
+        #'abs_amp_mean', 'abs_base_amp_mean', 'abs_amp_mean_minus_base', 
+        # 'ic_deconv_amp_mean', 'ic_base_deconv_amp_mean', #'abs_deconv_amp_mean_minus_base', 
+        # 'vc_amp_mean',
         # 'electrode_distance'
     ]]
 
     # for k in ['deconv_amp_ks2samp']:
     #     features[k] = np.log(features[k])
 
-    mask = recs['ic_n_samples'] > 100
+    mask = (recs['ic_n_samples'] > 100) & (recs['ic_crosstalk_mean'] < 60e-6)
 
     x = np.array([tuple(r) for r in features[mask]])
     y = recs['synapse'][mask]
