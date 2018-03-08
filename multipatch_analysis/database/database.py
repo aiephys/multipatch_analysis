@@ -1,23 +1,20 @@
 """
 Accumulate all experiment data into a set of linked tables.
 """
-import io
+import os, io
 import numpy as np
 
 import sqlalchemy
-version = map(int, sqlalchemy.__version__.split('.'))
-if version < [1, 2, 0]:
+from distutils.version import LooseVersion
+if LooseVersion(sqlalchemy.__version__) < '1.2':
     raise Exception('requires at least sqlalchemy 1.2')
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, Float, Date, DateTime, LargeBinary, ForeignKey, or_, and_
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, Integer, String, Boolean, Float, Date, DateTime, LargeBinary, ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, deferred, sessionmaker, aliased
 from sqlalchemy.types import TypeDecorator
-from sqlalchemy.orm import sessionmaker, aliased
 from sqlalchemy.sql.expression import func
-from sqlalchemy import or_, and_
 
 from .. import config
 
@@ -169,7 +166,7 @@ table_schemas = {
         ('duration', 'float', 'Length of the pulse in seconds'),
         ('n_spikes', 'int', 'Number of spikes evoked by this pulse'),
         # ('first_spike', 'stim_spike.id', 'The ID of the first spike evoked by this pulse'),
-        ('data', 'array', 'Numpy array of presynaptic recording sampled at '+_sample_rate_str),
+        ('data', 'array', 'Numpy array of presynaptic recording sampled at '+_sample_rate_str, {'deferred': True}),
         ('data_start_time', 'float', "Starting time of the data chunk, relative to the beginning of the recording"),
     ],
     'stim_spike': [
@@ -185,7 +182,7 @@ table_schemas = {
         "A snippet of baseline data, matched to a postsynaptic recording",
         ('recording_id', 'recording.id', 'The recording from which this baseline snippet was extracted.', {'index': True}),
         ('start_time', 'float', "Starting time of this chunk of the recording in seconds, relative to the beginning of the recording"),
-        ('data', 'array', 'numpy array of baseline data sampled at '+_sample_rate_str),
+        ('data', 'array', 'numpy array of baseline data sampled at '+_sample_rate_str, {'deferred': True}),
         ('mode', 'float', 'most common value in the baseline snippet'),
         ('ex_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for excitatory synapse probing'),
         ('in_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for inhibitory synapse probing'),
@@ -196,7 +193,7 @@ table_schemas = {
         ('pulse_id', 'stim_pulse.id', 'The presynaptic pulse', {'index': True}),
         ('pair_id', 'pair.id', 'The pre-post cell pair involved in this pulse response', {'index': True}),
         ('start_time', 'float', 'Starting time of this chunk of the recording in seconds, relative to the beginning of the recording'),
-        ('data', 'array', 'numpy array of response data sampled at '+_sample_rate_str),
+        ('data', 'array', 'numpy array of response data sampled at '+_sample_rate_str, {'deferred': True}),
         ('ex_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for excitatory synapse probing'),
         ('in_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for inhibitory synapse probing'),
         ('baseline_id', 'baseline.id'),
@@ -252,7 +249,7 @@ _coltypes = {
 }
 
 
-def generate_mapping(table, schema):
+def generate_mapping(table, schema, base=None):
     """Generate an ORM mapping class from an entry in table_schemas.
     """
     name = table.capitalize()
@@ -270,7 +267,8 @@ def generate_mapping(table, schema):
         colname, coltype = column[:2]
         kwds = {} if len(column) < 4 else column[3]
         kwds['comment'] = None if len(column) < 3 else column[2]
-            
+        defer_col = kwds.pop('deferred', False)
+
         if coltype not in _coltypes:
             if not coltype.endswith('.id'):
                 raise ValueError("Unrecognized column type %s" % coltype)
@@ -278,16 +276,26 @@ def generate_mapping(table, schema):
         else:
             ctyp = _coltypes[coltype]
             props[colname] = Column(ctyp, **kwds)
-    
+
+        if defer_col:
+            props[colname] = deferred(props[colname])
+
     props['time_created'] = Column(DateTime, default=func.now())
     props['time_modified'] = Column(DateTime, onupdate=func.current_timestamp())
     props['meta'] = Column(JSONB)
 
-    return type(name, (ORMBase,), props)
+    if base is None:
+        return type(name, (ORMBase,), props)
+    else:
+        def init(self, *args, **kwds):
+            base.__init__(self)
+            ORMBase.__init__(self, *args, **kwds)
+        props['__init__'] = init  # doesn't work?
+        return type(name, (base,ORMBase), props)
 
 
-def _generate_mapping(table):
-    return generate_mapping(table, table_schemas[table])
+def _generate_mapping(table, base=None):
+    return generate_mapping(table, table_schemas[table], base=base)
 
 
 def create_all_mappings():
@@ -295,8 +303,47 @@ def create_all_mappings():
     global TestPulse, StimPulse, StimSpike, PulseResponse, Baseline
 
     # Generate ORM mapping classes
+
+    class ExperimentBase(object):
+        def __getitem__(self, item):
+            # Easy cell/pair getters.
+            # They're inefficient, but meh.
+            if isinstance(item, int):
+                for cell in self.cells:
+                    if cell.ext_id == item:
+                        return cell
+            elif isinstance(item, tuple):
+                for pair in self.pairs:
+                    if item == (pair.pre_cell.ext_id, pair.post_cell.ext_id):
+                        return pair
+        
+        @property
+        def nwb_file(self):
+            return os.path.join(config.synphys_data, self.storage_path, self.ephys_file)
+
+        @property
+        def nwb_cache_file(self):
+            from ..synphys_cache import SynPhysCache
+            return SynPhysCache().get_cache(self.nwb_file)
+
+        @property
+        def data(self):
+            """Data object from NWB file. 
+            
+            Contains all ephys recordings.
+            """
+
+            if not hasattr(self, '_data'):
+                from ..data import MultiPatchExperiment
+                try:
+                    self._data = MultiPatchExperiment(self.nwb_cache_file)
+                except IOError:
+                    os.remove(self.nwb_cache_file)
+                    self._data = MultiPatchExperiment(self.nwb_cache_file)
+            return self._data
+
     Slice = _generate_mapping('slice')
-    Experiment = _generate_mapping('experiment')
+    Experiment = _generate_mapping('experiment', base=ExperimentBase)
     Electrode = _generate_mapping('electrode')
     Cell = _generate_mapping('cell')
     Pair = _generate_mapping('pair')
@@ -339,7 +386,7 @@ def create_all_mappings():
     Recording.sync_rec = relationship(SyncRec, back_populates="recordings")
 
     Recording.patch_clamp_recording = relationship(PatchClampRecording, back_populates="recording", cascade="delete", single_parent=True)
-    PatchClampRecording.recording = relationship(Recording, back_populates="patch_clamp_recording")
+    PatchClampRecording.recording = relationship(Recording, back_populates="patch_clamp_recording", single_parent=True)
 
     PatchClampRecording.multi_patch_probe = relationship(MultiPatchProbe, back_populates="patch_clamp_recording", cascade="delete", single_parent=True)
     MultiPatchProbe.patch_clamp_recording = relationship(PatchClampRecording, back_populates="multi_patch_probe")

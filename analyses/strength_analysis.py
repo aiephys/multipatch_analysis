@@ -10,11 +10,10 @@ Big question: what's the best way to measure synaptic strength / connectivity?
 from __future__ import print_function, division
 
 from collections import OrderedDict
-from multipatch_analysis.constants import EXCITATORY_CRE_TYPES, INHIBITORY_CRE_TYPES
-
 import argparse, time, sys, os, pickle, io, multiprocessing
 import numpy as np
 import scipy.stats
+import pandas
 
 from sqlalchemy.orm import aliased
 
@@ -29,6 +28,9 @@ from neuroanalysis.event_detection import exp_deconvolve
 from multipatch_analysis.database import database as db
 from multipatch_analysis import config, synphys_cache
 from multipatch_analysis.ui.multipatch_nwb_viewer import MultipatchNwbViewer
+from multipatch_analysis.constants import EXCITATORY_CRE_TYPES, INHIBITORY_CRE_TYPES
+import multipatch_analysis.qc as qc 
+
 
 
 class TableGroup(object):
@@ -66,6 +68,7 @@ class PulseResponseStrengthTableGroup(TableGroup):
             ('neg_dec_amp', 'float'),
             ('pos_dec_latency', 'float'),
             ('neg_dec_latency', 'float'),
+            ('crosstalk', 'float'),
         ],
         'baseline_response_strength' : [
             ('baseline_id', 'baseline.id', '', {'index': True}),
@@ -75,6 +78,7 @@ class PulseResponseStrengthTableGroup(TableGroup):
             ('neg_dec_amp', 'float'),
             ('pos_dec_latency', 'float'),
             ('neg_dec_latency', 'float'),
+            ('crosstalk', 'float'),
         ]
         #'deconv_pulse_response': [
             #"Exponentially deconvolved pulse responses",
@@ -90,33 +94,68 @@ class PulseResponseStrengthTableGroup(TableGroup):
         db.PulseResponse.pulse_response_strength = db.relationship(PulseResponseStrength, back_populates="pulse_response", cascade="delete", single_parent=True)
         PulseResponseStrength.pulse_response = db.relationship(db.PulseResponse, back_populates="pulse_response_strength", single_parent=True)
 
+        db.Baseline.baseline_response_strength = db.relationship(BaselineResponseStrength, back_populates="baseline", cascade="delete", single_parent=True)
+        BaselineResponseStrength.baseline = db.relationship(db.Baseline, back_populates="baseline_response_strength", single_parent=True)
+
 
 class ConnectionStrengthTableGroup(TableGroup):
     schemas = {
         'connection_strength': [
             ('pair_id', 'pair.id', '', {'index': True}),
             ('synapse_type', 'str', '"ex" or "in"'),
-            ('n_samples', 'int'),
-            ('amp_med', 'float'),
-            ('amp_stdev', 'float'),
-            ('base_amp_med', 'float'),
-            ('base_amp_stdev', 'float'),
-            ('amp_med_minus_base', 'float'),
-            ('amp_stdev_minus_base', 'float'),
-            ('deconv_amp_med', 'float'),
-            ('deconv_amp_stdev', 'float'),
-            ('deconv_base_amp_med', 'float'),
-            ('deconv_base_amp_stdev', 'float'),
-            ('deconv_amp_med_minus_base', 'float'),
-            ('deconv_amp_stdev_minus_base', 'float'),
-            ('amp_ttest', 'float'),
-            ('deconv_amp_ttest', 'float'),
-            ('amp_ks2samp', 'float'),
-            ('deconv_amp_ks2samp', 'float'),
-            ('latency_med', 'float'),
-            ('latency_stdev', 'float'),
-            ('base_latency_med', 'float'),
-            ('base_latency_stdev', 'float'),
+
+            # current clamp metrics
+            ('ic_n_samples', 'int'),
+            ('ic_crosstalk_mean', 'float'),
+            ('ic_base_crosstalk_mean', 'float'),
+            # amplitude,
+            ('ic_amp_mean', 'float'),
+            ('ic_amp_stdev', 'float'),
+            ('ic_base_amp_mean', 'float'),
+            ('ic_base_amp_stdev', 'float'),
+            ('ic_amp_ttest', 'float'),
+            ('ic_amp_ks2samp', 'float'),
+            # deconvolved amplitide
+            ('ic_deconv_amp_mean', 'float'),
+            ('ic_deconv_amp_stdev', 'float'),
+            ('ic_base_deconv_amp_mean', 'float'),
+            ('ic_base_deconv_amp_stdev', 'float'),
+            ('ic_deconv_amp_ttest', 'float'),
+            ('ic_deconv_amp_ks2samp', 'float'),
+            # latency
+            ('ic_latency_mean', 'float'),
+            ('ic_latency_stdev', 'float'),
+            ('ic_base_latency_mean', 'float'),
+            ('ic_base_latency_stdev', 'float'),
+            ('ic_latency_ttest', 'float'),
+            ('ic_latency_ks2samp', 'float'),
+            
+            # voltage clamp metrics
+            ('vc_n_samples', 'int'),
+            ('vc_crosstalk_mean', 'float'),
+            ('vc_base_crosstalk_mean', 'float'),
+            # amplitude,
+            ('vc_amp_mean', 'float'),
+            ('vc_amp_stdev', 'float'),
+            ('vc_base_amp_mean', 'float'),
+            ('vc_base_amp_stdev', 'float'),
+            ('vc_amp_ttest', 'float'),
+            ('vc_amp_ks2samp', 'float'),
+            # deconvolved amplitide
+            ('vc_deconv_amp_mean', 'float'),
+            ('vc_deconv_amp_stdev', 'float'),
+            ('vc_base_deconv_amp_mean', 'float'),
+            ('vc_base_deconv_amp_stdev', 'float'),
+            ('vc_deconv_amp_ttest', 'float'),
+            ('vc_deconv_amp_ks2samp', 'float'),
+            # latency
+            ('vc_latency_mean', 'float'),
+            ('vc_latency_stdev', 'float'),
+            ('vc_base_latency_mean', 'float'),
+            ('vc_base_latency_stdev', 'float'),
+            ('vc_latency_ttest', 'float'),
+            ('vc_latency_ks2samp', 'float'),
+            
         ],
     }
 
@@ -148,7 +187,7 @@ def measure_peak(trace, sign, spike_time, pulse_times, spike_delay=1e-3, respons
 
     # Start measuring after spike and hope that the pulse offset doesn't get in the way
     # (if we wait for the pulse to end, then we miss too many fast rise / short latency events)
-    response_start = max(spike_time + spike_delay, pulse_times[1])
+    response_start = spike_time + spike_delay
     response_stop = response_start + response_window
 
     # measure baseline from beginning of data until 50µs before pulse onset
@@ -179,15 +218,12 @@ def deconv_filter(trace, pulse_times, tau=15e-3, lowpass=1000., lpf=True, remove
     if remove_artifacts:
         # after deconvolution, the pulse causes two sharp artifacts; these
         # must be removed before LPF
-        dt = dec.dt
-        r = [-50e-6, 250e-6]
-        edges = [(int((t+r[0])/dt), int((t+r[1])/dt)) for t in pulse_times]
-        cleaned = filter.remove_artifacts(dec, edges, window=400e-6)
+        cleaned = remove_crosstalk_artifacts(dec, pulse_times)
     else:
         cleaned = dec
 
     if bsub:
-        baseline = np.median(cleaned.time_slice(cleaned.t0, cleaned.t0+10e-3).data)
+        baseline = np.median(cleaned.time_slice(cleaned.t0+5e-3, cleaned.t0+10e-3).data)
         b_subbed = cleaned-baseline
     else:
         b_subbed = cleaned
@@ -198,15 +234,24 @@ def deconv_filter(trace, pulse_times, tau=15e-3, lowpass=1000., lpf=True, remove
         return b_subbed
 
 
+def remove_crosstalk_artifacts(data, pulse_times):
+    dt = data.dt
+    r = [-50e-6, 250e-6]
+    edges = [(int((t+r[0])/dt), int((t+r[1])/dt)) for t in pulse_times]
+    # If window is too shortm then it becomes seneitive to sample noise.
+    # If window is too long, then it becomes sensitive to slower signals (like the AP following pulse onset)
+    return filter.remove_artifacts(data, edges, window=100e-6)
+
+
 @db.default_session
 def rebuild_strength(parallel=True, workers=6, session=None):
-    for source in ['baseline', 'pulse_response']:
+    for source in ['pulse_response', 'baseline']:
         print("Rebuilding %s strength table.." % source)
         
         # Divide workload into equal parts for each worker
         max_pulse_id = session.execute('select max(id) from %s' % source).fetchone()[0]
         chunk = 1 + (max_pulse_id // workers)
-        parts = [(source, chunk*i, chunk*(i+1)) for i in range(4)]
+        parts = [(source, chunk*i, chunk*(i+1)) for i in range(workers)]
 
         if parallel:
             pool = multiprocessing.Pool(processes=workers)
@@ -233,13 +278,15 @@ def response_query(session):
         db.StimPulse.duration.label('pulse_dur'),
         db.StimSpike.max_dvdt_time.label('spike_time'),
         db.PatchClampRecording.clamp_mode,
+        db.PulseResponse.ex_qc_pass,
+        db.PulseResponse.in_qc_pass,
     )
     q = q.join(db.StimPulse)
     q = q.join(db.StimSpike)
     q = q.join(db.PulseResponse.recording).join(db.PatchClampRecording) 
 
     # Ignore anything that failed QC
-    q = q.filter(db.or_(db.StimPulse.ex_qc_pass==True, db.StimPulse.in_qc_pass==True))
+    q = q.filter(((db.PulseResponse.ex_qc_pass==True) | (db.PulseResponse.in_qc_pass==True)))
 
     return q
 
@@ -252,11 +299,13 @@ def baseline_query(session):
         db.Baseline.id.label('response_id'),
         db.Baseline.data,
         db.PatchClampRecording.clamp_mode,
+        db.Baseline.ex_qc_pass,
+        db.Baseline.in_qc_pass,
     )
     q = q.join(db.Baseline.recording).join(db.PatchClampRecording) 
 
     # Ignore anything that failed QC
-    q = q.filter(db.or_(db.Baseline.ex_qc_pass==True, db.Baseline.in_qc_pass==True))
+    q = q.filter(((db.Baseline.ex_qc_pass==True) | (db.Baseline.in_qc_pass==True)))
 
     return q
 
@@ -289,12 +338,23 @@ def analyze_response_strength(rec, source, remove_artifacts=False, lpf=True, bsu
     results['pulse_times'] = pulse_times
     results['spike_time'] = spike_time
 
+    # Measure crosstalk from pulse onset
+    p1 = data.time_slice(pulse_times[0]-200e-6, pulse_times[0]).median()
+    p2 = data.time_slice(pulse_times[0], pulse_times[0]+200e-6).median()
+    results['crosstalk'] = p2 - p1
+
+    # crosstalk artifacts in VC are removed before deconvolution
+    if rec.clamp_mode == 'vc' and remove_artifacts is True:
+        data = remove_crosstalk_artifacts(data, pulse_times)
+        remove_artifacts = False
+
     # Measure deflection on raw data
     results['pos_amp'], _ = measure_peak(data, '+', spike_time, pulse_times)
     results['neg_amp'], _ = measure_peak(data, '-', spike_time, pulse_times)
 
     # Deconvolution / artifact removal / filtering
-    dec_data = deconv_filter(data, pulse_times, lpf=lpf, remove_artifacts=remove_artifacts, bsub=bsub, lowpass=lowpass)
+    tau = 15e-3 if rec.clamp_mode == 'ic' else 5e-3
+    dec_data = deconv_filter(data, pulse_times, tau=tau, lpf=lpf, remove_artifacts=remove_artifacts, bsub=bsub, lowpass=lowpass)
     results['dec_trace'] = dec_data
 
     # Measure deflection on deconvolved data
@@ -340,7 +400,7 @@ def _compute_strength(inds, session=None):
             result = analyze_response_strength(rec, source)
             new_rec = {'%s_id'%source: rec.response_id}
             # copy a subset of results over to new record
-            for k in ['pos_amp', 'neg_amp', 'pos_dec_amp', 'neg_dec_amp', 'pos_dec_latency','neg_dec_latency']:
+            for k in ['pos_amp', 'neg_amp', 'pos_dec_amp', 'neg_dec_amp', 'pos_dec_latency', 'neg_dec_latency', 'crosstalk']:
                 new_rec[k] = result[k]
             new_recs.append(new_rec)
         
@@ -368,59 +428,79 @@ def rebuild_connectivity(session):
     expts_in_db = list_experiments(session=session)
     for i,expt in enumerate(expts_in_db):
         for pair in expt.pairs:
-            devs = pair.pre_cell.electrode.device_id, pair.post_cell.electrode.device_id
-            amps = get_amps(session, pair)
-            base_amps = get_baseline_amps(session, pair, limit=len(amps))
+            fields = {}  # used to fill the new DB record
             
-            conn = ConnectionStrength(pair_id=pair.id)
-            # Whether the user marked this as connected
-            cell_ids = (devs[0] + 1, devs[1] + 1)
+            # Use KS p value to check for differences between foreground and background
             
+            amps = {}
+            qc_amps = {}
+            ks_pvals = {}
+            #amp_means = {}
+            #amp_diffs = {}
+            for clamp_mode in ('ic', 'vc'):
+                # Query all pulse amplitude records for this clamp mode
+                clamp_mode_fg = get_amps(session, pair, clamp_mode=clamp_mode)
+                clamp_mode_bg = get_baseline_amps(session, pair, limit=len(clamp_mode_fg), clamp_mode=clamp_mode)
+                amps[clamp_mode, 'fg'] = clamp_mode_fg
+                amps[clamp_mode, 'bg'] = clamp_mode_bg
+                if (len(clamp_mode_fg) == 0 or len(clamp_mode_bg) == 0):
+                    continue
+                
+                for sign in ('pos', 'neg'):
+                    # Separate into positive/negative tests and filter out responses that failed qc
+                    qc_field = {'vc': {'pos': 'in_qc_pass', 'neg': 'ex_qc_pass'}, 'ic': {'pos': 'ex_qc_pass', 'neg': 'in_qc_pass'}}[clamp_mode][sign]
+                    fg = clamp_mode_fg[clamp_mode_fg[qc_field]]
+                    bg = clamp_mode_bg[clamp_mode_bg[qc_field]]
+                    qc_amps[sign, clamp_mode, 'fg'] = fg
+                    qc_amps[sign, clamp_mode, 'bg'] = bg
+                    if (len(fg) == 0 or len(bg) == 0):
+                        continue
+                    
+                    # Measure some statistics from these records
+                    fg = fg[sign + '_dec_amp']
+                    bg = bg[sign + '_dec_amp']
+                    pval = scipy.stats.ks_2samp(fg, bg).pvalue
+                    ks_pvals[(sign, clamp_mode)] = pval
+                    # we could ensure that the average amplitude is in the right direction:
+                    #fg_mean = np.mean(fg)
+                    #bg_mean = np.mean(bg)
+                    #amp_means[sign, clamp_mode] = {'fg': fg_mean, 'bg': bg_mean}
+                    #amp_diffs[sign, clamp_mode] = fg_mean - bg_mean
+
             # decide whether to treat this connection as excitatory or inhibitory
             # (probably we can do much better here)
-            pos_amp = amps['pos_dec_amp'].mean() - base_amps['pos_dec_amp'].mean()
-            neg_amp = amps['neg_dec_amp'].mean() - base_amps['neg_dec_amp'].mean()
-            if pos_amp > -neg_amp:
-                conn.synapse_type = 'ex'
-                pfx = 'pos_'
+            if (ks_pvals.get(('pos', 'ic'), 1) < ks_pvals.get(('neg', 'ic'), 1)) or (ks_pvals.get(('neg', 'vc'), 1) < ks_pvals.get(('pos', 'vc'), 1)):
+                fields['synapse_type'] = 'ex'
+                sign = 'pos'
             else:
-                conn.synapse_type = 'in'
-                pfx = 'neg_'
-            # select out positive or negative amplitude columns
-            amp, base_amp = amps[pfx+'amp'], base_amps[pfx+'amp']
-            dec_amp, dec_base_amp = amps[pfx+'dec_amp'], base_amps[pfx+'dec_amp']
-            latency, base_latency = amps[pfx+'dec_latency'], base_amps[pfx+'dec_latency']
-    
-            # compute mean/stdev of samples
-            n_samp = len(amps)
-            conn.n_samples = n_samp
-            if n_samp == 0:
-                continue
-            conn.amp_med = np.median(amp)
-            conn.amp_stdev = amp.std()
-            conn.base_amp_med = np.median(base_amp)
-            conn.base_amp_stdev = base_amp.std()
-            conn.amp_med_minus_base = conn.amp_med - conn.base_amp_med
-            conn.amp_stdev_minus_base = conn.amp_stdev - conn.base_amp_stdev
-            conn.deconv_amp_med = np.median(dec_amp)
-            conn.deconv_amp_stdev = dec_amp.std()
-            conn.deconv_base_amp_med = np.median(dec_base_amp)
-            conn.deconv_base_amp_stdev = dec_base_amp.std()
-            conn.deconv_amp_med_minus_base = conn.deconv_amp_med - conn.deconv_base_amp_med
-            conn.deconv_amp_stdev_minus_base = conn.deconv_amp_stdev - conn.deconv_base_amp_stdev
+                fields['synapse_type'] = 'in'
+                sign = 'neg'
 
-            # do some statistical tests
-            conn.amp_ks2samp = scipy.stats.ks_2samp(amp, base_amp).pvalue
-            conn.deconv_amp_ks2samp = scipy.stats.ks_2samp(dec_amp, dec_base_amp).pvalue
-            conn.amp_ttest = scipy.stats.ttest_ind(amp, base_amp, equal_var=False).pvalue
-            conn.deconv_amp_ttest = scipy.stats.ttest_ind(dec_amp, dec_base_amp, equal_var=False).pvalue
+            # compute the rest of statistics for only positive or negative deflections
+            for clamp_mode in ('ic', 'vc'):
+                fg = qc_amps.get((sign, clamp_mode, 'fg'))
+                bg = qc_amps.get((sign, clamp_mode, 'bg'))
+                if fg is None or bg is None or len(fg) == 0 or len(bg) == 0:
+                    fields[clamp_mode + '_n_samples'] = 0
+                    continue
+                
+                fields[clamp_mode + '_n_samples'] = len(fg)
+                fields[clamp_mode + '_crosstalk_mean'] = np.mean(fg['crosstalk'])
+                fields[clamp_mode + '_base_crosstalk_mean'] = np.mean(bg['crosstalk'])
+                
+                # measure mean, stdev, and statistical differences between
+                # fg and bg for each measurement
+                for val, field in [('amp', 'amp'), ('deconv_amp', 'dec_amp'), ('latency', 'dec_latency')]:
+                    f = fg[sign + '_' + field]
+                    b = bg[sign + '_' + field]
+                    fields[clamp_mode + '_' + val + '_mean'] = np.mean(f)
+                    fields[clamp_mode + '_' + val + '_stdev'] = np.std(f)
+                    fields[clamp_mode + '_base_' + val + '_mean'] = np.mean(b)
+                    fields[clamp_mode + '_base_' + val + '_stdev'] = np.std(b)
+                    fields[clamp_mode + '_' + val + '_ttest'] = scipy.stats.ttest_ind(f, b, equal_var=False).pvalue
+                    fields[clamp_mode + '_' + val + '_ks2samp'] = scipy.stats.ks_2samp(f, b).pvalue
 
-            # deconvolved peak latencies
-            conn.latency_med = np.median(latency)
-            conn.latency_stdev = np.std(latency)
-            conn.base_latency_med = np.median(base_latency)
-            conn.base_latency_stdev = np.std(base_latency)
-
+            conn = ConnectionStrength(pair_id=pair.id, **fields)
             session.add(conn)
         
         session.commit()
@@ -458,6 +538,7 @@ class ExperimentBrowser(pg.TreeWidget):
         pg.TreeWidget.__init__(self)
         self.setColumnCount(7)
         self.setHeaderLabels(['date', 'rig', 'organism', 'region', 'genotype', 'acsf'])
+        self.setDragDropMode(self.NoDragDrop)
         self.populate()
         self._last_expanded = None
         
@@ -476,8 +557,10 @@ class ExperimentBrowser(pg.TreeWidget):
             self.addTopLevelItem(expt_item)
 
             for pair in expt.pairs:
+                if pair.n_ex_test_spikes == 0 and pair.n_in_test_spikes == 0:
+                    continue
                 cells = '%d => %d' % (pair.pre_cell.ext_id, pair.post_cell.ext_id)
-                conn = {True:"connected", False:"unconnected", None:"?"}[pair.synapse]
+                conn = {True:"syn", False:"-", None:"?"}[pair.synapse]
                 types = 'L%s %s => L%s %s' % (pair.pre_cell.target_layer or "?", pair.pre_cell.cre_type, pair.post_cell.target_layer or "?", pair.post_cell.cre_type)
                 pair_item = pg.TreeWidgetItem([cells, conn, types])
                 expt_item.addChild(pair_item)
@@ -513,17 +596,12 @@ def get_amps(session, pair, clamp_mode='ic'):
         PulseResponseStrength.neg_dec_amp,
         PulseResponseStrength.pos_dec_latency,
         PulseResponseStrength.neg_dec_latency,
+        PulseResponseStrength.crosstalk,
+        db.PulseResponse.ex_qc_pass,
+        db.PulseResponse.in_qc_pass,
+        db.PatchClampRecording.clamp_mode,
+        db.StimPulse.pulse_number,
     ).join(db.PulseResponse)
-
-    dtype = [
-        ('id', 'int'),
-        ('pos_amp', 'float'),
-        ('neg_amp', 'float'),
-        ('pos_dec_amp', 'float'),
-        ('neg_dec_amp', 'float'),
-        ('pos_dec_latency', 'float'),
-        ('neg_dec_latency', 'float'),
-    ]
     
     q, pre_rec, post_rec = join_pulse_response_to_expt(q)
         
@@ -531,27 +609,18 @@ def get_amps(session, pair, clamp_mode='ic'):
         (pre_rec.electrode==pair.pre_cell.electrode,),
         (post_rec.electrode==pair.post_cell.electrode,),
         (db.PatchClampRecording.clamp_mode==clamp_mode,),
-        (db.PatchClampRecording.baseline_potential<=-50e-3,),
-        (db.PatchClampRecording.baseline_current>-800e-12,),
-        (db.PatchClampRecording.baseline_current<400e-12,),
+        (db.PatchClampRecording.qc_pass==True,),
     ]
     for filter_args in filters:
         q = q.filter(*filter_args)
     
-    # fetch all
-    recs = q.all()
-    
-    # fill numpy array
-    arr = np.empty(len(recs), dtype=dtype)
-    for i,rec in enumerate(recs):
-        arr[i] = rec
-
-    return arr
+    df = pandas.read_sql_query(q.statement, q.session.bind)
+    recs = df.to_records()
+    return recs
 
 
 def get_baseline_amps_NO_ORM_VERSION(session, expt, dev, clamp_mode='ic'):
     # Tested this against the ORM version below; no difference in performance.
-    import pandas
     query = """
     select 
         brs.id, brs.pos_amp, brs.neg_amp, brs.pos_dec_amp, brs.neg_dec_amp
@@ -586,24 +655,16 @@ def get_baseline_amps(session, pair, clamp_mode='ic', limit=None):
         BaselineResponseStrength.neg_dec_amp,
         BaselineResponseStrength.pos_dec_latency,
         BaselineResponseStrength.neg_dec_latency,
+        BaselineResponseStrength.crosstalk,
+        db.Baseline.ex_qc_pass,
+        db.Baseline.in_qc_pass,
+        db.PatchClampRecording.clamp_mode,
     ).join(db.Baseline).join(db.Recording).join(db.PatchClampRecording).join(db.SyncRec).join(db.Experiment)
-
-    dtype = [
-        ('id', 'int'),
-        ('pos_amp', 'float'),
-        ('neg_amp', 'float'),
-        ('pos_dec_amp', 'float'),
-        ('neg_dec_amp', 'float'),
-        ('pos_dec_latency', 'float'),
-        ('neg_dec_latency', 'float'),
-    ]
     
     filters = [
         (db.Recording.electrode==pair.post_cell.electrode,),
         (db.PatchClampRecording.clamp_mode==clamp_mode,),
-        (db.PatchClampRecording.baseline_potential<=-50e-3,),
-        (db.PatchClampRecording.baseline_current>-800e-12,),
-        (db.PatchClampRecording.baseline_current<400e-12,),
+        (db.PatchClampRecording.qc_pass==True,),
     ]
     for filter_args in filters:
         q = q.filter(*filter_args)
@@ -611,15 +672,9 @@ def get_baseline_amps(session, pair, clamp_mode='ic', limit=None):
     if limit is not None:
         q = q.limit(limit)
 
-    # fetch all
-    recs = q.all()
-    
-    # fill numpy array
-    arr = np.empty(len(recs), dtype=dtype)
-    for i,rec in enumerate(recs):
-        arr[i] = rec
-
-    return arr
+    df = pandas.read_sql_query(q.statement, q.session.bind)
+    recs = df.to_records()
+    return recs
 
 
 def join_pulse_response_to_expt(query):
@@ -648,7 +703,7 @@ class ResponseStrengthPlots(QtGui.QWidget):
         self.setLayout(self.layout)
         self.layout.setContentsMargins(0, 0, 0, 0)
 
-        self.analyses = ['neg', 'pos']
+        self.analyses = [('neg', 'ic'), ('pos', 'ic'), ('neg', 'vc'), ('pos', 'vc')]
         self.analyzers = []
         for col, analysis in enumerate(self.analyses):
             analyzer = ResponseStrengthAnalyzer(analysis, session)
@@ -657,17 +712,16 @@ class ResponseStrengthPlots(QtGui.QWidget):
                 
     def load_conn(self, pair):
         with pg.BusyCursor():
-            amp_recs = get_amps(self.session, pair)
-            base_recs = get_baseline_amps(self.session, pair, limit=len(amp_recs))
-
             for analyzer in self.analyzers:
-                analyzer.load_conn(pair, amp_recs, base_recs)
+                analyzer.load_conn(pair)
 
 
 class ResponseStrengthAnalyzer(object):
     def __init__(self, analysis, session):
-        self.analysis = analysis  # 'pos' or 'neg'
+        self.analysis = analysis  # ('pos'|'neg', 'ic'|'vc')
         self.session = session
+        self._amp_recs = None
+        self._base_recs = None
 
         self.widget = QtGui.QWidget()
         self.layout = QtGui.QGridLayout()
@@ -678,7 +732,7 @@ class ResponseStrengthAnalyzer(object):
         self.layout.addWidget(self.gl, 0, 0)
 
         # histogram plots
-        self.hist_plot = pg.PlotItem(title=analysis+":")
+        self.hist_plot = pg.PlotItem(title=' '.join(analysis)+":")
         self.gl.addItem(self.hist_plot, row=0, col=0)
         self.hist_plot.hideAxis('bottom')
 
@@ -745,6 +799,26 @@ class ResponseStrengthAnalyzer(object):
         self.ctrl_layout.addWidget(self.align_check, 0, 4)
         self.align_check.toggled.connect(self.replot_all)
 
+        self.pulse_ctrl = QtGui.QWidget()
+        self.ctrl_layout.addWidget(self.pulse_ctrl, 1, 0, 1, 5)
+        self.pulse_layout = QtGui.QHBoxLayout()
+        self.pulse_ctrl.setLayout(self.pulse_layout)
+        self.pulse_layout.setContentsMargins(0, 0, 0, 0)
+        self.pulse_layout.setSpacing(0)
+
+        self.color_by_pulse_check = QtGui.QCheckBox('color pulse n')
+        self.pulse_layout.addWidget(self.color_by_pulse_check)
+        self.color_by_pulse_check.toggled.connect(self.update_scatter_plots)
+
+        self.pulse_checks = []
+        for i in range(12):
+            c = QtGui.QCheckBox()
+            c.setChecked(True)
+            self.pulse_checks.append(c)
+            self.pulse_layout.addWidget(c)
+            c.setMaximumWidth(20)
+            c.toggled.connect(self.update_scatter_plots)
+
         self.selected_fg_traces = []
         self.selected_bg_traces = []
         self.clicked_fg_traces = []
@@ -761,6 +835,10 @@ class ResponseStrengthAnalyzer(object):
         self._clicked_fg_ids = ids
         self.plot_prd_ids(ids, 'fg', trace_list=self.clicked_fg_traces, pen='y')
 
+        global selected_response
+        selected_response = self.session.query(PulseResponseStrength).filter(PulseResponseStrength.id==ids[0]).first()
+        prs_qc()
+
     def bg_scatter_clicked(self, sp, points):
         """Point(s) were clicked; plot their source traces in a different color.
         """
@@ -768,21 +846,78 @@ class ResponseStrengthAnalyzer(object):
         self._clicked_bg_ids = ids
         self.plot_prd_ids(ids, 'bg', trace_list=self.clicked_bg_traces, pen='y')
 
-    def load_conn(self, pair, amp_recs, base_recs):
+        global selected_response
+        selected_response = self.session.query(BaselineResponseStrength).filter(BaselineResponseStrength.id==ids[0]).first()
+        prs_qc()
+
+    def load_conn(self, pair):
+        self.pair = pair
+        self._amp_recs = get_amps(self.session, self.pair, clamp_mode=self.analysis[1])
+        self._base_recs = get_baseline_amps(self.session, self.pair, limit=len(self._amp_recs), clamp_mode=self.analysis[1])
+        self.update_scatter_plots()
+
+    def update_scatter_plots(self): 
+        amp_recs = self._amp_recs
+        base_recs = self._base_recs
+        if amp_recs is None:
+            return
+
         # select fg/bg data
         fg_data = amp_recs
         bg_data = base_recs[:len(fg_data)]
-        if self.analysis == 'pos':
-            fg_x = np.array([rec['pos_dec_amp'] for rec in fg_data])
-            bg_x = np.array([rec['pos_dec_amp'] for rec in bg_data])
-        elif self.analysis == 'neg':
-            fg_x = np.array([rec['neg_dec_amp'] for rec in fg_data])
-            bg_x = np.array([rec['neg_dec_amp'] for rec in bg_data])
+        if self.analysis[0] == 'pos':
+            data_field = 'pos_dec_amp'
+            qc_field = 'ex_qc_pass' if self.analysis[1] == 'ic' else 'in_qc_pass'
+        elif self.analysis[0] == 'neg':
+            data_field = 'neg_dec_amp'
+            qc_field = 'in_qc_pass' if self.analysis[1] == 'ic' else 'ex_qc_pass'
+        fg_x = fg_data[data_field]
+        bg_x = bg_data[data_field]
+        fg_qc = fg_data[qc_field].copy()
+        bg_qc = bg_data[qc_field].copy()
+
+        # record data for later use
+        self.fg_x = fg_x
+        self.bg_x = bg_x
+        self.fg_qc = fg_qc
+        self.bg_qc = bg_qc
+        self.qc_field = qc_field
+        self.fg_data = fg_data
+        self.bg_data = bg_data
+
+        # select colors
+        pass_brush = pg.mkBrush((255, 255, 255, 80))
+        fail_brush = pg.mkBrush((150, 0, 0, 80))
+        fg_color = [(pass_brush if qc_pass else fail_brush) for qc_pass in fg_qc]
+        bg_color = [(pass_brush if qc_pass else fail_brush) for qc_pass in bg_qc]
+        for i in range(len(fg_data)):
+            # QC failures are colored red
+            if not fg_qc[i]:
+                continue
+
+            pulse_n = fg_data['pulse_number'][i] - 1
+
+            # If a pulse number is deselected, then we just mark it as qc-failed and color the point orange
+            if not self.pulse_checks[pulse_n].isChecked():
+                fg_color[i] = pg.mkBrush(255, 150, 0, 80)
+                fg_qc[i] = False
+                continue
+
+            # Otherwise, we can color by pulse number if requested
+            if self.color_by_pulse_check.isChecked():
+                g = pulse_n * 255/7.
+                b = 255 - g
+                if pulse_n > 7:
+                    color = pg.mkColor(0, 0, 0, 0)
+                else:
+                    color = pg.mkColor(0, g, b, 80)
+                fg_color[i] = pg.mkBrush(color)
         
         # clear old plots
         self.fg_scatter.setData([])
         self.bg_scatter.setData([])
         self.hist_plot.clear()
+        self.hist_plot.setTitle("")
         self.clear_trace_plots()
         # clear click-selected plots
         self._clicked_fg_ids = []
@@ -792,34 +927,34 @@ class ResponseStrengthAnalyzer(object):
             return
 
         # scatter plots of fg/bg data
-        fg_y = 1 + np.random.random(size=len(fg_x)) * 0.8
-        bg_y = np.random.random(size=len(bg_x)) * 0.8
-        self.fg_scatter.setData(fg_x, fg_y, data=fg_data, brush=(255, 255, 255, 80))
-        self.bg_scatter.setData(bg_x, bg_y, data=bg_data, brush=(255, 255, 255, 80))
+        fg_y = np.linspace(1, 1.8, len(fg_x))
+        bg_y = np.linspace(0, 0.8, len(bg_x))
+        self.fg_scatter.setData(fg_x, fg_y, data=fg_data, brush=fg_color)
+        self.bg_scatter.setData(bg_x, bg_y, data=bg_data, brush=bg_color)
 
-        # plot histograms
-        n_bins = max(5, int(len(fg_x)**0.5))
-        all_x = np.concatenate([fg_x, bg_x])
+        # show only qc-passed data in histogram
+        fg_x_qc = fg_x[fg_qc] 
+        bg_x_qc = bg_x[bg_qc]
+        if len(fg_x_qc) == 0 or len(bg_x_qc) == 0:
+            return
+        
+        # plot histograms        
+        n_bins = max(5, int(len(fg_x_qc)**0.5))
+        all_x = np.concatenate([fg_x_qc, bg_x_qc])
         bins = np.linspace(np.percentile(all_x, 2), np.percentile(all_x, 98), n_bins+1)
-        fg_hist = np.histogram(fg_x, bins=bins)
-        bg_hist = np.histogram(bg_x, bins=bins)
-        self.hist_plot.clear()
+        fg_hist = np.histogram(fg_x_qc, bins=bins)
+        bg_hist = np.histogram(bg_x_qc, bins=bins)
         self.hist_plot.plot(bg_hist[1], bg_hist[0], stepMode=True, fillLevel=0, brush=(255, 0, 0, 100), pen=0.5)
         self.hist_plot.plot(fg_hist[1], fg_hist[0], stepMode=True, fillLevel=0, brush=(0, 255, 255, 100), pen=1.0)
 
-        ks = scipy.stats.ks_2samp(fg_x, bg_x)
-        self.hist_plot.setTitle("%s: KS=%0.02g" % (self.analysis, ks.pvalue))
-
-        # record data for later use
-        self.fg_x = fg_x
-        self.bg_x = bg_x
-        self.fg_data = fg_data
-        self.bg_data = bg_data
+        # measure distance between distributions
+        ks = scipy.stats.ks_2samp(fg_x_qc, bg_x_qc)
+        self.hist_plot.setTitle("%s: KS=%0.02g" % (' '.join(self.analysis), ks.pvalue))
 
         # set event region, but don't update (it's too expensive)
         try:
             self.event_region.sigRegionChangeFinished.disconnect(self.region_changed)
-            self.event_region.setRegion([fg_x.min(), fg_x.max()])
+            self.event_region.setRegion([fg_x_qc.min(), fg_x_qc.max()])
         finally:
             self.event_region.sigRegionChangeFinished.connect(self.region_changed)
 
@@ -854,27 +989,42 @@ class ResponseStrengthAnalyzer(object):
         self.plot_prd_ids(self._clicked_fg_ids, 'fg', pen='y', trace_list=self.clicked_fg_traces)
         self.plot_prd_ids(self._clicked_bg_ids, 'bg', pen='y', trace_list=self.clicked_bg_traces)
 
+    def get_pulse_recs(self, ids, source):
+        if source == 'fg':
+            q = response_query(self.session)
+            q = q.join(PulseResponseStrength)
+            q = q.filter(PulseResponseStrength.id.in_(ids))
+            q = q.add_column(db.PulseResponse.start_time)
+            traces = self.selected_fg_traces
+            plot = self.fg_trace_plot
+        else:
+            q = baseline_query(self.session)
+            q = q.join(BaselineResponseStrength)
+            q = q.filter(BaselineResponseStrength.id.in_(ids))
+            q = q.add_column(db.Baseline.start_time)
+            traces = self.selected_bg_traces
+            plot = self.bg_trace_plot
+        
+        q = q.join(db.SyncRec).add_column(db.SyncRec.ext_id.label('sync_rec_ext_id'))
+        recs = q.all()
+        return recs
+
     def plot_prd_ids(self, ids, source, pen=None, trace_list=None, avg=False):
         """Plot raw or decolvolved PulseResponse data, given IDs of records in
         a PulseResponseStrength table.
         """
         with pg.BusyCursor():
+            recs = self.get_pulse_recs(ids, source)
+            if len(recs) == 0:
+                return
+
             if source == 'fg':
-                q = response_query(self.session)
-                q = q.join(PulseResponseStrength)
-                q = q.filter(PulseResponseStrength.id.in_(ids))
                 traces = self.selected_fg_traces
                 plot = self.fg_trace_plot
             else:
-                q = baseline_query(self.session)
-                q = q.join(BaselineResponseStrength)
-                q = q.filter(BaselineResponseStrength.id.in_(ids))
                 traces = self.selected_bg_traces
                 plot = self.bg_trace_plot
-            recs = q.all()
-            if len(recs) == 0:
-                return
-            
+
             for i in trace_list[:]:
                 plot.removeItem(i)
                 trace_list.remove(i)
@@ -887,6 +1037,10 @@ class ResponseStrengthAnalyzer(object):
             spike_times = []
             spike_values = []
             for rec in recs:
+                # Filter by QC unless we selected just a single record
+                if len(recs) > 0 and getattr(rec, self.qc_field) is False:
+                    continue
+
                 s = {'fg': 'pulse_response', 'bg': 'baseline'}[source]
                 result = analyze_response_strength(rec, source=s, lpf=self.lpf_check.isChecked(), 
                                                    remove_artifacts=self.ar_check.isChecked(), bsub=self.bsub_check.isChecked())
@@ -922,7 +1076,6 @@ class ResponseStrengthAnalyzer(object):
 
 
 def query_all_pairs():
-    import pandas
     query = ("""
     select """
         # ((DATE_PART('day', experiment.acq_timestamp - '1970-01-01'::timestamp) * 24 + 
@@ -933,12 +1086,6 @@ def query_all_pairs():
         connection_strength.*,
         experiment.id as experiment_id,
         experiment.acq_timestamp as acq_timestamp,
-        ABS(connection_strength.amp_med) as abs_amp_med,
-        ABS(connection_strength.base_amp_med) as abs_base_amp_med,
-        ABS(connection_strength.amp_med_minus_base) as abs_amp_med_minus_base,
-        ABS(connection_strength.deconv_amp_med) as abs_deconv_amp_med,
-        ABS(connection_strength.deconv_base_amp_med) as abs_deconv_base_amp_med,
-        ABS(connection_strength.deconv_amp_med_minus_base) as abs_deconv_amp_med_minus_base,
         experiment.rig_name,
         experiment.acsf,
         slice.species,
@@ -966,17 +1113,49 @@ def query_all_pairs():
     df = pandas.read_sql(query, session.bind)
 
     # test out a new metric:
-    df['connection_signal'] = pandas.Series(df['deconv_amp_med'] / df['latency_stdev'], index=df.index)
-    df['connection_background'] = pandas.Series(df['deconv_base_amp_med'] / df['base_latency_stdev'], index=df.index)
-
+    # df['connection_signal'] = pandas.Series(df['deconv_amp_mean'] / df['latency_stdev'], index=df.index)
+    # df['connection_background'] = pandas.Series(df['deconv_base_amp_mean'] / df['base_latency_stdev'], index=df.index)
     ts = [datetime_to_timestamp(t) for t in df['acq_timestamp']]
     df['acq_timestamp'] = ts
     recs = df.to_records()
+    # try to normalize p values
+    for f in recs.dtype.names:
+        if 'ttest' in f or 'ks2samp' in f:
+            recs[f] = np.log(1-np.log(recs[f]))
     return recs
 
 
 def datetime_to_timestamp(d):
     return time.mktime(d.timetuple()) + d.microsecond * 1e-6
+
+
+def prs_qc():
+    """Convenience function for debugging QC: returns (recording, window) arguments
+    used for pulse response QC
+    """
+    global selected_response
+    sr = selected_response
+    if isinstance(sr, PulseResponseStrength):
+        resp = sr.pulse_response
+    else:
+        resp = sr.baseline
+    rec = resp.recording
+    start = resp.start_time
+    expt = rec.sync_rec.experiment
+    nwb = expt.data
+    rrec = nwb.contents[rec.sync_rec.ext_id][rec.electrode.device_id]
+    dt = rrec['primary'].dt
+    dur = len(resp.data) / db.default_sample_rate
+    w = [int(start/dt), int((start+dur)/dt)]
+
+    stdev = rrec[w[0]:w[1]]['primary'].std()
+    if rrec.clamp_mode == 'ic':
+        median = rrec[w[0]:w[1]]['primary'].median()
+    else:
+        median = rrec[w[0]:w[1]]['command'].median()
+    print("Selected:  sweep %d @ %d ms   stdev=%0.3g, med=%0.3g" % (rec.sync_rec.ext_id, np.round(start*1000), stdev, median))
+
+    return rrec, w
 
 
 init_tables()
@@ -985,6 +1164,13 @@ init_tables()
 
 if __name__ == '__main__':
     #tt = pg.debug.ThreadTrace()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--rebuild', action='store_true', default=False)
+    parser.add_argument('--rebuild-connectivity', action='store_true', default=False, dest='rebuild_connectivity')
+    parser.add_argument('--local', action='store_true', default=False)
+    parser.add_argument('--workers', type=int, default=6)
+    
+    args, extra = parser.parse_known_args(sys.argv[1:])
 
 
     from multipatch_analysis.ui.multipatch_nwb_viewer import MultipatchNwbViewer    
@@ -993,13 +1179,13 @@ if __name__ == '__main__':
 
     pg.dbg()
 
-    if '--rebuild' in sys.argv:
+    if args.rebuild and raw_input("Rebuild strength tables? ") == 'y':
         connection_strength_tables.drop_tables()
         pulse_response_strength_tables.drop_tables()
         init_tables()
-        rebuild_strength(parallel='--local' not in sys.argv)
+        rebuild_strength(parallel=(not args.local), workers=args.workers)
         rebuild_connectivity()
-    elif '--rebuild-connectivity' in sys.argv:
+    elif args.rebuild_connectivity and raw_input("Rebuild connectivity table? ") == 'y':
         print("drop tables..")
         connection_strength_tables.drop_tables()
         print("create tables..")
@@ -1038,7 +1224,7 @@ if __name__ == '__main__':
             rs_plots.load_conn(pair)
         print(sel.expt.original_path)
         ts = sel.expt.acq_timestamp
-        sec = datetime_to_timestamp(ts.timetuple())
+        sec = datetime_to_timestamp(ts)
         print(sec)
 
     b.itemSelectionChanged.connect(selected)
@@ -1046,68 +1232,55 @@ if __name__ == '__main__':
     nwb_viewer = MultipatchNwbViewer()
 
     def dbl_clicked(index):
-        item = b.itemFromIndex(index)[0]
-        nwb = os.path.join(item.expt.original_path, item.expt.ephys_file)
-        print(nwb)
-        try:
-            cache = synphys_cache.get_cache().get_cache(nwb)
-            print("load cached:", cache)
-            nwb_viewer.load_nwb(cache)
-        except Exception:
-            print("load remote:", nwb)
-            nwb_viewer.load_nwb(nwb)
-        nwb_viewer.show()
+        with pg.BusyCursor():
+            item = b.itemFromIndex(index)[0]
+            nwb = os.path.join(item.expt.original_path, item.expt.ephys_file)
+            print(nwb)
+            try:
+                cache = synphys_cache.get_cache().get_cache(nwb)
+                print("load cached:", cache)
+                nwb_viewer.load_nwb(cache)
+            except Exception:
+                print("load remote:", nwb)
+                nwb_viewer.load_nwb(nwb)
+            nwb_viewer.show()
         
     b.doubleClicked.connect(dbl_clicked)
 
     spw = pg.ScatterPlotWidget()
     spw.style['symbolPen'] = None
     
+    spw.resize(1000, 800)
     spw.show()
 
     recs = query_all_pairs()
 
-    spw.setFields([
+    fields = [
         ('synapse', {'mode': 'enum', 'values': [True, False, None]}),
         ('synapse_type', {'mode': 'enum', 'values': ['in', 'ex']}),
         ('pre_cre_type', {'mode': 'enum', 'values': list(set(recs['pre_cre_type']))}),
         ('post_cre_type', {'mode': 'enum', 'values': list(set(recs['post_cre_type']))}),
         ('pre_target_layer', {'mode': 'enum'}),
         ('post_target_layer', {'mode': 'enum'}),
-        ('n_samples', {}),
+        ('ic_n_samples', {}),
+        ('vc_n_samples', {}),
         ('rig_name', {'mode': 'enum', 'values': list(set(recs['rig_name']))}),
         ('acsf', {'mode': 'enum', 'values': list(set(recs['acsf']))}),
         ('acq_timestamp', {}),
-        ('amp_med', {'units': 'V'}),
-        ('abs_amp_med', {'units': 'V'}),
-        ('amp_stdev', {'units': 'V'}),
-        ('base_amp_med', {'units': 'V'}),
-        ('abs_base_amp_med', {'units': 'V'}),
-        ('base_amp_stdev', {'units': 'V'}),
-        ('amp_med_minus_base', {'units': 'V'}),
-        ('abs_amp_med_minus_base', {'units': 'V'}),
-        ('amp_stdev_minus_base', {'units': 'V'}),
-        ('deconv_amp_med', {'units': 'V'}),
-        ('abs_deconv_amp_med', {'units': 'V'}),
-        ('deconv_amp_stdev', {'units': 'V'}),
-        ('deconv_base_amp_med', {'units': 'V'}),
-        ('abs_deconv_base_amp_med', {'units': 'V'}),
-        ('deconv_base_amp_stdev', {'units': 'V'}),
-        ('deconv_amp_med_minus_base', {'units': 'V'}),
-        ('abs_deconv_amp_med_minus_base', {'units': 'V'}),
-        ('deconv_amp_stdev_minus_base', {'units': 'V'}),
-        ('amp_ttest', {}),
-        ('deconv_amp_ttest', {}),
-        ('amp_ks2samp', {}),
-        ('deconv_amp_ks2samp', {}),
         ('crosstalk_artifact', {'units': 'V'}),
-        ('latency_med', {'units': 's'}),
-        ('latency_stdev', {'units': 's'}),
-        ('base_latency_med', {'units': 's'}),
-        ('base_latency_stdev', {'units': 's'}),
         ('electrode_distance', {}),
-    ])
-
+    ]
+    fnames = [f[0] for f in fields]
+    for f in recs.dtype.names:
+        if f in fnames:
+            continue
+        if 'amp' in f:
+            fields.append((f, {'units': 'V'}))
+        elif 'latency' in f:
+            fields.append((f, {'units': 's'}))
+        else:
+            fields.append((f, {}))
+    spw.setFields(fields)
     spw.setData(recs)
 
     def conn_clicked(spw, points):
@@ -1116,7 +1289,14 @@ if __name__ == '__main__':
 
     spw.sigScatterPlotClicked.connect(conn_clicked)
 
-
+    # Set up scatter plot widget defaults
+    spw.setSelectedFields('ic_base_deconv_amp_mean', 'ic_deconv_amp_mean')
+    spw.filter.addNew('synapse')
+    ch = spw.filter.addNew('ic_crosstalk_mean')
+    ch['Min'] = -1
+    ch['Max'] = 60e-6
+    ch = spw.colorMap.addNew('synapse')
+    ch['Values', 'True'] = pg.mkColor('y')
 
     # attempt a little machine learning. 
     # this could work if we can generate better features:
@@ -1129,25 +1309,28 @@ if __name__ == '__main__':
     from sklearn import svm, preprocessing
 
     features = recs[[
-        'n_samples', 
-        #'amp_med', 'amp_stdev', 'base_amp_med', 'base_amp_stdev', 'amp_med_minus_base', 'amp_stdev_minus_base', 
-        #'deconv_amp_med', 'deconv_amp_stdev', 'deconv_base_amp_med', 'deconv_base_amp_stdev', 'deconv_amp_med_minus_base', 'deconv_amp_stdev_minus_base', 
+        # 'ic_n_samples', 
+        #'amp_mean', 'amp_stdev', 'base_amp_mean', 'base_amp_stdev', 'amp_mean_minus_base', 'amp_stdev_minus_base', 
+        #'deconv_amp_mean', 'deconv_amp_stdev', 'deconv_base_amp_mean', 'deconv_base_amp_stdev', 'deconv_amp_mean_minus_base', 'deconv_amp_stdev_minus_base', 
         #'amp_ttest',
         #'deconv_amp_ttest',
         #'amp_ks2samp', 
-        'deconv_amp_ks2samp',
-        'latency_med', 'latency_stdev', 
-        'base_latency_med', 'base_latency_stdev',
-        #'abs_amp_med', 'abs_base_amp_med', 'abs_amp_med_minus_base', 
-        'abs_deconv_amp_med', 'abs_deconv_base_amp_med', #'abs_deconv_amp_med_minus_base', 
-        'electrode_distance'
+        'ic_deconv_amp_ks2samp',
+        'vc_amp_ks2samp',
+        'ic_latency_ks2samp',
+        'vc_latency_ks2samp',
+        # 'ic_latency_mean', 'ic_latency_stdev', 
+        #'ic_base_latency_mean', 'ic_base_latency_stdev',
+        #'abs_amp_mean', 'abs_base_amp_mean', 'abs_amp_mean_minus_base', 
+        # 'ic_deconv_amp_mean', 'ic_base_deconv_amp_mean', #'abs_deconv_amp_mean_minus_base', 
+        # 'vc_amp_mean',
+        # 'electrode_distance'
     ]]
 
-    features['deconv_amp_ks2samp'] = np.log(-np.log(features['deconv_amp_ks2samp']))
     # for k in ['deconv_amp_ks2samp']:
     #     features[k] = np.log(features[k])
 
-    mask = features['n_samples'] > 100
+    mask = (recs['ic_n_samples'] > 100) & (recs['ic_crosstalk_mean'] < 60e-6)
 
     x = np.array([tuple(r) for r in features[mask]])
     y = recs['synapse'][mask]

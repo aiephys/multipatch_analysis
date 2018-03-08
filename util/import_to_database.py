@@ -14,7 +14,7 @@ from multipatch_analysis import config, synphys_cache, experiment_list, constant
 all_expts = experiment_list.cached_experiments()
 
 
-def submit_expt(expt_id):
+def submit_expt(expt_id, raise_exc=False):
     try:
         expt = all_expts[expt_id]
         start = time.time()
@@ -43,6 +43,8 @@ def submit_expt(expt_id):
         print(">>>> %d Error importing experiment %s" % (os.getpid(), expt.uid))
         sys.excepthook(*sys.exc_info())
         print("<<<< %s" % expt.uid)
+        if raise_exc:
+            raise
 
 
 if __name__ == '__main__':
@@ -51,7 +53,8 @@ if __name__ == '__main__':
     parser.add_argument('--local', action='store_true', default=False)
     parser.add_argument('--workers', type=int, default=6)
     parser.add_argument('--uid', type=str, default=None)
-    parser.add_argument('--ex-only', action='store_true', default=False, dest='ex_only')
+    parser.add_argument('--ex-only', action='store_true', default=False, dest='ex_only', help='Only import experiments with excitatory types')
+    parser.add_argument('--raise-exc', action='store_true', default=False, dest='raise_exc', help='Do not ignore exceptions')
     
     args, extra = parser.parse_known_args(sys.argv[1:])
     
@@ -87,7 +90,7 @@ if __name__ == '__main__':
     
     if args.local is True:
         for i, expt in enumerate(selected_expts):
-            submit_expt(expt.uid)
+            submit_expt(expt.uid, raise_exc=args.raise_exc)
     else:
         ids = [expt.uid for expt in selected_expts]
 

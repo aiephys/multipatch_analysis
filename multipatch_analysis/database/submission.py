@@ -2,6 +2,7 @@ from acq4.util.DataManager import getDirHandle
 import os, re, json, yaml, shutil
 from collections import OrderedDict
 from datetime import datetime, timedelta
+import numpy as np
 import pyqtgraph as pg
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.data import PatchClampRecording
@@ -236,14 +237,16 @@ class ExperimentDBSubmission(object):
             for j, post_cell in self.expt.cells.items():
                 if i == j:
                     continue
-                synapse = (i, j) in self.expt.connections
+                # check to see if i,j is in manual connection calls
+                # (do not use expt.connections, which excludes some connections based on QC)
+                synapse = (i, j) in self.expt.connection_calls
                 pre_cell_entry = cell_entries[pre_cell]
                 post_cell_entry = cell_entries[post_cell]
                 p1, p2 = pre_cell.position, post_cell.position
                 if None in [p1, p2]:
                     distance = None
                 else:
-                    distance = np.linalg.norm(np.array(p1), np.array(p2))
+                    distance = np.linalg.norm(np.array(p1) - np.array(p2))
                 
                 pair_entry = db.Pair(
                     experiment=expt_entry,
