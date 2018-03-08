@@ -24,10 +24,12 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
         Strings to display as col header
     size : float
         Width of each cell
+    border_color : 2d array or nested lists
+        Border colors for each cell
     header_color : str | tuple
         Color of header text
     """
-    def __init__(self, text, fgcolor, bgcolor, rows, cols, size=50, header_color='w'):
+    def __init__(self, text, fgcolor, bgcolor, rows, cols, size=50, border_color='k', header_color='w'):
         pg.QtGui.QGraphicsItemGroup.__init__(self)
         self.cell_size = size
         self.header_color = header_color
@@ -48,6 +50,7 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
                 rect = pg.QtGui.QGraphicsRectItem(0, 0, size, size, parent=self)
                 rect.setPos(x, y)
                 rect.setBrush(pg.mkBrush(bgcolor[i][j]))
+                rect.setPen(pg.mkPen(border_color[i][j]))
                 rect.setZValue(-10)
                 self.cells[-1].append(rect)
 
