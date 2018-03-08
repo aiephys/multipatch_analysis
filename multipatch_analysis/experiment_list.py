@@ -317,7 +317,7 @@ class ExperimentList(object):
             name = ("%s->%s "%(','.join(pre_strs), ','.join(post_strs)))
         return distance_plot(connected, distance=probed, plots=plots, color=color, name=name, window=40e-6, spacing=40e-6)
 
-    def matrix(self, rows, cols, size=50, header_color='k', no_data_color='w', mode='connectivity'):
+    def matrix(self, rows, cols, size=50, header_color='k', no_data_color=0.9, mode='connectivity'):
         w = pg.GraphicsLayoutWidget()
         w.setRenderHints(w.renderHints() | pg.QtGui.QPainter.Antialiasing)
         v = w.addViewBox()
@@ -343,35 +343,35 @@ class ExperimentList(object):
         text = np.empty(shape, dtype=object)
         fgcolor = np.empty(shape, dtype=object)
         bgcolor = np.empty(shape, dtype=object)
+        bordercolor = np.empty(shape, dtype=object)
 
         for i,row in enumerate(rows):
             for j,col in enumerate(cols):
                 if (row, col) in summary:
                     conn = summary[(row, col)]['connected']
                     uconn = summary[(row, col)]['unconnected']
-                    color = colormap.map(conn/(conn + uconn))
                 else:
                     conn, uconn = 0, 0
-                    color = default
                 probed = conn + uconn
 
-                if mode == 'connectivity':
-                    color = default if probed == 0 else colormap.map(conn/(conn + uconn))
-                    color = pg.colorTuple(pg.mkColor(color))
-                    bgcolor[i, j] = color
-                    text[i, j] = "%d/%d" % (conn, conn+uconn)
-                    fgcolor[i, j] = 'w' if sum(color[:3]) < 200 else 'k'
-                    if conn == uconn == 0:
-                        fgcolor[i, j] = 0.3
-                elif mode == 'progress':
-                    prg = max(probed/80., conn/10.)
-                    color = pg.colorTuple(pg.mkColor(colormap.map(prg)))
-                    bgcolor[i, j] = color
-                    text[i, j] = str(probed) if probed > 0 else ''
-                    fgcolor[i, j] = 'w' if sum(color[:3]) < 200 else 'k'
+                if probed == 0:
+                    color = default
+                else:
+                    if mode == 'connectivity':
+                        color = default if probed == 0 else colormap.map(conn/probed)
+                        color = pg.colorTuple(pg.mkColor(color))
+                        bgcolor[i, j] = color
+                    elif mode == 'progress':
+                        prg = max(probed/80., conn/10.)
+                        color = pg.colorTuple(pg.mkColor(colormap.map(prg)))
+
+                bordercolor[i, j] = 0.8 if probed == 0 else 'k'
+                bgcolor[i, j] = color
+                fgcolor[i, j] = 0.6 if probed == 0 else ('w' if sum(color[:3]) < 200 else 'k')
+                text[i, j] = "%d/%d" % (conn, probed) if probed > 0 else ''
 
 
-        w.matrix = MatrixItem(text=text, fgcolor=fgcolor, bgcolor=bgcolor,
+        w.matrix = MatrixItem(text=text, fgcolor=fgcolor, bgcolor=bgcolor, border_color=bordercolor,
                               rows=rows.values(), cols=cols.values(), size=size,
                               header_color=header_color)
         v.addItem(w.matrix)
