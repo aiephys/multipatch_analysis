@@ -4,7 +4,7 @@ from allensdk_internal.core import lims_utilities as lims
 
 
 def specimen_info(specimen_name=None, specimen_id=None):
-    """Return a dictionary of information about a specimen queried from LIMS.
+    """Return a dictionary of information about a slice specimen queried from LIMS.
     
     Also generates information about the hemisphere and which side of the slice
     was patched.
@@ -165,6 +165,13 @@ def specimen_id_from_name(spec_name):
     return recs[0]['id']
 
 
+def specimen_name(spec_id):
+    recs = lims.query("select name from specimens where id=%s" % spec_id)
+    if len(recs) == 0:
+        raise ValueError('No LIMS specimen with ID %d' % spec_id)
+    return recs[0]['name']
+
+
 def specimen_ephys_roi_plans(spec_name):
     """Return a list of all ephys roi plans for this specimen.
     """
@@ -184,8 +191,33 @@ def specimen_ephys_roi_plans(spec_name):
 
 
 def cell_cluster_ids(spec_id):
-    recs = lims.query("select id from specimens where specimens.parent_id=%d" % spec_id)
+    q = """
+    select id from specimens 
+    join specimen_types_specimens on specimen_types_specimens.specimen_id=specimens.id
+    join specimen_types on specimen_types.id=specimen_types_specimens.specimen_type_id
+    where specimens.parent_id=%d
+    and specimen_types.name='CellCluster'
+    """ % spec_id
+    recs = lims.query(q)
     return [rec['id'] for rec in recs]
+
+
+def child_specimens(spec_id):
+    q = """
+    select id from specimens 
+    where specimens.parent_id=%d
+    """ % spec_id
+    recs = lims.query(q)
+    return [rec['id'] for rec in recs]    
+
+
+def parent_specimen(spec_id):
+    q = """
+    select parent_id from specimens 
+    where specimens.id=%d
+    """ % spec_id
+    recs = lims.query(q)
+    return recs[0]['parent_id']
 
 
 def cell_cluster_data_paths(cluster_id):
@@ -206,6 +238,25 @@ def specimen_metadata(spec_id):
     if meta == '':
         return None
     return json.loads(meta)  # unserialization corrects for a LIMS bug; we can remove this later.
+
+
+def specimen_type(spec_id):
+    q = """
+    select specimen_types.name from specimens 
+    left join specimen_types_specimens on specimen_types_specimens.specimen_id=specimens.id
+    left join specimen_types on specimen_types.id=specimen_types_specimens.specimen_type_id
+    where specimens.id=%d
+    """ % spec_id
+    recs = lims.query(q)
+    return recs[0]['name']
+
+
+def slice_parent(spec_id):
+    while True:
+        typ = specimen_type(spec_id)
+        if typ is None:
+            return spec_id
+        spec_id = parent_specimen(spec_id)
 
 
 def filename_base(specimen_id, acq_timestamp):
