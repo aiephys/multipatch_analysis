@@ -12,6 +12,7 @@ import re
 import sys
 from collections import OrderedDict
 
+import numpy as np
 import pyqtgraph as pg
 
 from multipatch_analysis.experiment_list import ExperimentList, cache_file
@@ -172,15 +173,67 @@ elif args.organism == 'human':
     m1 = expts.matrix(human_types, human_types)
 
 #human distance plots
-plots = expts.distance_plot(pre_types=[('5', None)], post_types=[('5', None)], color=(102, 255, 255))
-expts.distance_plot(pre_types=[('4', None)], post_types=[('4', None)], plots=plots, color=(102, 255, 102))
-expts.distance_plot(pre_types=[('6', None)], post_types=[('6', None)], plots=plots, color=(153, 51, 255))
-expts.distance_plot(pre_types=[('2', None)], post_types=[('2', None)], plots=plots, color=(255, 153, 153))
+plots = expts.distance_plot(pre_types=[('2', None)], post_types=[('2', None)], color=(255, 153, 153))
 expts.distance_plot(pre_types=[('3', None)], post_types=[('3', None)], plots=plots, color=(255, 255, 102))
+# expts.distance_plot(pre_types=[('4', None)], post_types=[('4', None)], plots=plots, color=(102, 255, 102))
+expts.distance_plot(pre_types=[('5', None)], post_types=[('5', None)], plots=plots, color=(102, 255, 255))
+# expts.distance_plot(pre_types=[('6', None)], post_types=[('6', None)], plots=plots, color=(153, 51, 255))
 
 #mouse distance plots
 plots = expts.distance_plot(pre_types=[('2/3', None)], post_types=[('2/3', None)], color=(255, 153, 51))
 expts.distance_plot('rorb', 'rorb', plots=plots, color=(102, 255, 102))
-expts.distance_plot('tlx3', 'tlx3', plots=plots, color=(51, 51, 255))
 expts.distance_plot('sim1', 'sim1', plots=plots, color=(102, 255, 255))
-expts.distance_plot('ntsr1', 'ntsr1', plots=plots, color=(153, 51, 255))
+expts.distance_plot('tlx3', 'tlx3', plots=plots, color=(51, 51, 255))
+# expts.distance_plot('pvalb', 'pvalb', plots=plots, color=(153, 51, 255))
+
+
+
+plt = pg.plot()
+plt.setAspectLocked()
+
+connects = []
+connected_brushes = []
+unconnects = []
+unconnected_brushes = []
+for expt in expts:
+    if expt.lims_record['organism'] != 'mouse':
+        continue
+    for pre_id, post_id in expt.connections_probed:
+        pre_cell = expt.cells[pre_id]
+        post_cell = expt.cells[post_id]
+        if pre_cell.cre_type != post_cell.cre_type:
+            continue
+        is_excitatory = (
+            (pre_cell.target_layer =='2/3' and pre_cell.cre_type == 'unknown' and post_cell.target_layer == '2/3' and post_cell.cre_type == 'unknown') or 
+            (pre_cell.cre_type == 'rorb' and post_cell.cre_type == 'rorb') or 
+            (pre_cell.cre_type == 'sim1' and post_cell.cre_type == 'sim1') or 
+            (pre_cell.cre_type == 'tlx3' and post_cell.cre_type == 'tlx3') or 
+            (pre_cell.cre_type == 'ntsr1' and post_cell.cre_type == 'ntsr1')
+        )
+        #for human data
+        # is_excitatory = (pre_cell.target_layer == '2' and post_cell.target_layer == '2') or (pre_cell.target_layer == '3' and post_cell.target_layer == '3') or (pre_cell.target_layer == '4' and post_cell.target_layer == '4') or (pre_cell.target_layer == '5' and post_cell.target_layer == '5')
+        if not is_excitatory:
+            continue
+        connected = (pre_id, post_id) in expt.connections
+        pre_pos = pre_cell.position
+        post_pos = post_cell.position
+        if pre_pos is None or post_pos is None:
+            continue
+        diff = np.array(pre_pos) - np.array(post_pos)
+        if connected:
+            connects.append(diff)
+            c_brush = {
+                'unknown': (255, 255, 255),
+                'rorb': (255, 255, 102),
+                'sim1': (102, 255, 102),
+                'tlx3': (102, 255, 255),
+                'ntsr1': (0, 0, 0)
+            }[pre_cell.cre_type]
+            connected_brushes.append(pg.mkBrush(c_brush))
+        else:
+            unconnects.append(diff)
+
+connects = np.vstack(connects)
+unconnects = np.vstack(unconnects)
+plt.plot(unconnects[:,0], unconnects[:,1], pen=None, symbol='o', symbolBrush = (100,100,100,100))
+plt.plot(connects[:,0], connects[:,1], pen=None, symbol='o', symbolBrush=connected_brushes)
