@@ -108,27 +108,30 @@ pg.mkQApp()
 
 
 mouse_types = [
+    ('1', 'ndnf'),
     ('2/3', 'unknown'),
     ('2/3', 'pvalb'),
     ('2/3', 'sst'),
     ('2/3', 'vip'),
-    ('4', 'unknown'),
+    # ('4', 'unknown'),
+    ('4', 'nr5a1'),
     ('4', 'pvalb'),
     ('4', 'sst'),
     ('4', 'vip'),
-    ('5', 'unknown'),
+    # ('5', 'unknown'),
     ('5', 'sim1'),
     ('5', 'tlx3'),
     ('5', 'pvalb'),
     ('5', 'sst'),
     ('5', 'vip'),
-    ('6', 'unknown'),
+    # ('6', 'unknown'),
     ('6', 'ntsr1'),
     ('6', 'pvalb'),
     ('6', 'sst'),
     ('6', 'vip'),
 ]
-mouse_types = OrderedDict([(typ, "L%s %s" % typ) for typ in mouse_types])
+mouse_types = OrderedDict([(typ, ('L'+typ[0], typ[1])) for typ in mouse_types])
+mouse_types[('2/3', 'unknown')] = ('L2/3', 'pyr')
 
 mouse_ee_types = OrderedDict([
     (('2/3', 'unknown'), 'L23pyr'),
@@ -165,11 +168,13 @@ human_types = OrderedDict([
 human_types = OrderedDict([(typ, "L%s %s" % typ) for typ in human_types])
 
 if args.organism == 'mouse':
+    # m1 = expts.matrix(mouse_types, mouse_types, mode='progress')
     m1 = expts.matrix(mouse_types, mouse_types)
     m2 = expts.matrix(mouse_ee_types, mouse_ee_types)
     m3 = expts.matrix(mouse_nolayer_types, mouse_nolayer_types)
 elif args.organism == 'human':
     m1 = expts.matrix(human_types, human_types)
+    # m1 = expts.matrix(human_types, human_types, mode='progress')
 
 #human distance plots
 plots = expts.distance_plot(pre_types=[('5', None)], post_types=[('5', None)], color=(102, 255, 255))

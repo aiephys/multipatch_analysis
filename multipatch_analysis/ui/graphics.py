@@ -29,23 +29,13 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
     """
     def __init__(self, text, fgcolor, bgcolor, rows, cols, size=50, header_color='w'):
         pg.QtGui.QGraphicsItemGroup.__init__(self)
+        self.cell_size = size
+        self.header_color = header_color
 
-        self.row_labels = []
-        for i,row in enumerate(rows):
-            txt = pg.QtGui.QGraphicsTextItem(str(row), parent=self)
-            br = txt.boundingRect()
-            txt.setPos(-br.width() - 10, i * size + size/2. - br.center().y())
-            txt.setDefaultTextColor(pg.mkColor(header_color))
-            self.row_labels.append(txt)
-
-        self.col_labels = []
-        for i,col in enumerate(cols):
-            txt = pg.QtGui.QGraphicsTextItem(str(col), parent=self)
-            txt.rotate(90)
-            br = txt.mapRectToParent(txt.boundingRect())
-            txt.setPos(i * size + size/2 - br.center().x(), -br.height() - 10)
-            txt.setDefaultTextColor(pg.mkColor(header_color))
-            self.col_labels.append(txt)
+        self.header_labels = {}
+        self.group_items = {}
+        self._make_header(rows, 'left')
+        self._make_header(cols, 'top')
 
         self.cell_labels = []
         self.cells = []
@@ -71,6 +61,76 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
         for item in self.childItems():
             br = br.united(self.mapRectFromItem(item, item.boundingRect()))
         self._bounding_rect = br
+
+    def _make_header(self, labels, side):
+        padding = 10
+        if isinstance(labels[0], tuple):
+            # draw groups first
+            grp_labels, labels = zip(*labels)
+
+            # measure range for each group
+            grps = []
+            for i,l in enumerate(grp_labels):
+                if len(grps) == 0 or grps[-1][0] != l:
+                    grps.append([l, i, i])
+                else:
+                    grps[-1][2] = i
+
+            self._make_header_groups(grps, side)
+            padding = 3
+
+        self.header_labels[side] = [self._make_header_text(label, i, side, padding=padding) for i,label in enumerate(labels)]
+
+    def _make_header_text(self, txt, i, side, padding=10, font_size=None):
+        size = self.cell_size
+        if font_size is None:
+            font_size = size / 3.
+        txt = pg.QtGui.QGraphicsTextItem(str(txt), parent=self)
+        font = txt.font()
+        font.setPixelSize(font_size)
+        txt.setFont(font)
+        if side == 'top':
+            txt.rotate(-90)
+        br = txt.mapRectToParent(txt.boundingRect())
+        if side == 'top':
+            txt.setPos(i * size + size/2 - br.center().x(), -br.bottom() - padding)
+        elif side == 'left':
+            txt.setPos(-br.right() - padding, i * size + size/2. - br.center().y())
+        else:
+            raise ValueError("side must be top or left")
+        txt.setDefaultTextColor(pg.mkColor(self.header_color))
+
+    def _make_header_groups(self, grps, side):
+        size = self.cell_size
+        self.group_items[side] = []
+        for label, start, stop in grps:
+            n_cells = 1 + stop - start
+            w = n_cells * size
+            h = size
+            path = pg.QtGui.QPainterPath()
+            path.moveTo(0, 0)
+            path.lineTo(w, 0)
+            path.lineTo(w, -h)
+            path.lineTo(w/2, -h*1.5)
+            path.lineTo(0, -h)
+            path.closeSubpath()
+            item = pg.QtGui.QGraphicsPathItem(self)
+            item.setPath(path)
+            item.setBrush(pg.mkBrush(0.8))
+            item.setPen(pg.mkPen(color='k', width=1
+            ))
+            if side == 'top':
+                br = item.mapRectToParent(item.boundingRect())
+                item.setPos(start * size - br.left(), -br.bottom())
+            elif side == 'left':
+                item.rotate(-90)
+                br = item.mapRectToParent(item.boundingRect())
+                item.setPos(-br.right(), start * size - br.top())
+            else:
+                raise ValueError("side must be top or left")
+
+            txt = self._make_header_text(label, (start+stop)/2., side, padding=(10 + size*1.5), font_size=size/2.)
+            self.group_items[side].append((item, txt))
 
     def boundingRect(self):
         return self._bounding_rect
