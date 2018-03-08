@@ -1250,6 +1250,7 @@ if __name__ == '__main__':
     spw = pg.ScatterPlotWidget()
     spw.style['symbolPen'] = None
     
+    spw.resize(1000, 800)
     spw.show()
 
     recs = query_all_pairs()
@@ -1288,7 +1289,14 @@ if __name__ == '__main__':
 
     spw.sigScatterPlotClicked.connect(conn_clicked)
 
-
+    # Set up scatter plot widget defaults
+    spw.setSelectedFields('ic_base_deconv_amp_mean', 'ic_deconv_amp_mean')
+    spw.filter.addNew('synapse')
+    ch = spw.filter.addNew('ic_crosstalk_mean')
+    ch['Min'] = -1
+    ch['Max'] = 60e-6
+    ch = spw.colorMap.addNew('synapse')
+    ch['Values', 'True'] = pg.mkColor('y')
 
     # attempt a little machine learning. 
     # this could work if we can generate better features:
