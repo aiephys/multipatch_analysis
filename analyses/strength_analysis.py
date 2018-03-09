@@ -1284,6 +1284,7 @@ if __name__ == '__main__':
     spw.setData(recs)
 
     def conn_clicked(spw, points):
+        spw.setSelectedPoints([points[0]])
         d = points[0].data()
         b.select(pair_id=d['pair_id'])
 
