@@ -49,7 +49,7 @@ class Entry(object):
         self.children.append(child)
 
     def print_tree(self):
-        print("\n".join([('    '*self.indentation)+l for l in self.lines]))
+        print("\n".join([(' '*self.indentation)+l for l in self.lines]))
         for ch in self.children:
             ch.print_tree()
 
@@ -235,6 +235,8 @@ class ExperimentList(object):
         return el
 
     def __getitem__(self, item):
+        if isinstance(item, float):
+            item = "%0.2f" % item
         if isinstance(item, str):
             try:
                 return self._expts_by_uid[item]
