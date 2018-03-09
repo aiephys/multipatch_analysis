@@ -1222,10 +1222,19 @@ if __name__ == '__main__':
             pair = sel.pair
             expt = pair.experiment
             rs_plots.load_conn(pair)
-        print(sel.expt.original_path)
+
         ts = sel.expt.acq_timestamp
         sec = datetime_to_timestamp(ts)
+        print("------------------------------")
+        print(sel.expt.original_path)
         print(sec)
+        src = sel.expt.source_experiment
+        print(src)
+        if src.entry is not None:
+            src.entry.print_tree()
+        else:
+            print(open(src.source_id[0], 'rb').read())
+        
 
     b.itemSelectionChanged.connect(selected)
 
