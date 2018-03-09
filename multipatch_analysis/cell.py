@@ -16,6 +16,7 @@ class Cell(object):
         self._raw_labels = {}
         self.position = None
         self._target_layer = None
+        self._is_excitatory = None
 
     @property
     def pass_qc(self):
@@ -110,13 +111,14 @@ class Cell(object):
 
     @property
     def is_excitatory(self):
-        ct = self.cre_type
-        if ct in EXCITATORY_CRE_TYPES:
-            return True
-        elif ct in INHIBITORY_CRE_TYPES:
-            return False
-        else:
-            return None
+        if self._is_excitatory is None:
+            # try to infer excitatory from cre line
+            ct = self.cre_type
+            if ct in EXCITATORY_CRE_TYPES:
+                self._is_excitatory =  True
+            elif ct in INHIBITORY_CRE_TYPES:
+                self._is_excitatory = False
+        return self._is_excitatory
 
     @property
     def depth(self):

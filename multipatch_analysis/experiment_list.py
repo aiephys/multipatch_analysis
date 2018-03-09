@@ -521,8 +521,8 @@ class ExperimentList(object):
                     pconn.append(c / t)
                 
                 totals.append((
-                    "L%s %s"%k[0],               # pre type
-                    "L%s %s"%k[1],               # post type
+                    "L%s %s %s"%k[0],               # pre type
+                    "L%s %s %s"%k[1],               # post type
                     v['connected'],              # n connected
                     probed,                      # n probed
                     reciprocal,                  # n reciprocal

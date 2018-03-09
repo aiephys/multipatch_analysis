@@ -427,13 +427,17 @@ class Experiment(object):
                 cell._raw_labels[cre] = ''.join([x or '' for x in grps[1:]])
 
                 # some target layers have been entered as a label (old data)
-                if cre.startswith('human_') and positive == '+':
+                if cre.startswith('human_') and positive in ['+', '-']:
                     # positive=='+' is actually currently used to mean that the cell is in this layer and excitatory,
                     # but for now we are just recording the layer and excluding all other cells.
                     layer = cre[7:].upper()
                     if layer == '23':
                         layer = '2/3'
                     cell._target_layer = layer
+                    if positive == '+':
+                        cell._is_excitatory = True
+                    elif positive == '-':
+                        cell._is_excitatory = False
                 elif cre in layer_labels:
                     # labels like "L23pyr" were used to denote unlabeled cells that are likely pyramidal,
                     # but where the morphology may not have been verified.
@@ -503,7 +507,7 @@ class Experiment(object):
             csum = {}
             for i, j in self.connections_probed:
                 ci, cj = self.cells[i], self.cells[j]
-                typ = ((ci.target_layer, ci.cre_type), (cj.target_layer, cj.cre_type))
+                typ = ((ci.target_layer, ci.cre_type, ci.is_excitatory), (cj.target_layer, cj.cre_type, cj.is_excitatory))
                 if typ not in csum:
                     csum[typ] = {'connected': 0, 'unconnected': 0, 'cdist':[], 'udist':[]}
                 if (i, j) in self.connections:
