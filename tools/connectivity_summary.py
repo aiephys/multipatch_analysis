@@ -155,14 +155,20 @@ mouse_nolayer_types = OrderedDict([
 ])
 
 human_types = OrderedDict([
-    (('1', 'unknown'), 'L1'),
-    (('2', 'unknown'), 'L2'),
-    (('3', 'unknown'), 'L3'), 
-    (('4', 'unknown'), 'L4'), 
-    (('5', 'unknown'), 'L5'), 
-    (('6', 'unknown'), 'L6'),
+ #   (('1', 'unknown', True), 'L1 exc'),
+    (('1', 'unknown', False), 'L1 inh'),
+    (('2', 'unknown', True), 'L2 exc'),
+    (('2', 'unknown', False), 'L2 inh'),
+    (('3', 'unknown', True), 'L3 exc'), 
+    (('3', 'unknown', False), 'L3 inh'), 
+    (('4', 'unknown', True), 'L4 exc'), 
+    (('4', 'unknown', False), 'L4 inh'), 
+    (('5', 'unknown', True), 'L5 exc'), 
+    (('5', 'unknown', False), 'L5 inh'), 
+    (('6', 'unknown', True), 'L6 exc'),
+    (('6', 'unknown', False), 'L6 inh'),
 ])
-human_types = OrderedDict([(typ, "L%s %s" % typ) for typ in human_types])
+human_types = OrderedDict([(typ, "L%s %s" % (typ[0], 'exc' if typ[2] is True else 'inh')) for typ in human_types])
 
 if args.organism == 'mouse':
     m1 = expts.matrix(mouse_types, mouse_types)
