@@ -1,7 +1,7 @@
 """
 Accumulate all experiment data into a set of linked tables.
 """
-import os, io
+import os, io, time
 import numpy as np
 
 import sqlalchemy
@@ -341,6 +341,15 @@ def create_all_mappings():
                     os.remove(self.nwb_cache_file)
                     self._data = MultiPatchExperiment(self.nwb_cache_file)
             return self._data
+
+        @property
+        def source_experiment(self):
+            """Return the original Experiment object that was used to import
+            data into the DB, if available.
+            """
+            from ..experiment_list import cached_experiments
+            return cached_experiments()[self.acq_timestamp]
+    
 
     Slice = _generate_mapping('slice')
     Experiment = _generate_mapping('experiment', base=ExperimentBase)
