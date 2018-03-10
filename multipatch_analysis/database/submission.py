@@ -239,7 +239,11 @@ class ExperimentDBSubmission(object):
                     continue
                 # check to see if i,j is in manual connection calls
                 # (do not use expt.connections, which excludes some connections based on QC)
-                synapse = (i, j) in self.expt.connection_calls
+                syn_calls = self.expt.connection_calls
+                synapse = None if syn_calls is None else ((i, j) in syn_calls)
+                gap_calls = self.expt.gap_calls
+                electrical = None if gap_calls is None else ((i, j) in gap_calls)
+
                 pre_cell_entry = cell_entries[pre_cell]
                 post_cell_entry = cell_entries[post_cell]
                 p1, p2 = pre_cell.position, post_cell.position
@@ -253,6 +257,7 @@ class ExperimentDBSubmission(object):
                     pre_cell=pre_cell_entry,
                     post_cell=post_cell_entry,
                     synapse=synapse,
+                    electrical=electrical,
                     n_ex_test_spikes=0,  # will be counted later
                     n_in_test_spikes=0,
                     distance=distance,
