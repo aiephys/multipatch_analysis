@@ -32,7 +32,8 @@ class Experiment(object):
         self.source_id = (None, None)
         self.electrodes = None
         self._cells = None
-        self._connections = []
+        self._connections = None
+        self._gaps = None
         self._region = None
         self._summary = None
         self._view = None
@@ -108,20 +109,43 @@ class Experiment(object):
 
     @property
     def connections(self):
-        """A list of connections reported for this experiment, excluding any that did not pass QC.
+        """A list of synaptic connections reported for this experiment, excluding any that did not pass QC.
         
         Each item in the list is a tuple containing the pre- and postsynaptic cell IDs::
         
             [(pre_cell_id, post_cell_id), ...]
         """
+        calls = self.connection_calls
+        if calls is None:
+            return None
         probed = self.connections_probed
-        return [c for c in self.connection_calls if c in probed]
+        return [c for c in calls if c in probed]
 
     @property
     def connection_calls(self):
-        """Manually curated list of connections seen in this experiment, without applying any QC.
+        """Manually curated list of synaptic connections seen in this experiment, without applying any QC.
         """
-        return self._connections[:]
+        return None if self._connections is None else self._connections[:]
+
+    @property
+    def gaps(self):
+        """A list of electrical connections reported for this experiment, excluding any that did not pass QC.
+        
+        Each item in the list is a tuple containing the pre- and postsynaptic cell IDs::
+        
+            [(pre_cell_id, post_cell_id), ...]
+        """
+        calls = self.gap_calls
+        if calls is None:
+            return None
+        probed = self.connections_probed
+        return [c for c in calls if c in probed]
+
+    @property
+    def gap_calls(self):
+        """Manually curated list of electrical connections seen in this experiment, without applying any QC.
+        """
+        return None if self._gaps is None else self._gaps[:]
 
     @property
     def cre_types(self):
@@ -285,51 +309,86 @@ class Experiment(object):
                     setattr(cell, k+'_qc', qc_pass)
             else:
                 # derive from NWB
-                nwb = self.data
-                try:
-                    chan = pip_meta['ad_channel']
-                    passed_holding = 0
-                    for srec in nwb.contents:
-                        try:
-                            rec = srec[chan]
-                        except KeyError:
-                            continue
-                        if rec.clamp_mode == 'vc':
-                            if abs(rec.baseline_current) < 800e-12:
-                                passed_holding += 1
-                        else:
-                            vm = rec.baseline_potential
-                            if vm > -75e-3 and vm < -50e-3:
-                                passed_holding += 1
-                        if passed_holding >= 5:
-                            break
-                    if passed_holding >= 5:
-                        cell.holding_qc = True
-                        # need to fix these!
-                        cell.access_qc = True
-                        cell.spiking_qc = True
-                finally:
-                    self.close_data()
+                cell.holding_qc, cell.access_qc, cell.spiking_qc = self._generate_cell_qc(pip_meta['ad_channel'])
                 
-        # load connections
+        # load synapse/gap connections
         for cell in self.cells.values():
             pip_meta = pips.pipettes[cell.cell_id]
             synapses = pip_meta.get('synapse_to', None)
-            if synapses is None:
-                continue
-            for post_id in synapses:
-                # allow tentative connections like "4?"
-                if isinstance(post_id, str):
-                    m = re.match("^(\d+)(\?)?$", post_id)
-                    if m is None:
-                        post_id = None  # triggers ValueError below
-                    post_id = int(m.groups()[0])
-                    if m.groups()[1] == '?':
-                        # ignore questionable connections for now
+            gaps = pip_meta.get('gap_to', None)
+
+            for src, dst in [('synapse_to', 'connections'), ('gap_to', 'gaps')]:
+                conns = pip_meta.get(src, None)
+                if conns is None:
+                    continue
+                conn_list = getattr(self, dst)
+                if conn_list is None:
+                    conn_list = []
+                    setattr(self, '_'+dst, conn_list)
+
+                for post_id in conns:
+                    # allow tentative connections like "4?"
+                    if isinstance(post_id, str):
+                        m = re.match("^(\d+)(\?)?$", post_id)
+                        if m is None:
+                            post_id = None  # triggers ValueError below
+                        post_id = int(m.groups()[0])
+                        if m.groups()[1] == '?':
+                            # ignore questionable connections for now
+                            continue
+                    if post_id not in self.cells:
+                        raise ValueError("Postsynaptic cell ID %r is invalid" % post_id)
+                    conn_list.append((cell.cell_id, post_id))
+                
+    def _generate_cell_qc(self, ad_chan):
+        # tempporary qc used to decide how many connections were probed in an
+        # experiment. will be replaced with per-pulse-response qc later.
+        cache_file = os.path.join(os.path.dirname(config.configfile), 'cell_qc_cache.pkl')
+        
+        cache = {}
+        if os.path.isfile(cache_file):
+            try:
+                cache = pickle.load(open(cache_file, 'rb'))
+            except Exception:
+                sys.excepthook(*sys.exc_info())
+                print("Failed to load cell qc cache (error above).")
+        
+        cache_key = (self.nwb_file, ad_chan)
+        if cache_key not in cache:
+            nwb = self.data
+            holding_qc = False
+            access_qc = False
+            spiking_qc = False
+            try:
+                passed_holding = 0
+                for srec in nwb.contents:
+                    try:
+                        rec = srec[ad_chan]
+                    except KeyError:
                         continue
-                if post_id not in self.cells:
-                    raise ValueError("Postsynaptic cell ID %r is invalid" % post_id)
-                self._connections.append((cell.cell_id, post_id))
+                    if rec.clamp_mode == 'vc':
+                        if abs(rec.baseline_current) < 800e-12:
+                            passed_holding += 1
+                    else:
+                        vm = rec.baseline_potential
+                        if vm > -75e-3 and vm < -50e-3:
+                            passed_holding += 1
+                    if passed_holding >= 5:
+                        break
+                if passed_holding >= 5:
+                    holding_qc = True
+                    # need to fix these!
+                    access_qc = True
+                    spiking_qc = True
+            finally:
+                self.close_data()
+            cache[cache_key] = (holding_qc, access_qc, spiking_qc)
+            
+            tmp_file = cache_file+'_tmp'
+            pickle.dump(cache, open(tmp_file, 'wb'))
+            os.rename(tmp_file, cache_file)
+            
+        return cache[cache_key]
 
     def _load_old_format(self, entry):
         """Load experiment metadata from an old-style summary file
@@ -358,6 +417,7 @@ class Experiment(object):
                 elif ch.lines[0] == 'Cell QC':
                     self._parse_qc(ch)
                 elif ch.lines[0] == 'Connections':
+                    self._connections = []
                     self._parse_connections(ch)
                     have_connections = True
                 elif ch.lines[0] == 'Conditions':
@@ -508,6 +568,8 @@ class Experiment(object):
                 }, 
             ...}
         """
+        if self.connections is None:
+            return None
         if self._summary is None:
             csum = {}
             for i, j in self.connections_probed:
@@ -560,7 +622,10 @@ class Experiment(object):
 
     @property
     def n_connections(self):
-        return sum([x['connected'] for x in self.summary().values()])
+        summary = self.summary()
+        if summary is None:
+            return None
+        return sum([x['connected'] for x in summary.values()])
 
     def load_cell_positions(self):
         """Load cell positions from external file.

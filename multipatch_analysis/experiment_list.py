@@ -238,6 +238,7 @@ class ExperimentList(object):
         if isinstance(item, float):
             item = "%0.2f" % item
         if isinstance(item, str):
+            item = "%0.2f" % float(item) # force correct formatting
             try:
                 return self._expts_by_uid[item]
             except KeyError:
@@ -285,6 +286,8 @@ class ExperimentList(object):
             post_types = [(None, post_types)]
 
         for expt in self:
+            if expt.connections is None:
+                continue
             for i,j in expt.connections_probed:
                 ci, cj = expt.cells[i], expt.cells[j]
                 if connection_types is not None:
@@ -398,6 +401,8 @@ class ExperimentList(object):
         tot_probed = 0
         tot_connected = 0
         for expt in self:
+            if expt.n_connections is None:
+                continue
             tot_probed += expt.n_connections_probed
             tot_connected += expt.n_connections
         return tot_probed, tot_connected
@@ -434,8 +439,12 @@ class ExperimentList(object):
         tot_connected = 0
         ages = []
         for i,expt in enumerate(self):
-            n_p = expt.n_connections_probed
             n_c = expt.n_connections
+            if n_c is None:
+                print("%s: connectivity not analyzed" % str(expt.uid).rjust(4))
+                continue
+            
+            n_p = expt.n_connections_probed
             tot_probed += n_p
             tot_connected += n_c
             try:
@@ -467,7 +476,10 @@ class ExperimentList(object):
     def connectivity_summary(self, cre_type=None):
         summary = {}
         for expt in self:
-            for k,v in expt.summary().items():
+            summary = expt.summary()
+            if summary is None:
+                continue
+            for k,v in summary.items():
                 if cre_type is not None and list(cre_type) != [x[1] for x in k]:
                     continue
                 if k not in summary:
@@ -488,7 +500,7 @@ class ExperimentList(object):
         summary = {}
         for expt in self:
             recip = []
-            if len(expt.connections) == 0:
+            if expt.connections is None or len(expt.connections) == 0:
                 continue
             for pre, post in expt.connections:
                 connection_type = ((expt.cells[pre].target_layer, expt.cells[pre].cre_type),
@@ -616,6 +628,8 @@ class ExperimentList(object):
         """
         summary = []
         for expt in self:
+            if expt.connections is None:
+                continue
             for pre_id, post_id in expt.connections:
 
                 c1, c2 = expt.cells[pre_id], expt.cells[post_id]
