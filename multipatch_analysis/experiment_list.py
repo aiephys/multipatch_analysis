@@ -101,7 +101,8 @@ class ExperimentList(object):
             print("Errors loading %d experiments from server:" % len(errs))
             for yml_file, exc in errs:
                 print("=======================")
-                print(yml_file)
+                print("yml:", yml_file)
+                print("source:", open(os.path.join(os.path.dirname(yml_file), 'sync_source')))
                 traceback.print_exception(*exc)
                 print("")
 
@@ -268,10 +269,11 @@ class ExperimentList(object):
         # sanity check: all experiments should have cre and fl labels
         for expt in self:
             # make sure we have at least one non-biocytin label and one cre label
-            if len(expt.cre_types) < 1:
-                print("Warning: Experiment %s has no cre-type labels" % str(expt.source_id))
-            if len(expt.labels) < 1 or expt.labels == ['biocytin']:
-                print("Warning: Experiment %s has no fluorescent labels" % str(expt.source_id))
+            if len(expt.cells) > 0:
+                if len(expt.cre_types) < 1:
+                    print("Warning: Experiment %s has no cre-type labels" % str(expt.source_id))
+                if len(expt.labels) < 1 or expt.labels == ['biocytin']:
+                    print("Warning: Experiment %s has no fluorescent labels" % str(expt.source_id))
             if expt.region is None:
                 print("Warning: Experiment %s has no region" % str(expt.source_id))
 
