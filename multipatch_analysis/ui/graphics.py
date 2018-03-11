@@ -70,7 +70,13 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
         if isinstance(labels[0], tuple):
             # draw groups first
             grp_labels, labels = zip(*labels)
+        else:
+            grp_labels = None
 
+        self.header_labels[side] = [self._make_header_text(label, i, side, padding=padding) for i,label in enumerate(labels)]
+        
+        if grp_labels is not None:
+            width = max(map(lambda l: l.boundingRect().width(), self.header_labels[side]))
             # measure range for each group
             grps = []
             for i,l in enumerate(grp_labels):
@@ -79,31 +85,31 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
                 else:
                     grps[-1][2] = i
 
-            self._make_header_groups(grps, side)
+            self._make_header_groups(grps, side, width)
             padding = 3
-
-        self.header_labels[side] = [self._make_header_text(label, i, side, padding=padding) for i,label in enumerate(labels)]
 
     def _make_header_text(self, txt, i, side, padding=10, font_size=None):
         size = self.cell_size
         if font_size is None:
             font_size = size / 3.
-        txt = pg.QtGui.QGraphicsTextItem(str(txt), parent=self)
-        font = txt.font()
-        font.setPixelSize(font_size)
-        txt.setFont(font)
+        align = {'top': 'left', 'left': 'right'}[side]
+        html = '<span style="font-size: %dpx; text-align: %s; line-height: 70%%">%s</span>' % (font_size, align, str(txt).replace('\n', '<br>'))
+        item = pg.QtGui.QGraphicsTextItem("", parent=self)
+        item.setHtml(html)
         if side == 'top':
-            txt.rotate(-90)
-        br = txt.mapRectToParent(txt.boundingRect())
+            item.rotate(-90)
+        br = item.mapRectToParent(item.boundingRect())
         if side == 'top':
-            txt.setPos(i * size + size/2 - br.center().x(), -br.bottom() - padding)
+            item.setPos(i * size + size/2 - br.center().x(), -br.bottom() - padding)
         elif side == 'left':
-            txt.setPos(-br.right() - padding, i * size + size/2. - br.center().y())
+            item.setPos(-br.right() - padding, i * size + size/2. - br.center().y())
         else:
             raise ValueError("side must be top or left")
-        txt.setDefaultTextColor(pg.mkColor(self.header_color))
+        item.setDefaultTextColor(pg.mkColor(self.header_color))
+        item.setTextWidth(item.boundingRect().width())  # needed to enable text alignment
+        return item
 
-    def _make_header_groups(self, grps, side):
+    def _make_header_groups(self, grps, side, width):
         size = self.cell_size
         self.group_items[side] = []
         for label, start, stop in grps:
@@ -113,15 +119,15 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
             path = pg.QtGui.QPainterPath()
             path.moveTo(0, 0)
             path.lineTo(w, 0)
-            path.lineTo(w, -h)
-            path.lineTo(w/2, -h*1.5)
-            path.lineTo(0, -h)
+            path.lineTo(w, -width)
+            path.lineTo(w/2, -width-h*0.5)
+            path.lineTo(0, -width)
             path.closeSubpath()
             item = pg.QtGui.QGraphicsPathItem(self)
             item.setPath(path)
             item.setBrush(pg.mkBrush(0.8))
-            item.setPen(pg.mkPen(color='k', width=1
-            ))
+            item.setPen(pg.mkPen(color='k', width=1))
+            item.setZValue(-5)
             if side == 'top':
                 br = item.mapRectToParent(item.boundingRect())
                 item.setPos(start * size - br.left(), -br.bottom())
@@ -132,7 +138,7 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
             else:
                 raise ValueError("side must be top or left")
 
-            txt = self._make_header_text(label, (start+stop)/2., side, padding=(10 + size*1.5), font_size=size/2.)
+            txt = self._make_header_text(label, (start+stop)/2., side, padding=(10 + width + size*0.5), font_size=size/2.)
             self.group_items[side].append((item, txt))
 
     def boundingRect(self):
