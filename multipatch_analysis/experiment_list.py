@@ -498,6 +498,43 @@ class ExperimentList(object):
                 summary[k]['udist'].extend(v['udist'])
         return summary
 
+    def compare_connectivity(self, expts):
+        """Print a comparison of connectivity between two experiment lists.
+        """
+        sum1 = self.connectivity_summary()
+        sum2 = expts.connectivity_summary()
+        results = []
+        keys = set(list(sum1.keys()) + list(sum2.keys()))
+        for k in keys:
+            name = "L%s %s -> L%s %s" % (k[0]+k[1])
+            if k in sum1:
+                c1 = sum1[k]['connected']
+                u1 = sum1[k]['unconnected']
+                t1 = c1 + u1
+                p1 = 100 * c1 / t1
+            else:
+                c1 = t1 = p1 = 0
+            
+            if k in sum2:
+                c2 = sum2[k]['connected']
+                u2 = sum2[k]['unconnected']
+                t2 = c2 + u2
+                p2 = 100 * c2 / t2
+            else:
+                c2 = t2 = p2 = 0
+            
+            if k in sum1 and sum2:
+                fe = scipy.stats.fisher_exact([[c1, t1], [c2, t2]])
+            else:
+                fe = (0, 1)
+
+            results.append((name, c1, t1, p1, c2, t2, p2, fe[0], fe[1]))
+
+        results.sort(key=lambda r: r[0])
+        for r in results:
+            print("{:<30s}  {:>3d}/{:>4d}={:>7.2f}%  {:>3d}/{:>4d}={:>7.2f}%   r={:<7.2g} p={:<7.2g}".format(*r))
+
+
     def reciprocal(self, pre_type=None, post_type=None):
         """Return a summary of reciprocal connections:
             {connection_type: {reciprocal: number reciprocal connections, uni-directional: number uni-directional
