@@ -82,8 +82,8 @@ class Experiment(object):
             try:
                 self.load_cell_positions()
             except Exception as exc:
-                sys.excepthook(*sys.exc_info())
-                print("Warning: Could not load cell positions for %s (exception printed above)" % (self,))
+                #sys.excepthook(*sys.exc_info())
+                print("Warning: Could not load cell positions for %s" % (self,))
 
 
     @staticmethod
@@ -169,7 +169,7 @@ class Experiment(object):
 
     @property
     def labels(self):
-        """A list of all labels in this experiment."""
+        """A list of all fluorophores and other markers used in this experiment."""
         if self._labels is None:
             labels = set()
             for cell in self.cells.values():
@@ -288,6 +288,11 @@ class Experiment(object):
                 else:
                     raise Exception("Invalid label or fluorescent color: %s" % label)
 
+            # check for internal dye fill
+            dye = pip_meta['internal_dye']
+            dye_color = FLUOROPHORES[dye]
+            cell.labels[dye] = colors.get(dye_color, None)
+
             # decide whether each driver was expressed
             if self.lims_record['organism'] == 'mouse':
                 if genotype is None:
@@ -367,7 +372,7 @@ class Experiment(object):
                     except KeyError:
                         continue
                     if rec.clamp_mode == 'vc':
-                        if abs(rec.baseline_current) < 800e-12:
+                        if rec.baseline_current is not None and abs(rec.baseline_current) < 800e-12:
                             passed_holding += 1
                     else:
                         vm = rec.baseline_potential

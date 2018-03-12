@@ -1,4 +1,3 @@
-ALL_LABELS = ['biocytin', 'af488', 'cascade_blue']
 INHIBITORY_CRE_TYPES = ['sst', 'pvalb', 'vip', 'ndnf', 'chat', 'htr3a', 'nos1', 'chrna2']
 EXCITATORY_CRE_TYPES = ['tlx3', 'sim1', 'rorb', 'ntsr1', 'rbp4', 'ctgf', 'glt25d2', 'slc17a8', 'cux2', 'nr5a1']
 ALL_CRE_TYPES = INHIBITORY_CRE_TYPES + EXCITATORY_CRE_TYPES + ['unknown']
@@ -24,6 +23,10 @@ FLUOROPHORES = {
     'EYFP': 'yellow',
     'ZsGreen': 'green',
 }
+# note: the lower-case af488 and cascade_blue are for backward compatibility; these
+# may be removed at some point
+ALL_LABELS = ['biocytin', 'af488', 'cascade_blue'] + FLUOROPHORES.keys()
+
 
 LAYERS = ['1', '2', '2/3', '3', '4', '5', '5a', '5b', '6']
 
@@ -83,7 +86,8 @@ GENOTYPES = OrderedDict([
     ("Tlx3-Cre_PL56/wt;Vip-IRES-FlpO/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'tlx3': ['EGFP']}),
     ("Ntsr1-Cre_GN220/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'ntsr1': ['EGFP']}),
     ("Sim1-Cre_KJ18/wt;Sst-IRES-FlpO/wt;Ai139(TIT2L-GFP-ICL-TPT)/wt", {'sim1': ['EGFP', 'tdTomato']}),
-    ("Tlx3-Cre_PL56/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'tlx3': ['EGFP']}),    
+    ("Tlx3-Cre_PL56/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'tlx3': ['EGFP']}),
+    ("Pvalb-IRES-Cre/wt;Rorb-T2A-tTA2/wt;Ai63(TIT-tdT)/Ai140(TIT2L-GFP-ICL-tTA2)", {'pvalb': ['EGFP'], 'rorb': ['tdTomato']}),
 ])    
 
 
