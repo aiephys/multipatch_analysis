@@ -71,7 +71,7 @@ class Cell(object):
         default = 'unknown'
         ct = []
         for label,pos in self.labels.items():
-            if label in ALL_LABELS:
+            if label not in ALL_CRE_TYPES:
                 continue
             if pos in ('+', True):
                 ct.append(label)

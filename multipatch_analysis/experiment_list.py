@@ -72,7 +72,7 @@ class ExperimentList(object):
 
         if expts is not None:
             for expt in expts:
-                self._add_experiment(expt)
+                self.add_experiment(expt)
         if cache is not None and os.path.isfile(cache):
             try:
                 self.load(cache)
@@ -90,7 +90,7 @@ class ExperimentList(object):
                 # break
             try:
                 expt = Experiment(yml_file=yml_file)
-                self._add_experiment(expt)
+                self.add_experiment(expt)
             except Exception as exc:
                 if len(exc.args) > 0 and exc.args[0] == 'breakpoint':
                     raise
@@ -102,8 +102,9 @@ class ExperimentList(object):
             for yml_file, exc in errs:
                 print("=======================")
                 print("yml:", yml_file)
-                print("source:", open(os.path.join(os.path.dirname(yml_file), 'sync_source')))
                 traceback.print_exception(*exc)
+                src_file = open(os.path.join(os.path.dirname(yml_file), 'sync_source')).read()
+                print("source:", os.path.join(src_file, 'pipettes.yml'))
                 print("")
 
     def load(self, filename):
@@ -119,7 +120,7 @@ class ExperimentList(object):
             print("Ignoring cache file %s due to incompatible version (%s != %s)" % (filename, ver, self._cache_version))
             return
         for expt in el._expts:
-            self._add_experiment(expt)
+            self.add_experiment(expt)
         self.sort()
 
     def _load_text(self, filename):
@@ -165,7 +166,7 @@ class ExperimentList(object):
                 errs.append((entry, sys.exc_info()))
                 continue
 
-            self._add_experiment(expt)
+            self.add_experiment(expt)
 
         if len(errs) > 0:
             print("Errors loading %d experiments:" % len(errs))
@@ -179,8 +180,9 @@ class ExperimentList(object):
 
         self.sort()
 
-    def _add_experiment(self, expt):
+    def add_experiment(self, expt):
         if expt.uid in self._expts_by_uid:
+            print("SKIP adding %s; ID already exists." % expt)
             return
         self._expts.append(expt)
         self._expts_by_uid[expt.uid] = expt
@@ -260,7 +262,7 @@ class ExperimentList(object):
         return self._expts.__iter__()
 
     def append(self, expt):
-        self._add_experiment(expt)
+        self.add_experiment(expt)
 
     def sort(self, key=lambda expt: expt.source_id[1], **kwds):
         self._expts.sort(key=key, **kwds)
@@ -271,9 +273,9 @@ class ExperimentList(object):
             # make sure we have at least one non-biocytin label and one cre label
             if len(expt.cells) > 0:
                 if len(expt.cre_types) < 1:
-                    print("Warning: Experiment %s has no cre-type labels" % str(expt.source_id))
+                    print("Warning: Experiment %s:%s has no cre-type labels" % (expt.uid, expt.source_id))
                 if len(expt.labels) < 1 or expt.labels == ['biocytin']:
-                    print("Warning: Experiment %s has no fluorescent labels" % str(expt.source_id))
+                    print("Warning: Experiment %s:%s has no fluorescent labels" % (expt.uid, expt.source_id))
             if expt.region is None:
                 print("Warning: Experiment %s has no region" % str(expt.source_id))
 
@@ -441,6 +443,8 @@ class ExperimentList(object):
         tot_connected = 0
         ages = []
         for i,expt in enumerate(self):
+            if len(expt.cells) < 2:
+                continue
             n_c = expt.n_connections
             if n_c is None:
                 print("%s: connectivity not analyzed" % str(expt.uid).rjust(4))
@@ -478,10 +482,10 @@ class ExperimentList(object):
     def connectivity_summary(self, cre_type=None):
         summary = {}
         for expt in self:
-            summary = expt.summary()
-            if summary is None:
+            ex_sum = expt.summary()
+            if ex_sum is None:
                 continue
-            for k,v in summary.items():
+            for k,v in ex_sum.items():
                 if cre_type is not None and list(cre_type) != [x[1] for x in k]:
                     continue
                 if k not in summary:
