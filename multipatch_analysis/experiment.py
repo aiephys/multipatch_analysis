@@ -319,17 +319,15 @@ class Experiment(object):
         # load synapse/gap connections
         for cell in self.cells.values():
             pip_meta = pips.pipettes[cell.cell_id]
-            synapses = pip_meta.get('synapse_to', None)
-            gaps = pip_meta.get('gap_to', None)
 
-            for src, dst in [('synapse_to', 'connections'), ('gap_to', 'gaps')]:
+            for src, dst in [('synapse_to', '_connections'), ('gap_to', '_gaps')]:
                 conns = pip_meta.get(src, None)
                 if conns is None:
                     continue
                 conn_list = getattr(self, dst)
                 if conn_list is None:
                     conn_list = []
-                    setattr(self, '_'+dst, conn_list)
+                    setattr(self, dst, conn_list)
 
                 for post_id in conns:
                     # allow tentative connections like "4?"
