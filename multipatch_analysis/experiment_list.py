@@ -196,7 +196,7 @@ class ExperimentList(object):
         pickle.dump(self, open(self._cache, 'w'))
 
     def select(self, start=None, stop=None, region=None, source_files=None, cre_type=None, target_layer=None, calcium=None,
-               age=None, temp=None, organism=None):
+               age=None, temp=None, organism=None, rig=None):
         expts = []
         for ex in self._expts:
             # filter experiments by experimental date and conditions
@@ -230,6 +230,8 @@ class ExperimentList(object):
             elif temp is not None and ex.expt_info['temperature'][:2] != temp:
                 continue
             elif organism is not None and ex.lims_record['organism'] != organism:
+                continue
+            elif rig is not None and ex.rig_name != rig_name:
                 continue
             else:
                 expts.append(ex)
