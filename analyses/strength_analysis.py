@@ -1191,23 +1191,28 @@ def predict_connections(recs):
         # 'vc_amp_mean',
         # 'electrode_distance'
     ]]
+    features = np.array([tuple(r) for r in features])
+    ids = recs['id']
 
     # for k in ['deconv_amp_ks2samp']:
     #     features[k] = np.log(features[k])
 
     mask = (recs['ic_n_samples'] > 100) & (recs['ic_crosstalk_mean'] < 60e-6)
 
-    x = np.array([tuple(r) for r in features[mask]])
+    x = features[mask]
     y = recs['synapse'][mask].astype(bool)
+    ids = ids[mask]
 
     order = np.arange(len(y))
     np.random.shuffle(order)
     x = x[order]
     y = y[order]
+    ids = ids[order]
 
     mask2 = np.all(np.isfinite(x), axis=1) & np.isfinite(y)
     x = x[mask2]
     y = y[mask2]
+    ids = ids[mask2]
 
     mask[mask] = mask2
 
@@ -1247,12 +1252,12 @@ def predict_connections(recs):
     print("TEST:")
     test(clf, test_x, test_y)
 
-    
-    result = np.empty(len(recs), dtype=[('prediction', float), ('confidence', float)])
+    result = np.empty(len(features), dtype=[('prediction', float), ('confidence', float)])
     result[:] = np.nan
-    result['prediction'][mask] = clf.predict(x)
-    result['confidence'][mask] = clf.decision_function(x)
-    assert np.isfinite(result['confidence']).sum() > 0
+    mask = np.all(np.isfinite(features), axis=1)
+    result['prediction'][mask] = clf.predict(features[mask])
+    result['confidence'][mask] = clf.decision_function(features[mask])
+    assert np.isfinite(result[mask]['confidence']).sum() > 0
     return result, clf
 
 
