@@ -15,9 +15,9 @@ all_expts = experiment_list.cached_experiments()
 
 
 def submit_expt(expt_id, raise_exc=False):
+    # print(os.getpid(), expt_id, "start")
     try:
         expt = all_expts[expt_id]
-        start = time.time()
         
         slice_dir = expt.slice_dir
         print("submit slice:", slice_dir)
@@ -27,7 +27,6 @@ def submit_expt(expt_id, raise_exc=False):
         else:
             sub.submit()
         
-        print("    %g sec" % (time.time()-start))
         start = time.time()
         
         print("submit experiment:")
@@ -45,6 +44,7 @@ def submit_expt(expt_id, raise_exc=False):
         print("<<<< %s" % expt.uid)
         if raise_exc:
             raise
+    # print(os.getpid(), expt_id, "return")
 
 
 if __name__ == '__main__':

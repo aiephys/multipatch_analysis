@@ -440,8 +440,8 @@ def rebuild_connectivity(session):
             amps = {}
             qc_amps = {}
             ks_pvals = {}
-            #amp_means = {}
-            #amp_diffs = {}
+            amp_means = {}
+            amp_diffs = {}
             for clamp_mode in ('ic', 'vc'):
                 # Query all pulse amplitude records for this clamp mode
                 clamp_mode_fg = get_amps(session, pair, clamp_mode=clamp_mode)
@@ -467,14 +467,30 @@ def rebuild_connectivity(session):
                     pval = scipy.stats.ks_2samp(fg, bg).pvalue
                     ks_pvals[(sign, clamp_mode)] = pval
                     # we could ensure that the average amplitude is in the right direction:
-                    #fg_mean = np.mean(fg)
-                    #bg_mean = np.mean(bg)
-                    #amp_means[sign, clamp_mode] = {'fg': fg_mean, 'bg': bg_mean}
-                    #amp_diffs[sign, clamp_mode] = fg_mean - bg_mean
+                    fg_mean = np.mean(fg)
+                    bg_mean = np.mean(bg)
+                    amp_means[sign, clamp_mode] = {'fg': fg_mean, 'bg': bg_mean}
+                    amp_diffs[sign, clamp_mode] = fg_mean - bg_mean
 
-            # decide whether to treat this connection as excitatory or inhibitory
-            # (probably we can do much better here)
-            if (ks_pvals.get(('pos', 'ic'), 1) < ks_pvals.get(('neg', 'ic'), 1)) or (ks_pvals.get(('neg', 'vc'), 1) < ks_pvals.get(('pos', 'vc'), 1)):
+            # Decide whether to treat this connection as excitatory or inhibitory.
+            #   strategy: accumulate evidence for either possibility by checking
+            #   the ks p-values for each sign/clamp mode and the direction of the deflection
+            is_exc = 0
+            # print(expt.acq_timestamp, pair.pre_cell.ext_id, pair.post_cell.ext_id)
+            for sign in ('pos', 'neg'):
+                for mode in ('ic', 'vc'):
+                    ks = ks_pvals.get((sign, mode), None)
+                    if ks is None:
+                        continue
+                    # turn p value into a reasonable scale factor
+                    ks = np.log(1-np.log(ks))
+                    dif_sign = 1 if amp_diffs[sign, mode] > 0 else -1
+                    if mode == 'vc':
+                        dif_sign *= -1
+                    is_exc += dif_sign * ks
+                    # print("    ", sign, mode, is_exc, dif_sign * ks)
+
+            if is_exc > 0:
                 fields['synapse_type'] = 'ex'
                 sign = 'pos'
             else:
