@@ -133,9 +133,8 @@ class ExperimentMetadataSubmission(object):
         if m is None:
             errors.append('Unrecognized temperature: "%s"' % temp)
         
-        # Is specimen from today?
-        
         # Slice time ok?
+        site_date = datetime.fromtimestamp(site_info['__timestamp__'])
         tod = expt_info.get('time_of_dissection', '')
         if tod == '':
             errors.append("Time of dissection not specified")
@@ -148,7 +147,6 @@ class ExperimentMetadataSubmission(object):
                 if int(h) < 7:
                     warnings.append("Dissection time appears to be very early. Did you mean %d:%s?" % (int(h)+12, m))
                 # interpret time of dissection
-                site_date = datetime.fromtimestamp(site_info['__timestamp__'])
                 if year is None:
                     diss_time = datetime(site_date.year, site_date.month, site_date.day, int(h), int(m))
                 else:
@@ -161,6 +159,23 @@ class ExperimentMetadataSubmission(object):
                     errors.append("Time of dissection is later than experiment time")
                 if seconds_since_dissection > 6*3600:
                     warnings.append("Time of dissection is more than 6 hours prior to experiment")
+
+        # check specimen age
+        if self.spec_info['age'] is None:
+            warnings.append("Donor age is not set in LIMS.")
+
+        # Check specimen death was today
+        if self.spec_info['date_of_birth'] is not None:
+            dod = self.spec_info['date_of_birth'].date() + timedelta(self.spec_info['age'])
+            days_since_death = (site_date.date() - dod).days
+            if days_since_death > 0:
+                warnings.append("Specimen was dissected before today")
+            if days_since_death < 0:
+                warnings.append("Specimen is from the future")
+
+        # slice project is specified
+        if slice_info.get('project', '') == '':
+            errors.append("Must specify slice.project")
 
         # Sanity checks on pipette metadata:
         
@@ -262,10 +277,6 @@ class ExperimentMetadataSubmission(object):
         if acq_plate_well is not None and acq_plate_well.strip() != hist_well:
             errors.append('LIMS histology well name "%s" does not match ACQ4 plate_well_ID "%s"' 
                     % (hist_well, acq_plate_well))
-
-        # check specimen age
-        if self.spec_info['age'] is None:
-            warnings.append("Donor age is not set in LIMS.")
 
     def summary(self):
         summ = OrderedDict()
