@@ -285,8 +285,8 @@ def response_query(session):
     q = q.join(db.StimSpike)
     q = q.join(db.PulseResponse.recording).join(db.PatchClampRecording) 
 
-    # Ignore anything that failed QC
-    q = q.filter(((db.PulseResponse.ex_qc_pass==True) | (db.PulseResponse.in_qc_pass==True)))
+    # return qc-failed records as well so we can verify qc is working
+    #q = q.filter(((db.PulseResponse.ex_qc_pass==True) | (db.PulseResponse.in_qc_pass==True)))
 
     return q
 
@@ -304,8 +304,8 @@ def baseline_query(session):
     )
     q = q.join(db.Baseline.recording).join(db.PatchClampRecording) 
 
-    # Ignore anything that failed QC
-    q = q.filter(((db.Baseline.ex_qc_pass==True) | (db.Baseline.in_qc_pass==True)))
+    # return qc-failed records as well so we can verify qc is working
+    # q = q.filter(((db.Baseline.ex_qc_pass==True) | (db.Baseline.in_qc_pass==True)))
 
     return q
 
@@ -323,7 +323,11 @@ def analyze_response_strength(rec, source, remove_artifacts=False, lpf=True, bsu
         # Find stimulus pulse edges for artifact removal
         start = rec.pulse_start - rec.rec_start
         pulse_times = [start, start + rec.pulse_dur]
-        spike_time = rec.spike_time - rec.rec_start
+        if rec.spike_time is None:
+            # these pulses failed QC, but we analyze them anyway to make all data visible
+            spike_time = 11e-3
+        else:
+            spike_time = rec.spike_time - rec.rec_start
     elif source == 'baseline':
         # Fake stimulus information to ensure that background data receives
         # the same filtering / windowing treatment
@@ -614,6 +618,9 @@ def get_amps(session, pair, clamp_mode='ic'):
     for filter_args in filters:
         q = q.filter(*filter_args)
     
+    # should result in chronological order
+    q = q.order_by(db.PulseResponse.id)
+
     df = pandas.read_sql_query(q.statement, q.session.bind)
     recs = df.to_records()
     return recs
@@ -669,6 +676,9 @@ def get_baseline_amps(session, pair, clamp_mode='ic', limit=None):
     for filter_args in filters:
         q = q.filter(*filter_args)
     
+    # should result in chronological order
+    q = q.order_by(db.Baseline.id)
+
     if limit is not None:
         q = q.limit(limit)
 
@@ -912,7 +922,7 @@ class ResponseStrengthAnalyzer(object):
                 else:
                     color = pg.mkColor(0, g, b, 80)
                 fg_color[i] = pg.mkBrush(color)
-        
+
         # clear old plots
         self.fg_scatter.setData([])
         self.bg_scatter.setData([])
@@ -927,8 +937,8 @@ class ResponseStrengthAnalyzer(object):
             return
 
         # scatter plots of fg/bg data
-        fg_y = np.linspace(1, 1.8, len(fg_x))
-        bg_y = np.linspace(0, 0.8, len(bg_x))
+        fg_y = np.linspace(1.8, 1, len(fg_x))
+        bg_y = np.linspace(0.8, 0, len(bg_x))
         self.fg_scatter.setData(fg_x, fg_y, data=fg_data, brush=fg_color)
         self.bg_scatter.setData(bg_x, bg_y, data=bg_data, brush=bg_color)
 
