@@ -694,21 +694,20 @@ def join_pulse_response_to_expt(query):
     return query, pre_rec, post_rec
 
 
-class ResponseStrengthPlots(QtGui.QWidget):
+class ResponseStrengthPlots(pg.dockarea.DockArea):
     def __init__(self, session):
-        QtGui.QWidget.__init__(self)
+        pg.dockarea.DockArea.__init__(self)
         self.session = session
-
-        self.layout = QtGui.QGridLayout()
-        self.setLayout(self.layout)
-        self.layout.setContentsMargins(0, 0, 0, 0)
 
         self.analyses = [('neg', 'ic'), ('pos', 'ic'), ('neg', 'vc'), ('pos', 'vc')]
         self.analyzers = []
+        self.analyzer_docks = []
         for col, analysis in enumerate(self.analyses):
             analyzer = ResponseStrengthAnalyzer(analysis, session)
             self.analyzers.append(analyzer)
-            self.layout.addWidget(analyzer.widget, 0, col)
+            dock = pg.dockarea.Dock(analyzer.title, widget=analyzer.widget)
+            self.analyzer_docks.append(dock)
+            self.addDock(dock, 'right')
                 
     def load_conn(self, pair):
         with pg.BusyCursor():
@@ -719,6 +718,7 @@ class ResponseStrengthPlots(QtGui.QWidget):
 class ResponseStrengthAnalyzer(object):
     def __init__(self, analysis, session):
         self.analysis = analysis  # ('pos'|'neg', 'ic'|'vc')
+        self.title = ' '.join(analysis)
         self.session = session
         self._amp_recs = None
         self._base_recs = None
@@ -732,7 +732,7 @@ class ResponseStrengthAnalyzer(object):
         self.layout.addWidget(self.gl, 0, 0)
 
         # histogram plots
-        self.hist_plot = pg.PlotItem(title=' '.join(analysis)+":")
+        self.hist_plot = pg.PlotItem(title=self.title)
         self.gl.addItem(self.hist_plot, row=0, col=0)
         self.hist_plot.hideAxis('bottom')
 
