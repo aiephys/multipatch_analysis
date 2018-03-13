@@ -801,33 +801,39 @@ class ResponseStrengthAnalyzer(object):
         self.ctrl.setLayout(self.ctrl_layout)
         self.ctrl_layout.setContentsMargins(0, 0, 0, 0)
 
+        self.field_combo = QtGui.QComboBox()
+        for field in ['dec_amp', 'amp', 'dec_latency', 'crosstalk']:
+            self.field_combo.addItem(field)
+        self.ctrl_layout.addWidget(self.field_combo, 0, 0)
+        self.field_combo.currentIndexChanged.connect(self.update_scatter_plots)
+
         self.deconv_check = QtGui.QCheckBox('deconvolve')
         self.deconv_check.setChecked(True)
-        self.ctrl_layout.addWidget(self.deconv_check, 0, 0)
+        self.ctrl_layout.addWidget(self.deconv_check, 1, 0)
         self.deconv_check.toggled.connect(self.replot_all)
 
         self.bsub_check = QtGui.QCheckBox('bsub')
         self.bsub_check.setChecked(True)
-        self.ctrl_layout.addWidget(self.bsub_check, 0, 1)
+        self.ctrl_layout.addWidget(self.bsub_check, 1, 1)
         self.bsub_check.toggled.connect(self.replot_all)
 
         self.lpf_check = QtGui.QCheckBox('lpf')
         self.lpf_check.setChecked(True)
-        self.ctrl_layout.addWidget(self.lpf_check, 0, 2)
+        self.ctrl_layout.addWidget(self.lpf_check, 1, 2)
         self.lpf_check.toggled.connect(self.replot_all)
 
         self.ar_check = QtGui.QCheckBox('crosstalk')
         self.ar_check.setChecked(True)
-        self.ctrl_layout.addWidget(self.ar_check, 0, 3)
+        self.ctrl_layout.addWidget(self.ar_check, 1, 3)
         self.ar_check.toggled.connect(self.replot_all)
 
         self.align_check = QtGui.QCheckBox('align')
         self.align_check.setChecked(True)
-        self.ctrl_layout.addWidget(self.align_check, 0, 4)
+        self.ctrl_layout.addWidget(self.align_check, 1, 4)
         self.align_check.toggled.connect(self.replot_all)
 
         self.pulse_ctrl = QtGui.QWidget()
-        self.ctrl_layout.addWidget(self.pulse_ctrl, 1, 0, 1, 5)
+        self.ctrl_layout.addWidget(self.pulse_ctrl, 2, 0, 1, 5)
         self.pulse_layout = QtGui.QHBoxLayout()
         self.pulse_ctrl.setLayout(self.pulse_layout)
         self.pulse_layout.setContentsMargins(0, 0, 0, 0)
@@ -892,11 +898,14 @@ class ResponseStrengthAnalyzer(object):
         # select fg/bg data
         fg_data = amp_recs
         bg_data = base_recs[:len(fg_data)]
+        
+        data_field = str(self.field_combo.currentText())
+        if data_field != 'crosstalk':
+            data_field = self.analysis[0] + '_' + data_field
+        
         if self.analysis[0] == 'pos':
-            data_field = 'pos_dec_amp'
             qc_field = 'ex_qc_pass' if self.analysis[1] == 'ic' else 'in_qc_pass'
         elif self.analysis[0] == 'neg':
-            data_field = 'neg_dec_amp'
             qc_field = 'in_qc_pass' if self.analysis[1] == 'ic' else 'ex_qc_pass'
         fg_x = fg_data[data_field]
         bg_x = bg_data[data_field]
