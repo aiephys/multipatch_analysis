@@ -1225,16 +1225,19 @@ if __name__ == '__main__':
 
         ts = sel.expt.acq_timestamp
         sec = datetime_to_timestamp(ts)
-        print("------------------------------")
+        src = sel.expt.source_experiment
+        print("======================================")
         if src.entry is not None:
             src.entry.print_tree()
         else:
             print(open(src.source_id[0], 'rb').read())
         print("------------------------------")
-        print(sel.expt.original_path)
-        print(sec)
-        src = sel.expt.source_experiment
-        print(src)
+        print("Original path:", src)
+        print("Server path:", sel.expt.original_path)
+        if hasattr(sel, 'pair'):
+            print("ID: %s  %d->%d" % (sec, pair.pre_cell.ext_id, pair.post_cell.ext_id))
+        else:
+            print("ID: %s" % sec)
         
 
     b.itemSelectionChanged.connect(selected)
@@ -1306,8 +1309,16 @@ if __name__ == '__main__':
     ch = spw.filter.addNew('ic_crosstalk_mean')
     ch['Min'] = -1
     ch['Max'] = 60e-6
+    ch = spw.filter.addNew('rig_name')
     ch = spw.colorMap.addNew('synapse')
     ch['Values', 'True'] = pg.mkColor('y')
+    ch['Values', 'False'] = pg.mkColor(200, 200, 200, 150)
+    ch['Values', 'None'] = pg.mkColor(200, 100, 100)
+    ch = spw.colorMap.addNew('ic_latency_mean')
+    ch['Operation'] = 'Add'
+    ch['Max'] = 3e-3
+    cm = pg.ColorMap([0, 1], [[0, 0, 255, 255], [0, 0, 0, 255]])
+    ch.setValue(cm)
 
     # attempt a little machine learning. 
     # this could work if we can generate better features:
@@ -1344,7 +1355,7 @@ if __name__ == '__main__':
     mask = (recs['ic_n_samples'] > 100) & (recs['ic_crosstalk_mean'] < 60e-6)
 
     x = np.array([tuple(r) for r in features[mask]])
-    y = recs['synapse'][mask]
+    y = recs['synapse'][mask].astype(bool)
 
     order = np.arange(len(y))
     np.random.shuffle(order)
