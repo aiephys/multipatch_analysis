@@ -134,7 +134,7 @@ class PulseStimAnalyzer(Analyzer):
                     # (todo: should be watching for rebound spikes as well)
                     continue
                 spike = detect_evoked_spike(self.rec, [on, off])
-                spike_info.append({'pulse_n': i, 'pulse_ind': on, 'spike': spike})
+                spike_info.append({'pulse_n': i, 'pulse_ind': on, 'pulse_len': off-on, 'spike': spike})
             self._evoked_spikes = spike_info
         return self._evoked_spikes
 

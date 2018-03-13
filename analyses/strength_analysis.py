@@ -24,6 +24,7 @@ from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.data import Trace, TraceList
 from neuroanalysis import filter
 from neuroanalysis.event_detection import exp_deconvolve
+from neuroanalysis.baseline import float_mode
 
 from multipatch_analysis.database import database as db
 from multipatch_analysis import config, synphys_cache
@@ -194,7 +195,7 @@ def measure_peak(trace, sign, spike_time, pulse_times, spike_delay=1e-3, respons
     baseline_start = 0
     baseline_stop = pulse_times[0] - 50e-6
 
-    baseline = trace.time_slice(baseline_start, baseline_stop).data.mean()
+    baseline = float_mode(trace.time_slice(baseline_start, baseline_stop).data)
     response = trace.time_slice(response_start, response_stop)
 
     if sign == '+':
@@ -285,8 +286,8 @@ def response_query(session):
     q = q.join(db.StimSpike)
     q = q.join(db.PulseResponse.recording).join(db.PatchClampRecording) 
 
-    # Ignore anything that failed QC
-    q = q.filter(((db.PulseResponse.ex_qc_pass==True) | (db.PulseResponse.in_qc_pass==True)))
+    # return qc-failed records as well so we can verify qc is working
+    #q = q.filter(((db.PulseResponse.ex_qc_pass==True) | (db.PulseResponse.in_qc_pass==True)))
 
     return q
 
@@ -304,8 +305,8 @@ def baseline_query(session):
     )
     q = q.join(db.Baseline.recording).join(db.PatchClampRecording) 
 
-    # Ignore anything that failed QC
-    q = q.filter(((db.Baseline.ex_qc_pass==True) | (db.Baseline.in_qc_pass==True)))
+    # return qc-failed records as well so we can verify qc is working
+    # q = q.filter(((db.Baseline.ex_qc_pass==True) | (db.Baseline.in_qc_pass==True)))
 
     return q
 
@@ -323,7 +324,11 @@ def analyze_response_strength(rec, source, remove_artifacts=False, lpf=True, bsu
         # Find stimulus pulse edges for artifact removal
         start = rec.pulse_start - rec.rec_start
         pulse_times = [start, start + rec.pulse_dur]
-        spike_time = rec.spike_time - rec.rec_start
+        if rec.spike_time is None:
+            # these pulses failed QC, but we analyze them anyway to make all data visible
+            spike_time = 11e-3
+        else:
+            spike_time = rec.spike_time - rec.rec_start
     elif source == 'baseline':
         # Fake stimulus information to ensure that background data receives
         # the same filtering / windowing treatment
@@ -435,8 +440,8 @@ def rebuild_connectivity(session):
             amps = {}
             qc_amps = {}
             ks_pvals = {}
-            #amp_means = {}
-            #amp_diffs = {}
+            amp_means = {}
+            amp_diffs = {}
             for clamp_mode in ('ic', 'vc'):
                 # Query all pulse amplitude records for this clamp mode
                 clamp_mode_fg = get_amps(session, pair, clamp_mode=clamp_mode)
@@ -462,14 +467,30 @@ def rebuild_connectivity(session):
                     pval = scipy.stats.ks_2samp(fg, bg).pvalue
                     ks_pvals[(sign, clamp_mode)] = pval
                     # we could ensure that the average amplitude is in the right direction:
-                    #fg_mean = np.mean(fg)
-                    #bg_mean = np.mean(bg)
-                    #amp_means[sign, clamp_mode] = {'fg': fg_mean, 'bg': bg_mean}
-                    #amp_diffs[sign, clamp_mode] = fg_mean - bg_mean
+                    fg_mean = np.mean(fg)
+                    bg_mean = np.mean(bg)
+                    amp_means[sign, clamp_mode] = {'fg': fg_mean, 'bg': bg_mean}
+                    amp_diffs[sign, clamp_mode] = fg_mean - bg_mean
 
-            # decide whether to treat this connection as excitatory or inhibitory
-            # (probably we can do much better here)
-            if (ks_pvals.get(('pos', 'ic'), 1) < ks_pvals.get(('neg', 'ic'), 1)) or (ks_pvals.get(('neg', 'vc'), 1) < ks_pvals.get(('pos', 'vc'), 1)):
+            # Decide whether to treat this connection as excitatory or inhibitory.
+            #   strategy: accumulate evidence for either possibility by checking
+            #   the ks p-values for each sign/clamp mode and the direction of the deflection
+            is_exc = 0
+            # print(expt.acq_timestamp, pair.pre_cell.ext_id, pair.post_cell.ext_id)
+            for sign in ('pos', 'neg'):
+                for mode in ('ic', 'vc'):
+                    ks = ks_pvals.get((sign, mode), None)
+                    if ks is None:
+                        continue
+                    # turn p value into a reasonable scale factor
+                    ks = np.log(1-np.log(ks))
+                    dif_sign = 1 if amp_diffs[sign, mode] > 0 else -1
+                    if mode == 'vc':
+                        dif_sign *= -1
+                    is_exc += dif_sign * ks
+                    # print("    ", sign, mode, is_exc, dif_sign * ks)
+
+            if is_exc > 0:
                 fields['synapse_type'] = 'ex'
                 sign = 'pos'
             else:
@@ -614,6 +635,9 @@ def get_amps(session, pair, clamp_mode='ic'):
     for filter_args in filters:
         q = q.filter(*filter_args)
     
+    # should result in chronological order
+    q = q.order_by(db.PulseResponse.id)
+
     df = pandas.read_sql_query(q.statement, q.session.bind)
     recs = df.to_records()
     return recs
@@ -669,6 +693,9 @@ def get_baseline_amps(session, pair, clamp_mode='ic', limit=None):
     for filter_args in filters:
         q = q.filter(*filter_args)
     
+    # should result in chronological order
+    q = q.order_by(db.Baseline.id)
+
     if limit is not None:
         q = q.limit(limit)
 
@@ -694,21 +721,20 @@ def join_pulse_response_to_expt(query):
     return query, pre_rec, post_rec
 
 
-class ResponseStrengthPlots(QtGui.QWidget):
+class ResponseStrengthPlots(pg.dockarea.DockArea):
     def __init__(self, session):
-        QtGui.QWidget.__init__(self)
+        pg.dockarea.DockArea.__init__(self)
         self.session = session
-
-        self.layout = QtGui.QGridLayout()
-        self.setLayout(self.layout)
-        self.layout.setContentsMargins(0, 0, 0, 0)
 
         self.analyses = [('neg', 'ic'), ('pos', 'ic'), ('neg', 'vc'), ('pos', 'vc')]
         self.analyzers = []
+        self.analyzer_docks = []
         for col, analysis in enumerate(self.analyses):
             analyzer = ResponseStrengthAnalyzer(analysis, session)
             self.analyzers.append(analyzer)
-            self.layout.addWidget(analyzer.widget, 0, col)
+            dock = pg.dockarea.Dock(analyzer.title, widget=analyzer.widget)
+            self.analyzer_docks.append(dock)
+            self.addDock(dock, 'right')
                 
     def load_conn(self, pair):
         with pg.BusyCursor():
@@ -719,6 +745,7 @@ class ResponseStrengthPlots(QtGui.QWidget):
 class ResponseStrengthAnalyzer(object):
     def __init__(self, analysis, session):
         self.analysis = analysis  # ('pos'|'neg', 'ic'|'vc')
+        self.title = ' '.join(analysis)
         self.session = session
         self._amp_recs = None
         self._base_recs = None
@@ -732,7 +759,7 @@ class ResponseStrengthAnalyzer(object):
         self.layout.addWidget(self.gl, 0, 0)
 
         # histogram plots
-        self.hist_plot = pg.PlotItem(title=' '.join(analysis)+":")
+        self.hist_plot = pg.PlotItem(title=self.title)
         self.gl.addItem(self.hist_plot, row=0, col=0)
         self.hist_plot.hideAxis('bottom')
 
@@ -774,33 +801,39 @@ class ResponseStrengthAnalyzer(object):
         self.ctrl.setLayout(self.ctrl_layout)
         self.ctrl_layout.setContentsMargins(0, 0, 0, 0)
 
+        self.field_combo = QtGui.QComboBox()
+        for field in ['dec_amp', 'amp', 'dec_latency', 'crosstalk']:
+            self.field_combo.addItem(field)
+        self.ctrl_layout.addWidget(self.field_combo, 0, 0)
+        self.field_combo.currentIndexChanged.connect(self.update_scatter_plots)
+
         self.deconv_check = QtGui.QCheckBox('deconvolve')
         self.deconv_check.setChecked(True)
-        self.ctrl_layout.addWidget(self.deconv_check, 0, 0)
+        self.ctrl_layout.addWidget(self.deconv_check, 1, 0)
         self.deconv_check.toggled.connect(self.replot_all)
 
         self.bsub_check = QtGui.QCheckBox('bsub')
         self.bsub_check.setChecked(True)
-        self.ctrl_layout.addWidget(self.bsub_check, 0, 1)
+        self.ctrl_layout.addWidget(self.bsub_check, 1, 1)
         self.bsub_check.toggled.connect(self.replot_all)
 
         self.lpf_check = QtGui.QCheckBox('lpf')
         self.lpf_check.setChecked(True)
-        self.ctrl_layout.addWidget(self.lpf_check, 0, 2)
+        self.ctrl_layout.addWidget(self.lpf_check, 1, 2)
         self.lpf_check.toggled.connect(self.replot_all)
 
         self.ar_check = QtGui.QCheckBox('crosstalk')
         self.ar_check.setChecked(True)
-        self.ctrl_layout.addWidget(self.ar_check, 0, 3)
+        self.ctrl_layout.addWidget(self.ar_check, 1, 3)
         self.ar_check.toggled.connect(self.replot_all)
 
         self.align_check = QtGui.QCheckBox('align')
         self.align_check.setChecked(True)
-        self.ctrl_layout.addWidget(self.align_check, 0, 4)
+        self.ctrl_layout.addWidget(self.align_check, 1, 4)
         self.align_check.toggled.connect(self.replot_all)
 
         self.pulse_ctrl = QtGui.QWidget()
-        self.ctrl_layout.addWidget(self.pulse_ctrl, 1, 0, 1, 5)
+        self.ctrl_layout.addWidget(self.pulse_ctrl, 2, 0, 1, 5)
         self.pulse_layout = QtGui.QHBoxLayout()
         self.pulse_ctrl.setLayout(self.pulse_layout)
         self.pulse_layout.setContentsMargins(0, 0, 0, 0)
@@ -865,11 +898,14 @@ class ResponseStrengthAnalyzer(object):
         # select fg/bg data
         fg_data = amp_recs
         bg_data = base_recs[:len(fg_data)]
+        
+        data_field = str(self.field_combo.currentText())
+        if data_field != 'crosstalk':
+            data_field = self.analysis[0] + '_' + data_field
+        
         if self.analysis[0] == 'pos':
-            data_field = 'pos_dec_amp'
             qc_field = 'ex_qc_pass' if self.analysis[1] == 'ic' else 'in_qc_pass'
         elif self.analysis[0] == 'neg':
-            data_field = 'neg_dec_amp'
             qc_field = 'in_qc_pass' if self.analysis[1] == 'ic' else 'ex_qc_pass'
         fg_x = fg_data[data_field]
         bg_x = bg_data[data_field]
@@ -912,7 +948,7 @@ class ResponseStrengthAnalyzer(object):
                 else:
                     color = pg.mkColor(0, g, b, 80)
                 fg_color[i] = pg.mkBrush(color)
-        
+
         # clear old plots
         self.fg_scatter.setData([])
         self.bg_scatter.setData([])
@@ -927,8 +963,8 @@ class ResponseStrengthAnalyzer(object):
             return
 
         # scatter plots of fg/bg data
-        fg_y = np.linspace(1, 1.8, len(fg_x))
-        bg_y = np.linspace(0, 0.8, len(bg_x))
+        fg_y = np.linspace(1.8, 1, len(fg_x))
+        bg_y = np.linspace(0.8, 0, len(bg_x))
         self.fg_scatter.setData(fg_x, fg_y, data=fg_data, brush=fg_color)
         self.bg_scatter.setData(bg_x, bg_y, data=bg_data, brush=bg_color)
 

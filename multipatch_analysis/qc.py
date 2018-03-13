@@ -13,7 +13,7 @@ def recording_qc_pass(rec):
     * Baseline current must be < 800 pA
     * For current clamp, baseline potential must be between -45 and -85 mV
 
-    This is intended only to remove the most eggregious data -- cells that are dead,
+    This is intended only to remove the most egregious data -- cells that are dead,
     sweeps that were interrupted before completion, etc. This is NOT intended to
     detect unhealthy cells, bad access resistance, etc.
 
@@ -40,11 +40,12 @@ def recording_qc_pass(rec):
     return True
 
 
-def pulse_response_qc_pass(sign, post_rec, window, n_spikes):
+def pulse_response_qc_pass(post_rec, window, n_spikes, adjacent_pulses):
     """Apply QC criteria for pulse-response recordings:
 
     * Postsynaptic recording passes recording_qc_pass()
     * Presynaptic cell must have at least 1 spike in response to pulse
+    * No other presynaptic pulses within 8ms on either side
     * Inhibitory response baseline potential must be between -45 and -60 mV
     * Excitatory response baseline potential must be between -45 and -80 mV
     * Overall stdev for postsynaptic recording must be < 1.5 mV or < 15 pA
@@ -52,8 +53,6 @@ def pulse_response_qc_pass(sign, post_rec, window, n_spikes):
 
     Parameters
     ----------
-    sign : -1 or +1
-        Indicates whether to apply QC criteria for inhibitory (-1) or excitatory (+1) tests
     post_rec : Recording
         The postsynaptic Recording instance
     window : list
@@ -61,39 +60,51 @@ def pulse_response_qc_pass(sign, post_rec, window, n_spikes):
     n_spikes : int or None
         The number of presynaptic spikes evoked for this pulse response. If None, then this
         check is skipped (this is used for background data where we do not expect to have spikes).
-    """
-    if recording_qc_pass(post_rec) is False:
-        return False
+    adjacent_pulses : list
+        The times of any adjacent presynaptic stimulus pulses, relative to the spike of interest.
+        This is used to ensure there is a minimum window of quiescence around the pulse to test, which
+        excludes responses from very high frequency stimuli.
 
+    Returns
+    -------
+    ex_qc_pass : bool
+        Whether this pulse-response passes QC for detecting excitatory connections
+    in_qc_pass : bool
+        Whether this pulse-response passes QC for detecting inhibitory connections
+    """
+    # Require the postsynaptic recording to pass basic QC
+    if recording_qc_pass(post_rec) is False:
+        return False, False
+
+    # require at least 1 presynaptic spike
     if n_spikes == 0:
-        return False
+        return False, False
     
+    # Check for noise in response window
     if post_rec.clamp_mode == 'ic':
         data = post_rec['primary'][window[0]:window[1]]
         base = data.median()
         if data.std() > 1.5e-3:
-            return False
+            return False, False
         if data.data.max() > -40e-3:
-            return False
+            return False, False
     elif post_rec.clamp_mode == 'vc':
         data = post_rec['primary'][window[0]:window[1]]
         base = post_rec['command'][window[0]:window[1]].median()
         if data.std() > 15e-12:
-            return False
+            return False, False
     else:
         raise TypeError('Unsupported clamp mode %s' % post_rec.clamp_mode)
-    
-    if sign == 1:
-        bmin, bmax = [-85e-3, -45e-3]
-    elif sign == -1:
-        bmin, bmax = [-60e-3, -45e-3]
-    else:
-        raise ValueError("sign must be -1 or +1")       
 
+    # Check timing of adjacent spikes
+    if any([abs(t) < 8e-3 for t in adjacent_pulses]):
+        return False, False
+
+    # Check holding potential is appropriate for each sign
+    limits = [[-85e-3, -45e-3], [-60e-3, -45e-3]]
     # check both baseline_potential (which is measured over all baseline regions in the recording)
     # and *base*, which is just the median value over the response window
     base2 = post_rec.baseline_potential
-    if not ((bmin < base < bmax) and (bmin < base2 < bmax)):
-        return False
+    qc_pass = tuple([((bmin < base < bmax) and (bmin < base2 < bmax)) for bmin, bmax in limits])
 
-    return True
+    return qc_pass
