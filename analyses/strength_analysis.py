@@ -1162,6 +1162,119 @@ init_tables()
 
 
 
+def predict_connections(recs):
+    # attempt a little machine learning. 
+    # this could work if we can generate better features:
+    #     KS measured on latency
+    #     Gaussian fit to deconvolved trace (amp, time, width, nrmse)
+    #         Seed by fitting average first
+    #     KS on fit parameters
+    #     Maybe something better than KS? Mixed gaussian model?
+    #          Histogram values on the above features?  (might need a lot more data for this)
+    from sklearn import svm, preprocessing
+
+    features = recs[[
+        # 'ic_n_samples', 
+        #'amp_mean', 'amp_stdev', 'base_amp_mean', 'base_amp_stdev', 'amp_mean_minus_base', 'amp_stdev_minus_base', 
+        #'deconv_amp_mean', 'deconv_amp_stdev', 'deconv_base_amp_mean', 'deconv_base_amp_stdev', 'deconv_amp_mean_minus_base', 'deconv_amp_stdev_minus_base', 
+        #'amp_ttest',
+        #'deconv_amp_ttest',
+        #'amp_ks2samp', 
+        'ic_deconv_amp_ks2samp',
+        'vc_amp_ks2samp',
+        'ic_latency_ks2samp',
+        'vc_latency_ks2samp',
+        # 'ic_latency_mean', 'ic_latency_stdev', 
+        #'ic_base_latency_mean', 'ic_base_latency_stdev',
+        #'abs_amp_mean', 'abs_base_amp_mean', 'abs_amp_mean_minus_base', 
+        # 'ic_deconv_amp_mean', 'ic_base_deconv_amp_mean', #'abs_deconv_amp_mean_minus_base', 
+        # 'vc_amp_mean',
+        # 'electrode_distance'
+    ]]
+
+    # for k in ['deconv_amp_ks2samp']:
+    #     features[k] = np.log(features[k])
+
+    mask = (recs['ic_n_samples'] > 100) & (recs['ic_crosstalk_mean'] < 60e-6)
+
+    x = np.array([tuple(r) for r in features[mask]])
+    y = recs['synapse'][mask].astype(bool)
+
+    order = np.arange(len(y))
+    np.random.shuffle(order)
+    x = x[order]
+    y = y[order]
+
+    mask2 = np.all(np.isfinite(x), axis=1) & np.isfinite(y)
+    x = x[mask2]
+    y = y[mask2]
+
+    mask[mask] = mask2
+
+    x = preprocessing.normalize(x, axis=0)
+
+    # train on equal parts connected and non-connected
+    train_mask = np.zeros(len(y), dtype='bool')
+    syn = np.argwhere(y)
+    n = len(syn) // 4 * 3
+    train_mask[syn[:n]] = True
+    other = np.arange(len(y))[~train_mask]
+    np.random.shuffle(other)
+    train_mask[other[:n]] = True
+
+    train_x = x[train_mask]
+    train_y = y[train_mask]
+    test_x = x[~train_mask]
+    test_y = y[~train_mask]
+    print("Train: %d  test: %d" % (len(train_y), len(test_y)))
+
+    clf = svm.LinearSVC()
+    clf.fit(train_x, train_y)
+
+    def test(clf, test_x, test_y):
+        pred = clf.predict(test_x)
+        def pr(name, pred, test_y):
+            print("%s:  %d/%d  %0.2f%%" % (name, (pred & test_y).sum(), test_y.sum(), 100 * (pred & test_y).sum() / test_y.sum()))
+            
+        pr(" True positive", pred, test_y)
+        pr("False positive", pred, ~test_y)
+        pr(" True negative", ~pred, ~test_y)
+        pr("False negative", ~pred, test_y)
+
+    print("TRAIN:")
+    test(clf, train_x, train_y)
+
+    print("TEST:")
+    test(clf, test_x, test_y)
+
+    
+    result = np.empty(len(recs), dtype=[('prediction', float), ('confidence', float)])
+    result[:] = np.nan
+    result['prediction'][mask] = clf.predict(x)
+    result['confidence'][mask] = clf.decision_function(x)
+    assert np.isfinite(result['confidence']).sum() > 0
+    return result, clf
+
+
+def join_struct_arrays(arrays):
+    """Join two structured arrays together.
+
+    This is the most inefficient possible approach, but other methods
+    don't work well with object dtypes.
+    """
+    dtype = []
+    for arr in arrays:
+        for name in arr.dtype.names:
+            dtype.append((str(name), arr.dtype.fields[name][0].str))
+    arr = np.empty(len(arrays[0]), dtype=dtype)
+    for i in range(len(arr)):
+        v = ()
+        for a in arrays:
+            v = v + tuple(a[i])
+        arr[i] = v
+    return arr
+
+
 if __name__ == '__main__':
     #tt = pg.debug.ThreadTrace()
     parser = argparse.ArgumentParser()
@@ -1260,17 +1373,25 @@ if __name__ == '__main__':
         
     b.doubleClicked.connect(dbl_clicked)
 
+    # Load records on all pairs
+    recs = query_all_pairs()
+
+    # Add results of machine learning prediction in to records
+    prediction, clf = predict_connections(recs)
+    recs = join_struct_arrays([recs, prediction])
+
+    # Load all records into scatter plot widget
     spw = pg.ScatterPlotWidget()
     spw.style['symbolPen'] = None
     
     spw.resize(1000, 800)
     spw.show()
 
-    recs = query_all_pairs()
-
     fields = [
         ('synapse', {'mode': 'enum', 'values': [True, False, None]}),
         ('synapse_type', {'mode': 'enum', 'values': ['in', 'ex']}),
+        ('prediction', {'mode': 'enum', 'values': [True, False, None]}),
+        ('confidence', {}),
         ('pre_cre_type', {'mode': 'enum', 'values': list(set(recs['pre_cre_type']))}),
         ('post_cre_type', {'mode': 'enum', 'values': list(set(recs['post_cre_type']))}),
         ('pre_target_layer', {'mode': 'enum'}),
@@ -1319,87 +1440,5 @@ if __name__ == '__main__':
     ch['Max'] = 3e-3
     cm = pg.ColorMap([0, 1], [[0, 0, 255, 255], [0, 0, 0, 255]])
     ch.setValue(cm)
-
-    # attempt a little machine learning. 
-    # this could work if we can generate better features:
-    #     KS measured on latency
-    #     Gaussian fit to deconvolved trace (amp, time, width, nrmse)
-    #         Seed by fitting average first
-    #     KS on fit parameters
-    #     Maybe something better than KS? Mixed gaussian model?
-    #          Histogram values on the above features?  (might need a lot more data for this)
-    from sklearn import svm, preprocessing
-
-    features = recs[[
-        # 'ic_n_samples', 
-        #'amp_mean', 'amp_stdev', 'base_amp_mean', 'base_amp_stdev', 'amp_mean_minus_base', 'amp_stdev_minus_base', 
-        #'deconv_amp_mean', 'deconv_amp_stdev', 'deconv_base_amp_mean', 'deconv_base_amp_stdev', 'deconv_amp_mean_minus_base', 'deconv_amp_stdev_minus_base', 
-        #'amp_ttest',
-        #'deconv_amp_ttest',
-        #'amp_ks2samp', 
-        'ic_deconv_amp_ks2samp',
-        'vc_amp_ks2samp',
-        'ic_latency_ks2samp',
-        'vc_latency_ks2samp',
-        # 'ic_latency_mean', 'ic_latency_stdev', 
-        #'ic_base_latency_mean', 'ic_base_latency_stdev',
-        #'abs_amp_mean', 'abs_base_amp_mean', 'abs_amp_mean_minus_base', 
-        # 'ic_deconv_amp_mean', 'ic_base_deconv_amp_mean', #'abs_deconv_amp_mean_minus_base', 
-        # 'vc_amp_mean',
-        # 'electrode_distance'
-    ]]
-
-    # for k in ['deconv_amp_ks2samp']:
-    #     features[k] = np.log(features[k])
-
-    mask = (recs['ic_n_samples'] > 100) & (recs['ic_crosstalk_mean'] < 60e-6)
-
-    x = np.array([tuple(r) for r in features[mask]])
-    y = recs['synapse'][mask].astype(bool)
-
-    order = np.arange(len(y))
-    np.random.shuffle(order)
-    x = x[order]
-    y = y[order]
-
-    mask = np.all(np.isfinite(x), axis=1) & np.isfinite(y)
-    x = x[mask]
-    y = y[mask]
-
-    x = preprocessing.normalize(x, axis=0)
-
-    # train on equal parts connected and non-connected
-    train_mask = np.zeros(len(y), dtype='bool')
-    syn = np.argwhere(y)
-    n = len(syn) // 4 * 3
-    train_mask[syn[:n]] = True
-    other = np.arange(len(y))[~train_mask]
-    np.random.shuffle(other)
-    train_mask[other[:n]] = True
-
-    train_x = x[train_mask]
-    train_y = y[train_mask]
-    test_x = x[~train_mask]
-    test_y = y[~train_mask]
-    print("Train: %d  test: %d" % (len(train_y), len(test_y)))
-
-    clf = svm.LinearSVC()
-    clf.fit(train_x, train_y)
-
-    def test(clf, test_x, test_y):
-        pred = clf.predict(test_x)
-        def pr(name, pred, test_y):
-            print("%s:  %d/%d  %0.2f%%" % (name, (pred & test_y).sum(), test_y.sum(), 100 * (pred & test_y).sum() / test_y.sum()))
-            
-        pr(" True positive", pred, test_y)
-        pr("False positive", pred, ~test_y)
-        pr(" True negative", ~pred, ~test_y)
-        pr("False negative", ~pred, test_y)
-
-    print("TRAIN:")
-    test(clf, train_x, train_y)
-
-    print("TEST:")
-    test(clf, test_x, test_y)
 
     
