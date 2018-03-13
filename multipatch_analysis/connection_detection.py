@@ -85,10 +85,15 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
                 pulse['rec_start'] = pulse['pulse_ind'] - int(pre_pad / dt)
             pulse['rec_start'] = max(0, pulse['rec_start'])
             
+            # get times of nearby pulses
+            prev_pulse = None if i == 0 else spikes[i-1]['pulse_ind'] + spikes[i-1]['pulse_len']
+            this_pulse = pulse['pulse_ind']
+            next_pulse = None if i+1 >= len(spikes) else spikes[i+1]['pulse_ind']
+
             max_stop = pulse['rec_start'] + int(50e-3 / dt)
-            if i+1 < len(spikes):
+            if next_pulse is not None:
                 # truncate window early if there is another pulse
-                pulse['rec_stop'] = min(max_stop, spikes[i+1]['pulse_ind'])
+                pulse['rec_stop'] = min(max_stop, next_pulse)
             else:
                 # otherwise, stop 50 ms later
                 pulse['rec_stop'] = max_stop
@@ -112,8 +117,12 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
             # Add minimal QC metrics for excitatory and inhibitory measurements
             pulse_window = [pulse['rec_start'], pulse['rec_stop']]
             n_spikes = 0 if spike is None else 1  # eventually should check for multiple spikes
-            pulse['ex_qc_pass'] = qc.pulse_response_qc_pass(sign=1, post_rec=post_rec, window=pulse_window, n_spikes=n_spikes)
-            pulse['in_qc_pass'] = qc.pulse_response_qc_pass(sign=-1, post_rec=post_rec, window=pulse_window, n_spikes=n_spikes)
+            adj_pulse_times = []
+            if prev_pulse is not None:
+                adj_pulse_times.append((prev_pulse - this_pulse) * dt)
+            if next_pulse is not None:
+                adj_pulse_times.append((next_pulse - this_pulse) * dt)
+            pulse['ex_qc_pass'], pulse['in_qc_pass'] = qc.pulse_response_qc_pass(post_rec=post_rec, window=pulse_window, n_spikes=n_spikes, adjacent_pulses=adj_pulse_times)
 
             assert len(pulse['baseline']) > 0
 

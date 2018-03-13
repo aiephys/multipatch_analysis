@@ -425,7 +425,6 @@ class ExperimentDBSubmission(object):
                             pair_entry.n_ex_test_spikes += 1
                         if resp['in_qc_pass']:
                             pair_entry.n_in_test_spikes += 1
-                            
                         resp_entry = db.PulseResponse(
                             recording=rec_entries[post_dev],
                             stim_pulse=all_pulse_entries[pre_dev][resp['pulse_n']],
@@ -451,8 +450,7 @@ class ExperimentDBSubmission(object):
                     start, stop = base
                     data = rec['primary'][start:stop].resample(sample_rate=20000).data
 
-                    ex_qc_pass = qc.pulse_response_qc_pass(+1, rec, [start, stop], None)
-                    in_qc_pass = qc.pulse_response_qc_pass(-1, rec, [start, stop], None)
+                    ex_qc_pass, in_qc_pass = qc.pulse_response_qc_pass(rec, [start, stop], None, [])
 
                     base_entry = db.Baseline(
                         recording=rec_entries[dev],
