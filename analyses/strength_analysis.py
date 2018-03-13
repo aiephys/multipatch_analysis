@@ -24,6 +24,7 @@ from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.data import Trace, TraceList
 from neuroanalysis import filter
 from neuroanalysis.event_detection import exp_deconvolve
+from neuroanalysis.baseline import float_mode
 
 from multipatch_analysis.database import database as db
 from multipatch_analysis import config, synphys_cache
@@ -194,7 +195,7 @@ def measure_peak(trace, sign, spike_time, pulse_times, spike_delay=1e-3, respons
     baseline_start = 0
     baseline_stop = pulse_times[0] - 50e-6
 
-    baseline = trace.time_slice(baseline_start, baseline_stop).data.mean()
+    baseline = float_mode(trace.time_slice(baseline_start, baseline_stop).data)
     response = trace.time_slice(response_start, response_stop)
 
     if sign == '+':
