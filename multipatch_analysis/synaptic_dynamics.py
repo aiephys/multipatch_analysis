@@ -26,7 +26,7 @@ class RawDynamicsAnalyzer(object):
         self.post_pad = 50e-3
         
         # time constant for exponential deconvolution
-        self.exp_tau = 15e-3
+        self.exp_tau = 30e-3
         # cutoff frequency for deconvolved traces
         self.cutoff = 500.
         
