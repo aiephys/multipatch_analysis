@@ -268,6 +268,7 @@ class ExperimentTimeline(QtGui.QWidget):
                 ('internal_dye', elec['internal dye']),
                 ('synapse_to', None),
                 ('gap_to', None),
+                ('notes', ''),
             ])
         return state
 
