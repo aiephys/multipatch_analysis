@@ -165,12 +165,25 @@ def response_filter(response, freq_range=None, holding_range=None, pulse=False, 
     return new_responses
 
 def feature_anova(feature, data):
-    feature_list = [data[group][feature] for group in data.keys()]
-    f, p = stats.f_oneway(feature_list[0], feature_list[1], feature_list[2], feature_list[3])
+    feature_list = [(key, group[feature])for key, group in data.items()]
+    f, p = stats.f_oneway(feature_list[0][1], feature_list[1][1], feature_list[2][1], feature_list[3][1])
     print ('One-way ANOVA: %s' % feature)
     print ('=============')
-
+    for i in feature_list:
+        print ('%s: %.3f +- %.3f' % (i[0], np.mean(i[1])*1e3, stats.sem(i[1])*1e3))
     print ('F value: %.3f' % f)
+    print ('P value: %.5f \n' % p)
+    return feature_list
+
+def feature_kw(feature, data):
+    feature_list = [(key, group[feature]) for key, group in data.items()]
+    h, p = stats.kruskal(feature_list[0][1], feature_list[1][1], feature_list[2][1], feature_list[3][1])
+
+    print ('Kruskal-Wallace: %s' % feature)
+    print ('=============')
+    for i in feature_list:
+        print ('%s: %.3f +- %.3f' % (i[0], np.median(i[1]) * 1e3, np.std(i[1]) * 1e3))
+    print ('H value: %.3f' % h)
     print ('P value: %.5f \n' % p)
     return feature_list
 

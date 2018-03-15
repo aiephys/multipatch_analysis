@@ -136,10 +136,10 @@ mouse_types[('2/3', 'unknown')] = ('L2/3', 'pyr')
 
 mouse_ee_types = OrderedDict([
     (('2/3', 'unknown'), 'L23pyr'),
-    (('4', 'rorb'), 'rorb'),
-    (('5', 'sim1'), 'sim1'),
-    (('5', 'tlx3'), 'tlx3'),
-    (('6', 'ntsr1'), 'ntsr1'),
+    ((None, 'rorb'), 'rorb'),
+    ((None, 'sim1'), 'sim1'),
+    ((None, 'tlx3'), 'tlx3'),
+    ((None, 'ntsr1'), 'ntsr1'),
 ])
 
 mouse_nolayer_types = OrderedDict([

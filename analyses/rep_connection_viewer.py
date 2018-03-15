@@ -2,7 +2,7 @@ import sys
 import argparse
 import pyqtgraph as pg
 import numpy as np
-from multipatch_analysis.experiment_list import ExperimentList
+from multipatch_analysis.experiment_list import cached_experiments
 from neuroanalysis.filter import bessel_filter
 from neuroanalysis.event_detection import exp_deconvolve
 from neuroanalysis.ui.plot_grid import PlotGrid
@@ -26,7 +26,7 @@ holding = [-68, -72]
 sign = '+'
 scale_offset = (-10, -10)
 scale_anchor = (0.45, 1)
-sweep_threshold = 5
+sweep_threshold = 3
 
 parser = argparse.ArgumentParser()
 # plot options
@@ -40,7 +40,7 @@ plot_sweeps = args['sweeps']
 plot_trains = args['trains']
 link_y_axis = args['link-y-axis']
 expt_cache = 'C:/Users/Stephanies/multipatch_analysis/tools/expts_cache.pkl'
-all_expts = ExperimentList(cache=expt_cache)
+all_expts = cached_experiments()
 
 test = PlotGrid()
 test.set_shape(len(connection_types.keys()), 1)
