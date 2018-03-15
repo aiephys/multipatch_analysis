@@ -1198,7 +1198,6 @@ def prs_qc():
 init_tables()
 
 
-
 def predict_connections(recs):
     # attempt a little machine learning. 
     # this could work if we can generate better features:
@@ -1292,8 +1291,9 @@ def predict_connections(recs):
     result = np.empty(len(features), dtype=[('prediction', float), ('confidence', float)])
     result[:] = np.nan
     mask = np.all(np.isfinite(features), axis=1)
-    result['prediction'][mask] = clf.predict(features[mask])
-    result['confidence'][mask] = clf.decision_function(features[mask])
+    norm_features = preprocessing.normalize(features[mask], axis=0)
+    result['prediction'][mask] = clf.predict(norm_features)
+    result['confidence'][mask] = clf.decision_function(norm_features)
     assert np.isfinite(result[mask]['confidence']).sum() > 0
     return result, clf
 
