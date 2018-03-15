@@ -389,6 +389,8 @@ class Experiment(object):
             
             tmp_file = cache_file+'_tmp'
             pickle.dump(cache, open(tmp_file, 'wb'))
+            if os.path.exists(cache_file):
+                os.remove(cache_file)
             os.rename(tmp_file, cache_file)
             
         return cache[cache_key]

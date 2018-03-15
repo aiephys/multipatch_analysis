@@ -1026,6 +1026,7 @@ class ResponseStrengthAnalyzer(object):
         self.plot_prd_ids(self._clicked_bg_ids, 'bg', pen='y', trace_list=self.clicked_bg_traces)
 
     def get_pulse_recs(self, ids, source):
+        ids = list(map(int, ids))
         if source == 'fg':
             q = response_query(self.session)
             q = q.join(PulseResponseStrength)
@@ -1401,15 +1402,7 @@ if __name__ == '__main__':
     def dbl_clicked(index):
         with pg.BusyCursor():
             item = b.itemFromIndex(index)[0]
-            nwb = os.path.join(item.expt.original_path, item.expt.ephys_file)
-            print(nwb)
-            try:
-                cache = synphys_cache.get_cache().get_cache(nwb)
-                print("load cached:", cache)
-                nwb_viewer.load_nwb(cache)
-            except Exception:
-                print("load remote:", nwb)
-                nwb_viewer.load_nwb(nwb)
+            nwb_viewer.load_nwb(item.expt.nwb_cache_file)
             nwb_viewer.show()
         
     b.doubleClicked.connect(dbl_clicked)
