@@ -1173,6 +1173,7 @@ def query_all_pairs(predict=True):
         post_cell.cre_type as post_cre_type,
         post_cell.target_layer as post_target_layer,
         pair.synapse,
+        pair.distance,
         pair.crosstalk_artifact,
         abs(post_cell.ext_id - pre_cell.ext_id) as electrode_distance
     from connection_strength
@@ -1250,25 +1251,25 @@ def predict_connections(recs):
     #     KS on fit parameters
     #     Maybe something better than KS? Mixed gaussian model?
     #          Histogram values on the above features?  (might need a lot more data for this)
-    from sklearn import svm, preprocessing
+    import sklearn.svm, sklearn.preprocessing, sklearn.ensemble
 
     features = recs[[
-        # 'ic_n_samples', 
-        #'amp_mean', 'amp_stdev', 'base_amp_mean', 'base_amp_stdev', 'amp_mean_minus_base', 'amp_stdev_minus_base', 
-        #'deconv_amp_mean', 'deconv_amp_stdev', 'deconv_base_amp_mean', 'deconv_base_amp_stdev', 'deconv_amp_mean_minus_base', 'deconv_amp_stdev_minus_base', 
-        #'amp_ttest',
-        #'deconv_amp_ttest',
-        #'amp_ks2samp', 
+        # 'ic_amp_mean',
+        # 'ic_amp_stdev',
+        'ic_amp_ks2samp',
+        'ic_deconv_amp_mean',
+        # 'ic_deconv_amp_stdev',
         'ic_deconv_amp_ks2samp',
+        'vc_amp_mean',
+        # 'vc_amp_stdev',
         'vc_amp_ks2samp',
+        # 'vc_deconv_amp_mean',
+        # 'vc_deconv_amp_stdev',
+        'vc_deconv_amp_ks2samp',
+        'ic_latency_mean',
+        'vc_latency_stdev',
         'ic_latency_ks2samp',
         'vc_latency_ks2samp',
-        # 'ic_latency_mean', 'ic_latency_stdev', 
-        #'ic_base_latency_mean', 'ic_base_latency_stdev',
-        #'abs_amp_mean', 'abs_base_amp_mean', 'abs_amp_mean_minus_base', 
-        # 'ic_deconv_amp_mean', 'ic_base_deconv_amp_mean', #'abs_deconv_amp_mean_minus_base', 
-        # 'vc_amp_mean',
-        # 'electrode_distance'
     ]]
     features = np.array([tuple(r) for r in features])
     ids = recs['id']
@@ -1295,16 +1296,18 @@ def predict_connections(recs):
 
     mask[mask] = mask2
 
-    x = preprocessing.normalize(x, axis=0)
+    scaler = sklearn.preprocessing.StandardScaler().fit(x)
+    x = scaler.transform(x)
 
-    # train on equal parts connected and non-connected
+    # select training set from connected and non-connected separately
     train_mask = np.zeros(len(y), dtype='bool')
     syn = np.argwhere(y)
     n = len(syn) // 4 * 3
     train_mask[syn[:n]] = True
     other = np.arange(len(y))[~train_mask]
     np.random.shuffle(other)
-    train_mask[other[:n]] = True
+    # train on equal parts connected and non-connected
+    train_mask[other[:n*5]] = True
 
     train_x = x[train_mask]
     train_y = y[train_mask]
@@ -1312,8 +1315,17 @@ def predict_connections(recs):
     test_y = y[~train_mask]
     print("Train: %d  test: %d" % (len(train_y), len(test_y)))
 
-    clf = svm.LinearSVC()
+    #clf = sklearn.svm.LinearSVC()
+    clf = sklearn.svm.SVC(C=1, class_weight='balanced', coef0=0.0,
+    decision_function_shape='ovr', degree=3, gamma='auto', kernel='rbf',
+    max_iter=-1, probability=True, random_state=None)
+    # clf = sklearn.ensemble.RandomForestClassifier()
+
+    hyper_params = [{'C': [1, 10, 100, 1000], 'gamma': [0.1, 0.01, 0.001, 0.0001]}]
+    clf = sklearn.model_selection.GridSearchCV(clf, hyper_params)
+
     clf.fit(train_x, train_y)
+    print("Classifier best hyperparameters:", clf.best_params_)
 
     def test(clf, test_x, test_y):
         pred = clf.predict(test_x)
@@ -1334,9 +1346,11 @@ def predict_connections(recs):
     result = np.empty(len(features), dtype=[('prediction', float), ('confidence', float)])
     result[:] = np.nan
     mask = np.all(np.isfinite(features), axis=1)
-    norm_features = preprocessing.normalize(features[mask], axis=0)
+    norm_features = scaler.transform(features[mask])
     result['prediction'][mask] = clf.predict(norm_features)
-    result['confidence'][mask] = clf.decision_function(norm_features)
+    # result['confidence'][mask] = clf.decision_function(norm_features)
+    result['confidence'][mask] = clf.predict_proba(norm_features)[:,1]
+    # result['confidence'][mask] = clf.predict_proba(norm_features)[:,1]
     assert np.isfinite(result[mask]['confidence']).sum() > 0
     return result, clf
 
