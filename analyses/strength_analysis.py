@@ -433,100 +433,134 @@ def rebuild_connectivity(session):
     expts_in_db = list_experiments(session=session)
     for i,expt in enumerate(expts_in_db):
         for pair in expt.pairs:
-            fields = {}  # used to fill the new DB record
             
-            # Use KS p value to check for differences between foreground and background
-            
+            # Query all pulse amplitude records for each clamp mode
             amps = {}
-            qc_amps = {}
-            ks_pvals = {}
-            amp_means = {}
-            amp_diffs = {}
             for clamp_mode in ('ic', 'vc'):
-                # Query all pulse amplitude records for this clamp mode
                 clamp_mode_fg = get_amps(session, pair, clamp_mode=clamp_mode)
                 clamp_mode_bg = get_baseline_amps(session, pair, limit=len(clamp_mode_fg), clamp_mode=clamp_mode)
                 amps[clamp_mode, 'fg'] = clamp_mode_fg
                 amps[clamp_mode, 'bg'] = clamp_mode_bg
-                if (len(clamp_mode_fg) == 0 or len(clamp_mode_bg) == 0):
-                    continue
-                
-                for sign in ('pos', 'neg'):
-                    # Separate into positive/negative tests and filter out responses that failed qc
-                    qc_field = {'vc': {'pos': 'in_qc_pass', 'neg': 'ex_qc_pass'}, 'ic': {'pos': 'ex_qc_pass', 'neg': 'in_qc_pass'}}[clamp_mode][sign]
-                    fg = clamp_mode_fg[clamp_mode_fg[qc_field]]
-                    bg = clamp_mode_bg[clamp_mode_bg[qc_field]]
-                    qc_amps[sign, clamp_mode, 'fg'] = fg
-                    qc_amps[sign, clamp_mode, 'bg'] = bg
-                    if (len(fg) == 0 or len(bg) == 0):
-                        continue
-                    
-                    # Measure some statistics from these records
-                    fg = fg[sign + '_dec_amp']
-                    bg = bg[sign + '_dec_amp']
-                    pval = scipy.stats.ks_2samp(fg, bg).pvalue
-                    ks_pvals[(sign, clamp_mode)] = pval
-                    # we could ensure that the average amplitude is in the right direction:
-                    fg_mean = np.mean(fg)
-                    bg_mean = np.mean(bg)
-                    amp_means[sign, clamp_mode] = {'fg': fg_mean, 'bg': bg_mean}
-                    amp_diffs[sign, clamp_mode] = fg_mean - bg_mean
-
-            # Decide whether to treat this connection as excitatory or inhibitory.
-            #   strategy: accumulate evidence for either possibility by checking
-            #   the ks p-values for each sign/clamp mode and the direction of the deflection
-            is_exc = 0
-            # print(expt.acq_timestamp, pair.pre_cell.ext_id, pair.post_cell.ext_id)
-            for sign in ('pos', 'neg'):
-                for mode in ('ic', 'vc'):
-                    ks = ks_pvals.get((sign, mode), None)
-                    if ks is None:
-                        continue
-                    # turn p value into a reasonable scale factor
-                    ks = np.log(1-np.log(ks))
-                    dif_sign = 1 if amp_diffs[sign, mode] > 0 else -1
-                    if mode == 'vc':
-                        dif_sign *= -1
-                    is_exc += dif_sign * ks
-                    # print("    ", sign, mode, is_exc, dif_sign * ks)
-
-            if is_exc > 0:
-                fields['synapse_type'] = 'ex'
-                sign = 'pos'
-            else:
-                fields['synapse_type'] = 'in'
-                sign = 'neg'
-
-            # compute the rest of statistics for only positive or negative deflections
-            for clamp_mode in ('ic', 'vc'):
-                fg = qc_amps.get((sign, clamp_mode, 'fg'))
-                bg = qc_amps.get((sign, clamp_mode, 'bg'))
-                if fg is None or bg is None or len(fg) == 0 or len(bg) == 0:
-                    fields[clamp_mode + '_n_samples'] = 0
-                    continue
-                
-                fields[clamp_mode + '_n_samples'] = len(fg)
-                fields[clamp_mode + '_crosstalk_mean'] = np.mean(fg['crosstalk'])
-                fields[clamp_mode + '_base_crosstalk_mean'] = np.mean(bg['crosstalk'])
-                
-                # measure mean, stdev, and statistical differences between
-                # fg and bg for each measurement
-                for val, field in [('amp', 'amp'), ('deconv_amp', 'dec_amp'), ('latency', 'dec_latency')]:
-                    f = fg[sign + '_' + field]
-                    b = bg[sign + '_' + field]
-                    fields[clamp_mode + '_' + val + '_mean'] = np.mean(f)
-                    fields[clamp_mode + '_' + val + '_stdev'] = np.std(f)
-                    fields[clamp_mode + '_base_' + val + '_mean'] = np.mean(b)
-                    fields[clamp_mode + '_base_' + val + '_stdev'] = np.std(b)
-                    fields[clamp_mode + '_' + val + '_ttest'] = scipy.stats.ttest_ind(f, b, equal_var=False).pvalue
-                    fields[clamp_mode + '_' + val + '_ks2samp'] = scipy.stats.ks_2samp(f, b).pvalue
-
-            conn = ConnectionStrength(pair_id=pair.id, **fields)
+            
+            # Generate summary results for this pair
+            results = analyze_pair_connectivity(amps)
+            
+            # Write new record to DB
+            conn = ConnectionStrength(pair_id=pair.id, **results)
             session.add(conn)
         
         session.commit()
         sys.stdout.write("%d / %d       \r" % (i, len(expts_in_db)))
         sys.stdout.flush()
+
+
+def analyze_pair_connectivity(amps):
+    """Given response strength records for a single pair, generate summary
+    statistics characterizing strength, latency, and connectivity.
+    
+    Input must have the following structure::
+    
+        amps = {
+            'ic': {'fg': recs, 'bg': recs},
+            'vc': {'fg': recs, 'bg': recs},
+        }
+        
+    Where each *recs* must be a structured array containing fields as returned
+    by get_amps() and get_baseline_amps().
+    
+    The overall strategy here is:
+    
+    1. Make an initial decision on whether to treat this pair as excitatory or
+       inhibitory, based on differences between foreground and background amplitude
+       measurements
+    2. Generate mean and stdev for amplitudes, deconvolved amplitudes, and deconvolved
+       latencies
+    3. Generate KS test p values describing the differences between foreground
+       and background distributions for amplitude, deconvolved amplitude, and
+       deconvolved latency    
+    """
+    
+    fields = {}  # used to fill the new DB record
+    
+    # Use KS p value to check for differences between foreground and background
+    qc_amps = {}
+    ks_pvals = {}
+    amp_means = {}
+    amp_diffs = {}
+    for clamp_mode in ('ic', 'vc'):
+        if (len(clamp_mode_fg) == 0 or len(clamp_mode_bg) == 0):
+            continue
+        for sign in ('pos', 'neg'):
+            # Separate into positive/negative tests and filter out responses that failed qc
+            qc_field = {'vc': {'pos': 'in_qc_pass', 'neg': 'ex_qc_pass'}, 'ic': {'pos': 'ex_qc_pass', 'neg': 'in_qc_pass'}}[clamp_mode][sign]
+            fg = clamp_mode_fg[clamp_mode_fg[qc_field]]
+            bg = clamp_mode_bg[clamp_mode_bg[qc_field]]
+            qc_amps[sign, clamp_mode, 'fg'] = fg
+            qc_amps[sign, clamp_mode, 'bg'] = bg
+            if (len(fg) == 0 or len(bg) == 0):
+                continue
+            
+            # Measure some statistics from these records
+            fg = fg[sign + '_dec_amp']
+            bg = bg[sign + '_dec_amp']
+            pval = scipy.stats.ks_2samp(fg, bg).pvalue
+            ks_pvals[(sign, clamp_mode)] = pval
+            # we could ensure that the average amplitude is in the right direction:
+            fg_mean = np.mean(fg)
+            bg_mean = np.mean(bg)
+            amp_means[sign, clamp_mode] = {'fg': fg_mean, 'bg': bg_mean}
+            amp_diffs[sign, clamp_mode] = fg_mean - bg_mean
+
+    # Decide whether to treat this connection as excitatory or inhibitory.
+    #   strategy: accumulate evidence for either possibility by checking
+    #   the ks p-values for each sign/clamp mode and the direction of the deflection
+    is_exc = 0
+    # print(expt.acq_timestamp, pair.pre_cell.ext_id, pair.post_cell.ext_id)
+    for sign in ('pos', 'neg'):
+        for mode in ('ic', 'vc'):
+            ks = ks_pvals.get((sign, mode), None)
+            if ks is None:
+                continue
+            # turn p value into a reasonable scale factor
+            ks = np.log(1-np.log(ks))
+            dif_sign = 1 if amp_diffs[sign, mode] > 0 else -1
+            if mode == 'vc':
+                dif_sign *= -1
+            is_exc += dif_sign * ks
+            # print("    ", sign, mode, is_exc, dif_sign * ks)
+
+    if is_exc > 0:
+        fields['synapse_type'] = 'ex'
+        sign = 'pos'
+    else:
+        fields['synapse_type'] = 'in'
+        sign = 'neg'
+
+    # compute the rest of statistics for only positive or negative deflections
+    for clamp_mode in ('ic', 'vc'):
+        fg = qc_amps.get((sign, clamp_mode, 'fg'))
+        bg = qc_amps.get((sign, clamp_mode, 'bg'))
+        if fg is None or bg is None or len(fg) == 0 or len(bg) == 0:
+            fields[clamp_mode + '_n_samples'] = 0
+            continue
+        
+        fields[clamp_mode + '_n_samples'] = len(fg)
+        fields[clamp_mode + '_crosstalk_mean'] = np.mean(fg['crosstalk'])
+        fields[clamp_mode + '_base_crosstalk_mean'] = np.mean(bg['crosstalk'])
+        
+        # measure mean, stdev, and statistical differences between
+        # fg and bg for each measurement
+        for val, field in [('amp', 'amp'), ('deconv_amp', 'dec_amp'), ('latency', 'dec_latency')]:
+            f = fg[sign + '_' + field]
+            b = bg[sign + '_' + field]
+            fields[clamp_mode + '_' + val + '_mean'] = np.mean(f)
+            fields[clamp_mode + '_' + val + '_stdev'] = np.std(f)
+            fields[clamp_mode + '_base_' + val + '_mean'] = np.mean(b)
+            fields[clamp_mode + '_base_' + val + '_stdev'] = np.std(b)
+            fields[clamp_mode + '_' + val + '_ttest'] = scipy.stats.ttest_ind(f, b, equal_var=False).pvalue
+            fields[clamp_mode + '_' + val + '_ks2samp'] = scipy.stats.ks_2samp(f, b).pvalue
+
+    return fields
 
 
 @db.default_session
@@ -1112,7 +1146,7 @@ class ResponseStrengthAnalyzer(object):
             trace_list.append(spike_scatter)
 
 
-def query_all_pairs():
+def query_all_pairs(predict=True):
     query = ("""
     select """
         # ((DATE_PART('day', experiment.acq_timestamp - '1970-01-01'::timestamp) * 24 + 
@@ -1125,9 +1159,12 @@ def query_all_pairs():
         experiment.acq_timestamp as acq_timestamp,
         experiment.rig_name,
         experiment.acsf,
-        slice.species,
-        slice.genotype,
-        slice.age,
+        slice.species as donor_species,
+        slice.genotype as dononr_genotype,
+        slice.age as donor_age,
+        slice.sex as donor_sex,
+        slice.quality as slice_quality,
+        slice.weight as donor_weight,
         slice.slice_time,
         pre_cell.ext_id as pre_cell_id,
         pre_cell.cre_type as pre_cre_type,
@@ -1159,6 +1196,12 @@ def query_all_pairs():
     for f in recs.dtype.names:
         if 'ttest' in f or 'ks2samp' in f:
             recs[f] = np.log(1-np.log(recs[f]))
+
+    # Add results of classifier prediction in to records
+    if predict is True:
+        prediction, clf = predict_connections(recs)
+        recs = join_struct_arrays([recs, prediction])
+
     return recs
 
 
@@ -1410,10 +1453,6 @@ if __name__ == '__main__':
     # Load records on all pairs
     recs = query_all_pairs()
 
-    # Add results of machine learning prediction in to records
-    prediction, clf = predict_connections(recs)
-    recs = join_struct_arrays([recs, prediction])
-
     # Load all records into scatter plot widget
     spw = pg.ScatterPlotWidget()
     spw.style['symbolPen'] = None
@@ -1437,6 +1476,7 @@ if __name__ == '__main__':
         ('acq_timestamp', {}),
         ('crosstalk_artifact', {'units': 'V'}),
         ('electrode_distance', {}),
+        ('slice_quality', {'mode': 'enum', 'values': list(range(1,6))}),
     ]
     fnames = [f[0] for f in fields]
     for f in recs.dtype.names:
@@ -1448,6 +1488,7 @@ if __name__ == '__main__':
             fields.append((f, {'units': 's'}))
         else:
             fields.append((f, {}))
+            
     spw.setFields(fields)
     spw.setData(recs)
 
