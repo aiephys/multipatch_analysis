@@ -118,7 +118,7 @@ def fail_rate(response_list, sign, peak_t):
         bsub_mean = bsub(response)
         dt = bsub_mean.dt
         if sign == '+':
-            amp = bsub_mean.data[int(13e-3/dt): int((peak_t + 3e-3)/dt)].max()
+            amp = bsub_mean.data[int(13e-3/dt):].max()
         else:
             amp = bsub_mean.data[int(13e-3 / dt): int((peak_t + 3e-3) / dt)].max()
         amps.append(amp)
@@ -142,6 +142,7 @@ def bsub(trace):
 def response_filter(response, freq_range=None, holding_range=None, pulse=False, train=None, delta_t=None):
     #plot = pg.plot()
     new_responses = []
+    holding_pass = []
     for stim_params, trials in response.items():
         ind_freq, rec_t, holding = stim_params
         holding = holding * 1e3
@@ -155,14 +156,17 @@ def response_filter(response, freq_range=None, holding_range=None, pulse=False, 
         if pulse is True:
             for trial in trials:
                 new_responses.append(trial[0]['response'])
+            holding_pass.append(holding)
         elif train is not None:
             for trial in trials[train].responses:
                 new_responses.append(trial)
         else:
             new_responses.append(trials)
+
         # plot.plot(response[trial].time_values, response[trial].data)
         # app.processEvents()
-    return new_responses
+    avg_holding = np.mean(holding_pass)
+    return new_responses, avg_holding
 
 def feature_anova(feature, data):
     feature_list = [(key, group[feature])for key, group in data.items()]
@@ -240,12 +244,12 @@ def induction_summary(train_response, freqs, holding, thresh=5, ind_dict=None, o
         offset_dict = {}
     for f, freq in enumerate(freqs):
         induction_traces = {}
-        induction_traces['responses'] = response_filter(train_response['responses'], freq_range=[freq, freq],
+        induction_traces['responses'], _ = response_filter(train_response['responses'], freq_range=[freq, freq],
                                                         holding_range=holding, train=0)
-        induction_traces['pulse_offsets'] = response_filter(train_response['pulse_offsets'], freq_range=[freq, freq])
-        ind_rec_traces = response_filter(train_response['responses'], freq_range=[freq, freq], holding_range=holding,
+        induction_traces['pulse_offsets'], _ = response_filter(train_response['pulse_offsets'], freq_range=[freq, freq])
+        ind_rec_traces, _ = response_filter(train_response['responses'], freq_range=[freq, freq], holding_range=holding,
                                          train=1, delta_t=250)
-        if len(induction_traces['responses']) >= thresh:
+        if len(induction_traces['responses']) >= thresh and len(ind_rec_traces) >= thresh:
             induction_avg = trace_avg(induction_traces['responses'])
             ind_rec_avg = trace_avg(ind_rec_traces)
             ind_rec_avg.t0 = induction_avg.time_values[-1] + 0.1
@@ -262,14 +266,14 @@ def recovery_summary(train_response, rec_t, holding, thresh=5, rec_dict=None, of
     if rec_dict is None:
         rec_dict = {}
         offset_dict = {}
-    rec_ind_traces = response_filter(train_response['responses'], freq_range=[50, 50], holding_range=holding, train=0)
+    rec_ind_traces, _ = response_filter(train_response['responses'], freq_range=[50, 50], holding_range=holding, train=0)
     for t, delta in enumerate(rec_t):
         recovery_traces = {}
-        recovery_traces['responses'] = response_filter(train_response['responses'], freq_range=[50, 50],
+        recovery_traces['responses'], _ = response_filter(train_response['responses'], freq_range=[50, 50],
                                                        holding_range=holding, train=1, delta_t=delta)
-        #rec_ind_traces = response_filter(train_response['responses'], freq_range=[50, 50],
+        #rec_ind_traces, _ = response_filter(train_response['responses'], freq_range=[50, 50],
         #                                               holding_range=holding, train=0, delta_t=delta)
-        recovery_traces['pulse_offsets'] = response_filter(train_response['pulse_offsets'], freq_range=[50, 50],
+        recovery_traces['pulse_offsets'], _ = response_filter(train_response['pulse_offsets'], freq_range=[50, 50],
                                                            delta_t=delta)
         if len(recovery_traces['responses']) >= thresh:
             recovery_avg = trace_avg(recovery_traces['responses'])
