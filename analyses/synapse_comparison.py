@@ -129,11 +129,12 @@ def first_pulse_plot(expt_list, name=None, summary_plot=None, color=None, scatte
         print(name + ' n = %d' % len(amp_base_subtract))
         grand_mean = TraceList(amp_base_subtract).mean()
         grand_amp = np.mean(np.array(avg_amps['amp']))
+        grand_amp_sem = stats.sem(np.array(avg_amps['amp']))
         amp_plots.addLegend()
         amp_plots.plot(grand_mean.time_values, grand_mean.data, pen={'color': 'g', 'width': 3}, name=name)
         amp_plots.addLine(y=grand_amp, pen={'color': 'g'})
         if grand_mean is not None:
-            print(legend + ' Grand mean amplitude = %f' % grand_amp)
+            print(legend + ' Grand mean amplitude = %f +- %f' % (grand_amp, grand_amp_sem))
             if features is True:
                 feature_list = (avg_amps['amp'], avg_amps['latency'], avg_amps['rise'])
                 labels = (['Vm', 'V'], ['t', 's'], ['t', 's'])
@@ -142,7 +143,7 @@ def first_pulse_plot(expt_list, name=None, summary_plot=None, color=None, scatte
                 feature_list = [avg_amps['amp']]
                 labels = (['Vm', 'V'])
                 titles = 'Amplitude'
-            summary_plots = summary_plot_pulse(feature_list, labels=labels, titles=titles, i=scatter,
+            summary_plots = summary_plot_pulse(feature_list[0], labels=labels, titles=titles, i=scatter,
                                                grand_trace=grand_mean, plot=summary_plot, color=color, name=legend)
             return avg_amps, summary_plots
     else:
@@ -217,7 +218,7 @@ def summary_plot_train(ind_grand_mean, plot=None, color=None, name=None):
     plot.plot(ind_grand_mean.time_values, ind_grand_mean.data, pen=color, name=name)
     return plot
 
-def summary_plot_pulse(feature_list, labels, titles, i, grand_trace=None, plot=None, color=None, name=None):
+def summary_plot_pulse(feature_list, labels, titles, i, median=False, grand_trace=None, plot=None, color=None, name=None):
     if type(feature_list) is tuple:
         n_features = len(feature_list)
     else:
@@ -232,7 +233,10 @@ def summary_plot_pulse(feature_list, labels, titles, i, grand_trace=None, plot=N
     for feature in range(n_features):
         if n_features > 1:
             current_feature = feature_list[feature]
-            mean = np.mean(current_feature)
+            if median is True:
+                mean = np.median(current_feature)
+            else:
+                mean = np.mean(current_feature)
             label = labels[feature]
             title = titles[feature]
         else:
@@ -246,13 +250,13 @@ def summary_plot_pulse(feature_list, labels, titles, i, grand_trace=None, plot=N
         if grand_trace is not None:
             plot[feature, 1].plot(grand_trace.time_values, grand_trace.data, pen=color, name=name)
         if len(current_feature) > 1:
-            dx = pg.pseudoScatter(np.array(current_feature).astype(float), 0.3, bidir=True)
+            dx = pg.pseudoScatter(np.array(current_feature).astype(float), 0.7, bidir=True)
             #bar = pg.BarGraphItem(x=[i], height=mean, width=0.7, brush='w', pen={'color': color, 'width': 2})
             #plot[feature, 0].addItem(bar)
             plot[feature, 0].plot([i], [mean], symbol='o', symbolSize=20, symbolPen='k', symbolBrush=color)
             sem = stats.sem(current_feature)
-            err = pg.ErrorBarItem(x=np.asarray([i]), y=np.asarray([mean]), height=sem, beam=0.1)
-            plot[feature, 0].addItem(err)
+            #err = pg.ErrorBarItem(x=np.asarray([i]), y=np.asarray([mean]), height=sem, beam=0.1)
+            #plot[feature, 0].addItem(err)
             plot[feature, 0].plot((0.3 * dx / dx.max()) + i, current_feature, pen=None, symbol='o', symbolSize=10, symbolPen='w',
                                 symbolBrush=(color[0], color[1], color[2], 100))
         else:
@@ -261,8 +265,8 @@ def summary_plot_pulse(feature_list, labels, titles, i, grand_trace=None, plot=N
 
     return plot
 
-def get_expts(all_expts, cre_type, calcium=None, age=None, start=None, dist_plot=None, color=None):
-    expts = all_expts.select(cre_type=cre_type, calcium=calcium, age=age, start=start)
+def get_expts(all_expts, cre_type, calcium=None, age=None, start=None, stop=None, dist_plot=None, color=None):
+    expts = all_expts.select(cre_type=cre_type, calcium=calcium, age=age, start=start, stop=stop)
     if calcium is not None:
         if calcium == 'high':
             mM = '2.0 mM'
@@ -289,6 +293,7 @@ if __name__ == '__main__':
     parser.add_argument('--recip', action='store_true', default=False, dest='recip',
                         help='Traces from reciprocal connections are red instead of gray')
     parser.add_argument('--start', type=arg_to_date)
+    parser.add_argument('--stop', type=arg_to_date)
     parser.add_argument('--trains', action='store_true', default=False, dest='trains',
                         help='optional to analyze 50Hz trains')
 
@@ -303,35 +308,35 @@ if __name__ == '__main__':
     result_cache_file = 'synapse_comparison_cache.pkl'
     if args.cre_type is not None:
         cre_types = args.cre_type.split(',')
-        color = [(0, 10), (5, 10)]
+        color = [(255, 0, 0), (0, 0, 255)]
         if args.calcium is True and len(cre_types) == 1:
             cre_type = args.cre_type.split('-')
             expts, legend, dist_plots = get_expts(all_expts, cre_type, calcium='high', age=args.age, start=args.start,
-                                                  dist_plot=None, color=color[0])
+                                                  stop=args.stop, dist_plot=None, color=color[0])
             avg_est_high, summary_plots = first_pulse_plot(expts, name=legend, summary_plot=None, color=color[0], scatter=0)
             if args.trains is True:
                 summary_train, summary_dec = train_response_plot(expts, name=(legend + ' 50 Hz induction'), summary_plots=[None,None],
                                                                  color=color[0])
             expts, legend, dist_plots = get_expts(all_expts, cre_type, calcium='low', age=args.age, start=args.start,
-                                                    dist_plot=dist_plots, color=color[1])
+                                                    stop=args.stop, dist_plot=dist_plots, color=color[1])
             avg_est_low, summary_plots = first_pulse_plot(expts, name=legend, summary_plot=summary_plots, color=color[1], scatter=1)
             if args.trains is True:
                 summary_train, summary_dec = train_response_plot(expts, name=(legend + ' 50 Hz induction'),
                                                                  summary_plots=[summary_train,summary_dec], color=color[1])
-            ks = stats.ks_2samp(avg_est_high, avg_est_low)
+            ks = stats.ks_2samp(avg_est_high['amp'], avg_est_low['amp'])
             print('p = %f (KS test)' % ks.pvalue)
         elif args.age is not None and len(args.age.split(',')) >= 2 and len(cre_types) == 1:
             cre_type = args.cre_type.split('-')
             ages = args.age.split(',')
             expts, legend, dist_plots = get_expts(all_expts, cre_type, calcium='high', age=ages[0], start=args.start,
-                                                  dist_plot=None, color=color[0])
+                                                  stop=args.stop, dist_plot=None, color=color[0])
             avg_est_age1, summary_plots = first_pulse_plot(expts, name=legend, summary_plot=None, color=color[0], scatter=0,
                                                            features=True)
             if args.trains is True:
                 summary_train, summary_dec = train_response_plot(expts, name=(legend + ' 50 Hz induction'), summary_plots=[None,None],
                                                                  color=color[0])
             expts, legend, dist_plots = get_expts(all_expts, cre_type, calcium='high', age=ages[1], start=args.start,
-                                                  dist_plot=None, color=color[0])
+                                                  stop=args.stop, dist_plot=None, color=color[0])
             avg_est_age2, summary_plots = first_pulse_plot(expts, name=legend, summary_plot=summary_plots, color=color[1],
                                                            scatter=1, features=True)
             if args.trains is True:
@@ -355,7 +360,7 @@ if __name__ == '__main__':
             for i, type in enumerate(cre_types):
                 cre_type = type.split('-')
                 expts, legend, dist_plots = get_expts(all_expts, cre_type, calcium='high', age=args.age, start=args.start,
-                                                      dist_plot=dist_plots, color=(i, len(cre_types)*1.3))
+                                                      stop=args.stop, dist_plot=dist_plots, color=(i, len(cre_types)*1.3))
                 reciprocal_summary = expts.reciprocal(cre_type[0], cre_type[1])
                 avg_est, summary_plot = first_pulse_plot(expts, name=legend, summary_plot=summary_plot, color=(i, len(cre_types)*1.3),
                                                          scatter=i)
