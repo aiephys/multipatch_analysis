@@ -623,7 +623,7 @@ class ExperimentBrowser(pg.TreeWidget):
                 pair_item.expt = expt
                 self.items_by_pair_id[pair.id] = pair_item
                 
-    def select(self, pair_id):
+    def select_pair(self, pair_id):
         """Select a specific pair from the list
         """
         if self._last_expanded is not None:
@@ -1374,6 +1374,82 @@ def join_struct_arrays(arrays):
     return arr
 
 
+class PairScatterPlot(pg.QtCore.QObject):
+    """Create a ScatterPlotWidget that displays results selected with query_all_pairs()
+    """
+
+    pair_clicked = pg.QtCore.Signal(object)
+
+    def __init__(self, recs):
+        pg.QtCore.QObject.__init__(self)
+        
+        # Load all records into scatter plot widget
+        spw = pg.ScatterPlotWidget()
+        spw.style['symbolPen'] = None
+        
+        spw.resize(1000, 800)
+        spw.show()
+
+        fields = [
+            ('synapse', {'mode': 'enum', 'values': [True, False, None]}),
+            ('synapse_type', {'mode': 'enum', 'values': ['in', 'ex']}),
+            ('prediction', {'mode': 'enum', 'values': [True, False, None]}),
+            ('confidence', {}),
+            ('pre_cre_type', {'mode': 'enum', 'values': list(set(recs['pre_cre_type']))}),
+            ('post_cre_type', {'mode': 'enum', 'values': list(set(recs['post_cre_type']))}),
+            ('pre_target_layer', {'mode': 'enum'}),
+            ('post_target_layer', {'mode': 'enum'}),
+            ('ic_n_samples', {}),
+            ('vc_n_samples', {}),
+            ('rig_name', {'mode': 'enum', 'values': list(set(recs['rig_name']))}),
+            ('acsf', {'mode': 'enum', 'values': list(set(recs['acsf']))}),
+            ('acq_timestamp', {}),
+            ('crosstalk_artifact', {'units': 'V'}),
+            ('electrode_distance', {}),
+            ('slice_quality', {'mode': 'enum', 'values': list(range(1,6))}),
+        ]
+        fnames = [f[0] for f in fields]
+        for f in recs.dtype.names:
+            if f in fnames:
+                continue
+            if 'amp' in f:
+                fields.append((f, {'units': 'V'}))
+            elif 'latency' in f:
+                fields.append((f, {'units': 's'}))
+            else:
+                fields.append((f, {}))
+                
+        spw.setFields(fields)
+        spw.setData(recs)
+
+        def conn_clicked(spw, points):
+            spw.setSelectedPoints([points[0]])
+            d = points[0].data()
+            self.pair_clicked.emit(d['pair_id'])
+
+        spw.sigScatterPlotClicked.connect(conn_clicked)
+
+        # Set up scatter plot widget defaults
+        spw.setSelectedFields('ic_base_deconv_amp_mean', 'ic_deconv_amp_mean')
+        spw.filter.addNew('synapse')
+        ch = spw.filter.addNew('ic_crosstalk_mean')
+        ch['Min'] = -1
+        ch['Max'] = 60e-6
+        ch = spw.filter.addNew('rig_name')
+        ch = spw.colorMap.addNew('synapse')
+        ch['Values', 'True'] = pg.mkColor('y')
+        ch['Values', 'False'] = pg.mkColor(200, 200, 200, 150)
+        ch['Values', 'None'] = pg.mkColor(200, 100, 100)
+        ch = spw.colorMap.addNew('ic_latency_mean')
+        ch['Operation'] = 'Add'
+        ch['Max'] = 3e-3
+        cm = pg.ColorMap([0, 1], [[0, 0, 255, 255], [0, 0, 0, 255]])
+        ch.setValue(cm)
+
+        self.spw = spw
+
+        
+
 if __name__ == '__main__':
     #tt = pg.debug.ThreadTrace()
     parser = argparse.ArgumentParser()
@@ -1467,67 +1543,6 @@ if __name__ == '__main__':
     # Load records on all pairs
     recs = query_all_pairs()
 
-    # Load all records into scatter plot widget
-    spw = pg.ScatterPlotWidget()
-    spw.style['symbolPen'] = None
-    
-    spw.resize(1000, 800)
-    spw.show()
+    spw = PairScatterPlot(recs)
+    spw.pair_clicked.connect(b.select_pair)
 
-    fields = [
-        ('synapse', {'mode': 'enum', 'values': [True, False, None]}),
-        ('synapse_type', {'mode': 'enum', 'values': ['in', 'ex']}),
-        ('prediction', {'mode': 'enum', 'values': [True, False, None]}),
-        ('confidence', {}),
-        ('pre_cre_type', {'mode': 'enum', 'values': list(set(recs['pre_cre_type']))}),
-        ('post_cre_type', {'mode': 'enum', 'values': list(set(recs['post_cre_type']))}),
-        ('pre_target_layer', {'mode': 'enum'}),
-        ('post_target_layer', {'mode': 'enum'}),
-        ('ic_n_samples', {}),
-        ('vc_n_samples', {}),
-        ('rig_name', {'mode': 'enum', 'values': list(set(recs['rig_name']))}),
-        ('acsf', {'mode': 'enum', 'values': list(set(recs['acsf']))}),
-        ('acq_timestamp', {}),
-        ('crosstalk_artifact', {'units': 'V'}),
-        ('electrode_distance', {}),
-        ('slice_quality', {'mode': 'enum', 'values': list(range(1,6))}),
-    ]
-    fnames = [f[0] for f in fields]
-    for f in recs.dtype.names:
-        if f in fnames:
-            continue
-        if 'amp' in f:
-            fields.append((f, {'units': 'V'}))
-        elif 'latency' in f:
-            fields.append((f, {'units': 's'}))
-        else:
-            fields.append((f, {}))
-            
-    spw.setFields(fields)
-    spw.setData(recs)
-
-    def conn_clicked(spw, points):
-        spw.setSelectedPoints([points[0]])
-        d = points[0].data()
-        b.select(pair_id=d['pair_id'])
-
-    spw.sigScatterPlotClicked.connect(conn_clicked)
-
-    # Set up scatter plot widget defaults
-    spw.setSelectedFields('ic_base_deconv_amp_mean', 'ic_deconv_amp_mean')
-    spw.filter.addNew('synapse')
-    ch = spw.filter.addNew('ic_crosstalk_mean')
-    ch['Min'] = -1
-    ch['Max'] = 60e-6
-    ch = spw.filter.addNew('rig_name')
-    ch = spw.colorMap.addNew('synapse')
-    ch['Values', 'True'] = pg.mkColor('y')
-    ch['Values', 'False'] = pg.mkColor(200, 200, 200, 150)
-    ch['Values', 'None'] = pg.mkColor(200, 100, 100)
-    ch = spw.colorMap.addNew('ic_latency_mean')
-    ch['Operation'] = 'Add'
-    ch['Max'] = 3e-3
-    cm = pg.ColorMap([0, 1], [[0, 0, 255, 255], [0, 0, 0, 255]])
-    ch.setValue(cm)
-
-    
