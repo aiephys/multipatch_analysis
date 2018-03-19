@@ -489,6 +489,8 @@ def analyze_pair_connectivity(amps):
     amp_means = {}
     amp_diffs = {}
     for clamp_mode in ('ic', 'vc'):
+        clamp_mode_fg = amps[clamp_mode, 'fg']
+        clamp_mode_bg = amps[clamp_mode, 'bg']
         if (len(clamp_mode_fg) == 0 or len(clamp_mode_bg) == 0):
             continue
         for sign in ('pos', 'neg'):
@@ -532,13 +534,14 @@ def analyze_pair_connectivity(amps):
 
     if is_exc > 0:
         fields['synapse_type'] = 'ex'
-        sign = 'pos'
+        signs = {'ic':'pos', 'vc':'neg'}
     else:
         fields['synapse_type'] = 'in'
-        sign = 'neg'
+        signs = {'ic':'neg', 'vc':'pos'}
 
     # compute the rest of statistics for only positive or negative deflections
     for clamp_mode in ('ic', 'vc'):
+        sign = signs[clamp_mode]
         fg = qc_amps.get((sign, clamp_mode, 'fg'))
         bg = qc_amps.get((sign, clamp_mode, 'bg'))
         if fg is None or bg is None or len(fg) == 0 or len(bg) == 0:
@@ -1149,12 +1152,7 @@ class ResponseStrengthAnalyzer(object):
 
 def query_all_pairs(predict=True):
     query = ("""
-    select """
-        # ((DATE_PART('day', experiment.acq_timestamp - '1970-01-01'::timestamp) * 24 + 
-        # DATE_PART('hour', experiment.acq_timestamp - '1970-01-01'::timestamp)) * 60 +
-        # DATE_PART('minute', experiment.acq_timestamp - '1970-01-01'::timestamp)) * 60 +
-        # DATE_PART('second', experiment.acq_timestamp - '1970-01-01'::timestamp) as acq_timestamp,
-        """
+    select 
         connection_strength.*,
         experiment.id as experiment_id,
         experiment.acq_timestamp as acq_timestamp,
@@ -1188,9 +1186,6 @@ def query_all_pairs(predict=True):
     session = db.Session()
     df = pandas.read_sql(query, session.bind)
 
-    # test out a new metric:
-    # df['connection_signal'] = pandas.Series(df['deconv_amp_mean'] / df['latency_stdev'], index=df.index)
-    # df['connection_background'] = pandas.Series(df['deconv_base_amp_mean'] / df['base_latency_stdev'], index=df.index)
     ts = [datetime_to_timestamp(t) for t in df['acq_timestamp']]
     df['acq_timestamp'] = ts
     recs = df.to_records()
@@ -1199,15 +1194,15 @@ def query_all_pairs(predict=True):
         if 'ttest' in f or 'ks2samp' in f:
             recs[f] = np.log(1-np.log(recs[f]))
 
-    # Add results of classifier prediction in to records
-    if predict is True:
-        classifier = PairClassifier()
-        classifier.fit(recs)
-        prediction = classifier.predict(recs)
-        recs = join_struct_arrays([recs, prediction])
-        return recs, classifier
+    if predict is False:
+        return recs
 
-    return recs
+    # Add results of classifier prediction in to records
+    classifier = PairClassifier()
+    classifier.fit(recs)
+    prediction = classifier.predict(recs)
+    recs = join_struct_arrays([recs, prediction])
+    return recs, classifier
 
 
 def datetime_to_timestamp(d):
@@ -1432,7 +1427,10 @@ class PairScatterPlot(pg.QtCore.QObject):
             if f in fnames:
                 continue
             if 'amp' in f:
-                fields.append((f, {'units': 'V'}))
+                if f[:2] == 'vc':
+                    fields.append((f, {'units': 'A'}))
+                else:
+                    fields.append((f, {'units': 'V'}))
             elif 'latency' in f:
                 fields.append((f, {'units': 's'}))
             else:
