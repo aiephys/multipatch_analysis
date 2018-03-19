@@ -120,7 +120,7 @@ for c in range(len(connection_types)):
                         #print ('%s, %0.0f' %((expt.uid, pre, post), hold, ))
                         all_amps = fail_rate(response_subset, '+', peak_t)
                         cv = np.std(all_amps)/np.mean(all_amps)
-                        psp_fits = fit_psp(avg_trace, sign=amp_sign, yoffset=0, amp=avg_amp, method='leastsq', fit_kws={})
+                        psp_fits = fit_psp(avg_trace, sign=amp_sign, yoffset=0, amp=avg_amp, method='leastsq', stacked = False, fit_kws={})
                         plt.clear()
                         plt.plot(avg_trace.time_values, avg_trace.data, title=str([psp_fits.best_values['xoffset'], expt.uid, pre, post]))
                         plt.plot(avg_trace.time_values, psp_fits.eval(), pen='g')
@@ -158,7 +158,7 @@ for c in range(len(connection_types)):
                         avg_trace, avg_amp, amp_sign, peak_t = get_amplitude(qc_list)
                         if amp_sign is '-':
                             continue
-                        psp_fits = fit_psp(avg_trace, sign=amp_sign, yoffset=0, amp=avg_amp, method='leastsq', fit_kws={})
+                        psp_fits = fit_psp(avg_trace, sign=amp_sign, yoffset=0, amp=avg_amp, method='leastsq', stacked = False,  fit_kws={})
                         grand_response[type[0]]['decay'].append(psp_fits.best_values['decay_tau'])
     if len(grand_response[type[0]]['trace']) == 0:
         continue
