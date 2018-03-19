@@ -501,7 +501,16 @@ class EvokedResponseGroup(object):
         return fit_psp(response, **kwds)
 
 
-def fit_psp(response, mode='ic', sign='any', xoffset=11e-3, yoffset=(0, 'fixed'), mask_stim_artifact=True, method='leastsq', fit_kws=None, **kwds):
+def fit_psp(response, 
+            mode='ic', 
+            sign='any', 
+            xoffset=11e-3, 
+            yoffset=(0, 'fixed'), 
+            mask_stim_artifact=True, 
+            method='leastsq', 
+            fit_kws=None, 
+            stacked = False,
+             **kwds):
     t = response.time_values
     y = response.data
 
@@ -527,16 +536,25 @@ def fit_psp(response, mode='ic', sign='any', xoffset=11e-3, yoffset=(0, 'fixed')
         raise ValueError('sign must be "+", "-", or "any"')
 
     psp = StackedPsp()
+    if stacked:
+        psp = StackedPsp()
+    else:
+        psp=Psp()
+        
     base_params = {
         'xoffset': (xoffset, 10e-3, 15e-3),
         'yoffset': yoffset,
         'rise_time': (rise_time, rise_time/2., rise_time*2.),
         'decay_tau': (decay_tau, decay_tau/10., decay_tau*10.),
-        'exp_amp': 'amp * amp_ratio',
-        'amp_ratio': (1, 0, 10),
         'rise_power': (2, 'fixed'),
     }
     
+    if stacked:
+        base_params.update({
+            'exp_amp': 'amp * amp_ratio',
+            'amp_ratio': (1, 0, 10),
+        })  
+        
     if 'rise_time' in kwds:
         rt = kwds.pop('rise_time')
         if not isinstance(rt, tuple):
