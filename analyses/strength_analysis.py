@@ -1256,19 +1256,21 @@ class PairClassifier(object):
         self.features = [
             # 'ic_amp_mean',
             # 'ic_amp_stdev',
-            'ic_amp_ks2samp',
+            # 'ic_amp_ks2samp',  # hurts perfornamce
             'ic_deconv_amp_mean',
             # 'ic_deconv_amp_stdev',
             'ic_deconv_amp_ks2samp',
-            'vc_amp_mean',
+            # 'vc_amp_mean',  # hurts perfornamce
             # 'vc_amp_stdev',
             'vc_amp_ks2samp',
             # 'vc_deconv_amp_mean',
             # 'vc_deconv_amp_stdev',
-            'vc_deconv_amp_ks2samp',
+            # 'vc_deconv_amp_ks2samp',  # hurts performance
             'ic_latency_mean',
-            'vc_latency_stdev',
+            'ic_latency_stdev',
             'ic_latency_ks2samp',
+            # 'vc_latency_mean',
+            # 'vc_latency_stdev',  # hurts performance
             'vc_latency_ks2samp',
         ]
         # Random seed used when shuffling training/test inputs
