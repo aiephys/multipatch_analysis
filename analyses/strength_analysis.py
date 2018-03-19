@@ -1382,7 +1382,7 @@ class PairScatterPlot(pg.QtCore.QObject):
 
     def __init__(self, recs):
         pg.QtCore.QObject.__init__(self)
-        
+
         # Load all records into scatter plot widget
         spw = pg.ScatterPlotWidget()
         spw.style['symbolPen'] = None
@@ -1448,7 +1448,79 @@ class PairScatterPlot(pg.QtCore.QObject):
 
         self.spw = spw
 
+
+class PairView(pg.QtCore.QObject):
+    """For browsing and analyzing pairs. 
+
+    Contains an ExperimentBrowser and a number of analyzers showing response properties of a selected pair
+    """
+    def __init__(self):
+        pg.QtCore.QObject.__init__(self)
+
+        # global session for querying from DB
+        self.session = db.Session()
+
+        win = pg.QtGui.QSplitter()
+        win.setOrientation(pg.QtCore.Qt.Horizontal)
+        win.resize(1000, 800)
+        win.show()
         
+        b = ExperimentBrowser()
+        win.addWidget(b)
+        
+        rs_plots = ResponseStrengthPlots(self.session)
+        win.addWidget(rs_plots)
+
+        b.itemSelectionChanged.connect(self._selected)            
+        b.doubleClicked.connect(self._dbl_clicked)
+
+        self.win = win
+        self.rs_plots = rs_plots
+        self.browser = b
+        self.nwb_viewer = MultipatchNwbViewer()
+
+    def select_pair(self, pair_id):
+        self.browser.select_pair(pair_id)
+
+    def _dbl_clicked(self, index):
+        """Item double clicked; load in NWB viewer
+        """
+        with pg.BusyCursor():
+            item = self.browser.itemFromIndex(index)[0]
+            self.nwb_viewer.load_nwb(item.expt.nwb_cache_file)
+            self.nwb_viewer.show()
+
+    def _selected(self, *args):
+        """A pair was selected; update the event plots
+        """
+        sel = self.browser.selectedItems()
+        self.selected = sel
+        if len(sel) == 0:
+            return
+        sel = sel[0]
+        if hasattr(sel, 'pair'):
+            pair = sel.pair
+            expt = pair.experiment
+            self.rs_plots.load_conn(pair)
+
+        ts = sel.expt.acq_timestamp
+        sec = datetime_to_timestamp(ts)
+        src = sel.expt.source_experiment
+        print("======================================")
+        if src.entry is not None:
+            src.entry.print_tree()
+        else:
+            print(open(src.source_id[0], 'rb').read())
+        print("------------------------------")
+        print("Original path:", src)
+        print("Server path:", sel.expt.original_path)
+        if hasattr(sel, 'pair'):
+            print("ID: %s  %d->%d" % (sec, pair.pre_cell.ext_id, pair.post_cell.ext_id))
+        else:
+            print("ID: %s" % sec)
+            
+
+
 
 if __name__ == '__main__':
     #tt = pg.debug.ThreadTrace()
@@ -1482,67 +1554,15 @@ if __name__ == '__main__':
         rebuild_connectivity()
     else:
         init_tables()
-        
-    
-    # global session for querying from DB
-    session = db.Session()
-    
-    win = pg.QtGui.QSplitter()
-    win.setOrientation(pg.QtCore.Qt.Horizontal)
-    win.resize(1000, 800)
-    win.show()
-    
-    b = ExperimentBrowser()
-    win.addWidget(b)
-    
-    rs_plots = ResponseStrengthPlots(session)
-    win.addWidget(rs_plots)
-    
-    def selected(*args):
-        """A pair was selected; update the event plots
-        """
-        global sel
-        sel = b.selectedItems()
-        if len(sel) == 0:
-            return
-        sel = sel[0]
-        if hasattr(sel, 'pair'):
-            pair = sel.pair
-            expt = pair.experiment
-            rs_plots.load_conn(pair)
 
-        ts = sel.expt.acq_timestamp
-        sec = datetime_to_timestamp(ts)
-        src = sel.expt.source_experiment
-        print("======================================")
-        if src.entry is not None:
-            src.entry.print_tree()
-        else:
-            print(open(src.source_id[0], 'rb').read())
-        print("------------------------------")
-        print("Original path:", src)
-        print("Server path:", sel.expt.original_path)
-        if hasattr(sel, 'pair'):
-            print("ID: %s  %d->%d" % (sec, pair.pre_cell.ext_id, pair.post_cell.ext_id))
-        else:
-            print("ID: %s" % sec)
-        
-
-    b.itemSelectionChanged.connect(selected)
-
-    nwb_viewer = MultipatchNwbViewer()
-
-    def dbl_clicked(index):
-        with pg.BusyCursor():
-            item = b.itemFromIndex(index)[0]
-            nwb_viewer.load_nwb(item.expt.nwb_cache_file)
-            nwb_viewer.show()
-        
-    b.doubleClicked.connect(dbl_clicked)
 
     # Load records on all pairs
     recs = query_all_pairs()
 
+    # show all records in scatter plot
     spw = PairScatterPlot(recs)
-    spw.pair_clicked.connect(b.select_pair)
+
+    # add another window for analyzing selected pairs
+    pair_view = PairView()
+    spw.pair_clicked.connect(pair_view.select_pair)
 
