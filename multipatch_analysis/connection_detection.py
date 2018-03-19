@@ -509,7 +509,7 @@ def fit_psp(response,
             mask_stim_artifact=True, 
             method='leastsq', 
             fit_kws=None, 
-            stacked = False,
+            stacked = True,
              **kwds):
     t = response.time_values
     y = response.data
