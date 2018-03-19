@@ -7,7 +7,7 @@ from .data import MultiPatchProbe, Analyzer, PulseStimAnalyzer
 from . import qc
 from neuroanalysis.stats import ragged_mean
 from neuroanalysis.data import Trace, TraceList
-from neuroanalysis.fitting import StackedPsp
+from neuroanalysis.fitting import StackedPsp, Psp
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.filter import bessel_filter
 
