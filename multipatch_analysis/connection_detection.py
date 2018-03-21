@@ -546,7 +546,7 @@ def fit_psp(response,
     base_params = {
         'xoffset': (xoffset, 10e-3, 15e-3),
         'yoffset': yoffset,
-        'rise_time': (rise_time, rise_time/rise_time_mult_factor, rise_time_mult_factor),
+        'rise_time': (rise_time, rise_time/rise_time_mult_factor, rise_time*rise_time_mult_factor),
         'decay_tau': (decay_tau, decay_tau/10., decay_tau*10.),
         'rise_power': (2, 'fixed'),
     }
