@@ -1394,6 +1394,12 @@ class PairClassifier(object):
         print("TEST:")
         test(clf, test_x, test_y)
 
+        # calculate approximate probability threshold between classes
+        pred = self.predict(recs)
+        min_prob = pred[pred['prediction'] == True]['confidence'].min()
+        max_prob = pred[pred['prediction'] == False]['confidence'].max()
+        self.prob_threshold = (min_prob + max_prob) / 2.
+
     def predict(self, recs=None):
         """Predict connectivity for a sequence of records output from analyze_response_strength
 

@@ -317,7 +317,6 @@ if __name__ == '__main__':
 
                     results[i,j]['results'].append(conn_result)
                     results[i,j]['traces'] = traces
-                    print(".",)
                     # print(conn_result)
                     print(dict([(k, conn_result[k]) for k in classifier.features]))
 
