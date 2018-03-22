@@ -5,7 +5,9 @@ Analysis of detection limits vs synaptic strength, kinetics, and background nois
 """
 from __future__ import print_function, division
 from datetime import datetime
+import multiprocessing
 import pyqtgraph as pg
+import pyqtgraph.multiprocess as mp
 import numpy as np
 from scipy import stats
 
@@ -29,9 +31,9 @@ if __name__ == '__main__':
 
         # ("low signal, low noise", (1506537287.63, 7, 8)),
         ("high signal, low noise", (1499725138.07, 7, 4)),
-        # ("low signal, high noise", (1494969844.93, 6, 1)),
+        ("low signal, high noise", (1494969844.93, 6, 1)),
         # ("low signal, low noise", (1502312765.01, 1, 4)),
-        # ("high noise, no connection", (1489009391.46, 3, 5)),
+        ("high noise, no connection", (1489009391.46, 3, 5)),
     ]
     
     pg.mkQApp()
@@ -107,6 +109,8 @@ if __name__ == '__main__':
         limit_plot = win.addPlot(i, 4)
         limit_plot.addLegend()
         limit_plot.setLogMode(True, False)
+        limit_plot.addLine(y=classifier.prob_threshold)
+
         # Find this connection in the pair list
         idx = np.argwhere((abs(filtered['acq_timestamp'] - timestamp) < 1) & (filtered['pre_cell_id'] == pre_id) & (filtered['post_cell_id'] == post_id))
         if idx.size == 0:
@@ -227,34 +231,69 @@ if __name__ == '__main__':
             plt.plot(mean.time_values, mean.data, pen='g')
 
 
-        def analyze_response_strength(recs, source, dtype):
-            """Wraps strength_analysis.analyze_response_strength to look like
+        # def analyze_response_strength(recs, source, dtype):
+        #     results = []
+        #     for i,rec in enumerate(recs):
+        #         result = strength_analysis.analyze_response_strength(rec, source)
+        #         results.append(result)
+        #     return str_analysis_result_table(results)
+
+        def str_analysis_result_table(results, recs):
+            """Convert output of strength_analysis.analyze_response_strength to look like
             the result was queried from the DB using get_amps() or get_baseline()
             """
-            results = np.empty(len(recs), dtype=dtype)
+            table = np.empty(len(recs), dtype=base_amps.dtype)
             for i,rec in enumerate(recs):
-                result = strength_analysis.analyze_response_strength(rec, source)
                 for key in ['ex_qc_pass', 'in_qc_pass', 'clamp_mode']:
-                    result[key] = getattr(rec, key)
+                    table[i][key] = getattr(rec, key)
+                result = results[i]
                 for key,val in result.items():
-                    if key in results.dtype.names:
-                        results[i][key] = val
-            return results
+                    if key in table.dtype.names:
+                        table[i][key] = val
+            return table
+
+
+        def simulate_response(fg_recs, bg_results, amp, rtime, seed=None):
+            if seed is not None:
+                np.random.seed(seed)
+            r_amps = stats.binom.rvs(p=0.2, n=24, size=len(fg_recs)) * stats.norm.rvs(scale=0.3, loc=1, size=len(fg_recs))
+            r_amps *= amp / r_amps.mean()
+            r_latency = np.random.normal(size=len(fg_recs), scale=200e-6, loc=13e-3)
+            fg_results = []
+            traces = []
+            for k,rec in enumerate(fg_recs):
+                data = rec.data.copy()
+                start = int(r_latency[k] / dt)
+                length = len(rec.data) - start
+                rec.data[start:] += template[:length] * r_amps[k]
+
+                fg_result = strength_analysis.analyze_response_strength(rec, 'baseline')
+                fg_results.append(fg_result)
+
+                traces.append(Trace(rec.data.copy(), dt=dt))
+                traces[-1].amp = r_amps[k]
+                rec.data[:] = data  # can't modify rec, so we have to muck with the array (and clean up afterward) instead
+            fg_results = str_analysis_result_table(fg_results, fg_recs)
+            conn_result = strength_analysis.analyze_pair_connectivity({('ic', 'fg'): fg_results, ('ic', 'bg'): bg_results, ('vc', 'fg'): [], ('vc', 'bg'): []}, sign=1)
+            return conn_result, traces
+
 
         # measure background connection strength
-        bg_results = analyze_response_strength(bg_recs, 'baseline', base_amps.dtype)
+        bg_results = [strength_analysis.analyze_response_strength(rec, 'baseline') for rec in bg_recs]
+        bg_results = str_analysis_result_table(bg_results, bg_recs)
 
         # for this example, we use background data to simulate foreground
         # (but this will be biased due to lack of crosstalk in background data)
         fg_recs = bg_recs
 
         # now measure foreground simulated under different conditions
-        amps = 5e-6 * 1.55**np.arange(6)
+        amps = 5e-6 * 2**np.arange(9)
         amps[0] = 0
         rtimes = [1e-3, 2e-3, 4e-3, 6e-3]
         dt = 1 / db.default_sample_rate
-        results = np.empty((len(amps), len(rtimes)), dtype=[('results', object), ('prediction', bool), ('confidence', float), ('traces', object), ('rise_time', float), ('amp', float)])
+        results = np.empty((len(amps), len(rtimes)), dtype=[('results', object), ('prediction', float), ('confidence', float), ('traces', object), ('rise_time', float), ('amp', float)])
         print("  Simulating synaptic events..")
+        # pool = multiprocessing.Pool(4)
         for j,rtime in enumerate(rtimes):
             for i,amp in enumerate(amps):
                 print("---------------------------------------    %d/%d  %d/%d      \r" % (i,len(amps),j,len(rtimes)),)
@@ -264,38 +303,26 @@ if __name__ == '__main__':
                 results[i,j]['results'] = []
                 results[i,j]['rise_time'] = rtime
                 results[i,j]['amp'] = amp
-                for k in range(6):
-                    r_amps = stats.binom.rvs(p=0.2, n=24, size=len(fg_recs)) * stats.norm.rvs(scale=0.3, loc=1, size=len(fg_recs))
-                    r_amps *= amp / r_amps.mean()
-                    r_latency = np.random.normal(size=len(fg_recs), scale=200e-6, loc=13e-3)
-                    fg_results = np.empty(len(fg_recs), dtype=bg_results.dtype)
-                    traces = []
-                    for k,rec in enumerate(fg_recs):
-                        data = rec.data.copy()
-                        start = int(r_latency[k] / dt)
-                        length = len(rec.data) - start
-                        rec.data[start:] += template[:length] * r_amps[k]
 
-                        fg_result = strength_analysis.analyze_response_strength(rec, 'baseline')
-                        for key in ['ex_qc_pass', 'in_qc_pass', 'clamp_mode']:
-                            fg_result[key] = getattr(rec, key)
-                        for key,val in fg_result.items():
-                            if key in fg_results.dtype.names:
-                                fg_results[k][key] = val
+                # sim_results = pool.map(lambda seed: simulate_response(fg_recs, bg_results, amp, rtime, seed=seed), range(8))
+                # sim_results = [simulate_response(fg_recs, bg_results, amp, rtime, seed=seed) for seed in range(8)]
+                trials = 8
+                sim_results = [None]*trials
+                with mp.Parallelize(range(trials), results=sim_results, workers=8) as tasker:
+                    for i in tasker:
+                        tasker.results[i] = simulate_response(fg_recs, bg_results, amp, rtime, seed=i)
 
-                        traces.append(Trace(rec.data.copy(), dt=dt))
-                        traces[-1].amp = r_amps[k]
-                        rec.data[:] = data  # can't modify rec, so we have to muck with the array (and clean up afterward) instead
-                        
-                    conn_result = strength_analysis.analyze_pair_connectivity({('ic', 'fg'): fg_results, ('ic', 'bg'): bg_results, ('vc', 'fg'): [], ('vc', 'bg'): []}, sign=1)
+                for k in range(len(sim_results)):
+                    conn_result, traces = sim_results[k]
+
                     results[i,j]['results'].append(conn_result)
-                    results[i,j]['traces'] = traces[:100]
+                    results[i,j]['traces'] = traces
                     print(".",)
                     # print(conn_result)
                     print(dict([(k, conn_result[k]) for k in classifier.features]))
 
                 pred = classifier.predict(results[i,j]['results'])
-                results[i,j]['prediction'] = pred['prediction'].mean()
+                results[i,j]['prediction'] = pred['prediction'].sum() / trials
                 results[i,j]['confidence'] = pred['confidence'].mean()
                 print("\nrise time:", rtime, " amplitude:", amp)
                 print(pred)
@@ -304,7 +331,7 @@ if __name__ == '__main__':
             # c = limit_plot.plot(rtimes, results[i]['result'], pen=(i, len(amps)*1.3), symbol='o', antialias=True, name="%duV"%(amp*1e6), data=results[i], symbolSize=4)
             # c.scatter.sigClicked.connect(clicked)
             # pg.QtGui.QApplication.processEvents()
-            c = limit_plot.plot(amps, results[:,j]['confidence'], pen=(j, len(rtimes)*1.3), symbol='o', antialias=True, name="%dus"%(rtime*1e6), data=results[:,j], symbolSize=4)
+            c = limit_plot.plot(amps, results[:,j]['confidence'], pen=pg.intColor(j, len(rtimes)*1.3, maxValue=150), symbol='o', antialias=True, name="%dus"%(rtime*1e6), data=results[:,j], symbolSize=4)
             c.scatter.sigClicked.connect(clicked)
             pg.QtGui.QApplication.processEvents()
 
