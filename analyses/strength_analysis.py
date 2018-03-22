@@ -439,7 +439,7 @@ def rebuild_connectivity(session):
             amps = {}
             for clamp_mode in ('ic', 'vc'):
                 clamp_mode_fg = get_amps(session, pair, clamp_mode=clamp_mode)
-                clamp_mode_bg = get_baseline_amps(session, pair, limit=len(clamp_mode_fg), clamp_mode=clamp_mode)
+                clamp_mode_bg = get_baseline_amps(session, pair, amps=clamp_mode_fg, clamp_mode=clamp_mode)
                 amps[clamp_mode, 'fg'] = clamp_mode_fg
                 amps[clamp_mode, 'bg'] = clamp_mode_bg
             
@@ -673,7 +673,7 @@ class ExperimentBrowser(pg.TreeWidget):
         self.scrollToItem(item)
 
 
-def get_amps(session, pair, clamp_mode='ic'):
+def get_amps(session, pair, clamp_mode='ic', get_data=False):
     """Select records from pulse_response_strength table
     """
     q = session.query(
@@ -689,9 +689,15 @@ def get_amps(session, pair, clamp_mode='ic'):
         db.PulseResponse.in_qc_pass,
         db.PatchClampRecording.clamp_mode,
         db.StimPulse.pulse_number,
-    ).join(db.PulseResponse)
+        db.PulseResponse.start_time.label('pulse_start_time'),
+    )
+    if get_data:
+        q.add_columns([db.PulseResponse.data])
+    
+    q = q.join(db.PulseResponse)
     
     q, pre_rec, post_rec = join_pulse_response_to_expt(q)
+    q = q.add_columns(post_rec.start_time.label('rec_start_time'))
         
     filters = [
         (pre_rec.electrode==pair.pre_cell.electrode,),
@@ -735,8 +741,11 @@ def get_baseline_amps_NO_ORM_VERSION(session, expt, dev, clamp_mode='ic'):
     return recs
 
 
-def get_baseline_amps(session, pair, clamp_mode='ic', limit=None):
+def get_baseline_amps(session, pair, clamp_mode='ic', amps=None):
     """Select records from baseline_response_strength table
+
+    If *amps* is given (output from get_amps), then baseline records will be selected from the same
+    sweeps as the responses.
     """
     q = session.query(
         BaselineResponseStrength.id,
@@ -750,6 +759,8 @@ def get_baseline_amps(session, pair, clamp_mode='ic', limit=None):
         db.Baseline.ex_qc_pass,
         db.Baseline.in_qc_pass,
         db.PatchClampRecording.clamp_mode,
+        db.Recording.start_time.label('rec_start_time'),
+        db.Baseline.start_time.label('base_start_time'),
     ).join(db.Baseline).join(db.Recording).join(db.PatchClampRecording).join(db.SyncRec).join(db.Experiment)
     
     filters = [
@@ -761,13 +772,28 @@ def get_baseline_amps(session, pair, clamp_mode='ic', limit=None):
         q = q.filter(*filter_args)
     
     # should result in chronological order
-    q = q.order_by(db.Baseline.id)
+    q = q.order_by(db.Recording.start_time)
 
-    if limit is not None:
-        q = q.limit(limit)
+    # if amps is not None:
+    #     q = q.limit(len(amps))
 
     df = pandas.read_sql_query(q.statement, q.session.bind)
     recs = df.to_records()
+
+    if amps is not None:
+        # for each record returned from get_amps, return the nearest baseline record
+        mask = np.zeros(len(recs), dtype=bool)
+        amp_times = amps['rec_start_time'].astype(float)*1e-9 + amps['pulse_start_time']
+        base_times = recs['rec_start_time'].astype(float)*1e-9 + recs['base_start_time']
+        for i in range(len(amps)):
+            order = np.argsort(np.abs(base_times - amp_times[i]))
+            for j in order:
+                if mask[j]:
+                    continue
+                mask[j] = True
+                break
+        recs = recs[mask]
+
     return recs
 
 
@@ -953,7 +979,7 @@ class ResponseStrengthAnalyzer(object):
     def load_conn(self, pair):
         self.pair = pair
         self._amp_recs = get_amps(self.session, self.pair, clamp_mode=self.analysis[1])
-        self._base_recs = get_baseline_amps(self.session, self.pair, limit=len(self._amp_recs), clamp_mode=self.analysis[1])
+        self._base_recs = get_baseline_amps(self.session, self.pair, amps=self._amp_recs, clamp_mode=self.analysis[1])
         self.update_scatter_plots()
 
     def update_scatter_plots(self): 
