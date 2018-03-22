@@ -93,10 +93,10 @@ class PulseResponseStrengthTableGroup(TableGroup):
         PulseResponseStrength = self['pulse_response_strength']
         BaselineResponseStrength = self['baseline_response_strength']
         
-        db.PulseResponse.pulse_response_strength = db.relationship(PulseResponseStrength, back_populates="pulse_response", cascade="delete", single_parent=True)
+        db.PulseResponse.pulse_response_strength = db.relationship(PulseResponseStrength, back_populates="pulse_response", cascade="delete", single_parent=True, uselist=False)
         PulseResponseStrength.pulse_response = db.relationship(db.PulseResponse, back_populates="pulse_response_strength", single_parent=True)
 
-        db.Baseline.baseline_response_strength = db.relationship(BaselineResponseStrength, back_populates="baseline", cascade="delete", single_parent=True)
+        db.Baseline.baseline_response_strength = db.relationship(BaselineResponseStrength, back_populates="baseline", cascade="delete", single_parent=True, uselist=False)
         BaselineResponseStrength.baseline = db.relationship(db.Baseline, back_populates="baseline_response_strength", single_parent=True)
 
 
@@ -166,7 +166,7 @@ class ConnectionStrengthTableGroup(TableGroup):
         
         ConnectionStrength = self['connection_strength']
         
-        db.Pair.connection_strength = db.relationship(ConnectionStrength, back_populates="pair", cascade="delete", single_parent=True)
+        db.Pair.connection_strength = db.relationship(ConnectionStrength, back_populates="pair", cascade="delete", single_parent=True, uselist=False)
         ConnectionStrength.pair = db.relationship(db.Pair, back_populates="connection_strength", single_parent=True)
 
 
@@ -455,15 +455,26 @@ def rebuild_connectivity(session):
         sys.stdout.flush()
 
 
-def analyze_pair_connectivity(amps):
+def analyze_pair_connectivity(amps, sign=None):
     """Given response strength records for a single pair, generate summary
     statistics characterizing strength, latency, and connectivity.
     
+    Parameters
+    ----------
+    amps : dict
+        Contains foreground and background strength analysis records
+        (see input format below)
+    sign : None, -1, or +1
+        If None, then automatically determine whether to treat this connection as
+        inhibitory or excitatory.
+
     Input must have the following structure::
     
         amps = {
-            'ic': {'fg': recs, 'bg': recs},
-            'vc': {'fg': recs, 'bg': recs},
+            ('ic', 'fg'): recs, 
+            ('ic', 'bg'): recs,
+            ('vc', 'fg'): recs, 
+            ('vc', 'bg'): recs,
         }
         
     Where each *recs* must be a structured array containing fields as returned
@@ -480,7 +491,7 @@ def analyze_pair_connectivity(amps):
        and background distributions for amplitude, deconvolved amplitude, and
        deconvolved latency    
     """
-    
+    requested_sign = sign
     fields = {}  # used to fill the new DB record
     
     # Use KS p value to check for differences between foreground and background
@@ -514,23 +525,36 @@ def analyze_pair_connectivity(amps):
             amp_means[sign, clamp_mode] = {'fg': fg_mean, 'bg': bg_mean}
             amp_diffs[sign, clamp_mode] = fg_mean - bg_mean
 
-    # Decide whether to treat this connection as excitatory or inhibitory.
-    #   strategy: accumulate evidence for either possibility by checking
-    #   the ks p-values for each sign/clamp mode and the direction of the deflection
-    is_exc = 0
-    # print(expt.acq_timestamp, pair.pre_cell.ext_id, pair.post_cell.ext_id)
-    for sign in ('pos', 'neg'):
-        for mode in ('ic', 'vc'):
-            ks = ks_pvals.get((sign, mode), None)
-            if ks is None:
-                continue
-            # turn p value into a reasonable scale factor
-            ks = np.log(1-np.log(ks))
-            dif_sign = 1 if amp_diffs[sign, mode] > 0 else -1
-            if mode == 'vc':
-                dif_sign *= -1
-            is_exc += dif_sign * ks
-            # print("    ", sign, mode, is_exc, dif_sign * ks)
+    def norm_pvalue(pval):
+        """Normalize a pvalue into a nice 0-7ish range.
+
+        Typically p values can have very large negative exponents, which
+        makes them difficult to visualize and to use as classifier features.
+        This function is a monotonic remapping of the entire 64-bit floating-point
+        space from (~2.5e-324, 1.0) onto a more evenly distributed scale (7, 0).
+        """
+        return min(7, np.log(1-np.log(pval)))
+
+    if requested_sign is None:
+        # Decide whether to treat this connection as excitatory or inhibitory.
+        #   strategy: accumulate evidence for either possibility by checking
+        #   the ks p-values for each sign/clamp mode and the direction of the deflection
+        is_exc = 0
+        # print(expt.acq_timestamp, pair.pre_cell.ext_id, pair.post_cell.ext_id)
+        for sign in ('pos', 'neg'):
+            for mode in ('ic', 'vc'):
+                ks = ks_pvals.get((sign, mode), None)
+                if ks is None:
+                    continue
+                # turn p value into a reasonable scale factor
+                ks = norm_pvalue(ks)
+                dif_sign = 1 if amp_diffs[sign, mode] > 0 else -1
+                if mode == 'vc':
+                    dif_sign *= -1
+                is_exc += dif_sign * ks
+                # print("    ", sign, mode, is_exc, dif_sign * ks)
+    else:
+        is_exc = requested_sign
 
     if is_exc > 0:
         fields['synapse_type'] = 'ex'
@@ -561,8 +585,13 @@ def analyze_pair_connectivity(amps):
             fields[clamp_mode + '_' + val + '_stdev'] = np.std(f)
             fields[clamp_mode + '_base_' + val + '_mean'] = np.mean(b)
             fields[clamp_mode + '_base_' + val + '_stdev'] = np.std(b)
-            fields[clamp_mode + '_' + val + '_ttest'] = scipy.stats.ttest_ind(f, b, equal_var=False).pvalue
-            fields[clamp_mode + '_' + val + '_ks2samp'] = scipy.stats.ks_2samp(f, b).pvalue
+            # statistical tests comparing fg vs bg
+            # Note: we use log(1-log(pval)) because it's nicer to plot and easier to
+            # use as a classifier input
+            tt_pval = scipy.stats.ttest_ind(f, b, equal_var=False).pvalue
+            ks_pval = scipy.stats.ks_2samp(f, b).pvalue
+            fields[clamp_mode + '_' + val + '_ttest'] = norm_pvalue(tt_pval)
+            fields[clamp_mode + '_' + val + '_ks2samp'] = norm_pvalue(ks_pval)
 
     return fields
 
@@ -1159,7 +1188,7 @@ def query_all_pairs(classifier=None):
         experiment.rig_name,
         experiment.acsf,
         slice.species as donor_species,
-        slice.genotype as dononr_genotype,
+        slice.genotype as donor_genotype,
         slice.age as donor_age,
         slice.sex as donor_sex,
         slice.quality as slice_quality,
@@ -1189,10 +1218,6 @@ def query_all_pairs(classifier=None):
     ts = [datetime_to_timestamp(t) for t in df['acq_timestamp']]
     df['acq_timestamp'] = ts
     recs = df.to_records()
-    # try to normalize p values
-    for f in recs.dtype.names:
-        if 'ttest' in f or 'ks2samp' in f:
-            recs[f] = np.log(1-np.log(recs[f]))
 
     if classifier is None:
         return recs
@@ -1207,7 +1232,8 @@ def query_all_pairs(classifier=None):
 pair_classifier = None
 def get_pair_classifier(**kwds):
     global pair_classifier
-    pair_classifier = PairClassifier(**kwds)
+    if pair_classifier is None:
+        pair_classifier = PairClassifier(**kwds)
     return pair_classifier
     
 
@@ -1252,27 +1278,38 @@ class PairClassifier(object):
 
     Input records should be similar to those generated by query_all_pairs()
     """
-    def __init__(self, seed=None):
-        self.features = [
+    def __init__(self, seed=None, use_vc_features=False):
+        ic_features = [
             # 'ic_amp_mean',
             # 'ic_amp_stdev',
             # 'ic_amp_ks2samp',  # hurts perfornamce
             'ic_deconv_amp_mean',
             # 'ic_deconv_amp_stdev',
             'ic_deconv_amp_ks2samp',
+            'ic_latency_mean',
+            'ic_latency_stdev',
+            'ic_latency_ks2samp',
+            # 'ic_crosstalk_mean',
+        ]
+        vc_features = [
             # 'vc_amp_mean',  # hurts perfornamce
             # 'vc_amp_stdev',
             'vc_amp_ks2samp',
             # 'vc_deconv_amp_mean',
             # 'vc_deconv_amp_stdev',
             # 'vc_deconv_amp_ks2samp',  # hurts performance
-            'ic_latency_mean',
-            'ic_latency_stdev',
-            'ic_latency_ks2samp',
             # 'vc_latency_mean',
             # 'vc_latency_stdev',  # hurts performance
             'vc_latency_ks2samp',
         ]
+        general_features = [
+            # 'electrode_distance',
+        ]
+
+        self.features = general_features + ic_features
+        if use_vc_features:
+             self.features.extend(vc_features)
+
         # Random seed used when shuffling training/test inputs
         self.seed = seed
 
@@ -1358,8 +1395,15 @@ class PairClassifier(object):
         test(clf, test_x, test_y)
 
     def predict(self, recs=None):
+        """Predict connectivity for a sequence of records output from analyze_response_strength
+
+        Input may be a structured array or list of dicts.
+        """
         # Select features from records
-        features = np.array([tuple(r) for r in recs[self.features]])
+        if isinstance(recs, np.ndarray):
+            features = np.array([tuple(r) for r in recs[self.features]])
+        else:
+            features = np.array([tuple(map(r.__getitem__, self.features)) for r in recs])
 
         # prepare ouptut array
         result = np.empty(len(features), dtype=[('prediction', float), ('confidence', float)])
@@ -1450,12 +1494,7 @@ class PairScatterPlot(pg.QtCore.QObject):
         spw.setFields(fields)
         spw.setData(recs)
 
-        def conn_clicked(spw, points):
-            spw.setSelectedPoints([points[0]])
-            d = points[0].data()
-            self.pair_clicked.emit(d['pair_id'])
-
-        spw.sigScatterPlotClicked.connect(conn_clicked)
+        spw.sigScatterPlotClicked.connect(self._conn_clicked)
 
         # Set up scatter plot widget defaults
         spw.setSelectedFields('ic_base_deconv_amp_mean', 'ic_deconv_amp_mean')
@@ -1475,6 +1514,12 @@ class PairScatterPlot(pg.QtCore.QObject):
         ch.setValue(cm)
 
         self.spw = spw
+
+    def _conn_clicked(self, spw, points):
+        self.spw.setSelectedPoints([points[0]])
+        d = points[0].data()
+        self.selected = d
+        self.pair_clicked.emit(d['pair_id'])
 
 
 class PairView(pg.QtCore.QObject):
@@ -1544,13 +1589,20 @@ class PairView(pg.QtCore.QObject):
         print("Server path:", sel.expt.original_path)
         if hasattr(sel, 'pair'):
             print("ID: %s  %d->%d" % (sec, pair.pre_cell.ext_id, pair.post_cell.ext_id))
+            conn = pair.connection_strength
+            cls = get_pair_classifier()
+            f = {k: getattr(conn, k) for k in cls.features}
+            print(f)
+            print(cls.predict([f]))
         else:
             print("ID: %s" % sec)
-            
+        
 
 
 
 if __name__ == '__main__':
+    import user
+
     #tt = pg.debug.ThreadTrace()
     parser = argparse.ArgumentParser()
     parser.add_argument('--rebuild', action='store_true', default=False)
