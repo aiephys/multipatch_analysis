@@ -467,13 +467,13 @@ class EvokedResponseGroup(object):
             
             # downsample all traces to the same rate
             # yarg: how does this change SNR?
+
             avg = TraceList([r.copy(t0=0) for r in responses]).mean()
             avg_baseline = TraceList([b.copy(t0=0) for b in baselines]).mean().data
 
             # subtract baseline
             baseline = np.median(avg_baseline)
             bsub = avg.data - baseline
-
             result = avg.copy(data=bsub)
             assert len(result.time_values) == len(result)
 
@@ -510,6 +510,7 @@ def fit_psp(response,
             method='leastsq', 
             fit_kws=None, 
             stacked = True,
+            rise_time_mult_factor=2.,
              **kwds):
     t = response.time_values
     y = response.data
@@ -540,11 +541,12 @@ def fit_psp(response,
         psp = StackedPsp()
     else:
         psp=Psp()
-        
+    
+    # initial condition, lower boundry, upper boundry    
     base_params = {
         'xoffset': (xoffset, 10e-3, 15e-3),
         'yoffset': yoffset,
-        'rise_time': (rise_time, rise_time/2., rise_time*2.),
+        'rise_time': (rise_time, rise_time/rise_time_mult_factor, rise_time*rise_time_mult_factor),
         'decay_tau': (decay_tau, decay_tau/10., decay_tau*10.),
         'rise_power': (2, 'fixed'),
     }
@@ -586,7 +588,7 @@ def fit_psp(response,
     if fit_kws is None:
         fit_kws = {'xtol': 1e-4, 'maxfev': 300, 'nan_policy': 'omit'}
 
-    if 'weight' not in fit_kws:
+    if 'weights' not in fit_kws:
         fit_kws['weights'] = weight
     
     best_fit = None
