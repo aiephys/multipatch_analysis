@@ -16,7 +16,6 @@ from multipatch_analysis.database import database as db
 
 
 if __name__ == '__main__':
-
     # silence warnings about fp issues
     np.seterr(all='ignore')
 
@@ -30,9 +29,9 @@ if __name__ == '__main__':
 
         # ("low signal, low noise", (1506537287.63, 7, 8)),
         ("high signal, low noise", (1499725138.07, 7, 4)),
-        ("low signal, high noise", (1494969844.93, 6, 1)),
-        ("low signal, low noise", (1502312765.01, 1, 4)),
-        ("high noise, no connection", (1489009391.46, 3, 5)),
+        # ("low signal, high noise", (1494969844.93, 6, 1)),
+        # ("low signal, low noise", (1502312765.01, 1, 4)),
+        # ("high noise, no connection", (1489009391.46, 3, 5)),
     ]
     
     pg.mkQApp()
@@ -50,7 +49,8 @@ if __name__ == '__main__':
     scatter_plot.setFixedWidth(500)
 
     # read all pair records from DB
-    conns = strength_analysis.query_all_pairs()
+    classifier = strength_analysis.get_pair_classifier(seed=0, use_vc_features=False)
+    conns = strength_analysis.query_all_pairs(classifier)
 
     # filter
     mask = np.isfinite(conns['ic_deconv_amp_mean'])
@@ -106,7 +106,7 @@ if __name__ == '__main__':
         hist_plots.append(hist_plot)
         limit_plot = win.addPlot(i, 4)
         limit_plot.addLegend()
-        limit_plot.setLogMode(True, True)
+        limit_plot.setLogMode(True, False)
         # Find this connection in the pair list
         idx = np.argwhere((abs(filtered['acq_timestamp'] - timestamp) < 1) & (filtered['pre_cell_id'] == pre_id) & (filtered['post_cell_id'] == post_id))
         if idx.size == 0:
@@ -117,7 +117,7 @@ if __name__ == '__main__':
 
         # Mark the point in scatter plot
         scatter_plot.plot([background[idx]], [signal[idx]], pen='k', symbol='o', size=10, symbolBrush='r', symbolPen=None)
-            
+        
         # Plot example traces and histograms
         for plts in [trace_plots, deconv_plots]:
             plt = plts[-1]
@@ -204,10 +204,6 @@ if __name__ == '__main__':
         p()
 
         pg.QtGui.QApplication.processEvents()
-        return
-
-
-
 
 
         # Plot detectability analysis
@@ -218,8 +214,11 @@ if __name__ == '__main__':
         bg_recs = q.all()
 
         def clicked(sp, pts):
-            traces = pts[0].data()['traces']
-            print([t.amp for t in traces])
+            data = pts[0].data()
+            print("-----------------------\nclicked:", data['rise_time'], data['amp'], data['prediction'], data['confidence'])
+            for r in data['results']:
+                print({k:r[k] for k in classifier.features})
+            traces = data['traces']
             plt = pg.plot()
             bsub = [t.copy(data=t.data - np.median(t.time_slice(0, 1e-3).data)) for t in traces]
             for t in bsub:
@@ -227,73 +226,85 @@ if __name__ == '__main__':
             mean = TraceList(bsub).mean()
             plt.plot(mean.time_values, mean.data, pen='g')
 
-        # first measure background a few times
-        N = len(fg_recs)
-        N = 50  # temporary for testing
-        print("Testing %d trials" % N)
 
+        def analyze_response_strength(recs, source, dtype):
+            """Wraps strength_analysis.analyze_response_strength to look like
+            the result was queried from the DB using get_amps() or get_baseline()
+            """
+            results = np.empty(len(recs), dtype=dtype)
+            for i,rec in enumerate(recs):
+                result = strength_analysis.analyze_response_strength(rec, source)
+                for key in ['ex_qc_pass', 'in_qc_pass', 'clamp_mode']:
+                    result[key] = getattr(rec, key)
+                for key,val in result.items():
+                    if key in results.dtype.names:
+                        results[i][key] = val
+            return results
 
-        bg_results = []
-        M = 500
-        print("  Grinding on %d background trials" % len(bg_recs))
-        for i in range(M):
-            amps = base_amps.copy()
-            np.random.shuffle(amps)
-            bg_results.append(np.median(amps[:N]['pos_dec_amp']) / np.std(amps[:N]['pos_dec_latency']))
-            print("    %d/%d      \r" % (i, M),)
-        print("    done.            ")
-        print("    ", bg_results)
+        # measure background connection strength
+        bg_results = analyze_response_strength(bg_recs, 'baseline', base_amps.dtype)
 
+        # for this example, we use background data to simulate foreground
+        # (but this will be biased due to lack of crosstalk in background data)
+        fg_recs = bg_recs
 
         # now measure foreground simulated under different conditions
-        amps = 5e-6 * 2**np.arange(6)
+        amps = 5e-6 * 1.55**np.arange(6)
         amps[0] = 0
-        rtimes = 1e-3 * 1.71**np.arange(4)
+        rtimes = [1e-3, 2e-3, 4e-3, 6e-3]
         dt = 1 / db.default_sample_rate
-        results = np.empty((len(amps), len(rtimes)), dtype=[('pos_dec_amp', float), ('latency_stdev', float), ('result', float), ('percentile', float), ('traces', object)])
+        results = np.empty((len(amps), len(rtimes)), dtype=[('results', object), ('prediction', bool), ('confidence', float), ('traces', object), ('rise_time', float), ('amp', float)])
         print("  Simulating synaptic events..")
         for j,rtime in enumerate(rtimes):
             for i,amp in enumerate(amps):
-                trial_results = []
+                print("---------------------------------------    %d/%d  %d/%d      \r" % (i,len(amps),j,len(rtimes)),)
                 t = np.arange(0, 15e-3, dt)
                 template = Psp.psp_func(t, xoffset=0, yoffset=0, rise_time=rtime, decay_tau=15e-3, amp=1, rise_power=2)
 
-                for l in range(20):
-                    print("    %d/%d  %d/%d      \r" % (i,len(amps),j,len(rtimes)),)
-                    r_amps = amp * 2**np.random.normal(size=N, scale=0.5)
-                    r_latency = np.random.normal(size=N, scale=600e-6, loc=12.5e-3)
-                    fg_results = []
+                results[i,j]['results'] = []
+                results[i,j]['rise_time'] = rtime
+                results[i,j]['amp'] = amp
+                for k in range(6):
+                    r_amps = stats.binom.rvs(p=0.2, n=24, size=len(fg_recs)) * stats.norm.rvs(scale=0.3, loc=1, size=len(fg_recs))
+                    r_amps *= amp / r_amps.mean()
+                    r_latency = np.random.normal(size=len(fg_recs), scale=200e-6, loc=13e-3)
+                    fg_results = np.empty(len(fg_recs), dtype=bg_results.dtype)
                     traces = []
-                    np.random.shuffle(bg_recs)
-                    for k,rec in enumerate(bg_recs[:N]):
+                    for k,rec in enumerate(fg_recs):
                         data = rec.data.copy()
                         start = int(r_latency[k] / dt)
                         length = len(rec.data) - start
                         rec.data[start:] += template[:length] * r_amps[k]
 
                         fg_result = strength_analysis.analyze_response_strength(rec, 'baseline')
-                        fg_results.append((fg_result['pos_dec_amp'], fg_result['pos_dec_latency']))
+                        for key in ['ex_qc_pass', 'in_qc_pass', 'clamp_mode']:
+                            fg_result[key] = getattr(rec, key)
+                        for key,val in fg_result.items():
+                            if key in fg_results.dtype.names:
+                                fg_results[k][key] = val
 
                         traces.append(Trace(rec.data.copy(), dt=dt))
                         traces[-1].amp = r_amps[k]
                         rec.data[:] = data  # can't modify rec, so we have to muck with the array (and clean up afterward) instead
-                    
-                    fg_amp = np.array([r[0] for r in fg_results])
-                    fg_latency = np.array([r[1] for r in fg_results])
-                    trial_results.append(np.median(fg_amp) / np.std(fg_latency))
-                results[i,j]['result'] = np.median(trial_results) / np.median(bg_results)
-                results[i,j]['percentile'] = stats.percentileofscore(bg_results, results[i,j]['result'])
-                results[i,j]['traces'] = traces
+                        
+                    conn_result = strength_analysis.analyze_pair_connectivity({('ic', 'fg'): fg_results, ('ic', 'bg'): bg_results, ('vc', 'fg'): [], ('vc', 'bg'): []}, sign=1)
+                    results[i,j]['results'].append(conn_result)
+                    results[i,j]['traces'] = traces[:100]
+                    print(".",)
+                    # print(conn_result)
+                    print(dict([(k, conn_result[k]) for k in classifier.features]))
 
-            assert all(np.isfinite(results[i]['pos_dec_amp']))
-            print(i, results[i]['result'])
-            print(i, results[i]['percentile'])
-            
+                pred = classifier.predict(results[i,j]['results'])
+                results[i,j]['prediction'] = pred['prediction'].mean()
+                results[i,j]['confidence'] = pred['confidence'].mean()
+                print("\nrise time:", rtime, " amplitude:", amp)
+                print(pred)
+
 
             # c = limit_plot.plot(rtimes, results[i]['result'], pen=(i, len(amps)*1.3), symbol='o', antialias=True, name="%duV"%(amp*1e6), data=results[i], symbolSize=4)
             # c.scatter.sigClicked.connect(clicked)
             # pg.QtGui.QApplication.processEvents()
-            c = limit_plot.plot(amps, results[:,j]['result'], pen=(j, len(rtimes)*1.3), symbol='o', antialias=True, name="%dus"%(rtime*1e6), data=results[:,j], symbolSize=4)
+            c = limit_plot.plot(amps, results[:,j]['confidence'], pen=(j, len(rtimes)*1.3), symbol='o', antialias=True, name="%dus"%(rtime*1e6), data=results[:,j], symbolSize=4)
             c.scatter.sigClicked.connect(clicked)
             pg.QtGui.QApplication.processEvents()
 
