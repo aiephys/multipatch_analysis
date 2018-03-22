@@ -120,7 +120,14 @@ for c in range(len(connection_types)):
                         #print ('%s, %0.0f' %((expt.uid, pre, post), hold, ))
                         all_amps = fail_rate(response_subset, '+', peak_t)
                         cv = np.std(all_amps)/np.mean(all_amps)
-                        psp_fits = fit_psp(avg_trace, sign=amp_sign, yoffset=0, amp=avg_amp, method='leastsq', stacked = False, fit_kws={})
+                        
+                        # weight parts of the trace during fitting
+                        dt = avg_trace.dt
+                        weight = np.ones(len(avg_trace.data))*10.  #set everything to ten initially
+                        weight[int(10e-3/dt):int(12e-3/dt)] = 0.   #area around stim artifact
+                        weight[int(12e-3/dt):int(19e-3/dt)] = 30.  #area around steep PSP rise 
+                        
+                        psp_fits = fit_psp(avg_trace, sign=amp_sign, yoffset=0, xoffset=14e-3, amp=avg_amp, method='leastsq', stacked = True, rise_time_mult_factor=10., fit_kws={'weights': weight})                        
                         plt.clear()
                         plt.plot(avg_trace.time_values, avg_trace.data, title=str([psp_fits.best_values['xoffset'], expt.uid, pre, post]))
                         plt.plot(avg_trace.time_values, psp_fits.eval(), pen='g')
@@ -152,14 +159,14 @@ for c in range(len(connection_types)):
                             trace_color = (0, 0, 0, 30)
                         trace_plot(avg_trace, trace_color, plot=synapse_plot[c, 0], x_range=[0, 27e-3])
                         app.processEvents()
-                    decay_response = response_filter(pulse_response, freq_range=[0, 20], holding_range=holding)
-                    qc_list = pulse_qc(response_subset, baseline=2, pulse=None, plot=qc_plot)
-                    if len(qc_list) >= sweep_threshold:
-                        avg_trace, avg_amp, amp_sign, peak_t = get_amplitude(qc_list)
-                        if amp_sign is '-':
-                            continue
-                        psp_fits = fit_psp(avg_trace, sign=amp_sign, yoffset=0, amp=avg_amp, method='leastsq', stacked = False,  fit_kws={})
-                        grand_response[type[0]]['decay'].append(psp_fits.best_values['decay_tau'])
+#                    decay_response = response_filter(pulse_response, freq_range=[0, 20], holding_range=holding)
+#                    qc_list = pulse_qc(response_subset, baseline=2, pulse=None, plot=qc_plot)
+#                    if len(qc_list) >= sweep_threshold:
+#                        avg_trace, avg_amp, amp_sign, peak_t = get_amplitude(qc_list)
+#                        if amp_sign is '-':
+#                            continue
+#                        psp_fits = fit_psp(avg_trace, sign=amp_sign, yoffset=0, amp=avg_amp, method='leastsq', stacked = False,  fit_kws={})
+#                        grand_response[type[0]]['decay'].append(psp_fits.best_values['decay_tau'])
     if len(grand_response[type[0]]['trace']) == 0:
         continue
     if len(grand_response[type[0]]['trace']) > 1:
