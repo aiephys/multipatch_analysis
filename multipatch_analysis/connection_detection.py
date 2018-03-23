@@ -590,7 +590,12 @@ def fit_psp(response, mode='ic', sign='any', xoffset=(11e-3, 10e-3, 15e-3), yoff
     best_fit = None
     best_score = None
     for p in params:
-        fit = psp.fit(y, x=t, params=p, fit_kws=fit_kws, method=method)
+        try:
+            fit = psp.fit(y, x=t, params=p, fit_kws=fit_kws, method=method)
+        except Exception:
+            if p is params[-1]:
+                raise
+            continue
         err = np.sum(fit.residual**2)
         if best_fit is None or err < best_score:
             best_fit = fit
