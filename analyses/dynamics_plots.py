@@ -10,7 +10,7 @@ from synapse_comparison import load_cache
 from neuroanalysis.data import TraceList
 from neuroanalysis.ui.plot_grid import PlotGrid
 from multipatch_analysis.synaptic_dynamics import RawDynamicsAnalyzer
-from rep_connections import ee_connections, human_connections, all_connections, ii_connections, ei_connections, ie_connections
+from rep_connections import ee_connections, human_connections, all_connections, ii_connections, ei_connections, ie_connections, no_include
 pg.dbg()
 app = pg.mkQApp()
 pg.setConfigOption('background', 'w')
@@ -32,6 +32,8 @@ if args['organism'] == 'mouse':
     if connection == 'ee':
         connection_types = ee_connections.keys()
         sign = '+'
+        threshold = [None, None, 0.03e-3, 0.03e-3, None]
+        qc_params = (sign, [0.5e-3, 1e-3, 1e-3, 1e-3, 1e-3])
     elif connection =='ii':
         connection_types = ii_connections.keys()
         sign = '-'
@@ -55,6 +57,8 @@ if args['organism'] == 'mouse':
         else:
             post_type = (None, c_type[0])
         connection_types = [(pre_type, post_type)]
+        threshold = [None]
+        qc_params = ('+', [1e-3])
 elif args['organism'] == 'human':
     color_palette = colors_human
     calcium = None
@@ -66,13 +70,11 @@ elif args['organism'] == 'human':
         c_type = connection.split('-')
         connection_types = [((c_type[0], 'unknown'), (c_type[1], 'unknown'))]
 
-holding = [-65, -75]
+holding = [-55, -75]
 freqs = [10, 20, 50, 100]
 rec_t = [250, 500, 1000, 2000, 4000]
 sweep_threshold = 3
-threshold = 0.03e-3
-qc_params = (sign, 0.5e-3)
-deconv = False
+deconv = True
 
 # cache_file = 'train_response_cache.pkl'
 # response_cache = load_cache(cache_file)
@@ -118,9 +120,11 @@ for c in range(len(connection_types)):
     summary_plot[c, 1].addLegend()
     for expt in expt_list:
         for pre, post in expt.connections:
+            if [expt.uid, pre, post] in no_include:
+                continue
             if expt.cells[pre].cre_type == cre_type[0] and expt.cells[post].cre_type == cre_type[1]:
                 train_response, artifact = get_response(expt, pre, post, type='train')
-                if threshold is not None and artifact > threshold:
+                if threshold[c] is not None and artifact > threshold[c]:
                     continue
                 induction_grand, pulse_offset_ind = induction_summary(train_response, freqs, holding, thresh=sweep_threshold,
                                                                 ind_dict=induction_grand, offset_dict=pulse_offset_ind,
@@ -134,7 +138,7 @@ for c in range(len(connection_types)):
             continue
         ind_offsets = pulse_offset_ind[freq]
         qc_plot.clear()
-        ind_pass_qc = train_qc(induction_grand[freq], ind_offsets, amp=qc_params[1], sign=qc_params[0], plot=qc_plot)
+        ind_pass_qc = train_qc(induction_grand[freq], ind_offsets, amp=qc_params[1][c], sign=qc_params[0], plot=qc_plot)
         n_synapses = len(ind_pass_qc[0])
         if n_synapses > 0:
             induction_grand_trace = TraceList(ind_pass_qc[0]).mean()
@@ -187,7 +191,7 @@ for c in range(len(connection_types)):
             print ("%d ms not represented in data set for %s" % (delta, c_type))
             continue
         rec_offsets = pulse_offset_rec[delta]
-        rec_pass_qc = train_qc(recovery_grand[delta], rec_offsets, amp=qc_params[1], sign=qc_params[0], plot=None)
+        rec_pass_qc = train_qc(recovery_grand[delta], rec_offsets, amp=qc_params[1][c], sign=qc_params[0], plot=None)
         n_synapses = len(rec_pass_qc[0])
         if n_synapses > 0:
             recovery_grand_trace = TraceList(rec_pass_qc[1]).mean()
@@ -213,11 +217,11 @@ for c in range(len(connection_types)):
                 rec_deconv = deconv_train(rec_pass_qc[:2])
                 rec_deconv_grand = TraceList(rec_deconv[0]).mean()
                 rec_ind_deconv_grand = TraceList(rec_deconv[1]).mean()
-                log_rec_plt.plot(rec_deconv_grand.time_values, rec_deconv_grand.data,
-                                    pen={'color': color, 'width': 2})
+                #log_rec_plt.plot(rec_deconv_grand.time_values, rec_deconv_grand.data,
+                #                    pen={'color': color, 'width': 2})
                 rec_deconv_ind_grand2 = rec_ind_deconv_grand.copy(t0=delta + 0.2)
-                log_rec_plt.plot(rec_deconv_ind_grand2.time_values, rec_deconv_ind_grand2.data,
-                                    pen={'color': color, 'width': 2})
+                #log_rec_plt.plot(rec_deconv_ind_grand2.time_values, rec_deconv_ind_grand2.data,
+                #                    pen={'color': color, 'width': 2})
                 [deconv_rec_plot[t, c].plot(ind.time_values, ind.data, pen=trace_color) for ind in rec_deconv[0]]
                 [deconv_rec_plot[t, c].plot(rec.time_values, rec.data, pen=trace_color) for rec in rec_deconv[1]]
                 deconv_rec_plot[t, c].plot(rec_ind_deconv_grand.time_values, rec_ind_deconv_grand.data,
@@ -239,5 +243,5 @@ for c in range(len(connection_types)):
     #     write_cache(response_cache, cache_file)
 
 print ('Exporting train pulse amplitudes and experiment IDs for further analysis')
-write_cache([ind_amp_summary, rec_amp_summary], "train_amps_2.pkl")
-write_cache([ind_uid, rec_uid], "expt_ids_2.pkl")
+write_cache([ind_amp_summary, rec_amp_summary], "train_amps3.pkl")
+write_cache([ind_uid, rec_uid], "expt_ids3.pkl")
