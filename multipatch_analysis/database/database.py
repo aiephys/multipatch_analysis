@@ -213,11 +213,15 @@ class NDArray(TypeDecorator):
     impl = LargeBinary
     
     def process_bind_param(self, value, dialect):
+        if value is None:
+            return b'' 
         buf = io.BytesIO()
         np.save(buf, value, allow_pickle=False)
         return buf.getvalue()
         
     def process_result_value(self, value, dialect):
+        if value == b'':
+            return None
         buf = io.BytesIO(value)
         return np.load(buf, allow_pickle=False)
 
