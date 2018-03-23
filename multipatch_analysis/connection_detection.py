@@ -501,17 +501,9 @@ class EvokedResponseGroup(object):
         return fit_psp(response, **kwds)
 
 
-def fit_psp(response, 
-            mode='ic', 
-            sign='any', 
-            xoffset=11e-3, 
-            yoffset=(0, 'fixed'), 
-            mask_stim_artifact=True, 
-            method='leastsq', 
-            fit_kws=None, 
-            stacked = True,
-            rise_time_mult_factor=2.,
-             **kwds):
+def fit_psp(response, mode='ic', sign='any', xoffset=(11e-3, 10e-3, 15e-3), yoffset=(0, 'fixed'),
+            mask_stim_artifact=True, method='leastsq', fit_kws=None, stacked=True,
+            rise_time_mult_factor=2., **kwds):
     t = response.time_values
     y = response.data
 
@@ -540,11 +532,11 @@ def fit_psp(response,
     if stacked:
         psp = StackedPsp()
     else:
-        psp=Psp()
+        psp = Psp()
     
     # initial condition, lower boundry, upper boundry    
     base_params = {
-        'xoffset': (xoffset, 10e-3, 15e-3),
+        'xoffset': xoffset,
         'yoffset': yoffset,
         'rise_time': (rise_time, rise_time/rise_time_mult_factor, rise_time*rise_time_mult_factor),
         'decay_tau': (decay_tau, decay_tau/10., decay_tau*10.),
@@ -554,7 +546,7 @@ def fit_psp(response,
     if stacked:
         base_params.update({
             'exp_amp': 'amp * amp_ratio',
-            'amp_ratio': (1, 0, 10),
+            'amp_ratio': (0, -100, 100),
         })  
         
     if 'rise_time' in kwds:
@@ -580,10 +572,14 @@ def fit_psp(response,
     dt = response.dt
     weight = np.ones(len(y))
     #weight[:int(10e-3/dt)] = 0.5
+    
+    onset_index = int((xoffset[0]-response.t0) / dt)
+    weight[onset_index+int(1e-3/dt):onset_index+int(7e-3/dt)] = 3
     if mask_stim_artifact:
         # Use zero weight for fit region around the stimulus artifact
-        weight[int(10e-3/dt):int(12e-3/dt)] = 0
-    weight[int(12e-3/dt):int(19e-3/dt)] = 30
+        i2 = onset_index + int(1e-3 / dt)
+        i1 = i2 - int(2e-3 / dt)
+        weight[i1:i2] = 0
 
     if fit_kws is None:
         fit_kws = {'xtol': 1e-4, 'maxfev': 300, 'nan_policy': 'omit'}

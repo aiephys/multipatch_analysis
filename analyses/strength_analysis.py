@@ -31,6 +31,7 @@ from multipatch_analysis.database import database as db
 from multipatch_analysis import config, synphys_cache
 from multipatch_analysis.ui.multipatch_nwb_viewer import MultipatchNwbViewer
 from multipatch_analysis.constants import EXCITATORY_CRE_TYPES, INHIBITORY_CRE_TYPES
+from multipatch_analysis.connection_detection import fit_psp
 import multipatch_analysis.qc as qc 
 
 
@@ -157,7 +158,34 @@ class ConnectionStrengthTableGroup(TableGroup):
             ('vc_base_latency_stdev', 'float'),
             ('vc_latency_ttest', 'float'),
             ('vc_latency_ks2samp', 'float'),
-            
+
+            # Average pulse responses
+            ('ic_average_response', 'array'),
+            ('ic_average_response_t0', 'float'),
+            ('ic_average_base_stdev', 'float'),
+            ('vc_average_response', 'array'),
+            ('vc_average_response_t0', 'float'),
+            ('vc_average_base_stdev', 'float'),
+
+            # PSP fit parameters
+            ('ic_fit_amp', 'float'),
+            ('ic_fit_xoffset', 'float'),
+            ('ic_fit_yoffset', 'float'),
+            ('ic_fit_rise_time', 'float'),
+            ('ic_fit_rise_power', 'float'),
+            ('ic_fit_decay_tau', 'float'),
+            ('ic_fit_exp_amp', 'float'),
+            ('ic_fit_nrmse', 'float'),
+
+            ('vc_fit_amp', 'float'),
+            ('vc_fit_xoffset', 'float'),
+            ('vc_fit_yoffset', 'float'),
+            ('vc_fit_rise_time', 'float'),
+            ('vc_fit_rise_power', 'float'),
+            ('vc_fit_decay_tau', 'float'),
+            ('vc_fit_exp_amp', 'float'),
+            ('vc_fit_nrmse', 'float'),
+
         ],
     }
 
@@ -434,12 +462,11 @@ def rebuild_connectivity(session):
     expts_in_db = list_experiments(session=session)
     for i,expt in enumerate(expts_in_db):
         for pair in expt.pairs:
-            
             # Query all pulse amplitude records for each clamp mode
             amps = {}
             for clamp_mode in ('ic', 'vc'):
-                clamp_mode_fg = get_amps(session, pair, clamp_mode=clamp_mode)
-                clamp_mode_bg = get_baseline_amps(session, pair, amps=clamp_mode_fg, clamp_mode=clamp_mode)
+                clamp_mode_fg = get_amps(session, pair, clamp_mode=clamp_mode, get_data=True)
+                clamp_mode_bg = get_baseline_amps(session, pair, amps=clamp_mode_fg, clamp_mode=clamp_mode, get_data=False)
                 amps[clamp_mode, 'fg'] = clamp_mode_fg
                 amps[clamp_mode, 'bg'] = clamp_mode_bg
             
@@ -453,6 +480,17 @@ def rebuild_connectivity(session):
         session.commit()
         sys.stdout.write("%d / %d       \r" % (i, len(expts_in_db)))
         sys.stdout.flush()
+
+
+def norm_pvalue(pval):
+    """Normalize a p-value into a nice 0-7ish range.
+
+    Typically p values can have very large negative exponents, which
+    makes them difficult to visualize and to use as classifier features.
+    This function is a monotonic remapping of the entire 64-bit floating-point
+    space from (~2.5e-324, 1.0) onto a more evenly distributed scale (7, 0).
+    """
+    return min(7, np.log(1-np.log(pval)))
 
 
 def analyze_pair_connectivity(amps, sign=None):
@@ -525,16 +563,6 @@ def analyze_pair_connectivity(amps, sign=None):
             amp_means[sign, clamp_mode] = {'fg': fg_mean, 'bg': bg_mean}
             amp_diffs[sign, clamp_mode] = fg_mean - bg_mean
 
-    def norm_pvalue(pval):
-        """Normalize a pvalue into a nice 0-7ish range.
-
-        Typically p values can have very large negative exponents, which
-        makes them difficult to visualize and to use as classifier features.
-        This function is a monotonic remapping of the entire 64-bit floating-point
-        space from (~2.5e-324, 1.0) onto a more evenly distributed scale (7, 0).
-        """
-        return min(7, np.log(1-np.log(pval)))
-
     if requested_sign is None:
         # Decide whether to treat this connection as excitatory or inhibitory.
         #   strategy: accumulate evidence for either possibility by checking
@@ -593,8 +621,50 @@ def analyze_pair_connectivity(amps, sign=None):
             fields[clamp_mode + '_' + val + '_ttest'] = norm_pvalue(tt_pval)
             fields[clamp_mode + '_' + val + '_ks2samp'] = norm_pvalue(ks_pval)
 
+
+        ### generate the average response and psp fit
+        
+        # collect all bg and fg traces
+        # bg_traces = TraceList([Trace(data, sample_rate=db.default_sample_rate) for data in amps[clamp_mode, 'bg']['data']])
+        fg_traces = TraceList()
+        for rec in fg:
+            t0 = rec['response_start_time'] - rec['max_dvdt_time']   # time-align to presynaptic spike
+            trace = Trace(rec['data'], sample_rate=db.default_sample_rate, t0=t0)
+            fg_traces.append(trace)
+        
+        # get averages
+        # bg_avg = bg_traces.mean()        
+        fg_avg = fg_traces.mean()
+        base_rgn = fg_avg.time_slice(-6e-3, 0)
+        base = float_mode(base_rgn.data)
+        fields[clamp_mode + '_average_response'] = fg_avg.data
+        fields[clamp_mode + '_average_response_t0'] = fg_avg.t0
+        fields[clamp_mode + '_average_base_stdev'] = base_rgn.std()
+
+        sign = {'pos':'+', 'neg':'-'}[signs[clamp_mode]]
+        fg_bsub = fg_avg.copy(data=fg_avg.data - base)  # remove base to help fitting
+        fit = fit_psp(fg_bsub, mode=clamp_mode, sign=sign, xoffset=(1e-3, 0, 6e-3), yoffset=0, mask_stim_artifact=False, rise_time_mult_factor=4)
+        for param, val in fit.best_values.items():
+            fields['%s_fit_%s' % (clamp_mode, param)] = val
+        fields[clamp_mode + '_fit_yoffset'] = fit.best_values['yoffset'] + base
+        fields[clamp_mode + '_fit_nrmse'] = fit.nrmse()
+        
+        
+        #global fit_plot
+        #if fit_plot is None:
+            #fit_plot = FitExplorer(fit)
+            #fit_plot.show()
+        #else:
+            #fit_plot.set_fit(fit)
+        #fit_plot.plot(fg_avg.time_values, fg_avg.data, clear=True)
+        #fit_plot.plot(fg_avg.time_values, fit.eval(), pen='g')
+        #raw_input("Waiting to continue..")
+
     return fields
 
+#pg.mkQApp()
+#from neuroanalysis.ui.fitting import FitExplorer
+#fit_plot = None
 
 @db.default_session
 def list_experiments(session):
@@ -676,7 +746,7 @@ class ExperimentBrowser(pg.TreeWidget):
 def get_amps(session, pair, clamp_mode='ic', get_data=False):
     """Select records from pulse_response_strength table
     """
-    q = session.query(
+    cols = [
         PulseResponseStrength.id,
         PulseResponseStrength.pos_amp,
         PulseResponseStrength.neg_amp,
@@ -689,14 +759,17 @@ def get_amps(session, pair, clamp_mode='ic', get_data=False):
         db.PulseResponse.in_qc_pass,
         db.PatchClampRecording.clamp_mode,
         db.StimPulse.pulse_number,
-        db.PulseResponse.start_time.label('pulse_start_time'),
-    )
+        db.StimSpike.max_dvdt_time,
+        db.PulseResponse.start_time.label('response_start_time'),
+    ]
     if get_data:
-        q.add_columns([db.PulseResponse.data])
-    
+        cols.append(db.PulseResponse.data)
+
+    q = session.query(*cols)
     q = q.join(db.PulseResponse)
     
     q, pre_rec, post_rec = join_pulse_response_to_expt(q)
+    q = q.join(db.StimSpike)
     q = q.add_columns(post_rec.start_time.label('rec_start_time'))
         
     filters = [
@@ -741,13 +814,13 @@ def get_baseline_amps_NO_ORM_VERSION(session, expt, dev, clamp_mode='ic'):
     return recs
 
 
-def get_baseline_amps(session, pair, clamp_mode='ic', amps=None):
+def get_baseline_amps(session, pair, clamp_mode='ic', amps=None, get_data=True):
     """Select records from baseline_response_strength table
 
     If *amps* is given (output from get_amps), then baseline records will be selected from the same
     sweeps as the responses.
     """
-    q = session.query(
+    cols = [
         BaselineResponseStrength.id,
         BaselineResponseStrength.pos_amp,
         BaselineResponseStrength.neg_amp,
@@ -761,7 +834,12 @@ def get_baseline_amps(session, pair, clamp_mode='ic', amps=None):
         db.PatchClampRecording.clamp_mode,
         db.Recording.start_time.label('rec_start_time'),
         db.Baseline.start_time.label('base_start_time'),
-    ).join(db.Baseline).join(db.Recording).join(db.PatchClampRecording).join(db.SyncRec).join(db.Experiment)
+    ]
+    if get_data:
+        cols.append(db.Baseline.data)
+        
+    q = session.query(*cols)
+    q = q.join(db.Baseline).join(db.Recording).join(db.PatchClampRecording).join(db.SyncRec).join(db.Experiment)
     
     filters = [
         (db.Recording.electrode==pair.post_cell.electrode,),
@@ -783,7 +861,7 @@ def get_baseline_amps(session, pair, clamp_mode='ic', amps=None):
     if amps is not None:
         # for each record returned from get_amps, return the nearest baseline record
         mask = np.zeros(len(recs), dtype=bool)
-        amp_times = amps['rec_start_time'].astype(float)*1e-9 + amps['pulse_start_time']
+        amp_times = amps['rec_start_time'].astype(float)*1e-9 + amps['response_start_time']
         base_times = recs['rec_start_time'].astype(float)*1e-9 + recs['base_start_time']
         for i in range(len(amps)):
             order = np.argsort(np.abs(base_times - amp_times[i]))
