@@ -142,7 +142,7 @@ if __name__ == '__main__':
     # then everything else
     for i,rec in enumerate(conns):
         pair_id = (rec['acq_timestamp'], rec['pre_cell_id'], rec['post_cell_id'])
-        print("================== %s %s %s ===================== (%d/%d)" % (pair_id + (i, len(conns)))
+        print("================== %s %s %s ===================== (%d/%d)" % (pair_id + (i, len(conns))))
         try:
             measure_limit(*pair_id)
         except Exception:
