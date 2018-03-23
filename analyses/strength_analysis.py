@@ -26,6 +26,7 @@ from neuroanalysis.data import Trace, TraceList
 from neuroanalysis import filter
 from neuroanalysis.event_detection import exp_deconvolve
 from neuroanalysis.baseline import float_mode
+from neuroanalysis.fitting import Psp
 
 from multipatch_analysis.database import database as db
 from multipatch_analysis import config, synphys_cache
@@ -864,7 +865,7 @@ def get_baseline_amps(session, pair, clamp_mode='ic', amps=None, get_data=True):
         # for each record returned from get_amps, return the nearest baseline record
         mask = np.zeros(len(recs), dtype=bool)
         amp_times = amps['rec_start_time'].astype(float)*1e-9 + amps['response_start_time']
-        base_times = recs['rec_start_time'].astype(float)*1e-9 + recs['base_start_time']
+        base_times = recs['rec_start_time'].astype(float)*1e-9 + recs['response_start_time']
         for i in range(len(amps)):
             order = np.argsort(np.abs(base_times - amp_times[i]))
             for j in order:
@@ -1727,6 +1728,135 @@ class PairView(pg.QtCore.QObject):
         else:
             print("ID: %s" % sec)
         
+
+
+
+def str_analysis_result_table(results, recs):
+    """Convert output of strength_analysis.analyze_response_strength to look like
+    the result was queried from the DB using get_amps() or get_baseline()
+    """
+    dtype = [
+        ('id', int),
+        ('pos_amp', float),
+        ('neg_amp', float),
+        ('pos_dec_amp', float),
+        ('neg_dec_amp', float),
+        ('pos_dec_latency', float),
+        ('neg_dec_latency', float),
+        ('crosstalk', float),
+        ('ex_qc_pass', bool),
+        ('in_qc_pass', bool),
+        ('clamp_mode', object),
+        ('pulse_number', int),
+        ('max_dvdt_time', float),
+        ('response_start_time', float),
+        ('data', object),
+        ('rec_start_time', float),
+    ]
+    
+    table = np.empty(len(recs), dtype=dtype)
+    for i,rec in enumerate(recs):
+        for key in ['ex_qc_pass', 'in_qc_pass', 'clamp_mode', 'data']:
+            table[i][key] = getattr(rec, key)
+        result = results[i]
+        for key,val in result.items():
+            if key in table.dtype.names:
+                table[i][key] = val
+        table[i]['max_dvdt_time'] = 10e-3
+        table[i]['response_start_time'] = 0
+    return table
+
+
+class RecordWrapper(object):
+    """Wraps records returned from DB so that we can override some values.
+    """
+    def __init__(self, rec):
+        self._rec = rec
+    def __getattr__(self, attr):
+        return getattr(self._rec, attr)
+        
+
+def simulate_response(fg_recs, bg_results, amp, rtime, seed=None):
+    if seed is not None:
+        np.random.seed(seed)
+
+    dt = 1.0 / db.default_sample_rate
+    t = np.arange(0, 15e-3, dt)
+    template = Psp.psp_func(t, xoffset=0, yoffset=0, rise_time=rtime, decay_tau=15e-3, amp=1, rise_power=2)
+
+    r_amps = scipy.stats.binom.rvs(p=0.2, n=24, size=len(fg_recs)) * scipy.stats.norm.rvs(scale=0.3, loc=1, size=len(fg_recs))
+    r_amps *= amp / r_amps.mean()
+    r_latency = np.random.normal(size=len(fg_recs), scale=200e-6, loc=13e-3)
+    fg_results = []
+    traces = []
+    fg_recs = [RecordWrapper(rec) for rec in fg_recs]  # can't modify fg_recs, so we wrap records with a mutable shell
+    for k,rec in enumerate(fg_recs):
+        rec.data = rec.data.copy()
+        start = int(r_latency[k] * db.default_sample_rate)
+        length = len(rec.data) - start
+        rec.data[start:] += template[:length] * r_amps[k]
+
+        fg_result = analyze_response_strength(rec, 'baseline')
+        fg_results.append(fg_result)
+
+        traces.append(Trace(rec.data, sample_rate=db.default_sample_rate))
+        traces[-1].amp = r_amps[k]
+    fg_results = str_analysis_result_table(fg_results, fg_recs)
+    conn_result = analyze_pair_connectivity({('ic', 'fg'): fg_results, ('ic', 'bg'): bg_results, ('vc', 'fg'): [], ('vc', 'bg'): []}, sign=1)
+    return conn_result, traces
+
+
+                    
+_connection_simulation_cache = None                    
+def simulate_connection(fg_recs, bg_results, classifier, amp, rtime, n_trials=8, pair_id=None):
+    # check for a cache hit first
+    cache_file = "strength_analysis_sim.pkl"
+    global _connection_simulation_cache
+    if pair_id is not None:
+        cache_key = (pair_id, amp, rtime)
+        if _connection_simulation_cache is None:
+            if os.path.exists(cache_file):
+                _connection_simulation_cache = pickle.load(open(cache_file, 'rb'))
+            else:
+                _connection_simulation_cache = {}
+        if cache_key in _connection_simulation_cache:
+            return _connection_simulation_cache[cache_key]
+        
+    # run the simulation
+    import pyqtgraph.multiprocess as mp
+    result = {'results': [], 'rise_time': rtime, 'amp': amp}
+
+    sim_results = [None] * n_trials
+    with mp.Parallelize(range(n_trials), results=sim_results, workers=8) as tasker:
+        for ii in tasker:
+            tasker.results[ii] = simulate_response(fg_recs, bg_results, amp, rtime, seed=ii)
+
+    for k in range(len(sim_results)):
+        conn_result, traces = sim_results[k]
+
+        result['results'].append(conn_result)
+        result['traces'] = traces
+        # print(conn_result)
+        print(dict([(k, conn_result[k]) for k in classifier.features]))
+
+    pred = classifier.predict(result['results'])
+    result['prediction'] = pred['prediction'].sum() / n_trials
+    result['confidence'] = pred['confidence'].mean()
+    print("\nrise time:", rtime, " amplitude:", amp)
+    print(pred)
+    
+    # store to cache
+    if pair_id is not None:
+        cache_result = result.copy()
+        cache_result['traces'] = None  # don't cache traces
+        _connection_simulation_cache[cache_key] = cache_result
+        tmp_file = cache_file + '.tmp'
+        pickle.dump(_connection_simulation_cache, open(tmp_file, 'wb'))
+        if os.path.isfile(cache_file):
+            os.remove(cache_file)
+        os.rename(tmp_file, cache_file)
+    
+    return result
 
 
 

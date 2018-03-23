@@ -7,90 +7,16 @@ from __future__ import print_function, division
 from datetime import datetime
 import multiprocessing
 import pyqtgraph as pg
-import pyqtgraph.multiprocess as mp
 import numpy as np
 from scipy import stats
 
 from neuroanalysis.data import Trace, TraceList
-from neuroanalysis.fitting import Psp
 import strength_analysis
 from multipatch_analysis.database import database as db
 
 
 
-def str_analysis_result_table(results, recs):
-    """Convert output of strength_analysis.analyze_response_strength to look like
-    the result was queried from the DB using get_amps() or get_baseline()
-    """
-    dtype = [
-        ('id', int),
-        ('pos_amp', float),
-        ('neg_amp', float),
-        ('pos_dec_amp', float),
-        ('neg_dec_amp', float),
-        ('pos_dec_latency', float),
-        ('neg_dec_latency', float),
-        ('crosstalk', float),
-        ('ex_qc_pass', bool),
-        ('in_qc_pass', bool),
-        ('clamp_mode', object),
-        ('pulse_number', int),
-        ('max_dvdt_time', float),
-        ('response_start_time', float),
-        ('data', object),
-        ('rec_start_time', float),
-    ]
-    
-    table = np.empty(len(recs), dtype=dtype)
-    for i,rec in enumerate(recs):
-        for key in ['ex_qc_pass', 'in_qc_pass', 'clamp_mode', 'data']:
-            table[i][key] = getattr(rec, key)
-        result = results[i]
-        for key,val in result.items():
-            if key in table.dtype.names:
-                table[i][key] = val
-        table[i]['max_dvdt_time'] = 10e-3
-        table[i]['response_start_time'] = 0
-    return table
 
-
-class RecordWrapper(object):
-    """Wraps records returned from DB so that we can override some values.
-    """
-    def __init__(self, rec):
-        self._rec = rec
-    def __getattr__(self, attr):
-        return getattr(self._rec, attr)
-        
-
-def simulate_response(fg_recs, bg_results, amp, rtime, seed=None):
-    if seed is not None:
-        np.random.seed(seed)
-
-    dt = 1.0 / db.default_sample_rate
-    t = np.arange(0, 15e-3, dt)
-    template = Psp.psp_func(t, xoffset=0, yoffset=0, rise_time=rtime, decay_tau=15e-3, amp=1, rise_power=2)
-
-    r_amps = stats.binom.rvs(p=0.2, n=24, size=len(fg_recs)) * stats.norm.rvs(scale=0.3, loc=1, size=len(fg_recs))
-    r_amps *= amp / r_amps.mean()
-    r_latency = np.random.normal(size=len(fg_recs), scale=200e-6, loc=13e-3)
-    fg_results = []
-    traces = []
-    fg_recs = [RecordWrapper(rec) for rec in fg_recs]  # can't modify fg_recs, so we wrap records with a mutable shell
-    for k,rec in enumerate(fg_recs):
-        rec.data = rec.data.copy()
-        start = int(r_latency[k] * db.default_sample_rate)
-        length = len(rec.data) - start
-        rec.data[start:] += template[:length] * r_amps[k]
-
-        fg_result = strength_analysis.analyze_response_strength(rec, 'baseline')
-        fg_results.append(fg_result)
-
-        traces.append(Trace(rec.data, sample_rate=db.default_sample_rate))
-        traces[-1].amp = r_amps[k]
-    fg_results = str_analysis_result_table(fg_results, fg_recs)
-    conn_result = strength_analysis.analyze_pair_connectivity({('ic', 'fg'): fg_results, ('ic', 'bg'): bg_results, ('vc', 'fg'): [], ('vc', 'bg'): []}, sign=1)
-    return conn_result, traces
 
 
 if __name__ == '__main__':
@@ -223,7 +149,7 @@ if __name__ == '__main__':
         p()
         amps = strength_analysis.get_amps(session, pair)
         p()
-        base_amps = strength_analysis.get_baseline_amps(session, pair)
+        base_amps = strength_analysis.get_baseline_amps(session, pair, amps=amps, clamp_mode='ic')
         p()
         
         q = strength_analysis.response_query(session)
@@ -318,7 +244,7 @@ if __name__ == '__main__':
 
         # measure background connection strength
         bg_results = [strength_analysis.analyze_response_strength(rec, 'baseline') for rec in bg_recs]
-        bg_results = str_analysis_result_table(bg_results, bg_recs)
+        bg_results = strength_analysis.str_analysis_result_table(bg_results, bg_recs)
 
         # for this example, we use background data to simulate foreground
         # (but this will be biased due to lack of crosstalk in background data)
@@ -335,37 +261,11 @@ if __name__ == '__main__':
         for j,rtime in enumerate(rtimes):
             for i,amp in enumerate(amps):
                 print("---------------------------------------    %d/%d  %d/%d      \r" % (i,len(amps),j,len(rtimes)),)
+                result = strength_analysis.simulate_connection(fg_recs, bg_results, classifier, amp, rtime, pair_id=(timestamp, pre_id, post_id))
 
-                results[i,j]['results'] = []
-                results[i,j]['rise_time'] = rtime
-                results[i,j]['amp'] = amp
+                for k,v in result.items():
+                    results[i,j][k] = v
 
-                # sim_results = pool.map(lambda seed: simulate_response(fg_recs, bg_results, amp, rtime, seed=seed), range(8))
-                # sim_results = [simulate_response(fg_recs, bg_results, amp, rtime, seed=seed) for seed in range(8)]
-                trials = 8
-                sim_results = [None]*trials
-                with mp.Parallelize(range(trials), results=sim_results, workers=8) as tasker:
-                    for ii in tasker:
-                        tasker.results[ii] = simulate_response(fg_recs, bg_results, amp, rtime, seed=ii)
-
-                for k in range(len(sim_results)):
-                    conn_result, traces = sim_results[k]
-
-                    results[i,j]['results'].append(conn_result)
-                    results[i,j]['traces'] = traces
-                    # print(conn_result)
-                    print(dict([(k, conn_result[k]) for k in classifier.features]))
-
-                pred = classifier.predict(results[i,j]['results'])
-                results[i,j]['prediction'] = pred['prediction'].sum() / trials
-                results[i,j]['confidence'] = pred['confidence'].mean()
-                print("\nrise time:", rtime, " amplitude:", amp)
-                print(pred)
-
-
-            # c = limit_plot.plot(rtimes, results[i]['result'], pen=(i, len(amps)*1.3), symbol='o', antialias=True, name="%duV"%(amp*1e6), data=results[i], symbolSize=4)
-            # c.scatter.sigClicked.connect(clicked)
-            # pg.QtGui.QApplication.processEvents()
             c = limit_plot.plot(amps, results[:,j]['confidence'], pen=pg.intColor(j, len(rtimes)*1.3, maxValue=150), symbol='o', antialias=True, name="%dus"%(rtime*1e6), data=results[:,j], symbolSize=4)
             c.scatter.sigClicked.connect(clicked)
             pg.QtGui.QApplication.processEvents()
