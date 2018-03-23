@@ -5,6 +5,7 @@ Analysis of detection limits vs synaptic strength, kinetics, and background nois
 """
 from __future__ import print_function, division
 from datetime import datetime
+import sys
 import multiprocessing
 import pyqtgraph as pg
 import numpy as np
@@ -12,19 +13,41 @@ from scipy import stats
 
 from neuroanalysis.data import Trace, TraceList
 import strength_analysis
+from strength_analysis import TableGroup
 from multipatch_analysis.database import database as db
 
 
+class DetectionLimitTableGroup(TableGroup):
+    """Measures pulse amplitudes for each pulse response and background chunk.
+    """
+    schemas = {
+        'detection_limit': [
+            ('pair_id', 'pair.id', '', {'index': True}),
+            ('simulation_results', 'object'),
+            ('minimum_amplitude', 'float'),
+        ]
+    }
 
-def measure_limit(timestamp, pre_id, post_id):
-    # Find this connection in the pair list
-    idx = np.argwhere((abs(filtered['acq_timestamp'] - timestamp) < 1) & (filtered['pre_cell_id'] == pre_id) & (filtered['post_cell_id'] == post_id))
-    if idx.size == 0:
-        print("not in filtered connections")
-        return
-    idx = idx[0,0]
-    
-    pair = session.query(db.Pair).filter(db.Pair.id==filtered[idx]['pair_id']).all()[0]
+    def create_mappings(self):
+        TableGroup.create_mappings(self)
+        
+        DetectionLimit = self['detection_limit']
+        
+        db.Pair.detection_limit = db.relationship(DetectionLimit, back_populates="pair", cascade="delete", single_parent=True, uselist=False)
+        DetectionLimit.pair = db.relationship(db.Pair, back_populates="detection_limit", single_parent=True)
+
+detection_limit_tables = DetectionLimitTableGroup()
+
+def init_tables():
+    global DetectionLimit
+    detection_limit_tables.create_tables()
+    DetectionLimit = detection_limit_tables['detection_limit']
+
+
+def measure_limit(pair, session, classifier):
+    pair_id = pair.experiment.acq_timestamp, pair.pre_cell.ext_id, pair.post_cell.ext_id
+    print(pair_id)
+
     amps = strength_analysis.get_amps(session, pair)
     base_amps = strength_analysis.get_baseline_amps(session, pair, amps=amps, clamp_mode='ic')
     
@@ -88,12 +111,35 @@ def measure_limit(timestamp, pre_id, post_id):
     results = np.empty(len(amps), dtype=[('results', object), ('prediction', float), ('confidence', float), ('traces', object), ('rise_time', float), ('amp', float)])
     print("  Simulating synaptic events..")
     # pool = multiprocessing.Pool(4)
+    limit_entry = DetectionLimit(pair=pair)
+
+    results = []
+    avg_conf = []
+    limit = None
     for i,amp in enumerate(amps):
-        print("---------------------------------------    %d/%d      \r" % (i, len(amps)),)
-        result = strength_analysis.simulate_connection(fg_recs, bg_results, classifier, amp, rtime, pair_id=(timestamp, pre_id, post_id))
+        print("----- %d/%d  %0.3g      \r" % (i, len(amps), amp),)
+        result = strength_analysis.simulate_connection(fg_recs, bg_results, classifier, amp, rtime)
+        results.append({'amp': amp, 'rise_time': rtime, 'predictions': list(result['predictions']), 'confidence': list(result['confidence'])})
+        avg_conf.append(result['confidence'].mean())
+        print(results[-1])
+        # if we crossed threshold, interpolate to estimate the minimum amplitude
+        # and terminate the loop early
+        if limit is None and i > 0 and avg_conf[-1] > classifier.prob_threshold:
+            a1 = amps[i-1]
+            a2 = amp
+            c1,c2 = avg_conf[-2:]
+            s = (classifier.prob_threshold - c1) / (c2 - c1)
+            limit = a1 + s * (a2 - a1)
+            break
+
+    limit_entry.simulation_results = results
+    limit_entry.minimum_amplitude = limit
+
+    session.add(limit_entry)
+    session.commit()
 
 
-if __name__ == '__main__':
+def rebuild_detection_limits():
     # silence warnings about fp issues
     np.seterr(all='ignore')
 
@@ -132,20 +178,27 @@ if __name__ == '__main__':
 
     # do selected connections first
     for i,rec in enumerate(filtered):
-        pair_id = (rec['acq_timestamp'], rec['pre_cell_id'], rec['post_cell_id'])
-        print("================== %s %s %s ===================== (%d/%d)" % (pair_id + (i, len(filtered))))
+        print("================== %d/%d ===================== " % (i, len(filtered)))
+        pair = session.query(db.Pair).filter(db.Pair.id==rec['pair_id']).all()[0]
         try:
-            measure_limit(*pair_id)
+            measure_limit(pair, session, classifier)
         except Exception:
             sys.excepthook(*sys.exc_info())
-            
-    # then everything else
-    for i,rec in enumerate(conns):
-        pair_id = (rec['acq_timestamp'], rec['pre_cell_id'], rec['post_cell_id'])
-        print("================== %s %s %s ===================== (%d/%d)" % (pair_id + (i, len(conns))))
-        try:
-            measure_limit(*pair_id)
-        except Exception:
-            sys.excepthook(*sys.exc_info())
-            
+
+
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--rebuild', action='store_true', default=False)
     
+    args, extra = parser.parse_known_args(sys.argv[1:])
+
+    pg.dbg()
+    if args.rebuild: # and raw_input("Rebuild detection limit table? ") == 'y':
+        detection_limit_tables.drop_tables()
+        init_tables()
+        rebuild_detection_limits()
+    else:
+        init_tables()
+
+
