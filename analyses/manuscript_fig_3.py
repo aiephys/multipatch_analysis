@@ -17,6 +17,82 @@ import strength_analysis
 from multipatch_analysis.database import database as db
 
 
+
+def str_analysis_result_table(results, recs):
+    """Convert output of strength_analysis.analyze_response_strength to look like
+    the result was queried from the DB using get_amps() or get_baseline()
+    """
+    dtype = [
+        ('id', int),
+        ('pos_amp', float),
+        ('neg_amp', float),
+        ('pos_dec_amp', float),
+        ('neg_dec_amp', float),
+        ('pos_dec_latency', float),
+        ('neg_dec_latency', float),
+        ('crosstalk', float),
+        ('ex_qc_pass', bool),
+        ('in_qc_pass', bool),
+        ('clamp_mode', object),
+        ('pulse_number', int),
+        ('max_dvdt_time', float),
+        ('response_start_time', float),
+        ('data', object),
+        ('rec_start_time', float),
+    ]
+    
+    table = np.empty(len(recs), dtype=dtype)
+    for i,rec in enumerate(recs):
+        for key in ['ex_qc_pass', 'in_qc_pass', 'clamp_mode', 'data']:
+            table[i][key] = getattr(rec, key)
+        result = results[i]
+        for key,val in result.items():
+            if key in table.dtype.names:
+                table[i][key] = val
+        table[i]['max_dvdt_time'] = 10e-3
+        table[i]['response_start_time'] = 0
+    return table
+
+
+class RecordWrapper(object):
+    """Wraps records returned from DB so that we can override some values.
+    """
+    def __init__(self, rec):
+        self._rec = rec
+    def __getattr__(self, attr):
+        return getattr(self._rec, attr)
+        
+
+def simulate_response(fg_recs, bg_results, amp, rtime, seed=None):
+    if seed is not None:
+        np.random.seed(seed)
+
+    dt = 1.0 / db.default_sample_rate
+    t = np.arange(0, 15e-3, dt)
+    template = Psp.psp_func(t, xoffset=0, yoffset=0, rise_time=rtime, decay_tau=15e-3, amp=1, rise_power=2)
+
+    r_amps = stats.binom.rvs(p=0.2, n=24, size=len(fg_recs)) * stats.norm.rvs(scale=0.3, loc=1, size=len(fg_recs))
+    r_amps *= amp / r_amps.mean()
+    r_latency = np.random.normal(size=len(fg_recs), scale=200e-6, loc=13e-3)
+    fg_results = []
+    traces = []
+    fg_recs = [RecordWrapper(rec) for rec in fg_recs]  # can't modify fg_recs, so we wrap records with a mutable shell
+    for k,rec in enumerate(fg_recs):
+        rec.data = rec.data.copy()
+        start = int(r_latency[k] * db.default_sample_rate)
+        length = len(rec.data) - start
+        rec.data[start:] += template[:length] * r_amps[k]
+
+        fg_result = strength_analysis.analyze_response_strength(rec, 'baseline')
+        fg_results.append(fg_result)
+
+        traces.append(Trace(rec.data, sample_rate=db.default_sample_rate))
+        traces[-1].amp = r_amps[k]
+    fg_results = str_analysis_result_table(fg_results, fg_recs)
+    conn_result = strength_analysis.analyze_pair_connectivity({('ic', 'fg'): fg_results, ('ic', 'bg'): bg_results, ('vc', 'fg'): [], ('vc', 'bg'): []}, sign=1)
+    return conn_result, traces
+
+
 if __name__ == '__main__':
     # silence warnings about fp issues
     np.seterr(all='ignore')
@@ -238,74 +314,6 @@ if __name__ == '__main__':
         #         results.append(result)
         #     return str_analysis_result_table(results)
 
-        def str_analysis_result_table(results, recs):
-            """Convert output of strength_analysis.analyze_response_strength to look like
-            the result was queried from the DB using get_amps() or get_baseline()
-            """
-            dtype = [
-                ('id', int),
-                ('pos_amp', float),
-                ('neg_amp', float),
-                ('pos_dec_amp', float),
-                ('neg_dec_amp', float),
-                ('pos_dec_latency', float),
-                ('neg_dec_latency', float),
-                ('crosstalk', float),
-                ('ex_qc_pass', bool),
-                ('in_qc_pass', bool),
-                ('clamp_mode', object),
-                ('pulse_number', int),
-                ('max_dvdt_time', float),
-                ('response_start_time', float),
-                ('data', object),
-                ('rec_start_time', float),
-            ]
-            
-            table = np.empty(len(recs), dtype=dtype)
-            for i,rec in enumerate(recs):
-                for key in ['ex_qc_pass', 'in_qc_pass', 'clamp_mode', 'data']:
-                    table[i][key] = getattr(rec, key)
-                result = results[i]
-                for key,val in result.items():
-                    if key in table.dtype.names:
-                        table[i][key] = val
-                table[i]['max_dvdt_time'] = 10e-3
-                table[i]['response_start_time'] = 0
-            return table
-
-
-        class RecordWrapper(object):
-            """Wraps records returned from DB so that we can override some values.
-            """
-            def __init__(self, rec):
-                self._rec = rec
-            def __getattr__(self, attr):
-                return getattr(self._rec, attr)
-                
-
-        def simulate_response(fg_recs, bg_results, amp, rtime, seed=None):
-            if seed is not None:
-                np.random.seed(seed)
-            r_amps = stats.binom.rvs(p=0.2, n=24, size=len(fg_recs)) * stats.norm.rvs(scale=0.3, loc=1, size=len(fg_recs))
-            r_amps *= amp / r_amps.mean()
-            r_latency = np.random.normal(size=len(fg_recs), scale=200e-6, loc=13e-3)
-            fg_results = []
-            traces = []
-            fg_recs = [RecordWrapper(rec) for rec in fg_recs]  # can't modify fg_recs, so we wrap records with a mutable shell
-            for k,rec in enumerate(fg_recs):
-                rec.data = rec.data.copy()
-                start = int(r_latency[k] / dt)
-                length = len(rec.data) - start
-                rec.data[start:] += template[:length] * r_amps[k]
-
-                fg_result = strength_analysis.analyze_response_strength(rec, 'baseline')
-                fg_results.append(fg_result)
-
-                traces.append(Trace(rec.data, dt=dt))
-                traces[-1].amp = r_amps[k]
-            fg_results = str_analysis_result_table(fg_results, fg_recs)
-            conn_result = strength_analysis.analyze_pair_connectivity({('ic', 'fg'): fg_results, ('ic', 'bg'): bg_results, ('vc', 'fg'): [], ('vc', 'bg'): []}, sign=1)
-            return conn_result, traces
 
 
         # measure background connection strength
@@ -327,8 +335,6 @@ if __name__ == '__main__':
         for j,rtime in enumerate(rtimes):
             for i,amp in enumerate(amps):
                 print("---------------------------------------    %d/%d  %d/%d      \r" % (i,len(amps),j,len(rtimes)),)
-                t = np.arange(0, 15e-3, dt)
-                template = Psp.psp_func(t, xoffset=0, yoffset=0, rise_time=rtime, decay_tau=15e-3, amp=1, rise_power=2)
 
                 results[i,j]['results'] = []
                 results[i,j]['rise_time'] = rtime
