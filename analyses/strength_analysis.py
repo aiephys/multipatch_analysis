@@ -1808,19 +1808,9 @@ def simulate_response(fg_recs, bg_results, amp, rtime, seed=None):
 
                     
 _connection_simulation_cache = None                    
-def simulate_connection(fg_recs, bg_results, classifier, amp, rtime, n_trials=8, pair_id=None):
-    # check for a cache hit first
-    cache_file = "strength_analysis_sim.pkl"
-    global _connection_simulation_cache
-    if pair_id is not None:
-        cache_key = (pair_id, amp, rtime)
-        if _connection_simulation_cache is None:
-            if os.path.exists(cache_file):
-                _connection_simulation_cache = pickle.load(open(cache_file, 'rb'))
-            else:
-                _connection_simulation_cache = {}
-        if cache_key in _connection_simulation_cache:
-            return _connection_simulation_cache[cache_key]
+def simulate_connection(fg_recs, bg_results, classifier, amp, rtime, n_trials=8):
+    """Run repeated simulation trials adding a synthetic PSP to recorded background noise.
+    """
         
     # run the simulation
     import pyqtgraph.multiprocess as mp
@@ -1837,25 +1827,14 @@ def simulate_connection(fg_recs, bg_results, classifier, amp, rtime, n_trials=8,
         result['results'].append(conn_result)
         result['traces'] = traces
         # print(conn_result)
-        print(dict([(k, conn_result[k]) for k in classifier.features]))
+        # print(dict([(k, conn_result[k]) for k in classifier.features]))
 
     pred = classifier.predict(result['results'])
-    result['prediction'] = pred['prediction'].sum() / n_trials
-    result['confidence'] = pred['confidence'].mean()
-    print("\nrise time:", rtime, " amplitude:", amp)
-    print(pred)
-    
-    # store to cache
-    if pair_id is not None:
-        cache_result = result.copy()
-        cache_result['traces'] = None  # don't cache traces
-        _connection_simulation_cache[cache_key] = cache_result
-        tmp_file = cache_file + '.tmp'
-        pickle.dump(_connection_simulation_cache, open(tmp_file, 'wb'))
-        if os.path.isfile(cache_file):
-            os.remove(cache_file)
-        os.rename(tmp_file, cache_file)
-    
+    result['predictions'] = pred['prediction']
+    result['confidence'] = pred['confidence']
+    # print("\nrise time:", rtime, " amplitude:", amp)
+    # print(pred)
+        
     return result
 
 
