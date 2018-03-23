@@ -242,16 +242,46 @@ if __name__ == '__main__':
             """Convert output of strength_analysis.analyze_response_strength to look like
             the result was queried from the DB using get_amps() or get_baseline()
             """
-            table = np.empty(len(recs), dtype=base_amps.dtype)
+            dtype = [
+                ('id', int),
+                ('pos_amp', float),
+                ('neg_amp', float),
+                ('pos_dec_amp', float),
+                ('neg_dec_amp', float),
+                ('pos_dec_latency', float),
+                ('neg_dec_latency', float),
+                ('crosstalk', float),
+                ('ex_qc_pass', bool),
+                ('in_qc_pass', bool),
+                ('clamp_mode', object),
+                ('pulse_number', int),
+                ('max_dvdt_time', float),
+                ('response_start_time', float),
+                ('data', object),
+                ('rec_start_time', float),
+            ]
+            
+            table = np.empty(len(recs), dtype=dtype)
             for i,rec in enumerate(recs):
-                for key in ['ex_qc_pass', 'in_qc_pass', 'clamp_mode']:
+                for key in ['ex_qc_pass', 'in_qc_pass', 'clamp_mode', 'data']:
                     table[i][key] = getattr(rec, key)
                 result = results[i]
                 for key,val in result.items():
                     if key in table.dtype.names:
                         table[i][key] = val
+                table[i]['max_dvdt_time'] = 10e-3
+                table[i]['response_start_time'] = 0
             return table
 
+
+        class RecordWrapper(object):
+            """Wraps records returned from DB so that we can override some values.
+            """
+            def __init__(self, rec):
+                self._rec = rec
+            def __getattr__(self, attr):
+                return getattr(self._rec, attr)
+                
 
         def simulate_response(fg_recs, bg_results, amp, rtime, seed=None):
             if seed is not None:
@@ -261,8 +291,9 @@ if __name__ == '__main__':
             r_latency = np.random.normal(size=len(fg_recs), scale=200e-6, loc=13e-3)
             fg_results = []
             traces = []
+            fg_recs = [RecordWrapper(rec) for rec in fg_recs]  # can't modify fg_recs, so we wrap records with a mutable shell
             for k,rec in enumerate(fg_recs):
-                data = rec.data.copy()
+                rec.data = rec.data.copy()
                 start = int(r_latency[k] / dt)
                 length = len(rec.data) - start
                 rec.data[start:] += template[:length] * r_amps[k]
@@ -270,9 +301,8 @@ if __name__ == '__main__':
                 fg_result = strength_analysis.analyze_response_strength(rec, 'baseline')
                 fg_results.append(fg_result)
 
-                traces.append(Trace(rec.data.copy(), dt=dt))
+                traces.append(Trace(rec.data, dt=dt))
                 traces[-1].amp = r_amps[k]
-                rec.data[:] = data  # can't modify rec, so we have to muck with the array (and clean up afterward) instead
             fg_results = str_analysis_result_table(fg_results, fg_recs)
             conn_result = strength_analysis.analyze_pair_connectivity({('ic', 'fg'): fg_results, ('ic', 'bg'): bg_results, ('vc', 'fg'): [], ('vc', 'bg'): []}, sign=1)
             return conn_result, traces
@@ -287,7 +317,7 @@ if __name__ == '__main__':
         fg_recs = bg_recs
 
         # now measure foreground simulated under different conditions
-        amps = 5e-6 * 2**np.arange(9)
+        amps = 2e-6 * 2**np.arange(9)
         amps[0] = 0
         rtimes = [1e-3, 2e-3, 4e-3, 6e-3]
         dt = 1 / db.default_sample_rate
@@ -309,8 +339,8 @@ if __name__ == '__main__':
                 trials = 8
                 sim_results = [None]*trials
                 with mp.Parallelize(range(trials), results=sim_results, workers=8) as tasker:
-                    for i in tasker:
-                        tasker.results[i] = simulate_response(fg_recs, bg_results, amp, rtime, seed=i)
+                    for ii in tasker:
+                        tasker.results[ii] = simulate_response(fg_recs, bg_results, amp, rtime, seed=ii)
 
                 for k in range(len(sim_results)):
                     conn_result, traces = sim_results[k]
