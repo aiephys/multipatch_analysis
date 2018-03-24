@@ -5,10 +5,11 @@ Analysis of detection limits vs synaptic strength, kinetics, and background nois
 """
 from __future__ import print_function, division
 from datetime import datetime
+import os, pickle
 import multiprocessing
 import pyqtgraph as pg
 import numpy as np
-from scipy import stats
+from scipy import stats, ndimage
 
 from neuroanalysis.data import Trace, TraceList
 import strength_analysis
@@ -35,7 +36,7 @@ if __name__ == '__main__':
         ("high signal, low noise", (1499725138.07, 7, 4)),
         ("low signal, high noise", (1494969844.93, 6, 1)),
         # ("low signal, low noise", (1502312765.01, 1, 4)),
-        ("high noise, no connection", (1489009391.46, 3, 5)),
+        ("high noise, no detected connection", (1489009391.46, 3, 5)),
     ]
     
     pg.mkQApp()
@@ -45,12 +46,13 @@ if __name__ == '__main__':
 
     win = pg.GraphicsLayoutWidget()
     win.show()
-    win.resize(1600, 600)
+    win.resize(900, 900)
 
     scatter_plot = win.addPlot(0, 0, rowspan=len(show_conns))
     scatter_plot.setLogMode(True, True)
     scatter_plot.setAspectLocked()
-    scatter_plot.setFixedWidth(500)
+    scatter_plot.setFixedWidth(350)
+    scatter_plot.showGrid(True, True, alpha=0.5)
 
     # read all pair records from DB
     classifier = strength_analysis.get_pair_classifier(seed=0, use_vc_features=False)
@@ -84,14 +86,44 @@ if __name__ == '__main__':
     c_mask = filtered['synapse'] == True
     u_mask = ~c_mask
 
-    signal = filtered['confidence']
-    background = filtered['ic_base_deconv_amp_mean']
+    signal = filtered['ic_fit_amp']
+    background = filtered['minimum_amplitude']
 
     c_plot = scatter_plot.plot(background[c_mask], signal[c_mask], pen=None, symbol='d', symbolPen='k', symbolBrush=(0, 255, 255), symbolSize=10, data=filtered[c_mask])
 
     u_plot = scatter_plot.plot(background[u_mask], signal[u_mask], pen=None, symbol='o', symbolPen=None, symbolBrush=(50, 50, 50, 80), symbolSize=4, data=filtered[u_mask])
-    u_plot.setZValue(-10)
-    # u_plot.scatter.setCompositionMode(pg.QtGui.QPainter.CompositionMode_Plus)
+    # u_plot.setZValue(-10)
+
+
+    # plot for showing distribution of response amplitudes and detection limits
+    profile_plot = win.addPlot(3, 0, colspan=5)
+    profile_plot.setMinimumHeight(300)
+    profile_plot.setXRange(2e-6, 2e-3, padding=0)
+    profile_plot.setLogMode(True, False)
+
+    
+    # Select pairs to use for amplitude profile analysis
+    prof_conns = filtered[c_mask]
+    prof_amps = prof_conns['ic_fit_amp']
+
+    n_bins = 30
+    bins = 10e-6 * ((2e-3/10e-6)**(1./n_bins)) ** np.arange(n_bins+1)
+    amp_hist = list(np.histogram(prof_amps, bins=bins))
+    amp_hist[0] = ndimage.gaussian_filter(amp_hist[0].astype(float), 1)
+    profile_plot.plot(amp_hist[1], amp_hist[0], stepMode=True, fillLevel=0, brush=(200, 200, 200), pen='k')
+
+    min_amps = prof_conns['minimum_amplitude']
+    min_amps = min_amps[np.isfinite(min_amps)]
+    limit_hist = list(np.histogram(min_amps, bins=bins))
+    limit_hist[0] = limit_hist[0].astype(float) / limit_hist[0].sum()
+    bin_centers = (bins[1:] * bins[:-1]) ** 0.5
+    limit_prof = np.cumsum(limit_hist[0])
+    profile_plot.plot(bin_centers, limit_prof * amp_hist[0].max(), pen='r')
+
+    corrected_prof = ndimage.gaussian_filter(amp_hist[0], 0) / limit_prof
+    profile_plot.plot(bins, corrected_prof, stepMode=True, fillLevel=0, brush=(120, 120, 120), pen='k').setZValue(-10)
+    
+    print("Global connectivity correction factor:", corrected_prof.sum() / amp_hist[0].sum())
 
     trace_plots = []
     deconv_plots = []
@@ -104,11 +136,14 @@ if __name__ == '__main__':
         p = pg.debug.Profiler(disabled=True, delayed=False)
         trace_plot = win.addPlot(i, 1)
         trace_plots.append(trace_plot)
-        deconv_plot = win.addPlot(i, 2)
-        deconv_plots.append(deconv_plot)
-        hist_plot = win.addPlot(i, 3)
+        trace_plot.setYRange(-1.4e-3, 2.1e-3)
+        # deconv_plot = win.addPlot(i, 2)
+        # deconv_plots.append(deconv_plot)
+        # deconv_plot.hide()
+        
+        hist_plot = win.addPlot(i, 2)
         hist_plots.append(hist_plot)
-        limit_plot = win.addPlot(i, 4)
+        limit_plot = win.addPlot(i, 3)
         limit_plot.addLegend()
         limit_plot.setLogMode(True, False)
         limit_plot.addLine(y=classifier.prob_threshold)
@@ -125,7 +160,7 @@ if __name__ == '__main__':
         scatter_plot.plot([background[idx]], [signal[idx]], pen='k', symbol='o', size=10, symbolBrush='r', symbolPen=None)
         
         # Plot example traces and histograms
-        for plts in [trace_plots, deconv_plots]:
+        for plts in [trace_plots]:#, deconv_plots]:
             plt = plts[-1]
             plt.setXLink(plts[0])
             plt.setYLink(plts[0])
@@ -183,13 +218,13 @@ if __name__ == '__main__':
             trace.t0 = -result['spike_time']
             trace = trace - np.median(trace.time_slice(-0.5e-3, 0.5e-3).data)
             deconvs.append(trace)            
-            deconv_plot.plot(trace.time_values, trace.data, pen=(0, 0, 0, 20))
+            # deconv_plot.plot(trace.time_values, trace.data, pen=(0, 0, 0, 20))
 
         # plot average trace
         mean = TraceList(traces).mean()
         trace_plot.plot(mean.time_values, mean.data, pen={'color':'g', 'width': 2}, shadowPen={'color':'k', 'width': 3}, antialias=True)
         mean = TraceList(deconvs).mean()
-        deconv_plot.plot(mean.time_values, mean.data, pen={'color':'g', 'width': 2}, shadowPen={'color':'k', 'width': 3}, antialias=True)
+        # deconv_plot.plot(mean.time_values, mean.data, pen={'color':'g', 'width': 2}, shadowPen={'color':'k', 'width': 3}, antialias=True)
 
         # add label
         label = pg.LabelItem(name)
@@ -255,22 +290,37 @@ if __name__ == '__main__':
         amps[0] = 0
         rtimes = [1e-3, 2e-3, 4e-3, 6e-3]
         dt = 1 / db.default_sample_rate
-        results = np.empty((len(amps), len(rtimes)), dtype=[('results', object), ('prediction', float), ('confidence', float), ('traces', object), ('rise_time', float), ('amp', float)])
+        results = np.empty((len(amps), len(rtimes)), dtype=[('results', object), ('predictions', object), ('confidence', object), ('traces', object), ('rise_time', float), ('amp', float)])
         print("  Simulating synaptic events..")
-        # pool = multiprocessing.Pool(4)
+
+        cachefile = 'fig_3_cache.pkl'
+        if os.path.exists(cachefile):
+            cache = pickle.load(open(cachefile, 'rb'))
+        else:
+            cache = {}
+        pair_key = (timestamp, pre_id, post_id)
+        pair_cache = cache.setdefault(pair_key, {})
+
         for j,rtime in enumerate(rtimes):
+            new_results = False
             for i,amp in enumerate(amps):
                 print("---------------------------------------    %d/%d  %d/%d      \r" % (i,len(amps),j,len(rtimes)),)
-                result = strength_analysis.simulate_connection(fg_recs, bg_results, classifier, amp, rtime, pair_id=(timestamp, pre_id, post_id))
+                result = pair_cache.get((rtime, amp))
+                if result is None:
+                    result = strength_analysis.simulate_connection(fg_recs, bg_results, classifier, amp, rtime)
+                    pair_cache[rtime, amp] = result
+                    new_results = True
 
                 for k,v in result.items():
                     results[i,j][k] = v
 
-            c = limit_plot.plot(amps, results[:,j]['confidence'], pen=pg.intColor(j, len(rtimes)*1.3, maxValue=150), symbol='o', antialias=True, name="%dus"%(rtime*1e6), data=results[:,j], symbolSize=4)
+            c = limit_plot.plot(amps, [np.mean(x) for x in results[:,j]['confidence']], pen=pg.intColor(j, len(rtimes)*1.3, maxValue=150), symbol='o', antialias=True, name="%dus"%(rtime*1e6), data=results[:,j], symbolSize=4)
             c.scatter.sigClicked.connect(clicked)
             pg.QtGui.QApplication.processEvents()
 
-                
+            if new_results:
+                pickle.dump(cache, open(cachefile, 'wb'))
+
         pg.QtGui.QApplication.processEvents()
 
     # Handle selected individual connections

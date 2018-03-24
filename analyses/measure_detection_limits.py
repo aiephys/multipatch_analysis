@@ -139,7 +139,7 @@ def measure_limit(pair, session, classifier):
     session.commit()
 
 
-def rebuild_detection_limits():
+def build_detection_limits():
     # silence warnings about fp issues
     np.seterr(all='ignore')
 
@@ -177,13 +177,22 @@ def rebuild_detection_limits():
     session = db.Session()
 
     # do selected connections first
+    count = 0
     for i,rec in enumerate(filtered):
         print("================== %d/%d ===================== " % (i, len(filtered)))
         pair = session.query(db.Pair).filter(db.Pair.id==rec['pair_id']).all()[0]
+        if pair.detection_limit is not None:
+            print("    skip!")
+            continue
         try:
             measure_limit(pair, session, classifier)
         except Exception:
             sys.excepthook(*sys.exc_info())
+        
+        count += 1
+        if count > 100:
+            print("Bailing out before memory fills up.")
+            sys.exit(0)
 
 
 if __name__ == '__main__':
@@ -194,11 +203,11 @@ if __name__ == '__main__':
     args, extra = parser.parse_known_args(sys.argv[1:])
 
     pg.dbg()
-    if args.rebuild: # and raw_input("Rebuild detection limit table? ") == 'y':
+    if args.rebuild and raw_input("Drop and rebuild detection limit table? ") == 'y':
         detection_limit_tables.drop_tables()
         init_tables()
-        rebuild_detection_limits()
     else:
         init_tables()
 
+    build_detection_limits()
 

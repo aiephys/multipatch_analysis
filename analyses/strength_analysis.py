@@ -1287,38 +1287,57 @@ class ResponseStrengthAnalyzer(object):
 
 
 def query_all_pairs(classifier=None):
+    columns = [
+        "connection_strength.*",
+        "experiment.id as experiment_id",
+        "experiment.acq_timestamp as acq_timestamp",
+        "experiment.rig_name",
+        "experiment.acsf",
+        "slice.species as donor_species",
+        "slice.genotype as donor_genotype",
+        "slice.age as donor_age",
+        "slice.sex as donor_sex",
+        "slice.quality as slice_quality",
+        "slice.weight as donor_weight",
+        "slice.slice_time",
+        "pre_cell.ext_id as pre_cell_id",
+        "pre_cell.cre_type as pre_cre_type",
+        "pre_cell.target_layer as pre_target_layer",
+        "post_cell.ext_id as post_cell_id",
+        "post_cell.cre_type as post_cre_type",
+        "post_cell.target_layer as post_target_layer",
+        "pair.synapse",
+        "pair.distance",
+        "pair.crosstalk_artifact",
+        "abs(post_cell.ext_id - pre_cell.ext_id) as electrode_distance",
+    ]
+    columns.extend([
+        "detection_limit.minimum_amplitude",
+    ])
+
+    joins = [
+        "join pair on connection_strength.pair_id=pair.id",
+        "join cell pre_cell on pair.pre_cell_id=pre_cell.id",
+        "join cell post_cell on pair.post_cell_id=post_cell.id",
+        "join experiment on pair.expt_id=experiment.id",
+        "join slice on experiment.slice_id=slice.id",
+    ]
+    joins.extend([
+        "left join detection_limit on detection_limit.pair_id=pair.id",
+    ])
+
+
     query = ("""
     select 
-        connection_strength.*,
-        experiment.id as experiment_id,
-        experiment.acq_timestamp as acq_timestamp,
-        experiment.rig_name,
-        experiment.acsf,
-        slice.species as donor_species,
-        slice.genotype as donor_genotype,
-        slice.age as donor_age,
-        slice.sex as donor_sex,
-        slice.quality as slice_quality,
-        slice.weight as donor_weight,
-        slice.slice_time,
-        pre_cell.ext_id as pre_cell_id,
-        pre_cell.cre_type as pre_cre_type,
-        pre_cell.target_layer as pre_target_layer,
-        post_cell.ext_id as post_cell_id,
-        post_cell.cre_type as post_cre_type,
-        post_cell.target_layer as post_target_layer,
-        pair.synapse,
-        pair.distance,
-        pair.crosstalk_artifact,
-        abs(post_cell.ext_id - pre_cell.ext_id) as electrode_distance
+    {columns}
     from connection_strength
-    join pair on connection_strength.pair_id=pair.id
-    join cell pre_cell on pair.pre_cell_id=pre_cell.id
-    join cell post_cell on pair.post_cell_id=post_cell.id
-    join experiment on pair.expt_id=experiment.id
-    join slice on experiment.slice_id=slice.id
+    {joins}
     order by acq_timestamp
-    """)
+    """).format(
+        columns=", ".join(columns), 
+        joins=" ".join(joins),
+    )
+
     session = db.Session()
     df = pandas.read_sql(query, session.bind)
 
@@ -1806,13 +1825,9 @@ def simulate_response(fg_recs, bg_results, amp, rtime, seed=None):
     return conn_result, traces
 
 
-                    
-_connection_simulation_cache = None                    
 def simulate_connection(fg_recs, bg_results, classifier, amp, rtime, n_trials=8):
     """Run repeated simulation trials adding a synthetic PSP to recorded background noise.
     """
-        
-    # run the simulation
     import pyqtgraph.multiprocess as mp
     result = {'results': [], 'rise_time': rtime, 'amp': amp}
 
