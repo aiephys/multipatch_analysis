@@ -323,6 +323,14 @@ def create_all_mappings():
                         return pair
         
         @property
+        def cells(self):
+            return {elec.cell.ext_id: elec.cell for elec in self.electrodes}
+
+        @property
+        def pairs(self):
+            return {(pair.pre_cell.ext_id, pair.post_cell.ext_id): pair for pair in self.pairs}
+
+        @property
         def nwb_file(self):
             return os.path.join(config.synphys_data, self.storage_path, self.ephys_file)
 
@@ -381,7 +389,7 @@ def create_all_mappings():
     Experiment.electrodes = relationship(Electrode, order_by=Electrode.id, back_populates="experiment", cascade="delete", single_parent=True)
     Electrode.experiment = relationship(Experiment, back_populates="electrodes")
 
-    Electrode.cell = relationship(Cell, back_populates="electrode", cascade="delete", single_parent=True)
+    Electrode.cell = relationship(Cell, back_populates="electrode", cascade="delete", single_parent=True, uselist=False)
     Cell.electrode = relationship(Electrode, back_populates="cell", single_parent=True)
 
     Experiment.pairs = relationship(Pair, back_populates="experiment", cascade="delete", single_parent=True)
@@ -399,7 +407,7 @@ def create_all_mappings():
     SyncRec.recordings = relationship(Recording, order_by=Recording.id, back_populates="sync_rec", cascade="delete", single_parent=True)
     Recording.sync_rec = relationship(SyncRec, back_populates="recordings")
 
-    Recording.patch_clamp_recording = relationship(PatchClampRecording, back_populates="recording", cascade="delete", single_parent=True)
+    Recording.patch_clamp_recording = relationship(PatchClampRecording, back_populates="recording", cascade="delete", single_parent=True, uselist=False)
     PatchClampRecording.recording = relationship(Recording, back_populates="patch_clamp_recording", single_parent=True)
 
     PatchClampRecording.multi_patch_probe = relationship(MultiPatchProbe, back_populates="patch_clamp_recording", cascade="delete", single_parent=True)
