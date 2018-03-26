@@ -2,6 +2,7 @@
 Accumulate all experiment data into a set of linked tables.
 """
 import os, io, time
+from datetime import datetime
 import numpy as np
 
 import sqlalchemy
@@ -507,8 +508,15 @@ def slice_from_timestamp(ts, session=None):
 
 @default_session
 def experiment_from_timestamp(ts, session=None):
+    if isinstance(ts, float):
+        ts = datetime.fromtimestamp(ts)
     expts = session.query(Experiment).filter(Experiment.acq_timestamp==ts).all()
     if len(expts) == 0:
+        # For backward compatibility, check for timestamp truncated to 2 decimal places
+        for expt in session.query(Experiment).all():
+            if abs((expt.acq_timestamp - ts).total_seconds()) < 0.01:
+                return expt
+        
         raise KeyError("No experiment found for timestamp %s" % ts)
     elif len(expts) > 1:
         raise RuntimeError("Multiple experiments found for timestamp %s" % ts)

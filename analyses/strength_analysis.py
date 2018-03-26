@@ -1738,7 +1738,7 @@ class PairView(pg.QtCore.QObject):
         print("Original path:", src)
         print("Server path:", sel.expt.original_path)
         if hasattr(sel, 'pair'):
-            print("ID: %s  %d->%d" % (sec, pair.pre_cell.ext_id, pair.post_cell.ext_id))
+            print("ID: %.3f  %d->%d" % (sec, pair.pre_cell.ext_id, pair.post_cell.ext_id))
             conn = pair.connection_strength
             cls = get_pair_classifier()
             f = {k: getattr(conn, k) for k in cls.features}
