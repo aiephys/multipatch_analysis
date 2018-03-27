@@ -88,6 +88,7 @@ feature2_plot.show()
 feature3_plot = PlotGrid()
 feature3_plot.set_shape(1, 3)
 feature3_plot.show()
+amp_plot = pg.plot()
 synapse_plot = PlotGrid()
 synapse_plot.set_shape(len(connection_types), 1)
 synapse_plot.show()
@@ -97,7 +98,7 @@ for c in range(len(connection_types)):
     type = connection_types[c]
     expt_list = all_expts.select(cre_type=cre_type, target_layer=target_layer, calcium=calcium, age=age)
     color = color_palette[c]
-    grand_response[type[0]] = {'trace': [], 'amp': [], 'latency': [], 'rise': [], 'dist': [], 'decay':[], 'CV': []}
+    grand_response[type[0]] = {'trace': [], 'amp': [], 'latency': [], 'rise': [], 'dist': [], 'decay':[], 'CV': [], 'amp_measured': []}
     expt_ids[type[0]] = []
     synapse_plot[c, 0].addLegend()
     for expt in expt_list:
@@ -108,7 +109,6 @@ for c in range(len(connection_types)):
             layer_check = expt.cells[pre].target_layer == target_layer[0] and expt.cells[post].target_layer == target_layer[1]
             if cre_check is True and layer_check is True:
                 pulse_response, artifact = get_response(expt, pre, post, type='pulse')
-
                 if threshold is not None and artifact > threshold:
                     continue
                 response_subset, hold = response_filter(pulse_response, freq_range=[0, 50], holding_range=holding, pulse=True)
@@ -157,12 +157,15 @@ for c in range(len(connection_types)):
                             manifest['rise1080'].append(rise1080)
                             manifest['rise'].append(rise)
                         else:
+                            grand_response[type[0]]['latency'].append(np.nan)
+                            grand_response[type[0]]['rise'].append(np.nan)
                             manifest['rise2080'].append(None)
                             manifest['rise1090'].append(None)
                             manifest['rise1080'].append(None)
                             manifest['rise'].append(rise)
                         grand_response[type[0]]['trace'].append(avg_trace)
                         grand_response[type[0]]['amp'].append(psp_fits.best_values['amp'])
+                        grand_response[type[0]]['amp_measured'].append(avg_amp)
                         grand_response[type[0]]['dist'].append(distance)
                         expt_ids[type[0]].append((pre, post, expt.uid, expt.source_id))
 
@@ -225,15 +228,18 @@ for c in range(len(connection_types)):
     # feature2_plot[3, 0].plot(grand_response[type[0]]['rise'], grand_response[type[0]]['amp'], pen=None, symbol='o',
     #                          symbolSize=8, symbolBrush=color, symbolPeb='w')
     # feature2_plot[3, 0].setLabels(left=['amplitude', 'V'], bottom=['rise time', 's'])
-    # feature3_plot[0, 0].plot(grand_response[type[0]]['latency'], grand_response[type[0]]['amp'], pen=None, symbol='o',
-    #                          symbolSize=8, symbolBrush=color, symbolPen='w')
-    # feature3_plot[0, 0].setLabels(left=['Amp', 'V'], bottom=['Latency', 's'])
-    # feature3_plot[0, 1].plot(grand_response[type[0]]['rise'], grand_response[type[0]]['amp'], pen=None, symbol='o',
-    #                          symbolSize=8, symbolBrush=color, symbolPen='w')
-    # feature3_plot[0, 1].setLabels(left=['Amp', 'V'], bottom=['Rise time', 's'])
-    # feature3_plot[0, 2].plot(grand_response[type[0]]['latency'], grand_response[type[0]]['rise'], pen=None, symbol='o',
-    #                          symbolSize=8, symbolBrush=color, symbolPen='w')
-    # feature3_plot[0, 2].setLabels(left=['Rise Time', 's'], bottom=['Latency', 's'])
+    feature3_plot[0, 0].plot(grand_response[type[0]]['latency'], grand_response[type[0]]['amp'], pen=None, symbol='o',
+                             symbolSize=8, symbolBrush=color, symbolPen='w')
+    feature3_plot[0, 0].setLabels(left=['Amp', 'V'], bottom=['Latency', 's'])
+    feature3_plot[0, 1].plot(grand_response[type[0]]['CV'], grand_response[type[0]]['amp'], pen=None, symbol='o',
+                             symbolSize=8, symbolBrush=color, symbolPen='w')
+    feature3_plot[0, 1].setLabels(left=['Amp', 'V'], bottom=['CV', ''])
+    feature3_plot[0, 2].plot(grand_response[type[0]]['CV'], grand_response[type[0]]['latency'], pen=None, symbol='o',
+                             symbolSize=8, symbolBrush=color, symbolPen='w')
+    feature3_plot[0, 2].setLabels(left=['Latency', 's'], bottom=['CV', ''])
+    amp_plot.plot(grand_response[type[0]]['amp'], grand_response[type[0]]['amp_measured'], pen=None, symbol='o',
+                 symbolSize=10, symbolBrush=color, symbolPen='w')
+    amp_plot.setLabels(left=['Measured Amp', 'V'], bottom=['Fit Amp','V'])
     if c == len(connection_types) - 1:
         x_scale = pg.ScaleBar(size=10e-3, suffix='s')
         x_scale.setParentItem(synapse_plot[c, 0].vb)
