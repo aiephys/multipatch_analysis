@@ -234,14 +234,14 @@ def summary_plot_pulse(feature_list, labels, titles, i, median=False, grand_trac
         if n_features > 1:
             current_feature = feature_list[feature]
             if median is True:
-                mean = np.median(current_feature)
+                mean = np.nanmedian(current_feature)
             else:
-                mean = np.mean(current_feature)
+                mean = np.nanmean(current_feature)
             label = labels[feature]
             title = titles[feature]
         else:
             current_feature = feature_list
-            mean = np.mean(current_feature)
+            mean = np.nanmean(current_feature)
             label = labels
             title = titles
         plot[feature, 0].setLabels(left=(label[0], label[1]))
@@ -254,7 +254,7 @@ def summary_plot_pulse(feature_list, labels, titles, i, median=False, grand_trac
             #bar = pg.BarGraphItem(x=[i], height=mean, width=0.7, brush='w', pen={'color': color, 'width': 2})
             #plot[feature, 0].addItem(bar)
             plot[feature, 0].plot([i], [mean], symbol='o', symbolSize=20, symbolPen='k', symbolBrush=color)
-            sem = stats.sem(current_feature)
+            sem = stats.sem(current_feature, nan_policy='omit')
             #err = pg.ErrorBarItem(x=np.asarray([i]), y=np.asarray([mean]), height=sem, beam=0.1)
             #plot[feature, 0].addItem(err)
             plot[feature, 0].plot((0.3 * dx / dx.max()) + i, current_feature, pen=None, symbol='o', symbolSize=10, symbolPen='w',
