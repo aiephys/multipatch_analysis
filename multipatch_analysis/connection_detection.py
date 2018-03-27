@@ -573,7 +573,8 @@ def fit_psp(response, mode='ic', sign='any', xoffset=(11e-3, 10e-3, 15e-3), yoff
     weight = np.ones(len(y))
     #weight[:int(10e-3/dt)] = 0.5
     
-    onset_index = int((xoffset[0]-response.t0) / dt)
+    init_xoff = xoffset[0] if isinstance(xoffset, tuple) else xoffset
+    onset_index = int((init_xoff-response.t0) / dt)
     weight[onset_index+int(1e-3/dt):onset_index+int(7e-3/dt)] = 3
     if mask_stim_artifact:
         # Use zero weight for fit region around the stimulus artifact
