@@ -380,7 +380,7 @@ class ExperimentMetadataSubmission(object):
                 else:
                     warnings.append("Pipette %d: old metadata has unrecognized label: %s." % (pid, label))
             # if target layer is not set above for human or mouse L2/3 assume layer 5
-            if pip['target_layer'] == '':
+            if pip['target_layer'] == '' and self.spec_info['organism'] == 'mouse':
                 pip['target_layer'] = '5'
             # now make sure there are no conflicts
             for label, pos in labels.items():
