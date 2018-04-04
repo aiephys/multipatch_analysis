@@ -27,14 +27,6 @@ class ExperimentMetadataSubmission(object):
         self.files = files
         self.pipettes = pipettes
 
-    @property
-    def old_expt_list(self):
-        """Singleton ExperimentList used to access old metadata information for import
-        """
-        if self._expt_list is None:
-            ExperimentMetadataSubmission._expt_list = experiment_list.ExperimentList(cache='expts_cache.pkl')
-        return self._expt_list
-
     def check(self):
         """
         * error if any files do not exist
@@ -214,22 +206,25 @@ class ExperimentMetadataSubmission(object):
         }[self.spec_info['organism']]
         roi_plans = lims.specimen_ephys_roi_plans(spec_name)
         lims_edit_href = '<a href="http://lims2/specimens/{sid}/edit">http://lims2/specimens/{sid}/edit</a>'.format(sid=sid)
-        if len(roi_plans) == 0:
-            errors.append('Specimen has no ephys roi plan. Edit:' + lims_edit_href)
-        elif len(roi_plans) == 1 and roi_plans[0]['name'] not in accepted_roi_plans:
-            errors.append('Specimen has wrong ephys roi plan '
-                '(expected "Synaptic Physiology ROI Plan"). Edit:' + lims_edit_href)
-        elif len(roi_plans) > 1:
-            errors.append('Specimen has multiple ephys roi plans '
-                '(expected 1). Edit:' + lims_edit_href)
 
-        # Check LIMS specimen has flipped field set
-        if self.spec_info['flipped'] not in (True, False):
-            if self.spec_info['organism'] == 'human':
-                # human specimens can be symmetrical enough that "flipped" is meaningless
-                warnings.append("Flipped field was not set for this specimen: %s" % lims_edit_href)
-            else:
-                errors.append("Must set flipped field for this specimen: %s" % lims_edit_href)
+        site_date = datetime.fromtimestamp(site_info['__timestamp__'])
+        if site_date >= datetime(2017, 10, 1):  # newer experiments need extra checks on LIMS structures
+            if len(roi_plans) == 0:
+                errors.append('Specimen has no ephys roi plan. Edit:' + lims_edit_href)
+            elif len(roi_plans) == 1 and roi_plans[0]['name'] not in accepted_roi_plans:
+                errors.append('Specimen has wrong ephys roi plan '
+                    '(expected "Synaptic Physiology ROI Plan"). Edit:' + lims_edit_href)
+            elif len(roi_plans) > 1:
+                errors.append('Specimen has multiple ephys roi plans '
+                    '(expected 1). Edit:' + lims_edit_href)
+
+            # Check LIMS specimen has flipped field set
+            if self.spec_info['flipped'] not in (True, False):
+                if self.spec_info['organism'] == 'human':
+                    # human specimens can be symmetrical enough that "flipped" is meaningless
+                    warnings.append("Flipped field was not set for this specimen: %s" % lims_edit_href)
+                else:
+                    errors.append("Must set flipped field for this specimen: %s" % lims_edit_href)
         
         # histology well name should look something like "multi_170911_21_A01"
         hist_well = self.spec_info['histology_well_name']
@@ -242,7 +237,6 @@ class ExperimentMetadataSubmission(object):
             else:
                 yy, mm, dd, plate_n, well = m.groups()[:5]
                 plate_date = datetime(2000+int(yy), int(mm), int(dd))
-                site_date = datetime.fromtimestamp(site_info['__timestamp__'])
                 # find the most recent Monday
                 expected_plate_date = site_date - timedelta(days=site_date.weekday())
                 if abs((expected_plate_date - plate_date).total_seconds()) > 7*24*3600:
@@ -317,7 +311,7 @@ class ExperimentMetadataSubmission(object):
         yaml.dump(self.files, open(manifest_file, 'wb'), default_flow_style=False, indent=4)
 
     def _import_old_metadata(self, site_info, warnings, errors):
-        expts = self.old_expt_list
+        expts = experiment_list.cached_experiments()
         uid = '%0.02f' % site_info['__timestamp__']
         try:
             genotype = genotypes.Genotype(self.spec_info['genotype'])
@@ -347,6 +341,9 @@ class ExperimentMetadataSubmission(object):
                     warnings.append('Pipette %d: ignoring old label "%s" because the value "%s" is unrecognized' % (pid, label, pos))
                     continue
 
+                # translate different fluorophore labels:
+                label = {'af488': 'AF488', 'cascade_blue':'Cascade Blue'}.get(label, label)
+
                 # biocytin or fluorophore
                 if label == 'biocytin':
                     labels[label] = pos
@@ -363,6 +360,11 @@ class ExperimentMetadataSubmission(object):
                         warnings.append("Pipette %d: imported layer %s from old metadata." % (pid, layer))
                     elif pip['target_layer'] != layer:
                         warnings.append("Pipette %d: old metadata layer %s conflicts with current layer: %s." % (pid, layer, pip['target_layer']))
+                # Mouse L2/3 pre-production manual calls
+                elif label == 'L23pyr':
+                    if pip['target_layer'] == '':
+                        pip['target_layer'] = '2/3'
+                        warnings.append("Pipette %d: imported layer %s from old metadata." % (pid, pip['target_layer']))
                 # cre type; convert to color(s)
                 elif label in constants.ALL_CRE_TYPES:
                     if genotype is None:
@@ -377,7 +379,9 @@ class ExperimentMetadataSubmission(object):
                         labels[color] = pos
                 else:
                     warnings.append("Pipette %d: old metadata has unrecognized label: %s." % (pid, label))
-            
+            # if target layer is not set above for human or mouse L2/3 assume layer 5
+            if pip['target_layer'] == '' and self.spec_info['organism'] == 'mouse':
+                pip['target_layer'] = '5'
             # now make sure there are no conflicts
             for label, pos in labels.items():
                 val = pip['cell_labels'].get(label, '')
