@@ -7,6 +7,7 @@ from acq4.Manager import getManager
 from acq4.modules.MosaicEditor import MosaicEditor
 from . import submit_expt
 from . import multipatch_nwb_viewer
+from .. import lims
 
 
 class MultipatchSubmissionModule(Module):
@@ -69,8 +70,20 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         QtGui.QWidget.__init__(self)
         self.layout = QtGui.QGridLayout()
         self.setLayout(self.layout)
-        self.label = QtGui.QLabel("OHai.")
-        self.layout.addWidget(self.label)
+
+        self.load_btn = QtGui.QPushButton("Load 20x")
+        self.layout.addWidget(self.load_btn, 0, 0)
+
+        self.load_btn.clicked.connect(self.load_clicked)
+
+    def load_clicked(self):
+        base_dir = self.mosaic_editor.ui.fileLoader.baseDir()
+        spec_id = base_dir.info()['specimen_ID']
+        print(spec_id)
+        images = lims.specimen_images(spec_id)
+        print(images)
+        raise Exception()
+
 
 MosaicEditor.addExtension("Multi Patch", {
     'type': 'ctrl',
