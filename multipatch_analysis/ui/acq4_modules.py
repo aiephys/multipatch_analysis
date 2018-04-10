@@ -1,6 +1,10 @@
+import acq4.pyqtgraph as pg
 from acq4.pyqtgraph.Qt import QtCore, QtGui
 from acq4.modules.Module import Module
 from acq4.Manager import getManager
+# from acq4.analysis.modules.MosaicEditor import MosaicEditor
+# from acq4.util.Canvas.items.CanvasItem import CanvasItem
+from acq4.modules.MosaicEditor import MosaicEditor
 from . import submit_expt
 from . import multipatch_nwb_viewer
 
@@ -56,3 +60,21 @@ class NWBViewerModule(Module):
         
     def window(self):
         return self.ui
+
+
+class MultiPatchMosaicEditorExtension(QtGui.QWidget):
+    def __init__(self, mosaic_editor):
+        self.mosaic_editor = mosaic_editor
+
+        QtGui.QWidget.__init__(self)
+        self.layout = QtGui.QGridLayout()
+        self.setLayout(self.layout)
+        self.label = QtGui.QLabel("OHai.")
+        self.layout.addWidget(self.label)
+
+MosaicEditor.addExtension("Multi Patch", {
+    'type': 'ctrl',
+    'builder': MultiPatchMosaicEditorExtension,
+    'pos': ('top', 'Canvas'),
+    'size': (600, 200),
+})
