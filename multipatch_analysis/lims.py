@@ -155,6 +155,25 @@ def specimen_images(specimen_name):
     r = lims.query(q)
     return [(rec['id'], rec['name']) for rec in r]
 
+def specimen_20x_image(specimen_name):
+    """Return file path for 20x, biocytin image for a specimen.
+    """
+    q = """
+        select slides.storage_directory, slides.barcode as barcode_start, treatments.id as barcode_end 
+        from slides join image_series_slides iss on iss.slide_id = slides.id 
+        join image_series on image_series.id = iss.image_series_id 
+        join specimens on image_series.specimen_id=specimens.id 
+        join sub_images on sub_images.image_series_id=image_series.id 
+        join images on images.id = sub_images.image_id 
+        left join treatments on treatments.id = images.treatment_id 
+        where treatments.name = 'Biocytin' and specimens.name = '%s';
+        """ % specimen_name
+    r = lims.query(q)
+    if len(r) == 0:
+        raise ValueError('No 20x image found for %d' % spec_name)
+    path_string = str(r[0]['storage_directory']) + str(r[0]['barcode_start']) + '_' + str(r[0]['barcode_end']) + '.aff'
+    return lims.safe_system_path(path_string)
+
 
 def specimen_id_from_name(spec_name):
     """Return the LIMS ID of a specimen give its name.

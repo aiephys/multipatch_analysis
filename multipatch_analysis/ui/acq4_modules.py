@@ -8,7 +8,8 @@ from acq4.modules.MosaicEditor import MosaicEditor
 from . import submit_expt
 from . import multipatch_nwb_viewer
 from .. import lims
-
+import os
+from acq4.util import FileLoader
 
 class MultipatchSubmissionModule(Module):
     """Allows multipatch data submission UI to be invoked as an ACQ4 module.
@@ -78,11 +79,31 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
 
     def load_clicked(self):
         base_dir = self.mosaic_editor.ui.fileLoader.baseDir()
-        spec_id = base_dir.info()['specimen_ID']
-        print(spec_id)
-        images = lims.specimen_images(spec_id)
-        print(images)
+        try:
+            spec_id = base_dir.info()['specimen_ID']
+            print(spec_id)
+            image_path = lims.specimen_20x_image(spec_id)
+            print(image_path)
+        
+            #check the file path
+            if os.path.exists(image_path) == True:
+                print('File Exists in LIMS')
+                image_name = image_path.split("\\")[-1]
+                fLoader = self.FileLoader.FileLoader()
+                #fLoader.loadFile(image_name)
+                #FileLoader.FileLoader.loadCSlicked(image_name)
+            else:
+                print('Try again')
+            #print (base_dir.info())
+            #print(os.path.join(base_dir, image_name))
+        except KeyError:
+            print('No Slice Selected')
         raise Exception()
+
+
+
+    #def copy_image(self):
+    #   base_dir = self.mosaic_editor.ui.fileLoader.baseDir()
 
 
 MosaicEditor.addExtension("Multi Patch", {
