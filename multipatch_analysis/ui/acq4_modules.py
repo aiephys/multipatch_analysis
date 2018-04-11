@@ -10,6 +10,9 @@ from . import multipatch_nwb_viewer
 from .. import lims
 import os
 from acq4.util import FileLoader
+import shutil
+import json
+
 
 class MultipatchSubmissionModule(Module):
     """Allows multipatch data submission UI to be invoked as an ACQ4 module.
@@ -85,25 +88,96 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
             image_path = lims.specimen_20x_image(spec_id)
             print(image_path)
         
-            #check the file path
+            #check the image file path
             if os.path.exists(image_path) == True:
                 print('File Exists in LIMS')
+
                 image_name = image_path.split("\\")[-1]
-                fLoader = self.FileLoader.FileLoader()
-                #fLoader.loadFile(image_name)
-                #FileLoader.FileLoader.loadCSlicked(image_name)
+                # need to copy image to current directory
+                # need to find current directory
+                # hardcode for the time being
+                save_path = "/Users/aarono/Scripts/example_data/2017.09.06_000/slice_001"
+                save_path = save_path + '/' + image_name
+                safe_save_path = lims.lims.safe_system_path(save_path)
+
+                if os.path.exists(safe_save_path) == False:
+                    shutil.copy2(image_path, safe_save_path)
+                    
+                if os.path.exists(safe_save_path) == True:
+                    print("20x already moved")
+
+                self.create_json_btn = QtGui.QPushButton("Save Cell Location Json")
+                self.layout.addWidget(self.create_json_btn, 1, 0)
+
+                self.create_json_btn.clicked.connect(self.create_lims_json)
+
+                
+                
+                
             else:
-                print('Try again')
+                print("Couldn't find image in LIMS. Check you have the selected the correct slice.")
             #print (base_dir.info())
             #print(os.path.join(base_dir, image_name))
         except KeyError:
             print('No Slice Selected')
-        raise Exception()
+        #raise Exception()
 
+    def upload_clicked(self):
+        print ("uploaded to LIMS")
 
+        # create trigger file in proper folder
+        # name spec_id_ephys_cluster.mpc
+        # Chat-IRES-Cre-neo;Ai14-316041.04.01_ephys_cell_cluster_1234_cells.mpc
+        # contains specimen_id: <LIMS id of cell cluster>
+        # cells_info: '<full path of json file in incoming directory>'
+        # specimen_id: 587022731
+        # cells_info: '/allen/programs/celltypes/production/incoming/mousecelltypes/Chat-IRES-Cre-neo;Ai14-316041.04.01_ephys_cell_cluster_1234_cells.json'
+    
+        # either mouse cell types or human cell types
+        # /allen/programs/celltypes/production/incoming/mousecelltypes/trigger/ or /allen/programs/celltypes/production/incoming/humancelltypes/trigger/
+        
+        # need to get cluster id, species, spec_id, spec_name
 
-    #def copy_image(self):
-    #   base_dir = self.mosaic_editor.ui.fileLoader.baseDir()
+    def create_lims_json(self):
+        # save locally so can be accessed in acq4 for second opinion and then upload function will make a copy
+        # that will be dropped in incoming folder
+
+        #stand in until I can move the variables between functions
+        base_dir = self.mosaic_editor.ui.fileLoader.baseDir()
+        spec_id = base_dir.info()['specimen_ID']
+        print(spec_id)
+
+        # need to get cluster id cell locations
+        # i don't know what the start time variable is
+        data = {}  
+        data['cells'] = []  
+        data['cells'].append({  
+            'ephys_cell_id': 23,
+            'coordinates_20x': {"x": 20, "y": 40},
+            'ephys_qc_result': 'pass',
+            'start_time_sec': 345.4
+        })
+        data['cells'].append({  
+            'ephys_cell_id': 24,
+            'coordinates_20x': {"x": 23, "y": 42},
+            'ephys_qc_result': 'pass',
+            'start_time_sec': 345.4
+        })
+        data['cells'].append({  
+            'ephys_cell_id': 25,
+            'coordinates_20x': {"x": 26, "y": 4},
+            'ephys_qc_result': 'fail',
+            'start_time_sec': 7654.2
+        })
+        # as defined by requirements from technology
+        save_file = spec_id + '_ephys_cell_cluster_1234_cells.json'
+        with open(save_file, 'w') as outfile:  
+            json.dump(data, outfile)
+
+        self.upload_btn = QtGui.QPushButton("Upload Tags to LIMS")
+        self.layout.addWidget(self.upload_btn, 1, 0)
+
+        self.upload_btn.clicked.connect(self.upload_clicked)
 
 
 MosaicEditor.addExtension("Multi Patch", {
