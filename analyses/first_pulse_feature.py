@@ -198,7 +198,6 @@ for c in range(len(connection_types)):
         continue
     if len(grand_response[conn_type[0]]['trace']) > 1:
         grand_trace = TraceList(grand_response[conn_type[0]]['trace']).mean()
-        grand_trace.t0 = 0
     else:
         grand_trace = grand_response[conn_type[0]]['trace'][0]
     n_synapses = len(grand_response[conn_type[0]]['trace'])
