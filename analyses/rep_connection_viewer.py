@@ -12,7 +12,7 @@ from multipatch_analysis.constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_T
 
 ### Select synapses for representative traces as {('pre-type'), ('post-type'): [UID, Pre_cell, Post_cell], } ###
 
-connection_types = human_connections
+connection_types = {((None,'rorb'), (None,'rorb')): ['1502301827.80', 8, 6]}
 
 pg.dbg()
 app = pg.mkQApp()
@@ -21,8 +21,8 @@ pg.setConfigOption('foreground', 'k')
 sweep_color = (0, 0, 0, 30)
 avg_color = {'color': (255, 0, 255), 'width': 2}
 holding_i = [-53, -60]
-holding_e = [-68, -72]
-holding = [-68, -72]
+holding_e = [-65, -72]
+holding = [-55, -72]
 sign = '+'
 scale_offset = (-10, -10)
 scale_anchor = (0.45, 1)
@@ -75,9 +75,9 @@ for row in range(len(connection_types)):
         sign = '-'
     pulse_response, artifact = get_response(expt, pre_cell, post_cell, type='pulse')
     sweep_list = response_filter(pulse_response, freq_range=[0, 50], holding_range=holding, pulse=True)
-    n_sweeps = len(sweep_list)
+    n_sweeps = len(sweep_list[0])
     if n_sweeps > sweep_threshold:
-        qc_list = pulse_qc(sweep_list, baseline=2.5, pulse=None, plot=grid[row, 1])
+        qc_list = pulse_qc(sweep_list[0], baseline=2, pulse=None, plot=grid[row, 1])
         qc_sweeps = len(qc_list)
         if qc_sweeps > sweep_threshold:
             avg_first_pulse = trace_avg(qc_list)
