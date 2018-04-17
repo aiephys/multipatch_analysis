@@ -33,7 +33,7 @@ def safe_copy(src, dst, test=False):
             chunk_copy(src, tmp_dst)
         if os.path.exists(dst):
             # rename destination file to avoid overwriting
-            now = time.strftime('%Y-%m-%d_%H:%M:%S')
+            now = time.strftime('%Y-%m-%d_%H-%M-%S')
             i = 0
             while True:
                 new_name = '%s_%s_%d' % (dst, now, i)
