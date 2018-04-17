@@ -129,7 +129,7 @@ class ExperimentMetadataSubmission(object):
         site_date = datetime.fromtimestamp(site_info['__timestamp__'])
         tod = expt_info.get('time_of_dissection', '')
         if tod == '':
-            errors.append("Time of dissection not specified")
+            warnings.append("Time of dissection not specified")
         else:
             m = re.match(r'((20\d{2})-(\d{1,2})-(\d{1,2}) )?(\d{1,2}):(\d{1,2})', tod)
             if m is None:
