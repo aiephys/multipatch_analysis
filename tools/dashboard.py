@@ -1,6 +1,6 @@
 import os, sys, datetime, re, glob
-import config
-import database
+from multipatch_analysis import config
+from multipatch_analysis.database import database
 from acq4.util.DataManager import getDirHandle
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtGui, QtCore
@@ -14,7 +14,9 @@ class Dashboard(QtGui.QWidget):
         self.setLayout(self.layout)
         
         self.expt_tree = pg.TreeWidget()
-        self.expt_tree.setColumnCount(5)
+        self.fields = ['timestamp', 'path', 'rig', 'description', 'pipettes.yml', 'site.mosaic', 'NAS', 'LIMS', '20x', 'cell specs', '63x', 'morphology']
+        self.expt_tree.setColumnCount(len(self.fields))
+        self.expt_tree.setHeaderLabels(self.fields)
         self.layout.addWidget(self.expt_tree, 0, 0)
         
         self.resize(1000, 900)
@@ -36,8 +38,13 @@ class Dashboard(QtGui.QWidget):
             rec['item'] = item
             self.records[ts] = rec
             
-        for i, field in enumerate(['timestamp', 'rig', 'has_metadata_qc', 'has_site_mosaic']):
+        for field in ['timestamp', 'path', 'rig', 'pipettes.yml', 'site.mosaic']:
+            i = self.fields.index(field)
             item.setText(i, str(rec[field]))
+            if rec[field] in (False, 'ERROR'):
+                item.setBackgroundColor(i, pg.mkColor(255, 200, 200))
+            elif rec[field] is True:
+                item.setBackgroundColor(i, pg.mkColor(200, 255, 200))
 
 
 class PollThread(QtCore.QThread):
@@ -63,17 +70,17 @@ class PollThread(QtCore.QThread):
         root_dh = getDirHandle(config.synphys_data)
         
         print(root_dh.name())
-        for expt in root_dh.ls():
+        for expt in root_dh.ls()[::-1]:
             expt_dh = root_dh[expt]
             print(expt_dh.name())
             if not expt_dh.isDir():
                 continue
-            for slice_name in expt_dh.ls():
+            for slice_name in expt_dh.ls()[::-1]:
                 slice_dh = expt_dh[slice_name]
                 if not slice_dh.isDir():
                     continue
                 print(slice_dh.name())
-                for site_name in slice_dh.ls():
+                for site_name in slice_dh.ls()[::-1]:
                     site_dh = slice_dh[site_name]
                     if not site_dh.isDir():
                         continue
@@ -81,14 +88,17 @@ class PollThread(QtCore.QThread):
             
     def check(self, site_dh):
         print("   check %s" % site_dh.name())
-        ts = site_dh.info()['__timestamp__']
-        date = datetime.datetime.fromtimestamp(ts)
-        site_id = date
+        try:
+            ts = site_dh.info()['__timestamp__']
+        except:
+            ts = "ERROR"
+        # date = datetime.datetime.fromtimestamp(ts)
+        # site_id = date
         
         rig = ''
         #rig = re.search('(MP\d)_', site_dh.name()).groups()[0]
         
-        has_meta_qc = 'file_manifest.yml' in site_dh.ls()
+        has_meta_qc = 'pipettes.yml' in site_dh.ls()
         has_site_mosaic = 'site.mosaic' in site_dh.ls()
         
         
@@ -111,11 +121,11 @@ class PollThread(QtCore.QThread):
         #))
         
         self.update.emit({
-            'dh': site_dh.name(), 
+            'path': site_dh.name(), 
             'timestamp': ts, 
             'rig': rig, 
-            'has_metadata_qc': has_meta_qc,
-            'has_site_mosaic': has_site_mosaic,
+            'pipettes.yml': has_meta_qc,
+            'site.mosaic': has_site_mosaic,
         })
 
 
