@@ -14,7 +14,8 @@ class Dashboard(QtGui.QWidget):
         self.setLayout(self.layout)
         
         self.expt_tree = pg.TreeWidget()
-        self.fields = ['timestamp', 'path', 'rig', 'description', 'pipettes.yml', 'site.mosaic', 'NAS', 'LIMS', '20x', 'cell specs', '63x', 'morphology']
+        self.expt_tree.setSortingEnabled(True)
+        self.fields = ['timestamp', 'path', 'rig', 'description', 'pipettes.yml', 'site.mosaic', 'NAS', 'DB', 'LIMS', '20x', 'cell specs', '63x', 'morphology']
         self.expt_tree.setColumnCount(len(self.fields))
         self.expt_tree.setHeaderLabels(self.fields)
         self.layout.addWidget(self.expt_tree, 0, 0)
@@ -38,8 +39,11 @@ class Dashboard(QtGui.QWidget):
             rec['item'] = item
             self.records[ts] = rec
             
-        for field in ['timestamp', 'path', 'rig', 'pipettes.yml', 'site.mosaic']:
-            i = self.fields.index(field)
+        for field in rec:
+            try:
+                i = self.fields.index(field)
+            except ValueError:
+                continue
             item.setText(i, str(rec[field]))
             if rec[field] in (False, 'ERROR'):
                 item.setBackgroundColor(i, pg.mkColor(255, 200, 200))
@@ -64,13 +68,22 @@ class PollThread(QtCore.QThread):
             break
                 
     def poll(self):
+
+        self.session = database.Session()
+
         print("loading site paths..")
         #site_paths = glob.glob(os.path.join(config.synphys_data, '*', 'slice_*', 'site_*'))
         
         root_dh = getDirHandle(config.synphys_data)
         
         print(root_dh.name())
+        for site_dh in self.list_expts(root_dh):
+            self.check(site_dh, nas=True)
+
+    def list_expts(self, root_dh):
         for expt in root_dh.ls()[::-1]:
+            if '@Recycle' in expt:
+                continue
             expt_dh = root_dh[expt]
             print(expt_dh.name())
             if not expt_dh.isDir():
@@ -84,24 +97,22 @@ class PollThread(QtCore.QThread):
                     site_dh = slice_dh[site_name]
                     if not site_dh.isDir():
                         continue
-                    self.check(site_dh)
-            
-    def check(self, site_dh):
+                    yield site_dh
+
+    def check(self, site_dh, nas=None):
         print("   check %s" % site_dh.name())
-        try:
-            ts = site_dh.info()['__timestamp__']
-        except:
-            ts = "ERROR"
-        # date = datetime.datetime.fromtimestamp(ts)
+        ts = site_dh.info()['__timestamp__']
+        date = datetime.datetime.fromtimestamp(ts)
         # site_id = date
         
-        rig = ''
+        rig = site_dh.info().get('rig')
         #rig = re.search('(MP\d)_', site_dh.name()).groups()[0]
         
         has_meta_qc = 'pipettes.yml' in site_dh.ls()
         has_site_mosaic = 'site.mosaic' in site_dh.ls()
         
-        
+        expts = self.session.query(database.Experiment).filter(database.Experiment.acq_timestamp==date).all()
+        in_database = len(expts) == 1
         
         #try:
             #expt_entry = database.experiment_from_timestamp(date)
@@ -119,14 +130,18 @@ class PollThread(QtCore.QThread):
             #in_db=expt_entry is not None,
             #in_server='raw_data_location' in expt_steps,
         #))
-        
-        self.update.emit({
+        rec = {
             'path': site_dh.name(), 
             'timestamp': ts, 
             'rig': rig, 
             'pipettes.yml': has_meta_qc,
             'site.mosaic': has_site_mosaic,
-        })
+            'DB': in_database,
+        }
+        if nas is not None:
+            rec['NAS'] = True
+        
+        self.update.emit(rec)
 
 
 if __name__ == '__main__':
