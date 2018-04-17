@@ -1,9 +1,14 @@
 import os, sys, datetime, re, glob
-from multipatch_analysis import config
+from multipatch_analysis import config, lims
 from multipatch_analysis.database import database
+from multipatch_analysis.genotypes import Genotype
 from acq4.util.DataManager import getDirHandle
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtGui, QtCore
+
+
+fail_color = (255, 200, 200)
+pass_color = (200, 255, 200)
 
 
 class Dashboard(QtGui.QWidget):
@@ -15,7 +20,7 @@ class Dashboard(QtGui.QWidget):
         
         self.expt_tree = pg.TreeWidget()
         self.expt_tree.setSortingEnabled(True)
-        self.fields = ['timestamp', 'path', 'rig', 'description', 'pipettes.yml', 'site.mosaic', 'NAS', 'DB', 'LIMS', '20x', 'cell specs', '63x', 'morphology']
+        self.fields = ['timestamp', 'path', 'rig', 'description', 'primary', 'archive', 'pipettes.yml', 'site.mosaic', 'NAS', 'DB', 'LIMS', '20x', 'cell specs', '63x', 'morphology']
         self.expt_tree.setColumnCount(len(self.fields))
         self.expt_tree.setHeaderLabels(self.fields)
         self.layout.addWidget(self.expt_tree, 0, 0)
@@ -39,16 +44,23 @@ class Dashboard(QtGui.QWidget):
             rec['item'] = item
             self.records[ts] = rec
             
-        for field in rec:
+        for field, val in rec.items():
             try:
                 i = self.fields.index(field)
             except ValueError:
                 continue
-            item.setText(i, str(rec[field]))
-            if rec[field] in (False, 'ERROR'):
-                item.setBackgroundColor(i, pg.mkColor(255, 200, 200))
-            elif rec[field] is True:
-                item.setBackgroundColor(i, pg.mkColor(200, 255, 200))
+            if isinstance(val, tuple):
+                val, color = val
+            else:
+                color = None
+                if val is True:
+                    color = pass_color
+                elif val in (False, 'ERROR'):
+                    color = fail_color
+
+            item.setText(i, str(val))
+            if color is not None:
+                item.setBackgroundColor(i, pg.mkColor(color))
 
 
 class PollThread(QtCore.QThread):
@@ -70,6 +82,7 @@ class PollThread(QtCore.QThread):
     def poll(self):
 
         self.session = database.Session()
+        expts = {}
 
         print("loading site paths..")
         #site_paths = glob.glob(os.path.join(config.synphys_data, '*', 'slice_*', 'site_*'))
@@ -78,7 +91,11 @@ class PollThread(QtCore.QThread):
         
         print(root_dh.name())
         for site_dh in self.list_expts(root_dh):
-            self.check(site_dh, nas=True)
+            expt = ExperimentMetadata(nas_path=site_dh.name())
+            if expt.timestamp in expts:
+                continue
+            expts[expt.timestamp] = expt
+            self.check(expt)
 
     def list_expts(self, root_dh):
         for expt in root_dh.ls()[::-1]:
@@ -99,49 +116,185 @@ class PollThread(QtCore.QThread):
                         continue
                     yield site_dh
 
-    def check(self, site_dh, nas=None):
-        print("   check %s" % site_dh.name())
-        ts = site_dh.info()['__timestamp__']
-        date = datetime.datetime.fromtimestamp(ts)
-        # site_id = date
+    def check(self, expt):
+        print("   check %s" % expt.site_dh.name())
+
+        org = expt.organism
+        if org is None:
+            description = ("no LIMS spec info", fail_color)
+        elif org == 'human':
+            description = org
+        else:
+            gtyp = expt.genotype
+            if gtyp is None:
+                description = (org + ' (no genotype)', fail_color)
+            else:
+                try:
+                    description = ','.join(Genotype(gtyp).drivers())
+                except:
+                    description = (org + ' (? genotype)', fail_color)
         
-        rig = site_dh.info().get('rig')
-        #rig = re.search('(MP\d)_', site_dh.name()).groups()[0]
-        
-        has_meta_qc = 'pipettes.yml' in site_dh.ls()
-        has_site_mosaic = 'site.mosaic' in site_dh.ls()
-        
-        expts = self.session.query(database.Experiment).filter(database.Experiment.acq_timestamp==date).all()
-        in_database = len(expts) == 1
-        
-        #try:
-            #expt_entry = database.experiment_from_timestamp(date)
-            #expt_steps = expt_entry.submission_data
-            #if expt_steps is None:
-                #expt_steps = {}
-        #except KeyError:
-            #expt_entry = None
-            #expt_steps = {}
-        
-        #print("{rig} {date} {uid} {in_db} {in_server}".format(
-            #rig=rig,
-            #date=date.strftime('%Y-%m-%d'), 
-            #uid='%0.2f'%ts,
-            #in_db=expt_entry is not None,
-            #in_server='raw_data_location' in expt_steps,
-        #))
         rec = {
-            'path': site_dh.name(), 
-            'timestamp': ts, 
-            'rig': rig, 
-            'pipettes.yml': has_meta_qc,
-            'site.mosaic': has_site_mosaic,
-            'DB': in_database,
+            'path': expt.site_dh.name(), 
+            'timestamp': expt.timestamp, 
+            'rig': expt.rig_name, 
+            'description': description,
+            'pipettes.yml': expt.pipette_file is not None,
+            'site.mosaic': expt.mosaic_file is not None,
+            'DB': expt.in_database,
         }
-        if nas is not None:
-            rec['NAS'] = True
         
         self.update.emit(rec)
+
+
+class ExperimentMetadata(object):
+    """Handles reading experiment metadata from several possible locations.
+    """
+    def __init__(self, nas_path=None, rig_path=None, archive_path=None, backup_path=None):
+        self._nas_path = None
+        self._rig_path = None
+        self._archive_path = None
+        self._backup_path = None
+
+        if nas_path is not None:
+            self._nas_path = nas_path
+            self.site_dh = getDirHandle(nas_path)
+        elif rig_path is not None:
+            self._rig_path = rig_path
+            self.site_dh = getDirHandle(rig_path)
+        elif archive_path is not None:
+            self._archive_path = archive_path
+            self.site_dh = getDirHandle(archive_path)
+        elif backup_path is not None:
+            self._backup_path = backup_path
+            self.site_dh = getDirHandle(backup_path)
+
+        self.site_info = self.site_dh.info()
+        self._slice_info = None
+        self._expt_info = None
+        self._specimen_info = None
+
+    @property
+    def slice_dh(self):
+        return self.site_dh.parent()
+
+    @property
+    def expt_dh(self):
+        return self.slice_dh.parent()
+
+    @property
+    def slice_info(self):
+        if self._slice_info is None:
+            self._slice_info = self.slice_dh.info()
+        return self._slice_info
+
+    @property
+    def expt_info(self):
+        if self._expt_info is None:
+            self._expt_info = self.expt_dh.info()
+        return self._expt_info
+
+    @property
+    def specimen_info(self):
+        if self._specimen_info is None:
+            spec_name = self.slice_info['specimen_ID'].strip()
+            try:
+                self._specimen_info = lims.specimen_info(spec_name)
+            except Exception as exc:
+                if 'returned 0 results' in exc.args[0]:
+                    pass
+                else:
+                    raise
+        return self._specimen_info
+
+    @property
+    def nas_path(self):
+        if self._nas_path is None:
+            ts = self.datetime
+        return self._nas_path
+
+    @property
+    def rig_path(self):
+        if self._rig_path is None:
+            ts = self.datetime
+        return self._rig_path
+
+    @property
+    def archive_path(self):
+        if self._archive_path is None:
+            ts = self.datetime
+        return self._archive_path
+
+    @property
+    def backup_path(self):
+        if self._backup_path is None:
+            ts = self.datetime
+        return self._backup_path
+
+    @property
+    def organism(self):
+        org = self.expt_info.get('organism')
+        if org is not None:
+            return org
+        spec_info = self.specimen_info
+        if spec_info is None:
+            return None
+        return spec_info['organism']
+
+    @property
+    def genotype(self):
+        gtyp = self.expt_info.get('genotype')
+        if gtyp is not None:
+            return gtyp
+        spec_info = self.specimen_info
+        if spec_info is None:
+            return None
+        return spec_info['genotype']
+
+    @property
+    def rig_name(self):
+        name = self.expt_info.get('rig_name')
+        if name is not None:
+            return name
+
+        # infer rig name from paths
+        path = None
+        if self.archive_path is not None:
+            path = self.archive_path
+        elif self.rig_path is not None:
+            path = self.rig_path
+        elif self.backup_path is not None:
+            path = self.backup_path
+        if path is None:
+            return None
+        ind = path.lower().index(os.path.sep + 'mp')
+        return path[ind+1:ind:4]
+
+    @property
+    def timestamp(self):
+        return self.site_info['__timestamp__']
+
+    @property
+    def datetime(self):
+        return datetime.datetime.fromtimestamp(self.timestamp)
+
+    @property
+    def pipette_file(self):
+        if 'pipettes.yml' in self.site_dh.ls():
+            return self.site_dh['pipettes.yml'].name()
+        return None
+
+    @property
+    def mosaic_file(self):
+        if 'site.mosaic' in self.site_dh.ls():
+            return self.site_dh['site.mosaic'].name()
+        return None
+
+    @property
+    def in_database(self):
+        session = database.Session()
+        expts = session.query(database.Experiment).filter(database.Experiment.acq_timestamp==self.datetime).all()
+        return len(expts) == 1
 
 
 if __name__ == '__main__':
