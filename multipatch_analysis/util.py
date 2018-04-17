@@ -2,6 +2,25 @@ from __future__ import print_function
 import os, sys, time
 
 
+def sync_dir(source_path, dest_path, test=False):
+    """Safely duplicate a directory structure
+    """
+    assert os.path.isdir(source_path)
+    assert os.path.isdir(dest_path)
+
+    for subpath, subdirs, files in os.walk(source_path):
+        rel = os.path.relpath(subpath, source_path)
+        dest_subpath = os.path.join(dest_path, rel)
+        if not os.path.exists(dest_subpath):
+            print('mkdir', dest_subpath)
+            if test is False:
+                os.mkdir(dest_subpath)
+        for fname in files:
+            src_file = os.path.join(subpath, fname)
+            dst_file = os.path.join(dest_subpath, fname)
+            action = sync_file(src_file, dst_file, test=test)
+
+
 def sync_file(src, dst, test=False):
     """Safely copy *src* to *dst*, but only if *src* is newer or a different size.
     """
