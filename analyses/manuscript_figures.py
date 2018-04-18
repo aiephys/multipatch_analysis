@@ -299,9 +299,11 @@ def pulse_qc(responses, baseline=None, pulse=None, plot=None):
         response = bsub(response)
         data = response.data
         if np.mean(data[:base_win]) > (baseline * base_std):
-            plot.plot(response.time_values, response.data, pen='r')
+            if plot is not None:
+                plot.plot(response.time_values, response.data, pen='r')
         # elif np.mean(data[pulse_win:]) > (pulse * pulse_std) and plot is not None:
-        #     plot.plot(response.time_values, response.data, pen='b')
+        #    if plot is not None:
+        #         plot.plot(response.time_values, response.data, pen='b')
         else:
             if plot is not None:
                 plot.plot(response.time_values, response.data)
