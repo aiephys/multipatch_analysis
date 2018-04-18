@@ -170,7 +170,7 @@ def specimen_20x_image(specimen_name):
         """ % specimen_name
     r = lims.query(q)
     if len(r) == 0:
-        raise ValueError('No 20x image found for %d' % spec_name)
+        raise ValueError("No 20x image found for '%d'" % specimen_name)
     path_string = str(r[0]['storage_directory']) + str(r[0]['barcode_start']) + '_' + str(r[0]['barcode_end']) + '.aff'
     return lims.safe_system_path(path_string)
 
