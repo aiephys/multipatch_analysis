@@ -20,7 +20,7 @@ class Dashboard(QtGui.QWidget):
         
         self.expt_tree = pg.TreeWidget()
         self.expt_tree.setSortingEnabled(True)
-        self.fields = ['timestamp', 'path', 'rig', 'description', 'primary', 'archive', 'pipettes.yml', 'site.mosaic', 'NAS', 'DB', 'LIMS', '20x', 'cell specs', '63x', 'morphology']
+        self.fields = ['timestamp', 'path', 'rig', 'description', 'primary', 'archive', 'backup', 'NAS', 'pipettes.yml', 'site.mosaic', 'DB', 'LIMS', '20x', 'cell specs', '63x', 'morphology']
         self.expt_tree.setColumnCount(len(self.fields))
         self.expt_tree.setHeaderLabels(self.fields)
         self.layout.addWidget(self.expt_tree, 0, 0)
@@ -31,7 +31,8 @@ class Dashboard(QtGui.QWidget):
         
         self.poll_thread = PollThread()
         self.poll_thread.update.connect(self.poller_update)
-        self.poll_thread.start()
+        # self.poll_thread.start()
+        self.poll_thread.poll()  # for local debugging
         
     def poller_update(self, rec):
         ts = rec['timestamp']
@@ -96,6 +97,8 @@ class PollThread(QtCore.QThread):
                 continue
             expts[expt.timestamp] = expt
             self.check(expt)
+            if len(expts) > 50:
+                break
 
     def list_expts(self, root_dh):
         for expt in root_dh.ls()[::-1]:
@@ -133,15 +136,23 @@ class PollThread(QtCore.QThread):
                     description = ','.join(Genotype(gtyp).drivers())
                 except:
                     description = (org + ' (? genotype)', fail_color)
-        
+
+        subs = expt.lims_submissions
+        lims = len(subs) == 1
+
         rec = {
             'path': expt.site_dh.name(), 
             'timestamp': expt.timestamp, 
             'rig': expt.rig_name, 
+            'primary': os.path.exists(expt.rig_path),
+            'archive': os.path.exists(expt.archive_path),
+            'backup': os.path.exists(expt.backup_path),
             'description': description,
             'pipettes.yml': expt.pipette_file is not None,
             'site.mosaic': expt.mosaic_file is not None,
             'DB': expt.in_database,
+            'NAS': expt.nas_path is not None,
+            'LIMS': lims,
         }
         
         self.update.emit(rec)
@@ -210,25 +221,29 @@ class ExperimentMetadata(object):
     @property
     def nas_path(self):
         if self._nas_path is None:
-            ts = self.datetime
+            pass
         return self._nas_path
 
     @property
     def rig_path(self):
         if self._rig_path is None:
-            ts = self.datetime
+            if self.nas_path is not None:
+                self._rig_path = open(os.path.join(self.nas_path, 'sync_source')).read()
         return self._rig_path
 
     @property
     def archive_path(self):
         if self._archive_path is None:
-            ts = self.datetime
+            if self.nas_path is not None:
+                apath = re.sub('mp(\d)', 'mp\1_e', self.rig_path)
+                self._archive_path = apath
         return self._archive_path
 
     @property
     def backup_path(self):
         if self._backup_path is None:
-            ts = self.datetime
+            if self.nas_path is not None:
+                self._backup_path = os.path.join('/home/luke/mnt/backup_server', os.path.relpath(self.rig_path, '/home/luke/mnt'))
         return self._backup_path
 
     @property
@@ -296,9 +311,14 @@ class ExperimentMetadata(object):
         expts = session.query(database.Experiment).filter(database.Experiment.acq_timestamp==self.datetime).all()
         return len(expts) == 1
 
+    @property
+    def lims_submissions(self):
+        return lims.expt_submissions(self.specimen_info['specimen_id'], self.timestamp)
+
 
 if __name__ == '__main__':
     app = pg.mkQApp()
+    pg.dbg()
     db = Dashboard()
     db.show()
     
