@@ -64,7 +64,7 @@ class ExperimentMetadataSubmission(object):
             info = fh.info()
             if 'category' in info and info['category'] != file_info['category']:
                 warnings.append("category for file %s will change %s => %s" % 
-                                (info['category'], file_info['category']))
+                                (fh.name(), info['category'], file_info['category']))
             
             max_size = max_sizes.get(file_info['category'], 0)
             size = int(os.stat(fh.name()).st_size / 1e6)
@@ -141,14 +141,16 @@ class ExperimentMetadataSubmission(object):
                 # interpret time of dissection
                 if year is None:
                     diss_time = datetime(site_date.year, site_date.month, site_date.day, int(h), int(m))
+                    extra_err = " (try specifying the full date like `yyyy-mm-dd hh:mm`)"
                 else:
                     diss_time = datetime(int(year), int(mon), int(day), int(h), int(m))
+                    extra_err = ""
                 # check time
                 seconds_since_dissection = (site_date - diss_time).total_seconds()
                 if seconds_since_dissection < 30*60:
                     warnings.append("Time of dissection is later than experiment time - 30 minutes")
                 if seconds_since_dissection < 0:
-                    errors.append("Time of dissection is later than experiment time")
+                    errors.append("Time of dissection is later than experiment time" + extra_err)
                 if seconds_since_dissection > 6*3600:
                     warnings.append("Time of dissection is more than 6 hours prior to experiment")
 
