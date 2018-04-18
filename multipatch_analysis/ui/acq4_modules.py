@@ -81,62 +81,86 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         self.load_btn.clicked.connect(self.load_clicked)
 
     def load_clicked(self):
+        """
+        Checks that directory is pointed at a slice
+        Check LIMS for 20x biocytin image and if 20x image is saved locally.
+        If image not saved locally then copies file from LIMS.
+        Opens button to create a JSON of the cell locations
+        """
         base_dir = self.mosaic_editor.ui.fileLoader.baseDir()
-        try:
-            spec_id = base_dir.info()['specimen_ID']
-            print(spec_id)
-            image_path = lims.specimen_20x_image(spec_id)
-            print(image_path)
-        
-            #check the image file path
-            if os.path.exists(image_path) == True:
-                print('File Exists in LIMS')
+        if base_dir.info()['dirType'] == 'Slice':
+            base_path = base_dir.name()
+            try:
+                spec_name = base_dir.info()['specimen_ID']
+                print(spec_name)
+                image_path = lims.specimen_20x_image(spec_name)
+                print(image_path)
+            
+                #check the image file path
+                if os.path.exists(image_path) == True:
+                    print('File Exists in LIMS')
 
-                image_name = image_path.split("\\")[-1]
-                # need to copy image to current directory
-                # need to find current directory
-                # hardcode for the time being
-                save_path = "/Users/aarono/Scripts/example_data/2017.09.06_000/slice_001"
-                save_path = save_path + '/' + image_name
-                safe_save_path = lims.lims.safe_system_path(save_path)
+                    image_name = image_path.split("\\")[-1]
 
-                if os.path.exists(safe_save_path) == False:
-                    shutil.copy2(image_path, safe_save_path)
+                    save_path = base_path + '/' + image_name
+                    safe_save_path = lims.lims.safe_system_path(save_path)
+
+                    if os.path.exists(safe_save_path) == True:
+                        print("20x already moved")
+
+                    if os.path.exists(safe_save_path) == False:
+                        shutil.copy2(image_path, safe_save_path)
+                        print("20x image moved")
+
+                    self.create_json_btn = QtGui.QPushButton("Save Cell Location Json")
+                    self.layout.addWidget(self.create_json_btn, 1, 0)
+
+                    self.create_json_btn.clicked.connect(self.create_lims_json)
+
                     
-                if os.path.exists(safe_save_path) == True:
-                    print("20x already moved")
-
-                self.create_json_btn = QtGui.QPushButton("Save Cell Location Json")
-                self.layout.addWidget(self.create_json_btn, 1, 0)
-
-                self.create_json_btn.clicked.connect(self.create_lims_json)
-
-                
-                
-                
-            else:
-                print("Couldn't find image in LIMS. Check you have the selected the correct slice.")
-            #print (base_dir.info())
-            #print(os.path.join(base_dir, image_name))
-        except KeyError:
+                    
+                    
+                else:
+                    print("Couldn't find image in LIMS. Check you have the selected the correct slice.")
+                #print (base_dir.info())
+                #print(os.path.join(base_dir, image_name))
+            except KeyError:
+                print('No Slice Selected')
+        else:
             print('No Slice Selected')
-        #raise Exception()
 
     def upload_clicked(self):
-        print ("uploaded to LIMS")
-
-        # create trigger file in proper folder
-        # name spec_id_ephys_cluster.mpc
-        # Chat-IRES-Cre-neo;Ai14-316041.04.01_ephys_cell_cluster_1234_cells.mpc
-        # contains specimen_id: <LIMS id of cell cluster>
-        # cells_info: '<full path of json file in incoming directory>'
-        # specimen_id: 587022731
-        # cells_info: '/allen/programs/celltypes/production/incoming/mousecelltypes/Chat-IRES-Cre-neo;Ai14-316041.04.01_ephys_cell_cluster_1234_cells.json'
-    
-        # either mouse cell types or human cell types
-        # /allen/programs/celltypes/production/incoming/mousecelltypes/trigger/ or /allen/programs/celltypes/production/incoming/humancelltypes/trigger/
+        """
+        Moves json to correct incoming folder
+        Creates trigger file for LIMS in correct incoming folder
+        """
         
-        # need to get cluster id, species, spec_id, spec_name
+        """if mouse:
+            incoming_path = /allen/programs/celltypes/production/incoming/mousecelltypes/
+        if human:
+            incoming_path = /allen/programs/celltypes/production/incoming/humancelltypes/
+        """
+        base_dir = self.mosaic_editor.ui.fileLoader.baseDir()
+        base_path = base_dir.name()
+        slice_name = base_dir.info()['specimen_ID']
+        spec_id = lims.specimen_id_from_name(slice_name)
+        clusters = []
+        for root, dirs, files in os.walk(base_path, topdown = False):
+            for name in dirs:
+                clusters.append(name.split("_")[-1])
+        cluster_name = clusters[0]
+        save_file = slice_name + "_ephys_cell_cluster_" + cluster_name + ".json"
+        save_path = os.path.join(base_path, save_file)
+        json_path = os.path.join(incoming_path, save_file)
+        #shutil.copy2(save_path, json_path)
+
+        trigger_file = slice_name + "_ephys_cell_cluster_" + cluster_name + "_cells.mpc"
+        trigger_path = os.path.join(incoming_path, 'trigger', trigger_file)
+        """with open(trigger_path, 'w') as the_file:
+            the_file.write("specimen_id: {}\n".format(spec_id))
+            the_file.write("cells_info: '{}'\n".format(json_path))"""
+
+
 
     def create_lims_json(self):
         # save locally so can be accessed in acq4 for second opinion and then upload function will make a copy
@@ -144,8 +168,13 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
 
         #stand in until I can move the variables between functions
         base_dir = self.mosaic_editor.ui.fileLoader.baseDir()
-        spec_id = base_dir.info()['specimen_ID']
-        print(spec_id)
+        base_path = base_dir.name()
+        slice_name = base_dir.info()['specimen_ID']
+        clusters = []
+        for root, dirs, files in os.walk(base_path, topdown = False):
+            for name in dirs:
+                clusters.append(name.split("_")[-1])
+        cluster_name = clusters[0]
 
         # need to get cluster id cell locations
         # i don't know what the start time variable is
@@ -170,8 +199,11 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
             'start_time_sec': 7654.2
         })
         # as defined by requirements from technology
-        save_file = spec_id + '_ephys_cell_cluster_1234_cells.json'
-        with open(save_file, 'w') as outfile:  
+
+        save_file = slice_name + "_ephys_cell_cluster_" + cluster_name + ".json"
+        save_path = os.path.join(base_path, save_file)
+        print('Json Saved')
+        with open(save_path, 'w') as outfile:  
             json.dump(data, outfile)
 
         self.upload_btn = QtGui.QPushButton("Upload Tags to LIMS")
