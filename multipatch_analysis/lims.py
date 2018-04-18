@@ -191,7 +191,7 @@ def specimen_ephys_roi_plans(spec_name):
 
 def cell_cluster_ids(spec_id):
     q = """
-    select id from specimens 
+    select specimens.id from specimens 
     join specimen_types_specimens on specimen_types_specimens.specimen_id=specimens.id
     join specimen_types on specimen_types.id=specimen_types_specimens.specimen_type_id
     where specimens.parent_id=%d
@@ -236,7 +236,9 @@ def specimen_metadata(spec_id):
     meta = recs[0]['data']
     if meta == '':
         return None
-    return json.loads(meta)  # unserialization corrects for a LIMS bug; we can remove this later.
+    if isinstance(meta, str):
+        meta = json.loads(meta)  # unserialization corrects for a LIMS bug; we can remove this later.
+    return meta
 
 
 def specimen_type(spec_id):
