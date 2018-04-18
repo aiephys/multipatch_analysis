@@ -12,7 +12,7 @@ pass_color = (200, 255, 200)
 
 
 class Dashboard(QtGui.QWidget):
-    def __init__(self):
+    def __init__(self, limit=0, no_thread=False):
         QtGui.QWidget.__init__(self)
         
         self.layout = QtGui.QGridLayout()
@@ -29,10 +29,12 @@ class Dashboard(QtGui.QWidget):
         
         self.records = {}
         
-        self.poll_thread = PollThread()
+        self.poll_thread = PollThread(limit=limit)
         self.poll_thread.update.connect(self.poller_update)
-        # self.poll_thread.start()
-        self.poll_thread.poll()  # for local debugging
+        if no_thread:
+            self.poll_thread.poll()  # for local debugging
+        else:
+            self.poll_thread.start()
         
     def poller_update(self, rec):
         ts = rec['timestamp']
@@ -44,6 +46,7 @@ class Dashboard(QtGui.QWidget):
             self.expt_tree.addTopLevelItem(item)
             rec['item'] = item
             self.records[ts] = rec
+            item.expt = rec['expt']
             
         for field, val in rec.items():
             try:
@@ -69,7 +72,8 @@ class PollThread(QtCore.QThread):
     """
     update = QtCore.Signal(object)
     
-    def __init__(self):
+    def __init__(self, limit=0):
+        self.limit = limit
         QtCore.QThread.__init__(self)
         
     def run(self):
@@ -97,7 +101,7 @@ class PollThread(QtCore.QThread):
                 continue
             expts[expt.timestamp] = expt
             self.check(expt)
-            if len(expts) > 50:
+            if self.limit > 0 and len(expts) > self.limit:
                 break
 
     def list_expts(self, root_dh):
@@ -138,9 +142,13 @@ class PollThread(QtCore.QThread):
                     description = (org + ' (? genotype)', fail_color)
 
         subs = expt.lims_submissions
-        lims = len(subs) == 1
+        if subs is None:
+            lims = "ERROR"
+        else:
+            lims = len(subs) == 1
 
         rec = {
+            'expt': expt,
             'path': expt.site_dh.name(), 
             'timestamp': expt.timestamp, 
             'rig': expt.rig_name, 
@@ -235,7 +243,7 @@ class ExperimentMetadata(object):
     def archive_path(self):
         if self._archive_path is None:
             if self.nas_path is not None:
-                apath = re.sub('mp(\d)', 'mp\1_e', self.rig_path)
+                apath = re.sub(r'mp(\d)', r'mp\1_e', self.rig_path)
                 self._archive_path = apath
         return self._archive_path
 
@@ -243,7 +251,7 @@ class ExperimentMetadata(object):
     def backup_path(self):
         if self._backup_path is None:
             if self.nas_path is not None:
-                self._backup_path = os.path.join('/home/luke/mnt/backup_server', os.path.relpath(self.rig_path, '/home/luke/mnt'))
+                self._backup_path = re.sub(r'/home/luke/mnt/mp(\d)/', r'/home/luke/mnt/backup_server/MP\1_backup/D_drive/', self.nas_path)
         return self._backup_path
 
     @property
@@ -313,12 +321,30 @@ class ExperimentMetadata(object):
 
     @property
     def lims_submissions(self):
-        return lims.expt_submissions(self.specimen_info['specimen_id'], self.timestamp)
+        if self.specimen_info is None:
+            return None
+        spec_id = self.specimen_info['specimen_id']
+        if spec_id is None:
+            return None
+        return lims.expt_submissions(spec_id, self.timestamp)
 
 
 if __name__ == '__main__':
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--no-thread', action='store_true', default=False, dest='no_thread',
+                    help='Do all polling in main thread (to make debugging easier).')
+    parser.add_argument('--limit', type=int, dest='limit', default=0, help="Limit the number of experiments to poll (to make testing easier).")
+    args = parser.parse_args(sys.argv[1:])
+
     app = pg.mkQApp()
-    pg.dbg()
-    db = Dashboard()
+    console = pg.dbg()
+    db = Dashboard(limit=args.limit, no_thread=args.no_thread)
     db.show()
     
+    def sel_change():
+        global sel
+        sel = db.expt_tree.selectedItems()[0].expt
+
+    db.expt_tree.itemSelectionChanged.connect(sel_change)
