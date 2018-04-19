@@ -12,7 +12,7 @@ import os
 from acq4.util import FileLoader
 import shutil
 import json
-
+import urllib
 
 class MultipatchSubmissionModule(Module):
     """Allows multipatch data submission UI to be invoked as an ACQ4 module.
@@ -77,8 +77,12 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
 
         self.load_btn = QtGui.QPushButton("Load 20x")
         self.layout.addWidget(self.load_btn, 0, 0)
-
         self.load_btn.clicked.connect(self.load_clicked)
+
+        self.create_json_btn = QtGui.QPushButton("Save Cell Location Json")
+        self.layout.addWidget(self.create_json_btn, 1, 0)
+        self.create_json_btn.clicked.connect(self.create_lims_json)
+
 
     def load_clicked(self):
         """
@@ -92,125 +96,102 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
             base_path = base_dir.name()
             try:
                 spec_name = base_dir.info()['specimen_ID']
-                print(spec_name)
-                image_path = lims.specimen_20x_image(spec_name)
-                print(image_path)
+                print("20x check",spec_name)
+                aff_image_path = lims.specimen_20x_image(spec_name)
             
+                 
                 #check the image file path
-                if os.path.exists(image_path) == True:
+                safe_aff_image_path = lims.lims.safe_system_path(aff_image_path)
+
+                if os.path.exists(safe_aff_image_path) == True:
                     print('File Exists in LIMS')
+                    aff_image_name = aff_image_path.split("/")[-1]
+                    jpg_image_name = aff_image_name.split(".aff")[0] + ".jpg"
 
-                    image_name = image_path.split("\\")[-1]
+                    image_service_url = "http://lims2/cgi-bin/imageservice?path="
+                    zoom = 5        #need to check that this ACQ4 can support this size
 
-                    save_path = base_path + '/' + image_name
+                    full_url = image_service_url + aff_image_path + "&zoom={}".format(str(zoom))
+                    print(full_url)
+                    save_path = base_path + '/' + jpg_image_name
                     safe_save_path = lims.lims.safe_system_path(save_path)
 
                     if os.path.exists(safe_save_path) == True:
                         print("20x already moved")
 
-                    if os.path.exists(safe_save_path) == False:
-                        shutil.copy2(image_path, safe_save_path)
+                    elif os.path.exists(safe_save_path) == False:
+                        image = urllib.URLopener()
+                        image.retrieve(full_url, safe_save_path)
                         print("20x image moved")
-
-                    self.create_json_btn = QtGui.QPushButton("Save Cell Location Json")
-                    self.layout.addWidget(self.create_json_btn, 1, 0)
-
-                    self.create_json_btn.clicked.connect(self.create_lims_json)
-
-                    
-                    
-                    
+                                             
                 else:
                     print("Couldn't find image in LIMS. Check you have the selected the correct slice.")
-                #print (base_dir.info())
-                #print(os.path.join(base_dir, image_name))
+                
             except KeyError:
                 print('No Slice Selected')
         else:
             print('No Slice Selected')
 
-    def upload_clicked(self):
-        """
-        Moves json to correct incoming folder
-        Creates trigger file for LIMS in correct incoming folder
-        """
-        
-        """if mouse:
-            incoming_path = /allen/programs/celltypes/production/incoming/mousecelltypes/
-        if human:
-            incoming_path = /allen/programs/celltypes/production/incoming/humancelltypes/
-        """
-        base_dir = self.mosaic_editor.ui.fileLoader.baseDir()
-        base_path = base_dir.name()
-        slice_name = base_dir.info()['specimen_ID']
-        spec_id = lims.specimen_id_from_name(slice_name)
-        clusters = []
-        for root, dirs, files in os.walk(base_path, topdown = False):
-            for name in dirs:
-                clusters.append(name.split("_")[-1])
-        cluster_name = clusters[0]
-        save_file = slice_name + "_ephys_cell_cluster_" + cluster_name + ".json"
-        save_path = os.path.join(base_path, save_file)
-        json_path = os.path.join(incoming_path, save_file)
-        #shutil.copy2(save_path, json_path)
-
-        trigger_file = slice_name + "_ephys_cell_cluster_" + cluster_name + "_cells.mpc"
-        trigger_path = os.path.join(incoming_path, 'trigger', trigger_file)
-        """with open(trigger_path, 'w') as the_file:
-            the_file.write("specimen_id: {}\n".format(spec_id))
-            the_file.write("cells_info: '{}'\n".format(json_path))"""
-
-
 
     def create_lims_json(self):
-        # save locally so can be accessed in acq4 for second opinion and then upload function will make a copy
-        # that will be dropped in incoming folder
-
-        #stand in until I can move the variables between functions
+        """
+        Creates json for each cell clusters and saves locally
+        copies json to correct incoming folder
+        creates trigger file and drops in correct incoming folder
+        """
+        
         base_dir = self.mosaic_editor.ui.fileLoader.baseDir()
         base_path = base_dir.name()
         slice_name = base_dir.info()['specimen_ID']
-        clusters = []
-        for root, dirs, files in os.walk(base_path, topdown = False):
-            for name in dirs:
-                clusters.append(name.split("_")[-1])
-        cluster_name = clusters[0]
+        slice_spec_id = lims.specimen_id_from_name(slice_name)        #check which id you need. Is this for the slice or cluster? how are clusters named in LIMS?
+        clusters = lims.cell_cluster_ids(slice_spec_id)
+        
+        for cluster in clusters:
+            """get the individual cell locations
+            """
+            cluster_name = lims.specimen_name(cluster).split(".")[-1]   #check the formatting on this. Might be 01 or 0001
 
-        # need to get cluster id cell locations
-        # i don't know what the start time variable is
-        data = {}  
-        data['cells'] = []  
-        data['cells'].append({  
-            'ephys_cell_id': 23,
-            'coordinates_20x': {"x": 20, "y": 40},
-            'ephys_qc_result': 'pass',
-            'start_time_sec': 345.4
-        })
-        data['cells'].append({  
-            'ephys_cell_id': 24,
-            'coordinates_20x': {"x": 23, "y": 42},
-            'ephys_qc_result': 'pass',
-            'start_time_sec': 345.4
-        })
-        data['cells'].append({  
-            'ephys_cell_id': 25,
-            'coordinates_20x': {"x": 26, "y": 4},
-            'ephys_qc_result': 'fail',
-            'start_time_sec': 7654.2
-        })
-        # as defined by requirements from technology
+            data = {}  
+            data['cells'] = []
+            for cells in cluster 
+                data['cells'].append({      
+                    'ephys_cell_id': 23,                        #find this value from luke
+                    'coordinates_20x': {"x": 20, "y": 40},      #find these values from luke
+                    'ephys_qc_result': 'pass',                  #find this value from luke
+                    'start_time_sec': 345.4                     #find this value from luke
+                })
+            
+            # as defined by requirements from technology
 
-        save_file = slice_name + "_ephys_cell_cluster_" + cluster_name + ".json"
-        save_path = os.path.join(base_path, save_file)
-        print('Json Saved')
-        with open(save_path, 'w') as outfile:  
-            json.dump(data, outfile)
+            json_save_file = slice_name + "_ephys_cell_cluster_" + cluster_name + ".json"
+            print (json_save_file)
 
-        self.upload_btn = QtGui.QPushButton("Upload Tags to LIMS")
-        self.layout.addWidget(self.upload_btn, 1, 0)
+            if lims.is_mouse(slice_name) == 'mouse':
+                incoming_path = "/allen/programs/celltypes/production/incoming/mousecelltypes/"
+            
+            if lims.is_mouse(slice_name) == 'human':
+                incoming_path = "/allen/programs/celltypes/production/incoming/humnacelltypes/"
+            
+            local_json_save_path = os.path.join(base_path, json_save_file)
 
-        self.upload_btn.clicked.connect(self.upload_clicked)
+            with open(local_json_save_path, 'w') as outfile:  
+                json.dump(data, outfile)
 
+            incoming_json_path = os.path.join(incoming_path, json_save_file)
+            #shutil.copy2(local_json_save_path, json_path)
+     
+            trigger_file = slice_name + "_ephys_cell_cluster_" + cluster_name + "_cells.mpc"
+            trigger_path = os.path.join(incoming_path, 'trigger', trigger_file)
+            trigger_path = lims.lims.safe_system_path(trigger_path)
+            
+            
+            #prevents dropping trigger file in incoming folder
+            trigger_path = os.path.join(base_dir.name(),trigger_file)
+            print (trigger_path)
+            with open(trigger_path, 'w') as the_file:
+                the_file.write("specimen_id: {}\n".format(slice_spec_id))     #verify if this is the cluster specimen or the slice specimen
+                the_file.write("cells_info: '{}'\n".format(incoming_json_path))
+      
 
 MosaicEditor.addExtension("Multi Patch", {
     'type': 'ctrl',

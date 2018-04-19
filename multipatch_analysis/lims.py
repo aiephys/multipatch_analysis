@@ -172,7 +172,21 @@ def specimen_20x_image(specimen_name):
     if len(r) == 0:
         raise ValueError("No 20x image found for '%d'" % specimen_name)
     path_string = str(r[0]['storage_directory']) + str(r[0]['barcode_start']) + '_' + str(r[0]['barcode_end']) + '.aff'
-    return lims.safe_system_path(path_string)
+    return path_string
+
+def is_mouse(specimen_name):
+    """returns species information
+    """
+    q = """
+    select (case when donors.organism_id = '1' then 'human' when donors.organism_id = '2' then 'mouse'
+    when donors.organism_id = '3' then 'monkey' end) as species
+    from donors join specimens on donors.id = specimens.donor_id
+    where specimens.name = '%s';
+    """ % specimen_name
+    r = lims.query(q)
+    if len(r) == 0:
+        raise ValueError("Could not find donor information")
+    return r[0]['species']
 
 
 def specimen_id_from_name(spec_name):
@@ -210,7 +224,7 @@ def specimen_ephys_roi_plans(spec_name):
 
 def cell_cluster_ids(spec_id):
     q = """
-    select id from specimens 
+    select specimens.id from specimens 
     join specimen_types_specimens on specimen_types_specimens.specimen_id=specimens.id
     join specimen_types on specimen_types.id=specimen_types_specimens.specimen_type_id
     where specimens.parent_id=%d
