@@ -139,7 +139,6 @@ def trace_avg(response_list):
 #    ----------
 #    response_list : list of neuroanalysis.data.TraceView objects
 #        neuroanalysis.data.TraceView object contains waveform data. 
-#        #TODO: is there a place we can direct someone to for reference?
 #        
 #    Returns
 #    -------
@@ -353,12 +352,9 @@ def pulse_qc(responses, baseline=None, pulse=None, plot=None):
         response = bsub(response)
         data = response.data
         if np.mean(data[:base_win]) > (baseline * base_std):
-            if plot is not None:
-                plot.plot(response.time_values, response.data, pen='r')
-        #TODO: deprecate the commented code below? or make standard?
+            plot.plot(response.time_values, response.data, pen='r')
         # elif np.mean(data[pulse_win:]) > (pulse * pulse_std) and plot is not None:
-        #    if plot is not None:
-        #         plot.plot(response.time_values, response.data, pen='b')
+        #   plot.plot(response.time_values, response.data, pen='b')
         else:
             if plot is not None:
                 plot.plot(response.time_values, response.data)
