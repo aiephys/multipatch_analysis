@@ -99,6 +99,13 @@ def get_response(expt, pre, post, type='pulse'):
     return response, artifact
 
 def get_amplitude(response_list):
+    """
+    Parameters
+    ----------
+    response_list : list of neuroanalysis.data.TraceView objects
+        neuroanalysis.data.TraceView object contains waveform data. 
+    """
+    
     if len(response_list) == 1:
         bsub_mean = bsub(response_list[0])
     else:
@@ -126,17 +133,46 @@ def fail_rate(response_list, sign, peak_t):
 
 
 def trace_avg(response_list):
-    for trace in response_list:
-        trace.t0 = 0
-    avg_trace = TraceList(response_list).mean()
-    bsub_mean = bsub(avg_trace)
+# doc string commented out to discourage code reuse given the change of values of t0
+#    """
+#    Parameters
+#    ----------
+#    response_list : list of neuroanalysis.data.TraceView objects
+#        neuroanalysis.data.TraceView object contains waveform data. 
+#        
+#    Returns
+#    -------
+#    bsub_mean : neuroanalysis.data.Trace object
+#        averages and baseline subtracts the ephys waveform data in the 
+#        input response_list TraceView objects and replaces the .t0 value with 0. 
+#    
+#    """
+    for trace in response_list: 
+        trace.t0 = 0  #align traces for the use of TraceList().mean() funtion
+    avg_trace = TraceList(response_list).mean() #returns the average of the wave form in a of a neuroanalysis.data.Trace object 
+    bsub_mean = bsub(avg_trace) #returns a copy of avg_trace but replaces the ephys waveform in .data with the base_line subtracted wave_form
+    
     return bsub_mean
 
 def bsub(trace):
-    data = trace.data
-    dt = trace.dt
-    base = float_mode(data[:int(10e-3 / dt)])
-    bsub_trace = trace.copy(data=data - base)
+    """Returns a copy of the neuroanalysis.data.Trace object 
+    where the ephys data waveform is replaced with a baseline 
+    subtracted ephys data waveform.  
+    
+    Parameters
+    ----------
+    trace : neuroanalysis.data.Trace object  
+        Note: there is also an 
+        
+    Returns
+    -------
+    bsub_trace : neuroanalysis.data.Trace object
+       Ephys data waveform is replaced with a baseline subtracted ephys data waveform
+    """
+    data = trace.data # actual numpy array of time series ephys waveform
+    dt = trace.dt # time step of the data
+    base = float_mode(data[:int(10e-3 / dt)]) # baseline value for trace 
+    bsub_trace = trace.copy(data=data - base) # new neuroanalysis.data.Trace object for baseline subtracted data
     return bsub_trace
 
 def response_filter(response, freq_range=None, holding_range=None, pulse=False, train=None, delta_t=None):
@@ -289,6 +325,23 @@ def recovery_summary(train_response, rec_t, holding, thresh=5, rec_dict=None, of
     return rec_dict, offset_dict
 
 def pulse_qc(responses, baseline=None, pulse=None, plot=None):
+    """
+    Parameters
+    ----------
+    responses : list of neuroanalysis.data.TraceView objects
+        neuroanalysis.data.TraceView object contains waveform data. 
+    base_line : float
+        Factor by which to multiply the standard deviation of the baseline current.
+    pulse : float
+        Factor by which to multiply the standard deviation of the current during a pulse.
+        Currently not in use.
+    plot : pyqtgraph.PlotItem
+        If not None, plot the data on the referenced pyqtgraph object.
+
+    Returns
+    ----------
+    qc_pass : 
+    """
     qc_pass = []
     avg, amp, _, peak_t = get_amplitude(responses)
     pulse_win = int((peak_t + 1e-3)/avg.dt)
