@@ -5,6 +5,8 @@ from acq4.Manager import getManager
 # from acq4.analysis.modules.MosaicEditor import MosaicEditor
 # from acq4.util.Canvas.items.CanvasItem import CanvasItem
 from acq4.modules.MosaicEditor import MosaicEditor
+from acq4.util.Canvas.items.MarkersCanvasItem import MarkersCanvasItem 
+from acq4.util.Canvas.items.MultiPatchLogCanvasItem import MultiPatchLogCanvasItem 
 from . import submit_expt
 from . import multipatch_nwb_viewer
 from .. import lims
@@ -83,6 +85,17 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         self.layout.addWidget(self.create_json_btn, 1, 0)
         self.create_json_btn.clicked.connect(self.create_lims_json)
 
+        self.create_test_btn = QtGui.QPushButton('Testing Button')
+        self.layout.addWidget(self.create_test_btn, 2, 0)
+        self.create_test_btn.clicked.connect(self.test_button)
+
+    def test_button(self):
+        """place to test things
+        """
+        items = self.mosaic_editor.canvas.items 
+        logs = [i for i in items if isinstance(i, MultiPatchLogCanvasItem)]
+        print logs[0].saveState()['currentTime']
+        
 
     def load_clicked(self):
         """
@@ -91,15 +104,16 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         If image not saved locally then copies file from LIMS.
         Opens button to create a JSON of the cell locations
         """
-        base_dir = self.mosaic_editor.ui.fileLoader.baseDir()
-        if base_dir.info()['dirType'] == 'Slice':
-            base_path = base_dir.name()
+        self.base_dir = self.mosaic_editor.ui.fileLoader.baseDir()
+        if self.base_dir.info()['dirType'] == 'Slice':
+            self.base_path = self.base_dir.name()
+            self.slice_name = self.base_dir.info()['specimen_ID']
+            self.slice_id = lims.specimen_id_from_name(self.slice_name)
+            clusters = lims.cell_cluster_ids(self.slice_id)
+            """if len(clusters) == 0:
+                                                    raise Exception("No Clusters Recorded in LIMS")"""
             try:
-                spec_name = base_dir.info()['specimen_ID']
-                print("20x check",spec_name)
-                aff_image_path = lims.specimen_20x_image(spec_name)
-            
-                 
+                aff_image_path = lims.specimen_20x_image(self.slice_name)
                 #check the image file path
                 safe_aff_image_path = lims.lims.safe_system_path(aff_image_path)
 
@@ -113,7 +127,7 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
 
                     full_url = image_service_url + aff_image_path + "&zoom={}".format(str(zoom))
                     print(full_url)
-                    save_path = base_path + '/' + jpg_image_name
+                    save_path = self.base_path + '/' + jpg_image_name
                     safe_save_path = lims.lims.safe_system_path(save_path)
 
                     if os.path.exists(safe_save_path) == True:
@@ -125,12 +139,13 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
                         print("20x image moved")
                                              
                 else:
-                    print("Couldn't find image in LIMS. Check you have the selected the correct slice.")
+                    raise Exception("Couldn't find image in LIMS. Check you have the selected the correct slice.")
                 
             except KeyError:
-                print('No Slice Selected')
+                raise Exception('No Slice Selected')
         else:
-            print('No Slice Selected')
+            raise Exception('No Slice Selected')
+       
 
 
     def create_lims_json(self):
@@ -140,58 +155,75 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         creates trigger file and drops in correct incoming folder
         """
         
-        base_dir = self.mosaic_editor.ui.fileLoader.baseDir()
-        base_path = base_dir.name()
-        slice_name = base_dir.info()['specimen_ID']
-        slice_spec_id = lims.specimen_id_from_name(slice_name)        #check which id you need. Is this for the slice or cluster? how are clusters named in LIMS?
-        clusters = lims.cell_cluster_ids(slice_spec_id)
+        items = self.mosaic_editor.canvas.items 
+
+        markers = [i for i in items if isinstance(i, MarkersCanvasItem)]
+        if len(markers) != 1:
+            raise Exception("Must have exactly 1 Markers item in the canvas.")
+        markers = markers[0].saveState()['markers']
+
+        logs = [i for i in items if isinstance(i, MultiPatchLogCanvasItem)]
+        if len(logs) != 1:
+            raise Exception("Must have exactly 1 Log item in the canvas.")
+        multipatch_tmsp = logs[0].saveState()['currentTime']
+
+        cluster_name = '01'
+        cluster_id = []
+        clusters = lims.cell_cluster_ids(self.slice_id)
+        for cid in clusters:
+            cluster_tmsp = lims.specimen_metadata[cid]['acq_timestamp']
+            if cluster_tmsp == multipatch_tmsp:
+                cluster_id = cid
+                cluster_name = lims.specimen_name(cid).split(".")[-1]
+                break
+
+        """if cluster_id == []:
+                                    raise Exception("Couldn't match Multipatch Log to data in LIMS")"""
+            
+        data = {}  
+        data['cells'] = []
+        for cell in markers:
+            data['cells'].append({      
+                'ephys_cell_id': cell[0],                        
+                'coordinates_20x': {"x": cell[1][0], "y": cell[1][1]},      
+                'ephys_qc_result': 'pass',                  #find this value from luke
+                'start_time_sec': 345.4                     #find this value from luke
+            })
         
-        for cluster in clusters:
-            """get the individual cell locations
-            """
-            cluster_name = lims.specimen_name(cluster).split(".")[-1]   #check the formatting on this. Might be 01 or 0001
+        # as defined by requirements from technology
 
-            data = {}  
-            data['cells'] = []
-            for cells in cluster 
-                data['cells'].append({      
-                    'ephys_cell_id': 23,                        #find this value from luke
-                    'coordinates_20x': {"x": 20, "y": 40},      #find these values from luke
-                    'ephys_qc_result': 'pass',                  #find this value from luke
-                    'start_time_sec': 345.4                     #find this value from luke
-                })
-            
-            # as defined by requirements from technology
+        json_save_file = self.slice_name + "_ephys_cell_cluster_" + cluster_name + ".json"
+        print (json_save_file)
 
-            json_save_file = slice_name + "_ephys_cell_cluster_" + cluster_name + ".json"
-            print (json_save_file)
+        if lims.is_mouse(self.slice_name) == 'mouse':
+            incoming_path = "/allen/programs/celltypes/production/incoming/mousecelltypes/"
+        
+        if lims.is_mouse(self.slice_name) == 'human':
+            incoming_path = "/allen/programs/celltypes/production/incoming/humnacelltypes/"
+        
+        local_json_save_path = os.path.join(self.base_path, json_save_file)
 
-            if lims.is_mouse(slice_name) == 'mouse':
-                incoming_path = "/allen/programs/celltypes/production/incoming/mousecelltypes/"
-            
-            if lims.is_mouse(slice_name) == 'human':
-                incoming_path = "/allen/programs/celltypes/production/incoming/humnacelltypes/"
-            
-            local_json_save_path = os.path.join(base_path, json_save_file)
+        with open(local_json_save_path, 'w') as outfile:  
+            json.dump(data, outfile)
 
-            with open(local_json_save_path, 'w') as outfile:  
-                json.dump(data, outfile)
+        incoming_json_path = os.path.join(incoming_path, json_save_file)
+        #shutil.copy2(local_json_save_path, json_path)
+        print (incoming_json_path)
 
-            incoming_json_path = os.path.join(incoming_path, json_save_file)
-            #shutil.copy2(local_json_save_path, json_path)
-     
-            trigger_file = slice_name + "_ephys_cell_cluster_" + cluster_name + "_cells.mpc"
-            trigger_path = os.path.join(incoming_path, 'trigger', trigger_file)
-            trigger_path = lims.lims.safe_system_path(trigger_path)
-            
-            
-            #prevents dropping trigger file in incoming folder
-            trigger_path = os.path.join(base_dir.name(),trigger_file)
-            print (trigger_path)
-            with open(trigger_path, 'w') as the_file:
-                the_file.write("specimen_id: {}\n".format(slice_spec_id))     #verify if this is the cluster specimen or the slice specimen
-                the_file.write("cells_info: '{}'\n".format(incoming_json_path))
-      
+        trigger_file = self.slice_name + "_ephys_cell_cluster_" + cluster_name + "_cells.mpc"
+        trigger_path = os.path.join(incoming_path, 'trigger', trigger_file)
+        trigger_path = lims.lims.safe_system_path(trigger_path)
+        
+        
+        #prevents dropping trigger file in incoming folder
+        trigger_path = os.path.join(self.base_dir.name(),trigger_file)
+        print (trigger_path)
+        with open(trigger_path, 'w') as the_file:
+            the_file.write("specimen_id: {}\n".format(self.slice_id))     #verify if this is the cluster specimen or the slice specimen
+            the_file.write("cells_info: '{}'\n".format(incoming_json_path))
+        
+        
+
 
 MosaicEditor.addExtension("Multi Patch", {
     'type': 'ctrl',
