@@ -104,7 +104,6 @@ def get_amplitude(response_list):
     ----------
     response_list : list of neuroanalysis.data.TraceView objects
         neuroanalysis.data.TraceView object contains waveform data. 
-        #TODO: is there a place we can direct someone to for reference?
     """
     
     if len(response_list) == 1:
@@ -134,21 +133,23 @@ def fail_rate(response_list, sign, peak_t):
 
 
 def trace_avg(response_list):
-    """
-    Parameters
-    ----------
-    response_list : list of neuroanalysis.data.TraceView objects
-        neuroanalysis.data.TraceView object contains waveform data. 
-        #TODO: is there a place we can direct someone to for reference?
-        
-    Returns
-    -------
-    bsub_mean : neuroanalysis.data.Trace object
-        averages the ephys waveform data in the input response_list TraceView objects and replaces the .t0 value with 0. 
-    
-    """
+# doc string commented out to discourage code reuse given the change of values of t0
+#    """
+#    Parameters
+#    ----------
+#    response_list : list of neuroanalysis.data.TraceView objects
+#        neuroanalysis.data.TraceView object contains waveform data. 
+#        #TODO: is there a place we can direct someone to for reference?
+#        
+#    Returns
+#    -------
+#    bsub_mean : neuroanalysis.data.Trace object
+#        averages and baseline subtracts the ephys waveform data in the 
+#        input response_list TraceView objects and replaces the .t0 value with 0. 
+#    
+#    """
     for trace in response_list: 
-        trace.t0 = 0  #TODO Steph: why change t0 in object to 0?
+        trace.t0 = 0  #align traces for the use of TraceList().mean() funtion
     avg_trace = TraceList(response_list).mean() #returns the average of the wave form in a of a neuroanalysis.data.Trace object 
     bsub_mean = bsub(avg_trace) #returns a copy of avg_trace but replaces the ephys waveform in .data with the base_line subtracted wave_form
     
@@ -162,7 +163,6 @@ def bsub(trace):
     Parameters
     ----------
     trace : neuroanalysis.data.Trace object  
-        #TODO: is there a place we can direct someone to for reference?
         Note: there is also an 
         
     Returns
@@ -331,14 +331,13 @@ def pulse_qc(responses, baseline=None, pulse=None, plot=None):
     ----------
     responses : list of neuroanalysis.data.TraceView objects
         neuroanalysis.data.TraceView object contains waveform data. 
-        #TODO: is there a place we can direct someone to for reference?
     base_line : float
         Factor by which to multiply the standard deviation of the baseline current.
     pulse : float
         Factor by which to multiply the standard deviation of the current during a pulse.
         Currently not in use.
-    plot : ???qtplot object??? #TODO: help with what this is
-        If not None, plot the data.
+    plot : pyqtgraph.PlotItem
+        If not None, plot the data on the referenced pyqtgraph object.
 
     Returns
     ----------
@@ -356,7 +355,7 @@ def pulse_qc(responses, baseline=None, pulse=None, plot=None):
         if np.mean(data[:base_win]) > (baseline * base_std):
             if plot is not None:
                 plot.plot(response.time_values, response.data, pen='r')
-        #TODO: deprecate? or make standard?
+        #TODO: deprecate the commented code below? or make standard?
         # elif np.mean(data[pulse_win:]) > (pulse * pulse_std) and plot is not None:
         #    if plot is not None:
         #         plot.plot(response.time_values, response.data, pen='b')
