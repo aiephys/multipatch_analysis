@@ -99,6 +99,14 @@ def get_response(expt, pre, post, type='pulse'):
     return response, artifact
 
 def get_amplitude(response_list):
+    """
+    Parameters
+    ----------
+    response_list : list of neuroanalysis.data.TraceView objects
+        neuroanalysis.data.TraceView object contains waveform data. 
+        #TODO: is there a place we can direct someone to for reference?
+    """
+    
     if len(response_list) == 1:
         bsub_mean = bsub(response_list[0])
     else:
@@ -126,17 +134,46 @@ def fail_rate(response_list, sign, peak_t):
 
 
 def trace_avg(response_list):
-    for trace in response_list:
-        trace.t0 = 0
-    avg_trace = TraceList(response_list).mean()
-    bsub_mean = bsub(avg_trace)
+    """
+    Parameters
+    ----------
+    response_list : list of neuroanalysis.data.TraceView objects
+        neuroanalysis.data.TraceView object contains waveform data. 
+        #TODO: is there a place we can direct someone to for reference?
+        
+    Returns
+    -------
+    bsub_mean : neuroanalysis.data.Trace object
+        averages the ephys waveform data in the input response_list TraceView objects and replaces the .t0 value with 0. 
+    
+    """
+    for trace in response_list: 
+        trace.t0 = 0  #TODO Steph: why change t0 in object to 0?
+    avg_trace = TraceList(response_list).mean() #returns the average of the wave form in a of a neuroanalysis.data.Trace object 
+    bsub_mean = bsub(avg_trace) #returns a copy of avg_trace but replaces the ephys waveform in .data with the base_line subtracted wave_form
+    
     return bsub_mean
 
 def bsub(trace):
-    data = trace.data
-    dt = trace.dt
-    base = float_mode(data[:int(10e-3 / dt)])
-    bsub_trace = trace.copy(data=data - base)
+    """Returns a copy of the neuroanalysis.data.Trace object 
+    where the ephys data waveform is replaced with a baseline 
+    subtracted ephys data waveform.  
+    
+    Parameters
+    ----------
+    trace : neuroanalysis.data.Trace object  
+        #TODO: is there a place we can direct someone to for reference?
+        Note: there is also an 
+        
+    Returns
+    -------
+    bsub_trace : neuroanalysis.data.Trace object
+       Ephys data waveform is replaced with a baseline subtracted ephys data waveform
+    """
+    data = trace.data # actual numpy array of time series ephys waveform
+    dt = trace.dt # time step of the data
+    base = float_mode(data[:int(10e-3 / dt)]) # baseline value for trace 
+    bsub_trace = trace.copy(data=data - base) # new neuroanalysis.data.Trace object for baseline subtracted data
     return bsub_trace
 
 def response_filter(response, freq_range=None, holding_range=None, pulse=False, train=None, delta_t=None):
@@ -289,6 +326,24 @@ def recovery_summary(train_response, rec_t, holding, thresh=5, rec_dict=None, of
     return rec_dict, offset_dict
 
 def pulse_qc(responses, baseline=None, pulse=None, plot=None):
+    """
+    Parameters
+    ----------
+    responses : list of neuroanalysis.data.TraceView objects
+        neuroanalysis.data.TraceView object contains waveform data. 
+        #TODO: is there a place we can direct someone to for reference?
+    base_line : float
+        Factor by which to multiply the standard deviation of the baseline current.
+    pulse : float
+        Factor by which to multiply the standard deviation of the current during a pulse.
+        Currently not in use.
+    plot : ???qtplot object??? #TODO: help with what this is
+        If not None, plot the data.
+
+    Returns
+    ----------
+    qc_pass : 
+    """
     qc_pass = []
     avg, amp, _, peak_t = get_amplitude(responses)
     pulse_win = int((peak_t + 1e-3)/avg.dt)
@@ -301,6 +356,7 @@ def pulse_qc(responses, baseline=None, pulse=None, plot=None):
         if np.mean(data[:base_win]) > (baseline * base_std):
             if plot is not None:
                 plot.plot(response.time_values, response.data, pen='r')
+        #TODO: deprecate? or make standard?
         # elif np.mean(data[pulse_win:]) > (pulse * pulse_std) and plot is not None:
         #    if plot is not None:
         #         plot.plot(response.time_values, response.data, pen='b')
