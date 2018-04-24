@@ -18,24 +18,30 @@ from multipatch_analysis.database import database as db
 
 
 
+def write_csv(fh, data, description, units='membrane voltage (V)'):
+    """Used to generate csv file accompanying figure.
+    """
+    if isinstance(data, Trace):
+        write_csv(fh, data.time_values, description + " time (s)")
+        write_csv(fh, data.data, description + " %s" % units)
+    else:
+        cols = ['"' + description + '"'] + list(data)
+        line = ','.join(map(str, cols))
+        fh.write(line)
+        fh.write('\n')
 
 
 if __name__ == '__main__':
+    csv_file = open("manuscript_fig_3.csv", 'wb')
+
     # silence warnings about fp issues
     np.seterr(all='ignore')
 
+    # Three connections selected for analysis
     show_conns = [
         # (expt_uid, pre_cell, post_cell)
-        # ("low signal, low noise", (1499277786.89, 1, 3)),
-        # ("low signal, low noise", (1503953399.15, 1, 7)),
-        # ("low signal, high noise", (1495833911.11, 1, 8)),
-        # ("low signal, high noise", (1509566559.2, 7, 1)),
-        # ("high signal, high noise", (1489441647.6, 8, 5)),
-
-        # ("low signal, low noise", (1506537287.63, 7, 8)),
         ("high signal, low noise", (1499725138.07, 7, 4)),
         ("low signal, high noise", (1494969844.93, 6, 1)),
-        # ("low signal, low noise", (1502312765.01, 1, 4)),
         ("high noise, no detected connection", (1489009391.46, 3, 5)),
     ]
     
@@ -48,6 +54,7 @@ if __name__ == '__main__':
     win.show()
     win.resize(900, 900)
 
+    # set up scatter plot
     scatter_plot = win.addPlot(0, 0, rowspan=len(show_conns))
     scatter_plot.setLogMode(True, True)
     scatter_plot.setAspectLocked()
@@ -77,6 +84,7 @@ if __name__ == '__main__':
     typ_mask = ((typs == 'sim1') | (typs == 'tlx3') | (typs == 'unknown') | (typs == 'rorb') | (typs == 'ntsr1'))
     mask &= typ_mask
 
+    # This is the final set of experiments we will include in the analysis here
     filtered = filtered[mask]
 
 
@@ -89,10 +97,17 @@ if __name__ == '__main__':
     signal = filtered['ic_fit_amp']
     background = filtered['minimum_amplitude']
 
-    c_plot = scatter_plot.plot(background[c_mask], signal[c_mask], pen=None, symbol='d', symbolPen='k', symbolBrush=(0, 255, 255), symbolSize=10, data=filtered[c_mask])
+    # plot connected pairs
+    x, y = background[c_mask], signal[c_mask]
+    c_plot = scatter_plot.plot(x, y, pen=None, symbol='d', symbolPen='k', symbolBrush=(0, 255, 255), symbolSize=10, data=filtered[c_mask])
+    write_csv(csv_file, x, "Figure 3A connected pairs; minimum detectable amplitude (V)")
+    write_csv(csv_file, y, "Figure 3A connected pairs; PSP amplitude (V)")
 
-    u_plot = scatter_plot.plot(background[u_mask], signal[u_mask], pen=None, symbol='o', symbolPen=None, symbolBrush=(50, 50, 50, 80), symbolSize=4, data=filtered[u_mask])
-    # u_plot.setZValue(-10)
+    # plot unconnected pairs
+    x, y = background[u_mask], signal[u_mask]
+    u_plot = scatter_plot.plot(x, y, pen=None, symbol='o', symbolPen=None, symbolBrush=(50, 50, 50, 80), symbolSize=4, data=filtered[u_mask])
+    write_csv(csv_file, x, "Figure 3A unconnected pairs; minimum detectable amplitude (V)")
+    write_csv(csv_file, y, "Figure 3A unconnected pairs; PSP amplitude (V)")
 
 
     # plot for showing distribution of response amplitudes and detection limits
@@ -106,22 +121,34 @@ if __name__ == '__main__':
     prof_conns = filtered[c_mask]
     prof_amps = prof_conns['ic_fit_amp']
 
+    # Plot distribution of connection amplitudes
     n_bins = 30
     bins = 10e-6 * ((2e-3/10e-6)**(1./n_bins)) ** np.arange(n_bins+1)
     amp_hist = list(np.histogram(prof_amps, bins=bins))
     amp_hist[0] = ndimage.gaussian_filter(amp_hist[0].astype(float), 1)
-    profile_plot.plot(amp_hist[1], amp_hist[0], stepMode=True, fillLevel=0, brush=(200, 200, 200), pen='k')
+    x, y = amp_hist[1], amp_hist[0]
+    profile_plot.plot(x, y, stepMode=True, fillLevel=0, brush=(200, 200, 200), pen='k')
+    write_csv(csv_file, x, "Figure 3E measured PSP amplitude distribution bin edges (V)")
+    write_csv(csv_file, y, "Figure 3E measured PSP amplitude distribution connections per bin")
 
+    # Plot probability of detection vs PSP amplitude 
     min_amps = prof_conns['minimum_amplitude']
     min_amps = min_amps[np.isfinite(min_amps)]
     limit_hist = list(np.histogram(min_amps, bins=bins))
     limit_hist[0] = limit_hist[0].astype(float) / limit_hist[0].sum()
     bin_centers = (bins[1:] * bins[:-1]) ** 0.5
     limit_prof = np.cumsum(limit_hist[0])
-    profile_plot.plot(bin_centers, limit_prof * amp_hist[0].max(), pen='r')
+    x, y = bin_centers, limit_prof * amp_hist[0].max()
+    profile_plot.plot(x, y, pen='r')
+    write_csv(csv_file, x, "Figure 3E detection probability x values (V)")
+    write_csv(csv_file, y, "Figure 3E detection probability y values")
 
+    # Plot corrected amplitude distribution
     corrected_prof = ndimage.gaussian_filter(amp_hist[0], 0) / limit_prof
-    profile_plot.plot(bins, corrected_prof, stepMode=True, fillLevel=0, brush=(120, 120, 120), pen='k').setZValue(-10)
+    x, y = bins, corrected_prof
+    profile_plot.plot(x, y, stepMode=True, fillLevel=0, brush=(120, 120, 120), pen='k').setZValue(-10)
+    write_csv(csv_file, x, "Figure 3E estimated PSP amplitude distribution bin edges (V)")
+    write_csv(csv_file, y, "Figure 3E estimated PSP amplitude distribution connections per bin")
     
     print("Global connectivity correction factor:", corrected_prof.sum() / amp_hist[0].sum())
 
@@ -205,26 +232,28 @@ if __name__ == '__main__':
 
         traces = []
         deconvs = []
-        for rec in fg_recs[:100]:
+        for i,rec in enumerate(fg_recs[:100]):
             result = strength_analysis.analyze_response_strength(rec, source='pulse_response', lpf=True, lowpass=2000,
                                                 remove_artifacts=False, bsub=True)
             trace = result['raw_trace']
             trace.t0 = -result['spike_time']
             trace = trace - np.median(trace.time_slice(-0.5e-3, 0.5e-3).data)
-            traces.append(trace)            
+            traces.append(trace)
             trace_plot.plot(trace.time_values, trace.data, pen=(0, 0, 0, 20))
+            write_csv(csv_file, trace, "Figure 3B; {name}; trace {trace_n}".format(name=name, trace_n=i))
 
-            trace = result['dec_trace']
-            trace.t0 = -result['spike_time']
-            trace = trace - np.median(trace.time_slice(-0.5e-3, 0.5e-3).data)
-            deconvs.append(trace)            
-            # deconv_plot.plot(trace.time_values, trace.data, pen=(0, 0, 0, 20))
+            # trace = result['dec_trace']
+            # trace.t0 = -result['spike_time']
+            # trace = trace - np.median(trace.time_slice(-0.5e-3, 0.5e-3).data)
+            # deconvs.append(trace)            
+            # # deconv_plot.plot(trace.time_values, trace.data, pen=(0, 0, 0, 20))
 
         # plot average trace
         mean = TraceList(traces).mean()
         trace_plot.plot(mean.time_values, mean.data, pen={'color':'g', 'width': 2}, shadowPen={'color':'k', 'width': 3}, antialias=True)
-        mean = TraceList(deconvs).mean()
-        # deconv_plot.plot(mean.time_values, mean.data, pen={'color':'g', 'width': 2}, shadowPen={'color':'k', 'width': 3}, antialias=True)
+        write_csv(csv_file, mean, "Figure 3B; {name}; average".format(name=name))
+        # mean = TraceList(deconvs).mean()
+        # # deconv_plot.plot(mean.time_values, mean.data, pen={'color':'g', 'width': 2}, shadowPen={'color':'k', 'width': 3}, antialias=True)
 
         # add label
         label = pg.LabelItem(name)
@@ -240,8 +269,13 @@ if __name__ == '__main__':
         n = min(len(amps), len(base_amps))
         hist_y, hist_bins = np.histogram(base_amps[:n][field], bins=bins)
         hist_plot.plot(hist_bins, hist_y, stepMode=True, pen=None, brush=(200, 0, 0, 150), fillLevel=0)
+        write_csv(csv_file, hist_bins, "Figure 3C; {name}; background noise amplitude distribution bin edges (V)".format(name=name))
+        write_csv(csv_file, hist_y, "Figure 3C; {name}; background noise amplitude distribution counts per bin".format(name=name))
+        
         hist_y, hist_bins = np.histogram(amps[:n][field], bins=bins)
         hist_plot.plot(hist_bins, hist_y, stepMode=True, pen='k', brush=(0, 150, 150, 100), fillLevel=0)
+        write_csv(csv_file, hist_bins, "Figure 3C; {name}; PSP amplitude distribution bin edges (V)".format(name=name))
+        write_csv(csv_file, hist_y, "Figure 3C; {name}; PSP amplitude distribution counts per bin".format(name=name))
         p()
 
         pg.QtGui.QApplication.processEvents()
@@ -314,7 +348,10 @@ if __name__ == '__main__':
                 for k,v in result.items():
                     results[i,j][k] = v
 
-            c = limit_plot.plot(amps, [np.mean(x) for x in results[:,j]['confidence']], pen=pg.intColor(j, len(rtimes)*1.3, maxValue=150), symbol='o', antialias=True, name="%dus"%(rtime*1e6), data=results[:,j], symbolSize=4)
+            x, y = amps, [np.mean(x) for x in results[:,j]['confidence']]
+            c = limit_plot.plot(x, y, pen=pg.intColor(j, len(rtimes)*1.3, maxValue=150), symbol='o', antialias=True, name="%dus"%(rtime*1e6), data=results[:,j], symbolSize=4)
+            write_csv(csv_file, x, "Figure 3D; {name}; {rise_time:0.3g} ms rise time; simulated PSP amplitude (V)".format(name=name, rise_time=rtime*1000))
+            write_csv(csv_file, y, "Figure 3D; {name}; {rise_time:0.3g} ms rise time; classifier decision probability".format(name=name, rise_time=rtime*1000))
             c.scatter.sigClicked.connect(clicked)
             pg.QtGui.QApplication.processEvents()
 
@@ -341,3 +378,6 @@ if __name__ == '__main__':
 
     c_plot.scatter.sigClicked.connect(clicked)
     u_plot.scatter.sigClicked.connect(clicked)
+
+
+csv_file.close()
