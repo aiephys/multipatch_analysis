@@ -15,7 +15,6 @@ import matplotlib.pyplot as mplt
 from scipy import stats
 import time
 import pandas as pd
-import time as sys_time
 
 parser = argparse.ArgumentParser(description='Enter organism and type of connection you"d like to analyze ex: mouse ee (all mouse excitatory-'
                 'excitatory). Alternatively enter a cre-type connection ex: sim1-sim1')
@@ -25,81 +24,93 @@ args = vars(parser.parse_args(sys.argv[1:]))
 
 all_expts = cached_experiments()
 
-if args['organism'] == 'mouse':
-    calcium = 'high'
-    age = '40-60'
-    sweep_threshold = 3
-    threshold = 0.03e-3
-    connection = args['connection']
-    if connection == 'ee':
-        connection_types = ee_connections.keys()
-    elif connection == 'ii':
-        connection_types = ii_connections.keys()
-    elif connection == 'ei':
-        connection_types = ei_connections.keys()
-    elif connection == 'ie':
-        connection_types == ie_connections.keys()
-    elif connection == 'all':
-        connection_types = all_connections.keys()
-    elif len(connection.split('-')) == 2:
-        conn_type = connection.split('-')
-        if conn_type[0] == '2/3':
-            pre_type = ('2/3', 'unknown')
-        else:
-            pre_type = (None, conn_type[0])
-        if conn_type[1] == '2/3':
-            post_type = ('2/3', 'unknown')
-        else:
-            post_type = (None, conn_type[0])
-        connection_types = [(pre_type, post_type)]
-elif args['organism'] == 'human':
-    calcium = None
-    age = None
-    sweep_threshold = 5
-    threshold = None
-    connection = args['connection']
-    if connection == 'ee':
-        connection_types = human_connections.keys()
-    else:
-        conn_type = connection.split('-')
-        connection_types = [((conn_type[0], 'unknown'), (conn_type[1], 'unknown'))]
+#if args['organism'] == 'mouse':
+#    calcium = 'high'
+#    age = '40-60'
+#    sweep_threshold = 3
+#    threshold = 0.03e-3
+#    connection = args['connection']
+#    if connection == 'ee':
+#        connection_types = ee_connections.keys()
+#    elif connection == 'ii':
+#        connection_types = ii_connections.keys()
+#    elif connection == 'ei':
+#        connection_types = ei_connections.keys()
+#    elif connection == 'ie':
+#        connection_types == ie_connections.keys()
+#    elif connection == 'all':
+#        connection_types = all_connections.keys()
+#    elif len(connection.split('-')) == 2:
+#        conn_type = connection.split('-')
+#        if conn_type[0] == '2/3':
+#            pre_type = ('2/3', 'unknown')
+#        else:
+#            pre_type = (None, conn_type[0])
+#        if conn_type[1] == '2/3':
+#            post_type = ('2/3', 'unknown')
+#        else:
+#            post_type = (None, conn_type[0])
+#        connection_types = [(pre_type, post_type)]
+#elif args['organism'] == 'human':
+#    calcium = None
+#    age = None
+#    sweep_threshold = 5
+#    threshold = None
+#    connection = args['connection']
+#    if connection == 'ee':
+#        connection_types = human_connections.keys()
+#    else:
+#        conn_type = connection.split('-')
+#        connection_types = [((conn_type[0], 'unknown'), (conn_type[1], 'unknown'))]
+#
+#holding = [-65, -75]
+#expt_ids = {}
+#
+#for c in range(len(connection_types)):
+#    cre_type = (connection_types[c][0][1], connection_types[c][1][1])
+##    if cre_type[0]!='rorb' and cre_type[1]!='rorb':
+##        print 'skipping'
+##        continue
+#    target_layer = (connection_types[c][0][0], connection_types[c][1][0])
+#    conn_type = connection_types[c]
+##---here she does a selection I don't think I need to do    
+#    expt_list = all_expts.select(cre_type=cre_type, target_layer=target_layer, calcium=calcium, age=age)
 
-holding = [-65, -75]
-expt_ids = {}
-
-for c in range(len(connection_types)):
-    cre_type = (connection_types[c][0][1], connection_types[c][1][1])
-#    if cre_type[0]!='rorb' and cre_type[1]!='rorb':
-#        print 'skipping'
-#        continue
-    target_layer = (connection_types[c][0][0], connection_types[c][1][0])
-    conn_type = connection_types[c]
-#---here she does a selection I don't think I need to do    
-    expt_list = all_expts.select(cre_type=cre_type, target_layer=target_layer, calcium=calcium, age=age)
-#    grand_response[conn_type[0]] = {'trace': [], 'amp': [], 'latency': [], 'rise': [], 'dist': [], 'decay':[], 'CV': []}
+#all this above is to choose a subset of experiments
+expt_list=all_expts
+if 1:
     for expt in expt_list:
         for pre, post in expt.connections:
-            if [expt.uid, pre, post] in no_include:
-                continue
+#            if [expt.uid, pre, post] in no_include:
+#                continue
 ##            if str(expt.uid)!='1502301827.80':
 #            if str(expt.uid)!='1501627688.56':
 #            if str(expt.uid)!='1512537689.69': 
 #                continue
             
-            cre_check = expt.cells[pre].cre_type == cre_type[0] and expt.cells[post].cre_type == cre_type[1]
-            layer_check = expt.cells[pre].target_layer == target_layer[0] and expt.cells[post].target_layer == target_layer[1]
-            if cre_check is True and layer_check is True:
-# ----Get response from pulse_response table
+#            cre_check = expt.cells[pre].cre_type == cre_type[0] and expt.cells[post].cre_type == cre_type[1]
+#            layer_check = expt.cells[pre].target_layer == target_layer[0] and expt.cells[post].target_layer == target_layer[1]
+#            if cre_check is True and layer_check is True:
+            if True:
                 # this gets response via the dynamics analyzer
                 pulse_response, artifact = get_response(expt, pre, post, type='pulse')
 
-                if threshold is not None and artifact > threshold:
-                    continue
-                response_subset, hold = response_filter(pulse_response, freq_range=[0, 50], holding_range=holding, pulse=True)
-                if len(response_subset) >= sweep_threshold:
+                # if the artifact is bigger get rid of it
+                threshold = None
+                #here we only care about the threshold if there is a specified threshold
+#                if threshold is not None and artifact > threshold:
+#                    continue
+#                response_subset, hold = response_filter(pulse_response, freq_range=[0, 50], holding_range=holding, pulse=True)
+                response_subset, hold = response_filter(pulse_response, pulse=True)
+#                if len(response_subset) >= sweep_threshold:
 #                    qc_plot.clear()
+                if True:
+                    #qc_list=response_subset    
                     qc_list = pulse_qc(response_subset, baseline=1.5, pulse=None, plot=None)
-                    if len(qc_list) >= sweep_threshold:
+                    #if len(qc_list) >= sweep_threshold:
+                    if not len(qc_list)>1:
+                        print('skipping', str(expt.uid), 'no pulse data available')
+                    else:
 #----here it is getting the amplitude so perhaps we don't need the response because the amplitude is cached                        
                         avg_trace, avg_amp, amp_sign, peak_t = get_amplitude(qc_list)
                         if amp_sign is '-':
