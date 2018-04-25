@@ -1,7 +1,27 @@
+from __future__ import print_function
 import os, sys, time
 
 
-def sync_file(src, dst):
+def sync_dir(source_path, dest_path, test=False):
+    """Safely duplicate a directory structure
+    """
+    assert os.path.isdir(source_path)
+    assert os.path.isdir(dest_path)
+
+    for subpath, subdirs, files in os.walk(source_path):
+        rel = os.path.relpath(subpath, source_path)
+        dest_subpath = os.path.join(dest_path, rel)
+        if not os.path.exists(dest_subpath):
+            print('mkdir', dest_subpath)
+            if test is False:
+                os.mkdir(dest_subpath)
+        for fname in files:
+            src_file = os.path.join(subpath, fname)
+            dst_file = os.path.join(dest_subpath, fname)
+            action = sync_file(src_file, dst_file, test=test)
+
+
+def sync_file(src, dst, test=False):
     """Safely copy *src* to *dst*, but only if *src* is newer or a different size.
     """
     if os.path.isfile(dst):
@@ -12,14 +32,14 @@ def sync_file(src, dst):
         if up_to_date:
             return "skip"
         
-        safe_copy(src, dst)
+        safe_copy(src, dst, test=test)
         return "update"
     else:
-        safe_copy(src, dst)
+        safe_copy(src, dst, test=test)
         return "copy"
 
 
-def safe_copy(src, dst):
+def safe_copy(src, dst, test=False):
     """Copy a file, but rename the destination file if it already exists.
     
     Also, the destination file is suffixed ".partial" until the copy is complete.
@@ -28,25 +48,29 @@ def safe_copy(src, dst):
     try:
         new_name = None
         print("copy: %s => %s" % (src, dst))
-        chunk_copy(src, tmp_dst)
+        if test is False:
+            chunk_copy(src, tmp_dst)
         if os.path.exists(dst):
             # rename destination file to avoid overwriting
-            now = time.strftime('%Y-%m-%d_%H:%M:%S')
+            now = time.strftime('%Y-%m-%d_%H-%M-%S')
             i = 0
             while True:
                 new_name = '%s_%s_%d' % (dst, now, i)
                 if not os.path.exists(new_name):
                     break
                 i += 1
-            os.rename(dst, new_name)
-        os.rename(tmp_dst, dst)
+            print("rename:", dst, new_name)
+            if test is False:
+                os.rename(dst, new_name)
+        if test is False:
+            os.rename(tmp_dst, dst)
     except Exception:
         # Move dst file back if there was a problem during copy
-        if new_name is not None and os.path.exists(new_name):
+        if test is False and new_name is not None and os.path.exists(new_name):
             os.rename(new_name, dst)
         raise
     finally:
-        if os.path.isfile(tmp_dst):
+        if test is False and os.path.isfile(tmp_dst):
             os.remove(tmp_dst)
     
 
