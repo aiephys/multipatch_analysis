@@ -2,6 +2,8 @@ import acq4.pyqtgraph as pg
 from acq4.pyqtgraph.Qt import QtCore, QtGui
 from acq4.modules.Module import Module
 from acq4.Manager import getManager
+import acq4.util.DataManager as DataManager
+
 # from acq4.analysis.modules.MosaicEditor import MosaicEditor
 # from acq4.util.Canvas.items.CanvasItem import CanvasItem
 from acq4.modules.MosaicEditor import MosaicEditor
@@ -15,6 +17,8 @@ from acq4.util import FileLoader
 import shutil
 import json
 import urllib
+from datetime import datetime
+import time
 
 class MultipatchSubmissionModule(Module):
     """Allows multipatch data submission UI to be invoked as an ACQ4 module.
@@ -93,9 +97,24 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         """place to test things
         """
         items = self.mosaic_editor.canvas.items 
-        logs = [i for i in items if isinstance(i, MultiPatchLogCanvasItem)]
-        print logs[0].saveState()['currentTime']
+        markers = [i for i in items if isinstance(i, MarkersCanvasItem)]
+        if len(markers) != 1:
+            raise Exception("Must have exactly 1 Markers item in the canvas.")
+        pipettes = markers[0].saveState()['markers']
+        for cell in pipettes:
+            p = cell[1]
+            for i in items:
+                try:
+                    if i.opts['handle'].name() == self.image_20:
+                        image = i
+                except AttributeError:
+                    pass
+            print(markers[0].graphicsItem().mapToItem(image.graphicsItem(),pg.Point(*p[:2])).x())
+            print(markers[0].graphicsItem().mapToItem(image.graphicsItem(),pg.Point(*p[:2])).y())
+
         
+
+    
 
     def load_clicked(self):
         """
@@ -137,7 +156,8 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
                         image = urllib.URLopener()
                         image.retrieve(full_url, safe_save_path)
                         print("20x image moved")
-                                             
+                    self.image_20 = safe_save_path
+                        
                 else:
                     raise Exception("Couldn't find image in LIMS. Check you have the selected the correct slice.")
                 
@@ -150,49 +170,125 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
 
     def create_lims_json(self):
         """
+        Checks that markers are loaded into the canvas
+        Gets timestamp
         Creates json for each cell clusters and saves locally
         copies json to correct incoming folder
         creates trigger file and drops in correct incoming folder
         """
         
         items = self.mosaic_editor.canvas.items 
-
         markers = [i for i in items if isinstance(i, MarkersCanvasItem)]
         if len(markers) != 1:
             raise Exception("Must have exactly 1 Markers item in the canvas.")
-        markers = markers[0].saveState()['markers']
+        
+        for i in items:
+                try:
+                    if i.opts['handle'].name() == self.image_20:
+                        image = i
+                except AttributeError:
+                    pass
 
-        logs = [i for i in items if isinstance(i, MultiPatchLogCanvasItem)]
-        if len(logs) != 1:
-            raise Exception("Must have exactly 1 Log item in the canvas.")
-        multipatch_tmsp = logs[0].saveState()['currentTime']
+        sites = set()
+        for item in items:
+            handle = item.opts.get('handle')
+            if handle is None:
+                continue
+            parent = handle.parent()
+            if parent.shortName().startswith('site_'):
+                sites.add(parent)
 
-        cluster_name = '01'
+        if len(sites) == 0:
+            raise Exception("No files loaded from site; can't determine which site to submit.")
+        if len(sites) > 1:
+            raise Exception("Files loaded from multiple sites; can't determine which site to submit.")
+        self.site_dh = list(sites)[0]
+        ts = self.site_dh.info()['__timestamp__']
+
+        
         cluster_id = []
         clusters = lims.cell_cluster_ids(self.slice_id)
         for cid in clusters:
-            cluster_tmsp = lims.specimen_metadata[cid]['acq_timestamp']
-            if cluster_tmsp == multipatch_tmsp:
+            cluster_tmsp = lims.specimen_metadata(cid)['acq_timestamp']
+            if cluster_tmsp == ts:
                 cluster_id = cid
-                cluster_name = lims.specimen_name(cid).split(".")[-1]
-                break
-
-        """if cluster_id == []:
-                                    raise Exception("Couldn't match Multipatch Log to data in LIMS")"""
+                cluster_name = lims.specimen_name(cid)
+                print(cluster_name)
             
+
+        if cluster_id == []:
+            raise Exception("Couldn't match Multipatch Log to data in LIMS")
+          
+        #convert the pipette.yml file into a usable dictionary
+        pipette_path = os.path.join(self.site_dh.name(), 'pipettes.yml')
+
+        if os.path.exists(pipette_path) == False:
+            raise Exception("Could not find pipette log")
+
+        with open(pipette_path, 'r') as the_file:
+            k =list(the_file)
+            k = [line[:-1] for line in k]
+
+        pipette_log = {}
+        for i in range(0,len(k),18):
+            patch_start = k[i+4].split(':',1)[1].strip()
+            patch_start = datetime.strptime(patch_start, "%Y-%m-%d %H:%M:%S.%f")
+            patch_start = time.mktime(patch_start.timetuple())
+            
+            patch_end = k[i+5].split(':',1)[1].strip()
+            patch_end = datetime.strptime(patch_end, "%Y-%m-%d %H:%M:%S.%f")
+            patch_end = time.mktime(patch_end.timetuple())
+            
+            pipette_log[k[i].strip(':')[0]] = {
+                        'pipette_status': k[i+1].split(':')[-1],
+                        'got_data':  k[i+2].split(':')[-1].strip(),
+                        'ad_channel': k[i+3].split(':')[-1].strip(),
+                        'patch_start': patch_start,
+                        'patch_end': patch_end,
+                        'cell_labels': 
+                            {
+                            'biocytin': k[i+7].split(':')[-1].strip(),
+                            'blue': k[i+8].split(':')[-1].strip(),
+                            'green': k[i+9].split(':')[-1].strip(),
+                            'red': k[i+10].split(':')[-1].strip()
+                            },
+                        'target_layer': k[i+11].split(':')[-1].strip(),
+                        'morphology': k[i+12].split(':')[-1].strip(), 
+                        'internal_solution': k[i+13].split(':')[-1].strip(),
+                        'internal_dye': k[i+14].split(':')[-1].strip(),
+                        'synapse_to': k[i+15].split(':')[-1].strip(),
+                        'gap_to': k[i+16].split(':')[-1].strip(),
+                        'notes': k[i+17].split(':')[-1].strip()
+                        }   
+
+        pipettes = markers[0].saveState()['markers']
+
+        if len(pipettes) != len(pipette_log):
+            raise Exception("There are a different number of pipettes in the pipettes.yml ")
+        for cell in pipettes:
+            p = cell[1]
+            
+            #print(markers[0].graphicsItem().mapToItem(image.graphicsItem(),pg.Point(*p[:2])).x())
+            #print(markers[0].graphicsItem().mapToItem(image.graphicsItem(),pg.Point(*p[:2])).y())
         data = {}  
         data['cells'] = []
-        for cell in markers:
+        for cell in pipettes:
+            cell_name = str(int(cell[0].split('_')[-1]))
+            p = cell[1]
             data['cells'].append({      
-                'ephys_cell_id': cell[0],                        
-                'coordinates_20x': {"x": cell[1][0], "y": cell[1][1]},      
-                'ephys_qc_result': 'pass',                  #find this value from luke
-                'start_time_sec': 345.4                     #find this value from luke
+                'ephys_cell_id': cell_name,                  
+                'coordinates_20x': 
+                {
+                "x": markers[0].graphicsItem().mapToItem(image.graphicsItem(),pg.Point(*p[:2])).x(), 
+                "y": markers[0].graphicsItem().mapToItem(image.graphicsItem(),pg.Point(*p[:2])).y()
+                },      
+                'ephys_qc_result': ('pass' if pipette_log[cell_name]['got_data'] == 'true' else 'fail'),                 
+                'start_time_sec': pipette_log[cell_name]['patch_start']                     
             })
         
         # as defined by requirements from technology
 
-        json_save_file = self.slice_name + "_ephys_cell_cluster_" + cluster_name + ".json"
+        json_save_file = cluster_name + "_ephys_cell_cluster.json"
         print (json_save_file)
 
         if lims.is_mouse(self.slice_name) == 'mouse':
@@ -201,7 +297,7 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         if lims.is_mouse(self.slice_name) == 'human':
             incoming_path = "/allen/programs/celltypes/production/incoming/humnacelltypes/"
         
-        local_json_save_path = os.path.join(self.base_path, json_save_file)
+        local_json_save_path = os.path.join(parent.name(), json_save_file)
 
         with open(local_json_save_path, 'w') as outfile:  
             json.dump(data, outfile)
@@ -210,18 +306,18 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         #shutil.copy2(local_json_save_path, json_path)
         print (incoming_json_path)
 
-        trigger_file = self.slice_name + "_ephys_cell_cluster_" + cluster_name + "_cells.mpc"
+        trigger_file = cluster_name + "_ephys_cell_cluster.mpc"
         trigger_path = os.path.join(incoming_path, 'trigger', trigger_file)
         trigger_path = lims.lims.safe_system_path(trigger_path)
         
-        
-        #prevents dropping trigger file in incoming folder
-        trigger_path = os.path.join(self.base_dir.name(),trigger_file)
         print (trigger_path)
+
+        #prevents dropping trigger file in incoming folder
+        trigger_path = os.path.join(parent.name(),trigger_file)
         with open(trigger_path, 'w') as the_file:
-            the_file.write("specimen_id: {}\n".format(self.slice_id))     #verify if this is the cluster specimen or the slice specimen
+            the_file.write("specimen_id: {}\n".format(cluster_id))     #verify if this is the cluster specimen or the slice specimen
             the_file.write("cells_info: '{}'\n".format(incoming_json_path))
-        
+    
         
 
 
@@ -231,3 +327,10 @@ MosaicEditor.addExtension("Multi Patch", {
     'pos': ('top', 'Canvas'),
     'size': (600, 200),
 })
+
+
+"""
+p = markers.saveState()['markers'][0][1]
+markers.graphicsItem().mapToItem(self.image_20.graphicsItem(), pg.Point(*p[:2]))
+markers.graphicsItem().mapToItem(self.image_20.graphicsItem(), pg.Point(*p[:2])).x()
+"""

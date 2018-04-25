@@ -170,7 +170,7 @@ def specimen_20x_image(specimen_name):
         """ % specimen_name
     r = lims.query(q)
     if len(r) == 0:
-        raise ValueError("No 20x image found for '%d'" % specimen_name)
+        raise ValueError("No 20x image found for '%s'" % specimen_name)
     path_string = str(r[0]['storage_directory']) + str(r[0]['barcode_start']) + '_' + str(r[0]['barcode_end']) + '.aff'
     return path_string
 
@@ -263,13 +263,14 @@ def cell_cluster_data_paths(cluster_id):
 
 
 def specimen_metadata(spec_id):
-    recs = lims.query("select data from specimen_metadata where specimen_id=%d" % spec_id)
+    recs = lims.query("""select data from specimen_metadata where specimen_id=%d"""  % spec_id)
     if len(recs) == 0:
         return None
     meta = recs[0]['data']
     if meta == '':
         return None
-    return json.loads(meta)  # unserialization corrects for a LIMS bug; we can remove this later.
+    return meta
+    #return json.loads(meta)  # unserialization corrects for a LIMS bug; we can remove this later.
 
 
 def specimen_type(spec_id):
