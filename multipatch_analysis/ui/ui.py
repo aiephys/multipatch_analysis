@@ -134,7 +134,7 @@ class ExperimentTimeline(QtGui.QWidget):
                 'GS': 'GOhm seal',
                 'TF': 'Technical failure',
                 'NA': 'No attempt',
-            }[hs_state]
+            }.get(hs_state, '')
             self.add_pipette(i, status=status, internal_dye=dye, internal=internal)
         
     def load_nwb(self, nwb_handle):
