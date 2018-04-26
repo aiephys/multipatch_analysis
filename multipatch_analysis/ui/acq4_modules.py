@@ -13,12 +13,12 @@ from . import submit_expt
 from . import multipatch_nwb_viewer
 from .. import lims
 import os
-from acq4.util import FileLoader
 import shutil
 import json
 import urllib
 from datetime import datetime
 import time
+import yaml
 
 class MultipatchSubmissionModule(Module):
     """Allows multipatch data submission UI to be invoked as an ACQ4 module.
@@ -81,7 +81,7 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         self.layout = QtGui.QGridLayout()
         self.setLayout(self.layout)
 
-        self.load_btn = QtGui.QPushButton("Load 20x")
+        self.load_btn = QtGui.QPushButton("Find 20x")
         self.layout.addWidget(self.load_btn, 0, 0)
         self.load_btn.clicked.connect(self.load_clicked)
 
@@ -93,28 +93,15 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         self.layout.addWidget(self.create_test_btn, 2, 0)
         self.create_test_btn.clicked.connect(self.test_button)
 
+
     def test_button(self):
         """place to test things
         """
-        items = self.mosaic_editor.canvas.items 
-        markers = [i for i in items if isinstance(i, MarkersCanvasItem)]
-        if len(markers) != 1:
-            raise Exception("Must have exactly 1 Markers item in the canvas.")
-        pipettes = markers[0].saveState()['markers']
-        for cell in pipettes:
-            p = cell[1]
-            for i in items:
-                try:
-                    if i.opts['handle'].name() == self.image_20:
-                        image = i
-                except AttributeError:
-                    pass
-            print(markers[0].graphicsItem().mapToItem(image.graphicsItem(),pg.Point(*p[:2])).x())
-            print(markers[0].graphicsItem().mapToItem(image.graphicsItem(),pg.Point(*p[:2])).y())
+        spec_name = "Ntsr1-Cre_GN220;Ai14-349905.03.06"
+        spec_id = lims.specimen_id_from_name(spec_name)
+        print(lims.specimen_type(spec_id))
+        print(lims.specimen_species(spec_name))
 
-        
-
-    
 
     def load_clicked(self):
         """
@@ -124,49 +111,42 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         Opens button to create a JSON of the cell locations
         """
         self.base_dir = self.mosaic_editor.ui.fileLoader.baseDir()
-        if self.base_dir.info()['dirType'] == 'Slice':
-            self.base_path = self.base_dir.name()
-            self.slice_name = self.base_dir.info()['specimen_ID']
-            self.slice_id = lims.specimen_id_from_name(self.slice_name)
-            clusters = lims.cell_cluster_ids(self.slice_id)
-            """if len(clusters) == 0:
-                                                    raise Exception("No Clusters Recorded in LIMS")"""
-            try:
-                aff_image_path = lims.specimen_20x_image(self.slice_name)
-                #check the image file path
-                safe_aff_image_path = lims.lims.safe_system_path(aff_image_path)
-
-                if os.path.exists(safe_aff_image_path) == True:
-                    print('File Exists in LIMS')
-                    aff_image_name = aff_image_path.split("/")[-1]
-                    jpg_image_name = aff_image_name.split(".aff")[0] + ".jpg"
-
-                    image_service_url = "http://lims2/cgi-bin/imageservice?path="
-                    zoom = 5        #need to check that this ACQ4 can support this size
-
-                    full_url = image_service_url + aff_image_path + "&zoom={}".format(str(zoom))
-                    print(full_url)
-                    save_path = self.base_path + '/' + jpg_image_name
-                    safe_save_path = lims.lims.safe_system_path(save_path)
-
-                    if os.path.exists(safe_save_path) == True:
-                        print("20x already moved")
-
-                    elif os.path.exists(safe_save_path) == False:
-                        image = urllib.URLopener()
-                        image.retrieve(full_url, safe_save_path)
-                        print("20x image moved")
-                    self.image_20 = safe_save_path
-                        
-                else:
-                    raise Exception("Couldn't find image in LIMS. Check you have the selected the correct slice.")
-                
-            except KeyError:
-                raise Exception('No Slice Selected')
-        else:
+        if self.base_dir.info()['dirType'] != 'Slice':
             raise Exception('No Slice Selected')
-       
+        self.base_path = self.base_dir.name()
+        self.slice_name = self.base_dir.info()['specimen_ID']
+        self.slice_id = lims.specimen_id_from_name(self.slice_name)
+        clusters = lims.cell_cluster_ids(self.slice_id)
+        """if len(clusters) == 0:
+                raise Exception("No Clusters Recorded in LIMS")"""
+        try:
+            aff_image_path = lims.specimen_20x_image(self.slice_name)
+        except KeyError:
+            raise Exception('No Slice Selected')
+        
+        #check the image file path
+        safe_aff_image_path = lims.lims.safe_system_path(aff_image_path)
 
+        if os.path.exists(safe_aff_image_path) == False:
+            raise Exception("Couldn't find image in LIMS. Check you have the selected the correct slice.")
+        
+        aff_image_name = os.path.split(aff_image_path)[-1]
+        
+        jpg_image_name = os.path.splitext(aff_image_name)[0] + ".jpg"
+
+        image_service_url = "http://lims2/cgi-bin/imageservice?path="
+        zoom = 5        #need to check that this ACQ4 can support this size
+
+        full_url = image_service_url + aff_image_path + "&zoom={}".format(str(zoom))
+        save_path = os.path.join(self.base_path, jpg_image_name)
+        safe_save_path = lims.lims.safe_system_path(save_path)
+
+        if os.path.exists(safe_save_path) == False:
+            image = urllib.URLopener()
+            image.retrieve(full_url, safe_save_path)
+            print("20x image moved")
+        self.image_20 = safe_save_path
+                
 
     def create_lims_json(self):
         """
@@ -211,69 +191,30 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         for cid in clusters:
             cluster_tmsp = lims.specimen_metadata(cid)['acq_timestamp']
             if cluster_tmsp == ts:
-                cluster_id = cid
+                cluster_id.append(cid)
                 cluster_name = lims.specimen_name(cid)
                 print(cluster_name)
             
 
-        if cluster_id == []:
+        if cluster_id == None:
             raise Exception("Couldn't match Multipatch Log to data in LIMS")
-          
-        #convert the pipette.yml file into a usable dictionary
+        
+        if len(cluster_id) > 1:
+            raise Exception("Multiple clusters found with same timestamp")
+
         pipette_path = os.path.join(self.site_dh.name(), 'pipettes.yml')
 
         if os.path.exists(pipette_path) == False:
             raise Exception("Could not find pipette log")
 
-        with open(pipette_path, 'r') as the_file:
-            k =list(the_file)
-            k = [line[:-1] for line in k]
-
-        pipette_log = {}
-        for i in range(0,len(k),18):
-            patch_start = k[i+4].split(':',1)[1].strip()
-            patch_start = datetime.strptime(patch_start, "%Y-%m-%d %H:%M:%S.%f")
-            patch_start = time.mktime(patch_start.timetuple())
-            
-            patch_end = k[i+5].split(':',1)[1].strip()
-            patch_end = datetime.strptime(patch_end, "%Y-%m-%d %H:%M:%S.%f")
-            patch_end = time.mktime(patch_end.timetuple())
-            
-            pipette_log[k[i].strip(':')[0]] = {
-                        'pipette_status': k[i+1].split(':')[-1],
-                        'got_data':  k[i+2].split(':')[-1].strip(),
-                        'ad_channel': k[i+3].split(':')[-1].strip(),
-                        'patch_start': patch_start,
-                        'patch_end': patch_end,
-                        'cell_labels': 
-                            {
-                            'biocytin': k[i+7].split(':')[-1].strip(),
-                            'blue': k[i+8].split(':')[-1].strip(),
-                            'green': k[i+9].split(':')[-1].strip(),
-                            'red': k[i+10].split(':')[-1].strip()
-                            },
-                        'target_layer': k[i+11].split(':')[-1].strip(),
-                        'morphology': k[i+12].split(':')[-1].strip(), 
-                        'internal_solution': k[i+13].split(':')[-1].strip(),
-                        'internal_dye': k[i+14].split(':')[-1].strip(),
-                        'synapse_to': k[i+15].split(':')[-1].strip(),
-                        'gap_to': k[i+16].split(':')[-1].strip(),
-                        'notes': k[i+17].split(':')[-1].strip()
-                        }   
+        pipette_log = yaml.load(open(pipette_path))
 
         pipettes = markers[0].saveState()['markers']
 
-        if len(pipettes) != len(pipette_log):
-            raise Exception("There are a different number of pipettes in the pipettes.yml ")
-        for cell in pipettes:
-            p = cell[1]
-            
-            #print(markers[0].graphicsItem().mapToItem(image.graphicsItem(),pg.Point(*p[:2])).x())
-            #print(markers[0].graphicsItem().mapToItem(image.graphicsItem(),pg.Point(*p[:2])).y())
         data = {}  
         data['cells'] = []
         for cell in pipettes:
-            cell_name = str(int(cell[0].split('_')[-1]))
+            cell_name = int(cell[0].split('_')[-1])
             p = cell[1]
             data['cells'].append({      
                 'ephys_cell_id': cell_name,                  
@@ -283,18 +224,17 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
                 "y": markers[0].graphicsItem().mapToItem(image.graphicsItem(),pg.Point(*p[:2])).y()
                 },      
                 'ephys_qc_result': ('pass' if pipette_log[cell_name]['got_data'] == 'true' else 'fail'),                 
-                'start_time_sec': pipette_log[cell_name]['patch_start']                     
+                'start_time_sec': time.mktime(pipette_log[cell_name]['patch_start'].timetuple())
             })
         
         # as defined by requirements from technology
 
         json_save_file = cluster_name + "_ephys_cell_cluster.json"
-        print (json_save_file)
 
-        if lims.is_mouse(self.slice_name) == 'mouse':
+        if lims.specimen_species(self.slice_name) == 'Mus musculus':
             incoming_path = "/allen/programs/celltypes/production/incoming/mousecelltypes/"
         
-        if lims.is_mouse(self.slice_name) == 'human':
+        if lims.specimen_species(self.slice_name) == 'Homo Sapiens':
             incoming_path = "/allen/programs/celltypes/production/incoming/humnacelltypes/"
         
         local_json_save_path = os.path.join(parent.name(), json_save_file)
@@ -304,18 +244,15 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
 
         incoming_json_path = os.path.join(incoming_path, json_save_file)
         #shutil.copy2(local_json_save_path, json_path)
-        print (incoming_json_path)
 
         trigger_file = cluster_name + "_ephys_cell_cluster.mpc"
         trigger_path = os.path.join(incoming_path, 'trigger', trigger_file)
         trigger_path = lims.lims.safe_system_path(trigger_path)
         
-        print (trigger_path)
-
         #prevents dropping trigger file in incoming folder
         trigger_path = os.path.join(parent.name(),trigger_file)
         with open(trigger_path, 'w') as the_file:
-            the_file.write("specimen_id: {}\n".format(cluster_id))     #verify if this is the cluster specimen or the slice specimen
+            the_file.write("specimen_id: {}\n".format(cluster_id[0]))     #verify if this is the cluster specimen or the slice specimen
             the_file.write("cells_info: '{}'\n".format(incoming_json_path))
     
         
@@ -327,10 +264,3 @@ MosaicEditor.addExtension("Multi Patch", {
     'pos': ('top', 'Canvas'),
     'size': (600, 200),
 })
-
-
-"""
-p = markers.saveState()['markers'][0][1]
-markers.graphicsItem().mapToItem(self.image_20.graphicsItem(), pg.Point(*p[:2]))
-markers.graphicsItem().mapToItem(self.image_20.graphicsItem(), pg.Point(*p[:2])).x()
-"""

@@ -174,13 +174,13 @@ def specimen_20x_image(specimen_name):
     path_string = str(r[0]['storage_directory']) + str(r[0]['barcode_start']) + '_' + str(r[0]['barcode_end']) + '.aff'
     return path_string
 
-def is_mouse(specimen_name):
+def specimen_species(specimen_name):
     """returns species information
     """
     q = """
-    select (case when donors.organism_id = '1' then 'human' when donors.organism_id = '2' then 'mouse'
-    when donors.organism_id = '3' then 'monkey' end) as species
-    from donors join specimens on donors.id = specimens.donor_id
+    select organisms.name as species 
+    from specimens left join donors on specimens.donor_id = donors.id
+    left join organisms on donors.organism_id = organisms.id
     where specimens.name = '%s';
     """ % specimen_name
     r = lims.query(q)
