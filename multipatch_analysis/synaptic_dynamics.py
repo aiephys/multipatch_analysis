@@ -520,6 +520,20 @@ class RawDynamicsAnalyzer(object):
         return rel_plots
 
     def cross_talk(self):
+        """#TODO: Luke you should edit this
+        Artifact is defined as the mean voltage value of the waveform
+        in a window 100 seconds before 999 seconds into the waveform 
+        in the pulse_resopnses subtracted from the mean voltage value in 
+        a window 100 seconds after 999 seconds into the waveform. 
+        #TODO: Pulse_responses ephys waveforms must be aligned to spike?
+        #TODO: How do we ensure someone is using this correctly or the begininng of experiment?
+        #TODO: Why were these times chosen? 
+
+        Returns
+        -------
+        cc_artifact: numpy float
+            Absolute value of mean voltage value of post window minus pre window.
+        """
         artifact = []
         for stim, responses in self.pulse_responses.items():
             for response in responses:
