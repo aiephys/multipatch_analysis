@@ -81,7 +81,7 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         self.layout = QtGui.QGridLayout()
         self.setLayout(self.layout)
 
-        self.load_btn = QtGui.QPushButton("Find 20x")
+        self.load_btn = QtGui.QPushButton("Download 20x")
         self.layout.addWidget(self.load_btn, 0, 0)
         self.load_btn.clicked.connect(self.load_clicked)
 
@@ -92,15 +92,6 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         self.create_test_btn = QtGui.QPushButton('Testing Button')
         self.layout.addWidget(self.create_test_btn, 2, 0)
         self.create_test_btn.clicked.connect(self.test_button)
-
-
-    def test_button(self):
-        """place to test things
-        """
-        spec_name = "Ntsr1-Cre_GN220;Ai14-349905.03.06"
-        spec_id = lims.specimen_id_from_name(spec_name)
-        print(lims.specimen_type(spec_id))
-        print(lims.specimen_species(spec_name))
 
 
     def load_clicked(self):
@@ -135,7 +126,7 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         jpg_image_name = os.path.splitext(aff_image_name)[0] + ".jpg"
 
         image_service_url = "http://lims2/cgi-bin/imageservice?path="
-        zoom = 5        #need to check that this ACQ4 can support this size
+        zoom = 6        #need to check that this ACQ4 can support this size
 
         full_url = image_service_url + aff_image_path + "&zoom={}".format(str(zoom))
         save_path = os.path.join(self.base_path, jpg_image_name)
@@ -144,6 +135,7 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         if os.path.exists(safe_save_path) == False:
             image = urllib.URLopener()
             image.retrieve(full_url, safe_save_path)
+            self.base_dir.indexFile(jpg_image_name)
             print("20x image moved")
         self.image_20 = safe_save_path
                 
@@ -237,24 +229,28 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         if lims.specimen_species(self.slice_name) == 'Homo Sapiens':
             incoming_path = "/allen/programs/celltypes/production/incoming/humnacelltypes/"
         
+        incoming_path = os.path.sep*2 + os.path.join(*incoming_path.split("/"))
         local_json_save_path = os.path.join(parent.name(), json_save_file)
 
         with open(local_json_save_path, 'w') as outfile:  
             json.dump(data, outfile)
 
         incoming_json_path = os.path.join(incoming_path, json_save_file)
-        #shutil.copy2(local_json_save_path, json_path)
+        
+        # uncomment line below to copy json to incoming folder
+        #shutil.copy2(local_json_save_path, incoming_json_path)
 
         trigger_file = cluster_name + "_ephys_cell_cluster.mpc"
         trigger_path = os.path.join(incoming_path, 'trigger', trigger_file)
         trigger_path = lims.lims.safe_system_path(trigger_path)
         
-        #prevents dropping trigger file in incoming folder
+        # prevents dropping trigger file in incoming folder
+        # comment out line below to send trigger file to LIMS
         trigger_path = os.path.join(parent.name(),trigger_file)
         with open(trigger_path, 'w') as the_file:
             the_file.write("specimen_id: {}\n".format(cluster_id[0]))     #verify if this is the cluster specimen or the slice specimen
             the_file.write("cells_info: '{}'\n".format(incoming_json_path))
-    
+        raise Exception('Trigger File Saved Locally')
         
 
 
