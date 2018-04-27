@@ -5,6 +5,16 @@ from .constants import ALL_CRE_TYPES, ALL_LABELS, EXCITATORY_CRE_TYPES, INHIBITO
 
 
 class Cell(object):
+    """Represents a single cell recorded during an experiment.
+
+    Parameters
+    ----------
+    expt : Experiment
+        The experiment that this cell is included in
+    cell_id : int
+        ID that identifies this cell uniquely amongst all other cells in the same experiment.
+
+    """
     def __init__(self, expt, cell_id):
         self.expt = expt
         self.cell_id = cell_id
