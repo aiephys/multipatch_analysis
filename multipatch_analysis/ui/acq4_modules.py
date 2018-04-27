@@ -89,10 +89,6 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         self.layout.addWidget(self.create_json_btn, 1, 0)
         self.create_json_btn.clicked.connect(self.create_lims_json)
 
-        self.create_test_btn = QtGui.QPushButton('Testing Button')
-        self.layout.addWidget(self.create_test_btn, 2, 0)
-        self.create_test_btn.clicked.connect(self.test_button)
-
 
     def load_clicked(self):
         """
