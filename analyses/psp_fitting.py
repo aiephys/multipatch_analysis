@@ -1,3 +1,6 @@
+'''currently this is based on first_pulse_features.py.  Stripping away unnecessary code. 
+'''
+
 import pyqtgraph as pg
 import numpy as np
 import csv
@@ -22,6 +25,7 @@ parser.add_argument('--organism', dest='organism', help='Select mouse or human')
 parser.add_argument('--connection', dest='connection', help='Specify connections to analyze')
 args = vars(parser.parse_args(sys.argv[1:]))
 
+# get experiments from cache
 all_expts = cached_experiments()
 
 #if args['organism'] == 'mouse':
@@ -78,7 +82,7 @@ all_expts = cached_experiments()
 
 #all this above is to choose a subset of experiments
 expt_list=all_expts
-if 1:
+if 1: # if statement currently here 
     for expt in expt_list:
         for pre, post in expt.connections:
 #            if [expt.uid, pre, post] in no_include:
@@ -91,9 +95,9 @@ if 1:
 #            cre_check = expt.cells[pre].cre_type == cre_type[0] and expt.cells[post].cre_type == cre_type[1]
 #            layer_check = expt.cells[pre].target_layer == target_layer[0] and expt.cells[post].target_layer == target_layer[1]
 #            if cre_check is True and layer_check is True:
-            if True:
+            if True: # another if statement to deal  
                 # this gets response via the dynamics analyzer
-                pulse_response, artifact = get_response(expt, pre, post, type='pulse')
+                pulse_response, artifact = get_response(expt, pre, post, analysis_type='pulse')
 
                 # if the artifact is bigger get rid of it
                 threshold = None
