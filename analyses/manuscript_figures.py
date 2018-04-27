@@ -37,22 +37,22 @@ def write_cache(cache, cache_file):
     os.rename(cache_file + '.new', cache_file)
     print("Done!")
 
-def cache_response(expt, pre, post, cache, type='pulse'):
+def cache_response(expt, pre, post, cache, analysis_type='pulse'):
         key = (expt.uid, pre, post)
         if key in cache:
             response = cache[key]
-            # if type == 'pulse':
+            # if analysis_type == 'pulse':
             #     response = format_responses(responses)
             # else:
             #     response = responses
             cache_change = 0
             return response, cache_change
 
-        response = get_response(expt, pre, post, type=type)
+        response = get_response(expt, pre, post, analysis_type=analysis_type)
         cache[key] = response
         cache_change = 1
         print ("cached connection %s, %d -> %d" % (key[0], key[1], key[2]))
-        # if type == 'pulse':
+        # if analysis_type == 'pulse':
         #     response = format_responses(responses)
         # else:
         #     response = responses
@@ -71,9 +71,41 @@ def format_responses(responses):
                                     stim_param=[responses['stim_param'][trial]]))
     return response
 
-def get_response(expt, pre, post, type='pulse'):
+def get_response(expt, pre, post, analysis_type = 'pulse'):
+    """Get the a) deconvolved and "aligned to spike" responses from 
+    the DynamicsAnalyzer and b) the cross talk artifact from a specified 
+    experiment. 
+    
+    Parameters
+    ----------
+    expt: multipatch_analysis.experiment.Experiment class
+        Contains information about and data from an experiment.
+    pre: integer
+        Refers to the assigned number of the pre-synaptic neuron  
+        of a synaptic connection. 
+        #TODO: make sure this is correct.  
+        #TODO: Should this be a 'potential synaptic connection' instead of a 
+        'synaptic connection'   
+    post: integer
+        Refers to the assigned number of the post synaptic neuron  
+        of a synaptic connection. 
+        #TODO: make sure this is correct.  
+        #TODO: Should this be a 'potential synaptic connection' instead of a 
+    analysis_type: string
+        Specifies 'pulse' or 'train' analysis. 
+    
+    Returns
+    -------
+    response: 'collections.OrderedDict' class
+        contains responses returned by the DynamicsAnalyzer
+    artifact: numpy float
+        #TODO: what is this number?
+    
+    -------
+    
+    """
     analyzer = DynamicsAnalyzer(expt, pre, post, method='deconv', align_to='spike')
-    if type == 'pulse':
+    if analysis_type == 'pulse':
         response = analyzer.pulse_responses
         # pulse = 0  # only pull first pulse
         # response = {'data': [], 'dt': [], 'stim_param': []}
@@ -86,7 +118,7 @@ def get_response(expt, pre, post, type='pulse'):
         #         response['data'].append(r.data)
         #         response['dt'].append(r.dt)
         #         response['stim_param'].append(r.meta['stim_params'])
-    elif type == 'train':
+    elif analysis_type == 'train':
         responses = analyzer.train_responses
         pulse_offset = analyzer.pulse_offsets
         response = {'responses': responses, 'pulse_offsets': pulse_offset}
@@ -95,7 +127,7 @@ def get_response(expt, pre, post, type='pulse'):
     if len(response) == 0:
         print "No suitable data found for cell %d -> cell %d in expt %s" % (pre, post, expt.source_id)
         return response, None
-    artifact = analyzer.cross_talk()
+    artifact = analyzer.cross_talk() #TODO: what is this number?
     return response, artifact
 
 def get_amplitude(response_list):
@@ -162,7 +194,6 @@ def bsub(trace):
     Parameters
     ----------
     trace : neuroanalysis.data.Trace object  
-        Note: there is also an 
         
     Returns
     -------
@@ -352,9 +383,12 @@ def pulse_qc(responses, baseline=None, pulse=None, plot=None):
         response = bsub(response)
         data = response.data
         if np.mean(data[:base_win]) > (baseline * base_std):
-            plot.plot(response.time_values, response.data, pen='r')
+            if plot is not None:
+                plot.plot(response.time_values, response.data, pen='r')
+        #TODO: deprecate? or make standard?
         # elif np.mean(data[pulse_win:]) > (pulse * pulse_std) and plot is not None:
-        #     plot.plot(response.time_values, response.data, pen='b')
+        #    if plot is not None:
+        #         plot.plot(response.time_values, response.data, pen='b')
         else:
             if plot is not None:
                 plot.plot(response.time_values, response.data)
