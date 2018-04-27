@@ -1,6 +1,8 @@
 from acq4.pyqtgraph.Qt import QtCore, QtGui
 from acq4.modules.Module import Module
 from acq4.Manager import getManager
+from acq4.util.Canvas.items.CanvasItem import CanvasItem
+from acq4.util.Canvas.items import registerItemType
 from . import submit_expt
 from . import multipatch_nwb_viewer
 
@@ -56,3 +58,29 @@ class NWBViewerModule(Module):
         
     def window(self):
         return self.ui
+
+
+class AffPyramidCanvasItem(CanvasItem):
+    """For displaying AFF image pyramids
+    """
+    _typeName = "AFF Image Pyramid"
+    
+    def __init__(self, handle, **kwds):
+        from affpyramid.ui import AffImageItem
+        kwds.pop('viewRect', None)
+        self.affitem = AffImageItem(handle.name())
+        opts = {'movable': True, 'rotatable': True, 'handle': handle}
+        opts.update(kwds)
+        if opts.get('name') is None:
+            opts['name'] = handle.shortName()            
+        CanvasItem.__init__(self, self.affitem, **opts)
+
+    @classmethod
+    def checkFile(cls, fh):
+        name = fh.shortName()
+        if name.endswith('.aff'):
+            return 10
+        else:
+            return 0
+
+registerItemType(AffPyramidCanvasItem)
