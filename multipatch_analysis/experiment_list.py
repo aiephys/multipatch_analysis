@@ -329,7 +329,7 @@ class ExperimentList(object):
             name = ("%s->%s "%(','.join(pre_strs), ','.join(post_strs)))
         return distance_plot(connected, distance=probed, plots=plots, color=color, name=name, window=40e-6, spacing=40e-6)
 
-    def matrix(self, rows, cols, size=50, header_color='k', no_data_color=0.9, mode='connectivity', title=None):
+    def matrix(self, rows, cols, size=50, header_color='k', no_data_color=0.9, mode='connectivity', title='Connectivity Matrix'):
         w = pg.GraphicsLayoutWidget()
         w.setRenderHints(w.renderHints() | pg.QtGui.QPainter.Antialiasing)
         w.setWindowTitle(title)
