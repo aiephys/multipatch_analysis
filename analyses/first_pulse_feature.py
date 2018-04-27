@@ -108,7 +108,7 @@ for c in range(len(connection_types)):
             cre_check = expt.cells[pre].cre_type == cre_type[0] and expt.cells[post].cre_type == cre_type[1]
             layer_check = expt.cells[pre].target_layer == target_layer[0] and expt.cells[post].target_layer == target_layer[1]
             if cre_check is True and layer_check is True:
-                pulse_response, artifact = get_response(expt, pre, post, type='pulse')
+                pulse_response, artifact = get_response(expt, pre, post, analysis_type='pulse')
                 if threshold is not None and artifact > threshold:
                     continue
                 response_subset, hold = response_filter(pulse_response, freq_range=[0, 50], holding_range=holding, pulse=True)
