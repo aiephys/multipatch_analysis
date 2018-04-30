@@ -46,7 +46,7 @@ if args['organism'] == 'mouse':
     elif connection == 'ei':
         connection_types = ei_connections.keys()
     elif connection == 'ie':
-        connection_types == ie_connections.keys()
+        connection_types = ie_connections.keys()
     elif connection == 'all':
         connection_types = all_connections.keys()
     elif len(connection.split('-')) == 2:
