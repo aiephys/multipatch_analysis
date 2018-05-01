@@ -202,7 +202,7 @@ def response_filter(response, freq_range=None, holding_range=None, pulse=False, 
         # plot.plot(response[trial].time_values, response[trial].data)
         # app.processEvents()
     avg_holding = np.mean(holding_pass)
-    return new_responses, avg_holding
+    return new_responses
 
 def feature_anova(feature, data):
     feature_list = [(key, group[feature])for key, group in data.items()]
