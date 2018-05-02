@@ -27,7 +27,7 @@ from . import yaml_local, config
 
 
 class Experiment(object):
-    def __init__(self, entry=None, yml_file=None):
+    def __init__(self, entry=None, yml_file=None, verify=True):
         self.entry = entry
         self.source_id = (None, None)
         self.electrodes = None
@@ -56,9 +56,15 @@ class Experiment(object):
         
         if entry is not None:
             self._load_old_format(entry)
-        else:
+        elif yml_file is not None:
             self._load_yml(yml_file)
 
+        if verify:
+            self.verify()
+
+    def verify(self):
+        """Perform some basic checks to ensure this experiment was acquired correctly.
+        """
         # make sure all cells have information for all labels
         for cell in self.cells.values():
             for label in self.labels:
@@ -244,6 +250,10 @@ class Experiment(object):
         return self._cells
 
     def _load_yml(self, yml_file):
+        """Load experiment information from a pipettes.yml file.
+
+        Sets several properties: source_id, site_path, electrodes, synapse_to, gap_to
+        """
         self.source_id = (yml_file, None)
         self._site_path = os.path.dirname(yml_file)
         self.electrodes = OrderedDict()
@@ -943,8 +953,8 @@ class Experiment(object):
         if self._rig_name is None:
             self._rig_name = self.expt_info.get('rig_name', None)
             if self._rig_name is None:
-                path = self.original_path
-                m = re.search(r'\/(MP\d)', self.original_path)
+                path = self.original_path.lower()
+                m = re.search(r'\/(mp\d)', self.original_path)
                 if m is not None:
                    self._rig_name = m.groups()[0]
         return self._rig_name
