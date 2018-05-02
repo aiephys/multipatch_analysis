@@ -90,10 +90,13 @@ def _sync_paths(source, target, changes):
             dst_path = os.path.join(target, fname)
             
             # Skip large files:
-            #   - pxp > 10GB
+            #   - pxp > 20GB
             #   - others > 5GB
-            src_stat = os.stat(src_path)
-            if (src_stat.st_size > 5e9 and not src_path.endswith('.pxp')) or  (src_stat.st_size > 15e9):
+            src_size = os.stat(src_path).st_size
+            ext = os.path.splitext(src_path)[1]
+            max_size = {'.pxp': 20e9}.get(ext, 5e9)
+
+            if src_size > max_size:
                 log("    err! %s => %s" % (src_path, dst_path))
                 changes.append(('error', src_path, 'file too large'))
                 continue
