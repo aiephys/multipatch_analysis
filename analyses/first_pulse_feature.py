@@ -46,7 +46,7 @@ if args['organism'] == 'mouse':
     elif connection == 'ei':
         connection_types = ei_connections.keys()
     elif connection == 'ie':
-        connection_types == ie_connections.keys()
+        connection_types = ie_connections.keys()
     elif connection == 'all':
         connection_types = all_connections.keys()
     elif len(connection.split('-')) == 2:
@@ -111,7 +111,7 @@ for c in range(len(connection_types)):
                 pulse_response, artifact = get_response(expt, pre, post, type='pulse')
                 if threshold is not None and artifact > threshold:
                     continue
-                response_subset, hold = response_filter(pulse_response, freq_range=[0, 50], holding_range=holding, pulse=True)
+                response_subset = response_filter(pulse_response, freq_range=[0, 50], holding_range=holding, pulse=True)
                 if len(response_subset) >= sweep_threshold:
                     qc_plot.clear()
                     qc_list = pulse_qc(response_subset, baseline=1.5, pulse=None, plot=qc_plot)
@@ -180,8 +180,6 @@ for c in range(len(connection_types)):
                         synapse_plot[c, 0].setTitle('First Pulse Response')
                         if [expt.uid, pre, post] == all_connections[conn_type]:
                             trace_color = color + (30,)
-                        elif hold > -65:
-                            trace_color = (255, 0, 255, 30)
                         else:
                             trace_color = (0, 0, 0, 30)
                         trace_plot(avg_trace, trace_color, plot=synapse_plot[c, 0], x_range=[0, 27e-3])
