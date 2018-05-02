@@ -19,5 +19,5 @@ if args.specimen_id is not None:
 elif args.uid is not None:
     specimen_list = args.uid
     for specimen in specimen_list:
-        expt = expts[args.uid]
+        expt = expts[specimen]
         print (' Specimen ID:\t %s \n Backup path:\t %s \n Original path:\t %s \n Rig:\t %s \n UID:\t %s' % (expt.specimen_id, expt.path, expt.original_path, expt.rig_name, expt.uid))
