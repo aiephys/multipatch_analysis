@@ -148,7 +148,7 @@ def first_pulse_plot(expt_list, name=None, summary_plot=None, color=None, scatte
             return avg_amps, summary_plots
     else:
         print ("No Traces")
-        return None, avg_amps, None, None
+        return avg_amps, None
 
 def train_response_plot(expt_list, name=None, summary_plots=[None, None], color=None):
     ind_base_subtract = []
