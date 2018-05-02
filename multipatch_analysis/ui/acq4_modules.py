@@ -181,7 +181,6 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
             if cluster_tmsp == ts:
                 cluster_id.append(cid)
                 cluster_name = lims.specimen_name(cid)
-                print(cluster_name)
             
 
         if cluster_id == None:
@@ -219,12 +218,10 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
 
         json_save_file = cluster_name + "_ephys_cell_cluster.json"
 
-        if lims.specimen_species(self.slice_name) == 'Mus musculus':
-            incoming_path = "/allen/programs/celltypes/production/incoming/mousecelltypes/"
-        
-        if lims.specimen_species(self.slice_name) == 'Homo Sapiens':
-            incoming_path = "/allen/programs/celltypes/production/incoming/humnacelltypes/"
-        
+        incoming_path = lims.get_incoming_dir(self.slice_name)
+        if incoming_path == None:
+            raise Exception("Could not find incoming directory in LIMS")
+
         incoming_path = os.path.sep*2 + os.path.join(*incoming_path.split("/"))
         local_json_save_path = os.path.join(parent.name(), json_save_file)
 
@@ -237,8 +234,12 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         #shutil.copy2(local_json_save_path, incoming_json_path)
 
         trigger_file = cluster_name + "_ephys_cell_cluster.mpc"
-        trigger_path = os.path.join(incoming_path, 'trigger', trigger_file)
-        trigger_path = lims.lims.safe_system_path(trigger_path)
+
+        trigger_path = lims.get_trigger_dir(self.slice_name)
+        if trigger_path == None:
+            raise Exception("Could not find trigger directory in LIMS")
+
+        trigger_path = os.path.sep*2 + os.path.join(*trigger_path.split("/"))
         
         # prevents dropping trigger file in incoming folder
         # comment out line below to send trigger file to LIMS

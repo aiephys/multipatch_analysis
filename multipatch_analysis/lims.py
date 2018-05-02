@@ -298,6 +298,29 @@ def filename_base(specimen_id, acq_timestamp):
     return "synphys-%d-%s" % (specimen_id, acq_timestamp)
 
 
+def get_incoming_dir(specimen_name):
+    """Returns the path for incoming files for each project
+    """
+    q = """
+    select projects.incoming_directory from projects 
+    left join specimens on projects.id = specimens.project_id
+    where specimens.name='%s'
+    """ % specimen_name
+    recs = lims.query(q)
+    return recs[0]['incoming_directory']
+
+
+def get_trigger_dir(specimen_name):
+    """Returns the path for trigger files for each project
+    """
+    q = """
+    select projects.trigger_dir from projects 
+    left join specimens on projects.id = specimens.project_id
+    where specimens.name  = '%s'
+    """ % specimen_name
+    recs = lims.query(q)
+    return recs[0]['trigger_dir']
+
 def submit_expt(spec_name, acq_timestamp, nwb_file, json_file):
     import limstk.LIMStk as limstk
     #limstk.init_log()
