@@ -26,12 +26,21 @@ synphys_data: "/path/to/server/synphys_data"
 cache_path: "cache"
 rig_name: 'MP_'
 n_headstages: 8
-raw_data_paths:
-    - '/raw/data/path/1'
-    - '/raw/data/path/2'
+
+
 summary_files:
     - '/path/to/old/connectivity_summary'
     - '/path/to/old/connectivity_summary'    
+
+
+rig_data_paths:
+    mp1:
+        - primary: /path/to/mp1/primary_data_1
+          archive: /path/to/mp1/data_1_archive
+          backup:  /path/to/mp1/data_1_backup
+        - primary: /path/to/mp1/primary_data_2
+          archive: /path/to/mp1/data_2_archive
+          backup:  /path/to/mp1/data_2_backup
 """
 
 configfile = os.path.join(os.path.dirname(__file__), '..', 'config.yml')
