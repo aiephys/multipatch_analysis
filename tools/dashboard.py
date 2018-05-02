@@ -1,4 +1,4 @@
-import os, sys, datetime, re, glob
+import os, sys, datetime, re, glob, traceback
 from multipatch_analysis import config, lims
 from multipatch_analysis.database import database
 from multipatch_analysis.genotypes import Genotype
@@ -20,7 +20,7 @@ class Dashboard(QtGui.QWidget):
         
         self.expt_tree = pg.TreeWidget()
         self.expt_tree.setSortingEnabled(True)
-        self.fields = ['timestamp', 'path', 'rig', 'description', 'primary', 'archive', 'backup', 'NAS', 'pipettes.yml', 'site.mosaic', 'DB', 'LIMS', '20x', 'cell specs', '63x', 'morphology']
+        self.fields = ['timestamp', 'path', 'rig', 'description', 'primary', 'archive', 'backup', 'NAS', 'pipettes.yml', 'site.mosaic', 'DB', 'LIMS', '20x', 'cell map', '63x', 'morphology']
         self.expt_tree.setColumnCount(len(self.fields))
         self.expt_tree.setHeaderLabels(self.fields)
         self.layout.addWidget(self.expt_tree, 0, 0)
@@ -92,20 +92,45 @@ class PollThread(QtCore.QThread):
         print("loading site paths..")
         #site_paths = glob.glob(os.path.join(config.synphys_data, '*', 'slice_*', 'site_*'))
         
-        root_dh = getDirHandle(config.synphys_data)
-        
-        print(root_dh.name())
-        for site_dh in self.list_expts(root_dh):
-            expt = ExperimentMetadata(nas_path=site_dh.name())
-            if expt.timestamp in expts:
+        search_paths = [config.synphys_data]
+        for rig_name, rig_path_sets in config.rig_data_paths.items():
+            for path_set in rig_path_sets:
+                search_paths.extend(list(path_set.values()))
+
+        for path in search_paths:
+            print("==============================  Searching %s" % path)
+            if not os.path.exists(path):
+                print("         skipping; path does not exist.")
                 continue
-            expts[expt.timestamp] = expt
-            self.check(expt)
+            root_dh = getDirHandle(path)
+            for site_dh in self.list_expts(root_dh):
+                expt = ExperimentMetadata(path=site_dh.name())
+                if expt.timestamp in expts:
+                    continue
+                expts[expt.timestamp] = expt
+                try:
+                    rec = self.check(expt)
+                    self.update.emit(rec)
+                except Exception:
+                    rec = {
+                        'expt': expt,
+                        'path': site_dh.name(),
+                        'timestamp': site_dh.info().get('__timestamp__', False),
+                        'rig': 'ERROR',
+                    }   
+                    self.update.emit(rec)
+                    traceback.print_exc()
+                    print(expt)
+
+
+                if self.limit > 0 and len(expts) > self.limit:
+                    break
             if self.limit > 0 and len(expts) > self.limit:
                 break
 
+
     def list_expts(self, root_dh):
-        for expt in root_dh.ls()[::-1]:
+        for expt in sorted(root_dh.ls(), reverse=True):
             if '@Recycle' in expt:
                 continue
             expt_dh = root_dh[expt]
@@ -152,9 +177,9 @@ class PollThread(QtCore.QThread):
             'path': expt.site_dh.name(), 
             'timestamp': expt.timestamp, 
             'rig': expt.rig_name, 
-            'primary': os.path.exists(expt.rig_path),
-            'archive': os.path.exists(expt.archive_path),
-            'backup': os.path.exists(expt.backup_path),
+            'primary': False if expt.primary_path is None else (True if os.path.exists(expt.primary_path) else "MISSING"),
+            'archive': False if expt.archive_path is None else (True if os.path.exists(expt.archive_path) else "MISSING"),
+            'backup': False if expt.backup_path is None else (True if os.path.exists(expt.backups_path) else "MISSING"),
             'description': description,
             'pipettes.yml': expt.pipette_file is not None,
             'site.mosaic': expt.mosaic_file is not None,
@@ -162,36 +187,49 @@ class PollThread(QtCore.QThread):
             'NAS': expt.nas_path is not None,
             'LIMS': lims,
         }
-        
-        self.update.emit(rec)
+        return rec
 
 
 class ExperimentMetadata(object):
     """Handles reading experiment metadata from several possible locations.
     """
-    def __init__(self, nas_path=None, rig_path=None, archive_path=None, backup_path=None):
-        self._nas_path = None
-        self._rig_path = None
-        self._archive_path = None
-        self._backup_path = None
-
-        if nas_path is not None:
-            self._nas_path = nas_path
-            self.site_dh = getDirHandle(nas_path)
-        elif rig_path is not None:
-            self._rig_path = rig_path
-            self.site_dh = getDirHandle(rig_path)
-        elif archive_path is not None:
-            self._archive_path = archive_path
-            self.site_dh = getDirHandle(archive_path)
-        elif backup_path is not None:
-            self._backup_path = backup_path
-            self.site_dh = getDirHandle(backup_path)
-
+    def __init__(self, path=None):
+        self.site_dh = getDirHandle(path)
         self.site_info = self.site_dh.info()
         self._slice_info = None
         self._expt_info = None
         self._specimen_info = None
+        self._rig_name = None
+        self.primary_path = None
+        self.archive_path = None
+        self.backup_path = None
+
+        # get raw data subpath  (eg: 2018.01.20_000/slice_000/site_000)
+        if os.path.abspath(path).startswith(os.path.abspath(config.synphys_data) + os.path.sep):
+            # this is a server path; need to back-convert to rig path
+            source_path = open(os.path.join(path, 'sync_source')).read()
+            expt_subpath = os.path.join(*source_path.split('/')[-3:])
+            assert os.path.abspath(path) == os.path.abspath(self.nas_path), "Expected equal paths:\n  %s\n  %s" % (os.path.abspath(path), os.path.abspath(self.nas_path))
+        else:
+            expt_subpath = os.path.join(*path.split(os.path.sep)[-3:])
+        
+        # find the local primary/archive paths that contain this experiment
+        found_paths = False
+        rig_data_paths = config.rig_data_paths[self.rig_name]
+        for path_set in rig_data_paths:
+            for root in path_set.values():
+                test_path = os.path.join(root, expt_subpath)
+                if not os.path.isdir(test_path):
+                    continue
+                dh = getDirHandle(test_path)
+                if dh.info()['__timestamp__'] == self.site_info['__timestamp__']:
+                    found_paths = True
+                    # set self.primary_path, self.archive_path, etc.
+                    for k,v in path_set.items():
+                        setattr(self, k+'_path', os.path.join(v, expt_subpath))
+                    break
+            if found_paths:
+                break
 
     @property
     def slice_dh(self):
@@ -228,31 +266,9 @@ class ExperimentMetadata(object):
 
     @property
     def nas_path(self):
-        if self._nas_path is None:
-            pass
-        return self._nas_path
-
-    @property
-    def rig_path(self):
-        if self._rig_path is None:
-            if self.nas_path is not None:
-                self._rig_path = open(os.path.join(self.nas_path, 'sync_source')).read()
-        return self._rig_path
-
-    @property
-    def archive_path(self):
-        if self._archive_path is None:
-            if self.nas_path is not None:
-                apath = re.sub(r'mp(\d)', r'mp\1_e', self.rig_path)
-                self._archive_path = apath
-        return self._archive_path
-
-    @property
-    def backup_path(self):
-        if self._backup_path is None:
-            if self.nas_path is not None:
-                self._backup_path = re.sub(r'/home/luke/mnt/mp(\d)/', r'/home/luke/mnt/backup_server/MP\1_backup/D_drive/', self.nas_path)
-        return self._backup_path
+        expt_dir = '%0.3f' % self.expt_info['__timestamp__']
+        subpath = self.site_dh.name(relativeTo=self.expt_dh)
+        return os.path.abspath(os.path.join(config.synphys_data, expt_dir, subpath))
 
     @property
     def organism(self):
@@ -276,22 +292,21 @@ class ExperimentMetadata(object):
 
     @property
     def rig_name(self):
-        name = self.expt_info.get('rig_name')
-        if name is not None:
-            return name
-
-        # infer rig name from paths
-        path = None
-        if self.archive_path is not None:
-            path = self.archive_path
-        elif self.rig_path is not None:
-            path = self.rig_path
-        elif self.backup_path is not None:
-            path = self.backup_path
-        if path is None:
-            return None
-        ind = path.lower().index(os.path.sep + 'mp')
-        return path[ind+1:ind:4]
+        if self._rig_name is None:
+            name = self.expt_info.get('rig_name')
+            if name is not None:
+                self._rig_name = name.lower()
+            else:
+                # infer rig name from paths
+                if 'sync_source' in self.site_dh.ls():
+                    path = self.site_dh['sync_source'].read()
+                else:
+                    path = self.site_dh.name()
+                m = re.search(os.path.sep + '(mp\d)', path)
+                if m is None:
+                    raise Exception("Can't determine rig name for %s" % path)
+                self._rig_name = m.groups()[0].lower()
+        return self._rig_name
 
     @property
     def timestamp(self):
