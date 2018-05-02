@@ -141,8 +141,11 @@ def find_all_sites(root):
     return sites
 
 
-def sync_all():
+def sync_all(source='archive'):
     """Synchronize all known rig data paths to the server
+
+    *source* should be either 'primary' or 'archive', referring to the paths
+    specified in config.rig_data_paths.
     """
     log = []
     synced_paths = []
@@ -150,10 +153,7 @@ def sync_all():
     for rig_name, data_paths in config.rig_data_paths.items():
         # Each rig may have multiple paths to check
         for data_path in data_paths:
-            # each "primary" storage path also has a corresponding "archive" path
-            # on the same machine, but we probably only need to synchronize from the
-            # primary storage.
-            data_path = data_path['primary']
+            data_path = data_path[source]
 
             # Get a list of all experiments stored in this path
             paths = find_all_sites(data_path)
@@ -186,7 +186,7 @@ if __name__ == '__main__':
     paths = sys.argv[1:]
     if len(paths) == 0:
         # Synchronize all known rig data paths
-        log, synced_paths = sync_all()
+        log, synced_paths = sync_all(source='archive')
         print("==========================\nSynchronized files from:")
         for rig_name, data_path in synced_paths:
             print("%s  :  %s" % (rig_name, data_path))
