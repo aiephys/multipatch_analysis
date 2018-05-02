@@ -23,92 +23,89 @@ from multipatch_analysis import config
 from multipatch_analysis.util import sync_file
 
 
-class RawDataSubmission(object):
-    """Copies all raw data to a central server.
+def sync_experiment(site_dir):
+    """Synchronize all files for an experiment to the server.
+
+    Return a list of changes made.
     """
-    message = "Copying data to server"
+    site_dh = getDirHandle(site_dir)
+    changes = []
+    slice_dh = site_dh.parent()
+    expt_dh = slice_dh.parent()
     
-    def __init__(self, site_dh):
-        self.changes = None
-        self.site_dh = site_dh
+    now = time.strftime('%Y-%m-%d_%H:%M:%S')
+    log("========== %s : Sync %s to server" % (now, site_dh.name()))
+    skipped = 0
+    
+    try:
+        # Decide how the top-level directory will be named on the remote server
+        # (it may already be there from a previous slice/site, or the current
+        # name may already be taken by another rig.)
+        server_expt_path = get_experiment_server_path(expt_dh)
         
-    def check(self):
-        return [], []
+        log("    using server path: %s" % server_expt_path)
+        skipped += _sync_paths(expt_dh.name(), server_expt_path, changes)
         
-    def summary(self):
-        return {'raw_data': None}
-        
-    def submit(self):
-        self.changes = []
-        site_dh = self.site_dh
-        slice_dh = site_dh.parent()
-        expt_dh = slice_dh.parent()
-        
-        now = time.strftime('%Y-%m-%d_%H:%M:%S')
-        self.log("========== %s : Sync %s to server" % (now, site_dh.name()))
-        self.skipped = 0
-        
-        try:
-            # Decide how the top-level directory will be named on the remote server
-            # (it may already be there from a previous slice/site, or the current
-            # name may already be taken by another rig.)
-            server_expt_path = get_experiment_server_path(expt_dh)
-            
-            self.server_path = server_expt_path
-            self.log("    using server path: %s" % server_expt_path)
-            self._sync_paths(expt_dh.name(), server_expt_path)
-            
-            # Copy slice files if needed
-            server_slice_path = os.path.join(server_expt_path, slice_dh.shortName())
-            self._sync_paths(slice_dh.name(), server_slice_path)
+        # Copy slice files if needed
+        server_slice_path = os.path.join(server_expt_path, slice_dh.shortName())
+        skipped += _sync_paths(slice_dh.name(), server_slice_path, changes)
 
-            # Copy site files if needed
-            server_site_path = os.path.join(server_slice_path, site_dh.shortName())
-            self._sync_paths(site_dh.name(), server_site_path)
-            
-            self.log("    Done; skipped %d files." % self.skipped)
-            
-            # Leave a note about the source of this data
-            open(os.path.join(server_site_path, 'sync_source'), 'wb').write(site_dh.name())
-        except Exception:
-            err = traceback.format_exc()
-            self.changes.append(('error', site_dh.name(), err))
-            self.log(err)
-
-    def log(self, msg):
-        print(msg)
-        with open(os.path.join(config.synphys_data, 'sync_log'), 'ab') as log_fh:
-            log_fh.write(msg+'\n')
+        # Copy site files if needed
+        server_site_path = os.path.join(server_slice_path, site_dh.shortName())
+        skipped += _sync_paths(site_dh.name(), server_site_path, changes)
         
-    def _sync_paths(self, source, target):
-        """Non-recursive directory sync.
-        """
-        if not os.path.isdir(target):
-            os.mkdir(target)
-            self.changes.append(('mkdir', source, target))
-        for fname in os.listdir(source):
-            src_path = os.path.join(source, fname)
-            if os.path.isfile(src_path):
-                dst_path = os.path.join(target, fname)
-                
-                # Skip large files:
-                #   - pxp > 10GB
-                #   - others > 5GB
-                src_stat = os.stat(src_path)
-                if (src_stat.st_size > 5e9 and not src_path.endswith('.pxp')) or  (src_stat.st_size > 15e9):
-                    self.log("    err! %s => %s" % (src_path, dst_path))
-                    self.changes.append(('error', src_path, 'file too large'))
-                    continue
-                
-                status = sync_file(src_path, dst_path)
-                if status == 'skip':
-                    self.skipped += 1
-                elif status == 'copy':
-                    self.log("    copy %s => %s" % (src_path, dst_path))
-                    self.changes.append(('copy', src_path, dst_path))
-                elif status == 'update':
-                    self.log("    updt %s => %s" % (src_path, dst_path))
-                    self.changes.append(('update', src_path, dst_path))
+        log("    Done; skipped %d files." % skipped)
+        
+        # Leave a note about the source of this data
+        open(os.path.join(server_site_path, 'sync_source'), 'wb').write(site_dh.name())
+    except Exception:
+        err = traceback.format_exc()
+        changes.append(('error', site_dh.name(), err))
+        log(err)
+
+    return changes
+
+
+def log(msg):
+    print(msg)
+    with open(os.path.join(config.synphys_data, 'sync_log'), 'ab') as log_fh:
+        log_fh.write(msg+'\n')
+
+
+def _sync_paths(source, target, changes):
+    """Non-recursive directory sync.
+
+    Return the number of skipped files.
+    """
+    skipped = 0
+    if not os.path.isdir(target):
+        os.mkdir(target)
+        changes.append(('mkdir', source, target))
+    for fname in os.listdir(source):
+        src_path = os.path.join(source, fname)
+        if os.path.isfile(src_path):
+            dst_path = os.path.join(target, fname)
+            
+            # Skip large files:
+            #   - pxp > 10GB
+            #   - others > 5GB
+            src_stat = os.stat(src_path)
+            if (src_stat.st_size > 5e9 and not src_path.endswith('.pxp')) or  (src_stat.st_size > 15e9):
+                log("    err! %s => %s" % (src_path, dst_path))
+                changes.append(('error', src_path, 'file too large'))
+                continue
+            
+            status = sync_file(src_path, dst_path)
+            if status == 'skip':
+                skipped += 1
+            elif status == 'copy':
+                log("    copy %s => %s" % (src_path, dst_path))
+                changes.append(('copy', src_path, dst_path))
+            elif status == 'update':
+                log("    updt %s => %s" % (src_path, dst_path))
+                changes.append(('update', src_path, dst_path))
+
+    return skipped
 
 
 def get_experiment_server_path(dh):
@@ -151,6 +148,8 @@ def get_experiment_server_path(dh):
 
 _expt_path_cache = None
 def experiment_path_cache():
+    """The server contains a pickled dictionary mapping expt_uid:path
+    """
     global _expt_path_cache
     if _expt_path_cache is None:
         cache_file = os.path.join(config.synphys_data, 'experiment_path_cache.pkl')
@@ -195,67 +194,66 @@ def write_expt_path_cache():
     os.rename(tmp, cache_file)
     
 
-def sync_experiment(site_dir):
-    dh = getDirHandle(site_dir)
-    sub = RawDataSubmission(dh)
-    err, warn = sub.check()
-    if len(err) > 0:
-        return [], err, warn
-    sub.submit()
-    return sub.changes, err, warn
-    
-    
 def find_all_sites(root):
     sites = glob.glob(os.path.join(root, '*', 'slice_*', 'site_*'))
     sites.sort(reverse=True)
     return sites
     
 
-def sync_all(log):
-    for raw_data_path in config.raw_data_paths:
-        paths = find_all_sites(raw_data_path)
-        sync_paths(paths, log)
+def sync_all():
+    """Synchronize all known rig data paths to the server
+    """
+    log = []
+    synced_paths = []
+    # Loop over all rigs
+    for rig_name, data_paths in config.rig_data_paths.items():
+        # Each rig may have multiple paths to check
+        for data_path in data_paths:
+            # each "primary" storage path also has a corresponding "archive" path
+            # on the same machine, but we probably only need to synchronize from the
+            # primary storage.
+            data_path = data_path['primary']
+
+            # Get a list of all experiments stored in this path
+            paths = find_all_sites(data_path)
+
+            # synchronize files for each experiment to the server
+            log.extend(sync_paths(paths))
+            synced_paths.append((rig_name, data_path))
+    
+    return log, synced_paths
 
 
-def sync_paths(paths, log):
+def sync_paths(paths):
+    log = []
     for site_dir in paths:
         try:
-            changes, err, warn = sync_experiment(site_dir)
+            changes = sync_experiment(site_dir)
             if len(changes) > 0:
-                log.append((site_dir, changes, err, warn))
+                log.append((site_dir, changes))
         except Exception:
             exc = traceback.format_exc()
             print(exc)
             log.append((site_dir, [], exc, []))
+    return log
 
 
 if __name__ == '__main__':
-    log = []
     
     paths = sys.argv[1:]
     if len(paths) == 0:
-        sync_all(log)
+        # Synchronize all known rig data paths
+        log, synced_paths = sync_all()
+        print("==========================\nSynchronized files from:")
+        for rig_name, data_path in synced_paths:
+            print("%s  :  %s" % (rig_name, data_path))
+
     else:
-        sync_paths(paths, log)
+        # synchronize just the specified path(s)
+        log = sync_paths(paths)
     
     errs = [change for site in log for change in site[1] if change[0] == 'error']
     print("\n----- DONE ------\n   %d errors" % len(errs))
     
     for err in errs:
         print(err[1], err[2])
-    
-    #sites = find_all_sites(config.raw_data_paths[1])
-    #path = get_experiment_server_path(getDirHandle(sites[0]).parent().parent())
-    #changes, err, warn = sync_experiment(sites[0])
-    
-    #print("CHANGES:")
-    #for ch in changes:
-        #print(ch)
-        
-    #print("ERRORS:")
-    #print("\n".join(err))
-    
-    #print("WARNINGS:")
-    #print("\n".join(warn))
-    
-    
