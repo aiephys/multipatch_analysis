@@ -1,4 +1,5 @@
-import os, sys, datetime, re, glob, traceback
+import os, sys, datetime, re, glob, traceback, time, queue
+from pprint import pprint
 from multipatch_analysis import config, lims
 from multipatch_analysis.database import database
 from multipatch_analysis.genotypes import Genotype
@@ -15,6 +16,9 @@ class Dashboard(QtGui.QWidget):
     def __init__(self, limit=0, no_thread=False):
         QtGui.QWidget.__init__(self)
         
+        self.records = {}
+
+        # set up UI
         self.layout = QtGui.QGridLayout()
         self.setLayout(self.layout)
         
@@ -24,19 +28,41 @@ class Dashboard(QtGui.QWidget):
         self.expt_tree.setColumnCount(len(self.fields))
         self.expt_tree.setHeaderLabels(self.fields)
         self.layout.addWidget(self.expt_tree, 0, 0)
+        self.expt_tree.itemSelectionChanged.connect(self.tree_selection_changed)
         
         self.resize(1000, 900)
         
-        self.records = {}
-        
-        self.poll_thread = PollThread(limit=limit)
+        # Queue of experiments to be checked
+        self.expt_queue = queue.PriorityQueue()
+
+        # Poller searches all data sources for new experiments, adding them to the queue
+        self.poll_thread = PollThread(self.expt_queue, limit=limit)
         self.poll_thread.update.connect(self.poller_update)
         if no_thread:
             self.poll_thread.poll()  # for local debugging
         else:
             self.poll_thread.start()
-        
+
+        # Checkers pull experiments off of the queue and check their status
+        if no_thread:
+            self.checker = ExptCheckerThread(self.expt_queue)
+            self.checker.update.connect(self.poller_update)
+            self.checker.run(block=False)
+            
+        else:
+            self.checker_threads = []
+            for i in range(3):
+                self.checker_threads.append(ExptCheckerThread(self.expt_queue))
+                self.checker_threads[-1].update.connect(self.poller_update)
+                self.checker_threads[-1].start()
+
+    def tree_selection_changed(self):
+        sel = self.expt_tree.selectedItems()[0]
+        pprint(sel.rec)
+
     def poller_update(self, rec):
+        """Received an update from a worker thread describing information about an experiment
+        """
         expt = rec['expt']
         if expt in self.records:
             item = self.records[expt]['item']
@@ -47,6 +73,7 @@ class Dashboard(QtGui.QWidget):
             rec['item'] = item
             self.records[expt] = rec
             item.expt = rec['expt']
+            item.rec = rec
             
         for field, val in rec.items():
             try:
@@ -72,14 +99,17 @@ class PollThread(QtCore.QThread):
     """
     update = QtCore.Signal(object)
     
-    def __init__(self, limit=0):
+    def __init__(self, expt_queue, limit=0):
+        self.expt_queue = expt_queue
         self.limit = limit
         QtCore.QThread.__init__(self)
         
     def run(self):
         while True:
             try:
+                # check for new experiments hourly
                 self.poll()
+                time.sleep(3600)
             except Exception:
                 sys.excepthook(*sys.exc_info())
             break
@@ -90,8 +120,6 @@ class PollThread(QtCore.QThread):
         expts = {}
 
         print("loading site paths..")
-        #site_paths = glob.glob(os.path.join(config.synphys_data, '*', 'slice_*', 'site_*'))
-        
         # collect a list of all data sources to search
         search_paths = [config.synphys_data]
         for rig_name, rig_path_sets in config.rig_data_paths.items():
@@ -99,74 +127,62 @@ class PollThread(QtCore.QThread):
                 search_paths.extend(list(path_set.values()))
 
         # Find all available site paths across all data sources
-        expt_paths = []
+        count = 0
         for path in search_paths:
             print("====  Searching %s" % path)
             if not os.path.exists(path):
                 print("    skipping; path does not exist.")
                 continue
             root_dh = getDirHandle(path)
-            new_expt_paths = glob.glob(os.path.join(root_dh.name(), '*', 'slice_*', 'site_*'))
-            expt_paths.extend(new_expt_paths)
-            print("    found %d experiment paths" % len(new_expt_paths))
-            if self.limit > 0 and len(expt_paths) > self.limit:
-                expt_paths = expt_paths[:self.limit]
-                break
 
-        # Do an initial scan so we can sort all by timestamp
-        print("====   Getting all timestamps...")
-        for expt_path in expt_paths:
-            expt = ExperimentMetadata(path=expt_path)
-            ts = expt.timestamp
-            rec = {
-                'expt': expt,
-                'path': expt_path,
-                'timestamp': ts or 'ERROR',
-            }
+            # iterate over all expt sites in this path
+            for expt_path in glob.iglob(os.path.join(root_dh.name(), '*', 'slice_*', 'site_*')):
 
-            if ts is None:
-                self.update.emit(rec)
-                continue
+                expt = ExperimentMetadata(path=expt_path)
+                ts = expt.timestamp
 
-            if ts in expts:
-                continue
-            
-            expts[ts] = expt
-            self.update.emit(rec)
+                # Couldn't get timestamp; show an error message
+                if ts is None:
+                    print("Error getting timestamp for %s" % expt)
+                    continue
 
-        # sort and check all experiments
-        sorted_expts = sorted(list(expts.items()), reverse=True)
-        for ts, expt in sorted_expts:
+                # We've already seen this expt elsewhere; skip
+                if ts in expts:
+                    continue
+                
+                # Add this expt to the queue
+                expts[ts] = expt
+                self.expt_queue.put((-ts, expt))
+
+                count += 1
+                if self.limit > 0 and count >= self.limit:
+                    print("Hit limit; exiting poller")
+                    return
+
+
+class ExptCheckerThread(QtCore.QThread):
+    update = QtCore.Signal(object)
+
+    def __init__(self, expt_queue):
+        QtCore.QThread.__init__(self)
+        self.expt_queue = expt_queue
+
+    def run(self, block=True):
+        while True:
+            ts, expt = self.expt_queue.get(block=block)
             try:
                 rec = self.check(expt)
                 self.update.emit(rec)
             except Exception:
                 rec = {
                     'expt': expt,
+                    'path': expt.site_dh.name(),
+                    'timestamp': expt.timestamp or 'ERROR',
                     'rig': 'ERROR',
-                }   
+                }
                 self.update.emit(rec)
                 traceback.print_exc()
                 print(expt)
-
-    def list_expts(self, root_dh):
-        for expt in sorted(root_dh.ls(), reverse=True):
-            if '@Recycle' in expt:
-                continue
-            expt_dh = root_dh[expt]
-            print(expt_dh.name())
-            if not expt_dh.isDir():
-                continue
-            for slice_name in expt_dh.ls()[::-1]:
-                slice_dh = expt_dh[slice_name]
-                if not slice_dh.isDir():
-                    continue
-                print(slice_dh.name())
-                for site_name in slice_dh.ls()[::-1]:
-                    site_dh = slice_dh[site_name]
-                    if not site_dh.isDir():
-                        continue
-                    yield site_dh
 
     def check(self, expt):
         print("   check %s" % expt.site_dh.name())
@@ -183,8 +199,8 @@ class PollThread(QtCore.QThread):
             else:
                 try:
                     description = ','.join(Genotype(gtyp).drivers())
-                except:
-                    description = (org + ' (? genotype)', fail_color)
+                except Exception:
+                    description = (org + ' (unknown: %s)'%gtyp, fail_color)
 
         subs = expt.lims_submissions
         if subs is None:
@@ -199,7 +215,7 @@ class PollThread(QtCore.QThread):
             'rig': expt.rig_name, 
             'primary': False if expt.primary_path is None else (True if os.path.exists(expt.primary_path) else "MISSING"),
             'archive': False if expt.archive_path is None else (True if os.path.exists(expt.archive_path) else "MISSING"),
-            'backup': False if expt.backup_path is None else (True if os.path.exists(expt.backups_path) else "MISSING"),
+            'backup': False if expt.backup_path is None else (True if os.path.exists(expt.backup_path) else "MISSING"),
             'description': description,
             'pipettes.yml': expt.pipette_file is not None,
             'site.mosaic': expt.mosaic_file is not None,
@@ -226,7 +242,7 @@ class ExperimentMetadata(object):
 
     def _get_raw_paths(self):
         path = self.site_dh.name()
-        
+
         # get raw data subpath  (eg: 2018.01.20_000/slice_000/site_000)
         if os.path.abspath(path).startswith(os.path.abspath(config.synphys_data) + os.path.sep):
             # this is a server path; need to back-convert to rig path
