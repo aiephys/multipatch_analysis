@@ -1,5 +1,6 @@
 import os, sys, datetime, re, glob, traceback, time, queue
 from pprint import pprint
+from collections import OrderedDict
 import numpy as np
 from multipatch_analysis import config, lims
 from multipatch_analysis.database import database
@@ -20,21 +21,21 @@ class Dashboard(QtGui.QWidget):
         # fields displayed in ui
         self.visible_fields = [
             ('timestamp', float), 
-            ('path', str), 
-            ('rig', str), 
-            ('description', str), 
-            ('primary', str), 
-            ('archive', str), 
-            ('backup', str), 
-            ('NAS', str), 
-            ('pipettes.yml', str), 
-            ('site.mosaic', str), 
-            ('DB', str), 
-            ('LIMS', str), 
-            ('20x', str), 
-            ('cell map', str), 
-            ('63x', str), 
-            ('morphology', str)
+            ('path', 'S100'), 
+            ('rig', 'S100'), 
+            ('description', 'S100'), 
+            ('primary', 'S100'), 
+            ('archive', 'S100'), 
+            ('backup', 'S100'), 
+            ('NAS', 'S100'), 
+            ('pipettes.yml', 'S100'), 
+            ('site.mosaic', 'S100'), 
+            ('DB', 'S100'), 
+            ('LIMS', 'S100'), 
+            ('20x', 'S100'), 
+            ('cell map', 'S100'), 
+            ('63x', 'S100'), 
+            ('morphology', 'S100')
         ]
 
         # data tracked but not displayed
@@ -60,7 +61,13 @@ class Dashboard(QtGui.QWidget):
         self.layout.addWidget(self.splitter, 0, 0)
 
         self.filter = pg.DataFilterWidget()
+        self.filter_fields = OrderedDict([(field[0], {'mode': 'enum', 'values': []}) for field in self.visible_fields])
+        self.filter_fields['timestamp'] = {'mode': 'range'}
+        self.filter_fields.pop('path')
+
+        self.filter.setFields(self.filter_fields)
         self.splitter.addWidget(self.filter)
+        self.filter.sigFilterChanged.connect(self.filter_changed)
 
         self.expt_tree = pg.TreeWidget()
         self.expt_tree.setSortingEnabled(True)
@@ -70,6 +77,7 @@ class Dashboard(QtGui.QWidget):
         self.expt_tree.itemSelectionChanged.connect(self.tree_selection_changed)
         
         self.resize(1000, 900)
+        self.splitter.setSizes([200, 800])
         
         # Queue of experiments to be checked
         self.expt_queue = queue.PriorityQueue()
@@ -120,30 +128,47 @@ class Dashboard(QtGui.QWidget):
 
         # update item/record fields
         for field, val in rec.items():
-            try:
-                i = self.field_indices[field]
-            except KeyError:
-                continue
             if isinstance(val, tuple):
+                # if a tuple was given, interpret it as (text, color)
                 val, color = val
             else:
+                # otherwise make a guess on a good color
                 color = None
                 if val is True:
                     color = pass_color
                 elif val in (False, 'ERROR', 'MISSING'):
                     color = fail_color
 
+            # update this field in the record
             record[field] = val
-
+            
+            # update this field in the tree item
+            try:
+                i = self.field_indices[field]
+            except KeyError:
+                continue
             item.setText(i, str(val))
             if color is not None:
                 item.setBackgroundColor(i, pg.mkColor(color))
+
+            # update filter fields
+            filter_field = self.filter_fields.get(field)
+            if filter_field is not None and filter_field['mode'] == 'enum' and val not in filter_field['values']:
+                filter_field['values'].append(val)
+                self.filter.setFields(self.filter_fields)
+
+
+    def filter_changed(self):
+        mask = self.filter.generateMask(self.records)
+        for i,item in enumerate(self.records['item']):
+            item.setHidden(not mask[i])
 
 
 class GrowingArray(object):
     def __init__(self, dtype, init_size=1000):
         self.size = 0
         self._data = np.empty(init_size, dtype=dtype)
+        self._view = self._data[:0]
 
     def __len__(self):
         return self.size
@@ -153,7 +178,7 @@ class GrowingArray(object):
         return (self.size,)
 
     def __getitem__(self, i):
-        return self._data[i]
+        return self._view[i]
 
     def add_record(self, rec):
         index = self.size
@@ -169,6 +194,7 @@ class GrowingArray(object):
     def _grow(self, size):
         if size > len(self._data):
             self._data = np.resize(self._data, len(self._data)*2)
+        self._view = self._data[:size]
         self.size = size
 
 
