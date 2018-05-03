@@ -37,15 +37,15 @@ class Dashboard(QtGui.QWidget):
             self.poll_thread.start()
         
     def poller_update(self, rec):
-        ts = rec['timestamp']
-        if ts in self.records:
-            item = self.records[ts]['item']
-            self.records[ts].update(rec)
+        expt = rec['expt']
+        if expt in self.records:
+            item = self.records[expt]['item']
+            self.records[expt].update(rec)
         else:
             item = pg.TreeWidgetItem()
             self.expt_tree.addTopLevelItem(item)
             rec['item'] = item
-            self.records[ts] = rec
+            self.records[expt] = rec
             item.expt = rec['expt']
             
         for field, val in rec.items():
@@ -59,7 +59,7 @@ class Dashboard(QtGui.QWidget):
                 color = None
                 if val is True:
                     color = pass_color
-                elif val in (False, 'ERROR'):
+                elif val in (False, 'ERROR', 'MISSING'):
                     color = fail_color
 
             item.setText(i, str(val))
@@ -92,42 +92,62 @@ class PollThread(QtCore.QThread):
         print("loading site paths..")
         #site_paths = glob.glob(os.path.join(config.synphys_data, '*', 'slice_*', 'site_*'))
         
+        # collect a list of all data sources to search
         search_paths = [config.synphys_data]
         for rig_name, rig_path_sets in config.rig_data_paths.items():
             for path_set in rig_path_sets:
                 search_paths.extend(list(path_set.values()))
 
+        # Find all available site paths across all data sources
+        expt_paths = []
         for path in search_paths:
-            print("==============================  Searching %s" % path)
+            print("====  Searching %s" % path)
             if not os.path.exists(path):
-                print("         skipping; path does not exist.")
+                print("    skipping; path does not exist.")
                 continue
             root_dh = getDirHandle(path)
-            for site_dh in self.list_expts(root_dh):
-                expt = ExperimentMetadata(path=site_dh.name())
-                if expt.timestamp in expts:
-                    continue
-                expts[expt.timestamp] = expt
-                try:
-                    rec = self.check(expt)
-                    self.update.emit(rec)
-                except Exception:
-                    rec = {
-                        'expt': expt,
-                        'path': site_dh.name(),
-                        'timestamp': site_dh.info().get('__timestamp__', False),
-                        'rig': 'ERROR',
-                    }   
-                    self.update.emit(rec)
-                    traceback.print_exc()
-                    print(expt)
-
-
-                if self.limit > 0 and len(expts) > self.limit:
-                    break
-            if self.limit > 0 and len(expts) > self.limit:
+            new_expt_paths = glob.glob(os.path.join(root_dh.name(), '*', 'slice_*', 'site_*'))
+            expt_paths.extend(new_expt_paths)
+            print("    found %d experiment paths" % len(new_expt_paths))
+            if self.limit > 0 and len(expt_paths) > self.limit:
+                expt_paths = expt_paths[:self.limit]
                 break
 
+        # Do an initial scan so we can sort all by timestamp
+        print("====   Getting all timestamps...")
+        for expt_path in expt_paths:
+            expt = ExperimentMetadata(path=expt_path)
+            ts = expt.timestamp
+            rec = {
+                'expt': expt,
+                'path': expt_path,
+                'timestamp': ts or 'ERROR',
+            }
+
+            if ts is None:
+                self.update.emit(rec)
+                continue
+
+            if ts in expts:
+                continue
+            
+            expts[ts] = expt
+            self.update.emit(rec)
+
+        # sort and check all experiments
+        sorted_expts = sorted(list(expts.items()), reverse=True)
+        for ts, expt in sorted_expts:
+            try:
+                rec = self.check(expt)
+                self.update.emit(rec)
+            except Exception:
+                rec = {
+                    'expt': expt,
+                    'rig': 'ERROR',
+                }   
+                self.update.emit(rec)
+                traceback.print_exc()
+                print(expt)
 
     def list_expts(self, root_dh):
         for expt in sorted(root_dh.ls(), reverse=True):
@@ -200,10 +220,13 @@ class ExperimentMetadata(object):
         self._expt_info = None
         self._specimen_info = None
         self._rig_name = None
-        self.primary_path = None
-        self.archive_path = None
-        self.backup_path = None
+        self._primary_path = None
+        self._archive_path = None
+        self._backup_path = None
 
+    def _get_raw_paths(self):
+        path = self.site_dh.name()
+        
         # get raw data subpath  (eg: 2018.01.20_000/slice_000/site_000)
         if os.path.abspath(path).startswith(os.path.abspath(config.synphys_data) + os.path.sep):
             # this is a server path; need to back-convert to rig path
@@ -224,12 +247,30 @@ class ExperimentMetadata(object):
                 dh = getDirHandle(test_path)
                 if dh.info()['__timestamp__'] == self.site_info['__timestamp__']:
                     found_paths = True
-                    # set self.primary_path, self.archive_path, etc.
+                    # set self._primary_path, self._archive_path, etc.
                     for k,v in path_set.items():
-                        setattr(self, k+'_path', os.path.join(v, expt_subpath))
+                        setattr(self, '_'+k+'_path', os.path.join(v, expt_subpath))
                     break
             if found_paths:
                 break
+
+    @property
+    def primary_path(self):
+        if self._primary_path is None:
+            self._get_raw_paths()
+        return self._primary_path
+
+    @property
+    def archive_path(self):
+        if self._archive_path is None:
+            self._get_raw_paths()
+        return self._archive_path
+
+    @property
+    def backup_path(self):
+        if self._backup_path is None:
+            self._get_raw_paths()
+        return self._backup_path
 
     @property
     def slice_dh(self):
@@ -310,7 +351,7 @@ class ExperimentMetadata(object):
 
     @property
     def timestamp(self):
-        return self.site_info['__timestamp__']
+        return self.site_info.get('__timestamp__')
 
     @property
     def datetime(self):
