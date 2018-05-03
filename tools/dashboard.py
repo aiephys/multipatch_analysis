@@ -1,5 +1,6 @@
 import os, sys, datetime, re, glob, traceback, time, queue
 from pprint import pprint
+import numpy as np
 from multipatch_analysis import config, lims
 from multipatch_analysis.database import database
 from multipatch_analysis.genotypes import Genotype
@@ -15,19 +16,57 @@ pass_color = (200, 255, 200)
 class Dashboard(QtGui.QWidget):
     def __init__(self, limit=0, no_thread=False):
         QtGui.QWidget.__init__(self)
-        
-        self.records = {}
+
+        # fields displayed in ui
+        self.visible_fields = [
+            ('timestamp', float), 
+            ('path', str), 
+            ('rig', str), 
+            ('description', str), 
+            ('primary', str), 
+            ('archive', str), 
+            ('backup', str), 
+            ('NAS', str), 
+            ('pipettes.yml', str), 
+            ('site.mosaic', str), 
+            ('DB', str), 
+            ('LIMS', str), 
+            ('20x', str), 
+            ('cell map', str), 
+            ('63x', str), 
+            ('morphology', str)
+        ]
+
+        # data tracked but not displayed
+        self.hidden_fields = [
+            ('experiment', object),
+            ('item', object),
+        ]
+
+        # maps field name : index (column number)
+        self.field_indices = {self.visible_fields[i][0]:i for i in range(len(self.visible_fields))}
+
+        self.records = GrowingArray(dtype=self.visible_fields + self.hidden_fields)
+        self.records_by_expt = {}  # maps expt:index
+
+        self.selected = None
 
         # set up UI
         self.layout = QtGui.QGridLayout()
         self.setLayout(self.layout)
-        
+        self.layout.setContentsMargins(0, 0, 0, 0)
+
+        self.splitter = QtGui.QSplitter(QtCore.Qt.Horizontal)
+        self.layout.addWidget(self.splitter, 0, 0)
+
+        self.filter = pg.DataFilterWidget()
+        self.splitter.addWidget(self.filter)
+
         self.expt_tree = pg.TreeWidget()
         self.expt_tree.setSortingEnabled(True)
-        self.fields = ['timestamp', 'path', 'rig', 'description', 'primary', 'archive', 'backup', 'NAS', 'pipettes.yml', 'site.mosaic', 'DB', 'LIMS', '20x', 'cell map', '63x', 'morphology']
-        self.expt_tree.setColumnCount(len(self.fields))
-        self.expt_tree.setHeaderLabels(self.fields)
-        self.layout.addWidget(self.expt_tree, 0, 0)
+        self.expt_tree.setColumnCount(len(self.visible_fields))
+        self.expt_tree.setHeaderLabels([f[0] for f in self.visible_fields])
+        self.splitter.addWidget(self.expt_tree)
         self.expt_tree.itemSelectionChanged.connect(self.tree_selection_changed)
         
         self.resize(1000, 900)
@@ -59,26 +98,31 @@ class Dashboard(QtGui.QWidget):
     def tree_selection_changed(self):
         sel = self.expt_tree.selectedItems()[0]
         pprint(sel.rec)
+        self.selected = sel
 
     def poller_update(self, rec):
         """Received an update from a worker thread describing information about an experiment
         """
-        expt = rec['expt']
-        if expt in self.records:
-            item = self.records[expt]['item']
-            self.records[expt].update(rec)
+        expt = rec['experiment']
+        if expt in self.records_by_expt:
+            # use old record / item
+            index = self.records_by_expt[expt]
+            item = self.records[index]['item']
         else:
+            # add new record / item
             item = pg.TreeWidgetItem()
             self.expt_tree.addTopLevelItem(item)
             rec['item'] = item
-            self.records[expt] = rec
-            item.expt = rec['expt']
-            item.rec = rec
-            
+            index = self.records.add_record({})
+            item.index = index
+
+        record = self.records[index]
+
+        # update item/record fields
         for field, val in rec.items():
             try:
-                i = self.fields.index(field)
-            except ValueError:
+                i = self.field_indices[field]
+            except KeyError:
                 continue
             if isinstance(val, tuple):
                 val, color = val
@@ -89,9 +133,43 @@ class Dashboard(QtGui.QWidget):
                 elif val in (False, 'ERROR', 'MISSING'):
                     color = fail_color
 
+            record[field] = val
+
             item.setText(i, str(val))
             if color is not None:
                 item.setBackgroundColor(i, pg.mkColor(color))
+
+
+class GrowingArray(object):
+    def __init__(self, dtype, init_size=1000):
+        self.size = 0
+        self._data = np.empty(init_size, dtype=dtype)
+
+    def __len__(self):
+        return self.size
+
+    @property
+    def shape(self):
+        return (self.size,)
+
+    def __getitem__(self, i):
+        return self._data[i]
+
+    def add_record(self, rec):
+        index = self.size
+        self._grow(self.size+1)
+        self.update_record(index, rec)
+        return index
+
+    def update_record(self, index, rec):
+        for k,v in rec.items():
+            print(k, v)
+            self._data[index][k] = v
+
+    def _grow(self, size):
+        if size > len(self._data):
+            self._data = np.resize(self._data, len(self._data)*2)
+        self.size = size
 
 
 class PollThread(QtCore.QThread):
@@ -175,7 +253,7 @@ class ExptCheckerThread(QtCore.QThread):
                 self.update.emit(rec)
             except Exception:
                 rec = {
-                    'expt': expt,
+                    'experiment': expt,
                     'path': expt.site_dh.name(),
                     'timestamp': expt.timestamp or 'ERROR',
                     'rig': 'ERROR',
@@ -209,7 +287,7 @@ class ExptCheckerThread(QtCore.QThread):
             lims = len(subs) == 1
 
         rec = {
-            'expt': expt,
+            'experiment': expt,
             'path': expt.site_dh.name(), 
             'timestamp': expt.timestamp, 
             'rig': expt.rig_name, 
@@ -414,9 +492,3 @@ if __name__ == '__main__':
     console = pg.dbg()
     db = Dashboard(limit=args.limit, no_thread=args.no_thread)
     db.show()
-    
-    def sel_change():
-        global sel
-        sel = db.expt_tree.selectedItems()[0].expt
-
-    db.expt_tree.itemSelectionChanged.connect(sel_change)
