@@ -90,40 +90,41 @@ def first_pulse_plot(expt_list, name=None, summary_plot=None, color=None, scatte
     amp_base_subtract = []
     avg_amps = {'amp': [], 'latency': [], 'rise': []}
     for expt in expt_list:
-        for pre, post in expt.connections:
-            if expt.cells[pre].cre_type == cre_type[0] and expt.cells[post].cre_type == cre_type[1]:
-                avg_amp, avg_trace, n_sweeps = responses(expt, pre, post, thresh=0.03e-3, filter=[[0, 50], [-68, -72]])
-                if expt.cells[pre].cre_type in EXCITATORY_CRE_TYPES and avg_amp < 0:
-                    continue
-                elif expt.cells[pre].cre_type in INHIBITORY_CRE_TYPES and avg_amp > 0:
-                    continue
-                if n_sweeps >= 10:
-                    avg_trace.t0 = 0
-                    avg_amps['amp'].append(avg_amp)
-                    base = float_mode(avg_trace.data[:int(10e-3 / avg_trace.dt)])
-                    amp_base_subtract.append(avg_trace.copy(data=avg_trace.data - base))
-                    if features is True:
-                        if avg_amp > 0:
-                            amp_sign = '+'
+        if expt.connections is not None:
+            for pre, post in expt.connections:
+                if expt.cells[pre].cre_type == cre_type[0] and expt.cells[post].cre_type == cre_type[1]:
+                    avg_amp, avg_trace, n_sweeps = responses(expt, pre, post, thresh=0.03e-3, filter=[[0, 50], [-68, -72]])
+                    if expt.cells[pre].cre_type in EXCITATORY_CRE_TYPES and avg_amp < 0:
+                        continue
+                    elif expt.cells[pre].cre_type in INHIBITORY_CRE_TYPES and avg_amp > 0:
+                        continue
+                    if n_sweeps >= 10:
+                        avg_trace.t0 = 0
+                        avg_amps['amp'].append(avg_amp)
+                        base = float_mode(avg_trace.data[:int(10e-3 / avg_trace.dt)])
+                        amp_base_subtract.append(avg_trace.copy(data=avg_trace.data - base))
+                        if features is True:
+                            if avg_amp > 0:
+                                amp_sign = '+'
+                            else:
+                                amp_sign = '-'
+                            psp_fits = fit_psp(avg_trace, sign=amp_sign, yoffset=0, amp=avg_amp, method='leastsq',
+                                               fit_kws={})
+                            avg_amps['latency'].append(psp_fits.best_values['xoffset'] - 10e-3)
+                            avg_amps['rise'].append(psp_fits.best_values['rise_time'])
+
+                        current_connection_HS = post, pre
+                        if len(expt.connections) > 1 and args.recip is True:
+                            for i,x in enumerate(expt.connections):
+                                if x == current_connection_HS:  # determine if a reciprocal connection
+                                    amp_plots.plot(avg_trace.time_values, avg_trace.data - base, pen={'color': 'r', 'width': 1})
+                                    break
+                                elif x != current_connection_HS and i == len(expt.connections) - 1:  # reciprocal connection was not found
+                                    amp_plots.plot(avg_trace.time_values, avg_trace.data - base)
                         else:
-                            amp_sign = '-'
-                        psp_fits = fit_psp(avg_trace, sign=amp_sign, yoffset=0, amp=avg_amp, method='leastsq',
-                                           fit_kws={})
-                        avg_amps['latency'].append(psp_fits.best_values['xoffset'] - 10e-3)
-                        avg_amps['rise'].append(psp_fits.best_values['rise_time'])
+                            amp_plots.plot(avg_trace.time_values, avg_trace.data - base)
 
-                    current_connection_HS = post, pre
-                    if len(expt.connections) > 1 and args.recip is True:
-                        for i,x in enumerate(expt.connections):
-                            if x == current_connection_HS:  # determine if a reciprocal connection
-                                amp_plots.plot(avg_trace.time_values, avg_trace.data - base, pen={'color': 'r', 'width': 1})
-                                break
-                            elif x != current_connection_HS and i == len(expt.connections) - 1:  # reciprocal connection was not found
-                                amp_plots.plot(avg_trace.time_values, avg_trace.data - base)
-                    else:
-                        amp_plots.plot(avg_trace.time_values, avg_trace.data - base)
-
-                    app.processEvents()
+                        app.processEvents()
 
     if len(amp_base_subtract) != 0:
         print(name + ' n = %d' % len(amp_base_subtract))
