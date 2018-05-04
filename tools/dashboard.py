@@ -1,4 +1,9 @@
-import os, sys, datetime, re, glob, traceback, time, queue
+from __future__ import print_function
+import os, sys, datetime, re, glob, traceback, time
+try:
+    import queue
+except ImportError:
+    import Queue as queue
 from pprint import pprint
 from collections import OrderedDict
 import numpy as np
@@ -42,6 +47,7 @@ class Dashboard(QtGui.QWidget):
         self.hidden_fields = [
             ('experiment', object),
             ('item', object),
+            ('error', object),
         ]
 
         # maps field name : index (column number)
@@ -105,8 +111,12 @@ class Dashboard(QtGui.QWidget):
 
     def tree_selection_changed(self):
         sel = self.expt_tree.selectedItems()[0]
-        pprint(sel.rec)
-        self.selected = sel
+        rec = self.records[sel.index]
+        pprint(rec)
+        self.selected = rec
+        err = rec['error']
+        if err is not None:
+            traceback.print_exception(*err)
 
     def poller_update(self, rec):
         """Received an update from a worker thread describing information about an experiment
@@ -128,7 +138,7 @@ class Dashboard(QtGui.QWidget):
 
         # update item/record fields
         for field, val in rec.items():
-            if isinstance(val, tuple):
+            if field in self.field_indices and isinstance(val, tuple):
                 # if a tuple was given, interpret it as (text, color)
                 val, color = val
             else:
@@ -277,20 +287,17 @@ class ExptCheckerThread(QtCore.QThread):
             try:
                 rec = self.check(expt)
                 self.update.emit(rec)
-            except Exception:
+            except Exception as exc:
                 rec = {
                     'experiment': expt,
                     'path': expt.site_dh.name(),
                     'timestamp': expt.timestamp or 'ERROR',
                     'rig': 'ERROR',
+                    'error': sys.exc_info(),
                 }
                 self.update.emit(rec)
-                traceback.print_exc()
-                print(expt)
 
     def check(self, expt):
-        print("   check %s" % expt.site_dh.name())
-
         org = expt.organism
         if org is None:
             description = ("no LIMS spec info", fail_color)
@@ -317,7 +324,7 @@ class ExptCheckerThread(QtCore.QThread):
             'path': expt.site_dh.name(), 
             'timestamp': expt.timestamp, 
             'rig': expt.rig_name, 
-            'primary': False if expt.primary_path is None else (True if os.path.exists(expt.primary_path) else "MISSING"),
+            'primary': False if expt.primary_path is None else (True if os.path.exists(expt.primary_path) else "-"),
             'archive': False if expt.archive_path is None else (True if os.path.exists(expt.archive_path) else "MISSING"),
             'backup': False if expt.backup_path is None else (True if os.path.exists(expt.backup_path) else "MISSING"),
             'description': description,
@@ -348,7 +355,7 @@ class ExperimentMetadata(object):
         path = self.site_dh.name()
 
         # get raw data subpath  (eg: 2018.01.20_000/slice_000/site_000)
-        if os.path.abspath(path).startswith(os.path.abspath(config.synphys_data) + os.path.sep):
+        if os.path.abspath(path).startswith(os.path.abspath(config.synphys_data).rstrip(os.path.sep) + os.path.sep):
             # this is a server path; need to back-convert to rig path
             source_path = open(os.path.join(path, 'sync_source')).read()
             expt_subpath = os.path.join(*source_path.split('/')[-3:])
@@ -358,7 +365,7 @@ class ExperimentMetadata(object):
         
         # find the local primary/archive paths that contain this experiment
         found_paths = False
-        rig_data_paths = config.rig_data_paths[self.rig_name]
+        rig_data_paths = config.rig_data_paths.get(self.rig_name, [])
         for path_set in rig_data_paths:
             for root in path_set.values():
                 test_path = os.path.join(root, expt_subpath)
@@ -463,10 +470,10 @@ class ExperimentMetadata(object):
                     path = self.site_dh['sync_source'].read()
                 else:
                     path = self.site_dh.name()
-                m = re.search(os.path.sep + '(mp\d)', path)
+                m = re.search(r'(/|\\)(mp\d)(/|\\)', path)
                 if m is None:
                     raise Exception("Can't determine rig name for %s" % path)
-                self._rig_name = m.groups()[0].lower()
+                self._rig_name = m.groups()[1].lower()
         return self._rig_name
 
     @property
