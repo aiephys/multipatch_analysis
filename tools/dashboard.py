@@ -92,7 +92,9 @@ class Dashboard(QtGui.QWidget):
 
         self.resize(1000, 900)
         self.splitter.setSizes([200, 800])
-        for i,size in enumerate([150, 50, 230, 150, 200]):
+        colsizes = [150, 50, 230, 150, 200]
+        for i in range(len(self.visible_fields)):
+            size = colsizes[i] if i < len(colsizes) else 50
             self.expt_tree.setColumnWidth(i, size)
         
         # Queue of experiments to be checked
