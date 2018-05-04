@@ -1,5 +1,5 @@
 from __future__ import print_function
-import os, sys, datetime, re, glob, traceback, time
+import os, sys, datetime, re, glob, traceback, time, atexit, threading
 try:
     import queue
 except ImportError:
@@ -81,33 +81,51 @@ class Dashboard(QtGui.QWidget):
         self.expt_tree.setHeaderLabels([f[0] for f in self.visible_fields])
         self.splitter.addWidget(self.expt_tree)
         self.expt_tree.itemSelectionChanged.connect(self.tree_selection_changed)
-        
+
+        self.status = QtGui.QStatusBar()
+        self.layout.addWidget(self.status, 1, 0)
+
         self.resize(1000, 900)
         self.splitter.setSizes([200, 800])
         
         # Queue of experiments to be checked
         self.expt_queue = queue.PriorityQueue()
 
-        # Poller searches all data sources for new experiments, adding them to the queue
-        self.poll_thread = PollThread(self.expt_queue, limit=limit)
-        self.poll_thread.update.connect(self.poller_update)
-        if no_thread:
-            self.poll_thread.poll()  # for local debugging
-        else:
-            self.poll_thread.start()
+        # collect a list of all data sources to search
+        search_paths = [config.synphys_data]
+        for rig_name, rig_path_sets in config.rig_data_paths.items():
+            for path_set in rig_path_sets:
+                search_paths.extend(list(path_set.values()))
+
+        # Each poller searches a single data source for new experiments, adding them to the queue
+        self.pollers = []
+        self.poller_status = {}
+        for search_path in search_paths:
+            if not os.path.exists(search_path):
+                print("Ignoring search path:", search_path)
+                continue
+            poll_thread = PollThread(self.expt_queue, search_path, limit=limit)
+            poll_thread.update.connect(self.poller_update)
+            if no_thread:
+                poll_thread.poll()  # for local debugging
+            else:
+                poll_thread.start()
+            self.pollers.append(poll_thread)
 
         # Checkers pull experiments off of the queue and check their status
         if no_thread:
             self.checker = ExptCheckerThread(self.expt_queue)
-            self.checker.update.connect(self.poller_update)
-            self.checker.run(block=False)
-            
+            self.checker.update.connect(self.checker_update)
+            self.checker.run(block=False)            
         else:
-            self.checker_threads = []
+            self.checkers = []
             for i in range(3):
-                self.checker_threads.append(ExptCheckerThread(self.expt_queue))
-                self.checker_threads[-1].update.connect(self.poller_update)
-                self.checker_threads[-1].start()
+                self.checkers.append(ExptCheckerThread(self.expt_queue))
+                self.checkers[-1].update.connect(self.checker_update)
+                self.checkers[-1].start()
+
+        # shut down threads nicely on exit
+        atexit.register(self.quit)
 
     def tree_selection_changed(self):
         sel = self.expt_tree.selectedItems()[0]
@@ -115,7 +133,7 @@ class Dashboard(QtGui.QWidget):
         self.selected = rec
         expt = rec['experiment']
         print("===================", expt.timestamp)
-        print(" description:", rec['description']
+        print(" description:", rec['description'])
         print("    NAS path:", expt.nas_path)
         print("primary path:", expt.nas_path)
         print("archive path:", expt.nas_path)
@@ -125,8 +143,15 @@ class Dashboard(QtGui.QWidget):
             print("Error checking experiment:")
             traceback.print_exception(*err)
 
+    def poller_update(self, path, status):
+        """Received an update on the status of a poller
+        """
+        self.poller_status[path] = status
+        paths = sorted(self.poller_status.keys())
+        msg = '    '.join(['%s: %s' % (p,self.poller_status[p]) for p in paths])
+        self.status.showMessage(msg)
 
-    def poller_update(self, rec):
+    def checker_update(self, rec):
         """Received an update from a worker thread describing information about an experiment
         """
         expt = rec['experiment']
@@ -175,11 +200,19 @@ class Dashboard(QtGui.QWidget):
                 filter_field['values'].append(val)
                 self.filter.setFields(self.filter_fields)
 
-
     def filter_changed(self):
         mask = self.filter.generateMask(self.records)
         for i,item in enumerate(self.records['item']):
             item.setHidden(not mask[i])
+
+    def quit(self):
+        for t in self.pollers:
+            t.stop()
+            t.wait()
+
+        for t in self.checkers:
+            t.stop()
+            t.wait()
 
 
 class GrowingArray(object):
@@ -219,67 +252,69 @@ class GrowingArray(object):
 class PollThread(QtCore.QThread):
     """Used to check in the background for changes to experiment status.
     """
-    update = QtCore.Signal(object)
+    update = QtCore.Signal(object, object)  # search_path, status_message
     
-    def __init__(self, expt_queue, limit=0):
-        self.expt_queue = expt_queue
-        self.limit = limit
+    def __init__(self, expt_queue, search_path, limit=0):
         QtCore.QThread.__init__(self)
+        self.expt_queue = expt_queue
+        self.search_path = search_path
+        self.limit = limit
+        self._stop = False
+        self.waker = threading.Event()
         
+    def stop(self):
+        self._stop = True
+        self.waker.set()
+
     def run(self):
         while True:
             try:
                 # check for new experiments hourly
                 self.poll()
-                time.sleep(3600)
+                self.waker.wait(3600)
+                if self._stop:
+                    return
             except Exception:
                 sys.excepthook(*sys.exc_info())
             break
                 
     def poll(self):
-
         self.session = database.Session()
         expts = {}
 
-        print("loading site paths..")
-        # collect a list of all data sources to search
-        search_paths = [config.synphys_data]
-        for rig_name, rig_path_sets in config.rig_data_paths.items():
-            for path_set in rig_path_sets:
-                search_paths.extend(list(path_set.values()))
-
         # Find all available site paths across all data sources
         count = 0
-        for path in search_paths:
-            print("====  Searching %s" % path)
-            if not os.path.exists(path):
-                print("    skipping; path does not exist.")
+        path = self.search_path
+
+        self.update.emit(path, "Updating...")
+        root_dh = getDirHandle(path)
+
+        # iterate over all expt sites in this path
+        for expt_path in glob.iglob(os.path.join(root_dh.name(), '*', 'slice_*', 'site_*')):
+            if self._stop:
+                return
+
+            expt = ExperimentMetadata(path=expt_path)
+            ts = expt.timestamp
+
+            # Couldn't get timestamp; show an error message
+            if ts is None:
+                print("Error getting timestamp for %s" % expt)
                 continue
-            root_dh = getDirHandle(path)
 
-            # iterate over all expt sites in this path
-            for expt_path in glob.iglob(os.path.join(root_dh.name(), '*', 'slice_*', 'site_*')):
+            # We've already seen this expt elsewhere; skip
+            if ts in expts:
+                continue
+            
+            # Add this expt to the queue
+            expts[ts] = expt
+            self.expt_queue.put((-ts, expt))
 
-                expt = ExperimentMetadata(path=expt_path)
-                ts = expt.timestamp
-
-                # Couldn't get timestamp; show an error message
-                if ts is None:
-                    print("Error getting timestamp for %s" % expt)
-                    continue
-
-                # We've already seen this expt elsewhere; skip
-                if ts in expts:
-                    continue
-                
-                # Add this expt to the queue
-                expts[ts] = expt
-                self.expt_queue.put((-ts, expt))
-
-                count += 1
-                if self.limit > 0 and count >= self.limit:
-                    print("Hit limit; exiting poller")
-                    return
+            count += 1
+            if self.limit > 0 and count >= self.limit:
+                print("Hit limit; exiting poller")
+                return
+        self.update.emit(path, "Finished")
 
 
 class ExptCheckerThread(QtCore.QThread):
@@ -288,10 +323,17 @@ class ExptCheckerThread(QtCore.QThread):
     def __init__(self, expt_queue):
         QtCore.QThread.__init__(self)
         self.expt_queue = expt_queue
+        self._stop = False
+
+    def stop(self):
+        self._stop = True
+        self.expt_queue.put(('stop', None))
 
     def run(self, block=True):
         while True:
             ts, expt = self.expt_queue.get(block=block)
+            if self._stop or ts == 'stop':
+                return
             try:
                 rec = self.check(expt)
                 self.update.emit(rec)
@@ -530,6 +572,10 @@ if __name__ == '__main__':
     args = parser.parse_args(sys.argv[1:])
 
     app = pg.mkQApp()
-    console = pg.dbg()
+    # console = pg.dbg()
     db = Dashboard(limit=args.limit, no_thread=args.no_thread)
     db.show()
+
+    if sys.flags.interactive == 0:
+        app.exec_()
+
