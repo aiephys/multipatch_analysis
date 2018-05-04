@@ -66,6 +66,7 @@ class Dashboard(QtGui.QWidget):
         self.splitter = QtGui.QSplitter(QtCore.Qt.Horizontal)
         self.layout.addWidget(self.splitter, 0, 0)
 
+
         self.filter = pg.DataFilterWidget()
         self.filter_fields = OrderedDict([(field[0], {'mode': 'enum', 'values': []}) for field in self.visible_fields])
         self.filter_fields['timestamp'] = {'mode': 'range'}
@@ -134,10 +135,11 @@ class Dashboard(QtGui.QWidget):
         expt = rec['experiment']
         print("===================", expt.timestamp)
         print(" description:", rec['description'])
+        print("   spec name:", expt.specimen_info['specimen_name'])
         print("    NAS path:", expt.nas_path)
-        print("primary path:", expt.nas_path)
-        print("archive path:", expt.nas_path)
-        print(" backup path:", expt.nas_path)
+        print("primary path:", expt.primary_path)
+        print("archive path:", expt.archive_path)
+        print(" backup path:", expt.backup_path)
         err = rec['error']
         if err is not None:
             print("Error checking experiment:")
@@ -253,7 +255,9 @@ class PollThread(QtCore.QThread):
     """Used to check in the background for changes to experiment status.
     """
     update = QtCore.Signal(object, object)  # search_path, status_message
-    
+    known_expts = {}
+    known_expts_lock = threading.Lock()
+
     def __init__(self, expt_queue, search_path, limit=0):
         QtCore.QThread.__init__(self)
         self.expt_queue = expt_queue
@@ -302,12 +306,13 @@ class PollThread(QtCore.QThread):
                 print("Error getting timestamp for %s" % expt)
                 continue
 
-            # We've already seen this expt elsewhere; skip
-            if ts in expts:
-                continue
-            
-            # Add this expt to the queue
-            expts[ts] = expt
+            with self.known_expts_lock:
+                if ts in self.known_expts:
+                    # We've already seen this expt elsewhere; skip
+                    continue            
+                self.known_expts[ts] = expt
+
+            # Add this expt to the queue to be checked
             self.expt_queue.put((-ts, expt))
 
             count += 1
