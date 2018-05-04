@@ -76,6 +76,8 @@ class Dashboard(QtGui.QWidget):
         self.filter.setFields(self.filter_fields)
         self.splitter.addWidget(self.filter)
         self.filter.sigFilterChanged.connect(self.filter_changed)
+        self.filter.addFilter('rig')
+        self.filter.addFilter('project')
 
         self.expt_tree = pg.TreeWidget()
         self.expt_tree.setSortingEnabled(True)
@@ -183,6 +185,7 @@ class Dashboard(QtGui.QWidget):
         record = self.records[index]
 
         # update item/record fields
+        update_filter = False
         for field, val in rec.items():
             display_val = str(val)
             if field in self.field_indices and isinstance(val, tuple):
@@ -215,7 +218,10 @@ class Dashboard(QtGui.QWidget):
             filter_field = self.filter_fields.get(field)
             if filter_field is not None and filter_field['mode'] == 'enum' and val not in filter_field['values']:
                 filter_field['values'].append(val)
-                self.filter.setFields(self.filter_fields)
+                update_filter = True
+
+        if update_filter:
+            self.filter.setFields(self.filter_fields)
 
     def filter_changed(self):
         mask = self.filter.generateMask(self.records)
