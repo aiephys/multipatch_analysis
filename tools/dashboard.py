@@ -189,7 +189,6 @@ class Dashboard(QtGui.QWidget):
         # update item/record fields
         update_filter = False
         for field, val in rec.items():
-            display_val = str(val)
             if field in self.field_indices and isinstance(val, tuple):
                 # if a tuple was given, interpret it as (text, color)
                 val, color = val
@@ -202,6 +201,7 @@ class Dashboard(QtGui.QWidget):
                     color = fail_color
                 elif val in ('ERROR', 'MISSING'):
                     color = fail_color
+            display_val = str(val)
 
             # update this field in the record
             record[field] = val
@@ -377,7 +377,7 @@ class ExptCheckerThread(QtCore.QThread):
             rec['primary'] = False if expt.primary_path is None else (True if os.path.exists(expt.primary_path) else "-")
             rec['archive'] = False if expt.archive_path is None else (True if os.path.exists(expt.archive_path) else "MISSING")
             rec['backup'] = False if expt.backup_path is None else (True if os.path.exists(expt.backup_path) else "MISSING")
-            rec['NAS'] = expt.nas_path is not None
+            rec['NAS'] = False if expt.nas_path is None else (True if os.path.exists(expt.nas_path) else "MISSING")
             rec['pipettes.yml'] = expt.pipette_file is not None
             rec['site.mosaic'] = expt.mosaic_file is not None
 
