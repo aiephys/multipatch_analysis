@@ -28,6 +28,7 @@ class Dashboard(QtGui.QWidget):
             ('timestamp', float), 
             ('rig', 'S100'), 
             ('path', 'S100'), 
+            ('project', 'S100'),
             ('description', 'S100'), 
             ('primary', 'S100'), 
             ('archive', 'S100'), 
@@ -89,7 +90,7 @@ class Dashboard(QtGui.QWidget):
 
         self.resize(1000, 900)
         self.splitter.setSizes([200, 800])
-        for i,size in enumerate([150, 50, 230, 200]):
+        for i,size in enumerate([150, 50, 230, 150, 200]):
             self.expt_tree.setColumnWidth(i, size)
         
         # Queue of experiments to be checked
@@ -364,6 +365,7 @@ class ExptCheckerThread(QtCore.QThread):
             rec['timestamp'] = expt.timestamp
             rec['rig'] = expt.rig_name
             rec['path'] = expt.expt_subpath
+            rec['project'] = expt.slice_info.get('project', None)
             rec['primary'] = False if expt.primary_path is None else (True if os.path.exists(expt.primary_path) else "-")
             rec['archive'] = False if expt.archive_path is None else (True if os.path.exists(expt.archive_path) else "MISSING")
             rec['backup'] = False if expt.backup_path is None else (True if os.path.exists(expt.backup_path) else "MISSING")
