@@ -434,7 +434,7 @@ def create_all_mappings():
 
 #-------------- initial DB access ----------------
 
-engine = create_engine(config.synphys_db_host + '/' + config.synphys_db)
+engine = create_engine(config.synphys_db_host + '/' + config.synphys_db, pool_size=10, max_overflow=40)
 # external users should create sessions from here.
 Session = sessionmaker(bind=engine)
 
