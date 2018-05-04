@@ -33,7 +33,8 @@ class Dashboard(QtGui.QWidget):
             ('archive', 'S100'), 
             ('backup', 'S100'), 
             ('NAS', 'S100'), 
-            ('pipettes.yml', 'S100'), 
+            ('pipettes.yml', 'S100'),
+            ('connections', 'S100'),
             ('site.mosaic', 'S100'), 
             ('DB', 'S100'), 
             ('LIMS', 'S100'), 
@@ -88,6 +89,8 @@ class Dashboard(QtGui.QWidget):
 
         self.resize(1000, 900)
         self.splitter.setSizes([200, 800])
+        for i,size in enumerate([150, 50, 230, 200]):
+            self.expt_tree.setColumnWidth(i, size)
         
         # Queue of experiments to be checked
         self.expt_queue = queue.PriorityQueue()
@@ -180,6 +183,7 @@ class Dashboard(QtGui.QWidget):
 
         # update item/record fields
         for field, val in rec.items():
+            display_val = str(val)
             if field in self.field_indices and isinstance(val, tuple):
                 # if a tuple was given, interpret it as (text, color)
                 val, color = val
@@ -188,7 +192,9 @@ class Dashboard(QtGui.QWidget):
                 color = None
                 if val is True:
                     color = pass_color
-                elif val in (False, 'ERROR', 'MISSING'):
+                elif val is False:
+                    color = fail_color
+                elif val in ('ERROR', 'MISSING'):
                     color = fail_color
 
             # update this field in the record
@@ -199,7 +205,8 @@ class Dashboard(QtGui.QWidget):
                 i = self.field_indices[field]
             except KeyError:
                 continue
-            item.setText(i, str(val))
+
+            item.setText(i, display_val)
             if color is not None:
                 item.setBackgroundColor(i, pg.mkColor(color))
 
