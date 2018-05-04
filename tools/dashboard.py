@@ -112,11 +112,19 @@ class Dashboard(QtGui.QWidget):
     def tree_selection_changed(self):
         sel = self.expt_tree.selectedItems()[0]
         rec = self.records[sel.index]
-        pprint(rec)
         self.selected = rec
+        expt = rec['experiment']
+        print("===================", expt.timestamp)
+        print(" description:", rec['description']
+        print("    NAS path:", expt.nas_path)
+        print("primary path:", expt.nas_path)
+        print("archive path:", expt.nas_path)
+        print(" backup path:", expt.nas_path)
         err = rec['error']
         if err is not None:
+            print("Error checking experiment:")
             traceback.print_exception(*err)
+
 
     def poller_update(self, rec):
         """Received an update from a worker thread describing information about an experiment
