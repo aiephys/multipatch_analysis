@@ -26,8 +26,8 @@ class Dashboard(QtGui.QWidget):
         # fields displayed in ui
         self.visible_fields = [
             ('timestamp', float), 
-            ('path', 'S100'), 
             ('rig', 'S100'), 
+            ('path', 'S100'), 
             ('description', 'S100'), 
             ('primary', 'S100'), 
             ('archive', 'S100'), 
@@ -66,7 +66,6 @@ class Dashboard(QtGui.QWidget):
         self.splitter = QtGui.QSplitter(QtCore.Qt.Horizontal)
         self.layout.addWidget(self.splitter, 0, 0)
 
-
         self.filter = pg.DataFilterWidget()
         self.filter_fields = OrderedDict([(field[0], {'mode': 'enum', 'values': []}) for field in self.visible_fields])
         self.filter_fields['timestamp'] = {'mode': 'range'}
@@ -84,6 +83,7 @@ class Dashboard(QtGui.QWidget):
         self.expt_tree.itemSelectionChanged.connect(self.tree_selection_changed)
 
         self.status = QtGui.QStatusBar()
+        self.status.setMaximumHeight(25)
         self.layout.addWidget(self.status, 1, 0)
 
         self.resize(1000, 900)
@@ -128,6 +128,10 @@ class Dashboard(QtGui.QWidget):
         # shut down threads nicely on exit
         atexit.register(self.quit)
 
+        self.status_timer = QtCore.QTimer()
+        self.status_timer.timeout.connect(self.update_status)
+        self.status_timer.start(1000)
+
     def tree_selection_changed(self):
         sel = self.expt_tree.selectedItems()[0]
         rec = self.records[sel.index]
@@ -135,7 +139,7 @@ class Dashboard(QtGui.QWidget):
         expt = rec['experiment']
         print("===================", expt.timestamp)
         print(" description:", rec['description'])
-        print("   spec name:", expt.specimen_info['specimen_name'])
+        print("   spec name:", expt.specimen_name)
         print("    NAS path:", expt.nas_path)
         print("primary path:", expt.primary_path)
         print("archive path:", expt.archive_path)
@@ -151,7 +155,10 @@ class Dashboard(QtGui.QWidget):
         self.poller_status[path] = status
         paths = sorted(self.poller_status.keys())
         msg = '    '.join(['%s: %s' % (p,self.poller_status[p]) for p in paths])
-        self.status.showMessage(msg)
+        # self.long_status.showMessage(msg)
+
+    def update_status(self):
+        self.status.showMessage("%d sites in queue" % self.expt_queue.qsize())
 
     def checker_update(self, rec):
         """Received an update from a worker thread describing information about an experiment
@@ -208,13 +215,16 @@ class Dashboard(QtGui.QWidget):
             item.setHidden(not mask[i])
 
     def quit(self):
+        print("Stopping pollers..")
         for t in self.pollers:
             t.stop()
             t.wait()
 
+        print("Stopping checkers..")
         for t in self.checkers:
             t.stop()
-            t.wait()
+        for t in self.checkers:
+            t.wait()  # don't wait until all checkers have been requested to stop!
 
 
 class GrowingArray(object):
@@ -283,7 +293,6 @@ class PollThread(QtCore.QThread):
             break
                 
     def poll(self):
-        self.session = database.Session()
         expts = {}
 
         # Find all available site paths across all data sources
@@ -317,7 +326,6 @@ class PollThread(QtCore.QThread):
 
             count += 1
             if self.limit > 0 and count >= self.limit:
-                print("Hit limit; exiting poller")
                 return
         self.update.emit(path, "Finished")
 
@@ -339,56 +347,51 @@ class ExptCheckerThread(QtCore.QThread):
             ts, expt = self.expt_queue.get(block=block)
             if self._stop or ts == 'stop':
                 return
-            try:
-                rec = self.check(expt)
-                self.update.emit(rec)
-            except Exception as exc:
-                rec = {
-                    'experiment': expt,
-                    'path': expt.site_dh.name(),
-                    'timestamp': expt.timestamp or 'ERROR',
-                    'rig': 'ERROR',
-                    'error': sys.exc_info(),
-                }
-                self.update.emit(rec)
+            rec = self.check(expt)
+            self.update.emit(rec)
 
     def check(self, expt):
-        org = expt.organism
-        if org is None:
-            description = ("no LIMS spec info", fail_color)
-        elif org == 'human':
-            description = org
-        else:
-            gtyp = expt.genotype
-            if gtyp is None:
-                description = (org + ' (no genotype)', fail_color)
+        try:
+            rec = {'experiment': expt}
+
+            rec['timestamp'] = expt.timestamp
+            rec['rig'] = expt.rig_name
+            rec['path'] = expt.expt_subpath
+            rec['primary'] = False if expt.primary_path is None else (True if os.path.exists(expt.primary_path) else "-")
+            rec['archive'] = False if expt.archive_path is None else (True if os.path.exists(expt.archive_path) else "MISSING")
+            rec['backup'] = False if expt.backup_path is None else (True if os.path.exists(expt.backup_path) else "MISSING")
+            rec['NAS'] = expt.nas_path is not None
+            rec['pipettes.yml'] = expt.pipette_file is not None
+            rec['site.mosaic'] = expt.mosaic_file is not None
+
+            org = expt.organism
+            if org is None:
+                description = ("no LIMS spec info", fail_color)
+            elif org == 'human':
+                description = org
             else:
-                try:
-                    description = ','.join(Genotype(gtyp).drivers())
-                except Exception:
-                    description = (org + ' (unknown: %s)'%gtyp, fail_color)
+                gtyp = expt.genotype
+                if gtyp is None:
+                    description = (org + ' (no genotype)', fail_color)
+                else:
+                    try:
+                        description = ','.join(Genotype(gtyp).drivers())
+                    except Exception:
+                        description = (org + ' (unknown: %s)'%gtyp, fail_color)
+            rec['description'] = description
 
-        subs = expt.lims_submissions
-        if subs is None:
-            lims = "ERROR"
-        else:
-            lims = len(subs) == 1
+            rec['DB'] = expt.in_database
 
-        rec = {
-            'experiment': expt,
-            'path': expt.site_dh.name(), 
-            'timestamp': expt.timestamp, 
-            'rig': expt.rig_name, 
-            'primary': False if expt.primary_path is None else (True if os.path.exists(expt.primary_path) else "-"),
-            'archive': False if expt.archive_path is None else (True if os.path.exists(expt.archive_path) else "MISSING"),
-            'backup': False if expt.backup_path is None else (True if os.path.exists(expt.backup_path) else "MISSING"),
-            'description': description,
-            'pipettes.yml': expt.pipette_file is not None,
-            'site.mosaic': expt.mosaic_file is not None,
-            'DB': expt.in_database,
-            'NAS': expt.nas_path is not None,
-            'LIMS': lims,
-        }
+            subs = expt.lims_submissions
+            if subs is None:
+                lims = "ERROR"
+            else:
+                lims = len(subs) == 1
+            rec['LIMS'] = lims
+        
+        except Exception as exc:
+            rec['error'] = sys.exc_info()
+        
         return rec
 
 
@@ -407,20 +410,14 @@ class ExperimentMetadata(object):
         self._backup_path = None
 
     def _get_raw_paths(self):
-        path = self.site_dh.name()
+        expt_subpath = self.expt_subpath
 
-        # get raw data subpath  (eg: 2018.01.20_000/slice_000/site_000)
-        if os.path.abspath(path).startswith(os.path.abspath(config.synphys_data).rstrip(os.path.sep) + os.path.sep):
-            # this is a server path; need to back-convert to rig path
-            source_path = open(os.path.join(path, 'sync_source')).read()
-            expt_subpath = os.path.join(*source_path.split('/')[-3:])
-            assert os.path.abspath(path) == os.path.abspath(self.nas_path), "Expected equal paths:\n  %s\n  %s" % (os.path.abspath(path), os.path.abspath(self.nas_path))
-        else:
-            expt_subpath = os.path.join(*path.split(os.path.sep)[-3:])
-        
         # find the local primary/archive paths that contain this experiment
         found_paths = False
-        rig_data_paths = config.rig_data_paths.get(self.rig_name, [])
+        rig_name = self.rig_name
+        if rig_name is None:
+            return
+        rig_data_paths = config.rig_data_paths.get(rig_name, [])
         for path_set in rig_data_paths:
             for root in path_set.values():
                 test_path = os.path.join(root, expt_subpath)
@@ -435,6 +432,21 @@ class ExperimentMetadata(object):
                     break
             if found_paths:
                 break
+
+    @property
+    def expt_subpath(self):
+        path = self.site_dh.name()
+
+        # get raw data subpath  (eg: 2018.01.20_000/slice_000/site_000)
+        if os.path.abspath(path).startswith(os.path.abspath(config.synphys_data).rstrip(os.path.sep) + os.path.sep):
+            # this is a server path; need to back-convert to rig path
+            source_path = open(os.path.join(path, 'sync_source')).read()
+            expt_subpath = os.path.join(*source_path.split('/')[-3:])
+            assert os.path.abspath(path) == os.path.abspath(self.nas_path), "Expected equal paths:\n  %s\n  %s" % (os.path.abspath(path), os.path.abspath(self.nas_path))
+        else:
+            expt_subpath = os.path.join(*path.split(os.path.sep)[-3:])
+
+        return expt_subpath
 
     @property
     def primary_path(self):
@@ -477,7 +489,9 @@ class ExperimentMetadata(object):
     @property
     def specimen_info(self):
         if self._specimen_info is None:
-            spec_name = self.slice_info['specimen_ID'].strip()
+            spec_name = self.specimen_name
+            if spec_name is None:
+                return None
             try:
                 self._specimen_info = lims.specimen_info(spec_name)
             except Exception as exc:
@@ -527,7 +541,7 @@ class ExperimentMetadata(object):
                     path = self.site_dh.name()
                 m = re.search(r'(/|\\)(mp\d)(/|\\)', path)
                 if m is None:
-                    raise Exception("Can't determine rig name for %s" % path)
+                    return None
                 self._rig_name = m.groups()[1].lower()
         return self._rig_name
 
@@ -554,7 +568,8 @@ class ExperimentMetadata(object):
     @property
     def in_database(self):
         session = database.Session()
-        expts = session.query(database.Experiment).filter(database.Experiment.acq_timestamp==self.datetime).all()
+        expts = session.query(database.Experiment.id).filter(database.Experiment.acq_timestamp==self.datetime).all()
+        session.close()
         return len(expts) == 1
 
     @property
@@ -565,6 +580,13 @@ class ExperimentMetadata(object):
         if spec_id is None:
             return None
         return lims.expt_submissions(spec_id, self.timestamp)
+
+    @property
+    def specimen_name(self):
+        name = self.slice_info.get('specimen_ID', None)
+        if name is None:
+            return None
+        return name.strip()
 
 
 if __name__ == '__main__':
