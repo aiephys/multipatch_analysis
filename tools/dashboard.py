@@ -8,6 +8,7 @@ from pprint import pprint
 from collections import OrderedDict
 import numpy as np
 from multipatch_analysis import config, lims
+from multipatch_analysis.experiment import Experiment
 from multipatch_analysis.database import database
 from multipatch_analysis.genotypes import Genotype
 from acq4.util.DataManager import getDirHandle
@@ -34,7 +35,8 @@ class Dashboard(QtGui.QWidget):
             ('archive', 'S100'), 
             ('backup', 'S100'), 
             ('NAS', 'S100'), 
-            ('pipettes.yml', 'S100'),
+            ('data', 'S100'),
+            ('submitted', 'S100'),
             ('connections', 'S100'),
             ('site.mosaic', 'S100'), 
             ('DB', 'S100'), 
@@ -148,6 +150,7 @@ class Dashboard(QtGui.QWidget):
         print("===================", expt.timestamp)
         print(" description:", rec['description'])
         print("   spec name:", expt.specimen_name)
+        print("    genotype:", expt.lims_record.get('genotype', None))
         print("    NAS path:", expt.nas_path)
         print("primary path:", expt.primary_path)
         print("archive path:", expt.archive_path)
@@ -202,6 +205,9 @@ class Dashboard(QtGui.QWidget):
                 elif val in ('ERROR', 'MISSING'):
                     color = fail_color
             display_val = str(val)
+
+            if field == 'timestamp' and rec.get('error') is not None:
+                color = fail_color
 
             # update this field in the record
             record[field] = val
@@ -378,8 +384,6 @@ class ExptCheckerThread(QtCore.QThread):
             rec['archive'] = False if expt.archive_path is None else (True if os.path.exists(expt.archive_path) else "MISSING")
             rec['backup'] = False if expt.backup_path is None else (True if os.path.exists(expt.backup_path) else "MISSING")
             rec['NAS'] = False if expt.nas_path is None else (True if os.path.exists(expt.nas_path) else "MISSING")
-            rec['pipettes.yml'] = expt.pipette_file is not None
-            rec['site.mosaic'] = expt.mosaic_file is not None
 
             org = expt.organism
             if org is None:
@@ -387,24 +391,26 @@ class ExptCheckerThread(QtCore.QThread):
             elif org == 'human':
                 description = org
             else:
-                gtyp = expt.genotype
-                if gtyp is None:
-                    description = (org + ' (no genotype)', fail_color)
-                else:
-                    try:
-                        description = ','.join(Genotype(gtyp).drivers())
-                    except Exception:
-                        description = (org + ' (unknown: %s)'%gtyp, fail_color)
+                try:
+                    gtyp = expt.genotype
+                    description = ','.join(gtyp.drivers())
+                except Exception:
+                    description = (org + ' (unknown: %s)'%expt.lims_record.get('genotype', None), fail_color)
             rec['description'] = description
+            
+            rec['data'] = '-' if expt.nwb_file is None else True
+            if rec['data'] is True:
+                rec['site.mosaic'] = expt.mosaic_file is not None
+                rec['submitted'] = expt.pipette_file is not None
+                if rec['submitted']:
+                    rec['DB'] = expt.in_database
 
-            rec['DB'] = expt.in_database
-
-            subs = expt.lims_submissions
-            if subs is None:
-                lims = "ERROR"
-            else:
-                lims = len(subs) == 1
-            rec['LIMS'] = lims
+                    subs = expt.lims_submissions
+                    if subs is None:
+                        lims = "ERROR"
+                    else:
+                        lims = len(subs) == 1
+                    rec['LIMS'] = lims
         
         except Exception as exc:
             rec['error'] = sys.exc_info()
@@ -412,15 +418,18 @@ class ExptCheckerThread(QtCore.QThread):
         return rec
 
 
-class ExperimentMetadata(object):
+class ExperimentMetadata(Experiment):
     """Handles reading experiment metadata from several possible locations.
     """
     def __init__(self, path=None):
+        Experiment.__init__(self, verify=False)
+        self._site_path = path
+
         self.site_dh = getDirHandle(path)
-        self.site_info = self.site_dh.info()
-        self._slice_info = None
-        self._expt_info = None
-        self._specimen_info = None
+        # self.site_info = self.site_dh.info()
+        # self._slice_info = None
+        # self._expt_info = None
+        # self._specimen_info = None
         self._rig_name = None
         self._primary_path = None
         self._archive_path = None
@@ -491,32 +500,32 @@ class ExperimentMetadata(object):
     def expt_dh(self):
         return self.slice_dh.parent()
 
-    @property
-    def slice_info(self):
-        if self._slice_info is None:
-            self._slice_info = self.slice_dh.info()
-        return self._slice_info
+    # @property
+    # def slice_info(self):
+    #     if self._slice_info is None:
+    #         self._slice_info = self.slice_dh.info()
+    #     return self._slice_info
 
-    @property
-    def expt_info(self):
-        if self._expt_info is None:
-            self._expt_info = self.expt_dh.info()
-        return self._expt_info
+    # @property
+    # def expt_info(self):
+    #     if self._expt_info is None:
+    #         self._expt_info = self.expt_dh.info()
+    #     return self._expt_info
 
-    @property
-    def specimen_info(self):
-        if self._specimen_info is None:
-            spec_name = self.specimen_name
-            if spec_name is None:
-                return None
-            try:
-                self._specimen_info = lims.specimen_info(spec_name)
-            except Exception as exc:
-                if 'returned 0 results' in exc.args[0]:
-                    pass
-                else:
-                    raise
-        return self._specimen_info
+    # @property
+    # def specimen_info(self):
+    #     if self._specimen_info is None:
+    #         spec_name = self.specimen_name
+    #         if spec_name is None:
+    #             return None
+    #         try:
+    #             self._specimen_info = lims.lims_record(spec_name)
+    #         except Exception as exc:
+    #             if 'returned 0 results' in exc.args[0]:
+    #                 pass
+    #             else:
+    #                 raise
+    #     return self._specimen_info
 
     @property
     def nas_path(self):
@@ -529,20 +538,20 @@ class ExperimentMetadata(object):
         org = self.expt_info.get('organism')
         if org is not None:
             return org
-        spec_info = self.specimen_info
+        spec_info = self.lims_record
         if spec_info is None:
             return None
         return spec_info['organism']
 
-    @property
-    def genotype(self):
-        gtyp = self.expt_info.get('genotype')
-        if gtyp is not None:
-            return gtyp
-        spec_info = self.specimen_info
-        if spec_info is None:
-            return None
-        return spec_info['genotype']
+    # @property
+    # def genotype(self):
+    #     gtyp = self.expt_info.get('genotype')
+    #     if gtyp is not None:
+    #         return gtyp
+    #     spec_info = self.lims_record
+    #     if spec_info is None:
+    #         return None
+    #     return spec_info['genotype']
 
     @property
     def rig_name(self):
@@ -562,25 +571,25 @@ class ExperimentMetadata(object):
                 self._rig_name = m.groups()[1].lower()
         return self._rig_name
 
-    @property
-    def timestamp(self):
-        return self.site_info.get('__timestamp__')
+    # @property
+    # def timestamp(self):
+    #     return self.site_info.get('__timestamp__')
 
-    @property
-    def datetime(self):
-        return datetime.datetime.fromtimestamp(self.timestamp)
+    # @property
+    # def datetime(self):
+    #     return datetime.datetime.fromtimestamp(self.timestamp)
 
-    @property
-    def pipette_file(self):
-        if 'pipettes.yml' in self.site_dh.ls():
-            return self.site_dh['pipettes.yml'].name()
-        return None
+    # @property
+    # def pipette_file(self):
+    #     if 'pipettes.yml' in self.site_dh.ls():
+    #         return self.site_dh['pipettes.yml'].name()
+    #     return None
 
-    @property
-    def mosaic_file(self):
-        if 'site.mosaic' in self.site_dh.ls():
-            return self.site_dh['site.mosaic'].name()
-        return None
+    # @property
+    # def mosaic_file(self):
+    #     if 'site.mosaic' in self.site_dh.ls():
+    #         return self.site_dh['site.mosaic'].name()
+    #     return None
 
     @property
     def in_database(self):
@@ -591,19 +600,19 @@ class ExperimentMetadata(object):
 
     @property
     def lims_submissions(self):
-        if self.specimen_info is None:
+        if self.lims_record is None:
             return None
-        spec_id = self.specimen_info['specimen_id']
+        spec_id = self.lims_record['specimen_id']
         if spec_id is None:
             return None
         return lims.expt_submissions(spec_id, self.timestamp)
 
-    @property
-    def specimen_name(self):
-        name = self.slice_info.get('specimen_ID', None)
-        if name is None:
-            return None
-        return name.strip()
+    # @property
+    # def specimen_name(self):
+    #     name = self.slice_info.get('specimen_ID', None)
+    #     if name is None:
+    #         return None
+    #     return name.strip()
 
 
 if __name__ == '__main__':

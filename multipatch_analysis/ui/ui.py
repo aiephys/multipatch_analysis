@@ -59,7 +59,7 @@ class ExperimentInfoWidget(QtGui.QWidget):
         
         info = OrderedDict([
             ('date', str(expt.date)),
-            ('specimen', expt.specimen_id),
+            ('specimen', expt.specimen_name),
             ('age', expt.age),
         ])
           
