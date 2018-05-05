@@ -106,6 +106,11 @@ class Experiment(object):
         return '%0.2f' % (self.site_info['__timestamp__'])
     
     @property
+    def timestamp(self):
+        info = self.site_info
+        return None if info is None else info.get('__timestamp__', None)
+
+    @property
     def datetime(self):
         return datetime.datetime.fromtimestamp(self.site_info['__timestamp__'])
 
@@ -306,7 +311,7 @@ class Experiment(object):
             # decide whether each driver was expressed
             if self.lims_record['organism'] == 'mouse':
                 if genotype is None:
-                    raise Exception("Mouse specimen has no genotype: %s\n  (from %r)" % (self.specimen_id, self))
+                    raise Exception("Mouse specimen has no genotype: %s\n  (from %r)" % (self.specimen_name, self))
                 for driver,positive in genotype.predict_driver_expression(colors).items():
                     cell.labels[driver] = positive
 
@@ -674,9 +679,16 @@ class Experiment(object):
             if not os.path.isfile(sitefile):
                 # print(os.listdir(self.path))
                 # print(os.listdir(os.path.split(self.path)[0]))
-                raise Exception("No site mosaic found for %s" % self)
+                return None
             self._mosaic_file = sitefile
         return self._mosaic_file
+
+    @property
+    def pipette_file(self):
+        pf = os.path.join(self.path, 'pipettes.yml')
+        if not os.path.isfile(pf):
+            return None
+        return pf
 
     @property
     def path(self):
@@ -722,7 +734,7 @@ class Experiment(object):
         if self._site_info is None:
             index = os.path.join(self.path, '.index')
             if not os.path.isfile(index):
-                raise TypeError("Cannot find slice index file (%s) for experiment %s" % (index, self))
+                return None
             self._site_info = pg.configfile.readConfigFile(index)['.']
         return self._site_info
 
@@ -731,7 +743,7 @@ class Experiment(object):
         if self._slice_info is None:
             index = os.path.join(os.path.split(self.path)[0], '.index')
             if not os.path.isfile(index):
-                raise TypeError("Cannot find slice index file (%s) for experiment %s" % (index, self))
+                return None
             self._slice_info = pg.configfile.readConfigFile(index)['.']
         return self._slice_info
 
@@ -760,7 +772,7 @@ class Experiment(object):
             if len(files) == 0:
                 files = glob.glob(os.path.join(p, '*.NWB'))
             if len(files) == 0:
-                raise Exception("No NWB file found for %s\nSearched in path %s" % (self, self.path))
+                return None
             elif len(files) > 1:
                 # multiple NWB files here; try using the file manifest to resolve.
                 manifest = os.path.join(self.path, 'file_manifest.yml')
@@ -814,7 +826,7 @@ class Experiment(object):
         self._data = None
 
     @property
-    def specimen_id(self):
+    def specimen_name(self):
         return self.slice_info['specimen_ID'].strip()
 
     @property
@@ -822,7 +834,7 @@ class Experiment(object):
         age = self.lims_record.get('age', 0)
         if self.lims_record['organism'] == 'mouse':
             if age == 0:
-                raise Exception("Donor age not set in LIMS for specimen %s" % self.specimen_id)
+                raise Exception("Donor age not set in LIMS for specimen %s" % self.specimen_name)
             # data not entered in to lims
             age = (self.date - self.birth_date).days
         else:
@@ -841,7 +853,7 @@ class Experiment(object):
         See multipatch_analysis.lims.section_info()
         """
         if self._lims_record is None:
-            self._lims_record = specimen_info(self.specimen_id)
+            self._lims_record = specimen_info(self.specimen_name)
         return self._lims_record
 
     @property
@@ -860,7 +872,7 @@ class Experiment(object):
         """A LIMS URL that points to the biocytin image for this specimen, or
         None if no image is found.
         """
-        images = specimen_images(self.specimen_id)
+        images = specimen_images(self.specimen_name)
         for img_id, treatment in images:
             if treatment == 'Biocytin':
                 return "http://lims2/siv?sub_image=%d" % img_id
@@ -870,7 +882,7 @@ class Experiment(object):
         """A LIMS URL that points to the DAPI image for this specimen, or
         None if no image is found.
         """
-        images = specimen_images(self.specimen_id)
+        images = specimen_images(self.specimen_name)
         for img_id, treatment in images:
             if treatment == 'DAPI':
                 return "http://lims2/siv?sub_image=%d" % img_id
