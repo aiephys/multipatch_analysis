@@ -398,11 +398,20 @@ class ExptCheckerThread(QtCore.QThread):
                     description = (org + ' (unknown: %s)'%expt.lims_record.get('genotype', None), fail_color)
             rec['description'] = description
             
+            search_paths = [expt.primary_path, expt.archive_path, expt.nas_path]
+            submitted = False
+            for path in search_paths:
+                if path is None:
+                    continue
+                if os.path.isfile(os.path.join(path, 'pipettes.yml')):
+                    submitted = True
+                    break
+
+            rec['submitted'] = submitted
             rec['data'] = '-' if expt.nwb_file is None else True
-            if rec['data'] is True:
-                rec['site.mosaic'] = expt.mosaic_file is not None
-                rec['submitted'] = expt.pipette_file is not None
-                if rec['submitted']:
+            if rec['submitted']:
+                if rec['data'] is True:
+                    rec['site.mosaic'] = expt.mosaic_file is not None
                     rec['DB'] = expt.in_database
 
                     subs = expt.lims_submissions
@@ -561,12 +570,27 @@ class ExperimentMetadata(Experiment):
                 self._rig_name = name.lower()
             else:
                 # infer rig name from paths
-                if 'sync_source' in self.site_dh.ls():
-                    path = self.site_dh['sync_source'].read()
+                nas_path = self.nas_path
+                if nas_path is not None:
+                    sync_file = os.path.join(self.nas_path, 'sync_source')
+                else:
+                    sync_file = None
+                if sync_file is not None and os.path.isfile(sync_file):
+                    path = open(sync_file, 'rb').read()
                 else:
                     path = self.site_dh.name()
                 m = re.search(r'(/|\\)(mp\d)(/|\\)', path)
                 if m is None:
+                    path = os.path.abspath(self.site_dh.name())
+                    for rig,paths in config.rig_data_paths.items():
+                        data_paths = paths.values()
+                        for data_path in paths:
+                            if path.startswith(os.path.abspath(data_path)):
+                                self._rig_name = rig
+                                break
+                        if self._rig_name is not None:
+                            break
+
                     return None
                 self._rig_name = m.groups()[1].lower()
         return self._rig_name
