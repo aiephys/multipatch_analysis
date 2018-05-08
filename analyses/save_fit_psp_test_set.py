@@ -1,3 +1,8 @@
+"""Create a test set of data for testing the fit_psp function.  Uses Steph's 
+original first_puls_feature.py code to filter out error causing data.
+"""
+
+
 import pyqtgraph as pg
 import numpy as np
 import csv
@@ -7,7 +12,7 @@ from multipatch_analysis.experiment_list import cached_experiments
 from manuscript_figures import get_response, get_amplitude, response_filter, feature_anova, write_cache, trace_plot, \
     colors_human, colors_mouse, fail_rate, pulse_qc, feature_kw
 from synapse_comparison import load_cache, summary_plot_pulse
-from neuroanalysis.data import TraceList
+from neuroanalysis.data import TraceList, Trace
 from neuroanalysis.ui.plot_grid import PlotGrid
 from multipatch_analysis.connection_detection import fit_psp
 from rep_connections import ee_connections, human_connections, no_include, all_connections, ie_connections, ii_connections, ei_connections
@@ -138,180 +143,53 @@ for c in range(len(connection_types)):
                             
                         save_dict={}
                         save_dict['input']={'data': avg_trace.data.tolist(),
+                                            'dt': float(avg_trace.dt),
                                             'amp_sign': amp_sign,
                                             'yoffset': 0, 
                                             'xoffset': 14e-3, 
                                             'avg_amp': float(avg_amp),
                                             'method': 'leastsq', 
-                                            'stacked': True, 
+                                            'stacked': False, 
                                             'rise_time_mult_factor': 10., 
                                             'weight': weight.tolist()} 
                         
+                        # need to remake trace because different output is created
+                        avg_trace_simple=Trace(data=np.array(save_dict['input']['data']), dt=save_dict['input']['dt']) # create Trace object
                         
-#                        psp_fits = fit_psp(avg_trace, 
-#                                           sign=save_dict['input']['amp_sign'], 
-#                                           yoffset=save_dict['input'][yoffset], 
-#                                           xoffset=save_dict['input'][xoffset], 
-#                                           amp=save_dict['input']['avg_amp'],
-#                                           method=save_dict['input']['method'], 
-#                                           stacked = save_dict['input']['stacled'], 
-#                                           rise_time_mult_factor=10., 
-#                                           fit_kws={'weights': weight})
-                             
-                        with open(os.path.join(test_data_dir,expt.uid + '_' + str(pre) + '_' + str(post)+'.json'), 'w') as out_file:
-                            json.dump(save_dict, out_file)
+                        # try to figure out what is different about Trace because somehow is affects nrmse
+                        # TODO: circle back to figure out what about the Trace object is affecting nmsre
+#                        print expt.uid, pre, post
+#                        for key in avg_trace.__dict__.keys():
+#                            print 'key', key
+#                            if type(getattr(avg_trace, key))==np.ndarray:
+#                                if np.all(getattr(avg_trace, key) == getattr(avg_trace_simple,key)):
+#                                    print 'SAME'
+#                                else: 
+#                                    print 'DIFFERENT'
+#                            else:
+#                                if getattr(avg_trace, key) == getattr(avg_trace_simple,key):
+#                                    print 'SAME'
+#                                else:
+#                                    print 'DIFFERENT'
+#                            print '\t getattr(avg_trace, key)', getattr(avg_trace, key)
+#                            print '\t getattr(avg_trace_simple, key)', getattr(avg_trace_simple, key)        
                         
-#                        psp_fits = fit_psp(avg_trace, 
-#                                           sign=amp_sign, 
-#                                           yoffset=0, 
-#                                           xoffset=14e-3, 
-#                                           amp=avg_amp, 
-#                                           method='leastsq', 
-#                                           stacked = True, 
-#                                           rise_time_mult_factor=10., 
-#                                           fit_kws={'weights': weight})                        
+                        
+                        psp_fits = fit_psp(avg_trace_simple, 
+                                           sign=save_dict['input']['amp_sign'], 
+                                           yoffset=save_dict['input']['yoffset'], 
+                                           xoffset=save_dict['input']['xoffset'], 
+                                           amp=save_dict['input']['avg_amp'],
+                                           method=save_dict['input']['method'], 
+                                           stacked=save_dict['input']['stacked'], 
+                                           rise_time_mult_factor=save_dict['input']['rise_time_mult_factor'], 
+                                           fit_kws={'weights': save_dict['input']['weight']})  
 
-#                        plt.clear()
-#                        plt.plot(avg_trace.time_values, avg_trace.data, title=str([psp_fits.best_values['xoffset'], expt.uid, pre, post]))
-#                        plt.plot(avg_trace.time_values, psp_fits.eval(), pen='g')
-#                        avg_trace.t0 = -(psp_fits.best_values['xoffset'] - 10e-3)
-#                        distance = expt.cells[pre].distance(expt.cells[post])
-#                        grand_response[conn_type[0]]['CV'].append(cv)
-#                        latency = psp_fits.best_values['xoffset'] - 10e-3
-#                        rise = psp_fits.best_values['rise_time']
-#                        decay = psp_fits.best_values['decay_tau']
-#                        nrmse = psp_fits.nrmse()
-#                        if nrmse < fit_qc['nrmse']:
-#                            grand_response[conn_type[0]]['latency'].append(psp_fits.best_values['xoffset'] - 10e-3)
-#                            max_x = np.argwhere(psp_fits.eval() == max(psp_fits.eval()))[0, 0]
-#                            min_x = int(psp_fits.best_values['xoffset'] / avg_trace.dt)
-#                            amp_20 = psp_fits.userkws['x'][np.argwhere(psp_fits.eval()[min_x:max_x] > psp_fits.best_values['amp']*0.2)[0,0]] + 10e-3
-#                            amp_10 = psp_fits.userkws['x'][np.argwhere(psp_fits.eval() > psp_fits.best_values['amp']*0.1)[0,0]]
-#                            amp_80 = psp_fits.userkws['x'][np.argwhere(psp_fits.eval()[min_x:max_x] < psp_fits.best_values['amp']*0.8)[-1,0]] +10e-3
-#                            amp_90 = psp_fits.userkws['x'][np.argwhere(psp_fits.eval()[: max_x] < psp_fits.best_values['amp']*0.9)[-1,0]]
-#                            rise2080 = amp_80-amp_20
-#                            rise1090 = amp_90-amp_10
-#                            rise1080 = amp_80-amp_10
-#                            grand_response[conn_type[0]]['rise'].append(rise2080)
-#                            manifest['rise2080'].append(rise2080)
-#                            manifest['rise1090'].append(rise1090)
-#                            manifest['rise1080'].append(rise1080)
-#                            manifest['rise'].append(rise)
-#                        else:
-#                            grand_response[conn_type[0]]['latency'].append(np.nan)
-#                            grand_response[conn_type[0]]['rise'].append(np.nan)
-#                            manifest['rise2080'].append(None)
-#                            manifest['rise1090'].append(None)
-#                            manifest['rise1080'].append(None)
-#                            manifest['rise'].append(rise)
-#                        grand_response[conn_type[0]]['trace'].append(avg_trace)
-#                        grand_response[conn_type[0]]['amp'].append(psp_fits.best_values['amp'])
-#                        grand_response[conn_type[0]]['amp_measured'].append(avg_amp)
-#                        grand_response[conn_type[0]]['dist'].append(distance)
-#                        expt_ids[conn_type[0]].append((pre, post, expt.uid, expt.source_id))
-#
-#                        manifest['Type'].append(cre_type)
-#                        manifest['Connection'].append((expt.uid, pre, post))
-#                        manifest['amp'].append(avg_amp)
-#                        manifest['latency'].append(psp_fits.best_values['xoffset'] - 10e-3)
-#                        manifest['nrmse'].append(psp_fits.nrmse())
-#                        manifest['CV'].append(cv)
-#                        manifest['decay'].append(psp_fits.best_values['decay_tau'])
-#
-#                        synapse_plot[c, 0].setTitle('First Pulse Response')
-#                        if [expt.uid, pre, post] == all_connections[conn_type]:
-#                            trace_color = color + (30,)
-#                        elif hold > -65:
-#                            trace_color = (255, 0, 255, 30)
-#                        else:
-#                            trace_color = (0, 0, 0, 30)
-#                        trace_plot(avg_trace, trace_color, plot=synapse_plot[c, 0], x_range=[0, 27e-3])
-#                        app.processEvents()
-##                    decay_response = response_filter(pulse_response, freq_range=[0, 20], holding_range=holding)
-##                    qc_list = pulse_qc(response_subset, baseline=2, pulse=None, plot=qc_plot)
-##                    if len(qc_list) >= sweep_threshold:
-##                        avg_trace, avg_amp, amp_sign, peak_t = get_amplitude(qc_list)
-##                        if amp_sign is '-':
-##                            continue
-##                        psp_fits = fit_psp(avg_trace, sign=amp_sign, yoffset=0, amp=avg_amp, method='leastsq', stacked = False,  fit_kws={})
-##                        grand_response[conn_type[0]]['decay'].append(psp_fits.best_values['decay_tau'])
-#    if len(grand_response[conn_type[0]]['trace']) == 0:
-#        continue
-#    if len(grand_response[conn_type[0]]['trace']) > 1:
-#        grand_trace = TraceList(grand_response[conn_type[0]]['trace']).mean()
-#    else:
-#        grand_trace = grand_response[conn_type[0]]['trace'][0]
-#    n_synapses = len(grand_response[conn_type[0]]['trace'])
-#    trace_plot(grand_trace, color={'color': color, 'width': 2}, plot=synapse_plot[c, 0], x_range=[0, 27e-3],
-#               name=('%s, n = %d' % (connection_types[c], n_synapses)))
-#    synapse_plot[c, 0].hideAxis('bottom')
-#    # all_amps = np.hstack(np.asarray(grand_response[cre_type[0]]['fail_rate']))
-#    # y, x = np.histogram(all_amps, bins=np.linspace(0, 2e-3, 40))
-#    # synapse_plot[c, 1].plot(x, y, stepMode=True, fillLevel=0, brush='k')
-#    # synapse_plot[c, 1].setLabels(bottom=('Vm', 'V'))
-#    # synapse_plot[c, 1].setXRange(0, 2e-3)
-#    print ('%s kinetics n = %d' % (conn_type[0], len(grand_response[conn_type[0]]['latency'])))
-#    feature_list = (grand_response[conn_type[0]]['amp'], grand_response[conn_type[0]]['CV'], grand_response[conn_type[0]]['latency'],
-#                    grand_response[conn_type[0]]['rise'])
-#    labels = (['Vm', 'V'], ['CV', ''], ['t', 's'], ['t', 's'])
-#    feature_plot = summary_plot_pulse(feature_list, labels, ('Amplitude', 'CV', 'Latency', 'Rise time'), c,
-#                                      median=True, grand_trace=grand_trace, plot=feature_plot, color=color, name=connection_types[c])
-#    # feature2_plot[0, 0].plot(grand_response[conn_type[0]]['dist'], grand_response[conn_type[0]]['amp'], pen=None, symbol='o',
-#    #                          symbolSize=8, symbolBrush=color, symbolPeb='w')
-#    # feature2_plot[0, 0].setLabels(left=['mV', 'V'], bottom=['distance', 'm'])
-#    # feature2_plot[1, 0].plot(grand_response[conn_type[0]]['dist'], grand_response[conn_type[0]]['latency'], pen=None, symbol='o',
-#    #                          symbolSize=8, symbolBrush=color, symbolPeb='w')
-#    # feature2_plot[1, 0].setLabels(left=['ms', 's'], bottom=['distance', 'm'])
-#    # feature2_plot[2, 0].plot(grand_response[conn_type[0]]['dist'], grand_response[conn_type[0]]['rise'], pen=None, symbol='o',
-#    #                          symbolSize=8, symbolBrush=color, symbolPeb='w')
-#    # feature2_plot[2, 0].setLabels(left=['ms', 's'], bottom=['distance', 'm'])
-#    # feature2_plot[3, 0].plot(grand_response[conn_type[0]]['rise'], grand_response[conn_type[0]]['amp'], pen=None, symbol='o',
-#    #                          symbolSize=8, symbolBrush=color, symbolPeb='w')
-#    # feature2_plot[3, 0].setLabels(left=['amplitude', 'V'], bottom=['rise time', 's'])
-#    feature3_plot[0, 0].plot(grand_response[conn_type[0]]['latency'], grand_response[conn_type[0]]['amp'], pen=None, symbol='o',
-#                             symbolSize=8, symbolBrush=color, symbolPen='w')
-#    feature3_plot[0, 0].setLabels(left=['Amp', 'V'], bottom=['Latency', 's'])
-#    feature3_plot[0, 1].plot(grand_response[conn_type[0]]['CV'], grand_response[conn_type[0]]['amp'], pen=None, symbol='o',
-#                             symbolSize=8, symbolBrush=color, symbolPen='w')
-#    feature3_plot[0, 1].setLabels(left=['Amp', 'V'], bottom=['CV', ''])
-#    feature3_plot[0, 2].plot(grand_response[conn_type[0]]['CV'], grand_response[conn_type[0]]['latency'], pen=None, symbol='o',
-#                             symbolSize=8, symbolBrush=color, symbolPen='w')
-#    feature3_plot[0, 2].setLabels(left=['Latency', 's'], bottom=['CV', ''])
-#    amp_plot.plot(grand_response[conn_type[0]]['amp'], grand_response[conn_type[0]]['amp_measured'], pen=None, symbol='o',
-#                 symbolSize=10, symbolBrush=color, symbolPen='w')
-#    amp_plot.setLabels(left=['Measured Amp', 'V'], bottom=['Fit Amp','V'])
-#    if c == len(connection_types) - 1:
-#        x_scale = pg.ScaleBar(size=10e-3, suffix='s')
-#        x_scale.setParentItem(synapse_plot[c, 0].vb)
-#        x_scale.anchor(scale_anchor, scale_anchor, offset=scale_offset)
-#amp_list = feature_anova('amp', grand_response)
-#feature_kw('amp', grand_response)
-#feature_kw('latency', grand_response)
-#feature_kw('rise', grand_response)
-#feature_kw('CV', grand_response)
-#latency_list = feature_anova('latency', grand_response)
-#rise_list = feature_anova('rise', grand_response)
-#decay_list = feature_anova('decay', grand_response)
-#
-## if args['organism'] == 'human':
-##     t, p = stats.ks_2samp(grand_response[('3', 'unknown')]['amp'], grand_response[('5', 'unknown')]['amp'])
-##     print ('KS: Amp = %f' % p)
-##     t, p = stats.ks_2samp(grand_response[('3', 'unknown')]['latency'],
-##                            grand_response[('5', 'unknown')]['latency'])
-##     print ('KS: Latency = %f' % p)
-##     t, p = stats.ks_2samp(grand_response[('3', 'unknown')]['rise'],
-##                            grand_response[('5', 'unknown')]['rise'])
-##     print ('KS: Rise Time = %f' % p)
-##     t, p = stats.ks_2samp(grand_response[('3', 'unknown')]['CV'],
-##                           grand_response[('5', 'unknown')]['CV'])
-##     print ('KS: CV = %f' % p)
-#features = (amp_list, latency_list, rise_list, decay_list)
-#
-##write_cache(expt_ids, 'pulse_expt_ids.pkl')
-##write_cache(features, 'pulse_features_human.pkl')
-#
-#df = pd.DataFrame(data=manifest)
-#df = df[['Type', 'Connection', 'amp', 'latency', 'rise2080', 'rise1090', 'rise1080', 'decay', 'CV', 'nrmse']]
-#writer = pd.ExcelWriter('Fig1_manifest_risefit.xlsx')
-#df.to_excel(writer, 'Sheet1')
-#writer.save()
+
+                        
+                        save_dict['out']={}
+                        save_dict['out']['best_values']=psp_fits.best_values     
+                        save_dict['out']['best_fit']=psp_fits.best_fit.tolist()
+                        save_dict['out']['nrmse']=float(psp_fits.nrmse())
+                        with open(os.path.join(test_data_dir,expt.uid + '_' + str(pre) + '_' + str(post)+'NOTstacked.json'), 'w') as out_file:
+                            json.dump(save_dict, out_file)
