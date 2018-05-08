@@ -367,6 +367,9 @@ class ExperimentMetadataSubmission(object):
                     if pip['target_layer'] == '':
                         pip['target_layer'] = '2/3'
                         warnings.append("Pipette %d: imported layer %s from old metadata." % (pid, pip['target_layer']))
+                    if cell._raw_labels['biocytin'] == '+':
+                        pip['morphology'] = 'pyr'
+                        warnings.append("Pipette %d: imported pyr morphology from old metadata." % pid)    
                 # cre type; convert to color(s)
                 elif label in constants.ALL_CRE_TYPES:
                     if genotype is None:
