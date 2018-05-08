@@ -504,9 +504,30 @@ class EvokedResponseGroup(object):
 def fit_psp(response, mode='ic', sign='any', xoffset=(11e-3, 10e-3, 15e-3), yoffset=(0, 'fixed'),
             mask_stim_artifact=True, method='leastsq', fit_kws=None, stacked=True,
             rise_time_mult_factor=2., **kwds):
+    """Fit psp.
+    
+    Parameters
+    ----------
+    response: neuroanalysis.data.Trace class
+        Contains data on trace waveform.
+    mode: string
+        either 'ic' for current clamp or 'vc' for voltage clamp
+    sign: string
+        Specifies the sign of the PSP deflection.  Must be '+', '-', or any.
+    xoffset
+    yoffset
+    mask_stim_artifact=
+    method 
+    fit_kws 
+    stacked
+    rise_time_mult_factor
+    """
+    
+    #TODO: what is this for?
     t = response.time_values
     y = response.data
 
+    # set initial conditions depending on whether in voltage or current clamp
     if mode == 'ic':
         amp = .2e-3
         amp_max = 100e-3
@@ -520,7 +541,8 @@ def fit_psp(response, mode='ic', sign='any', xoffset=(11e-3, 10e-3, 15e-3), yoff
     else:
         raise ValueError('mode must be "ic" or "vc"')
 
-    amps = [(amp, 0, amp_max), (-amp, -amp_max, 0)]
+    amps = [(amp, 0, amp_max), (-amp, -amp_max, 0)] #TODO: what is this?
+    #TODO:  I think this might be trying to constrain the sign of the fitting 
     if sign == '-':
         amps = amps[1:]
     elif sign == '+':
@@ -528,7 +550,6 @@ def fit_psp(response, mode='ic', sign='any', xoffset=(11e-3, 10e-3, 15e-3), yoff
     elif sign != 'any':
         raise ValueError('sign must be "+", "-", or "any"')
 
-    psp = StackedPsp()
     if stacked:
         psp = StackedPsp()
     else:
