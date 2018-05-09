@@ -5,6 +5,7 @@ from acq4.util.Canvas.items.CanvasItem import CanvasItem
 from acq4.util.Canvas.items import registerItemType
 from . import submit_expt
 from . import multipatch_nwb_viewer
+from . import dashboard
 
 
 class MultipatchSubmissionModule(Module):
@@ -55,6 +56,22 @@ class NWBViewerModule(Module):
         man = getManager()
         filename = man.currentFile.name()
         nwb = self.ui.load_nwb(filename)
+        
+    def window(self):
+        return self.ui
+
+
+class DashboardModule(Module):
+    """ACQ module for monitoring pipeline status
+    """
+    moduleDisplayName = "MP Dashboard"
+    moduleCategory = "Analysis"
+
+    def __init__(self, manager, name, config):
+        Module.__init__(self, manager, name, config)
+        self.ui = dashboard.Dashboard(limit=config.get('limit', None), filter_defaults=config.get('filters', None))
+        self.ui.resize(1600, 900)
+        self.ui.show()
         
     def window(self):
         return self.ui

@@ -136,6 +136,7 @@ class Experiment(object):
     def connection_calls(self):
         """Manually curated list of synaptic connections seen in this experiment, without applying any QC.
         """
+
         return None if self._connections is None else self._connections[:]
 
     @property
@@ -257,7 +258,7 @@ class Experiment(object):
     def _load_yml(self, yml_file):
         """Load experiment information from a pipettes.yml file.
 
-        Sets several properties: source_id, site_path, electrodes, synapse_to, gap_to
+        Sets several properties: source_id, _site_path, electrodes, _connections, _gaps
         """
         self.source_id = (yml_file, None)
         self._site_path = os.path.dirname(yml_file)
