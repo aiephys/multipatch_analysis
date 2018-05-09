@@ -1,3 +1,5 @@
+import sys
+import pyqtgraph as pg
 from multipatch_analysis.ui.dashboard import Dashboard
 
 if __name__ == '__main__':
