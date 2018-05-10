@@ -13,7 +13,8 @@ test_data_files=[os.path.join(test_data_dir,f) for f in os.listdir(test_data_dir
 for file in test_data_files:
     print 'file', file
     test_dict=json.load(open(file)) # load test data
-    avg_trace=neuroanalysis.data.Trace(data=np.array(test_dict['input']['data']), dt=test_dict['input']['dt']) # create Trace object
+#    avg_trace=neuroanalysis.data.Trace(data=np.array(test_dict['input']['data']), dt=test_dict['input']['dt']) # create Trace object
+    avg_trace=neuroanalysis.data.Trace(data=np.array(test_dict['input']['data'])) # create Trace object
     psp_fits = fit_psp(avg_trace, 
                        sign=test_dict['input']['amp_sign'], 
                        yoffset=test_dict['input']['yoffset'], 

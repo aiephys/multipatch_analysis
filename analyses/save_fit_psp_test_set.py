@@ -175,7 +175,7 @@ for c in range(len(connection_types)):
 #                            print '\t getattr(avg_trace_simple, key)', getattr(avg_trace_simple, key)        
                         
                         
-                        psp_fits = fit_psp(avg_trace_simple, 
+                        psp_fits_original = fit_psp(avg_trace, 
                                            sign=save_dict['input']['amp_sign'], 
                                            yoffset=save_dict['input']['yoffset'], 
                                            xoffset=save_dict['input']['xoffset'], 
@@ -185,11 +185,26 @@ for c in range(len(connection_types)):
                                            rise_time_mult_factor=save_dict['input']['rise_time_mult_factor'], 
                                            fit_kws={'weights': save_dict['input']['weight']})  
 
+                        psp_fits_simple = fit_psp(avg_trace_simple, 
+                                           sign=save_dict['input']['amp_sign'], 
+                                           yoffset=save_dict['input']['yoffset'], 
+                                           xoffset=save_dict['input']['xoffset'], 
+                                           amp=save_dict['input']['avg_amp'],
+                                           method=save_dict['input']['method'], 
+                                           stacked=save_dict['input']['stacked'], 
+                                           rise_time_mult_factor=save_dict['input']['rise_time_mult_factor'], 
+                                           fit_kws={'weights': save_dict['input']['weight']})  
+                        print expt.uid, pre, post    
+                        if psp_fits_original.nrmse()!=psp_fits_simple.nrmse():     
+                            print '  the nrmse values dont match'
+                            print '\toriginal', psp_fits_original.nrmse()
+                            print '\tsimple', psp_fits_simple.nrmse()
+
 
                         
-                        save_dict['out']={}
-                        save_dict['out']['best_values']=psp_fits.best_values     
-                        save_dict['out']['best_fit']=psp_fits.best_fit.tolist()
-                        save_dict['out']['nrmse']=float(psp_fits.nrmse())
-                        with open(os.path.join(test_data_dir,expt.uid + '_' + str(pre) + '_' + str(post)+'NOTstacked.json'), 'w') as out_file:
-                            json.dump(save_dict, out_file)
+#                        save_dict['out']={}
+#                        save_dict['out']['best_values']=psp_fits.best_values     
+#                        save_dict['out']['best_fit']=psp_fits.best_fit.tolist()
+#                        save_dict['out']['nrmse']=float(psp_fits.nrmse())
+#                        with open(os.path.join(test_data_dir,expt.uid + '_' + str(pre) + '_' + str(post)+'NOTstacked.json'), 'w') as out_file:
+#                            json.dump(save_dict, out_file)

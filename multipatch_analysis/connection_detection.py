@@ -521,6 +521,9 @@ def fit_psp(response, mode='ic', sign='any', xoffset=(11e-3, 10e-3, 15e-3), yoff
     fit_kws 
     stacked
     rise_time_mult_factor
+    kwds: optional key word arguments
+
+        
     """
     
     #TODO: what is this for?
@@ -549,14 +552,20 @@ def fit_psp(response, mode='ic', sign='any', xoffset=(11e-3, 10e-3, 15e-3), yoff
         amps = amps[:1]
     elif sign != 'any':
         raise ValueError('sign must be "+", "-", or "any"')
-
+    
+    if not isinstance(stacked, bool):
+        raise Exception("Stacked must be True or False")
     if stacked:
         psp = StackedPsp()
     else:
         psp = Psp()
-    
+
+#---------I don't understand this whole chunk of code----------------    
     # initial condition, lower boundry, upper boundry    
+    # why not move the things in function call with defaults down here and use kwargs
     base_params = {
+        #TODO: what are these
+        #TODO: do I need to make xoffset consistent the others by adding boundries?
         'xoffset': xoffset,
         'yoffset': yoffset,
         'rise_time': (rise_time, rise_time/rise_time_mult_factor, rise_time*rise_time_mult_factor),
@@ -566,24 +575,32 @@ def fit_psp(response, mode='ic', sign='any', xoffset=(11e-3, 10e-3, 15e-3), yoff
     
     if stacked:
         base_params.update({
+            #TODO: what are these
             'exp_amp': 'amp * amp_ratio',
             'amp_ratio': (0, -100, 100),
         })  
-        
+    # Why isnt code below place above where base_params are initialized
+    # if rise_time is specified in arguments, set it here and assign
+    # boundry conditions if not specified    
     if 'rise_time' in kwds:
         rt = kwds.pop('rise_time')
         if not isinstance(rt, tuple):
             rt = (rt, rt/2., rt*2.)
         base_params['rise_time'] = rt
-                
+    
+    # if decay_tau is specified in arguments, set it here and assign
+    # boundry conditions if not specified                    
     if 'decay_tau' in kwds:
         dt = kwds.pop('decay_tau')
         if not isinstance(dt, tuple):
             dt = (dt, dt/2., dt*2.)
         base_params['decay_tau'] = dt
-                
-    base_params.update(kwds)
     
+    #TODO: should this be before?            
+    base_params.update(kwds)
+#-------------------------------------------------------
+    
+    #TODO: why making this list of parameter copies
     params = []
     for amp, amp_min, amp_max in amps:
         p2 = base_params.copy()
@@ -594,6 +611,7 @@ def fit_psp(response, mode='ic', sign='any', xoffset=(11e-3, 10e-3, 15e-3), yoff
     weight = np.ones(len(y))
     #weight[:int(10e-3/dt)] = 0.5
     
+    # lets make ranges a list as opposed to tuples that are set limits 
     init_xoff = xoffset[0] if isinstance(xoffset, tuple) else xoffset
     onset_index = int((init_xoff-response.t0) / dt)
     weight[onset_index+int(1e-3/dt):onset_index+int(7e-3/dt)] = 3
@@ -611,6 +629,8 @@ def fit_psp(response, mode='ic', sign='any', xoffset=(11e-3, 10e-3, 15e-3), yoff
     
     best_fit = None
     best_score = None
+    #TODO: I don't know what this is doing
+    #params appears to be a list 
     for p in params:
         try:
             fit = psp.fit(y, x=t, params=p, fit_kws=fit_kws, method=method)
