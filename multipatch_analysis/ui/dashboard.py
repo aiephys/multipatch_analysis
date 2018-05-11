@@ -105,15 +105,18 @@ class Dashboard(QtGui.QWidget):
             self.expt_tree.setColumnWidth(i, size)
 
         # Add reload context menu action
-        self.setContextMenuPolicy(QtCore.Qt.ActionsContextMenu)
+        # self.setContextMenuPolicy(QtCore.Qt.ActionsContextMenu)
         self.reload_action = QtGui.QAction('Reload', self)
         self.reload_action.triggered.connect(self.reload_clicked)
-        self.addAction(self.reload_action)
+        # self.addAction(self.reload_action)
+
+        self.menu = QtGui.QMenu()
+        self.menu.addAction(self.reload_action)
         
         # Add generic experiment context menu actions
         self.expt_actions = ExperimentActions()
         for act in self.expt_actions.actions.values():
-            self.addAction(act)
+            self.menu.addAction(act)
         
         # Queue of experiments to be checked
         self.expt_queue = queue.PriorityQueue()
@@ -157,6 +160,9 @@ class Dashboard(QtGui.QWidget):
         self.status_timer = QtCore.QTimer()
         self.status_timer.timeout.connect(self.update_status)
         self.status_timer.start(1000)
+
+    def contextMenuEvent(self, event):
+        self.menu.popup(event.globalPos())
 
     def tree_selection_changed(self):
         sel = self.expt_tree.selectedItems()[0]
