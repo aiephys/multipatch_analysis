@@ -1,5 +1,6 @@
 import os, sys, glob, datetime, csv, re
 from acq4.util.DataManager import getDirHandle
+from multipatch_analysis import config
 from multipatch_analysis.experiment import Experiment
 
 slice_csv_file = 'Slice_Preparation_Record.csv'
@@ -55,9 +56,9 @@ def solution_check(dh, expt_date, columns):
         return
 
 
-def dissection_check(path, dh, sub_id, expt_date, columns):
+def dissection_check(dh, sub_id, expt_date, columns):
     if sub_id is None:
-        print("\tNo animal_ID for %s" % path)
+        print("\tNo animal_ID for %s" % dh.path)
         return
     dis_rec = diss_times.get(sub_id, None)
     if dis_rec is None:
@@ -105,17 +106,115 @@ def dissection_check(path, dh, sub_id, expt_date, columns):
             print("\tDissection Time: Match!")
             return
 
+def project_check(dh, sub_id, expt_date, species):
+    mouse_prod = datetime.date(2017, 10, 01)
+    project = dh.info().get('project', None)
+    if project is None:
+        if species is None and sub_id is None:
+            print("\tNo specimen, can't set project code")
+            return
+        if species.lower() == 'human':
+            print("\tSet Project Code: human course matrix")
+            return
+        if expt_date < mouse_prod:
+            print("\tSet Project Code: mouse V1 pre-production")
+        else:
+            print("\tSet Project Code: mouse V1 course matrix")
+
+def region_check(dh, species):
+    region = dh.info().get('target_region', None)
+    if species is None:
+        print("\tCan't set target region")
+        return
+    if species == 'mouse':
+        if region is None:
+            print("Set target region: V1")
+            return
+        if region == 'V1':
+            print("\tTarget region: Match!")
+        else:
+            print("\tTarget region mismatch: %s != V1" % region)
+
+def internal_check(dh, species):
+    internal = dh.info().get('internal', None)
+    internal_dye = dh.info().get('internal_dye', None)
+    if internal is None:
+        print("\tSet Internal: Standard K-Gluc")
+        return
+    if internal.lower() != 'standard k-gluc':
+        print("\tInternal mismatch: %s != Standard K-Gluc" % internal)
+        return
+    if internal_dye is not None:
+        return
+    if internal_dye is None and species is None:
+        print("\tCan't set internal dye")
+        return
+    if internal_dye is None and species.lower() == 'human':
+        print("\tSet internal dye: AF488")
+        return
+    if internal_dye is None and species != 'mouse':
+        genotype = species.split(';')
+        if len(genotype) < 3:
+            print("\tSet internal dye: AF488, %s looks likes single transgenic" % species)
+        else:
+            print("\tSet internal dye: Cascade Blue, %s looks liked quad" % species)
+    else:
+        print("\tCan't parse genotype %s, set internal dye manually" % species)
+
+def rig_check(dh):
+    try:
+        dh.info()['rig_name']
+    except KeyError:
+        #dh.setInfo(rig_name=config.rig_name)
+        print("\tRig set: %s" % config.rig_name)
+        return
+    rig = dh.info().get('rig_name', None)
+    if rig is None:
+        #dh.setInfo(rig_name=config.rig_name)
+        print("\tRig set: %s" % config.rig_name)
+        return
+    if rig == config.rig_name:
+        print("\tRig: Match!")
+    else:
+        print("\tRig mismatch: %s != %s" % (rig, config.rig_name))
+
 root = sys.argv[1]
 
 # find all subject folders that contain at least one site folder
 sites = glob.glob(os.path.join(root, '*', 'slice_*', 'site_*'))
-subs = sorted(list(set([os.path.abspath(os.path.join(s, '..', '..')) for s in sites])))
+checked_days = set()
+checked_slices = set()
 
-for path in subs:
-    dh = getDirHandle(path)
-    sub_id = dh.info().get('animal_ID', None)
-    expt_date = datetime.datetime.fromtimestamp(dh.info()['__timestamp__']).date()
+for path in sites:
+    site_dh = getDirHandle(path)
+    slice_dh = site_dh.parent()
+    day_dh = slice_dh.parent()
+    sub_id = day_dh.info().get('animal_ID', None)
+    expt_date = datetime.datetime.fromtimestamp(day_dh.info()['__timestamp__']).date()
+    species = day_dh.info().get('species', None)
+    if sub_id is not None and species is None:
+        try:
+            species = day_dh.info().get('LIMS_specimen_info')['organism']
+        except TypeError:
+            try:
+                species = day_dh.info().get('LIMS_donor_info')['organism']
+            except TypeError:
+                guess = sub_id[0]
+                if guess == 'H':
+                    species = 'human'
+                else:
+                    species = 'mouse'
     print("Experiment Date: %s\nAnimal ID: %s" % (expt_date, sub_id))
+    if day_dh not in checked_days:
+        rig_check(day_dh)
+        dissection_check(day_dh, sub_id, expt_date, diss_columns)
+        solution_check(day_dh, expt_date, osm_columns)
+        region_check(day_dh, species)
+        internal_check(day_dh, species)
+        checked_days.add(day_dh)
 
-    dissection_check(path, dh, sub_id, expt_date, diss_columns)
-    solution_check(dh, expt_date, osm_columns)
+    if slice_dh not in checked_slices:
+        project_check(slice_dh, sub_id, expt_date, species)
+        checked_slices.add(slice_dh)
+
+
