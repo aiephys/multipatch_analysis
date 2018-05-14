@@ -41,18 +41,14 @@ def solution_check(dh, expt_date, columns):
         return
 
     calcium = solution.split('m')[0]
-    if calcium in recipe:
-        print("\taCSF: Match!")
-    else:
+    if calcium not in recipe:
         print("\taCSF disagreement: %s != %s" % (solution, recipe))
 
     if osm is None:
         print("\tSet osmolarity: %s" % sheet_osm)
         return
 
-    if sheet_osm == osm:
-        print("\tOsmolarity: Match!")
-    else:
+    if sheet_osm != osm:
         print("\tOsmolarity disagreement: %s != %s" % (osm, sheet_osm))
         return
 
@@ -103,9 +99,6 @@ def dissection_check(dh, sub_id, expt_date, columns):
         if dis_time_2 != dis_time_1:
             print("\tDissection time disagreement:  %r != %r" % (dis_time_2, dis_time_1))
             return
-        else:
-            print("\tDissection Time: Match!")
-            return
 
 def project_check(dh, sub_id, expt_date, species):
     mouse_prod = datetime.date(2017, 10, 01)
@@ -131,9 +124,7 @@ def region_check(dh, species):
         if region is None:
             print("Set target region: V1")
             return
-        if region == 'V1':
-            print("\tTarget region: Match!")
-        else:
+        if region != 'V1':
             print("\tTarget region mismatch: %s != V1" % region)
 
 def internal_check(dh, species, genotype):
@@ -151,9 +142,9 @@ def internal_check(dh, species, genotype):
         print("\tSet internal dye: AF488")
         return
     if internal_dye is None and genotype is not None:
-        if len(genotype) < 3:
+        if len(genotype.split(';')) < 3:
             print("\tSet internal dye: AF488, %s looks likes single transgenic" % genotype)
-        elif len(genotype) >= 3:
+        elif len(genotype.split(';')) >= 3:
             print("\tSet internal dye: Cascade Blue, %s looks liked quad" % genotype)
         else:
             print("\tCan't parse genotype %s, set internal dye manually" % genotype)
@@ -164,9 +155,7 @@ def rig_check(dh):
         #dh.setInfo(rig_name=config.rig_name)
         print("\tSet Rig: %s" % config.rig_name)
         return
-    if rig == config.rig_name:
-        print("\tRig: Match!")
-    else:
+    if rig != config.rig_name:
         print("\tRig mismatch: %s != %s" % (rig, config.rig_name))
 
 
