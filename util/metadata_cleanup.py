@@ -1,6 +1,7 @@
 import os, sys, glob, datetime, csv, re
 from acq4.util.DataManager import getDirHandle
 from multipatch_analysis import config
+from multipatch_analysis.constants import INTERNAL_RECIPES
 from multipatch_analysis.experiment import Experiment
 
 slice_csv_file = 'Slice_Preparation_Record.csv'
@@ -114,12 +115,12 @@ def project_check(dh, sub_id, expt_date, species):
             print("\tNo specimen, can't set project code")
             return
         if species.lower() == 'human':
-            print("\tSet Project Code: human course matrix")
+            print("\tSet Project Code: human coarse matrix")
             return
         if expt_date < mouse_prod:
             print("\tSet Project Code: mouse V1 pre-production")
         else:
-            print("\tSet Project Code: mouse V1 course matrix")
+            print("\tSet Project Code: mouse V1 coarse matrix")
 
 def region_check(dh, species):
     region = dh.info().get('target_region', None)
@@ -135,48 +136,39 @@ def region_check(dh, species):
         else:
             print("\tTarget region mismatch: %s != V1" % region)
 
-def internal_check(dh, species):
+def internal_check(dh, species, genotype):
     internal = dh.info().get('internal', None)
     internal_dye = dh.info().get('internal_dye', None)
-    if internal is None:
+    if internal is not None and internal not in INTERNAL_RECIPES:
+        print("\tInternal mismatch: %s not in recipe list" % internal)
+    elif internal is None:
         print("\tSet Internal: Standard K-Gluc")
-        return
-    if internal.lower() != 'standard k-gluc':
-        print("\tInternal mismatch: %s != Standard K-Gluc" % internal)
-        return
-    if internal_dye is not None:
-        return
+
     if internal_dye is None and species is None:
         print("\tCan't set internal dye")
         return
     if internal_dye is None and species.lower() == 'human':
         print("\tSet internal dye: AF488")
         return
-    if internal_dye is None and species != 'mouse':
-        genotype = species.split(';')
+    if internal_dye is None and genotype is not None:
         if len(genotype) < 3:
-            print("\tSet internal dye: AF488, %s looks likes single transgenic" % species)
+            print("\tSet internal dye: AF488, %s looks likes single transgenic" % genotype)
+        elif len(genotype) >= 3:
+            print("\tSet internal dye: Cascade Blue, %s looks liked quad" % genotype)
         else:
-            print("\tSet internal dye: Cascade Blue, %s looks liked quad" % species)
-    else:
-        print("\tCan't parse genotype %s, set internal dye manually" % species)
+            print("\tCan't parse genotype %s, set internal dye manually" % genotype)
 
 def rig_check(dh):
-    try:
-        dh.info()['rig_name']
-    except KeyError:
-        #dh.setInfo(rig_name=config.rig_name)
-        print("\tRig set: %s" % config.rig_name)
-        return
     rig = dh.info().get('rig_name', None)
-    if rig is None:
+    if rig in (None, ''):
         #dh.setInfo(rig_name=config.rig_name)
-        print("\tRig set: %s" % config.rig_name)
+        print("\tSet Rig: %s" % config.rig_name)
         return
     if rig == config.rig_name:
         print("\tRig: Match!")
     else:
         print("\tRig mismatch: %s != %s" % (rig, config.rig_name))
+
 
 root = sys.argv[1]
 
@@ -192,9 +184,12 @@ for path in sites:
     sub_id = day_dh.info().get('animal_ID', None)
     expt_date = datetime.datetime.fromtimestamp(day_dh.info()['__timestamp__']).date()
     species = day_dh.info().get('species', None)
+    if species != 'human':
+        genotype = species
     if sub_id is not None and species is None:
         try:
             species = day_dh.info().get('LIMS_specimen_info')['organism']
+            genotype = day_dh.info().get('LIMS_specimen_info')['genotype']
         except TypeError:
             try:
                 species = day_dh.info().get('LIMS_donor_info')['organism']
@@ -204,13 +199,14 @@ for path in sites:
                     species = 'human'
                 else:
                     species = 'mouse'
+
     print("Experiment Date: %s\nAnimal ID: %s" % (expt_date, sub_id))
     if day_dh not in checked_days:
         rig_check(day_dh)
         dissection_check(day_dh, sub_id, expt_date, diss_columns)
         solution_check(day_dh, expt_date, osm_columns)
         region_check(day_dh, species)
-        internal_check(day_dh, species)
+        internal_check(day_dh, species, genotype)
         checked_days.add(day_dh)
 
     if slice_dh not in checked_slices:
