@@ -1,5 +1,8 @@
 """Create a test set of data for testing the fit_psp function.  Uses Steph's 
 original first_puls_feature.py code to filter out error causing data.
+
+Example run statement
+python save save_fit_psp_test_set.py --organism mouse --connection ee
 """
 
 
@@ -143,6 +146,7 @@ for c in range(len(connection_types)):
                             
                         save_dict={}
                         save_dict['input']={'data': avg_trace.data.tolist(),
+                                            'dtype': str(avg_trace.data.dtype),
                                             'dt': float(avg_trace.dt),
                                             'amp_sign': amp_sign,
                                             'yoffset': 0, 

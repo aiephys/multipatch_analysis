@@ -500,6 +500,224 @@ class EvokedResponseGroup(object):
             return None
         return fit_psp(response, **kwds)
 
+def fit_psp_corinne(response, 
+                    mode='ic', 
+                    sign='any', 
+                    xoffset=(11e-3, 10e-3, 15e-3), 
+                    yoffset=(0, 'fixed'),
+                    mask_stim_artifact=True, 
+                    method='leastsq', 
+                    fit_kws=None, 
+                    stacked=True,
+                    rise_time_mult_factor=2.,
+                    weight=True, 
+                    **kwds):
+    """Fit psp.
+    
+    This function make assumptions about where the cross talk happens as traces 
+    have been aligned to the pulses and response.t0 has been set to zero 
+    
+    Parameters
+    ----------
+    response: neuroanalysis.data.Trace class
+        Contains data on trace waveform.
+    mode: string
+        either 'ic' for current clamp or 'vc' for voltage clamp
+    sign: string
+        Specifies the sign of the PSP deflection.  Must be '+', '-', or any.
+    xoffset
+    yoffset
+    mask_stim_artifact=
+    method 
+    fit_kws 
+    stacked
+    rise_time_mult_factor
+    kwds: optional key word arguments
+    weights: True, False, or array like
+    
+    
+    parameters to be fit should be specified the same
+        
+    """       
+    
+    # extracting these so don't pass classes to function
+    t=response.time_values
+    y=response.data
+    dt = response.dt
+    
+#    if fit_kws is None:
+#        fit_kws = {'xtol': 1e-4, 'maxfev': 300, 'nan_policy': 'omit'}
+       
+    if weight is True: #use default weighting
+        # THIS CODE IS DEPENDENT ON THE DATA BEING INPUT IN A CERTAIN WAY THAT IS NOT TESTED
+        weight = np.ones(len(avg_trace.data))*10.  #set everything to ten initially
+        weight[int(10e-3/dt):int(12e-3/dt)] = 0.   #area around stim artifact
+        weight[int(12e-3/dt):int(19e-3/dt)] = 30.  #area around steep PSP rise 
+    elif weight is False: #do not weight any part of the stimulus
+        weight = np.ones(len(avg_trace.data))
+    elif weight:  #works if there is a value specified in weight
+        if len(weight) != len(y):
+            raise Exception('the weight and array vectors are not the same length')
+
+            
+#    if 'weights' not in fit_kws:
+#        fit_kws['weights'] = weight
+    fit_kws={'weights': weight}   
+#    fit_kws['xtol']= 1e-4  #This alters output
+#    fit_kws['maxfev']= 300  #this alters output
+    fit_kws['nan_policy']='omit'
+
+#    #TODO: depricate when decide don't need this
+#    #TODO: update weights to use tags available in data as opposed to hard coded values 
+#    init_xoff = xoffset[0] if isinstance(xoffset, tuple) else xoffset
+#    onset_index = int((init_xoff-response.t0) / dt)
+#    weight = np.ones(len(y))
+#    weight[onset_index+int(1e-3/dt):onset_index+int(7e-3/dt)] = 3
+#    
+#    #TODO: should this be depricated?
+#    if mask_stim_artifact:
+#        # Use zero weight for fit region around the stimulus artifact
+#        i2 = onset_index + int(1e-3 / dt)
+#        i1 = i2 - int(2e-3 / dt)
+#        weight[i1:i2] = 0
+
+    # set initial conditions depending on whether in voltage or current clamp
+    if mode == 'ic':
+        amp = .2e-3
+        amp_max = 100e-3
+        rise_time = 5e-3
+        decay_tau = 50e-3
+    elif mode == 'vc':
+        amp = 20e-12
+        amp_max = 500e-12
+        rise_time = 1e-3
+        decay_tau = 4e-3
+    else:
+        raise ValueError('mode must be "ic" or "vc"')
+
+    amps = [(amp, 0, amp_max), (-amp, -amp_max, 0)] #TODO: what is this?
+    #TODO:  I think this might be trying to constrain the sign of the fitting 
+    if sign == '-':
+        amps = amps[1:]
+    elif sign == '+':
+        amps = amps[:1]
+    elif sign != 'any':
+        raise ValueError('sign must be "+", "-", or "any"')
+    
+    if not isinstance(stacked, bool):
+        raise Exception("Stacked must be True or False")
+    if stacked:
+        psp = StackedPsp()
+    else:
+        psp = Psp()
+
+#---------I don't understand this whole chunk of code----------------    
+    # initial condition, lower boundry, upper boundry    
+    # why not move the things in function call with defaults down here and use kwargs
+    base_params = {
+        #TODO: what are these
+        #TODO: do I need to make xoffset consistent the others by adding boundries?
+        'xoffset': xoffset,
+        'yoffset': yoffset,
+        'rise_time': (rise_time, rise_time/rise_time_mult_factor, rise_time*rise_time_mult_factor),
+        'decay_tau': (decay_tau, decay_tau/10., decay_tau*10.),
+        'rise_power': (2, 'fixed'),
+    }
+    
+    if stacked:
+        base_params.update({
+            #TODO: what are these
+            'exp_amp': 'amp * amp_ratio',
+            'amp_ratio': (0, -100, 100),
+        })  
+    # Why isnt code below place above where base_params are initialized
+    # if rise_time is specified in arguments, set it here and assign
+    # boundry conditions if not specified    
+    if 'rise_time' in kwds:
+        rt = kwds.pop('rise_time')
+        if not isinstance(rt, tuple):
+            rt = (rt, rt/2., rt*2.)
+        base_params['rise_time'] = rt
+    
+    # if decay_tau is specified in arguments, set it here and assign
+    # boundry conditions if not specified                    
+    if 'decay_tau' in kwds:
+        dt = kwds.pop('decay_tau')
+        if not isinstance(dt, tuple):
+            dt = (dt, dt/2., dt*2.)
+        base_params['decay_tau'] = dt
+    
+    #TODO: should this be before?            
+    base_params.update(kwds)
+#-------------------------------------------------------
+    
+    #TODO: why making this list of parameter copies
+    params = []
+    for amp, amp_min, amp_max in amps:
+        p2 = base_params.copy()
+        p2['amp'] = (amp, amp_min, amp_max)
+        params.append(p2)
+    
+    
+    # lets make ranges a list as opposed to tuples that are set limits 
+
+
+    
+    best_fit = None
+    best_score = None
+    #TODO: I don't know what this is doing
+    #params appears to be a list 
+
+    for p in params:
+        try:
+            fit = psp.fit(y, x=t, params=p, fit_kws=fit_kws, method=method)
+        except Exception:
+            if p is params[-1]:
+                raise
+            continue
+        err = np.sum(fit.residual**2)
+        if best_fit is None or err < best_score:
+            best_fit = fit
+            best_score = err
+    fit = best_fit
+
+    # nrmse = fit.nrmse()
+    if 'baseline_std' in response.meta:
+        fit.snr = abs(fit.best_values['amp']) / response.meta['baseline_std']
+        fit.err = fit.rmse() / response.meta['baseline_std']
+    # print fit.best_values
+    # print "RMSE:", fit.rmse()
+    # print "NRMSE:", nrmse
+    # print "SNR:", snr
+
+    return fit
+
+
+
+
+def detect_connections(expt):
+    analyzer = MultiPatchExperimentAnalyzer.get(expt)
+
+    # First get average evoked responses for all pre/post pairs with long decay time
+    all_responses, rows, cols = analyzer.get_evoked_response_matrix(clamp_mode='ic', min_duration=16e-3)
+
+    for pre_id in rows:
+        for post_id in cols:
+            try:
+                response = all_responses[(pre_id, post_id)]
+                if len(response) == 0:
+                    continue
+            except KeyError:
+                continue
+
+            # fit average to extract PSP decay
+            fit = response.fit_psp(yoffset=0)
+
+            # make connectivity call
+            lsnr = np.log(fit.snr)
+            lnrmse = np.log(fit.nrmse())
+            if lsnr > lnrmse + 6:
+                print "Connection:", pre_id, post_id, fit.snr, fit.nrmse()
 
 def fit_psp(response, mode='ic', sign='any', xoffset=(11e-3, 10e-3, 15e-3), yoffset=(0, 'fixed'),
             mask_stim_artifact=True, method='leastsq', fit_kws=None, stacked=True,
@@ -621,6 +839,7 @@ def fit_psp(response, mode='ic', sign='any', xoffset=(11e-3, 10e-3, 15e-3), yoff
         i1 = i2 - int(2e-3 / dt)
         weight[i1:i2] = 0
 
+    #note that this was not being used in the publication because I was specifying wieghts via fit_kwargs
     if fit_kws is None:
         fit_kws = {'xtol': 1e-4, 'maxfev': 300, 'nan_policy': 'omit'}
 
@@ -654,29 +873,3 @@ def fit_psp(response, mode='ic', sign='any', xoffset=(11e-3, 10e-3, 15e-3), yoff
     # print "SNR:", snr
 
     return fit
-
-
-def detect_connections(expt):
-    analyzer = MultiPatchExperimentAnalyzer.get(expt)
-
-    # First get average evoked responses for all pre/post pairs with long decay time
-    all_responses, rows, cols = analyzer.get_evoked_response_matrix(clamp_mode='ic', min_duration=16e-3)
-
-    for pre_id in rows:
-        for post_id in cols:
-            try:
-                response = all_responses[(pre_id, post_id)]
-                if len(response) == 0:
-                    continue
-            except KeyError:
-                continue
-
-            # fit average to extract PSP decay
-            fit = response.fit_psp(yoffset=0)
-
-            # make connectivity call
-            lsnr = np.log(fit.snr)
-            lnrmse = np.log(fit.nrmse())
-            if lsnr > lnrmse + 6:
-                print "Connection:", pre_id, post_id, fit.snr, fit.nrmse()
-
