@@ -98,6 +98,11 @@ GENOTYPES = OrderedDict([
     ("Tlx3-Cre_PL56/wt;Pvalb-T2A-FlpO/wt;PhiC31-neo/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'pvalb': ['tdTomato'], 'tlx3': ['EGFP']}),
     ("Tlx3-Cre_PL56/wt;Ai14(RCL-tdT)/wt", {'tlx3': ['tdTomato']}),
     ("Ntsr1-Cre_GN220/wt;Vip-IRES-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'vip': ['tdTomato'], 'ntsr1': ['EGFP']}),
+    ("Tlx3-Cre_PL56/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'tlx3': ['EGFP']}),
+    ("Vip-IRES-Cre/wt;Pvalb-T2A-FlpO/Pvalb-T2A-FlpO;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'pvalb': ['tdTomato'], 'vip': ['EGFP']}),
+    ("Ntsr1-Cre_GN220/wt;Ai14(RCL-tdT)/wt", {'ntsr1': ['tdTomato']}),
+    ("Pvalb-IRES-Cre/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'pvalb': ['EGFP']}),
+    ("Pvalb-T2A-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'pvalb': ['tdTomato']})
 ])    
 
 
