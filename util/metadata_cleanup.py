@@ -31,44 +31,47 @@ def solution_check(dh, expt_date, columns):
     try:
         osm_entry = osm_dates[date]
     except KeyError:
-        print("\tSolution date not in Multipatch_throughput sheet, check notes\r")
-        return
+        print_msg = ("\tSolution date not in Multipatch_throughput sheet, check notes")
+        return print_msg
 
     recipe = osm_entry[columns['recipe_col']]
     sheet_osm = osm_entry[columns['osm_col']]
     if solution is None:
-        print("\tSet aCSF: %s" % recipe)
-        return
+        print_msg = ("\tSet aCSF: %s" % recipe)
+        return print_msg
 
     calcium = solution.split('m')[0]
     if calcium not in recipe:
-        print("\taCSF disagreement: %s != %s" % (solution, recipe))
+        print_msg = ("\taCSF disagreement: %s != %s" % (solution, recipe))
+    else:
+        print_msg = ''
 
     if osm is None:
-        print("\tSet osmolarity: %s" % sheet_osm)
-        return
+        print_msg += ("\tSet osmolarity: %s" % sheet_osm)
+        return print_msg
 
     if sheet_osm != osm:
-        print("\tOsmolarity disagreement: %s != %s" % (osm, sheet_osm))
-        return
+        print_msg += ("\tOsmolarity disagreement: %s != %s" % (osm, sheet_osm))
+        return print_msg
+    return None
 
 
 def dissection_check(dh, sub_id, expt_date, columns):
     if sub_id is None:
-        print("\tNo animal_ID for %s" % dh.path)
-        return
+        print_msg = ("\tNo animal_ID for %s" % dh.path)
+        return print_msg
     dis_rec = diss_times.get(sub_id, None)
     if dis_rec is None:
-        print("\tNo tissue processing record")
-        return
+        print_msg = ("\tNo tissue processing record")
+        return print_msg
 
     date = dis_rec[columns['date_col']]
     sac = dis_rec[columns['sac_col']]
     time = dis_rec[columns['time_col']]
     sac_time = datetime.datetime.strptime(date + ' ' + sac, '%m/%d/%Y %I:%M %p')
     if not time:
-        print("\tNo time record, sacrifice time was %s" % sac)
-        return
+        print_msg = ("\tNo time record, sacrifice time was %s\n" % sac)
+        return print_msg
     if time[-2:] in ('AM', 'PM'):
         dis_time = datetime.datetime.strptime(date + ' ' + time, '%m/%d/%Y %I:%M %p')
     else:
@@ -77,86 +80,100 @@ def dissection_check(dh, sub_id, expt_date, columns):
             dis_time = dis_time + datetime.timedelta(seconds=12 * 3600)
 
     if (dis_time - sac_time).total_seconds() > 3600:
-        print("\tSac. / dissection times for are too far apart")
-        return
+        print_msg = ("\tSac. / dissection times for are too far apart")
+        return print_msg
     if dis_time <= sac_time:
-        print("\tDissection before sac\r")
-        return
+        print_msg = ("\tDissection before sac")
+        return print_msg
 
     if expt_date != dis_time.date():
         if (expt_date - dis_time.date()).days != 1:
-            print("\tExpt date %s does not match dissection date %s" % (expt_date, dis_time.date()))
-            return
+            print_msg = ("\tExpt date %s does not match dissection date %s" % (expt_date, dis_time.date()))
+            return print_msg
         dis_time_1 = "{d.year}-{d.month}-{d.day} {d.hour}:{d.minute:02d}".format(d=dis_time)
     else:
         dis_time_1 = "{d.hour}:{d.minute:02d}".format(d=dis_time)
 
     dis_time_2 = dh.info().get('time_of_dissection', '')  # recorded by rig operator
     if dis_time_2 == '':
-        print("\tSet dissection time: %s" % dis_time_1)
-        return
+        print_msg = ("\tSet dissection time: %s" % dis_time_1)
+        return print_msg
     else:
         if dis_time_2 != dis_time_1:
-            print("\tDissection time disagreement:  %r != %r" % (dis_time_2, dis_time_1))
-            return
+            print_msg = ("\tDissection time disagreement:  %r != %r" % (dis_time_2, dis_time_1))
+            return print_msg
+    return None
 
 def project_check(dh, sub_id, expt_date, species):
     mouse_prod = datetime.date(2017, 10, 01)
     project = dh.info().get('project', None)
     if project is None:
         if species is None and sub_id is None:
-            print("\tNo specimen, can't set project code")
-            return
+            print_msg = ("\tNo specimen, can't set project code")
+            return print_msg
         if species.lower() == 'human':
-            print("\tSet Project Code: human coarse matrix")
-            return
+            print_msg = ("\tSet Project Code: human coarse matrix")
+            return print_msg
         if expt_date < mouse_prod:
-            print("\tSet Project Code: mouse V1 pre-production")
+            print_msg = ("\tSet Project Code: mouse V1 pre-production")
+            return print_msg
         else:
-            print("\tSet Project Code: mouse V1 coarse matrix")
+            print_msg = ("\tSet Project Code: mouse V1 coarse matrix")
+            return print_msg
+    return None
 
 def region_check(dh, species):
     region = dh.info().get('target_region', None)
     if species is None:
-        print("\tCan't set target region")
-        return
-    if species == 'mouse':
+        print_msg = ("\tCan't set target region")
+        return print_msg
+    if species != 'human':
         if region is None:
-            print("Set target region: V1")
-            return
+            print_msg = ("\tSet target region: V1")
+            return print_msg
         if region != 'V1':
-            print("\tTarget region mismatch: %s != V1" % region)
+            print_msg = ("\tTarget region mismatch: %s != V1" % region)
+            return print_msg
+    return None
 
-def internal_check(dh, species, genotype):
+def internal_check(dh):
     internal = dh.info().get('internal', None)
-    internal_dye = dh.info().get('internal_dye', None)
     if internal is not None and internal not in INTERNAL_RECIPES:
-        print("\tInternal mismatch: %s not in recipe list" % internal)
-    elif internal is None:
-        print("\tSet Internal: Standard K-Gluc")
+        print_msg = ("\tInternal mismatch: %s not in recipe list" % internal)
+        return print_msg
+    if internal in (None, ''):
+        print_msg = ("\tSet Internal: Standard K-Gluc")
+        return print_msg
+    return None
 
-    if internal_dye is None and species is None:
-        print("\tCan't set internal dye")
-        return
-    if internal_dye is None and species.lower() == 'human':
-        print("\tSet internal dye: AF488")
-        return
-    if internal_dye is None and genotype is not None:
+def dye_check(dh, species, genotype):
+    internal_dye = dh.info().get('internal_dye', None)
+    if internal_dye in(None, '') and species is None:
+        print_msg = ("\tCan't set internal dye")
+        return print_msg
+    if internal_dye in(None, '') and species.lower() == 'human':
+        print_msg = ("\tSet internal dye: AF488")
+        return print_msg
+    if internal_dye in(None, '') and genotype is not None:
         if len(genotype.split(';')) < 3:
-            print("\tSet internal dye: AF488, %s looks likes single transgenic" % genotype)
+            print_msg = ("\tSet internal dye: AF488, %s looks likes single transgenic" % genotype)
         elif len(genotype.split(';')) >= 3:
-            print("\tSet internal dye: Cascade Blue, %s looks liked quad" % genotype)
+            print_msg = ("\tSet internal dye: Cascade Blue, %s looks liked quad" % genotype)
         else:
-            print("\tCan't parse genotype %s, set internal dye manually" % genotype)
+            print_msg = ("\tCan't parse genotype %s, set internal dye manually" % genotype)
+        return print_msg
+    return None
 
 def rig_check(dh):
     rig = dh.info().get('rig_name', None)
     if rig in (None, ''):
         #dh.setInfo(rig_name=config.rig_name)
-        print("\tSet Rig: %s" % config.rig_name)
-        return
+        print_msg = ("\tSet Rig: %s" % config.rig_name)
+        return print_msg
     if rig != config.rig_name:
-        print("\tRig mismatch: %s != %s" % (rig, config.rig_name))
+        print_msg = ("\tRig mismatch: %s != %s" % (rig, config.rig_name))
+        return print_msg
+    return None
 
 
 root = sys.argv[1]
@@ -189,17 +206,25 @@ for path in sites:
                 else:
                     species = 'mouse'
 
-    print("Experiment Date: %s\nAnimal ID: %s" % (expt_date, sub_id))
+    header_msg = ("Experiment Date: %s\nAnimal ID: %s" % (expt_date, sub_id))
+    print_msg = []
     if day_dh not in checked_days:
-        rig_check(day_dh)
-        dissection_check(day_dh, sub_id, expt_date, diss_columns)
-        solution_check(day_dh, expt_date, osm_columns)
-        region_check(day_dh, species)
-        internal_check(day_dh, species, genotype)
+        print_msg.append(rig_check(day_dh))
+        print_msg.append(dissection_check(day_dh, sub_id, expt_date, diss_columns))
+        print_msg.append(solution_check(day_dh, expt_date, osm_columns))
+        print_msg.append(region_check(day_dh, species))
+        print_msg.append(internal_check(day_dh))
+        print_msg.append(dye_check(day_dh, species, genotype))
         checked_days.add(day_dh)
 
     if slice_dh not in checked_slices:
-        project_check(slice_dh, sub_id, expt_date, species)
+        print_msg.append(project_check(slice_dh, sub_id, expt_date, species))
         checked_slices.add(slice_dh)
 
-
+    if all([t is None for t in print_msg]):
+        continue
+    else:
+        print header_msg
+        for msg in print_msg:
+            if msg is not None:
+                print msg
