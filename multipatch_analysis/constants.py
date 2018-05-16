@@ -111,8 +111,18 @@ GENOTYPES = OrderedDict([
     ("Vip-IRES-Cre/wt;Sst-IRES-FlpO/wt;PhiC31-neo/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'sst': ['tdTomato'], 'vip': ['EGFP']}),
     ("Tlx3-Cre_PL56/wt;Pvalb-2A-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'pvalb': ['tdTomato'], 'tlx3': ['EGFP']}),
     ("Cux2-CreERT2/wt;Ai14(RCL-tdT)/wt", {'cux2': ['tdTomato']}),
-
-
+    ("Tlx3-Cre_PL56/wt;Pvalb-2A-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'pvalb': ['tdTomato'], 'tlx3': ['EGFP']}),
+    ("Pvalb-T2A-FlpO/wt;Ai65F/wt", {'pvalb': ['tdTomato']}),
+    ("Chat-IRES-Cre-neo/wt;Snap25-LSL-F2A-GFP/wt", {'chat': ['EGFP']}),
+    ("Tlx3-Cre_PL56/wt;Pvalb-T2A-FlpO/wt;Ai65F/wt", {'pvalb': ['tdTomato']}),
+    ("Pvalb-T2A-FlpO/wt;Ai65F/Ai65F", {'pvalb': ['tdTomato']}),
+    ("Sst-IRES-Cre/wt;Pvalb-T2A-FlpO/Pvalb-T2A-FlpO;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'pvalb': ['tdTomato'], 'sst': ['EGFP']}),
+    ("Pvalb-IRES-Cre/wt;Rorb-T2A-tTA2/wt;Ai63(TIT-tdT)/wt", {'rorb': ['tdTomato']}),
+    ("Sim1-Cre_KJ18/wt;Sst-IRES-FlpO/wt;PhiC31-neo/Ai65F", {'sst': ['tdTomato']}),
+    ("Sst-IRES-FlpO/wt;PhiC31-neo/Ai65F", {'sst': ['tdTomato']}),
+    ("Sst-IRES-Cre/wt;Pvalb-T2A-FlpO/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'sst': ['EGFP']}),
+    ("Tlx3-Cre_PL56/wt;Sst-IRES-FlpO/wt;Ai65F/PhiC31-neo;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'sst': ['tdTomato'], 'tlx3': ['EGFP']}),
+    ("Sst-IRES-Cre/wt;Pvalb-T2A-FlpO/Pvalb-T2A-FlpO;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'pvalb': ['tdTomato'], 'sst': ['EGFP']}),
 ])    
 
 
