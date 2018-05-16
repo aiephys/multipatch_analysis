@@ -2,7 +2,6 @@ import acq4.pyqtgraph as pg
 from acq4.pyqtgraph.Qt import QtCore, QtGui
 from acq4.modules.Module import Module
 from acq4.Manager import getManager
-<<<<<<< HEAD
 import acq4.util.DataManager as DataManager
 
 # from acq4.analysis.modules.MosaicEditor import MosaicEditor
@@ -21,14 +20,11 @@ from datetime import datetime
 import time
 import yaml
 import affpyramid
-=======
+
 from acq4.util.Canvas.items.CanvasItem import CanvasItem
 from acq4.util.Canvas.items import registerItemType
-from . import submit_expt
-from . import multipatch_nwb_viewer
-from . import dashboard
+#from . import dashboard
 
->>>>>>> 1d32d1a85f03d04ccf05c0f9e72d04cd3efe0162
 
 class MultipatchSubmissionModule(Module):
     """Allows multipatch data submission UI to be invoked as an ACQ4 module.
@@ -129,21 +125,21 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         
         aff_image_name = os.path.split(aff_image_path)[-1]
         
-        jpg_image_name = os.path.splitext(aff_image_name)[0] + ".jpg"
+        #jpg_image_name = os.path.splitext(aff_image_name)[0] + ".jpg"
 
-        image_service_url = "http://lims2/cgi-bin/imageservice?path="
-        self.zoom = 6        #need to check that this ACQ4 can support this size
+        #image_service_url = "http://lims2/cgi-bin/imageservice?path="
+        #self.zoom = 6        #need to check that this ACQ4 can support this size
 
-        full_url = image_service_url + aff_image_path + "&zoom={}".format(str(self.zoom))
-        save_path = os.path.join(self.base_path, jpg_image_name)
+        #full_url = image_service_url + aff_image_path + "&zoom={}".format(str(self.zoom))
+        save_path = os.path.join(self.base_path, aff_image_name)
         safe_save_path = lims.lims.safe_system_path(save_path)
 
         if os.path.exists(safe_save_path) == False:
-            #shutil.copy2( safe_aff_image_path,safe_save_path)
+            shutil.copy2(safe_aff_image_path,safe_save_path)
 
-            image = urllib.URLopener()
-            image.retrieve(full_url, safe_save_path)
-            self.base_dir.indexFile(jpg_image_name)
+            # image = urllib.URLopener()
+            # image.retrieve(full_url, safe_save_path)
+            self.base_dir.indexFile(aff_image_name)
             print("20x image moved")
         self.image_20 = safe_save_path
                 
@@ -220,8 +216,8 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
                 'ephys_cell_id': cell_name,                  
                 'coordinates_20x': 
                 {
-                "x": markers[0].graphicsItem().mapToItem(image.graphicsItem(),pg.Point(*p[:2])).x()*self.zoom, 
-                "y": markers[0].graphicsItem().mapToItem(image.graphicsItem(),pg.Point(*p[:2])).y()*self.zoom
+                "x": markers[0].graphicsItem().mapToItem(image.graphicsItem(),pg.Point(*p[:2])).x(), 
+                "y": markers[0].graphicsItem().mapToItem(image.graphicsItem(),pg.Point(*p[:2])).y()
                 },      
                 'ephys_qc_result': ('pass' if pipette_log[cell_name]['got_data'] == True else 'fail'),                 
                 'start_time_sec': time.mktime(pipette_log[cell_name]['patch_start'].timetuple())
@@ -242,7 +238,7 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
             json.dump(data, outfile)
 
         #incoming_json_path = os.path.join(incoming_path, json_save_file)
-        incoming_json_path = os.path.join('/allen/programs/celltypes/production/incoming/mousecelltypes', json_save_file)
+        incoming_json_path = '/allen/programs/celltypes/production/incoming/mousecelltypes/' + json_save_file
         print(incoming_json_path)
         # uncomment line below to copy json to incoming folder
         #shutil.copy2(local_json_save_path, incoming_json_path)
@@ -302,7 +298,8 @@ class AffPyramidCanvasItem(CanvasItem):
         opts = {'movable': True, 'rotatable': True, 'handle': handle}
         opts.update(kwds)
         if opts.get('name') is None:
-            opts['name'] = handle.shortName()            
+            opts['name'] = handle.shortName()
+        opts['defaultUserTransform'] = {'scale': (1e-6, 1e-6)}            
         CanvasItem.__init__(self, self.affitem, **opts)
 
     @classmethod
