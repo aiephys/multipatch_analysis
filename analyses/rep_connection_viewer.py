@@ -12,7 +12,7 @@ from multipatch_analysis.constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_T
 
 ### Select synapses for representative traces as {('pre-type'), ('post-type'): [UID, Pre_cell, Post_cell], } ###
 
-connection_types = {((None,'rorb'), (None,'rorb')): ['1502301827.80', 8, 6]}
+connection_types = {(('5','unknown'), ('5','unknown')): ['1503376975.16', 2, 4]}
 
 pg.dbg()
 app = pg.mkQApp()
@@ -77,7 +77,7 @@ for row in range(len(connection_types)):
     sweep_list = response_filter(pulse_response, freq_range=[0, 50], holding_range=holding, pulse=True)
     n_sweeps = len(sweep_list[0])
     if n_sweeps > sweep_threshold:
-        qc_list = pulse_qc(sweep_list[0], baseline=2, pulse=None, plot=grid[row, 1])
+        qc_list = pulse_qc(sweep_list, baseline=2, pulse=None, plot=grid[row, 1])
         qc_sweeps = len(qc_list)
         if qc_sweeps > sweep_threshold:
             avg_first_pulse = trace_avg(qc_list)

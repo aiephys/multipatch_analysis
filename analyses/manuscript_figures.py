@@ -288,10 +288,10 @@ def induction_summary(train_response, freqs, holding, thresh=5, ind_dict=None, o
         offset_dict = {}
     for f, freq in enumerate(freqs):
         induction_traces = {}
-        induction_traces['responses'], _ = response_filter(train_response['responses'], freq_range=[freq, freq],
+        induction_traces['responses'] = response_filter(train_response['responses'], freq_range=[freq, freq],
                                                         holding_range=holding, train=0)
-        induction_traces['pulse_offsets'], _ = response_filter(train_response['pulse_offsets'], freq_range=[freq, freq])
-        ind_rec_traces, _ = response_filter(train_response['responses'], freq_range=[freq, freq], holding_range=holding,
+        induction_traces['pulse_offsets'] = response_filter(train_response['pulse_offsets'], freq_range=[freq, freq])
+        ind_rec_traces = response_filter(train_response['responses'], freq_range=[freq, freq], holding_range=holding,
                                          train=1, delta_t=250)
         if len(induction_traces['responses']) >= thresh and len(ind_rec_traces) >= thresh:
             induction_avg = trace_avg(induction_traces['responses'])
@@ -310,14 +310,14 @@ def recovery_summary(train_response, rec_t, holding, thresh=5, rec_dict=None, of
     if rec_dict is None:
         rec_dict = {}
         offset_dict = {}
-    rec_ind_traces, _ = response_filter(train_response['responses'], freq_range=[50, 50], holding_range=holding, train=0)
+    rec_ind_traces = response_filter(train_response['responses'], freq_range=[50, 50], holding_range=holding, train=0)
     for t, delta in enumerate(rec_t):
         recovery_traces = {}
-        recovery_traces['responses'], _ = response_filter(train_response['responses'], freq_range=[50, 50],
+        recovery_traces['responses'] = response_filter(train_response['responses'], freq_range=[50, 50],
                                                        holding_range=holding, train=1, delta_t=delta)
-        #rec_ind_traces, _ = response_filter(train_response['responses'], freq_range=[50, 50],
+        #rec_ind_traces = response_filter(train_response['responses'], freq_range=[50, 50],
         #                                               holding_range=holding, train=0, delta_t=delta)
-        recovery_traces['pulse_offsets'], _ = response_filter(train_response['pulse_offsets'], freq_range=[50, 50],
+        recovery_traces['pulse_offsets'] = response_filter(train_response['pulse_offsets'], freq_range=[50, 50],
                                                            delta_t=delta)
         if len(recovery_traces['responses']) >= thresh:
             recovery_avg = trace_avg(recovery_traces['responses'])
