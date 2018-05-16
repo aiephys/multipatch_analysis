@@ -41,7 +41,7 @@ if args['organism'] == 'mouse':
         connection_types = ei_connections.keys()
         sign = '+'
     elif connection == 'ie':
-        connection_types == ie_connections.keys()
+        connection_types = ie_connections.keys()
         sign = '-'
     elif connection == 'all':
         connection_types = all_connections.keys()
@@ -66,9 +66,15 @@ elif args['organism'] == 'human':
     connection = args['connection']
     if connection == 'ee':
         connection_types = human_connections.keys()
+        sign = '+'
+        threshold = [None, None, None, None]
+        qc_params = (sign, [1e-3, 1e-3, 1e-3, 1e-3])
     else:
         c_type = connection.split('-')
         connection_types = [((c_type[0], 'unknown'), (c_type[1], 'unknown'))]
+        sign='+'
+        threshold = [None]
+        qc_params = (sign, [1e-3])
 
 holding = [-55, -75]
 freqs = [10, 20, 50, 100]
@@ -119,6 +125,8 @@ for c in range(len(connection_types)):
     summary_plot[c, 0].addLegend()
     summary_plot[c, 1].addLegend()
     for expt in expt_list:
+        if expt.connections is None:
+            continue
         for pre, post in expt.connections:
             if [expt.uid, pre, post] in no_include:
                 continue
@@ -243,5 +251,5 @@ for c in range(len(connection_types)):
     #     write_cache(response_cache, cache_file)
 
 print ('Exporting train pulse amplitudes and experiment IDs for further analysis')
-write_cache([ind_amp_summary, rec_amp_summary], "train_amps3.pkl")
-write_cache([ind_uid, rec_uid], "expt_ids3.pkl")
+write_cache([ind_amp_summary, rec_amp_summary], "train_amps_human.pkl")
+write_cache([ind_uid, rec_uid], "expt_ids_human.pkl")
