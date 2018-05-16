@@ -102,7 +102,17 @@ GENOTYPES = OrderedDict([
     ("Vip-IRES-Cre/wt;Pvalb-T2A-FlpO/Pvalb-T2A-FlpO;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'pvalb': ['tdTomato'], 'vip': ['EGFP']}),
     ("Ntsr1-Cre_GN220/wt;Ai14(RCL-tdT)/wt", {'ntsr1': ['tdTomato']}),
     ("Pvalb-IRES-Cre/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'pvalb': ['EGFP']}),
-    ("Pvalb-T2A-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'pvalb': ['tdTomato']})
+    ("Pvalb-T2A-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'pvalb': ['tdTomato']}),
+    ("Pvalb-T2A-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'pvalb': ['tdTomato']}),
+    ("Vip-IRES-Cre/wt;Pvalb-T2A-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/Ai140(TIT2L-GFP-ICL-tTA2)", {'pvalb': ['tdTomato'], 'vip': ['EGFP']}),
+    ("Sim1-Cre_KJ18/wt;Ai65F/wt;Ai139(TIT2L-GFP-ICL-TPT)/wt", {'sim1': ['EGFP', 'tdTomato']}),
+    ("Sst-IRES-Cre/wt;Pvalb-T2A-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/Ai140(TIT2L-GFP-ICL-tTA2)", {'pvalb': ['tdTomato'], 'sst': ['EGFP']}),
+    ("Sim1-Cre_KJ18/wt;Pvalb-T2A-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'pvalb': ['tdTomato'], 'sim1': ['EGFP']}),
+    ("Vip-IRES-Cre/wt;Sst-IRES-FlpO/wt;PhiC31-neo/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'sst': ['tdTomato'], 'vip': ['EGFP']}),
+    ("Tlx3-Cre_PL56/wt;Pvalb-2A-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'pvalb': ['tdTomato'], 'tlx3': ['EGFP']}),
+    ("Cux2-CreERT2/wt;Ai14(RCL-tdT)/wt", {'cux2': ['tdTomato']}),
+
+
 ])    
 
 
@@ -193,4 +203,6 @@ DRIVER_LINES = {                  # dependencies   # products
     'Sst-IRES-FlpO':              ('sst',          ['flp']),
     'Vip-IRES-FlpO':              ('vip',          ['flp']),
     'Slc17a8-IRES2-Cre':          ('slc17a8',      ['cre']),
+    'Pvalb-2A-FlpO':              ('pvalb',        ['flp']),
+    'Cux2-CreERT2':               ('cux2',         ['cre']),
 }
