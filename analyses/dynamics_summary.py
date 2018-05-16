@@ -1,6 +1,6 @@
 from synapse_comparison import load_cache, summary_plot_pulse
-from rep_connections import ee_connections
-from manuscript_figures import colors_mouse, feature_kw
+from rep_connections import ee_connections, human_connections
+from manuscript_figures import colors_mouse, feature_kw, colors_human
 from scipy import stats
 import numpy as np
 import pyqtgraph as pg
@@ -12,16 +12,17 @@ pg.dbg()
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
 
-add_model = True
+add_model = False
 grand_avg = False
 
-cache_file = 'train_amps3.pkl'
+cache_file = 'train_amps_human.pkl'
 data = load_cache(cache_file)
-expt_ids = load_cache('expt_ids3.pkl')
+expt_ids = load_cache('expt_ids_human.pkl')
 model_amps = load_cache('model_amps.pkl')
 feature_plt_ind = None
 feature_plt_rec = None
 symbols = ['d', 's', 'o', '+', 't']
+color = colors_human
 
 # model = ReleaseModel()
 # model.Dynamics = {'Dep':1, 'Fac':0, 'UR':0, 'SMR':0, 'DSR':0}
@@ -34,7 +35,7 @@ ind = data[0]
 rec = data[1]
 freq = 10
 delta =250
-order = ee_connections.keys()
+order = human_connections.keys()
 delay_order = [250, 500, 1000, 2000, 4000]
 
 ind_plt = PlotGrid()
@@ -53,7 +54,9 @@ gain_plot = pg.plot()
 
 
 for t, type in enumerate(order):
-    if type == ((None, 'ntsr1'), (None, 'ntsr1')):
+    if type == (('2', 'unknown'), ('2', 'unknown')):
+        continue
+    if type == (('4', 'unknown'), ('4', 'unknown')):
         continue
     pulse_ratio = {}
     median_ratio = []
@@ -73,22 +76,22 @@ for t, type in enumerate(order):
             pulse_ratio[freqs[0]] = np.asarray([freqs[1][n, :]/freqs[1][n, 0] for n in range(freqs[1].shape[0])])
             avg_ratio = np.mean(pulse_ratio[freqs[0]], 0)
             sd_ratio = np.std(pulse_ratio[freqs[0]], 0)
-            color2 = (colors_mouse[t][0], colors_mouse[t][1], colors_mouse[t][2], 150)
+            color2 = (color[t][0], color[t][1], color[t][2], 150)
             vals = np.hstack(pulse_ratio[freqs[0]][0])
             x = pg.pseudoScatter(vals, spacing=0.15)
-            ind_plt_all[0, 1].plot(x, vals, pen=None, symbol=symbols[f], symbolSize=8, symbolPen=colors_mouse[t],
+            ind_plt_all[0, 1].plot(x, vals, pen=None, symbol=symbols[f], symbolSize=8, symbolPen=color[t],
                                    symbolBrush=color2)
             ind_plt_all[0, 1].setLabels(left=['8:1 Ratio', ''])
         ind_plt[t, 0].addLegend()
-        ind_plt[t, 0].plot(avg_ratio, pen=colors_mouse[t], symbol=symbols[f], symbolSize=10, symbolPen='k',
-                        symbolBrush=colors_mouse[t], name=('  %d Hz' % freqs[0]))
+        ind_plt[t, 0].plot(avg_ratio, pen=color[t], symbol=symbols[f], symbolSize=10, symbolPen='k',
+                        symbolBrush=color[t], name=('  %d Hz' % freqs[0]))
         if add_model is True:
             if type != (('2/3', 'unknown'), ('2/3', 'unknown')):
                 model = model_amps[type][0][f]
-                ind_plt[t, 0].plot(model, pen=colors_mouse[t])
+                ind_plt[t, 0].plot(model, pen=color[t])
         ind_plt[t, 0].setXRange(0, 11)
         ind_plt[t, 0].setYRange(0, 1.5)
-        ind_plt_all[0, 0].plot([f], [avg_ratio[7]], pen=None, symbol='o', symbolSize=15, symbolPen='k', symbolBrush=colors_mouse[t])
+        ind_plt_all[0, 0].plot([f], [avg_ratio[7]], pen=None, symbol='o', symbolSize=15, symbolPen='k', symbolBrush=color[t])
         # err = pg.ErrorBarItem(x=np.asarray([f]), y=np.asarray([avg_ratio[7]]), height=np.asarray([sd_ratio[7]]), beam=0.1)
         # ind_plt_all[0, 0].addItem(err)
 
@@ -100,11 +103,11 @@ for t, type in enumerate(order):
         labels = [['8:1 pulse ratio', ''], ['8:1 pulse ratio', ''], ['8:1 pulse ratio', ''], ['8:1 pulse ratio', '']]
         titles = ['10Hz', '20Hz', '50Hz', '100Hz']
         feature_plt_ind = summary_plot_pulse(feature_list, labels, titles, t, plot=feature_plt_ind,
-                                         color=colors_mouse[t], name=type)
+                                         color=color[t], name=type)
         ind_50[type] = {}
         ind_50[type][50] = pulse_ratio[50][:, 7]
-    gain_plot.plot([np.mean(n) for n in gain], pen=colors_mouse[t], symbol='o', symbolSize=8, symbolPen='k',
-                   symbolBrush=colors_mouse[t])
+    gain_plot.plot([np.mean(n) for n in gain], pen=color[t], symbol='o', symbolSize=8, symbolPen='k',
+                   symbolBrush=color[t])
     gain_plot.getAxis('bottom').setTicks([[(0, '10/4'), (1, '20/4'), (2, '50/4'), (3, '100/4')]])
     gain_plot.setLabels(left=['% change amplitude', ''], bottom=['Freq Change', ''])
 
@@ -133,21 +136,21 @@ for t, type in enumerate(order):
         if add_model is True:
             if type != (('2/3', 'unknown'), ('2/3', 'unknown')):
                 model_rec = model_amps[type][1][d, 8:]
-                rec_plt[0, 1].plot([d, d+0.2, d+0.4, d+0.6], model_rec, pen={'color': colors_mouse[t], 'width': 2})
+                rec_plt[0, 1].plot([d, d+0.2, d+0.4, d+0.6], model_rec, pen={'color': color[t], 'width': 2})
 
     grand_rec_ratio = np.mean(np.asarray(rec_avg_ratio), 0)
-    rec_plt[0, 0].plot(grand_rec_ratio[:8]/grand_rec_ratio[0], pen=colors_mouse[t], symbol='o',
-                       symbolSize=10, symbolPen='k',symbolBrush=colors_mouse[t])
+    rec_plt[0, 0].plot(grand_rec_ratio[:8]/grand_rec_ratio[0], pen=color[t], symbol='o',
+                       symbolSize=10, symbolPen='k',symbolBrush=color[t])
     if add_model is True:
         if type != (('2/3', 'unknown'), ('2/3', 'unknown')):
             model_rec_ind = np.mean(model_amps[type][1], 0)[:8]
-            rec_plt[0, 0].plot(model_rec_ind, pen={'color': colors_mouse[t], 'width': 2})
+            rec_plt[0, 0].plot(model_rec_ind, pen={'color': color[t], 'width': 2})
     rec_plt[0, 0].getAxis('bottom').setTicks([[(0, '0'), (1, '20'), (2, '40'), (3, '60'), (4, '80'), (5, '100'), (6, '120'),
                                                (7, '140')]])
     rec_plt[0, 0].setYRange(0, 1.5)
     ninth_pulse_avg = [np.mean(ninth_pulse[delays]) for delays in delay_order]
-    rec_plt[0, 1].plot(ninth_pulse_avg, pen=colors_mouse[t], symbol='o', symbolSize=10, symbolPen='k',
-                       symbolBrush=colors_mouse[t])
+    rec_plt[0, 1].plot(ninth_pulse_avg, pen=color[t], symbol='o', symbolSize=10, symbolPen='k',
+                       symbolBrush=color[t])
     rec_plt[0, 1].setYRange(0, 1.5)
     rec_plt[0, 1].getAxis('bottom').setTicks([[(0, '250'), (1, '500'), (2, '1000'), (3, '2000'), (4, '4000')]])
 
@@ -158,7 +161,7 @@ for t, type in enumerate(order):
         titles = ['250ms', '500ms', '1000ms', '2000ms', '4000ms']
         feature_list = (ninth_pulse[250], ninth_pulse[500], ninth_pulse[1000], ninth_pulse[2000], ninth_pulse[4000])
         feature_plt_rec = summary_plot_pulse(feature_list, labels, titles, t, plot=feature_plt_rec,
-                                         color=colors_mouse[t], name=type)
+                                         color=color[t], name=type)
 
     ninth_pulse_250[type] = {}
     ninth_pulse_250[type][250] = ninth_pulse[250]
