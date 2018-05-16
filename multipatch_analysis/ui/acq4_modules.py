@@ -19,6 +19,7 @@ import urllib
 from datetime import datetime
 import time
 import yaml
+import affpyramid
 
 class MultipatchSubmissionModule(Module):
     """Allows multipatch data submission UI to be invoked as an ACQ4 module.
@@ -122,13 +123,15 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         jpg_image_name = os.path.splitext(aff_image_name)[0] + ".jpg"
 
         image_service_url = "http://lims2/cgi-bin/imageservice?path="
-        zoom = 6        #need to check that this ACQ4 can support this size
+        self.zoom = 6        #need to check that this ACQ4 can support this size
 
-        full_url = image_service_url + aff_image_path + "&zoom={}".format(str(zoom))
+        full_url = image_service_url + aff_image_path + "&zoom={}".format(str(self.zoom))
         save_path = os.path.join(self.base_path, jpg_image_name)
         safe_save_path = lims.lims.safe_system_path(save_path)
 
         if os.path.exists(safe_save_path) == False:
+            #shutil.copy2( safe_aff_image_path,safe_save_path)
+
             image = urllib.URLopener()
             image.retrieve(full_url, safe_save_path)
             self.base_dir.indexFile(jpg_image_name)
@@ -190,6 +193,7 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
             raise Exception("Multiple clusters found with same timestamp")
 
         pipette_path = os.path.join(self.site_dh.name(), 'pipettes.yml')
+        print(pipette_path)
 
         if os.path.exists(pipette_path) == False:
             raise Exception("Could not find pipette log")
@@ -207,10 +211,10 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
                 'ephys_cell_id': cell_name,                  
                 'coordinates_20x': 
                 {
-                "x": markers[0].graphicsItem().mapToItem(image.graphicsItem(),pg.Point(*p[:2])).x(), 
-                "y": markers[0].graphicsItem().mapToItem(image.graphicsItem(),pg.Point(*p[:2])).y()
+                "x": markers[0].graphicsItem().mapToItem(image.graphicsItem(),pg.Point(*p[:2])).x()*self.zoom, 
+                "y": markers[0].graphicsItem().mapToItem(image.graphicsItem(),pg.Point(*p[:2])).y()*self.zoom
                 },      
-                'ephys_qc_result': ('pass' if pipette_log[cell_name]['got_data'] == 'true' else 'fail'),                 
+                'ephys_qc_result': ('pass' if pipette_log[cell_name]['got_data'] == True else 'fail'),                 
                 'start_time_sec': time.mktime(pipette_log[cell_name]['patch_start'].timetuple())
             })
         
@@ -219,17 +223,18 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         json_save_file = cluster_name + "_ephys_cell_cluster.json"
 
         incoming_path = lims.get_incoming_dir(self.slice_name)
-        if incoming_path == None:
-            raise Exception("Could not find incoming directory in LIMS")
+        #if incoming_path == None:
+            #raise Exception("Could not find incoming directory in LIMS")
 
-        incoming_path = os.path.sep*2 + os.path.join(*incoming_path.split("/"))
+        #incoming_path = os.path.sep*2 + os.path.join(*incoming_path.split("/"))
         local_json_save_path = os.path.join(parent.name(), json_save_file)
 
         with open(local_json_save_path, 'w') as outfile:  
             json.dump(data, outfile)
 
-        incoming_json_path = os.path.join(incoming_path, json_save_file)
-        
+        #incoming_json_path = os.path.join(incoming_path, json_save_file)
+        incoming_json_path = os.path.join('/allen/programs/celltypes/production/incoming/mousecelltypes', json_save_file)
+        print(incoming_json_path)
         # uncomment line below to copy json to incoming folder
         #shutil.copy2(local_json_save_path, incoming_json_path)
 
@@ -240,6 +245,7 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
             raise Exception("Could not find trigger directory in LIMS")
 
         trigger_path = os.path.sep*2 + os.path.join(*trigger_path.split("/"))
+        print (trigger_path)
         
         # prevents dropping trigger file in incoming folder
         # comment out line below to send trigger file to LIMS
