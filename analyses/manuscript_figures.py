@@ -4,11 +4,15 @@ import numpy as np
 import pyqtgraph as pg
 import seaborn as sns
 import time
+import sys
+import datetime
+import re
 from multipatch_analysis.synaptic_dynamics import DynamicsAnalyzer
 from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.event_detection import exp_deconvolve
 from neuroanalysis.filter import bessel_filter
+from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.spike_detection import detect_ic_evoked_spike
 from scipy import stats
 from multipatch_analysis.constants import EXCITATORY_CRE_TYPES, INHIBITORY_CRE_TYPES
@@ -17,17 +21,22 @@ from statsmodels.stats.multicomp import MultiComparison
 app = pg.mkQApp()
 
 colors_human = [(247, 118, 118),
-                (246, 197, 97), # (211, 143, 198)
+                (246, 197, 97),
                 (100, 202, 103),
                 (107, 155, 250),
                 (162, 62, 247)]
 
-colors_mouse = [(249, 144, 92), #(202, 168, 220)
+colors_mouse = [(249, 144, 92),
                 (100, 202, 103),
                 (81, 221, 209),
                 (45, 77, 247),
-                #(107, 155, 250),
                 (162, 62, 247)]
+
+def arg_to_date(arg):
+    if arg is None:
+        return None
+    parts = re.split('\D+', arg)
+    return datetime.date(*map(int, parts))
 
 def write_cache(cache, cache_file):
     print("writing cache to disk...")
@@ -37,7 +46,21 @@ def write_cache(cache, cache_file):
     os.rename(cache_file + '.new', cache_file)
     print("Done!")
 
-def cache_response(expt, pre, post, cache, type='pulse'):
+def load_cache(cache_file):
+    if os.path.exists(cache_file):
+        try:
+            result_cache = pickle.load(open(cache_file, 'rb'))
+            print ('loaded cache')
+        except:
+            result_cache = {}
+            sys.excepthook(*sys.exc_info())
+            print ('Error loading cache')
+    else:
+        result_cache = {}
+
+    return result_cache
+
+def cache_response(expt, pre, post, cache, analysis_type='pulse'):
         key = (expt.uid, pre, post)
         if key in cache:
             response = cache[key]
@@ -48,7 +71,7 @@ def cache_response(expt, pre, post, cache, type='pulse'):
             cache_change = 0
             return response, cache_change
 
-        response = get_response(expt, pre, post, type=type)
+        response = get_response(expt, pre, post, analysis_type=analysis_type)
         cache[key] = response
         cache_change = 1
         print ("cached connection %s, %d -> %d" % (key[0], key[1], key[2]))
@@ -71,22 +94,11 @@ def format_responses(responses):
                                     stim_param=[responses['stim_param'][trial]]))
     return response
 
-def get_response(expt, pre, post, type='pulse'):
+def get_response(expt, pre, post, analysis_type='pulse'):
     analyzer = DynamicsAnalyzer(expt, pre, post, method='deconv', align_to='spike')
-    if type == 'pulse':
+    if analysis_type == 'pulse':
         response = analyzer.pulse_responses
-        # pulse = 0  # only pull first pulse
-        # response = {'data': [], 'dt': [], 'stim_param': []}
-        # responses = analyzer.pulse_responses
-        # for i,stim_params in enumerate(responses.keys()):
-        #     resp = responses[stim_params]
-        #     for trial in resp:
-        #         r = trial[pulse]['response']
-        #         r.meta['stim_params'] = stim_params
-        #         response['data'].append(r.data)
-        #         response['dt'].append(r.dt)
-        #         response['stim_param'].append(r.meta['stim_params'])
-    elif type == 'train':
+    elif analysis_type == 'train':
         responses = analyzer.train_responses
         pulse_offset = analyzer.pulse_offsets
         response = {'responses': responses, 'pulse_offsets': pulse_offset}
@@ -99,6 +111,13 @@ def get_response(expt, pre, post, type='pulse'):
     return response, artifact
 
 def get_amplitude(response_list):
+    """
+    Parameters
+    ----------
+    response_list : list of neuroanalysis.data.TraceView objects
+        neuroanalysis.data.TraceView object contains waveform data. 
+    """
+    
     if len(response_list) == 1:
         bsub_mean = bsub(response_list[0])
     else:
@@ -126,21 +145,49 @@ def fail_rate(response_list, sign, peak_t):
 
 
 def trace_avg(response_list):
-    for trace in response_list:
-        trace.t0 = 0
-    avg_trace = TraceList(response_list).mean()
-    bsub_mean = bsub(avg_trace)
+# doc string commented out to discourage code reuse given the change of values of t0
+#    """
+#    Parameters
+#    ----------
+#    response_list : list of neuroanalysis.data.TraceView objects
+#        neuroanalysis.data.TraceView object contains waveform data. 
+#        
+#    Returns
+#    -------
+#    bsub_mean : neuroanalysis.data.Trace object
+#        averages and baseline subtracts the ephys waveform data in the 
+#        input response_list TraceView objects and replaces the .t0 value with 0. 
+#    
+#    """
+    for trace in response_list: 
+        trace.t0 = 0  #align traces for the use of TraceList().mean() funtion
+    avg_trace = TraceList(response_list).mean() #returns the average of the wave form in a of a neuroanalysis.data.Trace object 
+    bsub_mean = bsub(avg_trace) #returns a copy of avg_trace but replaces the ephys waveform in .data with the base_line subtracted wave_form
+    
     return bsub_mean
 
 def bsub(trace):
-    data = trace.data
-    dt = trace.dt
-    base = float_mode(data[:int(10e-3 / dt)])
-    bsub_trace = trace.copy(data=data - base)
+    """Returns a copy of the neuroanalysis.data.Trace object 
+    where the ephys data waveform is replaced with a baseline 
+    subtracted ephys data waveform.  
+    
+    Parameters
+    ----------
+    trace : neuroanalysis.data.Trace object  
+        Note: there is also an 
+        
+    Returns
+    -------
+    bsub_trace : neuroanalysis.data.Trace object
+       Ephys data waveform is replaced with a baseline subtracted ephys data waveform
+    """
+    data = trace.data # actual numpy array of time series ephys waveform
+    dt = trace.dt # time step of the data
+    base = float_mode(data[:int(10e-3 / dt)]) # baseline value for trace 
+    bsub_trace = trace.copy(data=data - base) # new neuroanalysis.data.Trace object for baseline subtracted data
     return bsub_trace
 
 def response_filter(response, freq_range=None, holding_range=None, pulse=False, train=None, delta_t=None):
-    #plot = pg.plot()
     new_responses = []
     holding_pass = []
     for stim_params, trials in response.items():
@@ -163,10 +210,7 @@ def response_filter(response, freq_range=None, holding_range=None, pulse=False, 
         else:
             new_responses.append(trials)
 
-        # plot.plot(response[trial].time_values, response[trial].data)
-        # app.processEvents()
-    avg_holding = np.mean(holding_pass)
-    return new_responses, avg_holding
+    return new_responses
 
 def feature_anova(feature, data):
     feature_list = [(key, group[feature])for key, group in data.items()]
@@ -244,10 +288,10 @@ def induction_summary(train_response, freqs, holding, thresh=5, ind_dict=None, o
         offset_dict = {}
     for f, freq in enumerate(freqs):
         induction_traces = {}
-        induction_traces['responses'], _ = response_filter(train_response['responses'], freq_range=[freq, freq],
+        induction_traces['responses'] = response_filter(train_response['responses'], freq_range=[freq, freq],
                                                         holding_range=holding, train=0)
-        induction_traces['pulse_offsets'], _ = response_filter(train_response['pulse_offsets'], freq_range=[freq, freq])
-        ind_rec_traces, _ = response_filter(train_response['responses'], freq_range=[freq, freq], holding_range=holding,
+        induction_traces['pulse_offsets'] = response_filter(train_response['pulse_offsets'], freq_range=[freq, freq])
+        ind_rec_traces = response_filter(train_response['responses'], freq_range=[freq, freq], holding_range=holding,
                                          train=1, delta_t=250)
         if len(induction_traces['responses']) >= thresh and len(ind_rec_traces) >= thresh:
             induction_avg = trace_avg(induction_traces['responses'])
@@ -266,14 +310,14 @@ def recovery_summary(train_response, rec_t, holding, thresh=5, rec_dict=None, of
     if rec_dict is None:
         rec_dict = {}
         offset_dict = {}
-    rec_ind_traces, _ = response_filter(train_response['responses'], freq_range=[50, 50], holding_range=holding, train=0)
+    rec_ind_traces = response_filter(train_response['responses'], freq_range=[50, 50], holding_range=holding, train=0)
     for t, delta in enumerate(rec_t):
         recovery_traces = {}
-        recovery_traces['responses'], _ = response_filter(train_response['responses'], freq_range=[50, 50],
+        recovery_traces['responses'] = response_filter(train_response['responses'], freq_range=[50, 50],
                                                        holding_range=holding, train=1, delta_t=delta)
-        #rec_ind_traces, _ = response_filter(train_response['responses'], freq_range=[50, 50],
+        #rec_ind_traces = response_filter(train_response['responses'], freq_range=[50, 50],
         #                                               holding_range=holding, train=0, delta_t=delta)
-        recovery_traces['pulse_offsets'], _ = response_filter(train_response['pulse_offsets'], freq_range=[50, 50],
+        recovery_traces['pulse_offsets'] = response_filter(train_response['pulse_offsets'], freq_range=[50, 50],
                                                            delta_t=delta)
         if len(recovery_traces['responses']) >= thresh:
             recovery_avg = trace_avg(recovery_traces['responses'])
@@ -289,6 +333,23 @@ def recovery_summary(train_response, rec_t, holding, thresh=5, rec_dict=None, of
     return rec_dict, offset_dict
 
 def pulse_qc(responses, baseline=None, pulse=None, plot=None):
+    """
+    Parameters
+    ----------
+    responses : list of neuroanalysis.data.TraceView objects
+        neuroanalysis.data.TraceView object contains waveform data. 
+    base_line : float
+        Factor by which to multiply the standard deviation of the baseline current.
+    pulse : float
+        Factor by which to multiply the standard deviation of the current during a pulse.
+        Currently not in use.
+    plot : pyqtgraph.PlotItem
+        If not None, plot the data on the referenced pyqtgraph object.
+
+    Returns
+    ----------
+    qc_pass : 
+    """
     qc_pass = []
     avg, amp, _, peak_t = get_amplitude(responses)
     pulse_win = int((peak_t + 1e-3)/avg.dt)
@@ -350,13 +411,129 @@ def subplots(name=None, row=None):
         p5.setTitle('Recovery Amplitudes')
     return p1, p2, p3, p4, p5
 
-def get_color(pre_type, post_type):
-    if pre_type in EXCITATORY_CRE_TYPES and post_type in EXCITATORY_CRE_TYPES:
-        color = (255, 0, 0)
-    elif pre_type in EXCITATORY_CRE_TYPES and post_type in INHIBITORY_CRE_TYPES:
-        color = (255, 140, 0)
-    elif pre_type in INHIBITORY_CRE_TYPES and post_type in EXCITATORY_CRE_TYPES:
-        color = (138, 43, 226)
-    elif pre_type in INHIBITORY_CRE_TYPES and post_type in INHIBITORY_CRE_TYPES:
-        color = (0, 0, 255)
-    return color
+
+def summary_plot_pulse(feature_list, labels, titles, i, median=False, grand_trace=None, plot=None, color=None, name=None):
+    """
+    Plots features of single-pulse responses such as amplitude, latency, etc. for group analysis. Can be used for one
+    group by ideal for comparing across many groups in the feature_list
+
+    Parameters
+    ----------
+    feature_list : list of lists of floats
+        single-pulse features such as amplitude. Can be multiple features each a list themselves
+    labels : list of pyqtgraph.LabelItem
+        axis labels, must be a list of same length as feature_list
+    titles : list of strings
+        plot title, must be a list of same length as feature_list
+    i : integer
+        iterator to place groups along x-axis
+    median : boolean
+        to calculate median (True) vs mean (False), default is False
+    grand_trace : neuroanalysis.data.TraceView object
+        option to plot response trace alongside scatter plot, default is None
+    plot : pyqtgraph.PlotItem
+        If not None, plot the data on the referenced pyqtgraph object.
+    color : tuple
+        plot color
+    name : pyqtgraph.LegendItem
+
+    Returns
+    -------
+    plot : pyqtgraph.PlotItem
+        2 x n plot with scatter plot and optional trace response plot for each feature (n)
+
+    """
+    if type(feature_list) is tuple:
+        n_features = len(feature_list)
+    else:
+        n_features = 1
+    if plot is None:
+        plot = PlotGrid()
+        plot.set_shape(n_features, 2)
+        plot.show()
+        for g in range(n_features):
+            plot[g, 1].addLegend()
+
+    for feature in range(n_features):
+        if n_features > 1:
+            current_feature = feature_list[feature]
+            if median is True:
+                mean = np.nanmedian(current_feature)
+            else:
+                mean = np.nanmean(current_feature)
+            label = labels[feature]
+            title = titles[feature]
+        else:
+            current_feature = feature_list
+            mean = np.nanmean(current_feature)
+            label = labels
+            title = titles
+        plot[feature, 0].setLabels(left=(label[0], label[1]))
+        plot[feature, 0].hideAxis('bottom')
+        plot[feature, 0].setTitle(title)
+        if grand_trace is not None:
+            plot[feature, 1].plot(grand_trace.time_values, grand_trace.data, pen=color, name=name)
+        if len(current_feature) > 1:
+            dx = pg.pseudoScatter(np.array(current_feature).astype(float), 0.7, bidir=True)
+            plot[feature, 0].plot([i], [mean], symbol='o', symbolSize=20, symbolPen='k', symbolBrush=color)
+            sem = stats.sem(current_feature, nan_policy='omit')
+            if len(color) != 3:
+                new_color = pg.glColor(color)
+                color = (new_color[0]*255, new_color[1]*255, new_color[2]*255)
+            plot[feature, 0].plot((0.3 * dx / dx.max()) + i, current_feature, pen=None, symbol='o', symbolSize=10, symbolPen='w',
+                                symbolBrush=(color[0], color[1], color[2], 100))
+        else:
+            plot[feature, 0].plot([i], current_feature, pen=None, symbol='o', symbolSize=10, symbolPen='w',
+                                symbolBrush=color)
+
+    return plot
+
+
+def get_expts(all_expts, cre_type, calcium=None, age=None, start=None, stop=None, dist_plot=None, color=None):
+    """
+    Collect and filter experiments by cre-type, caclium concentration, age, and date-range
+
+    Parameters
+    ----------
+    all_expts : ExperimentList object
+        list of experiments
+    cre_type : string tuple
+        cre-types of pre- and postsynaptic type of interest
+    calcium : string
+        can be 'high' or 'low' to filter for 2.0 mM external Ca++ or 1.3 mM
+    age : string
+        desired age range separated with '-'
+    start : datetime
+        start date of desired experiments
+    stop : datetime
+        stop date of desired experiments
+    dist_plot : pyqtgraph.PlotItem
+        plot to display distance profile of connections
+    color : color tuple
+        color for plot
+
+    Returns
+    -------
+    expts : ExperimentList object
+        list of filtered experiments
+    legend : string
+        string detailing cre-type, age, and calcium
+    dist_plot : pyqtgraph.PlotItem
+        plot of distance profile of connections from expts
+
+    """
+    expts = all_expts.select(cre_type=cre_type, calcium=calcium, age=age, start=start, stop=stop)
+    if calcium is not None:
+        if calcium == 'high':
+            mM = '2.0 mM'
+        elif calcium == 'low':
+            mM = '1.3 mM'
+    else:
+        mM = ''
+    if age is not None:
+        age2 = 'P%s' % age
+    else:
+        age2 = 'All'
+    legend = ("%s->%s, calcium = %s, age = %s" % (cre_type[0], cre_type[1], mM, age2))
+    dist_plot = expts.distance_plot(cre_type[0], cre_type[1], plots=dist_plot, color=color, name=legend)
+    return expts, legend, dist_plot

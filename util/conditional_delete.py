@@ -23,7 +23,7 @@ def conditional_delete(path1, path2):
     return True
 
 
-def conditional_delete_old(path1, path2, min_age=120):
+def conditional_delete_old(path1, path2, min_age=90):
     """Conditionally delete subdirectories from *path1* if they are older than *min_age* (in days) and
     have a valid copy in *path2*.
 

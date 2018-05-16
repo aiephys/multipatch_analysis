@@ -269,8 +269,10 @@ def specimen_metadata(spec_id):
     meta = recs[0]['data']
     if meta == '':
         return None
+
+    if isinstance(meta, basestring):
+        meta = json.loads(meta)  # unserialization corrects for a LIMS bug; we can remove this later.
     return meta
-    #return json.loads(meta)  # unserialization corrects for a LIMS bug; we can remove this later.
 
 
 def specimen_type(spec_id):

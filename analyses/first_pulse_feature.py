@@ -46,7 +46,7 @@ if args['organism'] == 'mouse':
     elif connection == 'ei':
         connection_types = ei_connections.keys()
     elif connection == 'ie':
-        connection_types == ie_connections.keys()
+        connection_types = ie_connections.keys()
     elif connection == 'all':
         connection_types = all_connections.keys()
     elif len(connection.split('-')) == 2:
@@ -95,11 +95,11 @@ synapse_plot.show()
 for c in range(len(connection_types)):
     cre_type = (connection_types[c][0][1], connection_types[c][1][1])
     target_layer = (connection_types[c][0][0], connection_types[c][1][0])
-    type = connection_types[c]
+    conn_type = connection_types[c]
     expt_list = all_expts.select(cre_type=cre_type, target_layer=target_layer, calcium=calcium, age=age)
     color = color_palette[c]
-    grand_response[type[0]] = {'trace': [], 'amp': [], 'latency': [], 'rise': [], 'dist': [], 'decay':[], 'CV': [], 'amp_measured': []}
-    expt_ids[type[0]] = []
+    grand_response[conn_type[0]] = {'trace': [], 'amp': [], 'latency': [], 'rise': [], 'dist': [], 'decay':[], 'CV': [], 'amp_measured': []}
+    expt_ids[conn_type[0]] = []
     synapse_plot[c, 0].addLegend()
     for expt in expt_list:
         for pre, post in expt.connections:
@@ -111,7 +111,7 @@ for c in range(len(connection_types)):
                 pulse_response, artifact = get_response(expt, pre, post, type='pulse')
                 if threshold is not None and artifact > threshold:
                     continue
-                response_subset, hold = response_filter(pulse_response, freq_range=[0, 50], holding_range=holding, pulse=True)
+                response_subset = response_filter(pulse_response, freq_range=[0, 50], holding_range=holding, pulse=True)
                 if len(response_subset) >= sweep_threshold:
                     qc_plot.clear()
                     qc_list = pulse_qc(response_subset, baseline=1.5, pulse=None, plot=qc_plot)
@@ -135,13 +135,13 @@ for c in range(len(connection_types)):
                         plt.plot(avg_trace.time_values, psp_fits.eval(), pen='g')
                         avg_trace.t0 = -(psp_fits.best_values['xoffset'] - 10e-3)
                         distance = expt.cells[pre].distance(expt.cells[post])
-                        grand_response[type[0]]['CV'].append(cv)
+                        grand_response[conn_type[0]]['CV'].append(cv)
                         latency = psp_fits.best_values['xoffset'] - 10e-3
                         rise = psp_fits.best_values['rise_time']
                         decay = psp_fits.best_values['decay_tau']
                         nrmse = psp_fits.nrmse()
                         if nrmse < fit_qc['nrmse']:
-                            grand_response[type[0]]['latency'].append(psp_fits.best_values['xoffset'] - 10e-3)
+                            grand_response[conn_type[0]]['latency'].append(psp_fits.best_values['xoffset'] - 10e-3)
                             max_x = np.argwhere(psp_fits.eval() == max(psp_fits.eval()))[0, 0]
                             min_x = int(psp_fits.best_values['xoffset'] / avg_trace.dt)
                             amp_20 = psp_fits.userkws['x'][np.argwhere(psp_fits.eval()[min_x:max_x] > psp_fits.best_values['amp']*0.2)[0,0]] + 10e-3
@@ -151,23 +151,23 @@ for c in range(len(connection_types)):
                             rise2080 = amp_80-amp_20
                             rise1090 = amp_90-amp_10
                             rise1080 = amp_80-amp_10
-                            grand_response[type[0]]['rise'].append(rise2080)
+                            grand_response[conn_type[0]]['rise'].append(rise2080)
                             manifest['rise2080'].append(rise2080)
                             manifest['rise1090'].append(rise1090)
                             manifest['rise1080'].append(rise1080)
                             manifest['rise'].append(rise)
                         else:
-                            grand_response[type[0]]['latency'].append(np.nan)
-                            grand_response[type[0]]['rise'].append(np.nan)
+                            grand_response[conn_type[0]]['latency'].append(np.nan)
+                            grand_response[conn_type[0]]['rise'].append(np.nan)
                             manifest['rise2080'].append(None)
                             manifest['rise1090'].append(None)
                             manifest['rise1080'].append(None)
                             manifest['rise'].append(rise)
-                        grand_response[type[0]]['trace'].append(avg_trace)
-                        grand_response[type[0]]['amp'].append(psp_fits.best_values['amp'])
-                        grand_response[type[0]]['amp_measured'].append(avg_amp)
-                        grand_response[type[0]]['dist'].append(distance)
-                        expt_ids[type[0]].append((pre, post, expt.uid, expt.source_id))
+                        grand_response[conn_type[0]]['trace'].append(avg_trace)
+                        grand_response[conn_type[0]]['amp'].append(psp_fits.best_values['amp'])
+                        grand_response[conn_type[0]]['amp_measured'].append(avg_amp)
+                        grand_response[conn_type[0]]['dist'].append(distance)
+                        expt_ids[conn_type[0]].append((pre, post, expt.uid, expt.source_id))
 
                         manifest['Type'].append(cre_type)
                         manifest['Connection'].append((expt.uid, pre, post))
@@ -178,10 +178,8 @@ for c in range(len(connection_types)):
                         manifest['decay'].append(psp_fits.best_values['decay_tau'])
 
                         synapse_plot[c, 0].setTitle('First Pulse Response')
-                        if [expt.uid, pre, post] == all_connections[type]:
+                        if [expt.uid, pre, post] == all_connections[conn_type]:
                             trace_color = color + (30,)
-                        elif hold > -65:
-                            trace_color = (255, 0, 255, 30)
                         else:
                             trace_color = (0, 0, 0, 30)
                         trace_plot(avg_trace, trace_color, plot=synapse_plot[c, 0], x_range=[0, 27e-3])
@@ -193,15 +191,14 @@ for c in range(len(connection_types)):
 #                        if amp_sign is '-':
 #                            continue
 #                        psp_fits = fit_psp(avg_trace, sign=amp_sign, yoffset=0, amp=avg_amp, method='leastsq', stacked = False,  fit_kws={})
-#                        grand_response[type[0]]['decay'].append(psp_fits.best_values['decay_tau'])
-    if len(grand_response[type[0]]['trace']) == 0:
+#                        grand_response[conn_type[0]]['decay'].append(psp_fits.best_values['decay_tau'])
+    if len(grand_response[conn_type[0]]['trace']) == 0:
         continue
-    if len(grand_response[type[0]]['trace']) > 1:
-        grand_trace = TraceList(grand_response[type[0]]['trace']).mean()
-        grand_trace.t0 = 0
+    if len(grand_response[conn_type[0]]['trace']) > 1:
+        grand_trace = TraceList(grand_response[conn_type[0]]['trace']).mean()
     else:
-        grand_trace = grand_response[type[0]]['trace'][0]
-    n_synapses = len(grand_response[type[0]]['trace'])
+        grand_trace = grand_response[conn_type[0]]['trace'][0]
+    n_synapses = len(grand_response[conn_type[0]]['trace'])
     trace_plot(grand_trace, color={'color': color, 'width': 2}, plot=synapse_plot[c, 0], x_range=[0, 27e-3],
                name=('%s, n = %d' % (connection_types[c], n_synapses)))
     synapse_plot[c, 0].hideAxis('bottom')
@@ -210,34 +207,34 @@ for c in range(len(connection_types)):
     # synapse_plot[c, 1].plot(x, y, stepMode=True, fillLevel=0, brush='k')
     # synapse_plot[c, 1].setLabels(bottom=('Vm', 'V'))
     # synapse_plot[c, 1].setXRange(0, 2e-3)
-    print ('%s kinetics n = %d' % (type[0], len(grand_response[type[0]]['latency'])))
-    feature_list = (grand_response[type[0]]['amp'], grand_response[type[0]]['CV'], grand_response[type[0]]['latency'],
-                    grand_response[type[0]]['rise'])
+    print ('%s kinetics n = %d' % (conn_type[0], len(grand_response[conn_type[0]]['latency'])))
+    feature_list = (grand_response[conn_type[0]]['amp'], grand_response[conn_type[0]]['CV'], grand_response[conn_type[0]]['latency'],
+                    grand_response[conn_type[0]]['rise'])
     labels = (['Vm', 'V'], ['CV', ''], ['t', 's'], ['t', 's'])
     feature_plot = summary_plot_pulse(feature_list, labels, ('Amplitude', 'CV', 'Latency', 'Rise time'), c,
                                       median=True, grand_trace=grand_trace, plot=feature_plot, color=color, name=connection_types[c])
-    # feature2_plot[0, 0].plot(grand_response[type[0]]['dist'], grand_response[type[0]]['amp'], pen=None, symbol='o',
+    # feature2_plot[0, 0].plot(grand_response[conn_type[0]]['dist'], grand_response[conn_type[0]]['amp'], pen=None, symbol='o',
     #                          symbolSize=8, symbolBrush=color, symbolPeb='w')
     # feature2_plot[0, 0].setLabels(left=['mV', 'V'], bottom=['distance', 'm'])
-    # feature2_plot[1, 0].plot(grand_response[type[0]]['dist'], grand_response[type[0]]['latency'], pen=None, symbol='o',
+    # feature2_plot[1, 0].plot(grand_response[conn_type[0]]['dist'], grand_response[conn_type[0]]['latency'], pen=None, symbol='o',
     #                          symbolSize=8, symbolBrush=color, symbolPeb='w')
     # feature2_plot[1, 0].setLabels(left=['ms', 's'], bottom=['distance', 'm'])
-    # feature2_plot[2, 0].plot(grand_response[type[0]]['dist'], grand_response[type[0]]['rise'], pen=None, symbol='o',
+    # feature2_plot[2, 0].plot(grand_response[conn_type[0]]['dist'], grand_response[conn_type[0]]['rise'], pen=None, symbol='o',
     #                          symbolSize=8, symbolBrush=color, symbolPeb='w')
     # feature2_plot[2, 0].setLabels(left=['ms', 's'], bottom=['distance', 'm'])
-    # feature2_plot[3, 0].plot(grand_response[type[0]]['rise'], grand_response[type[0]]['amp'], pen=None, symbol='o',
+    # feature2_plot[3, 0].plot(grand_response[conn_type[0]]['rise'], grand_response[conn_type[0]]['amp'], pen=None, symbol='o',
     #                          symbolSize=8, symbolBrush=color, symbolPeb='w')
     # feature2_plot[3, 0].setLabels(left=['amplitude', 'V'], bottom=['rise time', 's'])
-    feature3_plot[0, 0].plot(grand_response[type[0]]['latency'], grand_response[type[0]]['amp'], pen=None, symbol='o',
+    feature3_plot[0, 0].plot(grand_response[conn_type[0]]['latency'], grand_response[conn_type[0]]['amp'], pen=None, symbol='o',
                              symbolSize=8, symbolBrush=color, symbolPen='w')
     feature3_plot[0, 0].setLabels(left=['Amp', 'V'], bottom=['Latency', 's'])
-    feature3_plot[0, 1].plot(grand_response[type[0]]['CV'], grand_response[type[0]]['amp'], pen=None, symbol='o',
+    feature3_plot[0, 1].plot(grand_response[conn_type[0]]['CV'], grand_response[conn_type[0]]['amp'], pen=None, symbol='o',
                              symbolSize=8, symbolBrush=color, symbolPen='w')
     feature3_plot[0, 1].setLabels(left=['Amp', 'V'], bottom=['CV', ''])
-    feature3_plot[0, 2].plot(grand_response[type[0]]['CV'], grand_response[type[0]]['latency'], pen=None, symbol='o',
+    feature3_plot[0, 2].plot(grand_response[conn_type[0]]['CV'], grand_response[conn_type[0]]['latency'], pen=None, symbol='o',
                              symbolSize=8, symbolBrush=color, symbolPen='w')
     feature3_plot[0, 2].setLabels(left=['Latency', 's'], bottom=['CV', ''])
-    amp_plot.plot(grand_response[type[0]]['amp'], grand_response[type[0]]['amp_measured'], pen=None, symbol='o',
+    amp_plot.plot(grand_response[conn_type[0]]['amp'], grand_response[conn_type[0]]['amp_measured'], pen=None, symbol='o',
                  symbolSize=10, symbolBrush=color, symbolPen='w')
     amp_plot.setLabels(left=['Measured Amp', 'V'], bottom=['Fit Amp','V'])
     if c == len(connection_types) - 1:
