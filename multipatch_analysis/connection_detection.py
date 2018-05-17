@@ -511,13 +511,14 @@ def process_fit_inputs():
 def fit_psp_corinne(response, 
                     mode='ic', 
                     sign='any', 
-                    xoffset=14e-3, 
-                    yoffset=(0, 'fixed'),
+                    xoffset='default', 
+                    yoffset='default',
                     mask_stim_artifact=True, 
                     method='leastsq', 
                     fit_kws=None, 
                     stacked=True,
-                    rise_power='defalt',
+                    decay_tau='default',
+                    rise_power='default',
                     rise_time='default',
                     amp_ratio='default',
                     exp_amp='default',
@@ -617,16 +618,17 @@ def fit_psp_corinne(response,
 #        weight[i1:i2] = 0
 
     # set initial conditions depending on whether in voltage or current clamp
+
     if mode == 'ic':
         amp = .2e-3
         amp_max = 100e-3
-        rise_time = 5e-3
-        decay_tau = 50e-3
+        rise_time_init = 5e-3
+        decay_tau_init = 50e-3
     elif mode == 'vc':
         amp = 20e-12
         amp_max = 500e-12
-        rise_time = 1e-3
-        decay_tau = 4e-3
+        rise_time_init = 1e-3
+        decay_tau_init = 4e-3
     else:
         raise ValueError('mode must be "ic" or "vc"')
 
@@ -652,12 +654,11 @@ def fit_psp_corinne(response,
     # initial condition, lower boundry, upper boundry    
     # why not move the things in function call with defaults down here and use kwargs
     base_params = {
-        #TODO: what are these
         #TODO: do I need to make xoffset consistent the others by adding boundries?
-        'xoffset': (xoffset, -float('inf'), float('inf')),
-        'yoffset': (yoffset, -float('inf'), float('inf')),
-        'rise_time': (rise_time, rise_time/rise_time_mult_factor, rise_time*rise_time_mult_factor),
-        'decay_tau': (decay_tau, decay_tau/10., decay_tau*10.),
+        'xoffset': (14e-3, -float('inf'), float('inf')),
+        'yoffset': (0.0, -float('inf'), float('inf')),
+        'rise_time': (rise_time_init, rise_time_init/rise_time_mult_factor, rise_time_init*rise_time_mult_factor),
+        'decay_tau': (decay_tau_init, decay_tau_init/10., decay_tau_init*10.),
         'rise_power': (2, 'fixed')
     }
     
@@ -667,9 +668,9 @@ def fit_psp_corinne(response,
             'exp_amp': 'amp * amp_ratio',# -float('inf'), float('inf')),
             'amp_ratio': (0, -100, 100),
         })  
-#    for bp in base_params.keys():
-#        if eval(bp)!='defalt':
-#            base_params[bp]=eval(bp)
+    for bp in base_params.keys():
+        if eval(bp)!='default':
+            base_params[bp]=eval(bp)
 
     #TODO: decay tau is more complicated because there are different defaults
     # if decay_tau is specified in arguments, set it here and assign

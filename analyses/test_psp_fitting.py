@@ -19,8 +19,8 @@ for file in sorted(test_data_files):
 #    avg_trace=neuroanalysis.data.Trace(data=np.array(test_dict['input']['data'])) # create Trace object
     psp_fits = fit_psp_corinne(avg_trace, 
                        sign=test_dict['input']['amp_sign'], 
-                       yoffset=test_dict['input']['yoffset'], 
-                       xoffset=test_dict['input']['xoffset'], 
+#                       yoffset=test_dict['input']['yoffset'], 
+#                       xoffset='test_dict['input']['xoffset']', 
                        amp=test_dict['input']['avg_amp'],
                        method=test_dict['input']['method'], 
                        stacked=test_dict['input']['stacked'], 
