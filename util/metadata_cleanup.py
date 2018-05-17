@@ -206,8 +206,13 @@ def rig_check(dh, set_data=False):
             print_msg = ("\tSet Rig: %s" % config.rig_name)
             return print_msg
     if rig != config.rig_name:
-        print_msg = ("\tRig mismatch: %s != %s" % (rig, config.rig_name))
-        return print_msg
+        if set_data is True:
+            print_msg = ("\t Rig name mismatch, overrode and set to %s from %s" % (config.rig_name, rig))
+            dh.setInfo(rig_name=config.rig_name)
+            return print_msg
+        else:
+            print_msg = ("\tRig mismatch: %s != %s" % (rig, config.rig_name))
+            return print_msg
     return None
 
 
