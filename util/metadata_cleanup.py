@@ -81,6 +81,7 @@ def dissection_check(dh, sub_id, expt_date, columns, set_data=False):
     if time[-2:] in ('AM', 'PM'):
         dis_time = datetime.datetime.strptime(date + ' ' + time, '%m/%d/%Y %I:%M %p')
     else:
+        if date.endswith( 'N/A'): date = date[:-4]
         dis_time = datetime.datetime.strptime(date + ' ' + time, '%m/%d/%Y %I:%M')
         if dis_time < sac_time:
             dis_time = dis_time + datetime.timedelta(seconds=12 * 3600)
