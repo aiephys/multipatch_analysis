@@ -7,7 +7,7 @@ import json
 import neuroanalysis.data
 from multipatch_analysis.connection_detection import fit_psp_corinne
 
-plotting=True # specifies whether to make plots of fitting results
+plotting=False # specifies whether to make plots of fitting results
 
 test_data_dir='test_psp_fit' # directory containing test data
 
@@ -51,11 +51,12 @@ for file in sorted(test_data_files):
         fig=mplt.figure(figsize=(20,8))
         ax=fig.add_subplot(1,1,1)
         ax2=ax.twinx()
-        ax.plot(avg_trace.time_values, psp_fits.data*1.e3, 'b')
-        ax.plot(avg_trace.time_values, psp_fits.best_fit*1.e3, 'g', lw=5)
-        ax2.plot(avg_trace.time_values, test_dict['input']['weight'], 'r')
+        ax.plot(avg_trace.time_values, psp_fits.data*1.e3, 'b', label='data')
+        ax.plot(avg_trace.time_values, psp_fits.best_fit*1.e3, 'g', lw=5, label='current best fit')
+        ax2.plot(avg_trace.time_values, test_dict['input']['weight'], 'r', label='weighting')
         if change_flag is True:
-            ax.plot(avg_trace.time_values, np.array(test_dict['out']['best_fit'])*1.e3, 'k--', lw=5)
+            ax.plot(avg_trace.time_values, np.array(test_dict['out']['best_fit'])*1.e3, 'k--', lw=5, label='original best fit')
             mplt.annotate('CHANGE', xy=(.5, .5), xycoords='figure fraction', fontsize=40)
+        ax.legend()
         mplt.title(file + ', nrmse =' + str(psp_fits.nrmse()))
         mplt.show()

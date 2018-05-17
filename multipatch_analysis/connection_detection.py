@@ -499,20 +499,33 @@ class EvokedResponseGroup(object):
         if response is None:
             return None
         return fit_psp(response, **kwds)
+    
+default_fit_dictionary={'xoffset':{'bounds':(0, 1e8), 'init_conditions':(14e-3, 'fixed') }}
+
+def process_fit_inputs():
+    """takes inputs provided for the fitting parameters and processes them
+    """
+    fit_params=[xoffset]#, yoffset, rise_time, decay_tau, amp, rise_power]
+#    for parameter in parameter  : 
 
 def fit_psp_corinne(response, 
                     mode='ic', 
                     sign='any', 
-                    xoffset=(11e-3, 10e-3, 15e-3), 
+                    xoffset=14e-3, 
                     yoffset=(0, 'fixed'),
                     mask_stim_artifact=True, 
                     method='leastsq', 
                     fit_kws=None, 
                     stacked=True,
+                    rise_power='defalt',
+                    rise_time='default',
+                    amp_ratio='default',
+                    exp_amp='default',
                     rise_time_mult_factor=2.,
                     weight=True, 
+#                    [xoffset, yoffset, rise_time, decay_tau, amp, rise_power]
                     **kwds):
-    """Fit psp.
+    """Fit psp. function to the equation 
     
     This function make assumptions about where the cross talk happens as traces 
     have been aligned to the pulses and response.t0 has been set to zero 
@@ -535,18 +548,39 @@ def fit_psp_corinne(response,
     kwds: optional key word arguments
     weights: True, False, or array like
     
+    Boundry conditions and initial conditions can affect how well a function 
+    For all parameters that are fit a boundries and initial condition values 
+    can be specified.  
     
+    parameters that get fed to the psp function
+    xoffset : scalar
+        Horizontal shift (positive shifts to the right)
+    yoffset : scalar
+        Vertical offset
+    rise_time : scalar
+        Time from beginning of psp until peak
+    decay_tau : scalar
+        Decay time constant
+    amp : scalar
+        The peak value of the psp
+    rise_power : scalar
+        Exponent for the rising phase; larger values result in a slower activation
+    
+    x, xoffset, yoffset, rise_time, decay_tau, amp, rise_power
+    , rise_power, decay_tau, 
+    rise_time, rise_tau, decay_tau, rise_power
     parameters to be fit should be specified the same
         
+    where does the range get set    
     """       
+    #In all cases I think there should be default boundries and also a default range of initial conditions
+    
     
     # extracting these so don't pass classes to function
     t=response.time_values
     y=response.data
     dt = response.dt
     
-#    if fit_kws is None:
-#        fit_kws = {'xtol': 1e-4, 'maxfev': 300, 'nan_policy': 'omit'}
        
     if weight is True: #use default weighting
         # THIS CODE IS DEPENDENT ON THE DATA BEING INPUT IN A CERTAIN WAY THAT IS NOT TESTED
@@ -558,7 +592,8 @@ def fit_psp_corinne(response,
     elif weight:  #works if there is a value specified in weight
         if len(weight) != len(y):
             raise Exception('the weight and array vectors are not the same length')
-
+    
+    
             
 #    if 'weights' not in fit_kws:
 #        fit_kws['weights'] = weight
@@ -610,6 +645,8 @@ def fit_psp_corinne(response,
         psp = StackedPsp()
     else:
         psp = Psp()
+        
+    
 
 #---------I don't understand this whole chunk of code----------------    
     # initial condition, lower boundry, upper boundry    
@@ -617,35 +654,31 @@ def fit_psp_corinne(response,
     base_params = {
         #TODO: what are these
         #TODO: do I need to make xoffset consistent the others by adding boundries?
-        'xoffset': xoffset,
-        'yoffset': yoffset,
+        'xoffset': (xoffset, -float('inf'), float('inf')),
+        'yoffset': (yoffset, -float('inf'), float('inf')),
         'rise_time': (rise_time, rise_time/rise_time_mult_factor, rise_time*rise_time_mult_factor),
         'decay_tau': (decay_tau, decay_tau/10., decay_tau*10.),
-        'rise_power': (2, 'fixed'),
+        'rise_power': (2, 'fixed')
     }
     
     if stacked:
         base_params.update({
-            #TODO: what are these
-            'exp_amp': 'amp * amp_ratio',
+            #TODO: figure out the bounds on these
+            'exp_amp': 'amp * amp_ratio',# -float('inf'), float('inf')),
             'amp_ratio': (0, -100, 100),
         })  
-    # Why isnt code below place above where base_params are initialized
-    # if rise_time is specified in arguments, set it here and assign
-    # boundry conditions if not specified    
-    if 'rise_time' in kwds:
-        rt = kwds.pop('rise_time')
-        if not isinstance(rt, tuple):
-            rt = (rt, rt/2., rt*2.)
-        base_params['rise_time'] = rt
-    
+#    for bp in base_params.keys():
+#        if eval(bp)!='defalt':
+#            base_params[bp]=eval(bp)
+
+    #TODO: decay tau is more complicated because there are different defaults
     # if decay_tau is specified in arguments, set it here and assign
     # boundry conditions if not specified                    
-    if 'decay_tau' in kwds:
-        dt = kwds.pop('decay_tau')
-        if not isinstance(dt, tuple):
-            dt = (dt, dt/2., dt*2.)
-        base_params['decay_tau'] = dt
+#    if 'decay_tau' in kwds:
+#        dt = kwds.pop('decay_tau')
+#        if not isinstance(dt, tuple):
+#            dt = (dt, dt/2., dt*2.)
+#        base_params['decay_tau'] = dt
     
     #TODO: should this be before?            
     base_params.update(kwds)
