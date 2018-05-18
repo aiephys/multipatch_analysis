@@ -1,4 +1,4 @@
-import sys
+import sys, user
 import multipatch_analysis.database.database as db
 from multipatch_analysis.config import synphys_db
 

@@ -48,5 +48,5 @@ class SynPhysCache(object):
         if not os.path.isdir(path):
             root, _ = os.path.split(path)
             if root != '':
-                self.mkdir(root)
+                self._mkdir(root)
             os.mkdir(path)
