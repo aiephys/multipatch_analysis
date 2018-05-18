@@ -21,11 +21,12 @@ for file in sorted(test_data_files):
                        sign=test_dict['input']['amp_sign'], 
 #                       yoffset=test_dict['input']['yoffset'], 
 #                       xoffset='test_dict['input']['xoffset']', 
-                       amp=test_dict['input']['avg_amp'],
-                       method=test_dict['input']['method'], 
-                       stacked=test_dict['input']['stacked'], 
-                       rise_time_mult_factor=test_dict['input']['rise_time_mult_factor'], 
-                       weight=test_dict['input']['weight'])                        
+#                       amp=test_dict['input']['avg_amp'],# as far as I can tell this was never getting input to the function
+#                       method=test_dict['input']['method'], 
+                       stacked=test_dict['input']['stacked'] 
+#                       rise_time_mult_factor=test_dict['input']['rise_time_mult_factor'] 
+#                       weight=test_dict['input']['weight']
+                        )                        
     
     change_flag=False
     if test_dict['out']['best_values']!=psp_fits.best_values:     
