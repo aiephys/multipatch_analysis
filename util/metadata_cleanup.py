@@ -28,6 +28,8 @@ def solution_check(dh, expt_date, columns, set_data=False):
     solution = dh.info().get('solution', None)
     osm = dh.info().get('solution_osm', None)
     date = expt_date.strftime('%#m/%#d/%Y')
+    if expt_date < datetime.date(2016, 10, 18):
+        return None
     try:
         osm_entry = osm_dates[date]
     except KeyError:
@@ -68,6 +70,8 @@ def dissection_check(dh, sub_id, expt_date, columns, set_data=False):
     if sub_id is None:
         print_msg = ("\tNo animal_ID for %s" % dh.path)
         return print_msg
+    if sub_id.startswith('H'):
+        return None
     dis_rec = diss_times.get(sub_id, None)
     if dis_rec is None:
         print_msg = ("\tNo tissue processing record")
