@@ -324,7 +324,7 @@ def create_all_mappings():
         
         @property
         def cells(self):
-            return {elec.cell.ext_id: elec.cell for elec in self.electrodes}
+            return {elec.cell.ext_id: elec.cell for elec in self.electrodes if elec.cell is not None}
 
         @property
         def pairs(self):
