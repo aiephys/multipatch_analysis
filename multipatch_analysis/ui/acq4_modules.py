@@ -212,12 +212,14 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         for cell in pipettes:
             cell_name = int(cell[0].split('_')[-1])
             p = cell[1]
+            x_float = markers[0].graphicsItem().mapToItem(image.graphicsItem(),pg.Point(*p[:2])).x()
+            y_float = markers[0].graphicsItem().mapToItem(image.graphicsItem(),pg.Point(*p[:2])).y()
             data['cells'].append({      
                 'ephys_cell_id': cell_name,                  
                 'coordinates_20x': 
                 {
-                "x": markers[0].graphicsItem().mapToItem(image.graphicsItem(),pg.Point(*p[:2])).x(), 
-                "y": markers[0].graphicsItem().mapToItem(image.graphicsItem(),pg.Point(*p[:2])).y()
+                "x": int(round(x_float)),   # round the float and change to integer for technology requirements
+                "y": int(round(y_float))    # round the float and change to integer for technology requirements
                 },      
                 'ephys_qc_result': ('pass' if pipette_log[cell_name]['got_data'] == True else 'fail'),                 
                 'start_time_sec': time.mktime(pipette_log[cell_name]['patch_start'].timetuple())
@@ -299,7 +301,7 @@ class AffPyramidCanvasItem(CanvasItem):
         opts.update(kwds)
         if opts.get('name') is None:
             opts['name'] = handle.shortName()
-        opts['defaultUserTransform'] = {'scale': (1e-6, 1e-6)}            
+        opts['defaultUserTransform'] = {'scale': (0.36e-6, 0.36e-6)}            
         CanvasItem.__init__(self, self.affitem, **opts)
 
     @classmethod
