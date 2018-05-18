@@ -178,6 +178,7 @@ class Dashboard(QtGui.QWidget):
         print("primary path:", expt.primary_path)
         print("archive path:", expt.archive_path)
         print(" backup path:", expt.backup_path)
+        print("biocytin URL:", expt.biocytin_image_url)
         err = rec['error']
         if err is not None:
             print("Error checking experiment:")
@@ -447,6 +448,9 @@ class ExptCheckerThread(QtCore.QThread):
                     else:
                         lims = len(subs) == 1
                     rec['LIMS'] = lims
+
+                    image = expt.biocytin_image_url
+                    rec['20x'] = image is not None
         
         except Exception as exc:
             rec['error'] = sys.exc_info()
