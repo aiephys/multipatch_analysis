@@ -212,6 +212,7 @@ class Dashboard(QtGui.QWidget):
             item.index = index
 
         record = self.records[index]
+        self.records_by_expt[expt] = index
 
         # update item/record fields
         update_filter = False
@@ -343,8 +344,6 @@ class PollThread(QtCore.QThread):
             break
                 
     def poll(self):
-        expts = {}
-
         # Find all available site paths across all data sources
         count = 0
         path = self.search_path
