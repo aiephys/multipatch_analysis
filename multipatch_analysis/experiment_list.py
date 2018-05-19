@@ -61,7 +61,7 @@ def indentation(line):
 class ExperimentList(object):
 
     def __init__(self, expts=None, cache=None):
-        self._cache_version = 8
+        self._cache_version = 9
         self._cache = cache
         self._expts = []
         self._expts_by_datetime = {}
@@ -85,6 +85,9 @@ class ExperimentList(object):
 
         # Load all pipettes.yml files found on server
         yamls = glob.glob(os.path.join(config.synphys_data, '*', 'slice_*', 'site_*', 'pipettes.yml'))
+        if len(yamls) == 0:
+            print("No experiments found at %s" % config.synphys_data)
+
         for i,yml_file in enumerate(yamls):
             # if i>15:
                 # break
