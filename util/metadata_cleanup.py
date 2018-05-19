@@ -28,6 +28,8 @@ def solution_check(dh, expt_date, columns, set_data=False):
     solution = dh.info().get('solution', None)
     osm = dh.info().get('solution_osm', None)
     date = expt_date.strftime('%#m/%#d/%Y')
+    if expt_date < datetime.date(2016, 10, 18):
+        return None
     try:
         osm_entry = osm_dates[date]
     except KeyError:
@@ -39,6 +41,7 @@ def solution_check(dh, expt_date, columns, set_data=False):
     if solution is None:
         if set_data is True:
             dh.setInfo(solution=recipe)
+            return None
         else:
             print_msg = ("\tSet aCSF: %s" % recipe)
             return print_msg
@@ -52,6 +55,7 @@ def solution_check(dh, expt_date, columns, set_data=False):
     if osm is None:
         if set_data is True:
             dh.setInfo(solution_osm=sheet_osm)
+            return None
         else:
             print_msg += ("\tSet osmolarity: %s" % sheet_osm)
             return print_msg
@@ -66,6 +70,8 @@ def dissection_check(dh, sub_id, expt_date, columns, set_data=False):
     if sub_id is None:
         print_msg = ("\tNo animal_ID for %s" % dh.path)
         return print_msg
+    if sub_id.startswith('H'):
+        return None
     dis_rec = diss_times.get(sub_id, None)
     if dis_rec is None:
         print_msg = ("\tNo tissue processing record")
@@ -105,6 +111,7 @@ def dissection_check(dh, sub_id, expt_date, columns, set_data=False):
     if dis_time_2 == '':
         if set_data is True:
             dh.setInfo(time_of_dissection=dis_time_1)
+            return None
         else:
             print_msg = ("\tSet dissection time: %s" % dis_time_1)
             return print_msg
@@ -124,18 +131,21 @@ def project_check(dh, sub_id, expt_date, species, set_data=False):
         if species.lower() == 'human':
             if set_data is True:
                 dh.setInfo(project='human coarse matrix')
+                return None
             else:
                 print_msg = ("\tSet Project Code: human coarse matrix")
                 return print_msg
         if expt_date < mouse_prod:
             if set_data is True:
                 dh.setInfo(project='mouse V1 pre-production')
+                return None
             else:
                 print_msg = ("\tSet Project Code: mouse V1 pre-production")
                 return print_msg
         else:
             if set_data is True:
                 dh.setInfo(project='mouse V1 coarse matrix')
+                return None
             else:
                 print_msg = ("\tSet Project Code: mouse V1 coarse matrix")
                 return print_msg
@@ -150,6 +160,7 @@ def region_check(dh, species, set_data=False):
         if region is None:
             if set_data is True:
                 dh.setInfo(target_region='V1')
+                return None
             else:
                 print_msg = ("\tSet target region: V1")
                 return print_msg
@@ -166,6 +177,7 @@ def internal_check(dh, set_data=False):
     if internal in (None, ''):
         if set_data is True:
             dh.setInfo(internal='Standard K-Gluc')
+            return None
         else:
             print_msg = ("\tSet Internal: Standard K-Gluc")
             return print_msg
@@ -179,6 +191,7 @@ def dye_check(dh, species, genotype, set_data=False):
     if internal_dye in(None, '') and species.lower() == 'human':
         if set_data is True:
             dh.setInfo(internal_dye='AF488')
+            return None
         else:
             print_msg = ("\tSet internal dye: AF488")
             return print_msg
@@ -186,11 +199,13 @@ def dye_check(dh, species, genotype, set_data=False):
         if len(genotype.split(';')) < 3:
             if set_data is True:
                 dh.setInfo(internal_dye='AF488')
+                return None
             else:
                 print_msg = ("\tSet internal dye: AF488, %s looks likes single transgenic" % genotype)
         elif len(genotype.split(';')) >= 3:
             if set_data is True:
                 dh.setInfo(internal_dye='Cascade Blue')
+                return None
             else:
                 print_msg = ("\tSet internal dye: Cascade Blue, %s looks liked quad" % genotype)
         else:
@@ -203,6 +218,7 @@ def rig_check(dh, set_data=False):
     if rig in (None, ''):
         if set_data is True:
             dh.setInfo(rig_name=config.rig_name)
+            return None
         else:
             print_msg = ("\tSet Rig: %s" % config.rig_name)
             return print_msg
