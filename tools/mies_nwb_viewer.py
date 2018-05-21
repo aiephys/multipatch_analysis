@@ -35,6 +35,7 @@ if __name__ == '__main__':
     nwb = None
     def load_nwb(filename):
         global nwb
+        print("Loading %s" % filename)
         nwb = v.load_nwb(filename)
         console.localNamespace['nwb'] = nwb
 
@@ -68,8 +69,15 @@ if __name__ == '__main__':
     # load file or set base directory from argv
     for arg in sys.argv[1:]:
         if not os.path.exists(arg):
-            print "Could not find %s" % arg
-            sys.exit(-1)
+            from multipatch_analysis.experiment_list import cached_experiments
+            expts = cached_experiments()
+            try:
+                expt = expts[arg]
+            except Exception:
+                print "Could not find experiment %s" % arg
+                sys.exit(-1)
+            arg = expt.nwb_file
+
         if os.path.isdir(arg):
             m.setBaseDir(arg)
         elif os.path.isfile(arg):

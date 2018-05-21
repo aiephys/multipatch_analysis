@@ -324,7 +324,7 @@ def create_all_mappings():
         
         @property
         def cells(self):
-            return {elec.cell.ext_id: elec.cell for elec in self.electrodes}
+            return {elec.cell.ext_id: elec.cell for elec in self.electrodes if elec.cell is not None}
 
         @property
         def pairs(self):
@@ -434,7 +434,7 @@ def create_all_mappings():
 
 #-------------- initial DB access ----------------
 
-engine = create_engine(config.synphys_db_host + '/' + config.synphys_db)
+engine = create_engine(config.synphys_db_host + '/' + config.synphys_db, pool_size=10, max_overflow=40)
 # external users should create sessions from here.
 Session = sessionmaker(bind=engine)
 

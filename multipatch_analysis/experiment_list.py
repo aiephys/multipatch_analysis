@@ -61,7 +61,7 @@ def indentation(line):
 class ExperimentList(object):
 
     def __init__(self, expts=None, cache=None):
-        self._cache_version = 8
+        self._cache_version = 9
         self._cache = cache
         self._expts = []
         self._expts_by_datetime = {}
@@ -85,6 +85,9 @@ class ExperimentList(object):
 
         # Load all pipettes.yml files found on server
         yamls = glob.glob(os.path.join(config.synphys_data, '*', 'slice_*', 'site_*', 'pipettes.yml'))
+        if len(yamls) == 0:
+            print("No experiments found at %s" % config.synphys_data)
+
         for i,yml_file in enumerate(yamls):
             # if i>15:
                 # break
@@ -329,9 +332,10 @@ class ExperimentList(object):
             name = ("%s->%s "%(','.join(pre_strs), ','.join(post_strs)))
         return distance_plot(connected, distance=probed, plots=plots, color=color, name=name, window=40e-6, spacing=40e-6)
 
-    def matrix(self, rows, cols, size=50, header_color='k', no_data_color=0.9, mode='connectivity'):
+    def matrix(self, rows, cols, size=50, header_color='k', no_data_color=0.9, mode='connectivity', title='Connectivity Matrix'):
         w = pg.GraphicsLayoutWidget()
         w.setRenderHints(w.renderHints() | pg.QtGui.QPainter.Antialiasing)
+        w.setWindowTitle(title)
         v = w.addViewBox()
         v.setBackgroundColor('w')
         v.setAspectLocked()

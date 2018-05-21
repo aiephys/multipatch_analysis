@@ -236,7 +236,7 @@ def specimen_metadata(spec_id):
     meta = recs[0]['data']
     if meta == '':
         return None
-    if isinstance(meta, str):
+    if isinstance(meta, basestring):
         meta = json.loads(meta)  # unserialization corrects for a LIMS bug; we can remove this later.
     return meta
 

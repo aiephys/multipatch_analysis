@@ -37,16 +37,16 @@ class SynPhysCache(object):
         path, _ = os.path.split(rel_filename)
         
         local_path = os.path.join(self.local_path, path)
-        self.mkdir(local_path)
+        self._mkdir(local_path)
         
         local_filename = os.path.join(self.local_path, rel_filename)
         
         sync_file(filename, local_filename)
         return local_filename
         
-    def mkdir(self, path):
+    def _mkdir(self, path):
         if not os.path.isdir(path):
             root, _ = os.path.split(path)
             if root != '':
-                self.mkdir(root)
+                self._mkdir(root)
             os.mkdir(path)

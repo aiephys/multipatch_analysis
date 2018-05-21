@@ -1,8 +1,11 @@
 from acq4.pyqtgraph.Qt import QtCore, QtGui
 from acq4.modules.Module import Module
 from acq4.Manager import getManager
+from acq4.util.Canvas.items.CanvasItem import CanvasItem
+from acq4.util.Canvas.items import registerItemType
 from . import submit_expt
 from . import multipatch_nwb_viewer
+from . import dashboard
 
 
 class MultipatchSubmissionModule(Module):
@@ -56,3 +59,45 @@ class NWBViewerModule(Module):
         
     def window(self):
         return self.ui
+
+
+class DashboardModule(Module):
+    """ACQ module for monitoring pipeline status
+    """
+    moduleDisplayName = "MP Dashboard"
+    moduleCategory = "Analysis"
+
+    def __init__(self, manager, name, config):
+        Module.__init__(self, manager, name, config)
+        self.ui = dashboard.Dashboard(limit=config.get('limit', None), filter_defaults=config.get('filters', None))
+        self.ui.resize(1600, 900)
+        self.ui.show()
+        
+    def window(self):
+        return self.ui
+
+
+class AffPyramidCanvasItem(CanvasItem):
+    """For displaying AFF image pyramids
+    """
+    _typeName = "AFF Image Pyramid"
+    
+    def __init__(self, handle, **kwds):
+        from affpyramid.ui import AffImageItem
+        kwds.pop('viewRect', None)
+        self.affitem = AffImageItem(handle.name())
+        opts = {'movable': True, 'rotatable': True, 'handle': handle}
+        opts.update(kwds)
+        if opts.get('name') is None:
+            opts['name'] = handle.shortName()            
+        CanvasItem.__init__(self, self.affitem, **opts)
+
+    @classmethod
+    def checkFile(cls, fh):
+        name = fh.shortName()
+        if name.endswith('.aff'):
+            return 10
+        else:
+            return 0
+
+registerItemType(AffPyramidCanvasItem)
