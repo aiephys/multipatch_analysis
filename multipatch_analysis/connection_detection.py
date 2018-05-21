@@ -500,14 +500,30 @@ class EvokedResponseGroup(object):
             return None
         return fit_psp(response, **kwds)
     
+def test_create_all_fit_param_combos():
+    input={'decay_tau': (0.05, 0.005, 0.5), 
+           'rise_time': (0.005, 0.0005, 0.05), 
+           'yoffset': (0, -float('inf'), float('inf')), 
+           'rise_power': ([1, 2], 'fixed'), 
+           'amp': (0.0002, 0, 0.1), 
+           'xoffset': ([0.011, 0.014, 0.015], -float('inf'), float('inf'))}
+    output=[{'decay_tau': (0.05, 0.005, 0.5), 'rise_time': (0.005, 0.0005, 0.05), 'yoffset': (0, -float('inf'), float('inf')), 'rise_power': (1, 'fixed'), 'amp': (0.0002, 0, 0.1), 'xoffset': (0.011, -float('inf'), float('inf'))}, 
+            {'decay_tau': (0.05, 0.005, 0.5), 'rise_time': (0.005, 0.0005, 0.05), 'yoffset': (0, -float('inf'), float('inf')), 'rise_power': (2, 'fixed'), 'amp': (0.0002, 0, 0.1), 'xoffset': (0.011, -float('inf'), float('inf'))}, 
+            {'decay_tau': (0.05, 0.005, 0.5), 'rise_time': (0.005, 0.0005, 0.05), 'yoffset': (0, -float('inf'), float('inf')), 'rise_power': (1, 'fixed'), 'amp': (0.0002, 0, 0.1), 'xoffset': (0.014, -float('inf'), float('inf'))}, 
+            {'decay_tau': (0.05, 0.005, 0.5), 'rise_time': (0.005, 0.0005, 0.05), 'yoffset': (0, -float('inf'), float('inf')), 'rise_power': (2, 'fixed'), 'amp': (0.0002, 0, 0.1), 'xoffset': (0.014, -float('inf'), float('inf'))}, 
+            {'decay_tau': (0.05, 0.005, 0.5), 'rise_time': (0.005, 0.0005, 0.05), 'yoffset': (0, -float('inf'), float('inf')), 'rise_power': (1, 'fixed'), 'amp': (0.0002, 0, 0.1), 'xoffset': (0.015, -float('inf'), float('inf'))}, 
+            {'decay_tau': (0.05, 0.005, 0.5), 'rise_time': (0.005, 0.0005, 0.05), 'yoffset': (0, -float('inf'), float('inf')), 'rise_power': (2, 'fixed'), 'amp': (0.0002, 0, 0.1), 'xoffset': (0.015, -float('inf'), float('inf'))}]
+
+    test_out=create_all_fit_param_combos(input)
+    
+    assert test_out==output
 
 def create_all_fit_param_combos(base_params):
-    '''Convert the parameters fed to fit_psp in to a list of all possible parameter 
+    '''Convert the parameters fed to fit_psp into a list of all possible parameter 
     dictionaries to be fed to PSP() or stackedPSP() for fitting. 
     
     Parameters 
     ----------
-    
     base_params: dictionary
         Each value in the key, value dictionary pair must be a tuple.
         In general the structure of the tuple is of the form, 
@@ -517,12 +533,17 @@ def create_all_fit_param_combos(base_params):
         initial condition may also be fixed by replacing the lower 
         higher boundary combination with 'fixed'.
     
-    Examples    
+    Returns
+    -------
+    param_dict_list: list of dictionaries
+        Each dictionary contains parameter inputs for one fit_psp run.
+        
+    Examples:    
     base_params[amplitude]=(10, 0, 20)
     base_params[amplitude]=(10, 'fixed')
     base_params[amplitude]=([5,10, 20], 0, 20)
     base_params[amplitude]=([5,10, 20], 'fixed')
-
+    
     '''
     # need to create all combinations of the initial conditions
     param_dict_list = [{}] #initialize list
@@ -651,11 +672,11 @@ def fit_psp_corinne(response,
         
     # initial condition, lower boundry, upper boundry    
     base_params = {
-        'xoffset': (14e-3, -float('inf'), float('inf')),
+        'xoffset': ([11e-3, 14e-3, 15e-3], -float('inf'), float('inf')),
         'yoffset': (0, -float('inf'), float('inf')),
         'rise_time': (rise_time_init, rise_time_init/rise_time_mult_factor, rise_time_init*rise_time_mult_factor),
         'decay_tau': (decay_tau_init, decay_tau_init/10., decay_tau_init*10.),
-        'rise_power': (2, 'fixed'),
+        'rise_power': ([1,2], 'fixed'),
         'amp': amps
     }
     
