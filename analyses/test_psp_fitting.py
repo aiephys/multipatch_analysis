@@ -5,7 +5,7 @@ import numpy as np
 from pprint import pprint
 import json
 import neuroanalysis.data
-from multipatch_analysis.connection_detection import fit_psp_corinne
+from multipatch_analysis.connection_detection import fit_psp
 
 plotting=False # specifies whether to make plots of fitting results
 
@@ -16,16 +16,9 @@ for file in sorted(test_data_files):
     print 'file', file
     test_dict=json.load(open(file)) # load test data
     avg_trace=neuroanalysis.data.Trace(data=np.array(test_dict['input']['data']), dt=test_dict['input']['dt']) # create Trace object
-#    avg_trace=neuroanalysis.data.Trace(data=np.array(test_dict['input']['data'])) # create Trace object
-    psp_fits = fit_psp_corinne(avg_trace, 
+    psp_fits = fit_psp(avg_trace, 
                        sign=test_dict['input']['amp_sign'], 
-#                       yoffset=test_dict['input']['yoffset'], 
-#                       xoffset='test_dict['input']['xoffset']', 
-#                       amp=test_dict['input']['avg_amp'],# as far as I can tell this was never getting input to the function
-#                       method=test_dict['input']['method'], 
                        stacked=test_dict['input']['stacked'] 
-#                       rise_time_mult_factor=test_dict['input']['rise_time_mult_factor'] 
-#                       weight=test_dict['input']['weight']
                         )                        
     
     change_flag=False

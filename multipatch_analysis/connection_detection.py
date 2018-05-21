@@ -525,7 +525,7 @@ def create_all_fit_param_combos(base_params):
     Parameters 
     ----------
     base_params: dictionary
-        Each value in the key, value dictionary pair must be a tuple.
+        Each value in the key:value dictionary pair must be a tuple.
         In general the structure of the tuple is of the form, 
         (initial conditions, lower boundary, higher boundary).
         The initial conditions can be either a number or a list 
@@ -562,24 +562,24 @@ def create_all_fit_param_combos(base_params):
     
     return param_dict_list
 
-def fit_psp_corinne(response, 
-                    mode='ic', 
-                    sign='any', #Note this will not be used if *amp is specified
-                    method='leastsq', 
-                    fit_kws=None, 
-                    stacked=True,
-                    rise_time_mult_factor=10., #Note this will not be used if 
-                    weight='default',
-                    amp_ratio='default', #Note this will not be used if *amp* is specified
-                    # the following are parameters that can be fit 
-                        amp='default',
-                        decay_tau='default',
-                        rise_power='default',
-                        rise_time='default',
-                        exp_amp='default',
-                        xoffset='default', 
-                        yoffset='default',
-                    ):
+def fit_psp(response, 
+            mode='ic', 
+            sign='any', #Note this will not be used if *amp* input is specified
+            method='leastsq', 
+            fit_kws=None, 
+            stacked=True,
+            rise_time_mult_factor=10., #Note this will not be used if *rise_time* input is specified 
+            weight='default',
+            amp_ratio='default', 
+            # the following are parameters that can be fit 
+                amp='default',
+                decay_tau='default',
+                rise_power='default',
+                rise_time='default',
+                exp_amp='default',
+                xoffset='default', 
+                yoffset='default',
+            ):
     """Fit psp. function to the equation 
     
     This function make assumptions about where the cross talk happens as traces 
@@ -592,7 +592,10 @@ def fit_psp_corinne(response,
     mode : string
         either 'ic' for current clamp or 'vc' for voltage clamp
     sign : string
-        Specifies the sign of the PSP deflection.  Must be '+', '-', or any.
+        Specifies the sign of the PSP deflection.  Must be '+', '-', or any. If *amp* 
+        is specified, value will be irrelevant.
+    method : string 
+        Method lmfit uses for optimization
     rise_time_mult_factor: float
         Parameter that goes into the default calculation rise time.  
         Note that if an input for *rise_time* is provided this input
@@ -601,42 +604,44 @@ def fit_psp_corinne(response,
         If true, use the StackedPsp function which assumes there is still left
         over voltage decay from previous events.  If False, use Psp function
         which assumes the region of the waveform before the event is at baseline.
-    xoffset : t
-    yoffset
-    mask_stim_artifact=
-    method 
-    fit_kws 
+    fit_kws : dictionary
+        Additional key words that are fed to lmfit
+    The parameters below are fed to the psp function. Each value in the 
+        key:value dictionary pair must be a tuple.
+        In general the structure of the tuple is of the form, 
+        (initial conditions, lower boundary, higher boundary).
+        The initial conditions can be either a number or a list 
+        of numbers specifying several initial conditions.  The 
+        initial condition may also be fixed by replacing the lower 
+        higher boundary combination with 'fixed'.    
+        Examples:    
+            amplitude=(10, 0, 20)
+            amplitude=(10, 'fixed')
+            amplitude=([5,10, 20], 0, 20)
+            amplitude=([5,10, 20], 'fixed') 
+        xoffset : scalar
+            Horizontal shift between begin (positive shifts to the right)
+        yoffset : scalar
+            Vertical offset
+        rise_time : scalar
+            Time from beginning of psp until peak
+        decay_tau : scalar
+            Decay time constant
+        amp : scalar
+            The peak value of the psp
+        rise_power : scalar
+            Exponent for the rising phase; larger values result in a slower activation 
+        rise_power : scalar
+            rise_power
+        amp_ratio : scalar 
+            if *stacked* this is used to set up the ratio between the 
+            residual decay amplitute and the hight of the PSP.
     
-    
-    kwds: optional key word arguments
-    weights: True, False, or array like
-    
-    Boundry conditions and initial conditions can affect how well a function 
-    For all parameters that are fit a boundries and initial condition values 
-    can be specified.  
-    
-    parameters that get fed to the psp function
-    xoffset : scalar
-        Horizontal shift (positive shifts to the right)
-    yoffset : scalar
-        Vertical offset
-    rise_time : scalar
-        Time from beginning of psp until peak
-    decay_tau : scalar
-        Decay time constant
-    amp : scalar
-        The peak value of the psp
-    rise_power : scalar
-        Exponent for the rising phase; larger values result in a slower activation
-    
-    all of the parameters may have a initial condition, several initial conditions that 
-    will be cycles though, be fixed or have boundary conditions.  They will be specified 
-    a 
-        
-    where does the range get set    
-    """       
-    #In all cases I think there should be default boundries and also a default range of initial conditions
-    
+    Returns
+    -------
+    fit: lmfit.model.ModelResult
+        Best fit
+    """           
     
     # extracting these for ease of use
     t=response.time_values
@@ -644,8 +649,8 @@ def fit_psp_corinne(response,
     dt = response.dt
     
     # set initial conditions depending on whether in voltage or current clamp
-    # note that sign of these will automatically be set based on the the *sign*
-    # input
+    # note that sign of these will automatically be set later on based on the 
+    # the *sign* input
     if mode == 'ic':
         amp_init = .2e-3
         amp_max = 100e-3
@@ -659,7 +664,7 @@ def fit_psp_corinne(response,
     else:
         raise ValueError('mode must be "ic" or "vc"')
 
-    # Set up amplitude initial values and boundaries depending on whether things are positive or negative
+    # Set up amplitude initial values and boundaries depending on whether *sign* are positive or negative
     if sign == '-':
         amps = (-amp_init, -amp_max, 0)
     elif sign == '+':
@@ -672,73 +677,55 @@ def fit_psp_corinne(response,
         
     # initial condition, lower boundry, upper boundry    
     base_params = {
-        'xoffset': ([11e-3, 14e-3, 15e-3], -float('inf'), float('inf')),
+        'xoffset': (14e-3, -float('inf'), float('inf')),
         'yoffset': (0, -float('inf'), float('inf')),
         'rise_time': (rise_time_init, rise_time_init/rise_time_mult_factor, rise_time_init*rise_time_mult_factor),
         'decay_tau': (decay_tau_init, decay_tau_init/10., decay_tau_init*10.),
-        'rise_power': ([1,2], 'fixed'),
+        'rise_power': (2, 'fixed'),
         'amp': amps
     }
     
-    # Specify fitting function depending on input value
+    # specify fitting function and set up conditions
     if not isinstance(stacked, bool):
         raise Exception("Stacked must be True or False")
     if stacked:
         psp = StackedPsp()
-    else:
-        psp = Psp()
-    
-    if stacked:
         base_params.update({
             #TODO: figure out the bounds on these
             'exp_amp': ('amp * amp_ratio',-float('inf'), float('inf')),
             'amp_ratio': (0, -100, 100),
         })  
+    else:
+        psp = Psp()
+    
+    # override defaults with input
     for bp in base_params.keys():
         if eval(bp)!='default':
             base_params[bp]=eval(bp)
     
-    # -----------------set weighting-------------------------
+    # set weighting that 
     if weight == 'default': #use default weighting
         # THIS CODE IS DEPENDENT ON THE DATA BEING INPUT IN A CERTAIN WAY THAT IS NOT TESTED
-        weight = np.ones(len(response.data))*10.  #set everything to ten initially
+        weight = np.ones(len(y))*10.  #set everything to ten initially
         weight[int(10e-3/dt):int(12e-3/dt)] = 0.   #area around stim artifact
         weight[int(12e-3/dt):int(19e-3/dt)] = 30.  #area around steep PSP rise 
     elif weight is False: #do not weight any part of the stimulus
-        weight = np.ones(len(avg_trace.data))
+        weight = np.ones(len(y))
     elif weight:  #works if there is a value specified in weight
         if len(weight) != len(y):
             raise Exception('the weight and array vectors are not the same length') 
-    fit_kws={'weights': weight}   
-    fit_kws['nan_policy']='omit'
-
-#    #TODO: depricate when decide don't need this
-#    #TODO: update weights to use tags available in data as opposed to hard coded values 
-#    init_xoff = xoffset[0] if isinstance(xoffset, tuple) else xoffset
-#    onset_index = int((init_xoff-response.t0) / dt)
-#    weight = np.ones(len(y))
-#    weight[onset_index+int(1e-3/dt):onset_index+int(7e-3/dt)] = 3
-#    
-#    #TODO: should this be depricated?
-#    if mask_stim_artifact:
-#        # Use zero weight for fit region around the stimulus artifact
-#        i2 = onset_index + int(1e-3 / dt)
-#        i1 = i2 - int(2e-3 / dt)
-#        weight[i1:i2] = 0
     
+    # arguement to be passed through to fitting function
+    fit_kws={'weights': weight}   
+
     # convert initial parameters into a list of dictionaries to be consumed by psp.fit()        
     param_dict_list= create_all_fit_param_combos(base_params)
     
-    # cycle though different parameters sets for example if you wanted to do a range of initial conditions
+    # cycle though different parameters sets and chose best one
     best_fit = None
     best_score = None
     for p in param_dict_list:
-        try:
-            fit = psp.fit(y, x=t, params=p, fit_kws=fit_kws, method=method)
-        except Exception: #TODO: what is this
-            if p is param_dict_list[-1]:
-                raise
-            continue
+        fit = psp.fit(y, x=t, params=p, fit_kws=fit_kws, method=method)
         err = np.sum(fit.residual**2)  # note: using this because normalized (nrmse) is not necessary to comparing fits within the same data set
         if best_fit is None or err < best_score:
             best_fit = fit
@@ -748,15 +735,9 @@ def fit_psp_corinne(response,
     # nrmse = fit.nrmse()
     if 'baseline_std' in response.meta:
         fit.snr = abs(fit.best_values['amp']) / response.meta['baseline_std']
-        fit.err = fit.rmse() / response.meta['baseline_std']
-    # print fit.best_values
-    # print "RMSE:", fit.rmse()
-    # print "NRMSE:", nrmse
-    # print "SNR:", snr
+        fit.err = fit.nrmse() / response.meta['baseline_std']
 
     return fit
-
-
 
 
 def detect_connections(expt):
@@ -783,157 +764,3 @@ def detect_connections(expt):
             if lsnr > lnrmse + 6:
                 print "Connection:", pre_id, post_id, fit.snr, fit.nrmse()
 
-def fit_psp(response, mode='ic', sign='any', xoffset=(11e-3, 10e-3, 15e-3), yoffset=(0, 'fixed'),
-            mask_stim_artifact=True, method='leastsq', fit_kws=None, stacked=True,
-            rise_time_mult_factor=2., **kwds):
-    """Fit psp.
-    
-    Parameters
-    ----------
-    response: neuroanalysis.data.Trace class
-        Contains data on trace waveform.
-    mode: string
-        either 'ic' for current clamp or 'vc' for voltage clamp
-    sign: string
-        Specifies the sign of the PSP deflection.  Must be '+', '-', or any.
-    xoffset
-    yoffset
-    mask_stim_artifact=
-    method 
-    fit_kws 
-    stacked
-    rise_time_mult_factor
-    kwds: optional key word arguments
-
-        
-    """
-    
-    #TODO: what is this for?
-    t = response.time_values
-    y = response.data
-
-    # set initial conditions depending on whether in voltage or current clamp
-    if mode == 'ic':
-        amp = .2e-3
-        amp_max = 100e-3
-        rise_time = 5e-3
-        decay_tau = 50e-3
-    elif mode == 'vc':
-        amp = 20e-12
-        amp_max = 500e-12
-        rise_time = 1e-3
-        decay_tau = 4e-3
-    else:
-        raise ValueError('mode must be "ic" or "vc"')
-
-    amps = [(amp, 0, amp_max), (-amp, -amp_max, 0)] #TODO: what is this?
-    #TODO:  I think this might be trying to constrain the sign of the fitting 
-    if sign == '-':
-        amps = amps[1:]
-    elif sign == '+':
-        amps = amps[:1]
-    elif sign != 'any':
-        raise ValueError('sign must be "+", "-", or "any"')
-    
-    if not isinstance(stacked, bool):
-        raise Exception("Stacked must be True or False")
-    if stacked:
-        psp = StackedPsp()
-    else:
-        psp = Psp()
-
-#---------I don't understand this whole chunk of code----------------    
-    # initial condition, lower boundry, upper boundry    
-    # why not move the things in function call with defaults down here and use kwargs
-    base_params = {
-        #TODO: what are these
-        #TODO: do I need to make xoffset consistent the others by adding boundries?
-        'xoffset': xoffset,
-        'yoffset': yoffset,
-        'rise_time': (rise_time, rise_time/rise_time_mult_factor, rise_time*rise_time_mult_factor),
-        'decay_tau': (decay_tau, decay_tau/10., decay_tau*10.),
-        'rise_power': (2, 'fixed'),
-    }
-    
-    if stacked:
-        base_params.update({
-            #TODO: what are these
-            'exp_amp': 'amp * amp_ratio',
-            'amp_ratio': (0, -100, 100),
-        })  
-    # Why isnt code below place above where base_params are initialized
-    # if rise_time is specified in arguments, set it here and assign
-    # boundry conditions if not specified    
-    if 'rise_time' in kwds:
-        rt = kwds.pop('rise_time')
-        if not isinstance(rt, tuple):
-            rt = (rt, rt/2., rt*2.)
-        base_params['rise_time'] = rt
-    
-    # if decay_tau is specified in arguments, set it here and assign
-    # boundry conditions if not specified                    
-    if 'decay_tau' in kwds:
-        dt = kwds.pop('decay_tau')
-        if not isinstance(dt, tuple):
-            dt = (dt, dt/2., dt*2.)
-        base_params['decay_tau'] = dt
-    
-    #TODO: should this be before?            
-    base_params.update(kwds)
-#-------------------------------------------------------
-    
-    #TODO: why making this list of parameter copies
-    params = []
-    for amp, amp_min, amp_max in amps:
-        p2 = base_params.copy()
-        p2['amp'] = (amp, amp_min, amp_max)
-        params.append(p2)
-
-    dt = response.dt
-    weight = np.ones(len(y))
-    #weight[:int(10e-3/dt)] = 0.5
-    
-    # lets make ranges a list as opposed to tuples that are set limits 
-    init_xoff = xoffset[0] if isinstance(xoffset, tuple) else xoffset
-    onset_index = int((init_xoff-response.t0) / dt)
-    weight[onset_index+int(1e-3/dt):onset_index+int(7e-3/dt)] = 3
-    if mask_stim_artifact:
-        # Use zero weight for fit region around the stimulus artifact
-        i2 = onset_index + int(1e-3 / dt)
-        i1 = i2 - int(2e-3 / dt)
-        weight[i1:i2] = 0
-
-    #note that this was not being used in the publication because I was specifying wieghts via fit_kwargs
-    if fit_kws is None:
-        fit_kws = {'xtol': 1e-4, 'maxfev': 300, 'nan_policy': 'omit'}
-
-    if 'weights' not in fit_kws:
-        fit_kws['weights'] = weight
-    
-    best_fit = None
-    best_score = None
-    #TODO: I don't know what this is doing
-    #params appears to be a list 
-    for p in params:
-        try:
-            fit = psp.fit(y, x=t, params=p, fit_kws=fit_kws, method=method)
-        except Exception:
-            if p is params[-1]:
-                raise
-            continue
-        err = np.sum(fit.residual**2)
-        if best_fit is None or err < best_score:
-            best_fit = fit
-            best_score = err
-    fit = best_fit
-
-    # nrmse = fit.nrmse()
-    if 'baseline_std' in response.meta:
-        fit.snr = abs(fit.best_values['amp']) / response.meta['baseline_std']
-        fit.err = fit.rmse() / response.meta['baseline_std']
-    # print fit.best_values
-    # print "RMSE:", fit.rmse()
-    # print "NRMSE:", nrmse
-    # print "SNR:", snr
-
-    return fit
