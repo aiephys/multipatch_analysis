@@ -254,14 +254,14 @@ class ExperimentMetadataSubmission(object):
                     warnings.append("Histology plate number %s might be too high? %s" % (plate_n, lims_edit_href))
 
         # Check carousel ID matches the one in LIMS
-        if self.spec_info['organism'] == 'human' and self.spec_info['subsection_number'] is not None:
-            # this specimen was divided; ask about the parent carousel well name instead
-            parent_spec_info = lims.specimen_info(specimen_id=self.spec_info['parent_id'])
-            cw_name = parent_spec_info['carousel_well_name']
-        else:
-            cw_name = self.spec_info['carousel_well_name']
-        
-        if cw_name is None or len(cw_name.strip()) == 0:
+        cw_name = self.spec_info['carousel_well_name']
+        if cw_name is None:
+            if self.spec_info['organism'] == 'human' and self.spec_info['subsection_number'] is not None and :
+                # this specimen was divided; we need to ask about the parent carousel well name instead
+                # note that this behavior has changed-- newer subdivided specimens will have their own carousel well name
+                parent_spec_info = lims.specimen_info(specimen_id=self.spec_info['parent_id'])
+                cw_name = parent_spec_info['carousel_well_name']
+        if cw_name is None:
             errors.append('No LIMS carousel well name for this specimen!')
         else:
             if cw_name != slice_info['carousel_well_ID'].strip():
