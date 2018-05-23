@@ -107,7 +107,7 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         if self.base_dir.info()['dirType'] != 'Slice':
             raise Exception('No Slice Selected')
         self.base_path = self.base_dir.name()
-        self.slice_name = self.base_dir.info()['specimen_ID']
+        self.slice_name = self.base_dir.info()['specimen_ID'].strip()
         self.slice_id = lims.specimen_id_from_name(self.slice_name)
         clusters = lims.cell_cluster_ids(self.slice_id)
         """if len(clusters) == 0:
@@ -135,12 +135,13 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         safe_save_path = lims.lims.safe_system_path(save_path)
 
         if os.path.exists(safe_save_path) == False:
-            shutil.copy2(safe_aff_image_path,safe_save_path)
+            with pg.BusyCursor():
+                shutil.copy2(safe_aff_image_path,safe_save_path)
 
-            # image = urllib.URLopener()
-            # image.retrieve(full_url, safe_save_path)
-            self.base_dir.indexFile(aff_image_name)
-            print("20x image moved")
+                # image = urllib.URLopener()
+                # image.retrieve(full_url, safe_save_path)
+                self.base_dir.indexFile(aff_image_name)
+                print("20x image moved")
         self.image_20 = safe_save_path
                 
 
