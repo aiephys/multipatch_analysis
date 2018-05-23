@@ -10,7 +10,7 @@ from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.fitting import StackedPsp, Psp
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.filter import bessel_filter
-
+import unittest
 
 class BaselineDistributor(Analyzer):
     """Used to find baseline regions in a trace and distribute them on request.
@@ -500,23 +500,7 @@ class EvokedResponseGroup(object):
             return None
         return fit_psp(response, **kwds)
     
-def test_create_all_fit_param_combos():
-    input={'decay_tau': (0.05, 0.005, 0.5), 
-           'rise_time': (0.005, 0.0005, 0.05), 
-           'yoffset': (0, -float('inf'), float('inf')), 
-           'rise_power': ([1, 2], 'fixed'), 
-           'amp': (0.0002, 0, 0.1), 
-           'xoffset': ([0.011, 0.014, 0.015], -float('inf'), float('inf'))}
-    output=[{'decay_tau': (0.05, 0.005, 0.5), 'rise_time': (0.005, 0.0005, 0.05), 'yoffset': (0, -float('inf'), float('inf')), 'rise_power': (1, 'fixed'), 'amp': (0.0002, 0, 0.1), 'xoffset': (0.011, -float('inf'), float('inf'))}, 
-            {'decay_tau': (0.05, 0.005, 0.5), 'rise_time': (0.005, 0.0005, 0.05), 'yoffset': (0, -float('inf'), float('inf')), 'rise_power': (2, 'fixed'), 'amp': (0.0002, 0, 0.1), 'xoffset': (0.011, -float('inf'), float('inf'))}, 
-            {'decay_tau': (0.05, 0.005, 0.5), 'rise_time': (0.005, 0.0005, 0.05), 'yoffset': (0, -float('inf'), float('inf')), 'rise_power': (1, 'fixed'), 'amp': (0.0002, 0, 0.1), 'xoffset': (0.014, -float('inf'), float('inf'))}, 
-            {'decay_tau': (0.05, 0.005, 0.5), 'rise_time': (0.005, 0.0005, 0.05), 'yoffset': (0, -float('inf'), float('inf')), 'rise_power': (2, 'fixed'), 'amp': (0.0002, 0, 0.1), 'xoffset': (0.014, -float('inf'), float('inf'))}, 
-            {'decay_tau': (0.05, 0.005, 0.5), 'rise_time': (0.005, 0.0005, 0.05), 'yoffset': (0, -float('inf'), float('inf')), 'rise_power': (1, 'fixed'), 'amp': (0.0002, 0, 0.1), 'xoffset': (0.015, -float('inf'), float('inf'))}, 
-            {'decay_tau': (0.05, 0.005, 0.5), 'rise_time': (0.005, 0.0005, 0.05), 'yoffset': (0, -float('inf'), float('inf')), 'rise_power': (2, 'fixed'), 'amp': (0.0002, 0, 0.1), 'xoffset': (0.015, -float('inf'), float('inf'))}]
 
-    test_out=create_all_fit_param_combos(input)
-    
-    assert test_out==output
 
 def create_all_fit_param_combos(base_params):
     '''Convert the parameters fed to fit_psp into a list of all possible parameter 
@@ -763,4 +747,5 @@ def detect_connections(expt):
             lnrmse = np.log(fit.nrmse())
             if lsnr > lnrmse + 6:
                 print "Connection:", pre_id, post_id, fit.snr, fit.nrmse()
+
 
