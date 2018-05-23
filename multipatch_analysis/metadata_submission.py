@@ -255,9 +255,8 @@ class ExperimentMetadataSubmission(object):
 
         # Check carousel ID matches the one in LIMS
         cw_name = self.spec_info['carousel_well_name']
-        if cw_name is None:
-            if self.spec_info['organism'] == 'human' and self.spec_info['subsection_number'] is not None and :
-                # this specimen was divided; we need to ask about the parent carousel well name instead
+        if cw_name is None and self.spec_info['organism'] == 'human' and self.spec_info['subsection_number'] is not None:
+                # this specimen was subdivided; we need to ask about the parent carousel well name instead
                 # note that this behavior has changed-- newer subdivided specimens will have their own carousel well name
                 parent_spec_info = lims.specimen_info(specimen_id=self.spec_info['parent_id'])
                 cw_name = parent_spec_info['carousel_well_name']
