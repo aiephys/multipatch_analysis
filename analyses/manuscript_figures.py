@@ -46,8 +46,6 @@ def write_cache(cache, cache_file):
     os.rename(cache_file + '.new', cache_file)
     print("Done!")
 
-<<<<<<< HEAD
-=======
 def load_cache(cache_file):
     if os.path.exists(cache_file):
         try:
@@ -62,7 +60,6 @@ def load_cache(cache_file):
 
     return result_cache
 
->>>>>>> master
 def cache_response(expt, pre, post, cache, analysis_type='pulse'):
         key = (expt.uid, pre, post)
         if key in cache:
