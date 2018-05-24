@@ -3,6 +3,8 @@ original first_puls_feature.py code to filter out error causing data.
 
 Example run statement
 python save save_fit_psp_test_set.py --organism mouse --connection ee
+
+Comment in the code that does the saving at the bottom
 """
 
 
@@ -159,25 +161,6 @@ for c in range(len(connection_types)):
                         
                         # need to remake trace because different output is created
                         avg_trace_simple=Trace(data=np.array(save_dict['input']['data']), dt=save_dict['input']['dt']) # create Trace object
-                        
-                        # try to figure out what is different about Trace because somehow is affects nrmse
-                        # TODO: circle back to figure out what about the Trace object is affecting nmsre
-#                        print expt.uid, pre, post
-#                        for key in avg_trace.__dict__.keys():
-#                            print 'key', key
-#                            if type(getattr(avg_trace, key))==np.ndarray:
-#                                if np.all(getattr(avg_trace, key) == getattr(avg_trace_simple,key)):
-#                                    print 'SAME'
-#                                else: 
-#                                    print 'DIFFERENT'
-#                            else:
-#                                if getattr(avg_trace, key) == getattr(avg_trace_simple,key):
-#                                    print 'SAME'
-#                                else:
-#                                    print 'DIFFERENT'
-#                            print '\t getattr(avg_trace, key)', getattr(avg_trace, key)
-#                            print '\t getattr(avg_trace_simple, key)', getattr(avg_trace_simple, key)        
-                        
                         
                         psp_fits_original = fit_psp(avg_trace, 
                                            sign=save_dict['input']['amp_sign'], 
