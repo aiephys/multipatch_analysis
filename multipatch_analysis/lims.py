@@ -140,20 +140,64 @@ def specimen_info(specimen_name=None, specimen_id=None):
     return rec
     
     
-def specimen_images(specimen_name):
-    """Return a list of (image ID, treatment) pairs for a specimen.
+def specimen_images(specimen):
+    """Return a list of dicts describing images for a specimen.
+
+    Each dict looks like::
+
+        {'id': sub_image_id, 'file': image_file_path, 'treatment': treatment_name, 'resolution': um_per_px, 'url': lims_url}
+
+    If an image is a stack, then the values for 'id' and 'file' will be lists.
     
+    Parameters
+    ----------
+    specimen : int | str
+        Either the ID (int) or name (str) of the specimen.
     """
+
+    field = 'id' if isinstance(specimen, int) else 'name'
+    images = []
+
+    # First get a list of all image series for the specimen
     q = """
-        select sub_images.id, treatments.name from specimens 
+        select image_series.id, image_series.is_stack from specimens 
         join image_series on image_series.specimen_id=specimens.id 
-        join sub_images on sub_images.image_series_id=image_series.id
-        join images on images.id = sub_images.image_id
-        left join treatments on treatments.id = images.treatment_id
-        where specimens.name='%s';
-        """ % specimen_name
-    r = lims.query(q)
-    return [(rec['id'], rec['name']) for rec in r]
+        where specimens.%s='%s' and
+        image_series.type='FocalPlaneImageSeries';
+        """ % (field, specimen)
+
+    # for each image series, get all sub images and decide whether to treat them as 
+    # a stack or a set of images with different treatments
+    for image_series in lims.query(q):
+        q = """
+            select distinct sub_images.id, images.jp2, scans.resolution, treatments.name, slides.storage_directory from image_series
+            join sub_images on sub_images.image_series_id=image_series.id
+            join images on images.id = sub_images.image_id
+            left join treatments on treatments.id = images.treatment_id
+            left join slides on slides.id=images.slide_id
+            left join scans on scans.slide_id=slides.id
+            where image_series.id=%d;
+            """ % image_series['id']
+        results = lims.query(q)
+
+        if image_series['is_stack'] is True:
+            image_ids = {}
+            image_files = {}
+            # sift through stack and group images by treatment and resolution
+            for image in results:
+                key = (image['name'], image['resolution'])
+                image_ids.setdefault(key, []).append(image['id'])
+                image_files.setdefault(key, []).append(image['storage_directory'].rstrip('/') + '/' + image['jp2'])
+            for k in image_ids:
+                # not sure how to generate an image stack url
+                images.append({'id':image_ids[k], 'file': image_files[k], 'treatment': k[0], 'resolution': k[1], 'url': None})
+        else:
+            for image in results:
+                path = image['storage_directory'].rstrip('/') + '/' + image['jp2']
+                url = "http://lims2/siv?sub_image=%d"%image['id']
+                images.append({'id':image['id'], 'file': path, 'treatment': image['name'], 'resolution': image['resolution'], 'url': url})
+            
+    return images
 
 
 def specimen_id_from_name(spec_name):
@@ -172,10 +216,17 @@ def specimen_name(spec_id):
     return recs[0]['name']
 
 
-def specimen_ephys_roi_plans(spec_name):
+def specimen_ephys_roi_plans(specimen):
     """Return a list of all ephys roi plans for this specimen.
+
+    Parameters
+    ----------
+    specimen : int | str
+        Either the ID (int) or name (str) of the specimen.
     """
-    sid = specimen_id_from_name(spec_name)
+    if not isinstance(specimen, int):
+        specimen = specimen_id_from_name(specimen)
+    
     recs = lims.query("""
         select 
             ephys_roi_plans.id as ephys_roi_plan_id,
@@ -186,17 +237,26 @@ def specimen_ephys_roi_plans(spec_name):
             join ephys_roi_plans on ephys_specimen_roi_plans.ephys_roi_plan_id=ephys_roi_plans.id
         where 
             ephys_specimen_roi_plans.specimen_id=%d
-    """ % sid)
+    """ % specimen)
     return recs
 
-def cell_cluster_ids(spec_id):
+def cell_cluster_ids(specimen):
+    """Return the IDs of all cell-cluster children of *specimen*.
+
+    Parameters
+    ----------
+    specimen : int | str
+        Either the ID (int) or name (str) of the specimen.
+    """
+    if not isinstance(specimen, int):
+        specimen = specimen_id_from_name(specimen)
     q = """
     select specimens.id from specimens 
     join specimen_types_specimens on specimen_types_specimens.specimen_id=specimens.id
     join specimen_types on specimen_types.id=specimen_types_specimens.specimen_type_id
     where specimens.parent_id=%d
     and specimen_types.name='CellCluster'
-    """ % spec_id
+    """ % specimen
     recs = lims.query(q)
     return [rec['id'] for rec in recs]
 
@@ -339,15 +399,25 @@ def expt_submissions(spec_id, acq_timestamp):
             submissions.append(("trigger failed", failed_trigger, error))
             
     # Anything in LIMS already?
-    cluster_ids = cell_cluster_ids(spec_id)
+    cluster_ids = expt_cluster_ids(spec_id, acq_timestamp)
     for cid in cluster_ids:
-        meta = specimen_metadata(cid)
-        if meta is not None and meta['acq_timestamp'] == acq_timestamp:
-            data_path = cell_cluster_data_paths(cid)
-            submissions.append(("succeeded", cid, data_path))
+        data_path = cell_cluster_data_paths(cid)
+        submissions.append(("succeeded", cid, data_path))
     
     return submissions
     
+
+def expt_cluster_ids(spec_id, acq_timestamp):
+    """Return a list of CellCluster IDs associated with an experiment
+    """
+    cluster_ids = cell_cluster_ids(spec_id)
+    cids = []
+    for cid in cluster_ids:
+        meta = specimen_metadata(cid)
+        if meta is not None and meta['acq_timestamp'] == acq_timestamp:
+            cids.append(cid)
+    return cids
+
 
 if __name__ == '__main__':
     # testing specimen

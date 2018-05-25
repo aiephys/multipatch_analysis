@@ -15,6 +15,7 @@ from multipatch_analysis.ui.actions import ExperimentActions
 
 from acq4.util.DataManager import getDirHandle
 import pyqtgraph as pg
+import pyqtgraph.console
 from pyqtgraph.Qt import QtGui, QtCore
 
 
@@ -86,16 +87,45 @@ class Dashboard(QtGui.QWidget):
         self.filter.addFilter('rig')
         self.filter.addFilter('project')
 
+        self.right_splitter = QtGui.QSplitter(QtCore.Qt.Vertical)
+        self.splitter.addWidget(self.right_splitter)
+
         self.expt_tree = pg.TreeWidget()
         self.expt_tree.setSortingEnabled(True)
         self.expt_tree.setColumnCount(len(self.visible_fields))
         self.expt_tree.setHeaderLabels([f[0] for f in self.visible_fields])
-        self.splitter.addWidget(self.expt_tree)
+        self.right_splitter.addWidget(self.expt_tree)
         self.expt_tree.itemSelectionChanged.connect(self.tree_selection_changed)
+
+        console_text = """
+        Variables:
+            records : array of all known records in the dashboard
+            records['experiment'] : references to all known Experiment instances
+            sel : currently selected record
+            filter : DataFilterParameter
+            lims : multipatch_analysis.lims module
+            db : multipatch_analysis.database module
+            config : multipatch_analysis.config module
+        """
+        self.console = pg.console.ConsoleWidget(text=console_text, namespace={
+            'filter': self.filter.params,
+            'sel': None,
+            'records': self.records,
+            'config': config,
+            'lims': lims,
+            'db': database,
+        })
+        self.right_splitter.addWidget(self.console)
+        self.console.hide()
+
+        self.console_btn = QtGui.QPushButton('console')
+        self.console_btn.setCheckable(True)
+        self.console_btn.toggled.connect(self.console_toggled)
 
         self.status = QtGui.QStatusBar()
         self.status.setMaximumHeight(25)
         self.layout.addWidget(self.status, 1, 0)
+        self.status.addPermanentWidget(self.console_btn)
 
         self.resize(1000, 900)
         self.splitter.setSizes([200, 800])
@@ -167,6 +197,7 @@ class Dashboard(QtGui.QWidget):
     def tree_selection_changed(self):
         sel = self.expt_tree.selectedItems()[0]
         rec = self.records[sel.index]
+        self.console.localNamespace['sel'] = rec
         self.selected = rec
         expt = rec['experiment']
         self.expt_actions.experiment = expt
@@ -179,6 +210,7 @@ class Dashboard(QtGui.QWidget):
         print("archive path:", expt.archive_path)
         print(" backup path:", expt.backup_path)
         print("biocytin URL:", expt.biocytin_image_url)
+        print("  cluster ID:", expt.cluster_id)
         err = rec['error']
         if err is not None:
             print("Error checking experiment:")
@@ -256,9 +288,14 @@ class Dashboard(QtGui.QWidget):
         if update_filter:
             self.filter.setFields(self.filter_fields)
 
+        self.filter_items(self.records[index:index+1])
+
     def filter_changed(self):
-        mask = self.filter.generateMask(self.records)
-        for i,item in enumerate(self.records['item']):
+        self.filter_items(self.records)
+
+    def filter_items(self, records):
+        mask = self.filter.generateMask(records)
+        for i,item in enumerate(records['item']):
             item.setHidden(not mask[i])
 
     def quit(self):
@@ -276,6 +313,9 @@ class Dashboard(QtGui.QWidget):
     def reload_clicked(self, *args):
         expt = self.selected['experiment']
         self.expt_queue.put((-expt.timestamp, expt))
+
+    def console_toggled(self):
+        self.console.setVisible(self.console_btn.isChecked())
 
 
 class GrowingArray(object):
@@ -448,8 +488,11 @@ class ExptCheckerThread(QtCore.QThread):
                         lims = len(subs) == 1
                     rec['LIMS'] = lims
 
-                    image = expt.biocytin_image_url
-                    rec['20x'] = image is not None
+                    image_20x = expt.biocytin_20x_file
+                    rec['20x'] = image_20x is not None
+
+                    image_63x = expt.biocytin_63x_files
+                    rec['63x'] = image_63x is not None
         
         except Exception as exc:
             rec['error'] = sys.exc_info()

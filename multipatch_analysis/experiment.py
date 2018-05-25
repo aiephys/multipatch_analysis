@@ -15,7 +15,7 @@ import yaml
 import pyqtgraph as pg
 import pyqtgraph.configfile
 
-from .lims import specimen_info, specimen_images
+from . import lims
 from .constants import ALL_CRE_TYPES, ALL_LABELS, FLUOROPHORES, LAYERS
 from .cell import Cell
 from .electrode import Electrode
@@ -831,6 +831,18 @@ class Experiment(object):
         return self.slice_info['specimen_ID'].strip()
 
     @property
+    def cluster_id(self):
+        """LIMS CellCluster ID
+        """
+        spec_id = lims.specimen_id_from_name(self.specimen_name)
+        cids = lims.expt_cluster_ids(spec_id, self.timestamp)
+        if len(cids) == 0:
+            return None
+        if len(cids) > 1:
+            raise Exception("Experiment %s has multiple LIMS clusters." % self)
+        return cids[0]
+
+    @property
     def age(self):
         age = self.lims_record.get('age', 0)
         if self.lims_record['organism'] == 'mouse':
@@ -854,7 +866,7 @@ class Experiment(object):
         See multipatch_analysis.lims.section_info()
         """
         if self._lims_record is None:
-            self._lims_record = specimen_info(self.specimen_name)
+            self._lims_record = lims.specimen_info(self.specimen_name)
         return self._lims_record
 
     @property
@@ -870,23 +882,45 @@ class Experiment(object):
 
     @property
     def biocytin_image_url(self):
-        """A LIMS URL that points to the biocytin image for this specimen, or
+        """A LIMS URL that points to the 20x biocytin image for this specimen, or
         None if no image is found.
         """
-        images = specimen_images(self.specimen_name)
-        for img_id, treatment in images:
-            if treatment == 'Biocytin':
-                return "http://lims2/siv?sub_image=%d" % img_id
+        images = lims.specimen_images(self.specimen_name)
+        for image in images:
+            if image['treatment'] == 'Biocytin':
+                return image['url']
+
+    @property
+    def biocytin_20x_file(self):
+        """File path of the 20x biocytin image for this specimen, or None if
+        no image is found.
+        """
+        images = lims.specimen_images(self.specimen_name)
+        for image in images:
+            if image['treatment'] == 'Biocytin':
+                return image['file']
+
+    @property
+    def biocytin_63x_files(self):
+        """File paths of the 63x biocytin images for this specimen, or None if
+        no image stack is found.
+        """
+        images = lims.specimen_images(self.cluster_id)
+        if len(images) == 0:
+            return None
+        if len(images) > 1:
+            raise Exception("Multiple images found for cluster %d; not sure which is biocytin." % self.cluster_id)
+        return images[0]['file']
 
     @property
     def dapi_image_url(self):
-        """A LIMS URL that points to the DAPI image for this specimen, or
+        """A LIMS URL that points to the 20x DAPI image for this specimen, or
         None if no image is found.
         """
-        images = specimen_images(self.specimen_name)
-        for img_id, treatment in images:
-            if treatment == 'DAPI':
-                return "http://lims2/siv?sub_image=%d" % img_id
+        images = lims.specimen_images(self.specimen_name)
+        for image in images:
+            if image['treatment'] == 'DAPI':
+                return image['url']
 
     @property
     def multipatch_log(self):
