@@ -114,6 +114,8 @@ class Dashboard(QtGui.QWidget):
             'config': config,
             'lims': lims,
             'db': database,
+            'dashboard': self,
+            'np': np,
         })
         self.right_splitter.addWidget(self.console)
         self.console.hide()
@@ -281,8 +283,8 @@ class Dashboard(QtGui.QWidget):
 
             # update filter fields
             filter_field = self.filter_fields.get(field)
-            if filter_field is not None and filter_field['mode'] == 'enum' and val not in filter_field['values']:
-                filter_field['values'][val] = True
+            if filter_field is not None and filter_field['mode'] == 'enum' and display_val not in filter_field['values']:
+                filter_field['values'][display_val] = True
                 update_filter = True
 
         if update_filter:
