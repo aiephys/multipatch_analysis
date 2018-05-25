@@ -81,7 +81,7 @@ def dissection_check(dh, sub_id, expt_date, columns, set_data=False):
     sac = dis_rec[columns['sac_col']]
     time = dis_rec[columns['time_col']]
     sac_time = datetime.datetime.strptime(date + ' ' + sac, '%m/%d/%Y %I:%M %p')
-    if not time:
+    if time in (None, 'N/A', ''):
         print_msg = ("\tNo time record, sacrifice time was %s\n" % sac)
         return print_msg
     if time[-2:] in ('AM', 'PM'):
