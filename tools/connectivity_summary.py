@@ -169,8 +169,8 @@ human_types = OrderedDict([
 human_types = OrderedDict([(typ, "L%s %s" % typ) for typ in human_types])
 
 if args.organism == 'mouse':
-    m0 = expts.matrix(mouse_types, mouse_types, mode='progress', title='Mouse Course Progress Matrix')
-    m1 = expts.matrix(mouse_types, mouse_types, title='Mouse Course Cp Matrix')
+    m0 = expts.matrix(mouse_types, mouse_types, mode='progress', title='Mouse Coarse Progress Matrix')
+    m1 = expts.matrix(mouse_types, mouse_types, title='Mouse Coarse Cp Matrix')
     m2 = expts.matrix(mouse_ee_types, mouse_ee_types, title='Mouse L5 Recurrent Excitatory Matrix')
     m3 = expts.matrix(mouse_nolayer_types, mouse_nolayer_types, title='Mouse cre-type Matrix')
 elif args.organism == 'human':
