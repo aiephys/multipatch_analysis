@@ -231,20 +231,15 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         json_save_file = cluster_name + "_ephys_cell_cluster.json"
 
         incoming_path = lims.get_incoming_dir(self.slice_name)
-        #if incoming_path == None:
-            #raise Exception("Could not find incoming directory in LIMS")
+        if incoming_path == None:
+            raise Exception("Could not find incoming directory in LIMS")
 
-        #incoming_path = os.path.sep*2 + os.path.join(*incoming_path.split("/"))
-        local_json_save_path = os.path.join(parent.name(), json_save_file)
+        incoming_save_path = os.path.sep*2 + os.path.join(*incoming_path.split("/"))
+        incoming_json_save_path = os.path.join(incoming_save_path, json_save_file)
 
-        with open(local_json_save_path, 'w') as outfile:  
+        with open(incoming_json_save_path, 'w') as outfile:  
             json.dump(data, outfile)
 
-        #incoming_json_path = os.path.join(incoming_path, json_save_file)
-        incoming_json_path = '/allen/programs/celltypes/production/incoming/mousecelltypes/' + json_save_file
-        print(incoming_json_path)
-        # uncomment line below to copy json to incoming folder
-        #shutil.copy2(local_json_save_path, incoming_json_path)
 
         trigger_file = cluster_name + "_ephys_cell_cluster.mpc"
 
@@ -253,15 +248,11 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
             raise Exception("Could not find trigger directory in LIMS")
 
         trigger_path = os.path.sep*2 + os.path.join(*trigger_path.split("/"))
-        print (trigger_path)
         
-        # prevents dropping trigger file in incoming folder
-        # comment out line below to send trigger file to LIMS
-        trigger_path = os.path.join(parent.name(),trigger_file)
-        with open(trigger_path, 'w') as the_file:
-            the_file.write("specimen_id: {}\n".format(cluster_id[0]))     #verify if this is the cluster specimen or the slice specimen
-            the_file.write("cells_info: '{}'\n".format(incoming_json_path))
-        raise Exception('Trigger File Saved Locally')
+        trigger_save_path = os.path.join(trigger_path,trigger_file)
+        with open(trigger_save_path, 'w') as the_file:
+            the_file.write("specimen_id: {}\n".format(cluster_id[0]))     
+            the_file.write("cells_info: '{}'\n".format(incoming_json_save_path))
         
 
 

@@ -309,7 +309,11 @@ def get_incoming_dir(specimen_name):
     where specimens.name='%s'
     """ % specimen_name
     recs = lims.query(q)
-    return recs[0]['incoming_directory']
+    if recs[0]['incoming_directory'] == None:
+        trigger_dir = get_trigger_dir(specimen_name)
+        return os.path.dirname(os.path.dirname(trigger))
+    else:
+        return recs[0]['incoming_directory']
 
 
 def get_trigger_dir(specimen_name):
@@ -322,6 +326,7 @@ def get_trigger_dir(specimen_name):
     """ % specimen_name
     recs = lims.query(q)
     return recs[0]['trigger_dir']
+
 
 def submit_expt(spec_name, acq_timestamp, nwb_file, json_file):
     import limstk.LIMStk as limstk
