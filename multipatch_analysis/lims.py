@@ -240,6 +240,7 @@ def specimen_ephys_roi_plans(specimen):
     """ % specimen)
     return recs
 
+
 def cell_cluster_ids(specimen):
     """Return the IDs of all cell-cluster children of *specimen*.
 
@@ -261,16 +262,20 @@ def cell_cluster_ids(specimen):
     return [rec['id'] for rec in recs]
 
 
-def child_specimens(spec_id):
+def child_specimens(specimen):
+    if not isinstance(specimen, int):
+        specimen = specimen_id_from_name(specimen)
     q = """
     select id from specimens 
     where specimens.parent_id=%d
-    """ % spec_id
+    """ % specimen
     recs = lims.query(q)
     return [rec['id'] for rec in recs]    
 
 
-def parent_specimen(spec_id):
+def parent_specimen(specimen):
+    if not isinstance(specimen, int):
+        specimen = specimen_id_from_name(specimen)
     q = """
     select parent_id from specimens 
     where specimens.id=%d
@@ -279,18 +284,22 @@ def parent_specimen(spec_id):
     return recs[0]['parent_id']
 
 
-def cell_cluster_data_paths(cluster_id):
+def cell_cluster_data_paths(specimen):
+    if not isinstance(specimen, int):
+        specimen = specimen_id_from_name(specimen)
     recs = lims.query("""
         select ephys_roi_results.storage_directory 
         from specimens 
         join ephys_roi_results on ephys_roi_results.id=specimens.ephys_roi_result_id
         where specimens.id=%d
-    """ % cluster_id)
+    """ % specimen)
     return [r['storage_directory'] for r in recs]
 
 
-def specimen_metadata(spec_id):
-    recs = lims.query("select data from specimen_metadata where specimen_id=%d" % spec_id)
+def specimen_metadata(specimen):
+    if not isinstance(specimen, int):
+        specimen = specimen_id_from_name(specimen)
+    recs = lims.query("select data from specimen_metadata where specimen_id=%d" % specimen)
     if len(recs) == 0:
         return None
     meta = recs[0]['data']
@@ -301,13 +310,15 @@ def specimen_metadata(spec_id):
     return meta
 
 
-def specimen_type(spec_id):
+def specimen_type(specimen):
+    if not isinstance(specimen, int):
+        specimen = specimen_id_from_name(specimen)
     q = """
     select specimen_types.name from specimens 
     left join specimen_types_specimens on specimen_types_specimens.specimen_id=specimens.id
     left join specimen_types on specimen_types.id=specimen_types_specimens.specimen_type_id
     where specimens.id=%d
-    """ % spec_id
+    """ % specimen
     recs = lims.query(q)
     return recs[0]['name']
 
