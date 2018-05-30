@@ -311,7 +311,7 @@ def get_incoming_dir(specimen_name):
     recs = lims.query(q)
     if recs[0]['incoming_directory'] == None:
         trigger_dir = get_trigger_dir(specimen_name)
-        return os.path.dirname(os.path.dirname(trigger))
+        return os.path.dirname(os.path.dirname(trigger_dir))
     else:
         return recs[0]['incoming_directory']
 

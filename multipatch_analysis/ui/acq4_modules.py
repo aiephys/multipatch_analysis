@@ -186,10 +186,11 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         cluster_id = []
         clusters = lims.cell_cluster_ids(self.slice_id)
         for cid in clusters:
-            cluster_tmsp = lims.specimen_metadata(cid)['acq_timestamp']
-            if cluster_tmsp == ts:
-                cluster_id.append(cid)
-                cluster_name = lims.specimen_name(cid)
+            if lims.specimen_metadata(cid) != None:
+                cluster_tmsp = lims.specimen_metadata(cid).get('acq_timestamp')
+                if cluster_tmsp == ts:
+                    cluster_id.append(cid)
+                    cluster_name = lims.specimen_name(cid)
             
 
         if cluster_id == None:
@@ -254,7 +255,9 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
             the_file.write("specimen_id: {}\n".format(cluster_id[0]))     
             the_file.write("cells_info: '{}'\n".format(incoming_json_save_path))
         
-
+    def save_json_and_trigger(self):
+        raise Exception("Thanks for tagging your cells!")
+        
 
 MosaicEditor.addExtension("Multi Patch", {
     'type': 'ctrl',
