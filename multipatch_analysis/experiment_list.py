@@ -332,6 +332,20 @@ class ExperimentList(object):
             name = ("%s->%s "%(','.join(pre_strs), ','.join(post_strs)))
         return distance_plot(connected, distance=probed, plots=plots, color=color, name=name, window=40e-6, spacing=40e-6)
 
+    def connectivity_matrix(self, rows, cols):
+        summary = self.connectivity_summary(cre_type=None)
+        matrix = np.empty((len(rows), len(cols)), dtype=[('connected', int), ('probed', int)])
+        for i,row in enumerate(rows):
+            for j,col in enumerate(cols):
+                if (row, col) in summary:
+                    conn = summary[(row, col)]['connected']
+                    uconn = summary[(row, col)]['unconnected']
+                else:
+                    conn, uconn = 0, 0
+                probed = conn + uconn
+                matrix[i, j] = (conn, probed)
+        return matrix
+
     def matrix(self, rows, cols, size=50, header_color='k', no_data_color=0.9, mode='connectivity', title='Connectivity Matrix'):
         w = pg.GraphicsLayoutWidget()
         w.setRenderHints(w.renderHints() | pg.QtGui.QPainter.Antialiasing)
@@ -353,7 +367,7 @@ class ExperimentList(object):
             )
         default = no_data_color
 
-        summary = self.connectivity_summary(cre_type=None)
+        conn_matrix = self.connectivity_matrix(rows, cols)
 
         shape = (len(rows), len(cols))
         text = np.empty(shape, dtype=object)
@@ -363,12 +377,7 @@ class ExperimentList(object):
 
         for i,row in enumerate(rows):
             for j,col in enumerate(cols):
-                if (row, col) in summary:
-                    conn = summary[(row, col)]['connected']
-                    uconn = summary[(row, col)]['unconnected']
-                else:
-                    conn, uconn = 0, 0
-                probed = conn + uconn
+                conn, probed = conn_matrix[i, j]
 
                 if probed == 0:
                     color = default
