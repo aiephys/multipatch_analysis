@@ -151,8 +151,8 @@ class ExperimentMetadataSubmission(object):
                     warnings.append("Time of dissection is later than experiment time - 30 minutes")
                 if seconds_since_dissection < 0:
                     errors.append("Time of dissection is later than experiment time" + extra_err)
-                if seconds_since_dissection > 6*3600:
-                    warnings.append("Time of dissection is more than 6 hours prior to experiment")
+                if seconds_since_dissection > 10*3600:
+                    warnings.append("Time of dissection is more than 10 hours prior to experiment")
 
         # check specimen age
         if self.spec_info['age'] is None:
@@ -338,7 +338,7 @@ class ExperimentMetadataSubmission(object):
             # import labels
             labels = {}
             for label,pos in cell._raw_labels.items():
-                if pos not in ['', '+', '-', '+?', '-?', 'x']:
+                if pos not in ['', '+', '-', '+?', '-?', '?',F 'x']:
                     warnings.append('Pipette %d: ignoring old label "%s" because the value "%s" is unrecognized' % (pid, label, pos))
                     continue
 
