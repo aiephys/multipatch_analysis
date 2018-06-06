@@ -183,6 +183,10 @@ class ExperimentMetadataSubmission(object):
                 errors.append('Pipette %d has unrecognized internal "%s"' % (pip_id, pip['internal_solution']))
             
             # Does the selected dye overlap with cre reporters?
+
+            # Check pipette status
+            if pip['status'] not in ['No seal', 'Low seal', 'GOhm seal', 'Technical failure', 'No attempt', 'Not recorded']:
+                warnings.append('Pipette %d has unrecognized status "%s"' % (pip_id, pip['status']))
         
         # If slice was not fixed, don't attempt LIMS submission
         try:
