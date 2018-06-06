@@ -185,8 +185,8 @@ class ExperimentMetadataSubmission(object):
             # Does the selected dye overlap with cre reporters?
 
             # Check pipette status
-            if pip['status'] not in ['No seal', 'Low seal', 'GOhm seal', 'Technical failure', 'No attempt', 'Not recorded']:
-                warnings.append('Pipette %d has unrecognized status "%s"' % (pip_id, pip['status']))
+            if pip['pipette_status'] not in ['No seal', 'Low seal', 'GOhm seal', 'Technical failure', 'No attempt', 'Not recorded']:
+                warnings.append('Pipette %d has unrecognized status "%s"' % (pip_id, pip['pipette_status']))
         
         # If slice was not fixed, don't attempt LIMS submission
         try:
