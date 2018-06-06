@@ -141,6 +141,7 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
                 print("20x image moved")
         self.image_20 = safe_save_path
         self.create_json_btn.setEnabled(True)
+        self.save_json_btn.setEnabled(False)
 
                 
 
@@ -222,7 +223,7 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
                 'ephys_qc_result': ('pass' if pipette_log[cell_name]['got_data'] == True else 'fail'),                 
                 'start_time_sec': time.mktime(pipette_log[cell_name]['patch_start'].timetuple())
             })
-        print('Found {} cells in the cluster'.format(len(self.data)))
+        print('Found {} cells in the cluster'.format(len(self.data['cells'])))
 
         self.save_json_btn.setEnabled(True)
 
@@ -233,7 +234,6 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         incoming folders for LIMS
         disables create json button
         """
-        self.create_json_btn.setEnabled(False)
 
         json_save_file = self.cluster_name + "_ephys_cell_cluster.json"
 
@@ -262,6 +262,7 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
             the_file.write("cells_info: '{}'\n".format(incoming_json_save_path))
        
         raise Exception("Thanks for tagging your cells!")
+        self.save_json_btn.setEnabled(False)
         
 
 MosaicEditor.addExtension("Multi Patch", {
