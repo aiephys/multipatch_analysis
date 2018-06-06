@@ -278,7 +278,7 @@ class PipetteParameter(pg.parametertree.parameterTypes.GroupParameter):
         self.ui = ui
         params = [
             {'name': 'channel', 'type': 'list', 'values': ui.list_channels()},
-            {'name': 'status', 'type': 'list', 'values': ['No seal', 'Low seal', 'GOhm seal', 'Technical failure']},
+            {'name': 'status', 'type': 'list', 'values': ['No seal', 'Low seal', 'GOhm seal', 'Technical failure', 'No attempt']},
             {'name': 'got data', 'type': 'bool'},
             {'name': 'internal', 'type': 'list', 'values': [''] + constants.INTERNAL_RECIPES},
             {'name': 'internal dye', 'type': 'list', 'values': [''] + constants.INTERNAL_DYES},
