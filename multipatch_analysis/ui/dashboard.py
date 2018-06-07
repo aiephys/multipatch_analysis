@@ -344,7 +344,6 @@ class GrowingArray(object):
 
     def update_record(self, index, rec):
         for k,v in rec.items():
-            print(k, v)
             self._data[index][k] = v
 
     def _grow(self, size):

@@ -790,23 +790,7 @@ class Experiment(object):
 
     @property
     def nwb_cache_file(self):
-        try:
-            return SynPhysCache().get_cache(self.nwb_file)
-        except:
-            # deprecated soon..
-            if not os.path.isdir('cache'):
-                os.mkdir('cache')
-            cf = os.path.join('cache', self.nwb_file.replace('/', '_').replace(':', '_').replace('\\', '_'))
-            if not os.path.isfile(cf) or os.stat(self.nwb_file).st_mtime > os.stat(cf).st_mtime:
-                try:
-                    import shutil
-                    print("copying to cache:", cf)
-                    shutil.copyfile(self.nwb_file, cf)
-                except:
-                    if os.path.isfile(cf):
-                        os.remove(cf)
-                    raise
-            return cf
+        return SynPhysCache().get_cache(self.nwb_file)
 
     @property
     def data(self):
