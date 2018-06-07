@@ -193,8 +193,11 @@ def specimen_images(specimen):
                 images.append({'id':image_ids[k], 'file': image_files[k], 'treatment': k[0], 'resolution': k[1], 'url': None})
         else:
             for image in results:
-                path = image['storage_directory'].rstrip('/') + '/' + image['jp2']
-                url = "http://lims2/siv?sub_image=%d"%image['id']
+                if image['storage_directory'] is None:
+                    path = None
+                else:
+                    path = image['storage_directory'].rstrip('/') + '/' + image['jp2']
+                url = "http://lims2/siv?sub_image=%d" % image['id']
                 images.append({'id':image['id'], 'file': path, 'treatment': image['name'], 'resolution': image['resolution'], 'url': url})
             
     return images
@@ -389,12 +392,14 @@ def submit_expt(spec_name, acq_timestamp, nwb_file, json_file):
     return incoming_files
 
 
-def expt_submissions(spec_id, acq_timestamp):
+def expt_submissions(specimen, acq_timestamp):
     """Return information about the status of each submission found for an
     experiment, identified by its specimen ID and experiment uid.
     """
+    if not isinstance(specimen, int):
+        specimen = specimen_id_from_name(specimen)
     submissions = []
-    filebase = filename_base(spec_id, acq_timestamp)
+    filebase = filename_base(specimen, acq_timestamp)
     
     # Do we have incoming files?
     incoming_path = '/allen/programs/celltypes/production/incoming/mousecelltypes'
@@ -410,7 +415,7 @@ def expt_submissions(spec_id, acq_timestamp):
             submissions.append(("trigger failed", failed_trigger, error))
             
     # Anything in LIMS already?
-    cluster_ids = expt_cluster_ids(spec_id, acq_timestamp)
+    cluster_ids = expt_cluster_ids(specimen, acq_timestamp)
     for cid in cluster_ids:
         data_path = cell_cluster_data_paths(cid)
         submissions.append(("succeeded", cid, data_path))
@@ -418,10 +423,12 @@ def expt_submissions(spec_id, acq_timestamp):
     return submissions
     
 
-def expt_cluster_ids(spec_id, acq_timestamp):
+def expt_cluster_ids(specimen, acq_timestamp):
     """Return a list of CellCluster IDs associated with an experiment
     """
-    cluster_ids = cell_cluster_ids(spec_id)
+    if not isinstance(specimen, int):
+        specimen = specimen_id_from_name(specimen)
+    cluster_ids = cell_cluster_ids(specimen)
     cids = []
     for cid in cluster_ids:
         meta = specimen_metadata(cid)
