@@ -1,7 +1,7 @@
 import numpy as np
 
 from neuroanalysis.miesnwb import MiesNwb, MiesSyncRecording, MiesRecording
-from neuroanalysis.stimuli import square_pulses
+from neuroanalysis.stimuli import find_square_pulses
 from neuroanalysis.spike_detection import detect_evoked_spike
 
 
@@ -112,7 +112,8 @@ class PulseStimAnalyzer(Analyzer):
         """
         if self._pulses is None:
             trace = self.rec['command'].data
-            self._pulses = square_pulses(trace)
+            pulses = square_pulses(trace)
+            self._pulses = [(p.global_start_time, p.global_start_time+p.duration, p.amplitude) for p in pulses]
         return self._pulses
 
     def evoked_spikes(self):
