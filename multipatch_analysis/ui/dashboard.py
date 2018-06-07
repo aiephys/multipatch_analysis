@@ -394,30 +394,31 @@ class PollThread(QtCore.QThread):
         root_dh = getDirHandle(path)
 
         # iterate over all expt sites in this path
-        for expt_path in glob.iglob(os.path.join(root_dh.name(), '*', 'slice_*', 'site_*')):
-            if self._stop:
-                return
+        for day_name in sorted(os.listdir(root_dh.name()), reverse=True):
+            for expt_path in glob.iglob(os.path.join(root_dh.name(), day_name, 'slice_*', 'site_*')):
+                if self._stop:
+                    return
 
-            expt = ExperimentMetadata(path=expt_path)
-            ts = expt.timestamp
+                expt = ExperimentMetadata(path=expt_path)
+                ts = expt.timestamp
 
-            # Couldn't get timestamp; show an error message
-            if ts is None:
-                print("Error getting timestamp for %s" % expt)
-                continue
+                # Couldn't get timestamp; show an error message
+                if ts is None:
+                    print("Error getting timestamp for %s" % expt)
+                    continue
 
-            with self.known_expts_lock:
-                if ts in self.known_expts:
-                    # We've already seen this expt elsewhere; skip
-                    continue            
-                self.known_expts[ts] = expt
+                with self.known_expts_lock:
+                    if ts in self.known_expts:
+                        # We've already seen this expt elsewhere; skip
+                        continue            
+                    self.known_expts[ts] = expt
 
-            # Add this expt to the queue to be checked
-            self.expt_queue.put((-ts, expt))
+                # Add this expt to the queue to be checked
+                self.expt_queue.put((-ts, expt))
 
-            count += 1
-            if self.limit > 0 and count >= self.limit:
-                return
+                count += 1
+                if self.limit > 0 and count >= self.limit:
+                    return
         self.update.emit(path, "Finished")
 
 
