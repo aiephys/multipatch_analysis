@@ -31,7 +31,7 @@ ALL_LABELS = ['biocytin', 'af488', 'cascade_blue'] + FLUOROPHORES.keys()
 LAYERS = ['1', '2', '2/3', '3', '4', '5', '5a', '5b', '6']
 
 ACSF_RECIPES = ["2mM Ca & Mg", "1.3mM Ca & 1mM Mg"]
-INTERNAL_RECIPES = ["Standard K-Gluc"]
+INTERNAL_RECIPES = ["Standard K-Gluc", "PatchSeq"]
 INTERNAL_DYES = ['Cascade Blue', 'AF488']
 
 
