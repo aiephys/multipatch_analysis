@@ -24,7 +24,7 @@ class MultiPatchSyncRecording(MiesSyncRecording):
     
     def create_recording(self, sweep_id, ch):
         miesrec = MiesRecording(self, sweep_id, ch)
-        stim = miesrec.meta['stim_name'].lower()
+        stim = miesrec.stimulus.description
         if 'pulsetrain' in stim or 'recovery' in stim:
             return MultiPatchProbe(miesrec)
         else:
