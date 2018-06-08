@@ -360,11 +360,12 @@ class PollThread(QtCore.QThread):
     known_expts = {}
     known_expts_lock = threading.Lock()
 
-    def __init__(self, expt_queue, search_path, limit=0):
+    def __init__(self, expt_queue, search_path, limit=0, interval=3600):
         QtCore.QThread.__init__(self)
         self.expt_queue = expt_queue
         self.search_path = search_path
         self.limit = limit
+        self.interval = interval
         self._stop = False
         self.waker = threading.Event()
         
@@ -377,12 +378,11 @@ class PollThread(QtCore.QThread):
             try:
                 # check for new experiments hourly
                 self.poll()
-                self.waker.wait(3600)
+                self.waker.wait(self.interval)
                 if self._stop:
                     return
             except Exception:
                 sys.excepthook(*sys.exc_info())
-            break
                 
     def poll(self):
         # Find all available site paths across all data sources
@@ -407,10 +407,13 @@ class PollThread(QtCore.QThread):
                     continue
 
                 with self.known_expts_lock:
+                    now = time.time()
                     if ts in self.known_expts:
-                        # We've already seen this expt elsewhere; skip
-                        continue            
-                    self.known_expts[ts] = expt
+                        expt, last_update = self.known_expts[ts]
+                        if now - last_update < self.interval:
+                            # We've already seen this expt recently; skip
+                            continue
+                    self.known_expts[ts] = (expt, now)
 
                 # Add this expt to the queue to be checked
                 self.expt_queue.put((-ts, expt))
