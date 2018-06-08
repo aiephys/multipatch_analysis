@@ -522,6 +522,14 @@ class ExperimentMetadata(Experiment):
         self._archive_path = None
         self._backup_path = None
 
+        # reassign path based on order of most likely to be updated
+        for path_typ in ['primary', 'archive', 'nas', 'backup']:
+            path = getattr(self, path_typ + '_path')
+            if path is not None:
+                self._site_path = path
+                self.site_dh = getDirHandle(path)
+                break
+
     def _get_raw_paths(self):
         expt_subpath = self.expt_subpath
 
