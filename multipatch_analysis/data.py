@@ -60,9 +60,6 @@ class MultiPatchProbe(MiesRecording):
         self._parent_rec = recording
         self._base_regions = None
         
-    #@property    
-    #def induction_frequency(self):
-        #return self.stim_params
     def __len__(self):
         return len(self._parent_rec)
 
@@ -111,9 +108,13 @@ class PulseStimAnalyzer(Analyzer):
         in the stimulus.
         """
         if self._pulses is None:
-            trace = self.rec['command'].data
-            pulses = square_pulses(trace)
-            self._pulses = [(p.global_start_time, p.global_start_time+p.duration, p.amplitude) for p in pulses]
+            trace = self.rec['command']
+            pulses = find_square_pulses(trace)
+            self._pulses = []
+            for p in pulses:
+                start = trace.index_at(p.global_start_time)
+                stop = trace.index_at(p.global_start_time + p.duration)
+                self._pulses.append((start, stop, p.amplitude))
         return self._pulses
 
     def evoked_spikes(self):
