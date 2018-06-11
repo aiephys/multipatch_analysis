@@ -630,13 +630,14 @@ class ExperimentMetadata(Experiment):
                     path = self.site_dh.name()
                 m = re.search(r'(/|\\)(mp\d)(/|\\)', path)
                 if m is None:
+                    # last resort: see if we can find the experiment path in the config list of rig data locations
                     path = os.path.abspath(self.site_dh.name())
-                    for rig,paths in config.rig_data_paths.items():
-                        data_paths = paths.values()
-                        for data_path in paths:
-                            if path.startswith(os.path.abspath(data_path)):
-                                self._rig_name = rig
-                                break
+                    for rig,sources in config.rig_data_paths.items():
+                        for data_source in sources:
+                            for data_path in data_source.values():
+                                if path.startswith(os.path.abspath(data_path)):
+                                    self._rig_name = rig
+                                    break
                         if self._rig_name is not None:
                             break
                     
