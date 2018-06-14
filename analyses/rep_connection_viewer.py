@@ -12,7 +12,8 @@ from multipatch_analysis.constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_T
 
 ### Select synapses for representative traces as {('pre-type'), ('post-type'): [UID, Pre_cell, Post_cell], } ###
 
-connection_types = {(('5','unknown'), ('5','unknown')): ['1503376975.16', 2, 4]}
+
+connection_types = {((None,'sim1'), (None,'sim1')): ['1490642434.41', 3, 5]}
 
 pg.dbg()
 app = pg.mkQApp()
@@ -73,11 +74,11 @@ for row in range(len(connection_types)):
     elif expt.cells[pre_cell].cre_type in INHIBITORY_CRE_TYPES:
         holding = holding_i
         sign = '-'
-    pulse_response, artifact = get_response(expt, pre_cell, post_cell, type='pulse')
+    pulse_response, artifact = get_response(expt, pre_cell, post_cell, analysis_type='pulse')
     sweep_list = response_filter(pulse_response, freq_range=[0, 50], holding_range=holding, pulse=True)
     n_sweeps = len(sweep_list[0])
     if n_sweeps > sweep_threshold:
-        qc_list = pulse_qc(sweep_list, baseline=2, pulse=None, plot=grid[row, 1])
+        qc_list = pulse_qc(sweep_list, baseline=2, pulse=None, plot=pg.plot())
         qc_sweeps = len(qc_list)
         if qc_sweeps > sweep_threshold:
             avg_first_pulse = trace_avg(qc_list)
@@ -109,7 +110,7 @@ for row in range(len(connection_types)):
         x_scale.setParentItem(grid[row, 0].vb)
         x_scale.anchor(scale_anchor, scale_anchor, offset=scale_offset)
     if plot_trains is True:
-        train_responses = get_response(expt, pre_cell, post_cell, type='train')
+        train_responses, _ = get_response(expt, pre_cell, post_cell, analysis_type='train')
         train_sweep_list = response_filter(train_responses['responses'], freq_range=[50, 50], holding_range=holding, train=0)
         n_train_sweeps = len(train_sweep_list)
         if n_train_sweeps > sweep_threshold:
