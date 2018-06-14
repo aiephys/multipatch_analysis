@@ -804,6 +804,11 @@ class Experiment(object):
             except IOError:
                 os.remove(self.nwb_cache_file)
                 self._data = MultiPatchExperiment(self.nwb_cache_file)
+            except Exception as exc:
+                if 'is not inside' in exc.args[0]:
+                    return MultiPatchExperiment(self.nwb_file)
+                else:
+                    raise
         return self._data
 
     def close_data(self):
@@ -968,14 +973,9 @@ class Experiment(object):
     def server_path(self):
         """The path of this experiment relative to the server storage directory.
         """
-        expt_timestamp = self.expt_info['__timestamp__']
-        path_file = os.path.join(config.synphys_data, 'experiment_path_cache.pkl')
-        paths = pickle.load(open(path_file, 'rb'))
-        expt_path = paths.get(expt_timestamp, None)
-        if expt_path is None:
-            return None
-        rel = self.path.split(os.path.sep)[-2:]
-        return os.path.join(expt_path, *rel)
+        expt_dir = '%0.3f' % self.expt_info['__timestamp__']
+        subpath = self.path.split(os.path.sep)[-2:]
+        return os.path.abspath(os.path.join(expt_dir, *subpath))
 
     @property
     def rig_name(self):

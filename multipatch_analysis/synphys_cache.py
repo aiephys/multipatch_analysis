@@ -17,7 +17,7 @@ class SynPhysCache(object):
     def __init__(self, local_path=config.cache_path, remote_path=config.synphys_data):
         # If a relative path is given, then interpret it as relative to home
         if not os.path.isabs(local_path):
-            local_path = os.path.join(os.path.expanduser('~'), local_path)
+            local_path = os.path.join(os.path.dirname(__file__), '..', local_path)
 
         self.local_path = os.path.abspath(local_path)
         self.remote_path = os.path.abspath(remote_path)
