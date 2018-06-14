@@ -64,7 +64,7 @@ class ExperimentMetadataSubmission(object):
             info = fh.info()
             if 'category' in info and info['category'] != file_info['category']:
                 warnings.append("category for file %s will change %s => %s" % 
-                                (info['category'], file_info['category']))
+                                (fh.name(), info['category'], file_info['category']))
             
             max_size = max_sizes.get(file_info['category'], 0)
             size = int(os.stat(fh.name()).st_size / 1e6)
@@ -141,16 +141,18 @@ class ExperimentMetadataSubmission(object):
                 # interpret time of dissection
                 if year is None:
                     diss_time = datetime(site_date.year, site_date.month, site_date.day, int(h), int(m))
+                    extra_err = " (try specifying the full date like `yyyy-mm-dd hh:mm`)"
                 else:
                     diss_time = datetime(int(year), int(mon), int(day), int(h), int(m))
+                    extra_err = ""
                 # check time
                 seconds_since_dissection = (site_date - diss_time).total_seconds()
                 if seconds_since_dissection < 30*60:
                     warnings.append("Time of dissection is later than experiment time - 30 minutes")
                 if seconds_since_dissection < 0:
-                    errors.append("Time of dissection is later than experiment time")
-                if seconds_since_dissection > 6*3600:
-                    warnings.append("Time of dissection is more than 6 hours prior to experiment")
+                    errors.append("Time of dissection is later than experiment time" + extra_err)
+                if seconds_since_dissection > 10*3600:
+                    warnings.append("Time of dissection is more than 10 hours prior to experiment")
 
         # check specimen age
         if self.spec_info['age'] is None:
@@ -181,6 +183,10 @@ class ExperimentMetadataSubmission(object):
                 errors.append('Pipette %d has unrecognized internal "%s"' % (pip_id, pip['internal_solution']))
             
             # Does the selected dye overlap with cre reporters?
+
+            # Check pipette status
+            if pip['pipette_status'] not in ['No seal', 'Low seal', 'GOhm seal', 'Technical failure', 'No attempt', 'Not recorded']:
+                warnings.append('Pipette %d has unrecognized status "%s"' % (pip_id, pip['pipette_status']))
         
         # If slice was not fixed, don't attempt LIMS submission
         try:
@@ -252,14 +258,13 @@ class ExperimentMetadataSubmission(object):
                     warnings.append("Histology plate number %s might be too high? %s" % (plate_n, lims_edit_href))
 
         # Check carousel ID matches the one in LIMS
-        if self.spec_info['organism'] == 'human' and self.spec_info['subsection_number'] is not None:
-            # this specimen was divided; ask about the parent carousel well name instead
-            parent_spec_info = lims.specimen_info(specimen_id=self.spec_info['parent_id'])
-            cw_name = parent_spec_info['carousel_well_name']
-        else:
-            cw_name = self.spec_info['carousel_well_name']
-        
-        if cw_name is None or len(cw_name.strip()) == 0:
+        cw_name = self.spec_info['carousel_well_name']
+        if cw_name is None and self.spec_info['organism'] == 'human' and self.spec_info['subsection_number'] is not None:
+                # this specimen was subdivided; we need to ask about the parent carousel well name instead
+                # note that this behavior has changed-- newer subdivided specimens will have their own carousel well name
+                parent_spec_info = lims.specimen_info(specimen_id=self.spec_info['parent_id'])
+                cw_name = parent_spec_info['carousel_well_name']
+        if cw_name is None:
             errors.append('No LIMS carousel well name for this specimen!')
         else:
             if cw_name != slice_info['carousel_well_ID'].strip():
@@ -337,7 +342,7 @@ class ExperimentMetadataSubmission(object):
             # import labels
             labels = {}
             for label,pos in cell._raw_labels.items():
-                if pos not in ['', '+', '-', '+?', '-?', 'x']:
+                if pos not in ['', '+', '-', '+?', '-?', '?', 'x']:
                     warnings.append('Pipette %d: ignoring old label "%s" because the value "%s" is unrecognized' % (pid, label, pos))
                     continue
 
@@ -365,6 +370,9 @@ class ExperimentMetadataSubmission(object):
                     if pip['target_layer'] == '':
                         pip['target_layer'] = '2/3'
                         warnings.append("Pipette %d: imported layer %s from old metadata." % (pid, pip['target_layer']))
+                    if cell._raw_labels['biocytin'] == '+':
+                        pip['morphology'] = 'pyr'
+                        warnings.append("Pipette %d: imported pyr morphology from old metadata." % pid)    
                 # cre type; convert to color(s)
                 elif label in constants.ALL_CRE_TYPES:
                     if genotype is None:

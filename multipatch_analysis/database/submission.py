@@ -420,7 +420,9 @@ class ExperimentDBSubmission(object):
                         #     mode=float_mode(resp['baseline'].data),
                         # )
                         # session.add(base_entry)
-                        pair_entry = pairs_by_device_id[(pre_dev, post_dev)]
+                        pair_entry = pairs_by_device_id.get((pre_dev, post_dev), None)
+                        if pair_entry is None:
+                            continue  # no data for one or both channels
                         if resp['ex_qc_pass']:
                             pair_entry.n_ex_test_spikes += 1
                         if resp['in_qc_pass']:

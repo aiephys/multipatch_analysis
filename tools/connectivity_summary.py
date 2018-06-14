@@ -12,7 +12,7 @@ import re
 import sys
 from collections import OrderedDict
 import user
-
+import numpy as np
 import pyqtgraph as pg
 
 from multipatch_analysis.experiment_list import ExperimentList, cache_file
@@ -169,12 +169,22 @@ human_types = OrderedDict([
 human_types = OrderedDict([(typ, "L%s %s" % typ) for typ in human_types])
 
 if args.organism == 'mouse':
-    m0 = expts.matrix(mouse_types, mouse_types, mode='progress')
-    m1 = expts.matrix(mouse_types, mouse_types)
-    m2 = expts.matrix(mouse_ee_types, mouse_ee_types)
-    m3 = expts.matrix(mouse_nolayer_types, mouse_nolayer_types)
+    m0 = expts.matrix(mouse_types, mouse_types, mode='progress', title='Mouse Coarse Progress Matrix')
+    m1 = expts.matrix(mouse_types, mouse_types, title='Mouse Coarse Cp Matrix')
+    m2 = expts.matrix(mouse_ee_types, mouse_ee_types, title='Mouse L5 Recurrent Excitatory Matrix')
+    m3 = expts.matrix(mouse_nolayer_types, mouse_nolayer_types, title='Mouse cre-type Matrix')
+
+    # print total % complete
+    matrix = expts.connectivity_matrix(mouse_types, mouse_types)
+    n_started = (matrix['probed'] > 0).sum()
+    probed = matrix['probed'] / 80.
+    connected = matrix['connected'] / 10.
+    progress = np.clip(np.where(probed > connected, probed, connected), 0, 1)
+    print("Total progress %0.1f%%  (%d started)" % (100 * progress.sum()/90., n_started))
+
+
 elif args.organism == 'human':
-    m1 = expts.matrix(human_types, human_types)
+    m1 = expts.matrix(human_types, human_types, title='Human Cp Matrix')
     # m1 = expts.matrix(human_types, human_types, mode='progress')
 
 #human distance plots

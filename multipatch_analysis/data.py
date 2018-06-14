@@ -1,7 +1,7 @@
 import numpy as np
 
 from neuroanalysis.miesnwb import MiesNwb, MiesSyncRecording, MiesRecording
-from neuroanalysis.stimuli import square_pulses
+from neuroanalysis.stimuli import find_square_pulses
 from neuroanalysis.spike_detection import detect_evoked_spike
 
 
@@ -24,7 +24,7 @@ class MultiPatchSyncRecording(MiesSyncRecording):
     
     def create_recording(self, sweep_id, ch):
         miesrec = MiesRecording(self, sweep_id, ch)
-        stim = miesrec.meta['stim_name'].lower()
+        stim = miesrec.stimulus.description.lower()
         if 'pulsetrain' in stim or 'recovery' in stim:
             return MultiPatchProbe(miesrec)
         else:
@@ -60,9 +60,6 @@ class MultiPatchProbe(MiesRecording):
         self._parent_rec = recording
         self._base_regions = None
         
-    #@property    
-    #def induction_frequency(self):
-        #return self.stim_params
     def __len__(self):
         return len(self._parent_rec)
 
@@ -111,8 +108,13 @@ class PulseStimAnalyzer(Analyzer):
         in the stimulus.
         """
         if self._pulses is None:
-            trace = self.rec['command'].data
-            self._pulses = square_pulses(trace)
+            trace = self.rec['command']
+            pulses = find_square_pulses(trace)
+            self._pulses = []
+            for p in pulses:
+                start = trace.index_at(p.global_start_time)
+                stop = trace.index_at(p.global_start_time + p.duration)
+                self._pulses.append((start, stop, p.amplitude))
         return self._pulses
 
     def evoked_spikes(self):
