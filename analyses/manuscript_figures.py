@@ -107,7 +107,7 @@ def get_response(expt, pre, post, analysis_type='pulse'):
     if len(response) == 0:
         print "No suitable data found for cell %d -> cell %d in expt %s" % (pre, post, expt.source_id)
         return response, None
-    artifact = analyzer.cross_talk()
+    artifact = analyzer.cross_talk() #TODO: what is this number?
     return response, artifact
 
 def get_amplitude(response_list):
