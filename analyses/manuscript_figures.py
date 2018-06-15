@@ -64,7 +64,7 @@ def cache_response(expt, pre, post, cache, analysis_type='pulse'):
         key = (expt.uid, pre, post)
         if key in cache:
             response = cache[key]
-            # if type == 'pulse':
+            # if analysis_type == 'pulse':
             #     response = format_responses(responses)
             # else:
             #     response = responses
@@ -75,7 +75,7 @@ def cache_response(expt, pre, post, cache, analysis_type='pulse'):
         cache[key] = response
         cache_change = 1
         print ("cached connection %s, %d -> %d" % (key[0], key[1], key[2]))
-        # if type == 'pulse':
+        # if analysis_type == 'pulse':
         #     response = format_responses(responses)
         # else:
         #     response = responses
@@ -107,7 +107,7 @@ def get_response(expt, pre, post, analysis_type='pulse'):
     if len(response) == 0:
         print "No suitable data found for cell %d -> cell %d in expt %s" % (pre, post, expt.source_id)
         return response, None
-    artifact = analyzer.cross_talk()
+    artifact = analyzer.cross_talk() #TODO: what is this number?
     return response, artifact
 
 def get_amplitude(response_list):
@@ -174,7 +174,6 @@ def bsub(trace):
     Parameters
     ----------
     trace : neuroanalysis.data.Trace object  
-        Note: there is also an 
         
     Returns
     -------
@@ -360,9 +359,12 @@ def pulse_qc(responses, baseline=None, pulse=None, plot=None):
         response = bsub(response)
         data = response.data
         if np.mean(data[:base_win]) > (baseline * base_std):
-            plot.plot(response.time_values, response.data, pen='r')
+            if plot is not None:
+                plot.plot(response.time_values, response.data, pen='r')
+        #deprecate? or make standard?
         # elif np.mean(data[pulse_win:]) > (pulse * pulse_std) and plot is not None:
-        #     plot.plot(response.time_values, response.data, pen='b')
+        #    if plot is not None:
+        #         plot.plot(response.time_values, response.data, pen='b')
         else:
             if plot is not None:
                 plot.plot(response.time_values, response.data)
