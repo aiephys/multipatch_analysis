@@ -750,7 +750,7 @@ class Experiment(object):
 
     @property
     def slice_timestamp(self):
-        return datetime.datetime.fromtimestamp(self.slice_info['__timestamp__'])
+        return self.slice_info['__timestamp__']
 
     @property
     def slice_dir(self):

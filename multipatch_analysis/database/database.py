@@ -27,7 +27,7 @@ _sample_rate_str = '%dkHz' % (default_sample_rate // 1000)
 table_schemas = {
     'slice': [
         "All brain slices on which an experiment was attempted.",
-        ('acq_timestamp', 'datetime', 'Creation timestamp for slice data acquisition folder.', {'unique': True}),
+        ('acq_timestamp', 'float', 'Creation timestamp for slice data acquisition folder.', {'unique': True}),
         ('species', 'str', 'Human | mouse (from LIMS)'),
         ('age', 'int', 'Specimen age (in days) at time of dissection (from LIMS)'),
         ('sex', 'str', 'Specimen sex ("M", "F", or "unknown"; from LIMS)'),
@@ -49,7 +49,7 @@ table_schemas = {
         ('storage_path', 'str', 'Location of data within server or cache storage.'),
         ('ephys_file', 'str', 'Name of ephys NWB file relative to storage_path.'),
         ('rig_name', 'str', 'Identifier for the rig that generated these results.'),
-        ('acq_timestamp', 'datetime', 'Creation timestamp for site data acquisition folder.', {'unique': True, 'index': True}),
+        ('acq_timestamp', 'float', 'Creation timestamp for site data acquisition folder.', {'unique': True, 'index': True}),
         ('slice_id', 'slice.id', 'ID of the slice used for this experiment'),
         ('target_region', 'str', 'The intended brain region for this experiment'),
         ('internal', 'str', 'The name of the internal solution used in this experiment. '
@@ -516,13 +516,11 @@ def slice_from_timestamp(ts, session=None):
 
 @default_session
 def experiment_from_timestamp(ts, session=None):
-    if isinstance(ts, float):
-        ts = datetime.fromtimestamp(ts)
     expts = session.query(Experiment).filter(Experiment.acq_timestamp==ts).all()
     if len(expts) == 0:
         # For backward compatibility, check for timestamp truncated to 2 decimal places
         for expt in session.query(Experiment).all():
-            if abs((expt.acq_timestamp - ts).total_seconds()) < 0.01:
+            if abs((expt.acq_timestamp - ts)) < 0.01:
                 return expt
         
         raise KeyError("No experiment found for timestamp %s" % ts)
