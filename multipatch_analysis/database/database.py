@@ -131,7 +131,7 @@ table_schemas = {
         ('recording_id', 'recording.id', '', {'index': True}),
         ('clamp_mode', 'str', 'The mode used by the patch clamp amplifier: "ic" or "vc"', {'index': True}),
         ('patch_mode', 'str', "The state of the membrane patch. E.g. 'whole cell', 'cell attached', 'loose seal', 'bath', 'inside out', 'outside out'"),
-        ('stim_name', 'object', "The name of the stimulus protocol"),
+        ('stim_name', 'str', "The name of the stimulus protocol"),
         ('baseline_potential', 'float', 'Median steady-state potential (recorded for IC or commanded for VC) during the recording'),
         ('baseline_current', 'float', 'Median steady-state current (recorded for VC or commanded for IC) during the recording'),
         ('baseline_rms_noise', 'float', 'RMS noise of the steady-state part of the recording'),

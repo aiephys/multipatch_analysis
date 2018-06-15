@@ -265,7 +265,8 @@ class ExperimentDBSubmission(object):
                 pairs_by_device_id[(pre_id, post_id)] = pair_entry
 
         # Load NWB file and create data entries
-        self._load_nwb(session, expt_entry, elecs_by_ad_channel, pairs_by_device_id)
+        if self.expt.nwb_file is not None:
+            self._load_nwb(session, expt_entry, elecs_by_ad_channel, pairs_by_device_id)
 
         return expt_entry
 
@@ -300,7 +301,7 @@ class ExperimentDBSubmission(object):
                     recording=rec_entry,
                     clamp_mode=rec.clamp_mode,
                     patch_mode=rec.patch_mode,
-                    stim_name=rec.meta['stim_name'],
+                    stim_name=rec.stimulus.description,
                     baseline_potential=rec.baseline_potential,
                     baseline_current=rec.baseline_current,
                     baseline_rms_noise=rec.baseline_rms_noise,
