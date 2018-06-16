@@ -975,7 +975,7 @@ class Experiment(object):
         """
         expt_dir = '%0.3f' % self.expt_info['__timestamp__']
         subpath = self.path.split(os.path.sep)[-2:]
-        return os.path.abspath(os.path.join(expt_dir, *subpath))
+        return os.path.join(expt_dir, *subpath)
 
     @property
     def rig_name(self):
