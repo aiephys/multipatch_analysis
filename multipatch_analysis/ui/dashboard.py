@@ -176,6 +176,7 @@ class Dashboard(QtGui.QWidget):
             self.pollers.append(poll_thread)
 
         # Checkers pull experiments off of the queue and check their status
+        self._incoming_checker_records = []
         if no_thread:
             self.checker = ExptCheckerThread(self.expt_queue)
             self.checker.update.connect(self.checker_update)
@@ -193,6 +194,9 @@ class Dashboard(QtGui.QWidget):
         self.status_timer = QtCore.QTimer()
         self.status_timer.timeout.connect(self.update_status)
         self.status_timer.start(1000)
+
+        self.handle_checker_record_timer = QtCore.QTimer()
+        self.handle_checker_record_timer.timeout.connect(self.handle_all_checker_records)
 
     def contextMenuEvent(self, event):
         self.menu.popup(event.globalPos())
@@ -233,6 +237,23 @@ class Dashboard(QtGui.QWidget):
     def checker_update(self, rec):
         """Received an update from a worker thread describing information about an experiment
         """
+        # collect incoming records and process on a timer to ensure the ui doesn't get blocked.
+        self._incoming_checker_records.append(rec)
+        self.handle_checker_record_timer.start(0)
+
+    def handle_all_checker_records(self):
+        recs = self._incoming_checker_records
+        count = 0
+        while len(recs) > 0:
+            rec = recs.pop(0)
+            self.handle_checker_record(rec)
+            count += 1
+            if count > 2:
+                # yield to the event loop
+                return
+        self.handle_checker_record_timer.stop()
+
+    def handle_checker_record(self, rec):
         expt = rec['experiment']
         if expt in self.records_by_expt:
             # use old record / item
@@ -293,7 +314,7 @@ class Dashboard(QtGui.QWidget):
 
         self.filter_items(self.records[index:index+1])
 
-    def filter_changed(self):
+    def filter_changed(self, *args):
         self.filter_items(self.records)
 
     def filter_items(self, records):
@@ -536,18 +557,20 @@ class ExperimentMetadata(Experiment):
                     rec['site.mosaic'] = self.mosaic_file is not None
                     rec['DB'] = self.in_database
 
-                    subs = self.lims_submissions
-                    if subs is None:
-                        lims = "ERROR"
-                    else:
-                        lims = len(subs) == 1
-                    rec['LIMS'] = lims
+                    cell_cluster = self.lims_cell_cluster_id
+                    in_lims = cell_cluster is not None
+                    rec['LIMS'] = in_lims
 
                     image_20x = self.biocytin_20x_file
                     rec['20x'] = image_20x is not None
 
-                    image_63x = self.biocytin_63x_files
-                    rec['63x'] = image_63x is not None
+                    if in_lims is True:
+                        image_63x = self.biocytin_63x_files
+                        rec['63x'] = image_63x is not None
+
+                        cell_info = lims.cluster_cells(cell_cluster)
+                        mapped = len(cell_info) > 0 and all([ci['x_coord'] is not None  for ci in cell_info])
+                        rec['cell map'] = mapped
         
         except Exception as exc:
             rec['error'] = sys.exc_info()

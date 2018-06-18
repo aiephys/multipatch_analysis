@@ -437,6 +437,22 @@ def expt_cluster_ids(specimen, acq_timestamp):
     return cids
 
 
+def cluster_cells(cluster):
+    """Return information about a CellCluster's child cells.
+    """
+    if not isinstance(cluster, int):
+        cluster = specimen_id_from_name(cluster)
+    
+    q = """select child.id, child.name, child.x_coord, child.y_coord, child.external_specimen_name, child.ephys_qc_result
+    from specimens parent 
+    left join specimens child on child.parent_id=parent.id 
+    where parent.id=%d
+    """ % cluster
+
+    recs = lims.query(q)
+    return recs
+
+
 if __name__ == '__main__':
     # testing specimen
     spec_name = "Ntsr1-Cre_GN220;Ai14-349905.03.06"
