@@ -912,6 +912,14 @@ class Experiment(object):
                 return image['url']
 
     @property
+    def lims_drawing_tool_url(self):
+        images = lims.specimen_images(self.specimen_name)
+        if len(images) == 0:
+            return None
+        else:
+            return "http://lims2/drawing_tool?image_series=%d" % images[0]['image_series']
+
+    @property
     def multipatch_log(self):
         files = [p for p in os.listdir(self.path) if re.match(r'MultiPatch_\d+.log', p)]
         if len(files) == 0:
