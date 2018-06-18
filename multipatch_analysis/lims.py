@@ -190,7 +190,7 @@ def specimen_images(specimen):
                 image_files.setdefault(key, []).append(image['storage_directory'].rstrip('/') + '/' + image['jp2'])
             for k in image_ids:
                 # not sure how to generate an image stack url
-                images.append({'id':image_ids[k], 'file': image_files[k], 'treatment': k[0], 'resolution': k[1], 'url': None})
+                images.append({'id':image_ids[k], 'file': image_files[k], 'treatment': k[0], 'resolution': k[1], 'url': None, 'image_series': image_series['id']})
         else:
             for image in results:
                 if image['storage_directory'] is None:
@@ -198,7 +198,7 @@ def specimen_images(specimen):
                 else:
                     path = image['storage_directory'].rstrip('/') + '/' + image['jp2']
                 url = "http://lims2/siv?sub_image=%d" % image['id']
-                images.append({'id':image['id'], 'file': path, 'treatment': image['name'], 'resolution': image['resolution'], 'url': url})
+                images.append({'id':image['id'], 'file': path, 'treatment': image['name'], 'resolution': image['resolution'], 'url': url, 'image_series': image_series['id']})
             
     return images
 

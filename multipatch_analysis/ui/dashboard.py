@@ -230,6 +230,7 @@ class Dashboard(QtGui.QWidget):
         print("archive path:", expt.archive_path)
         print(" backup path:", expt.backup_path)
         print("biocytin URL:", expt.biocytin_image_url)
+        print("drawing tool:", expt.lims_drawing_tool_url)
         print("  cluster ID:", expt.cluster_id)
         err = rec['error']
         if err is not None:
