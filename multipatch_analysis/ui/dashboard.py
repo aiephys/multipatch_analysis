@@ -594,7 +594,7 @@ class ExperimentMetadata(Experiment):
                     image_20x = self.biocytin_20x_file
                     rec['20x'] = image_20x is not None
 
-                    if in_lims is True:
+                    if in_lims is True and image_20x is not None:
                         image_63x = self.biocytin_63x_files
                         rec['63x'] = image_63x is not None
 
