@@ -54,6 +54,7 @@ class Dashboard(QtGui.QWidget):
         # data tracked but not displayed
         self.hidden_fields = [
             ('experiment', object),
+            ('lims_slice_name', object),
             ('item', object),
             ('error', object),
         ]
@@ -74,6 +75,18 @@ class Dashboard(QtGui.QWidget):
         self.splitter = QtGui.QSplitter(QtCore.Qt.Horizontal)
         self.layout.addWidget(self.splitter, 0, 0)
 
+        self.left_vbox_widget = QtGui.QWidget()
+        self.splitter.addWidget(self.left_vbox_widget)
+        self.left_vbox = QtGui.QVBoxLayout()
+        self.left_vbox_widget.setLayout(self.left_vbox)
+        self.left_vbox.setContentsMargins(0, 0, 0, 0)
+
+        self.search_text = QtGui.QLineEdit()
+        self.search_text.setPlaceholderText('search')
+        # self.search_text.setClearButtonEnabled(True)   # Qt 5
+        self.left_vbox.addWidget(self.search_text)
+        self.search_text.textChanged.connect(self.search_text_changed)
+
         self.filter = pg.DataFilterWidget()
         self.filter_fields = OrderedDict([(field[0], {'mode': 'enum', 'values': {}}) for field in self.visible_fields])
         self.filter_fields['timestamp'] = {'mode': 'range'}
@@ -83,7 +96,7 @@ class Dashboard(QtGui.QWidget):
                 self.filter_fields[k]['values'].update(defs)
 
         self.filter.setFields(self.filter_fields)
-        self.splitter.addWidget(self.filter)
+        self.left_vbox.addWidget(self.filter)
         self.filter.sigFilterChanged.connect(self.filter_changed)
         self.filter.addFilter('rig')
         self.filter.addFilter('project')
@@ -317,10 +330,24 @@ class Dashboard(QtGui.QWidget):
     def filter_changed(self, *args):
         self.filter_items(self.records)
 
+    def search_text_changed(self):
+        self.filter_items(self.records)
+
     def filter_items(self, records):
+        search = str(self.search_text.text()).strip()
         mask = self.filter.generateMask(records)
-        for i,item in enumerate(records['item']):
-            item.setHidden(not mask[i])
+        for i,rec in enumerate(records):
+            hidden = not mask[i]
+            if search != '':
+                search_hit = False
+                if rec['lims_slice_name'] is not None and search in rec['lims_slice_name']:
+                    search_hit = True
+                elif search in str(rec['timestamp']) or search in str(np.round(rec['timestamp'], 2)):
+                    search_hit = True
+                elif rec['description'] is not None and search in rec['description']:
+                    search_hit = True
+                hidden = hidden or not search_hit
+            rec['item'].setHidden(hidden)
 
     def quit(self):
         print("Stopping pollers..")
@@ -527,6 +554,8 @@ class ExperimentMetadata(Experiment):
                 except Exception:
                     description = (org + ' (unknown: %s)'%self.lims_record.get('genotype', None), fail_color)
             rec['description'] = description
+
+            rec['lims_slice_name'] = self.specimen_name
             
             search_paths = [self.primary_path, self.archive_path, self.nas_path]
             submitted = False
