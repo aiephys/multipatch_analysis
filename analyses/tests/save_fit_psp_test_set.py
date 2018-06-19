@@ -5,6 +5,9 @@ Example run statement
 python save save_fit_psp_test_set.py --organism mouse --connection ee
 
 Comment in the code that does the saving at the bottom
+
+NOTE: the way this code runs fit_psp is currently out of date.  It will
+need to be updated if use is desired.
 """
 
 
