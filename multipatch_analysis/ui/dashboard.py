@@ -7,11 +7,12 @@ except ImportError:
 from pprint import pprint
 from collections import OrderedDict
 import numpy as np
-from multipatch_analysis import config, lims
-from multipatch_analysis.experiment import Experiment
-from multipatch_analysis.database import database
-from multipatch_analysis.genotypes import Genotype
-from multipatch_analysis.ui.actions import ExperimentActions
+from .. import config, lims
+from ..experiment import Experiment
+from ..database import database
+from ..genotypes import Genotype
+from .actions import ExperimentActions
+from ..yaml_local import yaml
 
 from acq4.util.DataManager import getDirHandle
 import pyqtgraph as pg
@@ -53,6 +54,7 @@ class Dashboard(QtGui.QWidget):
         # data tracked but not displayed
         self.hidden_fields = [
             ('experiment', object),
+            ('lims_slice_name', object),
             ('item', object),
             ('error', object),
         ]
@@ -73,6 +75,18 @@ class Dashboard(QtGui.QWidget):
         self.splitter = QtGui.QSplitter(QtCore.Qt.Horizontal)
         self.layout.addWidget(self.splitter, 0, 0)
 
+        self.left_vbox_widget = QtGui.QWidget()
+        self.splitter.addWidget(self.left_vbox_widget)
+        self.left_vbox = QtGui.QVBoxLayout()
+        self.left_vbox_widget.setLayout(self.left_vbox)
+        self.left_vbox.setContentsMargins(0, 0, 0, 0)
+
+        self.search_text = QtGui.QLineEdit()
+        self.search_text.setPlaceholderText('search')
+        # self.search_text.setClearButtonEnabled(True)   # Qt 5
+        self.left_vbox.addWidget(self.search_text)
+        self.search_text.textChanged.connect(self.search_text_changed)
+
         self.filter = pg.DataFilterWidget()
         self.filter_fields = OrderedDict([(field[0], {'mode': 'enum', 'values': {}}) for field in self.visible_fields])
         self.filter_fields['timestamp'] = {'mode': 'range'}
@@ -82,7 +96,7 @@ class Dashboard(QtGui.QWidget):
                 self.filter_fields[k]['values'].update(defs)
 
         self.filter.setFields(self.filter_fields)
-        self.splitter.addWidget(self.filter)
+        self.left_vbox.addWidget(self.filter)
         self.filter.sigFilterChanged.connect(self.filter_changed)
         self.filter.addFilter('rig')
         self.filter.addFilter('project')
@@ -175,6 +189,7 @@ class Dashboard(QtGui.QWidget):
             self.pollers.append(poll_thread)
 
         # Checkers pull experiments off of the queue and check their status
+        self._incoming_checker_records = []
         if no_thread:
             self.checker = ExptCheckerThread(self.expt_queue)
             self.checker.update.connect(self.checker_update)
@@ -192,6 +207,9 @@ class Dashboard(QtGui.QWidget):
         self.status_timer = QtCore.QTimer()
         self.status_timer.timeout.connect(self.update_status)
         self.status_timer.start(1000)
+
+        self.handle_checker_record_timer = QtCore.QTimer()
+        self.handle_checker_record_timer.timeout.connect(self.handle_all_checker_records)
 
     def contextMenuEvent(self, event):
         self.menu.popup(event.globalPos())
@@ -212,6 +230,7 @@ class Dashboard(QtGui.QWidget):
         print("archive path:", expt.archive_path)
         print(" backup path:", expt.backup_path)
         print("biocytin URL:", expt.biocytin_image_url)
+        print("drawing tool:", expt.lims_drawing_tool_url)
         print("  cluster ID:", expt.cluster_id)
         err = rec['error']
         if err is not None:
@@ -232,6 +251,23 @@ class Dashboard(QtGui.QWidget):
     def checker_update(self, rec):
         """Received an update from a worker thread describing information about an experiment
         """
+        # collect incoming records and process on a timer to ensure the ui doesn't get blocked.
+        self._incoming_checker_records.append(rec)
+        self.handle_checker_record_timer.start(0)
+
+    def handle_all_checker_records(self):
+        recs = self._incoming_checker_records
+        count = 0
+        while len(recs) > 0:
+            rec = recs.pop(0)
+            self.handle_checker_record(rec)
+            count += 1
+            if count > 2:
+                # yield to the event loop
+                return
+        self.handle_checker_record_timer.stop()
+
+    def handle_checker_record(self, rec):
         expt = rec['experiment']
         if expt in self.records_by_expt:
             # use old record / item
@@ -292,25 +328,46 @@ class Dashboard(QtGui.QWidget):
 
         self.filter_items(self.records[index:index+1])
 
-    def filter_changed(self):
+    def filter_changed(self, *args):
+        self.filter_items(self.records)
+
+    def search_text_changed(self):
         self.filter_items(self.records)
 
     def filter_items(self, records):
+        search = str(self.search_text.text()).strip()
         mask = self.filter.generateMask(records)
-        for i,item in enumerate(records['item']):
-            item.setHidden(not mask[i])
+        for i,rec in enumerate(records):
+            hidden = not mask[i]
+            if search != '':
+                search_hit = False
+                if rec['lims_slice_name'] is not None and search in rec['lims_slice_name']:
+                    search_hit = True
+                elif search in str(rec['timestamp']) or search in str(np.round(rec['timestamp'], 2)):
+                    search_hit = True
+                elif rec['description'] is not None and search in rec['description']:
+                    search_hit = True
+                hidden = hidden or not search_hit
+            rec['item'].setHidden(hidden)
 
     def quit(self):
         print("Stopping pollers..")
         for t in self.pollers:
-            t.stop()
-            t.wait()
+            if t.isRunning():
+                t.stop()
+                t.wait()
 
         print("Stopping checkers..")
+        stopped = []
         for t in self.checkers:
-            t.stop()
-        for t in self.checkers:
-            t.wait()  # don't wait until all checkers have been requested to stop!
+            if t.isRunning():
+                t.stop()
+                stopped.append(t)
+        for t in stopped:
+            t.wait()  # don't start waiting until all checkers have been requested to stop!
+
+    def closeEvent(self, ev):
+        self.quit()
 
     def reload_clicked(self, *args):
         expt = self.selected['experiment']
@@ -441,68 +498,8 @@ class ExptCheckerThread(QtCore.QThread):
             ts, expt = self.expt_queue.get(block=block)
             if self._stop or ts == 'stop':
                 return
-            rec = self.check(expt)
+            rec = expt.check()
             self.update.emit(rec)
-
-    def check(self, expt):
-        try:
-            rec = {'experiment': expt}
-
-            rec['timestamp'] = expt.timestamp
-            rec['rig'] = expt.rig_name
-            rec['path'] = expt.expt_subpath
-            rec['project'] = expt.slice_info.get('project', None)
-            rec['primary'] = False if expt.primary_path is None else (True if os.path.exists(expt.primary_path) else "-")
-            rec['archive'] = False if expt.archive_path is None else (True if os.path.exists(expt.archive_path) else "MISSING")
-            rec['backup'] = False if expt.backup_path is None else (True if os.path.exists(expt.backup_path) else "MISSING")
-            rec['NAS'] = False if expt.nas_path is None else (True if os.path.exists(expt.nas_path) else "MISSING")
-
-            org = expt.organism
-            if org is None:
-                description = ("no LIMS spec info", fail_color)
-            elif org == 'human':
-                description = org
-            else:
-                try:
-                    gtyp = expt.genotype
-                    description = ','.join(gtyp.drivers())
-                except Exception:
-                    description = (org + ' (unknown: %s)'%expt.lims_record.get('genotype', None), fail_color)
-            rec['description'] = description
-            
-            search_paths = [expt.primary_path, expt.archive_path, expt.nas_path]
-            submitted = False
-            for path in search_paths:
-                if path is None:
-                    continue
-                if os.path.isfile(os.path.join(path, 'pipettes.yml')):
-                    submitted = True
-                    break
-
-            rec['submitted'] = submitted
-            rec['data'] = '-' if expt.nwb_file is None else True
-            if rec['submitted']:
-                if rec['data'] is True:
-                    rec['site.mosaic'] = expt.mosaic_file is not None            
-                    rec['DB'] = expt.in_database
-
-                    subs = expt.lims_submissions
-                    if subs is None:
-                        lims = "ERROR"
-                    else:
-                        lims = len(subs) == 1
-                    rec['LIMS'] = lims
-
-                    image_20x = expt.biocytin_20x_file
-                    rec['20x'] = image_20x is not None
-
-                    image_63x = expt.biocytin_63x_files
-                    rec['63x'] = image_63x is not None
-        
-        except Exception as exc:
-            rec['error'] = sys.exc_info()
-        
-        return rec
 
 
 class ExperimentMetadata(Experiment):
@@ -525,10 +522,92 @@ class ExperimentMetadata(Experiment):
         # reassign path based on order of most likely to be updated
         for path_typ in ['primary', 'archive', 'nas', 'backup']:
             path = getattr(self, path_typ + '_path')
-            if path is not None:
+            if path is not None and os.path.exists(path):
                 self._site_path = path
                 self.site_dh = getDirHandle(path)
                 break
+
+    def check(self):
+        """Check the status of this experiment, return a dict describing
+        the state of each stage in the pipeline.
+        """
+        try:
+            rec = {'experiment': self}
+
+            rec['timestamp'] = self.timestamp
+            rec['rig'] = self.rig_name
+            rec['path'] = self.expt_subpath
+            rec['project'] = self.slice_info.get('project', None)
+            rec['primary'] = False if self.primary_path is None else (True if os.path.exists(self.primary_path) else "-")
+            rec['archive'] = False if self.archive_path is None else (True if os.path.exists(self.archive_path) else "MISSING")
+            rec['backup'] = False if self.backup_path is None else (True if os.path.exists(self.backup_path) else "MISSING")
+            rec['NAS'] = False if self.nas_path is None else (True if os.path.exists(self.nas_path) else "MISSING")
+
+            org = self.organism
+            if org is None:
+                description = ("no LIMS spec info", fail_color)
+            elif org == 'human':
+                description = org
+            else:
+                try:
+                    gtyp = self.genotype
+                    description = ','.join(gtyp.drivers())
+                except Exception:
+                    description = (org + ' (unknown: %s)'%self.lims_record.get('genotype', None), fail_color)
+            rec['description'] = description
+
+            rec['lims_slice_name'] = self.specimen_name
+            
+            search_paths = [self.primary_path, self.archive_path, self.nas_path]
+            submitted = False
+            connections = None
+            for path in search_paths:
+                if path is None:
+                    continue
+                yml_file = os.path.join(path, 'pipettes.yml')
+                if os.path.isfile(yml_file):
+                    submitted = True
+                    connections = (0, pass_color)
+                    pips = yaml.load(open(yml_file, 'rb'))
+                    for k,v in pips.items():
+                        if v['got_data']:
+                            if v['synapse_to'] is None:
+                                connections = False
+                                break
+                            else:
+                                connections = (connections[0] + len(v['synapse_to']), pass_color)
+                    break
+
+
+            rec['submitted'] = submitted
+            rec['data'] = '-' if self.nwb_file is None else True
+            slice_fixed = self.slice_info.get('carousel_well_ID') != 'not fixed'
+            if slice_fixed:
+                image_20x = self.biocytin_20x_file
+                rec['20x'] = image_20x is not None
+
+            if rec['submitted']:
+                rec['connections'] = connections
+                if rec['data'] is True:
+                    rec['site.mosaic'] = self.mosaic_file is not None
+                    rec['DB'] = self.in_database
+
+                    cell_cluster = self.lims_cell_cluster_id
+                    in_lims = cell_cluster is not None
+                    rec['LIMS'] = in_lims
+
+                    if slice_fixed and in_lims is True and image_20x is not None:
+                        image_63x = self.biocytin_63x_files
+                        rec['63x'] = image_63x is not None
+
+                        cell_info = lims.cluster_cells(cell_cluster)
+                        mapped = len(cell_info) > 0 and all([ci['x_coord'] is not None  for ci in cell_info])
+                        rec['cell map'] = mapped
+        
+        except Exception as exc:
+            rec['error'] = sys.exc_info()
+        
+        return rec
 
     def _get_raw_paths(self):
         expt_subpath = self.expt_subpath
@@ -597,9 +676,7 @@ class ExperimentMetadata(Experiment):
 
     @property
     def nas_path(self):
-        expt_dir = '%0.3f' % self.expt_info['__timestamp__']
-        subpath = self.site_dh.name(relativeTo=self.expt_dh)
-        return os.path.abspath(os.path.join(config.synphys_data, expt_dir, subpath))
+        return os.path.abspath(os.path.join(config.synphys_data, self.server_path))
 
     @property
     def organism(self):
@@ -660,3 +737,10 @@ class ExperimentMetadata(Experiment):
         if spec_id is None:
             return None
         return lims.expt_submissions(spec_id, self.timestamp)
+
+    @property
+    def lims_cell_cluster_id(self):
+        subs = self.lims_submissions
+        if subs is None or len(subs) != 1:
+            return None
+        return subs[0][1]

@@ -190,7 +190,7 @@ def specimen_images(specimen):
                 image_files.setdefault(key, []).append(image['storage_directory'].rstrip('/') + '/' + image['jp2'])
             for k in image_ids:
                 # not sure how to generate an image stack url
-                images.append({'id':image_ids[k], 'file': image_files[k], 'treatment': k[0], 'resolution': k[1], 'url': None})
+                images.append({'id':image_ids[k], 'file': image_files[k], 'treatment': k[0], 'resolution': k[1], 'url': None, 'image_series': image_series['id']})
         else:
             for image in results:
                 if image['storage_directory'] is None:
@@ -198,7 +198,7 @@ def specimen_images(specimen):
                 else:
                     path = image['storage_directory'].rstrip('/') + '/' + image['jp2']
                 url = "http://lims2/siv?sub_image=%d" % image['id']
-                images.append({'id':image['id'], 'file': path, 'treatment': image['name'], 'resolution': image['resolution'], 'url': url})
+                images.append({'id':image['id'], 'file': path, 'treatment': image['name'], 'resolution': image['resolution'], 'url': url, 'image_series': image_series['id']})
             
     return images
 
@@ -435,6 +435,22 @@ def expt_cluster_ids(specimen, acq_timestamp):
         if meta is not None and meta['acq_timestamp'] == acq_timestamp:
             cids.append(cid)
     return cids
+
+
+def cluster_cells(cluster):
+    """Return information about a CellCluster's child cells.
+    """
+    if not isinstance(cluster, int):
+        cluster = specimen_id_from_name(cluster)
+    
+    q = """select child.id, child.name, child.x_coord, child.y_coord, child.external_specimen_name, child.ephys_qc_result
+    from specimens parent 
+    left join specimens child on child.parent_id=parent.id 
+    where parent.id=%d
+    """ % cluster
+
+    recs = lims.query(q)
+    return recs
 
 
 if __name__ == '__main__':

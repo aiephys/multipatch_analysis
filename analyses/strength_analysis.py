@@ -645,7 +645,7 @@ def analyze_pair_connectivity(amps, sign=None):
         sign = {'pos':'+', 'neg':'-'}[signs[clamp_mode]]
         fg_bsub = fg_avg.copy(data=fg_avg.data - base)  # remove base to help fitting
         try:
-            fit = fit_psp(fg_bsub, mode=clamp_mode, sign=sign, xoffset=(1e-3, 0, 6e-3), yoffset=0, mask_stim_artifact=False, rise_time_mult_factor=4)            
+            fit = fit_psp(fg_bsub, mode=clamp_mode, sign=sign, xoffset=(1e-3, 0, 6e-3), yoffset=(0, -np.inf, np.inf), weight=False, rise_time_mult_factor=4)            
             for param, val in fit.best_values.items():
                 fields['%s_fit_%s' % (clamp_mode, param)] = val
             fields[clamp_mode + '_fit_yoffset'] = fit.best_values['yoffset'] + base
@@ -1872,15 +1872,20 @@ if __name__ == '__main__':
     from multipatch_analysis.experiment_list import cached_experiments
     expts = cached_experiments()
 
+    if args.rebuild:
+        args.rebuild = raw_input("Rebuild strength tables? ") == 'y'
+    if args.rebuild_connectivity:
+        args.rebuild_connectivity= raw_input("Rebuild connectivity table? ") == 'y'
+
     pg.dbg()
 
-    if args.rebuild and raw_input("Rebuild strength tables? ") == 'y':
+    if args.rebuild:
         connection_strength_tables.drop_tables()
         pulse_response_strength_tables.drop_tables()
         init_tables()
         rebuild_strength(parallel=(not args.local), workers=args.workers)
         rebuild_connectivity()
-    elif args.rebuild_connectivity and raw_input("Rebuild connectivity table? ") == 'y':
+    elif args.rebuild_connectivity:
         print("drop tables..")
         connection_strength_tables.drop_tables()
         print("create tables..")
