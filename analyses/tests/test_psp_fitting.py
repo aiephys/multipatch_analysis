@@ -1,3 +1,8 @@
+'''tests the psp_fits function.  If tests fail can use check_psp_fitting() to 
+explore how fits are different from test data.  Often fitts are just off by
+significant figures.  However, make sure all data is viewed as some fits can 
+can change when others do not
+'''
 from multipatch_analysis.connection_detection import fit_psp
 import os
 import numpy as np
@@ -26,6 +31,8 @@ def test_psp_fitting():
         test_dict=json.load(open(file)) # load test data
         avg_trace=neuroanalysis.data.Trace(data=np.array(test_dict['input']['data']), dt=test_dict['input']['dt']) # create Trace object
         psp_fits = fit_psp(avg_trace, 
+                           xoffset=(14e-3, -float('inf'), float('inf')),
+                           weight=np.array(test_dict['input']['weight']),
                            sign=test_dict['input']['amp_sign'], 
                            stacked=test_dict['input']['stacked'] 
                             )                        
@@ -54,6 +61,8 @@ def check_psp_fitting():
         test_dict=json.load(open(file)) # load test data
         avg_trace=neuroanalysis.data.Trace(data=np.array(test_dict['input']['data']), dt=test_dict['input']['dt']) # create Trace object
         psp_fits = fit_psp(avg_trace, 
+                           weight=np.array(test_dict['input']['weight']),
+                           xoffset=(14e-3, -float('inf'), float('inf')),
                            sign=test_dict['input']['amp_sign'], 
                            stacked=test_dict['input']['stacked'] 
                             )                        
@@ -93,6 +102,6 @@ def check_psp_fitting():
             mplt.show()
             
 if __name__== "__main__":
-#    check_psp_fitting()
-    test_create_all_fit_param_combos()
+
+#    check_psp_fitting() #use this to diagnose how fits differ from test data
     test_psp_fitting()

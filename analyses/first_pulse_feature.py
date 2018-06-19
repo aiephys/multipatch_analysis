@@ -129,7 +129,11 @@ for c in range(len(connection_types)):
                         weight[int(10e-3/dt):int(12e-3/dt)] = 0.   #area around stim artifact
                         weight[int(12e-3/dt):int(19e-3/dt)] = 30.  #area around steep PSP rise 
                         
-                        psp_fits = fit_psp(avg_trace, sign=amp_sign, yoffset=0, xoffset=14e-3, amp=avg_amp, method='leastsq', stacked = True, rise_time_mult_factor=10., fit_kws={'weights': weight})                        
+                        psp_fits = fit_psp(avg_trace, 
+                                           xoffset=(14e-3, -float('inf'), float('inf')),
+                                           sign=amp_sign, 
+#                                           amp=avg_amp, 
+                                           weight=weight)                        
                         plt.clear()
                         plt.plot(avg_trace.time_values, avg_trace.data, title=str([psp_fits.best_values['xoffset'], expt.uid, pre, post]))
                         plt.plot(avg_trace.time_values, psp_fits.eval(), pen='g')
