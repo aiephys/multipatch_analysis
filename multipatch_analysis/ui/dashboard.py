@@ -552,7 +552,7 @@ class ExperimentMetadata(Experiment):
         the state of each stage in the pipeline.
         """
         try:
-            rec = {'experiment': self}
+            rec = {'experiment': self, 'error': None}
 
             rec['timestamp'] = self.timestamp
             rec['rig'] = self.rig_name
