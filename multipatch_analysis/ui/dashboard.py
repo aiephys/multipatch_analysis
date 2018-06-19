@@ -530,10 +530,6 @@ class ExperimentMetadata(Experiment):
         self._site_path = path
 
         self.site_dh = getDirHandle(path)
-        # self.site_info = self.site_dh.info()
-        # self._slice_info = None
-        # self._expt_info = None
-        # self._specimen_info = None
         self._rig_name = None
         self._primary_path = None
         self._archive_path = None
