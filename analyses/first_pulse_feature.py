@@ -9,7 +9,7 @@ from manuscript_figures import get_response, get_amplitude, response_filter, fea
 from synapse_comparison import load_cache, summary_plot_pulse
 from neuroanalysis.data import TraceList
 from neuroanalysis.ui.plot_grid import PlotGrid
-from multipatch_analysis.connection_detection import fit_psp
+from neuroanalysis.fitting import fit_psp
 from rep_connections import ee_connections, human_connections, no_include, all_connections, ie_connections, ii_connections, ei_connections
 from multipatch_analysis.synaptic_dynamics import DynamicsAnalyzer
 from scipy import stats

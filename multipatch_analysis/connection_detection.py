@@ -567,7 +567,6 @@ def create_all_fit_param_combos(base_params):
     return param_dict_list
 
 def fit_psp(response, 
-            xoffset, # this parameter will be fit.
             mode='ic', 
             sign='any', #Note this will not be used if *amp* input is specified
             method='leastsq', 
@@ -582,10 +581,14 @@ def fit_psp(response,
                 rise_power='default',
                 rise_time='default',
                 exp_amp='default',
+                xoffset='default', 
                 yoffset='default',
             ):
-    """Fit psp waveform to the equation specified in the PSP class in neuroanalysis.fitting
-
+    """Fit psp. function to the equation 
+    
+    This function make assumptions about where the cross talk happens as traces 
+    have been aligned to the pulses and response.t0 has been set to zero 
+    
     Parameters
     ----------
     response : neuroanalysis.data.Trace class
@@ -608,8 +611,7 @@ def fit_psp(response,
     fit_kws : dictionary
         Additional key words that are fed to lmfit
     exp_amp : string
-        Function that is passed to lmfit. Note this is not the entire function 
-        being fit by this code.
+        function that is fed to lmfit
     The parameters below are fed to the psp function. Each value in the 
         key:value dictionary pair must be a tuple.
         In general the structure of the tuple is of the form, 
@@ -624,10 +626,9 @@ def fit_psp(response,
             amplitude=([5,10, 20], 0, 20)
             amplitude=([5,10, 20], 'fixed') 
         xoffset : scalar
-            Where psp begins in reference to the start of the data (positive shifts to the right).
-            Note that this paramter must be specified by user.
+            Horizontal shift between begin (positive shifts to the right)
         yoffset : scalar
-            Vertical offset of rest.  Note that default of zero assumes rest has been subtracted from traces.
+            Vertical offset
         rise_time : scalar
             Time from beginning of psp until peak
         decay_tau : scalar
@@ -638,8 +639,7 @@ def fit_psp(response,
             Exponent for the rising phase; larger values result in a slower activation 
         amp_ratio : scalar 
             if *stacked* this is used to set up the ratio between the 
-            residual decay amplitude (left over from other previous psps)
-            and the height of the PSP.
+            residual decay amplitude and the height of the PSP.
     
     Returns
     -------
@@ -681,7 +681,7 @@ def fit_psp(response,
         
     # initial condition, lower boundry, upper boundry    
     base_params = {
-        'xoffset': xoffset,
+        'xoffset': (14e-3, -float('inf'), float('inf')),
         'yoffset': (0, -float('inf'), float('inf')),
         'rise_time': (rise_time_init, rise_time_init/rise_time_mult_factor, rise_time_init*rise_time_mult_factor),
         'decay_tau': (decay_tau_init, decay_tau_init/10., decay_tau_init*10.),
@@ -709,8 +709,13 @@ def fit_psp(response,
     
     # set weighting that 
     if weight == 'default': #use default weighting
+        # THIS CODE IS DEPENDENT ON THE DATA BEING INPUT IN A CERTAIN WAY THAT IS NOT TESTED
+        weight = np.ones(len(y))*10.  #set everything to ten initially
+        weight[int(10e-3/dt):int(12e-3/dt)] = 0.   #area around stim artifact
+        weight[int(12e-3/dt):int(19e-3/dt)] = 30.  #area around steep PSP rise 
+    elif weight is False: #do not weight any part of the stimulus
         weight = np.ones(len(y))
-    else:  #works if there is a value specified in weight
+    elif weight:  #works if there is a value specified in weight
         if len(weight) != len(y):
             raise Exception('the weight and array vectors are not the same length') 
     
