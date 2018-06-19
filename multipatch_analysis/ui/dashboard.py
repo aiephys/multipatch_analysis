@@ -581,6 +581,11 @@ class ExperimentMetadata(Experiment):
 
             rec['submitted'] = submitted
             rec['data'] = '-' if self.nwb_file is None else True
+            slice_fixed = self.slice_info.get('carousel_well_ID') != 'not fixed'
+            if slice_fixed:
+                image_20x = self.biocytin_20x_file
+                rec['20x'] = image_20x is not None
+
             if rec['submitted']:
                 rec['connections'] = connections
                 if rec['data'] is True:
@@ -591,10 +596,7 @@ class ExperimentMetadata(Experiment):
                     in_lims = cell_cluster is not None
                     rec['LIMS'] = in_lims
 
-                    image_20x = self.biocytin_20x_file
-                    rec['20x'] = image_20x is not None
-
-                    if in_lims is True and image_20x is not None:
+                    if slice_fixed and in_lims is True and image_20x is not None:
                         image_63x = self.biocytin_63x_files
                         rec['63x'] = image_63x is not None
 
