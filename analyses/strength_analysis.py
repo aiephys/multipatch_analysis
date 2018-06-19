@@ -14,6 +14,7 @@ import argparse, time, sys, os, pickle, io, multiprocessing
 import numpy as np
 import scipy.stats
 import pandas
+from datetime import datetime
 
 from sqlalchemy.orm import aliased
 import sklearn.svm, sklearn.preprocessing, sklearn.ensemble
@@ -711,7 +712,7 @@ class ExperimentBrowser(pg.TreeWidget):
         db_expts.sort(key=lambda e: e.acq_timestamp)
         for expt in db_expts:
             date = expt.acq_timestamp
-            date_str = date.strftime('%Y-%m-%d')
+            date_str = datetime.fromtimestamp(date).strftime('%Y-%m-%d')
             slice = expt.slice
             expt_item = pg.TreeWidgetItem(map(str, [date_str, expt.rig_name, slice.species, expt.target_region, slice.genotype, expt.acsf]))
             expt_item.expt = expt
@@ -1311,9 +1312,9 @@ def query_all_pairs(classifier=None):
         "pair.crosstalk_artifact",
         "abs(post_cell.ext_id - pre_cell.ext_id) as electrode_distance",
     ]
-    columns.extend([
-        "detection_limit.minimum_amplitude",
-    ])
+    # columns.extend([
+    #     "detection_limit.minimum_amplitude",
+    # ])
 
     joins = [
         "join pair on connection_strength.pair_id=pair.id",
@@ -1322,9 +1323,9 @@ def query_all_pairs(classifier=None):
         "join experiment on pair.expt_id=experiment.id",
         "join slice on experiment.slice_id=slice.id",
     ]
-    joins.extend([
-        "left join detection_limit on detection_limit.pair_id=pair.id",
-    ])
+    # joins.extend([
+    #     "left join detection_limit on detection_limit.pair_id=pair.id",
+    # ])
 
 
     query = ("""
@@ -1341,8 +1342,6 @@ def query_all_pairs(classifier=None):
     session = db.Session()
     df = pandas.read_sql(query, session.bind)
 
-    ts = [datetime_to_timestamp(t) for t in df['acq_timestamp']]
-    df['acq_timestamp'] = ts
     recs = df.to_records()
 
     if classifier is None:
@@ -1726,8 +1725,7 @@ class PairView(pg.QtCore.QObject):
             expt = pair.experiment
             self.rs_plots.load_conn(pair)
 
-        ts = sel.expt.acq_timestamp
-        sec = datetime_to_timestamp(ts)
+        sec = sel.expt.acq_timestamp
         src = sel.expt.source_experiment
         print("======================================")
         if src.entry is not None:
@@ -1865,17 +1863,17 @@ if __name__ == '__main__':
     parser.add_argument('--workers', type=int, default=6)
     parser.add_argument('--seed', type=int, default=-1, help="Random seed used to shuffle classifier training data")
     
-    args, extra = parser.parse_known_args(sys.argv[1:])
+    args = parser.parse_args(sys.argv[1:])
+    if args.rebuild:
+        args.rebuild = raw_input("Rebuild %s strength tables? " % db.db_name) == 'y'
+    if args.rebuild_connectivity:
+        args.rebuild_connectivity = raw_input("Rebuild %s connectivity table? " % db.db_name) == 'y'
+
 
 
     from multipatch_analysis.ui.multipatch_nwb_viewer import MultipatchNwbViewer    
     from multipatch_analysis.experiment_list import cached_experiments
     expts = cached_experiments()
-
-    if args.rebuild:
-        args.rebuild = raw_input("Rebuild strength tables? ") == 'y'
-    if args.rebuild_connectivity:
-        args.rebuild_connectivity= raw_input("Rebuild connectivity table? ") == 'y'
 
     pg.dbg()
 

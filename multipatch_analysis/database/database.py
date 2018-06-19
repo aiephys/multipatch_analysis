@@ -20,7 +20,9 @@ from sqlalchemy.sql.expression import func
 from .. import config
 
 # database version should be incremented whenever the schema has changed
-db_version = 5
+db_version = 6
+db_name = '{database}_{version}'.format(database=config.synphys_db, version=db_version)
+db_address = '{host}/{database}'.format(host=config.synphys_db_host, database=db_name)
 
 default_sample_rate = 20000
 
@@ -436,7 +438,6 @@ def create_all_mappings():
 
 
 #-------------- initial DB access ----------------
-db_address = '{host}/{database}_{version}'.format(host=config.synphys_db_host, database=config.synphys_db, version=db_version)
 engine = create_engine(db_address, pool_size=10, max_overflow=40)
 # external users should create sessions from here.
 Session = sessionmaker(bind=engine)
