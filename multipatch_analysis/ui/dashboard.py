@@ -229,18 +229,18 @@ class Dashboard(QtGui.QWidget):
             "       timestamp: %s" % expt.timestamp,
             "     description: %s" % rec['description'],
         ]
-        print_fields = {
-            'spec name': 'specimen_name',
-            'genotype': 'genotype',
-            'NAS path': 'nas_path',
-            'primary path': 'primary_path',
-            'archive path': 'archive_path',
-            'backup path': 'backup_path',
-            'biocytin URL': 'biocytin_image_url',
-            'drawing tool': 'lims_drawing_tool_url',
-            'cluster ID': 'cluster_id',
-        }
-        for name,attr in print_fields.items():
+        print_fields = [
+            ('spec name', 'specimen_name'),
+            ('genotype', 'genotype'),
+            ('NAS path', 'nas_path'),
+            ('primary path', 'primary_path'),
+            ('archive path', 'archive_path'),
+            ('backup path', 'backup_path'),
+            ('biocytin URL', 'biocytin_image_url'),
+            ('drawing tool', 'lims_drawing_tool_url'),
+            ('cluster ID', 'cluster_id'),
+        ]
+        for name,attr in print_fields:
             try:
                 val = getattr(expt, attr)
                 msg.append("%16s: %s" % (name, val))
@@ -312,7 +312,7 @@ class Dashboard(QtGui.QWidget):
                 val, color = val
             else:
                 # otherwise make a guess on a good color
-                color = None
+                color = 'w'
                 if val is True:
                     color = pass_color
                 elif val is False:
