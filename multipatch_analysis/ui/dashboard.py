@@ -115,7 +115,8 @@ class Dashboard(QtGui.QWidget):
         Variables:
             records : array of all known records in the dashboard
             records['experiment'] : references to all known Experiment instances
-            sel : currently selected record
+            sel : currently selected dashboard record
+            expt : currently selected Experiment
             filter : DataFilterParameter
             lims : multipatch_analysis.lims module
             db : multipatch_analysis.database module
@@ -130,6 +131,7 @@ class Dashboard(QtGui.QWidget):
             'db': database,
             'dashboard': self,
             'np': np,
+            'pg': pg,
         })
         self.right_splitter.addWidget(self.console)
         self.console.hide()
@@ -221,21 +223,39 @@ class Dashboard(QtGui.QWidget):
         self.selected = rec
         expt = rec['experiment']
         self.expt_actions.experiment = expt
-        print("===================", expt.timestamp)
-        print(" description:", rec['description'])
-        print("   spec name:", expt.specimen_name)
-        print("    genotype:", expt.lims_record.get('genotype', None))
-        print("    NAS path:", expt.nas_path)
-        print("primary path:", expt.primary_path)
-        print("archive path:", expt.archive_path)
-        print(" backup path:", expt.backup_path)
-        print("biocytin URL:", expt.biocytin_image_url)
-        print("drawing tool:", expt.lims_drawing_tool_url)
-        print("  cluster ID:", expt.cluster_id)
+
+        msg = [
+            "\n======= Selected: ======================",
+            "       timestamp: %s" % expt.timestamp,
+            "     description: %s" % rec['description'],
+        ]
+        print_fields = {
+            'spec name': 'specimen_name',
+            'genotype': 'genotype',
+            'NAS path': 'nas_path',
+            'primary path': 'primary_path',
+            'archive path': 'archive_path',
+            'backup path': 'backup_path',
+            'biocytin URL': 'biocytin_image_url',
+            'drawing tool': 'lims_drawing_tool_url',
+            'cluster ID': 'cluster_id',
+        }
+        for name,attr in print_fields.items():
+            try:
+                val = getattr(expt, attr)
+                msg.append("%16s: %s" % (name, val))
+            except Exception:
+                msg.append("Error getting experiment attribute '%s':" % attr)
+                msg.append(traceback.format_exc())
+                break
         err = rec['error']
         if err is not None:
-            print("Error checking experiment:")
-            traceback.print_exception(*err)
+            msg.append("Error checking experiment:")
+            msg.extend([line.rstrip() for line in traceback.format_exception(*err)])
+
+        msg = '\n'.join(msg)
+        print(msg)
+        self.console.write(msg+'\n')
 
     def poller_update(self, path, status):
         """Received an update on the status of a poller
@@ -510,10 +530,6 @@ class ExperimentMetadata(Experiment):
         self._site_path = path
 
         self.site_dh = getDirHandle(path)
-        # self.site_info = self.site_dh.info()
-        # self._slice_info = None
-        # self._expt_info = None
-        # self._specimen_info = None
         self._rig_name = None
         self._primary_path = None
         self._archive_path = None
@@ -532,7 +548,7 @@ class ExperimentMetadata(Experiment):
         the state of each stage in the pipeline.
         """
         try:
-            rec = {'experiment': self}
+            rec = {'experiment': self, 'error': None}
 
             rec['timestamp'] = self.timestamp
             rec['rig'] = self.rig_name
