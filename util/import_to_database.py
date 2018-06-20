@@ -56,7 +56,7 @@ if __name__ == '__main__':
     parser.add_argument('--ex-only', action='store_true', default=False, dest='ex_only', help='Only import experiments with excitatory types')
     parser.add_argument('--raise-exc', action='store_true', default=False, dest='raise_exc', help='Do not ignore exceptions')
     
-    args, extra = parser.parse_known_args(sys.argv[1:])
+    args = parser.parse_args(sys.argv[1:])
     
     if args.uid is not None:
         selected_expts = [all_expts[uid] for uid in args.uid.split(',')]
