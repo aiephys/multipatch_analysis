@@ -5,8 +5,8 @@ import os, sys, time
 def sync_dir(source_path, dest_path, test=False):
     """Safely duplicate a directory structure
     """
-    assert os.path.isdir(source_path)
-    assert os.path.isdir(dest_path)
+    assert os.path.isdir(source_path), 'Source path "%s" does not exist.' % source_path
+    assert os.path.isdir(dest_path), 'Destination path "%s" does not exist.' % dest_path
 
     for subpath, subdirs, files in os.walk(source_path):
         rel = os.path.relpath(subpath, source_path)

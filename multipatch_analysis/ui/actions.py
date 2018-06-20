@@ -1,5 +1,7 @@
+import os
 from collections import OrderedDict
 import pyqtgraph as pg
+from pyqtgraph.Qt import QtGui, QtCore
 
 
 class ExperimentActions(pg.QtCore.QObject):
@@ -16,6 +18,7 @@ class ExperimentActions(pg.QtCore.QObject):
             ('NWB Viewer', self.nwb_viewer),
             ('Connection Detection', self.connection_detection),
             ('Submission Tool', self.submission_tool),
+            ('LIMS Drawing Tool', self.lims_drawing_tool),
         ]
         self.actions = OrderedDict()
         for name, callback in actions:
@@ -53,6 +56,12 @@ class ExperimentActions(pg.QtCore.QObject):
 
     def submission_tool(self):
         print(self.experiment)
+
+    def lims_drawing_tool(self):
+        # really should use QDesktopServices for this, but it appears to be broken.
+        # url = QtCore.QUrl(self.experiment.lims_drawing_tool_url)
+        # QtGui.QDesktopServices.openUrl(url)
+        os.system('firefox ' + self.experiment.lims_drawing_tool_url)
 
 
 class CellActions(pg.QtCore.QObject):

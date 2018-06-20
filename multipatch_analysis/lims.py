@@ -190,7 +190,7 @@ def specimen_images(specimen):
                 image_files.setdefault(key, []).append(image['storage_directory'].rstrip('/') + '/' + image['jp2'])
             for k in image_ids:
                 # not sure how to generate an image stack url
-                images.append({'id':image_ids[k], 'file': image_files[k], 'treatment': k[0], 'resolution': k[1], 'url': None})
+                images.append({'id':image_ids[k], 'file': image_files[k], 'treatment': k[0], 'resolution': k[1], 'url': None, 'image_series': image_series['id']})
         else:
             for image in results:
                 if image['storage_directory'] is None:
@@ -198,9 +198,42 @@ def specimen_images(specimen):
                 else:
                     path = image['storage_directory'].rstrip('/') + '/' + image['jp2']
                 url = "http://lims2/siv?sub_image=%d" % image['id']
-                images.append({'id':image['id'], 'file': path, 'treatment': image['name'], 'resolution': image['resolution'], 'url': url})
+                images.append({'id':image['id'], 'file': path, 'treatment': image['name'], 'resolution': image['resolution'], 'url': url, 'image_series': image_series['id']})
             
     return images
+
+def specimen_20x_image(specimen_name):
+    """Return file path for 20x, biocytin image for a specimen.
+    """
+    q = """
+        select slides.storage_directory, slides.barcode as barcode_start, treatments.id as barcode_end 
+        from slides join image_series_slides iss on iss.slide_id = slides.id 
+        join image_series on image_series.id = iss.image_series_id 
+        join specimens on image_series.specimen_id=specimens.id 
+        join sub_images on sub_images.image_series_id=image_series.id 
+        join images on images.id = sub_images.image_id 
+        left join treatments on treatments.id = images.treatment_id 
+        where treatments.name = 'Biocytin' and specimens.name = '%s';
+        """ % specimen_name
+    r = lims.query(q)
+    if len(r) == 0:
+        raise ValueError("No 20x image found for '%s'" % specimen_name)
+    path_string = str(r[0]['storage_directory']) + str(r[0]['barcode_start']) + '_' + str(r[0]['barcode_end']) + '.aff'
+    return path_string
+
+def specimen_species(specimen_name):
+    """returns species information
+    """
+    q = """
+    select organisms.name as species 
+    from specimens left join donors on specimens.donor_id = donors.id
+    left join organisms on donors.organism_id = organisms.id
+    where specimens.name = '%s';
+    """ % specimen_name
+    r = lims.query(q)
+    if len(r) == 0:
+        raise ValueError("Could not find donor information")
+    return r[0]['species']
 
 
 def specimen_id_from_name(spec_name):
@@ -298,7 +331,7 @@ def cell_cluster_data_paths(specimen):
     """ % specimen)
     return [r['storage_directory'] for r in recs]
 
-
+  
 def specimen_metadata(specimen):
     if not isinstance(specimen, int):
         specimen = specimen_id_from_name(specimen)
@@ -308,6 +341,7 @@ def specimen_metadata(specimen):
     meta = recs[0]['data']
     if meta == '':
         return None
+
     if isinstance(meta, basestring):
         meta = json.loads(meta)  # unserialization corrects for a LIMS bug; we can remove this later.
     return meta
@@ -338,6 +372,34 @@ def filename_base(specimen_id, acq_timestamp):
     """Return a base filename string to be used for all LIMS uploads.
     """
     return "synphys-%d-%s" % (specimen_id, acq_timestamp)
+
+
+def get_incoming_dir(specimen_name):
+    """Returns the path for incoming files for each project
+    """
+    q = """
+    select projects.incoming_directory from projects 
+    left join specimens on projects.id = specimens.project_id
+    where specimens.name='%s'
+    """ % specimen_name
+    recs = lims.query(q)
+    if recs[0]['incoming_directory'] == None:
+        trigger_dir = get_trigger_dir(specimen_name)
+        return os.path.dirname(os.path.dirname(trigger_dir))
+    else:
+        return recs[0]['incoming_directory']
+
+
+def get_trigger_dir(specimen_name):
+    """Returns the path for trigger files for each project
+    """
+    q = """
+    select projects.trigger_dir from projects 
+    left join specimens on projects.id = specimens.project_id
+    where specimens.name  = '%s'
+    """ % specimen_name
+    recs = lims.query(q)
+    return recs[0]['trigger_dir']
 
 
 def submit_expt(spec_name, acq_timestamp, nwb_file, json_file):
@@ -435,6 +497,22 @@ def expt_cluster_ids(specimen, acq_timestamp):
         if meta is not None and meta['acq_timestamp'] == acq_timestamp:
             cids.append(cid)
     return cids
+
+
+def cluster_cells(cluster):
+    """Return information about a CellCluster's child cells.
+    """
+    if not isinstance(cluster, int):
+        cluster = specimen_id_from_name(cluster)
+    
+    q = """select child.id, child.name, child.x_coord, child.y_coord, child.external_specimen_name, child.ephys_qc_result
+    from specimens parent 
+    left join specimens child on child.parent_id=parent.id 
+    where parent.id=%d
+    """ % cluster
+
+    recs = lims.query(q)
+    return recs
 
 
 if __name__ == '__main__':

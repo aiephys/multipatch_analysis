@@ -912,6 +912,14 @@ class Experiment(object):
                 return image['url']
 
     @property
+    def lims_drawing_tool_url(self):
+        images = lims.specimen_images(self.specimen_name)
+        if len(images) == 0:
+            return None
+        else:
+            return "http://lims2/drawing_tool?image_series=%d" % images[0]['image_series']
+
+    @property
     def multipatch_log(self):
         files = [p for p in os.listdir(self.path) if re.match(r'MultiPatch_\d+.log', p)]
         if len(files) == 0:
@@ -975,7 +983,7 @@ class Experiment(object):
         """
         expt_dir = '%0.3f' % self.expt_info['__timestamp__']
         subpath = self.path.split(os.path.sep)[-2:]
-        return os.path.abspath(os.path.join(expt_dir, *subpath))
+        return os.path.join(expt_dir, *subpath)
 
     @property
     def rig_name(self):
