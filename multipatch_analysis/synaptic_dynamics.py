@@ -519,14 +519,31 @@ class RawDynamicsAnalyzer(object):
         rel_plots.show()
         return rel_plots
 
-    def cross_talk(self):
+    def cross_talk(self, window=1e-3):
+        """Return an estimate of the stimulus crosstalk amplitude averaged across
+        all pulse responses.
+        
+        The crosstalk amplitude is calculated for each presynaptic pulse by taking the
+        difference in the postsynaptic recording immediately before and after the stimulus
+        onset.
+        
+        Parameters
+        ----------
+        window : float
+            The duration in seconds of the windows to measure before and after the stimulus onset.
+        
+        Returns
+        -------
+        cc_artifact : numpy float
+            Absolute value of the crosstalk measurement averaged across pulses
+        """
         artifact = []
         for stim, responses in self.pulse_responses.items():
             for response in responses:
                 for pulse in response:
                     dt = pulse['response'].dt
-                    start = int(10e-3/dt)
-                    chunk = int(1e-3/dt)
+                    start = int(self.pre_pad / dt)
+                    chunk = int(window / dt)
                     data = pulse['response'].data
                     pre = data[start-chunk:start]
                     post = data[start:start+chunk]

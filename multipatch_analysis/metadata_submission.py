@@ -151,8 +151,8 @@ class ExperimentMetadataSubmission(object):
                     warnings.append("Time of dissection is later than experiment time - 30 minutes")
                 if seconds_since_dissection < 0:
                     errors.append("Time of dissection is later than experiment time" + extra_err)
-                if seconds_since_dissection > 6*3600:
-                    warnings.append("Time of dissection is more than 6 hours prior to experiment")
+                if seconds_since_dissection > 10*3600:
+                    warnings.append("Time of dissection is more than 10 hours prior to experiment")
 
         # check specimen age
         if self.spec_info['age'] is None:
@@ -183,6 +183,10 @@ class ExperimentMetadataSubmission(object):
                 errors.append('Pipette %d has unrecognized internal "%s"' % (pip_id, pip['internal_solution']))
             
             # Does the selected dye overlap with cre reporters?
+
+            # Check pipette status
+            if pip['pipette_status'] not in ['No seal', 'Low seal', 'GOhm seal', 'Technical failure', 'No attempt', 'Not recorded']:
+                warnings.append('Pipette %d has unrecognized status "%s"' % (pip_id, pip['pipette_status']))
         
         # If slice was not fixed, don't attempt LIMS submission
         try:
@@ -254,14 +258,13 @@ class ExperimentMetadataSubmission(object):
                     warnings.append("Histology plate number %s might be too high? %s" % (plate_n, lims_edit_href))
 
         # Check carousel ID matches the one in LIMS
-        if self.spec_info['organism'] == 'human' and self.spec_info['subsection_number'] is not None:
-            # this specimen was divided; ask about the parent carousel well name instead
-            parent_spec_info = lims.specimen_info(specimen_id=self.spec_info['parent_id'])
-            cw_name = parent_spec_info['carousel_well_name']
-        else:
-            cw_name = self.spec_info['carousel_well_name']
-        
-        if cw_name is None or len(cw_name.strip()) == 0:
+        cw_name = self.spec_info['carousel_well_name']
+        if cw_name is None and self.spec_info['organism'] == 'human' and self.spec_info['subsection_number'] is not None:
+                # this specimen was subdivided; we need to ask about the parent carousel well name instead
+                # note that this behavior has changed-- newer subdivided specimens will have their own carousel well name
+                parent_spec_info = lims.specimen_info(specimen_id=self.spec_info['parent_id'])
+                cw_name = parent_spec_info['carousel_well_name']
+        if cw_name is None:
             errors.append('No LIMS carousel well name for this specimen!')
         else:
             if cw_name != slice_info['carousel_well_ID'].strip():
@@ -339,7 +342,7 @@ class ExperimentMetadataSubmission(object):
             # import labels
             labels = {}
             for label,pos in cell._raw_labels.items():
-                if pos not in ['', '+', '-', '+?', '-?', 'x']:
+                if pos not in ['', '+', '-', '+?', '-?', '?', 'x']:
                     warnings.append('Pipette %d: ignoring old label "%s" because the value "%s" is unrecognized' % (pid, label, pos))
                     continue
 

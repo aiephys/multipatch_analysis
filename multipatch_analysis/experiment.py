@@ -15,7 +15,7 @@ import yaml
 import pyqtgraph as pg
 import pyqtgraph.configfile
 
-from .lims import specimen_info, specimen_images
+from . import lims
 from .constants import ALL_CRE_TYPES, ALL_LABELS, FLUOROPHORES, LAYERS
 from .cell import Cell
 from .electrode import Electrode
@@ -790,23 +790,7 @@ class Experiment(object):
 
     @property
     def nwb_cache_file(self):
-        try:
-            return SynPhysCache().get_cache(self.nwb_file)
-        except:
-            # deprecated soon..
-            if not os.path.isdir('cache'):
-                os.mkdir('cache')
-            cf = os.path.join('cache', self.nwb_file.replace('/', '_').replace(':', '_').replace('\\', '_'))
-            if not os.path.isfile(cf) or os.stat(self.nwb_file).st_mtime > os.stat(cf).st_mtime:
-                try:
-                    import shutil
-                    print("copying to cache:", cf)
-                    shutil.copyfile(self.nwb_file, cf)
-                except:
-                    if os.path.isfile(cf):
-                        os.remove(cf)
-                    raise
-            return cf
+        return SynPhysCache().get_cache(self.nwb_file)
 
     @property
     def data(self):
@@ -820,6 +804,11 @@ class Experiment(object):
             except IOError:
                 os.remove(self.nwb_cache_file)
                 self._data = MultiPatchExperiment(self.nwb_cache_file)
+            except Exception as exc:
+                if 'is not inside' in exc.args[0]:
+                    return MultiPatchExperiment(self.nwb_file)
+                else:
+                    raise
         return self._data
 
     def close_data(self):
@@ -829,6 +818,18 @@ class Experiment(object):
     @property
     def specimen_name(self):
         return self.slice_info['specimen_ID'].strip()
+
+    @property
+    def cluster_id(self):
+        """LIMS CellCluster ID
+        """
+        spec_id = lims.specimen_id_from_name(self.specimen_name)
+        cids = lims.expt_cluster_ids(spec_id, self.timestamp)
+        if len(cids) == 0:
+            return None
+        if len(cids) > 1:
+            raise Exception("Experiment %s has multiple LIMS clusters." % self)
+        return cids[0]
 
     @property
     def age(self):
@@ -854,7 +855,7 @@ class Experiment(object):
         See multipatch_analysis.lims.section_info()
         """
         if self._lims_record is None:
-            self._lims_record = specimen_info(self.specimen_name)
+            self._lims_record = lims.specimen_info(self.specimen_name)
         return self._lims_record
 
     @property
@@ -870,23 +871,53 @@ class Experiment(object):
 
     @property
     def biocytin_image_url(self):
-        """A LIMS URL that points to the biocytin image for this specimen, or
+        """A LIMS URL that points to the 20x biocytin image for this specimen, or
         None if no image is found.
         """
-        images = specimen_images(self.specimen_name)
-        for img_id, treatment in images:
-            if treatment == 'Biocytin':
-                return "http://lims2/siv?sub_image=%d" % img_id
+        images = lims.specimen_images(self.specimen_name)
+        for image in images:
+            if image['treatment'] == 'Biocytin':
+                return image['url']
+
+    @property
+    def biocytin_20x_file(self):
+        """File path of the 20x biocytin image for this specimen, or None if
+        no image is found.
+        """
+        images = lims.specimen_images(self.specimen_name)
+        for image in images:
+            if image['treatment'] == 'Biocytin':
+                return image['file']
+
+    @property
+    def biocytin_63x_files(self):
+        """File paths of the 63x biocytin images for this specimen, or None if
+        no image stack is found.
+        """
+        images = lims.specimen_images(self.cluster_id)
+        if len(images) == 0:
+            return None
+        if len(images) > 1:
+            raise Exception("Multiple images found for cluster %d; not sure which is biocytin." % self.cluster_id)
+        return images[0]['file']
 
     @property
     def dapi_image_url(self):
-        """A LIMS URL that points to the DAPI image for this specimen, or
+        """A LIMS URL that points to the 20x DAPI image for this specimen, or
         None if no image is found.
         """
-        images = specimen_images(self.specimen_name)
-        for img_id, treatment in images:
-            if treatment == 'DAPI':
-                return "http://lims2/siv?sub_image=%d" % img_id
+        images = lims.specimen_images(self.specimen_name)
+        for image in images:
+            if image['treatment'] == 'DAPI':
+                return image['url']
+
+    @property
+    def lims_drawing_tool_url(self):
+        images = lims.specimen_images(self.specimen_name)
+        if len(images) == 0:
+            return None
+        else:
+            return "http://lims2/drawing_tool?image_series=%d" % images[0]['image_series']
 
     @property
     def multipatch_log(self):
@@ -950,14 +981,9 @@ class Experiment(object):
     def server_path(self):
         """The path of this experiment relative to the server storage directory.
         """
-        expt_timestamp = self.expt_info['__timestamp__']
-        path_file = os.path.join(config.synphys_data, 'experiment_path_cache.pkl')
-        paths = pickle.load(open(path_file, 'rb'))
-        expt_path = paths.get(expt_timestamp, None)
-        if expt_path is None:
-            return None
-        rel = self.path.split(os.path.sep)[-2:]
-        return os.path.join(expt_path, *rel)
+        expt_dir = '%0.3f' % self.expt_info['__timestamp__']
+        subpath = self.path.split(os.path.sep)[-2:]
+        return os.path.join(expt_dir, *subpath)
 
     @property
     def rig_name(self):

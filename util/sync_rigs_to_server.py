@@ -88,6 +88,10 @@ def _sync_paths(source, target, changes):
         src_path = os.path.join(source, fname)
         if os.path.isfile(src_path):
             dst_path = os.path.join(target, fname)
+
+            # Skip Igor temporary files
+            if fname.endswith('.pxpT0'):
+                continue
             
             # Skip large files:
             #   - pxp > 20GB

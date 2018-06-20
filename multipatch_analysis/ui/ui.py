@@ -134,7 +134,8 @@ class ExperimentTimeline(QtGui.QWidget):
                 'GS': 'GOhm seal',
                 'TF': 'Technical failure',
                 'NA': 'No attempt',
-            }.get(hs_state, '')
+                None: 'Not recorded',                
+            }.get(hs_state, hs_state)
             self.add_pipette(i, status=status, internal_dye=dye, internal=internal)
         
     def load_nwb(self, nwb_handle):
@@ -278,7 +279,7 @@ class PipetteParameter(pg.parametertree.parameterTypes.GroupParameter):
         self.ui = ui
         params = [
             {'name': 'channel', 'type': 'list', 'values': ui.list_channels()},
-            {'name': 'status', 'type': 'list', 'values': ['No seal', 'Low seal', 'GOhm seal', 'Technical failure']},
+            {'name': 'status', 'type': 'list', 'values': ['No seal', 'Low seal', 'GOhm seal', 'Technical failure', 'No attempt', 'Not recorded']},
             {'name': 'got data', 'type': 'bool'},
             {'name': 'internal', 'type': 'list', 'values': [''] + constants.INTERNAL_RECIPES},
             {'name': 'internal dye', 'type': 'list', 'values': [''] + constants.INTERNAL_DYES},

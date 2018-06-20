@@ -31,7 +31,7 @@ ALL_LABELS = ['biocytin', 'af488', 'cascade_blue'] + FLUOROPHORES.keys()
 LAYERS = ['1', '2', '2/3', '3', '4', '5', '5a', '5b', '6']
 
 ACSF_RECIPES = ["2mM Ca & Mg", "1.3mM Ca & 1mM Mg"]
-INTERNAL_RECIPES = ["Standard K-Gluc"]
+INTERNAL_RECIPES = ["Standard K-Gluc", "PatchSeq"]
 INTERNAL_DYES = ['Cascade Blue', 'AF488']
 
 
@@ -98,6 +98,35 @@ GENOTYPES = OrderedDict([
     ("Tlx3-Cre_PL56/wt;Pvalb-T2A-FlpO/wt;PhiC31-neo/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'pvalb': ['tdTomato'], 'tlx3': ['EGFP']}),
     ("Tlx3-Cre_PL56/wt;Ai14(RCL-tdT)/wt", {'tlx3': ['tdTomato']}),
     ("Ntsr1-Cre_GN220/wt;Vip-IRES-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'vip': ['tdTomato'], 'ntsr1': ['EGFP']}),
+    ("Tlx3-Cre_PL56/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'tlx3': ['EGFP']}),
+    ("Vip-IRES-Cre/wt;Pvalb-T2A-FlpO/Pvalb-T2A-FlpO;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'pvalb': ['tdTomato'], 'vip': ['EGFP']}),
+    ("Ntsr1-Cre_GN220/wt;Ai14(RCL-tdT)/wt", {'ntsr1': ['tdTomato']}),
+    ("Pvalb-IRES-Cre/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'pvalb': ['EGFP']}),
+    ("Pvalb-T2A-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'pvalb': ['tdTomato']}),
+    ("Pvalb-T2A-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'pvalb': ['tdTomato']}),
+    ("Vip-IRES-Cre/wt;Pvalb-T2A-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/Ai140(TIT2L-GFP-ICL-tTA2)", {'pvalb': ['tdTomato'], 'vip': ['EGFP']}),
+    ("Sim1-Cre_KJ18/wt;Ai65F/wt;Ai139(TIT2L-GFP-ICL-TPT)/wt", {'sim1': ['EGFP', 'tdTomato']}),
+    ("Sst-IRES-Cre/wt;Pvalb-T2A-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/Ai140(TIT2L-GFP-ICL-tTA2)", {'pvalb': ['tdTomato'], 'sst': ['EGFP']}),
+    ("Sim1-Cre_KJ18/wt;Pvalb-T2A-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'pvalb': ['tdTomato'], 'sim1': ['EGFP']}),
+    ("Vip-IRES-Cre/wt;Sst-IRES-FlpO/wt;PhiC31-neo/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'sst': ['tdTomato'], 'vip': ['EGFP']}),
+    ("Tlx3-Cre_PL56/wt;Pvalb-2A-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'pvalb': ['tdTomato'], 'tlx3': ['EGFP']}),
+    ("Cux2-CreERT2/wt;Ai14(RCL-tdT)/wt", {'cux2': ['tdTomato']}),
+    ("Tlx3-Cre_PL56/wt;Pvalb-2A-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'pvalb': ['tdTomato'], 'tlx3': ['EGFP']}),
+    ("Pvalb-T2A-FlpO/wt;Ai65F/wt", {'pvalb': ['tdTomato']}),
+    ("Chat-IRES-Cre-neo/wt;Snap25-LSL-F2A-GFP/wt", {'chat': ['EGFP']}),
+    ("Tlx3-Cre_PL56/wt;Pvalb-T2A-FlpO/wt;Ai65F/wt", {'pvalb': ['tdTomato']}),
+    ("Pvalb-T2A-FlpO/wt;Ai65F/Ai65F", {'pvalb': ['tdTomato']}),
+    ("Sst-IRES-Cre/wt;Pvalb-T2A-FlpO/Pvalb-T2A-FlpO;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'pvalb': ['tdTomato'], 'sst': ['EGFP']}),
+    ("Pvalb-IRES-Cre/wt;Rorb-T2A-tTA2/wt;Ai63(TIT-tdT)/wt", {'rorb': ['tdTomato']}),
+    ("Sim1-Cre_KJ18/wt;Sst-IRES-FlpO/wt;PhiC31-neo/Ai65F", {'sst': ['tdTomato']}),
+    ("Sst-IRES-FlpO/wt;PhiC31-neo/Ai65F", {'sst': ['tdTomato']}),
+    ("Sst-IRES-Cre/wt;Pvalb-T2A-FlpO/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'sst': ['EGFP']}),
+    ("Tlx3-Cre_PL56/wt;Sst-IRES-FlpO/wt;Ai65F/PhiC31-neo;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'sst': ['tdTomato'], 'tlx3': ['EGFP']}),
+    ("Sst-IRES-Cre/wt;Pvalb-T2A-FlpO/Pvalb-T2A-FlpO;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'pvalb': ['tdTomato'], 'sst': ['EGFP']}),
+    ("Pvalb-IRES-Cre/wt;Ai63(TIT-tdT)/Ai140(TIT2L-GFP-ICL-tTA2)", {'pvalb': ['EGFP']}),
+    ("Sst-IRES-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'sst': ['tdTomato']}),
+    ("Ntsr1-Cre_GN220/wt;Sst-IRES-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'sst': ['tdTomato'], 'ntsr1': ['EGFP']}),
+    ("Vip-IRES-Cre/wt;Sst-IRES-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'sst': ['tdTomato'], 'vip': ['EGFP']}),
 ])    
 
 
@@ -188,4 +217,6 @@ DRIVER_LINES = {                  # dependencies   # products
     'Sst-IRES-FlpO':              ('sst',          ['flp']),
     'Vip-IRES-FlpO':              ('vip',          ['flp']),
     'Slc17a8-IRES2-Cre':          ('slc17a8',      ['cre']),
+    'Pvalb-2A-FlpO':              ('pvalb',        ['flp']),
+    'Cux2-CreERT2':               ('cux2',         ['cre']),
 }
