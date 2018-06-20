@@ -715,7 +715,7 @@ def fit_psp(response,
         weight[int(12e-3/dt):int(19e-3/dt)] = 30.  #area around steep PSP rise 
     elif weight is False: #do not weight any part of the stimulus
         weight = np.ones(len(y))
-    elif weight:  #works if there is a value specified in weight
+    elif 'weight' in vars():  #works if there is a value specified in weight
         if len(weight) != len(y):
             raise Exception('the weight and array vectors are not the same length') 
     
