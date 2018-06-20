@@ -301,5 +301,5 @@ def save_fit_psp_test_set():
 
             
 if __name__== "__main__":
-    check_psp_fitting() #use this to diagnose how fits differ from test data
-#    test_psp_fitting()
+#    check_psp_fitting() #use this to diagnose how fits differ from test data
+    test_psp_fitting()
