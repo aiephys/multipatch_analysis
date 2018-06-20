@@ -741,7 +741,7 @@ class ExperimentMetadata(Experiment):
     @property
     def in_database(self):
         session = database.Session()
-        expts = session.query(database.Experiment.id).filter(database.Experiment.acq_timestamp==self.datetime).all()
+        expts = session.query(database.Experiment.id).filter(database.Experiment.acq_timestamp==self.timestamp).all()
         session.close()
         return len(expts) == 1
 
