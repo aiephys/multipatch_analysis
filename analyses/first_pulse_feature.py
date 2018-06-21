@@ -96,15 +96,15 @@ for c in range(len(connection_types)):
     cre_type = (connection_types[c][0][1], connection_types[c][1][1])
     target_layer = (connection_types[c][0][0], connection_types[c][1][0])
     conn_type = connection_types[c]
-    expt_list = all_expts.select(cre_type=cre_type, target_layer=target_layer, calcium=calcium, age=age)
+    #expt_list = all_expts.select(cre_type=cre_type, target_layer=target_layer, calcium=calcium, age=age)
     color = color_palette[c]
     grand_response[conn_type[0]] = {'trace': [], 'amp': [], 'latency': [], 'rise': [], 'dist': [], 'decay':[], 'CV': [], 'amp_measured': []}
     expt_ids[conn_type[0]] = []
     synapse_plot[c, 0].addLegend()
-    for expt in expt_list:
+    for expt in all_expts:
+        if expt.connections is None:
+            continue
         for pre, post in expt.connections:
-            if [expt.uid, pre, post] in no_include:
-                continue
             cre_check = expt.cells[pre].cre_type == cre_type[0] and expt.cells[post].cre_type == cre_type[1]
             layer_check = expt.cells[pre].target_layer == target_layer[0] and expt.cells[post].target_layer == target_layer[1]
             if cre_check is True and layer_check is True:
@@ -122,18 +122,18 @@ for c in range(len(connection_types)):
                         #print ('%s, %0.0f' %((expt.uid, pre, post), hold, ))
                         all_amps = fail_rate(response_subset, '+', peak_t)
                         cv = np.std(all_amps)/np.mean(all_amps)
-                        
+
                         # weight parts of the trace during fitting
                         dt = avg_trace.dt
                         weight = np.ones(len(avg_trace.data))*10.  #set everything to ten initially
                         weight[int(10e-3/dt):int(12e-3/dt)] = 0.   #area around stim artifact
-                        weight[int(12e-3/dt):int(19e-3/dt)] = 30.  #area around steep PSP rise 
-                        
-                        psp_fits = fit_psp(avg_trace, 
+                        weight[int(12e-3/dt):int(19e-3/dt)] = 30.  #area around steep PSP rise
+
+                        psp_fits = fit_psp(avg_trace,
                                            xoffset=(14e-3, -float('inf'), float('inf')),
-                                           sign=amp_sign, 
+                                           sign=amp_sign,
 #                                           amp=avg_amp, 
-                                           weight=weight)                        
+                                           weight=weight)
                         plt.clear()
                         plt.plot(avg_trace.time_values, avg_trace.data, title=str([psp_fits.best_values['xoffset'], expt.uid, pre, post]))
                         plt.plot(avg_trace.time_values, psp_fits.eval(), pen='g')
