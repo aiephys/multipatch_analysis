@@ -23,7 +23,7 @@ import affpyramid
 
 from acq4.util.Canvas.items.CanvasItem import CanvasItem
 from acq4.util.Canvas.items import registerItemType
-#from . import dashboard
+from . import dashboard
 
 
 class MultipatchSubmissionModule(Module):
