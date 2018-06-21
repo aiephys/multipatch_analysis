@@ -23,7 +23,7 @@ def archive_rig_data(rig_name, test=False, source='primary', dest='archive'):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--rig', type=str, default=config.rig_name, help="The name of the rig to archive (must be listed in config.rig_data_paths)")
+    parser.add_argument('--rig', type=str, default=config.rig_name.lower(), help="The name of the rig to archive (must be listed in config.rig_data_paths)")
     parser.add_argument('--source', type=str, default='primary', help="The name of the source storage location ('primary', 'archive', or 'backup')")
     parser.add_argument('--dest', type=str, default='archive', help="The name of the destination storage location ('primary', 'archive', or 'backup')")
     parser.add_argument('--test', action='store_true', default=False, help="Print actions to be taken, do not change any files")
