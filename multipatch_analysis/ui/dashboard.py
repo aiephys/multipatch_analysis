@@ -302,6 +302,7 @@ class Dashboard(QtGui.QWidget):
             item.index = index
 
         record = self.records[index]
+        record['item'] = item
         self.records_by_expt[expt] = index
 
         # update item/record fields
@@ -619,6 +620,9 @@ class ExperimentMetadata(Experiment):
                         cell_info = lims.cluster_cells(cell_cluster)
                         mapped = len(cell_info) > 0 and all([ci['x_coord'] is not None  for ci in cell_info])
                         rec['cell map'] = mapped
+            else:
+                if self.mosaic_file is not None:
+                    rec['site.mosaic'] = True
         
         except Exception as exc:
             rec['error'] = sys.exc_info()
