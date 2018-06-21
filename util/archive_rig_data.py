@@ -11,7 +11,8 @@ def archive_rig_data(rig_name, test=False, source='primary', dest='archive'):
 
     The chosen *source* and *dest* storage locations must be defined in ``config.rig_data_paths[rig_name]``.
 
-    This copies/updates files but does not delete or rename any files in the archive.
+    This copies/updates files but does not delete any files in the archive. For updated files, the original
+    version is renamed and suffixed with the current date/time.
     """
     paths = config.rig_data_paths[rig_name]
     for path_set in paths:
