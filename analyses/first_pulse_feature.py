@@ -9,7 +9,7 @@ from manuscript_figures import get_response, get_amplitude, response_filter, fea
 from synapse_comparison import load_cache, summary_plot_pulse
 from neuroanalysis.data import TraceList
 from neuroanalysis.ui.plot_grid import PlotGrid
-from multipatch_analysis.connection_detection import fit_psp
+from neuroanalysis.fitting import fit_psp
 from rep_connections import ee_connections, human_connections, no_include, all_connections, ie_connections, ii_connections, ei_connections
 from multipatch_analysis.synaptic_dynamics import DynamicsAnalyzer
 from scipy import stats
@@ -129,7 +129,11 @@ for c in range(len(connection_types)):
                         weight[int(10e-3/dt):int(12e-3/dt)] = 0.   #area around stim artifact
                         weight[int(12e-3/dt):int(19e-3/dt)] = 30.  #area around steep PSP rise 
                         
-                        psp_fits = fit_psp(avg_trace, sign=amp_sign, yoffset=0, xoffset=14e-3, amp=avg_amp, method='leastsq', stacked = True, rise_time_mult_factor=10., fit_kws={'weights': weight})                        
+                        psp_fits = fit_psp(avg_trace, 
+                                           xoffset=(14e-3, -float('inf'), float('inf')),
+                                           sign=amp_sign, 
+#                                           amp=avg_amp, 
+                                           weight=weight)                        
                         plt.clear()
                         plt.plot(avg_trace.time_values, avg_trace.data, title=str([psp_fits.best_values['xoffset'], expt.uid, pre, post]))
                         plt.plot(avg_trace.time_values, psp_fits.eval(), pen='g')
