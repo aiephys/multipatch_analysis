@@ -222,6 +222,7 @@ class Dashboard(QtGui.QWidget):
         self.console.localNamespace['sel'] = rec
         self.selected = rec
         expt = rec['experiment']
+        self.console.localNamespace['expt'] = expt
         self.expt_actions.experiment = expt
 
         msg = [
@@ -239,6 +240,7 @@ class Dashboard(QtGui.QWidget):
             ('biocytin URL', 'biocytin_image_url'),
             ('drawing tool', 'lims_drawing_tool_url'),
             ('cluster ID', 'cluster_id'),
+            ('slice fixed', 'slice_fixed'),
         ]
         for name,attr in print_fields:
             try:
@@ -598,10 +600,12 @@ class ExperimentMetadata(Experiment):
 
             rec['submitted'] = submitted
             rec['data'] = '-' if self.nwb_file is None else True
-            slice_fixed = self.slice_info.get('carousel_well_ID') != 'not fixed'
+            slice_fixed = self.slice_fixed
             if slice_fixed:
                 image_20x = self.biocytin_20x_file
                 rec['20x'] = image_20x is not None
+            else:
+                rec['20x'] = '-'
 
             if rec['submitted']:
                 rec['connections'] = connections
@@ -764,3 +768,7 @@ class ExperimentMetadata(Experiment):
         if subs is None or len(subs) != 1:
             return None
         return subs[0][1]
+
+    @property
+    def slice_fixed(self):
+        return self.slice_info.get('plate_well_ID') != 'not fixed'
