@@ -198,12 +198,3 @@ class Genotype(object):
         for d,rs in drm.items():
             for r in rs:
                 self._reporter_driver_map.setdefault(r, []).append(driver)
-
-
-if __name__ == '__main__':
-    for gt in GENOTYPES:
-        print(gt)
-        g = Genotype(gt)
-        print("    " + "   ".join(["%s: %s" % (d, ','.join(g.colors(d))) for d in g.drivers()]))
-        print("")
-    print(g.predict_driver_expression({'green': True, 'red': False}))
