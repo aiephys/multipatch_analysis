@@ -27,7 +27,7 @@ from . import yaml_local, config
 
 
 class Experiment(object):
-    def __init__(self, entry=None, yml_file=None, verify=True):
+    def __init__(self, site_path=None, entry=None, yml_file=None, verify=True):
         self.entry = entry
         self.source_id = (None, None)
         self.electrodes = None
@@ -54,10 +54,14 @@ class Experiment(object):
         self._target_layers = None
         self._rig_name = None
         
+        if site_path is not None:
+            yml_file = os.path.join(site_path, 'pipettes.yml')
+        
         if entry is not None:
             self._load_old_format(entry)
         elif yml_file is not None:
             self._load_yml(yml_file)
+            
 
         if verify:
             self.verify()
