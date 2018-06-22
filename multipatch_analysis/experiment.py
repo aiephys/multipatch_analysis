@@ -998,6 +998,12 @@ class Experiment(object):
                    self._rig_name = m.groups()[0]
         return self._rig_name
 
+    @property
+    def project_name(self):
+        """The name of the project to which this experiment belongs.
+        """
+        return self.slice_info.get('project', None)
+
     def show(self):
         if self._view is None:
             pg.mkQApp()

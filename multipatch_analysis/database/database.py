@@ -54,6 +54,7 @@ table_schemas = {
         ('storage_path', 'str', 'Location of data within server or cache storage.'),
         ('ephys_file', 'str', 'Name of ephys NWB file relative to storage_path.'),
         ('rig_name', 'str', 'Identifier for the rig that generated these results.'),
+        ('project_name', 'str', 'Name of the project to which this experiment belongs.'),
         ('acq_timestamp', 'float', 'Creation timestamp for site data acquisition folder.', {'unique': True, 'index': True}),
         ('slice_id', 'slice.id', 'ID of the slice used for this experiment'),
         ('target_region', 'str', 'The intended brain region for this experiment'),

@@ -167,6 +167,7 @@ class ExperimentDBSubmission(object):
             'storage_path': expt.server_path,
             'ephys_file': None if expt.nwb_file is None else os.path.relpath(expt.nwb_file, expt.path),
             'rig_name': expt.rig_name,
+            'project_name': expt.project_name,
             'acq_timestamp': expt.timestamp,
             'target_region': expt_info.get('region'),
             'internal': expt_info.get('internal'),
