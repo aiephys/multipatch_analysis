@@ -237,7 +237,12 @@ class ExperimentMetadataSubmission(object):
         if hist_well is None:
             errors.append("Missing histology well name in LIMS: %s" % lims_edit_href)        
         else:
-            m = re.match(r'multi_(\d{2})(\d{2})(\d{2})_(2[1-9])_([A-C]0[1-4])', hist_well)
+            if site_date > datetime(2017, 04, 30):
+               # 12-well plates
+               m = re.match(r'multi_(\d{2})(\d{2})(\d{2})_(2[1-9])_([A-C]0[1-4])', hist_well)
+            else:
+               # older experiments used 24-well plates
+               m = re.match(r'multi_(\d{2})(\d{2})(\d{2})_(2[1-9])_([A-D]0[1-6])', hist_well)            
             if m is None:
                 errors.append("Histology well name appears to be incorrectly formatted: %s" % lims_edit_href)        
             else:

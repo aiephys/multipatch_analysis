@@ -127,6 +127,10 @@ GENOTYPES = OrderedDict([
     ("Sst-IRES-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'sst': ['tdTomato']}),
     ("Ntsr1-Cre_GN220/wt;Sst-IRES-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'sst': ['tdTomato'], 'ntsr1': ['EGFP']}),
     ("Vip-IRES-Cre/wt;Sst-IRES-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'sst': ['tdTomato'], 'vip': ['EGFP']}),
+    ("Vip-IRES-Cre/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt", {'vip': ['EGFP']}),
+    ("Rbp4-Cre_KL100/wt;Ai14(RCL-tdT)/wt", {'rbp4': ['tdTomato']}),
+    ("Vip-IRES-Cre/wt;Ai14(RCL-tdT)/wt", {'vip': ['tdTomato']}),
+    ("Chrna2-Cre_OE25/wt;Ai14(RCL-tdT)/wt", {'chrna2': ['tdTomato']}),
 ])    
 
 
@@ -219,4 +223,7 @@ DRIVER_LINES = {                  # dependencies   # products
     'Slc17a8-IRES2-Cre':          ('slc17a8',      ['cre']),
     'Pvalb-2A-FlpO':              ('pvalb',        ['flp']),
     'Cux2-CreERT2':               ('cux2',         ['cre']),
+    'Chrna2-Cre_OE25':            ('chrna2',       ['cre']),
+    'Penk-IRES2-Cre-neo':         ('penk',         ['cre']),
+    'Slc17a6-IRES2-FlpO':         ('slc17a6',      ['flp']),
 }

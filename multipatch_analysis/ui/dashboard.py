@@ -222,6 +222,7 @@ class Dashboard(QtGui.QWidget):
         self.console.localNamespace['sel'] = rec
         self.selected = rec
         expt = rec['experiment']
+        self.console.localNamespace['expt'] = expt
         self.expt_actions.experiment = expt
 
         msg = [
@@ -229,18 +230,19 @@ class Dashboard(QtGui.QWidget):
             "       timestamp: %s" % expt.timestamp,
             "     description: %s" % rec['description'],
         ]
-        print_fields = {
-            'spec name': 'specimen_name',
-            'genotype': 'genotype',
-            'NAS path': 'nas_path',
-            'primary path': 'primary_path',
-            'archive path': 'archive_path',
-            'backup path': 'backup_path',
-            'biocytin URL': 'biocytin_image_url',
-            'drawing tool': 'lims_drawing_tool_url',
-            'cluster ID': 'cluster_id',
-        }
-        for name,attr in print_fields.items():
+        print_fields = [
+            ('spec name', 'specimen_name'),
+            ('genotype', 'genotype'),
+            ('NAS path', 'nas_path'),
+            ('primary path', 'primary_path'),
+            ('archive path', 'archive_path'),
+            ('backup path', 'backup_path'),
+            ('biocytin URL', 'biocytin_image_url'),
+            ('drawing tool', 'lims_drawing_tool_url'),
+            ('cluster ID', 'cluster_id'),
+            ('slice fixed', 'slice_fixed'),
+        ]
+        for name,attr in print_fields:
             try:
                 val = getattr(expt, attr)
                 msg.append("%16s: %s" % (name, val))
@@ -302,6 +304,7 @@ class Dashboard(QtGui.QWidget):
             item.index = index
 
         record = self.records[index]
+        record['item'] = item
         self.records_by_expt[expt] = index
 
         # update item/record fields
@@ -312,7 +315,7 @@ class Dashboard(QtGui.QWidget):
                 val, color = val
             else:
                 # otherwise make a guess on a good color
-                color = None
+                color = 'w'
                 if val is True:
                     color = pass_color
                 elif val is False:
@@ -597,10 +600,12 @@ class ExperimentMetadata(Experiment):
 
             rec['submitted'] = submitted
             rec['data'] = '-' if self.nwb_file is None else True
-            slice_fixed = self.slice_info.get('carousel_well_ID') != 'not fixed'
+            slice_fixed = self.slice_fixed
             if slice_fixed:
                 image_20x = self.biocytin_20x_file
                 rec['20x'] = image_20x is not None
+            else:
+                rec['20x'] = '-'
 
             if rec['submitted']:
                 rec['connections'] = connections
@@ -619,6 +624,9 @@ class ExperimentMetadata(Experiment):
                         cell_info = lims.cluster_cells(cell_cluster)
                         mapped = len(cell_info) > 0 and all([ci['x_coord'] is not None  for ci in cell_info])
                         rec['cell map'] = mapped
+            else:
+                if self.mosaic_file is not None:
+                    rec['site.mosaic'] = True
         
         except Exception as exc:
             rec['error'] = sys.exc_info()
@@ -760,3 +768,7 @@ class ExperimentMetadata(Experiment):
         if subs is None or len(subs) != 1:
             return None
         return subs[0][1]
+
+    @property
+    def slice_fixed(self):
+        return self.slice_info.get('plate_well_ID') != 'not fixed'
