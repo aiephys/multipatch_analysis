@@ -454,16 +454,16 @@ def reset_db():
     with pg_engine.begin() as conn:
         conn.connection.set_isolation_level(0)
         try:
-            conn.execute('drop database %s' % config.synphys_db)
+            conn.execute('drop database %s' % db_name)
         except sqlalchemy.exc.ProgrammingError as err:
             if 'does not exist' not in err.message:
                 raise
 
-        conn.execute('create database %s' % config.synphys_db)
+        conn.execute('create database %s' % db_name)
 
     # reconnect to DB
     global engine
-    engine = create_engine(config.synphys_db_host + '/' + config.synphys_db)
+    engine = create_engine(config.synphys_db_host + '/' + db_name)
 
     # Grant readonly permissions
     ro_user = config.synphys_db_readonly_user
