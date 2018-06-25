@@ -1,5 +1,5 @@
 from __future__ import print_function
-import sys
+import sys, itertools
 from .constants import GENOTYPES, REPORTER_LINES, DRIVER_LINES, FLUOROPHORES
 
 
@@ -32,8 +32,8 @@ class Genotype(object):
         gtype.colors()           # =>  ['red', 'green']
         gtype.colors('sst')      # =>  ['green']
 
-        gtype.driver_lines()     # =>  ['Tlx3-Cre_PL65', 'Sst-IRES-FlpO']
-        gtype.reporter_lines()   # =>  ['Ai65F', 'Ai140']
+        gtype.driver_lines       # =>  ['Tlx3-Cre_PL65', 'Sst-IRES-FlpO']
+        gtype.reporter_lines     # =>  ['Ai65F', 'Ai140']
 
     """
     def __init__(self, gtype):
@@ -151,30 +151,21 @@ class Genotype(object):
         extra = parts - set(self.driver_lines + self.reporter_lines)
         if len(extra) > 0:
             raise Exception("Unknown genotype part(s): %s" % str(extra))
-        
-        # map {cre line : fluorophore : color} and back again
-        reporter_driver_map = {}
-        driver_reporter_map = {}
+
+        # generate a combined map describing input factors and the output products that would be generated
+        #   e.g.:  [ (('tlx3',), ('cre')), (('cre',), ('tdTomato', 'tTA')) ]
+        #             tlx3 generates cre,   cre generates tomato and tTA
+        self._product_map = []
+        for d in self.driver_lines:
+            inputs, outputs = DRIVER_LINES[d]
+            self._product_map.append((set(inputs.split('&')), set(outputs)))
+        for r in self.reporter_lines:
+            inputs, outputs = REPORTER_LINES[r]
+            self._product_map.append((set(inputs.split('&')), set(outputs)))
 
         # Automatically determine driver-reporter mapping.
         try:
-            for d in self.driver_lines:
-                driver, driver_factors = DRIVER_LINES[d]
-                # driver_factors is a list containing one or more of 'cre', 'flp', and 'tTA'
-                # (these are _provided_ by the driver)
-                for r in self.reporter_lines:
-                    reporter_factors, reporters = REPORTER_LINES[r]
-                    reporters = [rr for rr in reporters if rr in FLUOROPHORES]
-                    
-                    # reporter_factors is an '&'-delimited string with one or more 'cre', 'flp', and 'tTA'
-                    # (these are _required_ by the reporter)
-                    reporter_factors = reporter_factors.split('&')
-                    if not all([rf in driver_factors for rf in reporter_factors]):
-                        # this is an oversimplification, but should work for now..
-                        continue
-                    driver_reporter_map.setdefault(driver, []).extend(reporters)
-                    for r in reporters:
-                        reporter_driver_map.setdefault(r, []).append(driver)
+            driver_reporter_map = self._simulate_driver_combos()
             parse_ok = True
         except Exception as parse_exc:
             sys.excepthook(*sys.exc_info())
@@ -191,10 +182,65 @@ class Genotype(object):
             else:
                 raise Exception('Unknown genotype "%s" (and genotype parsing failed).' % self.gtype)
 
-        drm = GENOTYPES[self.gtype]
-        self._driver_reporter_map = drm
+        self._driver_reporter_map = GENOTYPES[self.gtype]
+        
         # generate the reverse mapping
         self._reporter_driver_map = {}
-        for d,rs in drm.items():
-            for r in rs:
-                self._reporter_driver_map.setdefault(r, []).append(driver)
+        for drivers, reporters in self._driver_reporter_map.items():
+            for r in reporters:
+                self._reporter_driver_map.setdefault(r, []).append(drivers)
+
+    def _simulate_driver_combos(self):
+        """Given all of the available driver lines in this genotype, simulate
+        the reporter expression for each possible combination of drivers.
+
+        Returns
+        -------
+        driver_reporter_map : dict
+            Maps {(drivers,): [reporters]} to describe all of the reporters that would be expressed
+            by each possible combination of drivers.
+        """
+        driver_reporter_map = {}
+
+        # Generate a list of all possible driver line combinations
+        #   e.g.:   [(), ('Tlx3-Cre_PL65',), ('Sst-IRES-FlpO',), ('Tlx3-Cre_PL65', 'Sst-IRES-FlpO')]
+        driver_line_combos = []
+        for i in range(len(self.driver_lines) + 1):
+            driver_line_combos.extend(list(itertools.combinations(self.driver_lines, i)))
+
+        # Iterate over all combinations of the available driver lines and 
+        # predict which reporters would be expressed in each case
+        for driver_lines in driver_line_combos:
+            drivers = [DRIVER_LINES[d][0] for d in driver_lines]
+            expressed_factors = self._simulate_expression(drivers)
+            expressed_reporters = [f for f in expressed_factors if f in FLUOROPHORES]
+
+            driver_reporter_map[tuple(sorted(drivers))] = expressed_reporters
+
+        return driver_reporter_map
+
+    def _simulate_expression(self, factors):
+        """Given a list of factors that could impact expression (drivers, recombinases, drugs, etc.),
+        return a list of the reporters that would be expressed.
+
+        Example:
+
+            A pvalb-positive cell:  _simulate_expression(['pvalb'])
+            An sst-positive cell plus tetracycline:  _simulate_expression(['sst', 'tet'])
+
+        """
+        factors = set(factors)
+        new_expression = False
+        for inputs, outputs in self._product_map:
+            # inputs/outputs are tuples saying "if we have everything in inputs, then we generate everything in outputs"
+            # e.g.:  inputs=('tlx3',)  outputs=('cre', 'tTA')
+            #        inputs=('tTA',)   outputs=('tdTomato')
+            if inputs.issubset(factors) and not outputs.issubset(factors):
+                # Something new was expressed; add it to the list and run again
+                factors |= outputs
+                new_expression = True
+        
+        if new_expression:
+            return self._simulate_expression(factors)
+        else:
+            return factors
