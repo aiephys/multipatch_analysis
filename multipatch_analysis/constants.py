@@ -25,7 +25,7 @@ FLUOROPHORES = {
 }
 # note: the lower-case af488 and cascade_blue are for backward compatibility; these
 # may be removed at some point
-ALL_LABELS = ['biocytin', 'af488', 'cascade_blue'] + FLUOROPHORES.keys()
+ALL_LABELS = ['biocytin', 'af488', 'cascade_blue'] + list(FLUOROPHORES.keys())
 
 
 LAYERS = ['1', '2', '2/3', '3', '4', '5', '5a', '5b', '6']
@@ -189,17 +189,16 @@ REPORTER_LINES = {                # dependencies # products
     'Ai65F':                      ('flp',        ['tdTomato']),
     'Ai66(RCRL-tdT)':             ('cre&dre',    ['tdTomato']),
     'Ai72(RCL-VSFPB)':            ('cre',        ['VSFP','Butterfly 1.2']),
-    'Ai87(RCL-iGluSnFR)':         ('cre',        ['iGluSnFR']),
-    'Ai95(RCL-GCaMP6f)':          ('cre',        ['GCaMP6f']),
-    'Ai96(RCL-GCaMP6s)':          ('cre',        ['GCaMP6s']),
-    'Ai62(TITL-tdT)':             ('cre&tTA',    ['tdTomato']),
-    'Ai82(TITL-GFP)':             ('cre&tTA',    ['EGFP']),
+    'Ai78(TITL-VSFPB)':           ('cre&tTA',    ['VSFP','Butterfly 1.2']),
     'Ai79(TITL-Jaws)':            ('cre&tTA',    ['Jaws','GFP','ER2']),
+    'Ai82(TITL-GFP)':             ('cre&tTA',    ['EGFP']),
+    'Ai85(TITL-iGluSnFR)':        ('cre&tTA',    ['iGluSnFR']),
+    'Ai87(RCL-iGluSnFR)':         ('cre',        ['iGluSnFR']),
+    'Ai92(TITL-YCX2.60)':         ('cre&tTA',    ['YCX2.60']),
     'Ai93(TITL-GCaMP6f)':         ('cre&tTA',    ['GCaMP6f']),
     'Ai94(TITL-GCaMP6s)':         ('cre&tTA',    ['GCaMP6s']),
-    'Ai92(TITL-YCX2.60)':         ('cre&tTA',    ['YCX2.60']),
-    'Ai78(TITL-VSFPB)':           ('cre&tTA',    ['VSFP','Butterfly 1.2']),
-    'Ai85(TITL-iGluSnFR)':        ('cre&tTA',    ['iGluSnFR']),
+    'Ai95(RCL-GCaMP6f)':          ('cre',        ['GCaMP6f']),
+    'Ai96(RCL-GCaMP6s)':          ('cre',        ['GCaMP6s']),
     'Ai139(TIT2L-GFP-ICL-TPT)-D': ('cre',        ['EGFP','tdTomato']),
     'Ai139(TIT2L-GFP-ICL-TPT)':   ('cre',        ['EGFP','tdTomato']),
     'Ai140(TIT2L-GFP-ICL-tTA2)':  ('cre',        ['EGFP', 'tTA']),
@@ -226,4 +225,5 @@ DRIVER_LINES = {                  # dependencies   # products
     'Chrna2-Cre_OE25':            ('chrna2',       ['cre']),
     'Penk-IRES2-Cre-neo':         ('penk',         ['cre']),
     'Slc17a6-IRES2-FlpO':         ('slc17a6',      ['flp']),
+    'Ctgf-T2A-dgCre':             ('ctgf',         ['cre']),  # note: cre activity is reduced in dgCre; increased by administration of TMP
 }
