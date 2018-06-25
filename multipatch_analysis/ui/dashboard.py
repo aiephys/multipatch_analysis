@@ -570,7 +570,7 @@ class ExperimentMetadata(Experiment):
             else:
                 try:
                     gtyp = self.genotype
-                    description = ','.join(gtyp.drivers())
+                    description = ','.join(gtyp.all_drivers)
                 except Exception:
                     description = (org + ' (unknown: %s)'%self.lims_record.get('genotype', None), fail_color)
             rec['description'] = description
