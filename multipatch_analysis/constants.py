@@ -72,6 +72,7 @@ GENOTYPES = OrderedDict([
     ('Ntsr1-Cre_GN220/wt;Vip-IRES-FlpO/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt;Ai65F/wt', {('ntsr1',): ['EGFP'], ('vip',): ['tdTomato'], (): [], ('ntsr1', 'vip'): ['tdTomato', 'EGFP']}),
     ('Ntsr1-Cre_GN220/wt;Vip-IRES-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('ntsr1',): ['EGFP'], ('vip',): ['tdTomato'], (): [], ('ntsr1', 'vip'): ['tdTomato', 'EGFP']}),
     ('Ntsr1-Cre_GN220/wt;Vip-IRES-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('ntsr1',): ['EGFP'], ('vip',): ['tdTomato'], (): [], ('ntsr1', 'vip'): ['tdTomato', 'EGFP']}),
+    ('Penk-IRES2-Cre-neo/wt;Slc17a6-IRES2-FlpO/wt;Ai65(RCFL-tdT)/wt', {(): [], ('penk',): [], ('slc17a6',): [], ('penk', 'slc17a6'): ['tdTomato']}),
     ('Pvalb-IRES-Cre/wt;Ai14(RCL-tdT)/wt', {('pvalb',): ['tdTomato'], (): []}),
     ('Pvalb-IRES-Cre/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('pvalb',): ['EGFP'], (): []}),
     ('Pvalb-IRES-Cre/wt;Ai63(TIT-tdT)/Ai140(TIT2L-GFP-ICL-tTA2)', {('pvalb',): ['EGFP', 'tdTomato'], (): []}),

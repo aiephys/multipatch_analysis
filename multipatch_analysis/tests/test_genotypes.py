@@ -77,7 +77,7 @@ def test_overlapping_quad():
 
     assert gt.expressed_reporters([]) == set([])
     assert gt.expressed_reporters(['rorb']) == set(['tdTomato'])
-    assert set(gt.expressed_reporters(['pvalb'])) == set(['tdTomato', 'EGFP'])
+    assert gt.expressed_reporters(['pvalb']) == set(['tdTomato', 'EGFP'])
     assert gt.expressed_reporters(['rorb', 'pvalb']) == set(['tdTomato', 'EGFP'])
     assert gt.expressed_reporters(['pvalb', 'rorb']) == set(['tdTomato', 'EGFP'])
 
@@ -105,6 +105,37 @@ def test_overlapping_quad():
     assert gt.expressed_colors(['rorb']) == set(['red'])
     assert gt.expressed_colors(['pvalb']) == set(['red', 'green'])
     assert gt.expressed_colors(['pvalb', 'rorb']) == set(['red', 'green'])
+
+
+def test_intersectional():
+    # penk+slc17a6 => tomato
+    gt = Genotype('Penk-IRES2-Cre-neo/wt;Slc17a6-IRES2-FlpO/wt;Ai65(RCFL-tdT)/wt')
+    assert set(gt.driver_lines) == set(['Penk-IRES2-Cre-neo', 'Slc17a6-IRES2-FlpO'])
+    assert set(gt.reporter_lines) == set(['Ai65(RCFL-tdT)'])
+    assert gt.all_drivers == set(['penk', 'slc17a6'])
+    assert gt.all_reporters == set(['tdTomato'])
+    assert gt.all_colors == set(['red'])
+
+    assert gt.expressed_reporters([]) == set([])
+    assert gt.expressed_reporters(['slc17a6']) == set([])
+    assert gt.expressed_reporters(['penk']) == set([])
+    assert gt.expressed_reporters(['slc17a6', 'penk']) == set(['tdTomato'])
+    assert gt.expressed_reporters(['penk', 'slc17a6']) == set(['tdTomato'])
+
+    assert gt.expressed_colors([]) == set([])
+    assert gt.expressed_colors(['slc17a6']) == set([])
+    assert gt.expressed_colors(['penk']) == set([])
+    assert gt.expressed_colors(['slc17a6', 'penk']) == set(['red'])
+    assert gt.expressed_colors(['penk', 'slc17a6']) == set(['red'])
+
+    assert gt.test_driver_combinations({}) == {(): True, ('slc17a6',): True, ('penk',): True, ('penk', 'slc17a6'): True}
+    assert gt.test_driver_combinations({'red': None}) == {(): True, ('slc17a6',): True, ('penk',): True, ('penk', 'slc17a6'): True}
+    assert gt.test_driver_combinations({'red': True}) == {(): False, ('slc17a6',): False, ('penk',): False, ('penk', 'slc17a6'): True}
+    assert gt.test_driver_combinations({'red': False}) == {(): True, ('slc17a6',): True, ('penk',): True, ('penk', 'slc17a6'): False}
+
+    assert gt.predict_driver_expression({}) == {'penk': None, 'slc17a6': None}
+    assert gt.predict_driver_expression({'red': True}) == {'penk': True, 'slc17a6': True} 
+    assert gt.predict_driver_expression({'red': False}) == {'penk': None, 'slc17a6': None} 
 
 
 def test_known_genotypes():
