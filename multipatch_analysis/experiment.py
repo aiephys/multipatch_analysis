@@ -315,6 +315,7 @@ class Experiment(object):
                     raise Exception("Mouse specimen has no genotype: %s\n  (from %r)" % (self.specimen_name, self))
                 for driver,positive in genotype.predict_driver_expression(colors).items():
                     if len(driver) != 1:
+                        # Need to decide how to handle situations where two drivers could be active
                         continue
                     cell.labels[driver[0]] = positive
 
@@ -325,7 +326,7 @@ class Experiment(object):
                     qc_pass = pip_meta['cell_qc'][k]
                     if qc_pass == '':
                         qc_pass = None
-                    else:
+                    elif isinstance(qc_pass, str):
                         if qc_pass not in '+/-?':
                             raise ValueError('Invalid cell %s QC string: "%s"' % (k, qc_pass))
                         qc_pass = qc_pass in '+/'
