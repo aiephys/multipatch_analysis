@@ -1,6 +1,117 @@
 from __future__ import print_function
 import sys, itertools
-from .constants import GENOTYPES, REPORTER_LINES, DRIVER_LINES, FLUOROPHORES
+
+# ----------------- Genotype Handling ----------------------------
+# The purpose of the code below is to be able to ask, given a mouse genotype string, 
+# what cell types are marked, and what reporter color are they marked with.
+
+# There are two approaches:
+# 1. Write down a list of all possible genotype strings and the associated 
+#    driver / reporter information. This is simple and transparent, but requires
+#    constant maintenance as we add more genotypes.
+# 2. Write down the complete list of drivers and reporters, and use some simple
+#    genetic modeling to predict what phenotype will be created by a particular
+#    genotype.
+# The Genotype class below implements the second approach.
+
+
+# Background research on understanding genotype symbols:
+# http://help.brain-map.org/download/attachments/2818171/Connectivity_Resources.pdf
+# https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4365051/pdf/nihms665520.pdf
+
+# RCL  : Rosa_CAG-LSL      (cre dependent)
+# RCFL : Rosa_CAG-FSF-LSL  (cre+flp dependent)
+# RCRL : Rosa_CAG-RSR-LSL  (cre+dre dependent)
+# TIT : TIGRE-insulators-TRE_promoter   (tTa|rtTA dependent)
+# TITL : TIGRE-insulators-TRE_promoter-LSL   (cre+(tTA|rtTA) dependent)
+# TIT2L : TIGRE-insulators-TRE_promoter-LSL   (cre+(tTA|rtTA) dependent)
+# IRES :
+# T2A :
+# LSL : lox-stop-lox (cre dependent)
+# FSF : frt-stop-frt (flp dependent)
+# RSR : rox-stop-rox (dre dependent, but also slightly activated by cre)
+# dgCre : functions like Cre with reduced activity; increased by administration of TMP
+# TRE : tetracycline response element - series of TetO sequences that
+#       require tTA or rtTA to increase downstream expression
+#         - dox binds tTa, which prevents further binding to TetO
+#         - dox binds rtTa, which allows further binding to TetO
+#       this system is also used for amplification.
+# tTA : tet-off  (activates TRE only in absence of doxycycline)
+# rtTA: tet-on   (activates TRE only in presence of doxycycline)
+# tTA2 : same behavior as tTA
+
+EXPRESSION_FACTORS = ['cre', 'flp', 'dre', 'tTA']
+
+   
+DRIVER_LINES = {                  # dependencies   # products
+    'Nr5a1-Cre':                  ('nr5a1',        ['cre']),
+    'Rorb-T2A-tTA2':              ('rorb',         ['tTA']),
+    'Tlx3-Cre_PL56':              ('tlx3',         ['cre']),
+    'Sim1-Cre_KJ18':              ('sim1',         ['cre']),
+    'Ntsr1-Cre_GN220':            ('ntsr1',        ['cre']),
+    'Chat-IRES-Cre-neo':          ('chat',         ['cre']),
+    'Rbp4-Cre_KL100':             ('rbp4',         ['cre']),
+    'Pvalb-IRES-Cre':             ('pvalb',        ['cre']),
+    'Sst-IRES-Cre':               ('sst',          ['cre']),
+    'Vip-IRES-Cre':               ('vip',          ['cre']),
+    'Pvalb-T2A-FlpO':             ('pvalb',        ['flp']),
+    'Sst-IRES-FlpO':              ('sst',          ['flp']),
+    'Vip-IRES-FlpO':              ('vip',          ['flp']),
+    'Slc17a8-IRES2-Cre':          ('slc17a8',      ['cre']),
+    'Pvalb-2A-FlpO':              ('pvalb',        ['flp']),
+    'Cux2-CreERT2':               ('cux2',         ['cre']),
+    'Chrna2-Cre_OE25':            ('chrna2',       ['cre']),
+    'Penk-IRES2-Cre-neo':         ('penk',         ['cre']),
+    'Slc17a6-IRES2-FlpO':         ('slc17a6',      ['flp']),
+    'Ctgf-T2A-dgCre':             ('ctgf',         ['cre']),
+}
+
+
+REPORTER_LINES = {                # dependencies # products
+    'Ai2':                        ('',           ['EYFP']),
+    'Ai3':                        ('',           ['EYFP']),
+    'Ai6':                        ('',           ['ZsGreen']),
+    'Ai9':                        ('',           ['tdTomato']),
+    'Ai14':                       ('',           ['tdTomato']),
+    'Ai14(RCL-tdT)':              ('cre',        ['tdTomato']),
+    'Ai27':                       ('',           ['hChR2(H134R)','tdTomato']),
+    'Ai31':                       ('',           ['Syp','Emerald']),
+    'Ai32':                       ('',           ['ChR2(H134R)','EYFP']),
+    'Ai34':                       ('',           ['Syp','tdTomato']),
+    'Ai35':                       ('',           ['Arch','EGFP','ER2']),
+    'Ai57(RCFL-Jaws)':            ('cre&flp',    ['Jaws','GFP','ER2']),
+    'Ai62(TITL-tdT)':             ('cre&tTA',    ['tdTomato']),
+    'Ai63(TIT-tdT)':              ('tTA',        ['tdTomato']),
+    'Ai65(RCFL-tdT)':             ('cre&flp',    ['tdTomato']),
+    'Ai65F':                      ('flp',        ['tdTomato']),
+    'Ai66(RCRL-tdT)':             ('cre&dre',    ['tdTomato']),
+    'Ai72(RCL-VSFPB)':            ('cre',        ['VSFP','Butterfly 1.2']),
+    'Ai78(TITL-VSFPB)':           ('cre&tTA',    ['VSFP','Butterfly 1.2']),
+    'Ai79(TITL-Jaws)':            ('cre&tTA',    ['Jaws','GFP','ER2']),
+    'Ai82(TITL-GFP)':             ('cre&tTA',    ['EGFP']),
+    'Ai85(TITL-iGluSnFR)':        ('cre&tTA',    ['iGluSnFR']),
+    'Ai87(RCL-iGluSnFR)':         ('cre',        ['iGluSnFR']),
+    'Ai92(TITL-YCX2.60)':         ('cre&tTA',    ['YCX2.60']),
+    'Ai93(TITL-GCaMP6f)':         ('cre&tTA',    ['GCaMP6f']),
+    'Ai94(TITL-GCaMP6s)':         ('cre&tTA',    ['GCaMP6s']),
+    'Ai95(RCL-GCaMP6f)':          ('cre',        ['GCaMP6f']),
+    'Ai96(RCL-GCaMP6s)':          ('cre',        ['GCaMP6s']),
+    'Ai139(TIT2L-GFP-ICL-TPT)-D': ('cre',        ['EGFP','tdTomato']),
+    'Ai139(TIT2L-GFP-ICL-TPT)':   ('cre',        ['EGFP','tdTomato']),
+    'Ai140(TIT2L-GFP-ICL-tTA2)':  ('cre',        ['EGFP', 'tTA']),
+    'Snap25-LSL-F2A-GFP':         ('cre',        ['EGFP']),
+}
+
+
+FLUOROPHORES = {
+    'tdTomato': 'red',
+    'GFP': 'green',
+    'EGFP': 'green',
+    'AF488': 'green',
+    'Cascade Blue': 'blue',
+    'EYFP': 'yellow',
+    'ZsGreen': 'green',
+}
 
 
 class Genotype(object):
@@ -92,18 +203,17 @@ class Genotype(object):
         Returns
         -------
         driver_expression : dict
-            Dict indicating whether each driver in the genotype could be expressed
-            (True), could not be expressed (False), or has no information (None).
+            Dict indicating whether each driver in the genotype must be expressed
+            (True), must not be expressed (False), or cannot be determined (None).
 
         Notes
         -----
 
-        Example colors dict::
+        Example::
 
             colors = {
                 'red':   True,   # cell is red
                 'green': False,  # cell is not green
-                'blue':  None,   # cell may or may not be blue (no information, or ambiguous appearance)
             }
         """
         driver_combos = self.test_driver_combinations(colors)
@@ -212,25 +322,7 @@ class Genotype(object):
             self._product_map.append((set(inputs.split('&')), set(outputs)))
 
         # Automatically determine driver-reporter mapping.
-        try:
-            driver_reporter_map = self._simulate_driver_combos()
-            parse_ok = True
-        except Exception as parse_exc:
-            sys.excepthook(*sys.exc_info())
-            parse_ok = False
-
-        # For now, we don't really trust the above automated method.
-        # Try to pull the same information from a list of known genotypes,
-        # and if it's not there, then we can give an error message with
-        # the suggested mapping.
-        if GENOTYPES.get(self.gtype) is None:
-            if parse_ok:
-                raise Exception('Unknown genotype "%s".\nSuggested addition to constants.GENOTYPES:\n    %r\n.' % 
-                                (self.gtype, driver_reporter_map))
-            else:
-                raise Exception('Unknown genotype "%s" (and genotype parsing failed).' % self.gtype)
-
-        self._driver_reporter_map = {k:set(v) for k,v in GENOTYPES[self.gtype].items()}
+        self._driver_reporter_map = self._simulate_driver_combos()
 
         # generate the reverse mapping
         self._reporter_driver_map = {}

@@ -1,5 +1,97 @@
-from multipatch_analysis import constants
 from multipatch_analysis.genotypes import Genotype
+
+
+GENOTYPES = dict([
+    ('Chat-IRES-Cre-neo/wt;Snap25-LSL-F2A-GFP/wt', {(): [], ('chat',): ['EGFP']}),
+    ('Chrna2-Cre_OE25/wt;Ai14(RCL-tdT)/wt', {(): [], ('chrna2',): ['tdTomato']}),
+    ('Ctgf-T2A-dgCre/wt;Ai14(RCL-tdT)/wt', {('ctgf',): ['tdTomato'], (): []}),
+    ('Cux2-CreERT2/wt;Ai14(RCL-tdT)/wt', {('cux2',): ['tdTomato'], (): []}),
+    ('Nr5a1-Cre/wt;Ai14(RCL-tdT)/wt', {(): [], ('nr5a1',): ['tdTomato']}),
+    ('Ntsr1-Cre_GN220/wt;Ai14(RCL-tdT)/wt', {('ntsr1',): ['tdTomato'], (): []}),
+    ('Ntsr1-Cre_GN220/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt;Ai65F/wt', {('ntsr1',): ['EGFP'], (): []}),
+    ('Ntsr1-Cre_GN220/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('ntsr1',): ['EGFP'], (): []}),
+    ('Ntsr1-Cre_GN220/wt;Pvalb-T2A-FlpO/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('ntsr1',): ['EGFP'], (): [], ('ntsr1', 'pvalb'): ['EGFP'], ('pvalb',): []}),
+    ('Ntsr1-Cre_GN220/wt;Pvalb-T2A-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('ntsr1',): ['EGFP'], (): [], ('ntsr1', 'pvalb'): ['tdTomato', 'EGFP'], ('pvalb',): ['tdTomato']}),
+    ('Ntsr1-Cre_GN220/wt;Pvalb-T2A-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('ntsr1',): ['EGFP'], (): [], ('ntsr1', 'pvalb'): ['tdTomato', 'EGFP'], ('pvalb',): ['tdTomato']}),
+    ('Ntsr1-Cre_GN220/wt;Sst-IRES-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('ntsr1',): ['EGFP'], (): [], ('sst',): ['tdTomato'], ('ntsr1', 'sst'): ['tdTomato', 'EGFP']}),
+    ('Ntsr1-Cre_GN220/wt;Sst-IRES-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('ntsr1',): ['EGFP'], (): [], ('sst',): ['tdTomato'], ('ntsr1', 'sst'): ['tdTomato', 'EGFP']}),
+    ('Ntsr1-Cre_GN220/wt;Vip-IRES-FlpO/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt;Ai65F/wt', {('ntsr1',): ['EGFP'], ('vip',): ['tdTomato'], (): [], ('ntsr1', 'vip'): ['tdTomato', 'EGFP']}),
+    ('Ntsr1-Cre_GN220/wt;Vip-IRES-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('ntsr1',): ['EGFP'], ('vip',): ['tdTomato'], (): [], ('ntsr1', 'vip'): ['tdTomato', 'EGFP']}),
+    ('Ntsr1-Cre_GN220/wt;Vip-IRES-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('ntsr1',): ['EGFP'], ('vip',): ['tdTomato'], (): [], ('ntsr1', 'vip'): ['tdTomato', 'EGFP']}),
+    ('Penk-IRES2-Cre-neo/wt;Slc17a6-IRES2-FlpO/wt;Ai65(RCFL-tdT)/wt', {(): [], ('penk',): [], ('slc17a6',): [], ('penk', 'slc17a6'): ['tdTomato']}),
+    ('Pvalb-IRES-Cre/wt;Ai14(RCL-tdT)/wt', {('pvalb',): ['tdTomato'], (): []}),
+    ('Pvalb-IRES-Cre/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('pvalb',): ['EGFP'], (): []}),
+    ('Pvalb-IRES-Cre/wt;Ai63(TIT-tdT)/Ai140(TIT2L-GFP-ICL-tTA2)', {('pvalb',): ['EGFP', 'tdTomato'], (): []}),
+    ('Pvalb-IRES-Cre/wt;Rorb-T2A-tTA2/wt;Ai63(TIT-tdT)/Ai140(TIT2L-GFP-ICL-tTA2)', {('pvalb',): ['EGFP', 'tdTomato'], ('rorb',): ['tdTomato'], (): [], ('pvalb', 'rorb'): ['tdTomato', 'EGFP']}),
+    ('Pvalb-IRES-Cre/wt;Rorb-T2A-tTA2/wt;Ai63(TIT-tdT)/wt', {('pvalb',): [], ('rorb',): ['tdTomato'], (): [], ('pvalb', 'rorb'): ['tdTomato']}),
+    ('Pvalb-T2A-FlpO/wt;Ai65F/Ai65F', {('pvalb',): ['tdTomato'], (): []}),
+    ('Pvalb-T2A-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('pvalb',): ['tdTomato'], (): []}),
+    ('Pvalb-T2A-FlpO/wt;Ai65F/wt', {('pvalb',): ['tdTomato'], (): []}),
+    ('Pvalb-T2A-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('pvalb',): ['tdTomato'], (): []}),
+    ('Rbp4-Cre_KL100/wt;Ai14(RCL-tdT)/wt', {(): [], ('rbp4',): ['tdTomato']}),
+    ('Rorb-T2A-tTA2/wt;Ai63(TIT-tdT)/Ai140(TIT2L-GFP-ICL-tTA2)', {('rorb',): ['tdTomato'], (): []}),
+    ('Sim1-Cre_KJ18/wt;Ai14(RCL-tdT)/wt', {('sim1',): ['tdTomato'], (): []}),
+    ('Sim1-Cre_KJ18/wt;Ai65F/wt;Ai139(TIT2L-GFP-ICL-TPT)/wt', {('sim1',): ['tdTomato', 'EGFP'], (): []}),
+    ('Sim1-Cre_KJ18/wt;Pvalb-T2A-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('pvalb',): ['tdTomato'], ('sim1',): ['EGFP'], (): [], ('pvalb', 'sim1'): ['tdTomato', 'EGFP']}),
+    ('Sim1-Cre_KJ18/wt;Pvalb-T2A-FlpO/wt;Snap25-LSL-F2A-GFP/wt;Ai65F/wt', {('pvalb',): ['tdTomato'], ('sim1',): ['EGFP'], (): [], ('pvalb', 'sim1'): ['tdTomato', 'EGFP']}),
+    ('Sim1-Cre_KJ18/wt;Sst-IRES-FlpO/wt;Ai139(TIT2L-GFP-ICL-TPT)/wt', {('sim1',): ['tdTomato', 'EGFP'], (): [], ('sim1', 'sst'): ['tdTomato', 'EGFP'], ('sst',): []}),
+    ('Sim1-Cre_KJ18/wt;Sst-IRES-FlpO/wt;Ai65F/Ai65F;Ai139(TIT2L-GFP-ICL-TPT)/wt', {('sim1',): ['tdTomato', 'EGFP'], (): [], ('sim1', 'sst'): ['tdTomato', 'EGFP'], ('sst',): ['tdTomato']}),
+    ('Sim1-Cre_KJ18/wt;Sst-IRES-FlpO/wt;Ai65F/wt;Ai139(TIT2L-GFP-ICL-TPT)/wt', {('sim1',): ['tdTomato', 'EGFP'], (): [], ('sim1', 'sst'): ['tdTomato', 'EGFP'], ('sst',): ['tdTomato']}),
+    ('Sim1-Cre_KJ18/wt;Sst-IRES-FlpO/wt;PhiC31-neo/Ai65F', {('sim1',): [], (): [], ('sim1', 'sst'): ['tdTomato'], ('sst',): ['tdTomato']}),
+    ('Slc17a8-IRES2-Cre/wt;Ai14(RCL-tdT)/wt', {(): [], ('slc17a8',): ['tdTomato']}),
+    ('Sst-IRES-Cre/wt;Ai14(RCL-tdT)/wt', {(): [], ('sst',): ['tdTomato']}),
+    ('Sst-IRES-Cre/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {(): [], ('sst',): ['EGFP']}),
+    ('Sst-IRES-Cre/wt;Pvalb-T2A-FlpO/Pvalb-T2A-FlpO;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('pvalb',): ['tdTomato'], ('pvalb', 'sst'): ['tdTomato', 'EGFP'], (): [], ('sst',): ['EGFP']}),
+    ('Sst-IRES-Cre/wt;Pvalb-T2A-FlpO/Pvalb-T2A-FlpO;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('pvalb',): ['tdTomato'], ('pvalb', 'sst'): ['tdTomato', 'EGFP'], (): [], ('sst',): ['EGFP']}),
+    ('Sst-IRES-Cre/wt;Pvalb-T2A-FlpO/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('pvalb',): [], ('pvalb', 'sst'): ['EGFP'], (): [], ('sst',): ['EGFP']}),
+    ('Sst-IRES-Cre/wt;Pvalb-T2A-FlpO/wt;Ai65F/Ai65F', {('pvalb',): ['tdTomato'], ('pvalb', 'sst'): ['tdTomato'], (): [], ('sst',): []}),
+    ('Sst-IRES-Cre/wt;Pvalb-T2A-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('pvalb',): ['tdTomato'], ('pvalb', 'sst'): ['tdTomato', 'EGFP'], (): [], ('sst',): ['EGFP']}),
+    ('Sst-IRES-Cre/wt;Pvalb-T2A-FlpO/wt;Ai65F/wt', {('pvalb',): ['tdTomato'], ('pvalb', 'sst'): ['tdTomato'], (): [], ('sst',): []}),
+    ('Sst-IRES-Cre/wt;Pvalb-T2A-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/Ai140(TIT2L-GFP-ICL-tTA2)', {('pvalb',): ['tdTomato'], ('pvalb', 'sst'): ['tdTomato', 'EGFP'], (): [], ('sst',): ['EGFP']}),
+    ('Sst-IRES-Cre/wt;Pvalb-T2A-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('pvalb',): ['tdTomato'], ('pvalb', 'sst'): ['tdTomato', 'EGFP'], (): [], ('sst',): ['EGFP']}),
+    ('Sst-IRES-FlpO/wt;Ai65F/Ai65F', {(): [], ('sst',): ['tdTomato']}),
+    ('Sst-IRES-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {(): [], ('sst',): ['tdTomato']}),
+    ('Sst-IRES-FlpO/wt;Ai65F/wt', {(): [], ('sst',): ['tdTomato']}),
+    ('Sst-IRES-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {(): [], ('sst',): ['tdTomato']}),
+    ('Sst-IRES-FlpO/wt;PhiC31-neo/Ai65F', {(): [], ('sst',): ['tdTomato']}),
+    ('Tlx3-Cre_PL56/wt;Ai14(RCL-tdT)/wt', {('tlx3',): ['tdTomato'], (): []}),
+    ('Tlx3-Cre_PL56/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('tlx3',): ['EGFP'], (): []}),
+    ('Tlx3-Cre_PL56/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('tlx3',): ['EGFP'], (): []}),
+    ('Tlx3-Cre_PL56/wt;Pvalb-2A-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('pvalb',): ['tdTomato'], ('tlx3',): ['EGFP'], (): [], ('pvalb', 'tlx3'): ['tdTomato', 'EGFP']}),
+    ('Tlx3-Cre_PL56/wt;Pvalb-2A-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('pvalb',): ['tdTomato'], ('tlx3',): ['EGFP'], (): [], ('pvalb', 'tlx3'): ['tdTomato', 'EGFP']}),
+    ('Tlx3-Cre_PL56/wt;Pvalb-T2A-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('pvalb',): ['tdTomato'], ('tlx3',): ['EGFP'], (): [], ('pvalb', 'tlx3'): ['tdTomato', 'EGFP']}),
+    ('Tlx3-Cre_PL56/wt;Pvalb-T2A-FlpO/wt;Ai65F/wt', {('pvalb',): ['tdTomato'], ('tlx3',): [], (): [], ('pvalb', 'tlx3'): ['tdTomato']}),
+    ('Tlx3-Cre_PL56/wt;Pvalb-T2A-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('pvalb',): ['tdTomato'], ('tlx3',): ['EGFP'], (): [], ('pvalb', 'tlx3'): ['tdTomato', 'EGFP']}),
+    ('Tlx3-Cre_PL56/wt;Pvalb-T2A-FlpO/wt;PhiC31-neo/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('pvalb',): ['tdTomato'], ('tlx3',): ['EGFP'], (): [], ('pvalb', 'tlx3'): ['tdTomato', 'EGFP']}),
+    ('Tlx3-Cre_PL56/wt;Sst-IRES-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('tlx3',): ['EGFP'], (): [], ('sst',): ['tdTomato'], ('sst', 'tlx3'): ['tdTomato', 'EGFP']}),
+    ('Tlx3-Cre_PL56/wt;Sst-IRES-FlpO/wt;Ai65F/PhiC31-neo;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('tlx3',): ['EGFP'], (): [], ('sst',): ['tdTomato'], ('sst', 'tlx3'): ['tdTomato', 'EGFP']}),
+    ('Tlx3-Cre_PL56/wt;Sst-IRES-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('tlx3',): ['EGFP'], (): [], ('sst',): ['tdTomato'], ('sst', 'tlx3'): ['tdTomato', 'EGFP']}),
+    ('Tlx3-Cre_PL56/wt;Sst-IRES-FlpO/wt;PhiC31-neo/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('tlx3',): ['EGFP'], (): [], ('sst',): ['tdTomato'], ('sst', 'tlx3'): ['tdTomato', 'EGFP']}),
+    ('Tlx3-Cre_PL56/wt;Vip-IRES-FlpO/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('tlx3',): ['EGFP'], ('vip',): [], (): [], ('tlx3', 'vip'): ['EGFP']}),
+    ('Tlx3-Cre_PL56/wt;Vip-IRES-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('tlx3',): ['EGFP'], ('vip',): ['tdTomato'], (): [], ('tlx3', 'vip'): ['tdTomato', 'EGFP']}),
+    ('Tlx3-Cre_PL56/wt;Vip-IRES-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('tlx3',): ['EGFP'], ('vip',): ['tdTomato'], (): [], ('tlx3', 'vip'): ['tdTomato', 'EGFP']}),
+    ('Tlx3-Cre_PL56/wt;Vip-IRES-FlpO/wt;PhiC31-neo/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('tlx3',): ['EGFP'], ('vip',): ['tdTomato'], (): [], ('tlx3', 'vip'): ['tdTomato', 'EGFP']}),
+    ('Vip-IRES-Cre/wt;Ai14(RCL-tdT)/wt', {('vip',): ['tdTomato'], (): []}),
+    ('Vip-IRES-Cre/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('vip',): ['EGFP'], (): []}),
+    ('Vip-IRES-Cre/wt;Pvalb-T2A-FlpO/Pvalb-T2A-FlpO;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('pvalb',): ['tdTomato'], ('vip',): ['EGFP'], (): [], ('pvalb', 'vip'): ['tdTomato', 'EGFP']}),
+    ('Vip-IRES-Cre/wt;Pvalb-T2A-FlpO/Pvalb-T2A-FlpO;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('pvalb',): ['tdTomato'], ('vip',): ['EGFP'], (): [], ('pvalb', 'vip'): ['tdTomato', 'EGFP']}),
+    ('Vip-IRES-Cre/wt;Pvalb-T2A-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('pvalb',): ['tdTomato'], ('vip',): ['EGFP'], (): [], ('pvalb', 'vip'): ['tdTomato', 'EGFP']}),
+    ('Vip-IRES-Cre/wt;Pvalb-T2A-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/Ai140(TIT2L-GFP-ICL-tTA2)', {('pvalb',): ['tdTomato'], ('vip',): ['EGFP'], (): [], ('pvalb', 'vip'): ['tdTomato', 'EGFP']}),
+    ('Vip-IRES-Cre/wt;Pvalb-T2A-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('pvalb',): ['tdTomato'], ('vip',): ['EGFP'], (): [], ('pvalb', 'vip'): ['tdTomato', 'EGFP']}),
+    ('Vip-IRES-Cre/wt;Sst-IRES-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('sst', 'vip'): ['tdTomato', 'EGFP'], ('vip',): ['EGFP'], (): [], ('sst',): ['tdTomato']}),
+    ('Vip-IRES-Cre/wt;Sst-IRES-FlpO/wt;Ai65F/wt;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('sst', 'vip'): ['tdTomato', 'EGFP'], ('vip',): ['EGFP'], (): [], ('sst',): ['tdTomato']}),
+    ('Vip-IRES-Cre/wt;Sst-IRES-FlpO/wt;PhiC31-neo/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt', {('sst', 'vip'): ['tdTomato', 'EGFP'], ('vip',): ['EGFP'], (): [], ('sst',): ['tdTomato']}),
+
+])
+
+
+def test_known_genotypes():
+    # make sure simulation matches known results
+    for gtyp_str, mapping in GENOTYPES.items():
+        gt = Genotype(gtyp_str)
+        driver_reporter_map = gt._simulate_driver_combos()
+        for k,v in mapping.items():
+            assert set(driver_reporter_map[k]) == set(v)
 
 
 def test_double_trans():
@@ -136,14 +228,5 @@ def test_intersectional():
     assert gt.predict_driver_expression({}) == {'penk': None, 'slc17a6': None}
     assert gt.predict_driver_expression({'red': True}) == {'penk': True, 'slc17a6': True} 
     assert gt.predict_driver_expression({'red': False}) == {'penk': None, 'slc17a6': None} 
-
-
-def test_known_genotypes():
-    # make sure simulation matches known results
-    for gtyp_str, mapping in constants.GENOTYPES.items():
-        gt = Genotype(gtyp_str)
-        driver_reporter_map = gt._simulate_driver_combos()
-        for k,v in mapping.items():
-            assert set(driver_reporter_map[k]) == set(v)
 
 
