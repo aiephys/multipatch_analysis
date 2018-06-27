@@ -1,7 +1,7 @@
 from multipatch_analysis.genotypes import Genotype
 
 
-GENOTYPES = dict([
+known_genotypes = dict([
     ('Chat-IRES-Cre-neo/wt;Snap25-LSL-F2A-GFP/wt', {(): [], ('chat',): ['EGFP']}),
     ('Chrna2-Cre_OE25/wt;Ai14(RCL-tdT)/wt', {(): [], ('chrna2',): ['tdTomato']}),
     ('Ctgf-T2A-dgCre/wt;Ai14(RCL-tdT)/wt', {('ctgf',): ['tdTomato'], (): []}),
@@ -87,7 +87,7 @@ GENOTYPES = dict([
 
 def test_known_genotypes():
     # make sure simulation matches known results
-    for gtyp_str, mapping in GENOTYPES.items():
+    for gtyp_str, mapping in known_genotypes.items():
         gt = Genotype(gtyp_str)
         driver_reporter_map = gt._simulate_driver_combos()
         for k,v in mapping.items():

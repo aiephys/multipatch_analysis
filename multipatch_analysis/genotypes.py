@@ -137,24 +137,23 @@ class Genotype(object):
         gtype = Genotype(gtype_str)
 
         # Parsed genotype parts
-        gtype.driver_lines                       # =>  ['Tlx3-Cre_PL65', 'Sst-IRES-FlpO']
-        gtype.reporter_lines                     # =>  ['Ai65F', 'Ai140']
+        gtype.driver_lines                       # =>  ['Sst-IRES-FlpO', 'Tlx3-Cre_PL56']
+        gtype.reporter_lines                     # =>  ['Ai140(TIT2L-GFP-ICL-tTA2)', 'Ai65F']
 
         # Reduced representation of genotype parts
-        gtype.all_drivers                        # =>  ['tlx3', 'sst']
-        gtype.all_reporters                      # =>  ['tdTomato', 'GFP']
-        gtype.all_colors                         # =>  ['red', 'green']
+        gtype.all_drivers                        # =>  set(['sst', 'tlx3'])
+        gtype.all_reporters                      # =>  set(['EGFP', 'tdTomato'])
+        gtype.all_colors                         # =>  set(['green', 'red'])
 
         # What reporters are expressed if the cell is sst positive?
-        gtype.expressed_reporters('tlx3')        # =>  ['tdTomato'] 
+        gtype.expressed_reporters(['tlx3'])      # =>  set(['EGFP'])
 
         # What colors are expressed if the cell is sst positive?
-        gtype.expressed_colors('sst')            # =>  ['green']
+        gtype.expressed_colors(['sst'])          # =>  set(['red'])
 
-        # Given colors seen in a cell, what combinations of drivers 
-        # could have produced this?
+        # Given colors seen in a cell, can we predict which drivers were active?
         colors = {'red': True, 'green': False}
-        gtype.predict_driver_expression(colors)  # =>  {('tlx3',): True, ('sst',): False, ('tlx3', 'sst'): False, (,): False}
+        gtype.predict_driver_expression(colors)  # =>  {'sst': True, 'tlx3': False}
 
     """
     def __init__(self, gtype):
@@ -175,6 +174,17 @@ class Genotype(object):
         ----------
         drivers : set
             The set of active drivers
+
+        Notes
+        -----
+
+        Example::
+
+            # A simple case quad-transgenic genotype where tlx3->EGFP, pvalb->tdTomato
+            gt = Genotype('Tlx3-Cre_PL56/wt;Pvalb-2A-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt')
+
+            gt.expressed_reporters(['pvalb'])
+            # returns: set(['tdTomato'])
         """
         return self._driver_reporter_map[tuple(sorted(drivers))]
 
@@ -186,6 +196,17 @@ class Genotype(object):
         ----------
         drivers : set
             The set of active drivers
+
+        Notes
+        -----
+
+        Example::
+
+            # A simple case quad-transgenic genotype where tlx3->EGFP, pvalb->tdTomato
+            gt = Genotype('Tlx3-Cre_PL56/wt;Pvalb-2A-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt')
+
+            gt.expressed_colors(['pvalb'])
+            # returns: set(['red'])
         """
         reporters = self.expressed_reporters(drivers)
         return set([FLUOROPHORES[r] for r in reporters])
@@ -211,26 +232,27 @@ class Genotype(object):
 
         Example::
 
-            colors = {
-                'red':   True,   # cell is red
-                'green': False,  # cell is not green
-            }
+            # A simple case quad-transgenic genotype where tlx3->EGFP, pvalb->tdTomato
+            gt = Genotype('Tlx3-Cre_PL56/wt;Pvalb-2A-FlpO/wt;Ai65F/Ai65F;Ai140(TIT2L-GFP-ICL-tTA2)/wt')
+
+            gt.predict_driver_expression({'red': False, 'green': True})
+            # returns: {'pvalb': False, 'tlx3': True}
+
+            gt.predict_driver_expression({'red': True})
+            # returns: {'pvalb': True, 'tlx3': None}
         """
         driver_combos = self.test_driver_combinations(colors)
         true_combos = [drivers for drivers,prediction in driver_combos.items() if prediction is True]
-        false_combos = [drivers for drivers,prediction in driver_combos.items() if prediction is False]
         driver_expression = {}
         for driver in self.all_drivers:
-            driver_true_prediction_true = len([d for d in true_combos if driver in d])
-            driver_false_prediction_true = len([d for d in true_combos if driver not in d])
-            driver_true_prediction_false = len([d for d in false_combos if driver in d])
-            driver_false_prediction_false = len([d for d in false_combos if driver not in d])
+            n_match_with_driver = len([d for d in true_combos if driver in d])
+            n_match_without_driver = len([d for d in true_combos if driver not in d])
 
-            if driver_true_prediction_true > 0 and driver_false_prediction_true == 0:
+            if n_match_with_driver > 0 and n_match_without_driver == 0:
                 # If every possible driver combination that is consistent with observed colors
-                # contains this driver, then we asy it is definitely expressed.
+                # contains this driver, then we say it is definitely expressed.
                 driver_expression[driver] = True
-            elif driver_true_prediction_true == 0:
+            elif n_match_with_driver == 0:
                 # If no possible combinations that contain this driver are consistent with observed
                 # colors, then we say the driver is definitely not expressed.
                 driver_expression[driver] = False
@@ -249,13 +271,7 @@ class Genotype(object):
         ----------
         colors : dict
             Describes whether each color observed in a cell was expressed (True),
-            not expressed (False), or ambiguous (None). Example::
-
-                colors = {
-                    'red':   True,   # cell is red
-                    'green': False,  # cell is not green
-                    'blue':  None,   # cell may or may not be blue (no information, or ambiguous appearance)
-                }
+            not expressed (False), or ambiguous (None).
         
         Returns
         -------
@@ -269,6 +285,23 @@ class Genotype(object):
         The return values are only False where the predicted color expression is *inconsistent* with
         observed colors; in cases where there is not enough observed information, the return value
         will be True.
+
+        Example::
+
+            # A messy quad-transgenic genotype where pv->EGFP+tdTomato, rorb->tdTomato
+            gt = Genotype('Pvalb-IRES-Cre/wt;Rorb-T2A-tTA2/wt;Ai63(TIT-tdT)/Ai140(TIT2L-GFP-ICL-tTA2)')  
+
+            gt.test_driver_combinations({'red': True, 'green': False})
+            # returns: {('pvalb',): False, ('rorb',): True, (): False, ('pvalb', 'rorb'): False}
+            # this says that of the 4 possible combinations of drivers, only rorb+/pvalb- could 
+            # generate red without green
+
+            gt.test_driver_combinations({'red': True, 'green': True})
+            # returns: {('pvalb',): True, ('rorb',): False, (): False, ('pvalb', 'rorb'): True}
+            # this says that of the color expression is ambiguous--it could be the result of 
+            # either rorb+/pvalb+ or rorb-/pvalb+
+
+
         """
         predictions = {}
         for drivers in self._driver_combinations():
