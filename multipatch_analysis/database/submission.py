@@ -304,7 +304,7 @@ class ExperimentDBSubmission(object):
                     recording=rec_entry,
                     clamp_mode=rec.clamp_mode,
                     patch_mode=rec.patch_mode,
-                    stim_name=rec.meta['stim_name'],
+                    stim_name=rec.stimulus.description,
                     baseline_potential=rec.baseline_potential,
                     baseline_current=rec.baseline_current,
                     baseline_rms_noise=rec.baseline_rms_noise,

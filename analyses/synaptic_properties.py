@@ -27,7 +27,7 @@ def find_sweeps(expt, pre_id, post_id, clamp_mode=None, stim_filter=None):
         if pre_id not in devs or post_id not in devs:
             continue
         pre_rec = sweep[pre_id]
-        if stim_filter is not None and stim_filter not in pre_rec.meta['stim_name']:
+        if stim_filter is not None and stim_filter not in pre_rec.stimulus.description:
             continue
         post_rec = sweep[post_id]
         if clamp_mode is not None and post_rec.clamp_mode != clamp_mode:

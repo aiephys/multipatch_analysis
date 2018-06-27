@@ -235,7 +235,7 @@ class MultiPatchExperimentAnalyzer(Analyzer):
                 continue
             
             if stim_filter is not None:
-                stim_name = pre_rec.meta['stim_name']
+                stim_name = pre_rec.stimulus.description
                 if stim_filter not in stim_name:
                     continue
             

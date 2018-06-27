@@ -203,7 +203,7 @@ class Experiment(object):
                     sweep = {}
                     for dev in srec.devices:
                         rec = srec[dev]
-                        sweep[dev] = rec.meta['stim_name'], rec.clamp_mode, rec.holding_current, rec.holding_potential
+                        sweep[dev] = rec.stimulus.description, rec.clamp_mode, rec.holding_current, rec.holding_potential
                     sweeps.append(sweep)
             self._sweep_summary = sweeps
         return self._sweep_summary
