@@ -314,10 +314,7 @@ class Experiment(object):
                 if genotype is None:
                     raise Exception("Mouse specimen has no genotype: %s\n  (from %r)" % (self.specimen_name, self))
                 for driver,positive in genotype.predict_driver_expression(colors).items():
-                    if len(driver) != 1:
-                        # Need to decide how to handle situations where two drivers could be active
-                        continue
-                    cell.labels[driver[0]] = positive
+                    cell.labels[driver] = positive
 
             # load QC keys
             # (sets attributes: holding_qc, access_qc, spiking_qc)
