@@ -275,7 +275,7 @@ class Experiment(object):
             if pip_meta['got_data'] is False:
                 continue
 
-            cell = Cell(self, pip_id)
+            cell = Cell(self, pip_id, elec)
             elec.cell = cell
 
             cell._target_layer = pip_meta.get('target_layer', '')
@@ -429,7 +429,7 @@ class Experiment(object):
 
             elec = Electrode(i, None, None, ad_channel)
             self.electrodes[i] = elec
-            elec.cell = Cell(self, i)
+            elec.cell = Cell(self, i, elec)
     
         have_connections = False
         have_labels = False

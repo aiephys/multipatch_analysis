@@ -605,8 +605,8 @@ class DynamicsAnalyzer(RawDynamicsAnalyzer):
         expt = self.expt
 
         # convert cell ID to headstage ID
-        pre = self.pre_cell - 1
-        post = self.post_cell - 1
+        pre = self.expt.cells[pre_cell].electrode.device_id
+        post = self.expt.cells[post_cell].electrode.device_id
 
         pre_pad, post_pad = self.pre_pad, self.post_pad
         pulse_responses = {}
