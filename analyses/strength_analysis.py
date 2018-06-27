@@ -1320,7 +1320,7 @@ def query_all_pairs(classifier=None):
         "join pair on connection_strength.pair_id=pair.id",
         "join cell pre_cell on pair.pre_cell_id=pre_cell.id",
         "join cell post_cell on pair.post_cell_id=post_cell.id",
-        "join experiment on pair.expt_id=experiment.id",
+        "join experiment on pair.experiment_id=experiment.id",
         "join slice on experiment.slice_id=slice.id",
     ]
     # joins.extend([

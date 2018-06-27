@@ -73,10 +73,10 @@ table_schemas = {
     'electrode': [
         "Each electrode records a patch attempt, whether or not it resulted in a "
         "successful cell recording.",
-        ('expt_id', 'experiment.id', '', {'index': True}),
-        ('patch_status', 'str', 'no seal, low seal, GOhm seal, tech fail, ...'),
-        ('start_time', 'datetime'),
-        ('stop_time', 'datetime'),
+        ('experiment_id', 'experiment.id', '', {'index': True}),
+        ('patch_status', 'str', 'Status of the patch attempt: no seal, low seal, GOhm seal, tech fail, or no attempt'),
+        ('start_time', 'datetime', 'The time when recording began for this electrode.'),
+        ('stop_time', 'datetime', 'The time when recording ended for this electrode.'),
         ('device_id', 'int', 'External identifier for the device attached to this electrode (usually the MIES A/D channel)'),
         ('initial_resistance', 'float'),
         ('initial_current', 'float'),
@@ -105,8 +105,8 @@ table_schemas = {
         ('ext_id', 'int', 'Cell ID (usually 1-8) referenced in external metadata records'),
     ],
     'pair': [
-        "All possible putative synaptic connections",
-        ('expt_id', 'experiment.id', '', {'index': True}),
+        "All possible putative synaptic connections. Each pair represents a pre- and postsynaptic cell that were recorded from simultaneously.",
+        ('experiment_id', 'experiment.id', '', {'index': True}),
         ('pre_cell_id', 'cell.id', 'ID of the presynaptic cell', {'index': True}),
         ('post_cell_id', 'cell.id', 'ID of the postsynaptic cell', {'index': True}),
         ('synapse', 'bool', 'Whether the experimenter thinks there is a synapse', {'index': True}),
