@@ -273,7 +273,7 @@ class Experiment(object):
         all_colors = set(FLUOROPHORES.values())
         genotype = self.genotype
         for pip_id, pip_meta in pips.pipettes.items():
-            elec = Electrode(pip_id, pip_meta['patch_start'], pip_meta['patch_stop'], pip_meta['ad_channel'])
+            elec = Electrode(pip_id, start_time=pip_meta['patch_start'], stop_time=pip_meta['patch_stop'], device_id=pip_meta['ad_channel'], patch_status=pip_meta['patch_status'])
             self.electrodes[pip_id] = elec
 
             if pip_meta['got_data'] is False:
