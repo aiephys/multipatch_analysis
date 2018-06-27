@@ -15,9 +15,10 @@ class Cell(object):
         ID that identifies this cell uniquely amongst all other cells in the same experiment.
 
     """
-    def __init__(self, expt, cell_id):
+    def __init__(self, expt, cell_id, electrode):
         self.expt = expt
         self.cell_id = cell_id
+        self.electrode = electrode
         self.access_qc = None
         self.holding_qc = None
         self.spiking_qc = None

@@ -207,7 +207,7 @@ class Experiment(object):
                     sweep = {}
                     for dev in srec.devices:
                         rec = srec[dev]
-                        sweep[dev] = rec.meta['stim_name'], rec.clamp_mode, rec.holding_current, rec.holding_potential
+                        sweep[dev] = rec.stimulus.description, rec.clamp_mode, rec.holding_current, rec.holding_potential
                     sweeps.append(sweep)
             self._sweep_summary = sweeps
         return self._sweep_summary
@@ -279,7 +279,7 @@ class Experiment(object):
             if pip_meta['got_data'] is False:
                 continue
 
-            cell = Cell(self, pip_id)
+            cell = Cell(self, pip_id, elec)
             elec.cell = cell
 
             cell._target_layer = pip_meta.get('target_layer', '')
@@ -375,7 +375,7 @@ class Experiment(object):
 
             elec = Electrode(i, None, None, ad_channel)
             self.electrodes[i] = elec
-            elec.cell = Cell(self, i)
+            elec.cell = Cell(self, i, elec)
     
         have_connections = False
         have_labels = False
