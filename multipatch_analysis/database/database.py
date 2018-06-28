@@ -98,8 +98,6 @@ table_schemas = {
         ('seal_resistance', 'float', 'The seal resistance recorded for this cell immediately before membrane rupture'),
         ('has_biocytin', 'bool', 'If true, then the soma was seen to be darkly stained with biocytin (this indicates a good reseal, but does may not indicate a high-quality fill)'),
         ('has_dye_fill', 'bool', 'Indicates whether the cell was filled with fluorescent dye during the experiment'),
-        ('pass_qc', 'bool'),
-        ('pass_spike_qc', 'bool'),
         ('depth', 'float', 'Depth of the cell (in m) from the cut surface of the slice.'),
         ('position', 'object', '3D location of this cell in the arbitrary coordinate system of the experiment'),
         ('ext_id', 'int', 'Cell ID (usually 1-8) referenced in external metadata records'),
