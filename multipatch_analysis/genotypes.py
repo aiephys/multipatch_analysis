@@ -41,65 +41,68 @@ import sys, itertools
 # tTA2 : same behavior as tTA
 
 EXPRESSION_FACTORS = ['cre', 'flp', 'dre', 'tTA']
+DRUGS = ['dox']
 
    
 DRIVER_LINES = {                  # dependencies     products
-    'Nr5a1-Cre':                  (['nr5a1'],        ['cre']),
-    'Rorb-T2A-tTA2':              (['rorb'],         ['tTA']),
-    'Tlx3-Cre_PL56':              (['tlx3'],         ['cre']),
-    'Sim1-Cre_KJ18':              (['sim1'],         ['cre']),
-    'Ntsr1-Cre_GN220':            (['ntsr1'],        ['cre']),
-    'Chat-IRES-Cre-neo':          (['chat'],         ['cre']),
-    'Rbp4-Cre_KL100':             (['rbp4'],         ['cre']),
-    'Pvalb-IRES-Cre':             (['pvalb'],        ['cre']),
-    'Sst-IRES-Cre':               (['sst'],          ['cre']),
-    'Vip-IRES-Cre':               (['vip'],          ['cre']),
-    'Pvalb-T2A-FlpO':             (['pvalb'],        ['flp']),
-    'Sst-IRES-FlpO':              (['sst'],          ['flp']),
-    'Vip-IRES-FlpO':              (['vip'],          ['flp']),
-    'Slc17a8-IRES2-Cre':          (['slc17a8'],      ['cre']),
-    'Pvalb-2A-FlpO':              (['pvalb'],        ['flp']),
-    'Cux2-CreERT2':               (['cux2'],         ['cre']),
-    'Chrna2-Cre_OE25':            (['chrna2'],       ['cre']),
-    'Penk-IRES2-Cre-neo':         (['penk'],         ['cre']),
-    'Slc17a6-IRES2-FlpO':         (['slc17a6'],      ['flp']),
-    'Ctgf-T2A-dgCre':             (['ctgf'],         ['cre']),
+    'Nr5a1-Cre':                  [(['nr5a1'],        ['cre'])],
+    'Rorb-T2A-tTA2':              [(['rorb'],         ['tTA'])],
+    'Tlx3-Cre_PL56':              [(['tlx3'],         ['cre'])],
+    'Sim1-Cre_KJ18':              [(['sim1'],         ['cre'])],
+    'Ntsr1-Cre_GN220':            [(['ntsr1'],        ['cre'])],
+    'Chat-IRES-Cre-neo':          [(['chat'],         ['cre'])],
+    'Rbp4-Cre_KL100':             [(['rbp4'],         ['cre'])],
+    'Pvalb-IRES-Cre':             [(['pvalb'],        ['cre'])],
+    'Sst-IRES-Cre':               [(['sst'],          ['cre'])],
+    'Vip-IRES-Cre':               [(['vip'],          ['cre'])],
+    'Pvalb-T2A-FlpO':             [(['pvalb'],        ['flp'])],
+    'Sst-IRES-FlpO':              [(['sst'],          ['flp'])],
+    'Vip-IRES-FlpO':              [(['vip'],          ['flp'])],
+    'Slc17a8-IRES2-Cre':          [(['slc17a8'],      ['cre'])],
+    'Pvalb-2A-FlpO':              [(['pvalb'],        ['flp'])],
+    'Cux2-CreERT2':               [(['cux2'],         ['cre'])],
+    'Chrna2-Cre_OE25':            [(['chrna2'],       ['cre'])],
+    'Penk-IRES2-Cre-neo':         [(['penk'],         ['cre'])],
+    'Slc17a6-IRES2-FlpO':         [(['slc17a6'],      ['flp'])],
+    'Ctgf-T2A-dgCre':             [(['ctgf'],         ['cre'])],
 }
 
 
-REPORTER_LINES = {                # dependencies     products
-    'Ai2':                        ([],               ['EYFP']),
-    'Ai3':                        ([],               ['EYFP']),
-    'Ai6':                        ([],               ['ZsGreen']),
-    'Ai9':                        ([],               ['tdTomato']),
-    'Ai14':                       ([],               ['tdTomato']),
-    'Ai14(RCL-tdT)':              (['cre'],          ['tdTomato']),
-    'Ai27':                       ([],               ['hChR2(H134R)', 'tdTomato']),
-    'Ai31':                       ([],               ['Syp', 'Emerald']),
-    'Ai32':                       ([],               ['ChR2(H134R)', 'EYFP']),
-    'Ai34':                       ([],               ['Syp', 'tdTomato']),
-    'Ai35':                       ([],               ['Arch', 'EGFP', 'ER2']),
-    'Ai57(RCFL-Jaws)':            (['cre', 'flp'],   ['Jaws', 'GFP', 'ER2']),
-    'Ai62(TITL-tdT)':             (['cre', 'tTA'],   ['tdTomato']),
-    'Ai63(TIT-tdT)':              (['tTA'],          ['tdTomato']),
-    'Ai65(RCFL-tdT)':             (['cre', 'flp'],   ['tdTomato']),
-    'Ai65F':                      (['flp'],          ['tdTomato']),
-    'Ai66(RCRL-tdT)':             (['cre', 'dre'],   ['tdTomato']),
-    'Ai72(RCL-VSFPB)':            (['cre'],          ['VSFP', 'Butterfly 1.2']),
-    'Ai78(TITL-VSFPB)':           (['cre', 'tTA'],   ['VSFP', 'Butterfly 1.2']),
-    'Ai79(TITL-Jaws)':            (['cre', 'tTA'],   ['Jaws', 'GFP', 'ER2']),
-    'Ai82(TITL-GFP)':             (['cre', 'tTA'],   ['EGFP']),
-    'Ai85(TITL-iGluSnFR)':        (['cre', 'tTA'],   ['iGluSnFR']),
-    'Ai87(RCL-iGluSnFR)':         (['cre'],          ['iGluSnFR']),
-    'Ai92(TITL-YCX2.60)':         (['cre', 'tTA'],   ['YCX2.60']),
-    'Ai93(TITL-GCaMP6f)':         (['cre', 'tTA'],   ['GCaMP6f']),
-    'Ai94(TITL-GCaMP6s)':         (['cre', 'tTA'],   ['GCaMP6s']),
-    'Ai95(RCL-GCaMP6f)':          (['cre'],          ['GCaMP6f']),
-    'Ai96(RCL-GCaMP6s)':          (['cre'],          ['GCaMP6s']),
-    'Ai139(TIT2L-GFP-ICL-TPT)-D': (['cre'],          ['EGFP', 'tdTomato']),
-    'Ai139(TIT2L-GFP-ICL-TPT)':   (['cre'],          ['EGFP', 'tdTomato']),
-    'Ai140(TIT2L-GFP-ICL-tTA2)':  (['cre'],          ['EGFP', 'tTA']),
-    'Snap25-LSL-F2A-GFP':         (['cre'],          ['EGFP']),
+REPORTER_LINES = {                # dependencies             products
+    'Ai2':                        [([],                       ['EYFP'])],
+    'Ai3':                        [([],                       ['EYFP'])],
+    'Ai6':                        [([],                       ['ZsGreen'])],
+    'Ai9':                        [([],                       ['tdTomato'])],
+    'Ai14':                       [([],                       ['tdTomato'])],
+    'Ai14(RCL-tdT)':              [(['cre'],                  ['tdTomato'])],
+    'Ai27':                       [([],                       ['hChR2(H134R)', 'tdTomato'])],
+    'Ai31':                       [([],                       ['Syp', 'Emerald'])],
+    'Ai32':                       [([],                       ['ChR2(H134R)', 'EYFP'])],
+    'Ai34':                       [([],                       ['Syp', 'tdTomato'])],
+    'Ai35':                       [([],                       ['Arch', 'EGFP', 'ER2'])],
+    'Ai57(RCFL-Jaws)':            [(['cre', 'flp'],           ['Jaws', 'GFP', 'ER2'])],
+    'Ai62(TITL-tdT)':             [(['cre', 'tTA', '~dox'],   ['tdTomato']),
+                                   (['cre', 'rtTA', 'dox'],   ['tdTomato'])],
+    'Ai63(TIT-tdT)':              [(['tTA', '~dox'],          ['tdTomato']),
+                                   (['rtTA', 'dox'],          ['tdTomato'])],
+    'Ai65(RCFL-tdT)':             [(['cre', 'flp'],           ['tdTomato'])],
+    'Ai65F':                      [(['flp'],                  ['tdTomato'])],
+    'Ai66(RCRL-tdT)':             [(['cre', 'dre'],           ['tdTomato'])],
+    'Ai72(RCL-VSFPB)':            [(['cre'],                  ['VSFP', 'Butterfly 1.2'])],
+    'Ai78(TITL-VSFPB)':           [(['cre', 'tTA', '~dox'],   ['VSFP', 'Butterfly 1.2'])],
+    'Ai79(TITL-Jaws)':            [(['cre', 'tTA', '~dox'],   ['Jaws', 'GFP', 'ER2'])],
+    'Ai82(TITL-GFP)':             [(['cre', 'tTA', '~dox'],   ['EGFP'])],
+    'Ai85(TITL-iGluSnFR)':        [(['cre', 'tTA', '~dox'],   ['iGluSnFR'])],
+    'Ai87(RCL-iGluSnFR)':         [(['cre'],                  ['iGluSnFR'])],
+    'Ai92(TITL-YCX2.60)':         [(['cre', 'tTA', '~dox'],   ['YCX2.60'])],
+    'Ai93(TITL-GCaMP6f)':         [(['cre', 'tTA', '~dox'],   ['GCaMP6f'])],
+    'Ai94(TITL-GCaMP6s)':         [(['cre', 'tTA', '~dox'],   ['GCaMP6s'])],
+    'Ai95(RCL-GCaMP6f)':          [(['cre'],                  ['GCaMP6f'])],
+    'Ai96(RCL-GCaMP6s)':          [(['cre'],                  ['GCaMP6s'])],
+    'Ai139(TIT2L-GFP-ICL-TPT)-D': [(['cre'],                  ['EGFP', 'tdTomato'])],
+    'Ai139(TIT2L-GFP-ICL-TPT)':   [(['cre'],                  ['EGFP', 'tdTomato'])],
+    'Ai140(TIT2L-GFP-ICL-tTA2)':  [(['cre'],                  ['EGFP', 'tTA'])],
+    'Snap25-LSL-F2A-GFP':         [(['cre'],                  ['EGFP'])],
 }
 
 
@@ -116,12 +119,23 @@ FLUOROPHORES = {
 }
 
 
+ALL_TG_LINES = DRIVER_LINES.copy()
+ALL_TG_LINES.update(REPORTER_LINES)
+
 ALL_COLORS = set(FLUOROPHORES.values())
 
+ALL_DRIVERS = set()
+for rules in DRIVER_LINES.values():
+    for deps, prods in rules:
+        ALL_DRIVERS |= set([d for d in deps if d[0] != '~'])
+ALL_DRIVERS = ALL_DRIVERS - set(EXPRESSION_FACTORS) - set(DRUGS)
+
 ALL_REPORTERS = set()
-for x in REPORTER_LINES.values():
-    ALL_REPORTERS |= set(x[1])
-ALL_REPORTERS = ALL_REPORTERS - set(EXPRESSION_FACTORS)
+for rules in REPORTER_LINES.values():
+    for deps, prods in rules:
+        ALL_REPORTERS |= set(prods)
+ALL_REPORTERS = ALL_REPORTERS - set(EXPRESSION_FACTORS) - set(DRUGS)
+
 
 
 class Genotype(object):
@@ -297,7 +311,7 @@ class Genotype(object):
         return self.model.test_factor_combinations(unknown_factors=self.all_drivers, products=colors)
 
     def _parse(self):
-        """Attempt to predict phenotype information from a genotype string
+        """Extract driver/reporter lines from genotype string, generate a GeneticModel
         """
         ignore = ['wt', 'PhiC31-neo']
         
@@ -314,30 +328,23 @@ class Genotype(object):
         if len(extra) > 0:
             raise Exception("Unknown genotype part(s): %s" % str(extra))
 
-        self.all_drivers = set()
-        for driver_line in self.driver_lines:
-            deps = DRIVER_LINES[driver_line][0]
-            self.all_drivers |= set([d.lstrip('~') for d in deps])
-        self.all_reporters = set()
-        for r in self.reporter_lines:
-            self.all_reporters |= set(REPORTER_LINES[r][1])
-        self.all_reporters = self.all_reporters & set(FLUOROPHORES.keys())
-        self.all_colors = set([FLUOROPHORES[r] for r in self.all_reporters])
-
-        # generate a combined map describing input factors and the output products that would be generated
-        #   e.g.:  [ (('tlx3',), ('cre')), (('cre',), ('tdTomato', 'tTA')) ]
-        #             tlx3 generates cre,   cre generates tomato and tTA
+        # convert drivers / reporters into a GeneticModel
         self.model = GeneticModel()
-        for d in self.driver_lines:
-            inputs, outputs = DRIVER_LINES[d]
-            self.model.add_rule(inputs, outputs)
-        for r in self.reporter_lines:
-            inputs, outputs = REPORTER_LINES[r]
-            self.model.add_rule(inputs, outputs)
-            for reporter in outputs:
-                color = FLUOROPHORES.get(reporter, None)
-                if color is not None:
-                    self.model.add_rule([reporter], [color])
+        self.all_drivers = set()
+        self.all_reporters = set()
+        for line in self.driver_lines + self.reporter_lines:
+            rules = ALL_TG_LINES[line]
+            for deps, prods in rules:
+                self.model.add_rule(deps, prods)
+                self.all_drivers |= set([d.lstrip('~') for d in deps if d in ALL_DRIVERS])
+                reporters = set([p for p in prods if p in ALL_REPORTERS])
+                self.all_reporters |= reporters
+                for reporter in reporters:
+                    color = FLUOROPHORES.get(reporter, None)
+                    if color is not None:
+                        self.model.add_rule([reporter], [color])
+
+        self.all_colors = set([FLUOROPHORES[r] for r in self.all_reporters])
 
 
 class GeneticModel:
