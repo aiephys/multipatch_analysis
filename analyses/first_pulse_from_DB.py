@@ -1,5 +1,6 @@
 from multipatch_analysis.database import database as db
 from neuroanalysis.data import Trace
+from neuroanalysis.fitting import fit_psp
 import argparse, sys, re
 import pyqtgraph as pg
 
@@ -71,14 +72,14 @@ class FirstPulseFeaturesTableGroup(TableGroup):
                                                     single_parent=True)
 
 
-ex_first_pulse_features_tables = FirstPulseFeaturesTableGroup()
+first_pulse_features_tables = FirstPulseFeaturesTableGroup()
 
 
 def init_tables():
-    # TODO: add second table for inhibitory
-    global EXFirstPulseFeatures
-    ex_first_pulse_features_tables.create_tables()
-    EXFirstPulseFeatures = ex_first_pulse_features_tables['ex_first_pulse_features']
+    global EXFirstPulseFeatures, INFirstPulseFeatures
+    first_pulse_features_tables.create_tables()
+    EXFirstPulseFeatures = first_pulse_features_tables['ex_first_pulse_features']
+    INFirstPulseFeatures = first_pulse_features_tables['in_first_pulse_features']
 
 def update_analysis(limit=None):
     s = db.Session()
@@ -93,7 +94,8 @@ def update_analysis(limit=None):
 
         ex_results = first_pulse_features(ex_pulse_responses)
         in_results = first_pulse_features(in_pulse_responses)
-        ex_fpf = EXFirstPulseFeatures(pair=pair, **in_results) ## make keys exactly the column name
+        ex_fpf = EXFirstPulseFeatures(pair=pair, **ex_results) ## make keys exactly the column name
+        in_fpf = INFirstPulseFeatures(pair=pair, **in_results)
         # fpf.pair = pair
         # fpf.ic_fit_amp = results['ic_fit_amp']
         # fpf.ic_fit_latency = results['fit_latency']
@@ -139,7 +141,7 @@ def filter_pulse_responses(pair):
         ex_qc_pass = pr.ex_qc_pass
         in_qc_pass = pr.in_qc_pass
         pcr = stim_pulse.recording.patch_clamp_recording
-        stim_name = pcr.stim_name
+        stim_freq = pcr.multi_patch_probe.induction_frequency
         clamp_mode = pcr.clamp_mode
         # current clamp
         if clamp_mode != 'ic':
@@ -150,12 +152,8 @@ def filter_pulse_responses(pair):
         # we only want the first pulse of the train
         if pulse_number != 1:
             continue
-        if re.match('(.*)(\d+)Hz', stim_name) is not None:
-            freq = int(stim_name.split('_')[1].split('H')[0])
-        else:
-            continue
         # only include frequencies up to 50Hz
-        if freq > 50:
+        if stim_freq > 50:
             continue
 
         data = pr.data
