@@ -89,9 +89,8 @@ def test_known_genotypes():
     # make sure simulation matches known results
     for gtyp_str, mapping in known_genotypes.items():
         gt = Genotype(gtyp_str)
-        driver_reporter_map = gt._simulate_driver_combos()
-        for k,v in mapping.items():
-            assert set(driver_reporter_map[k]) == set(v)
+        for drivers, reporters in mapping.items():
+            assert gt.expressed_reporters(drivers) == set(reporters)
 
 
 def test_double_trans():
