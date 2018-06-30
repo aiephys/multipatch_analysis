@@ -89,14 +89,21 @@ REPORTER_LINES = {                # dependencies             products
     'Ai65F':                      [(['flp'],                  ['tdTomato'])],
     'Ai66(RCRL-tdT)':             [(['cre', 'dre'],           ['tdTomato'])],
     'Ai72(RCL-VSFPB)':            [(['cre'],                  ['VSFP', 'Butterfly 1.2'])],
-    'Ai78(TITL-VSFPB)':           [(['cre', 'tTA', '~dox'],   ['VSFP', 'Butterfly 1.2'])],
-    'Ai79(TITL-Jaws)':            [(['cre', 'tTA', '~dox'],   ['Jaws', 'GFP', 'ER2'])],
-    'Ai82(TITL-GFP)':             [(['cre', 'tTA', '~dox'],   ['EGFP'])],
-    'Ai85(TITL-iGluSnFR)':        [(['cre', 'tTA', '~dox'],   ['iGluSnFR'])],
+    'Ai78(TITL-VSFPB)':           [(['cre', 'tTA', '~dox'],   ['VSFP', 'Butterfly 1.2']),
+                                   (['cre', 'rtTA', 'dox'],   ['VSFP', 'Butterfly 1.2'])],
+    'Ai79(TITL-Jaws)':            [(['cre', 'tTA', '~dox'],   ['Jaws', 'GFP', 'ER2']),
+                                   (['cre', 'rtTA', 'dox'],   ['Jaws', 'GFP', 'ER2'])],
+    'Ai82(TITL-GFP)':             [(['cre', 'tTA', '~dox'],   ['EGFP']),
+                                   (['cre', 'rtTA', 'dox'],   ['EGFP'])],
+    'Ai85(TITL-iGluSnFR)':        [(['cre', 'tTA', '~dox'],   ['iGluSnFR']),
+                                   (['cre', 'rtTA', 'dox'],   ['iGluSnFR'])],
     'Ai87(RCL-iGluSnFR)':         [(['cre'],                  ['iGluSnFR'])],
-    'Ai92(TITL-YCX2.60)':         [(['cre', 'tTA', '~dox'],   ['YCX2.60'])],
-    'Ai93(TITL-GCaMP6f)':         [(['cre', 'tTA', '~dox'],   ['GCaMP6f'])],
-    'Ai94(TITL-GCaMP6s)':         [(['cre', 'tTA', '~dox'],   ['GCaMP6s'])],
+    'Ai92(TITL-YCX2.60)':         [(['cre', 'tTA', '~dox'],   ['YCX2.60']),
+                                   (['cre', 'rtTA', 'dox'],   ['YCX2.60'])],
+    'Ai93(TITL-GCaMP6f)':         [(['cre', 'tTA', '~dox'],   ['GCaMP6f']),
+                                   (['cre', 'rtTA', 'dox'],   ['GCaMP6f'])],
+    'Ai94(TITL-GCaMP6s)':         [(['cre', 'tTA', '~dox'],   ['GCaMP6s']),
+                                   (['cre', 'rtTA', 'dox'],   ['GCaMP6s'])],
     'Ai95(RCL-GCaMP6f)':          [(['cre'],                  ['GCaMP6f'])],
     'Ai96(RCL-GCaMP6s)':          [(['cre'],                  ['GCaMP6s'])],
     'Ai139(TIT2L-GFP-ICL-TPT)-D': [(['cre'],                  ['EGFP', 'tdTomato'])],
@@ -235,7 +242,7 @@ class Genotype(object):
         colors = set([p for p in prods if p in ALL_COLORS])
         return colors
 
-    def predict_driver_expression(self, colors):
+    def predict_driver_expression(self, colors, starting_factors=()):
         """Given information about fluorescent colors expressed in a cell,
         return predictions about whether each driver could have been active.
 
@@ -244,6 +251,8 @@ class Genotype(object):
         colors : dict
             Describes whether each color observed in a cell was expressed (True),
             not expressed (False), or ambiguous (None).
+        starting_factors : list
+            Optional list of factors that are present (for example: dox)
 
         Returns
         -------
@@ -265,9 +274,9 @@ class Genotype(object):
             gt.predict_driver_expression({'red': True})
             # returns: {'pvalb': True, 'tlx3': None}
         """
-        return self.model.reverse_model(unknown_factors=self.all_drivers, products=colors)
+        return self.model.reverse_model(unknown_factors=self.all_drivers, products=colors, starting_factors=starting_factors)
 
-    def test_driver_combinations(self, colors):
+    def test_driver_combinations(self, colors, starting_factors=()):
         """Given information about fluorescent colors expressed in a cell,
         return predictions about whether each combination of drivers could
         possibly have generated the specified color measurements.
@@ -277,6 +286,8 @@ class Genotype(object):
         colors : dict
             Describes whether each color observed in a cell was expressed (True),
             not expressed (False), or ambiguous (None).
+        starting_factors : list
+            Optional list of factors that are present (for example: dox)
         
         Returns
         -------
@@ -308,7 +319,7 @@ class Genotype(object):
 
 
         """
-        return self.model.test_factor_combinations(unknown_factors=self.all_drivers, products=colors)
+        return self.model.test_factor_combinations(unknown_factors=self.all_drivers, products=colors, starting_factors=starting_factors)
 
     def _parse(self):
         """Extract driver/reporter lines from genotype string, generate a GeneticModel
@@ -563,14 +574,12 @@ class GeneticModel:
         predictions = {}
         # iterate over all combinations of unknown_factors
         for factors in self._factor_combinations(unknown_factors):
-            factors = set(factors) | starting_factors
-
             # initial assumption is that this combination _will_ generate products that are
             # consistent with the observed products
             factor_combo_possible = True
 
             # model the products geenrated by this combination of factors
-            predicted_products = self.forward_model(factors)
+            predicted_products = self.forward_model(set(factors) | starting_factors)
 
             # check over all products for any mismatch
             for product in self.all_products:

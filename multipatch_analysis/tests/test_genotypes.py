@@ -93,6 +93,21 @@ def test_known_genotypes():
             assert gt.expressed_reporters(drivers) == set(reporters)
 
 
+def test_single_trans():
+    gt = Genotype('Ai2/wt')
+
+    assert gt.driver_lines == []
+    assert gt.reporter_lines == ['Ai2']
+    assert gt.all_drivers == set()
+    assert gt.all_reporters == set(['EYFP'])
+    assert gt.all_colors == set(['yellow'])
+
+    assert gt.expressed_reporters([]) == set(['EYFP'])
+    assert gt.expressed_colors([]) == set(['yellow'])
+    assert gt.predict_driver_expression({'yellow': True}) == {}
+
+
+
 def test_double_trans():
     # simple and easy: sst -> tomato
     gt = Genotype('Sst-IRES-Cre/wt;Ai14(RCL-tdT)/wt')
@@ -105,8 +120,8 @@ def test_double_trans():
     assert gt.expressed_reporters([]) == set([])
     assert gt.expressed_reporters(['sst']) == set(['tdTomato'])
     
-    assert gt.expressed_reporters([]) == set([])
-    assert gt.expressed_reporters(['sst']) == set(['tdTomato'])
+    assert gt.expressed_colors([]) == set([])
+    assert gt.expressed_colors(['sst']) == set(['red'])
     
     assert gt.test_driver_combinations({'red': None}) == {(): True, ('sst',): True}
     assert gt.test_driver_combinations({'red': True}) == {(): False, ('sst',): True}
@@ -228,4 +243,33 @@ def test_intersectional():
     assert gt.predict_driver_expression({'red': True}) == {'penk': True, 'slc17a6': True} 
     assert gt.predict_driver_expression({'red': False}) == {'penk': None, 'slc17a6': None} 
 
+
+def test_dox():
+    gt = Genotype('Ai63(TIT-tdT)/wt;Rorb-T2A-tTA2/wt')
+    assert set(gt.driver_lines) == set(['Rorb-T2A-tTA2'])
+    assert set(gt.reporter_lines) == set(['Ai63(TIT-tdT)'])
+    assert gt.all_drivers == set(['rorb'])
+    assert gt.all_reporters == set(['tdTomato'])
+    assert gt.all_colors == set(['red'])
+
+    assert gt.expressed_reporters([]) == set([])
+    assert gt.expressed_reporters(['rorb']) == set(['tdTomato'])
+    assert gt.expressed_reporters(['rorb', 'dox']) == set([])
+
+    assert gt.expressed_colors([]) == set([])
+    assert gt.expressed_colors(['rorb']) == set(['red'])
+    assert gt.expressed_colors(['rorb', 'dox']) == set([])
+
+    assert gt.test_driver_combinations({}) == {(): True, ('rorb',): True}
+    assert gt.test_driver_combinations({'red': True}) == {(): False, ('rorb',): True}
+    assert gt.test_driver_combinations({'red': False}) == {(): True, ('rorb',): False}
+    assert gt.test_driver_combinations({'red': True}, starting_factors=['dox']) == {(): False, ('rorb',): False}
+    assert gt.test_driver_combinations({'red': False}, starting_factors=['dox']) == {(): True, ('rorb',): True}
+
+    assert gt.predict_driver_expression({}) == {'rorb': None}
+    assert gt.predict_driver_expression({'red': True}) == {'rorb': True}
+    assert gt.predict_driver_expression({'red': False}) == {'rorb': False}
+    # TODO: Logic engine can't handle this case yet!
+    # assert gt.predict_driver_expression({'red': True}, starting_factors=['dox']) == {'rorb': None}
+    assert gt.predict_driver_expression({'red': False}, starting_factors=['dox']) == {'rorb': None}
 
