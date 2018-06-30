@@ -500,6 +500,7 @@ class GeneticModel:
             elif n_match_with_factor == 0:
                 # If no possible combinations that contain this factor are consistent with observed
                 # products, then we say the factor is definitely not expressed.
+                # TODO: this can give incorrect results in cases where the factor is expressed, but silenced.
                 factor_expression[factor] = False
             else:
                 # Otherwise, we can't say one way or another whether this factor is expressed.
@@ -620,5 +621,3 @@ class GeneticModel:
             product_map[tuple(sorted(factors))] = self.forward_model(factors)
 
         return product_map
-
-
