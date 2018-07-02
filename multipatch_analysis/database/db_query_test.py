@@ -32,7 +32,7 @@ query = """
         pulse_response.data 
     from 
         pulse_response
-        join stim_pulse on pulse_response.pulse_id=stim_pulse.id
+        join stim_pulse on pulse_response.stim_pulse_id=stim_pulse.id
         join recording post_rec on pulse_response.recording_id=post_rec.id
         join patch_clamp_recording post_pcrec on post_pcrec.recording_id=post_rec.id
         join multi_patch_probe on multi_patch_probe.patch_clamp_recording_id=post_pcrec.id
