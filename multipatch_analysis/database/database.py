@@ -219,17 +219,19 @@ class TableGroup(object):
 
     def create_mappings(self):
         for k,schema in self.schemas.items():
-            self.mappings[k] = db.generate_mapping(k, schema)
+            self.mappings[k] = generate_mapping(k, schema)
 
     def drop_tables(self):
+        global engine
         for k in self.schemas:
-            if k in db.engine.table_names():
-                self[k].__table__.drop(bind=db.engine)
+            if k in engine.table_names():
+                self[k].__table__.drop(bind=engine)
 
     def create_tables(self):
+        global engine
         for k in self.schemas:
-            if k not in db.engine.table_names():
-                self[k].__table__.create(bind=db.engine)
+            if k not in engine.table_names():
+                self[k].__table__.create(bind=engine)
 
 
 

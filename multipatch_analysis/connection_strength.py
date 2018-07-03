@@ -9,6 +9,7 @@ import sys, multiprocessing
 
 import numpy as np
 import scipy.stats
+import pyqtgraph as pg
 
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.data import Trace, TraceList
@@ -242,26 +243,71 @@ def remove_crosstalk_artifacts(data, pulse_times):
 
 
 @db.default_session
-def rebuild_strength(parallel=True, workers=6, session=None):
-    for source in ['pulse_response', 'baseline']:
-        print("Rebuilding %s strength table.." % source)
+def rebuild_strength(limit=0, parallel=True, workers=6, session=None):
+    """Rebuild connection strength tables for all experiments
+    """
+    experiments = session.query(db.Experiment.id).all()
+    if limit > 0:
+        experiments = experiments[:limit]
+
+    jobs = [(expt_id, index, len(experiments)) for index, expt_id in enumerate(experiments)]
+
+    if parallel:
+        pool = multiprocessing.Pool(processes=workers)
+        pool.map(compute_strength, jobs)
+    else:
+        for job in jobs:
+            compute_strength(job)
+
+
+def compute_strength(job_info, session=None):
+    """Fill connection strength tables for all pulse-responses in the given experiment.
+    """
+    expt_id, index, n_jobs = job_info
+    print("Generating connection strength: %d/%d" % (index, n_jobs))
+    _compute_strength('pulse_response', expt_id, session=session)
+    _compute_strength('baseline', expt_id, session=session)
+
+
+@db.default_session
+def _compute_strength(source, expt_id, session=None):
+    """Compute per-pulse-response strength metrics
+    """
+    if source == 'baseline':
+        q = baseline_query(session)
+    elif source == 'pulse_response':
+        q = response_query(session)
+    else:
+        raise ValueError("Invalid source %s" % source)
+
+    # select just data for the selected experiment
+    q = q.join(db.SyncRec).join(db.Experiment).filter(db.Experiment.id==expt_id)
+
+    prof = pg.debug.Profiler(delayed=False)
+    
+    recs = q.all()
+    prof('fetch')
         
-        # Divide workload into equal parts for each worker
-        max_pulse_id = session.execute('select max(id) from %s' % source).fetchone()[0]
-        chunk = 1 + (max_pulse_id // workers)
-        parts = [(source, chunk*i, chunk*(i+1)) for i in range(workers)]
+    new_recs = []
 
-        if parallel:
-            pool = multiprocessing.Pool(processes=workers)
-            pool.map(compute_strength, parts)
-        else:
-            for part in parts:
-                compute_strength(part)
+    for rec in recs:
+        result = analyze_response_strength(rec, source)
+        new_rec = {'%s_id'%source: rec.response_id}
+        # copy a subset of results over to new record
+        for k in ['pos_amp', 'neg_amp', 'pos_dec_amp', 'neg_dec_amp', 'pos_dec_latency', 'neg_dec_latency', 'crosstalk']:
+            new_rec[k] = result[k]
+        new_recs.append(new_rec)
+    
+    prof('process')
+    if source == 'pulse_response':
+        session.bulk_insert_mappings(PulseResponseStrength, new_recs)
+    else:
+        session.bulk_insert_mappings(BaselineResponseStrength, new_recs)
+    prof('insert')
+    new_recs = []
 
-
-def compute_strength(inds, session=None):
-    # Thin wrapper just to allow calling from pool.map
-    return _compute_strength(inds, session=session)
+    session.commit()
+    prof('commit')
 
 
 def response_query(session):
@@ -364,63 +410,6 @@ def analyze_response_strength(rec, source, remove_artifacts=False, lpf=True, bsu
     results['neg_dec_amp'], results['neg_dec_latency'] = measure_peak(dec_data, '-', spike_time, pulse_times)
     
     return results
-
-
-@db.default_session
-def _compute_strength(inds, session=None):
-    """Comput per-pulse-response strength metrics
-    """
-    source, start_id, stop_id = inds
-    if source == 'baseline':
-        q = baseline_query(session)
-    elif source == 'pulse_response':
-        q = response_query(session)
-    else:
-        raise ValueError("Invalid source %s" % source)
-
-    prof = pg.debug.Profiler(delayed=False)
-    
-    next_id = start_id
-    while True:
-        # Request just a chunk of all pulse responses based on ID range
-        if source == 'pulse_response':
-            q1 = q.filter(db.PulseResponse.id>=next_id).filter(db.PulseResponse.id<stop_id)
-            q1 = q1.order_by(db.PulseResponse.id)
-        else:
-            q1 = q.filter(db.Baseline.id>=next_id).filter(db.Baseline.id<stop_id)
-            q1 = q1.order_by(db.Baseline.id)
-        q1 = q1.limit(1000)  # process in 1000-record chunks
-
-        prof('exec')
-        recs = q1.all()
-        prof('fetch')
-        if len(recs) == 0:
-            break
-        new_recs = []
-
-        for rec in recs:
-            result = analyze_response_strength(rec, source)
-            new_rec = {'%s_id'%source: rec.response_id}
-            # copy a subset of results over to new record
-            for k in ['pos_amp', 'neg_amp', 'pos_dec_amp', 'neg_dec_amp', 'pos_dec_latency', 'neg_dec_latency', 'crosstalk']:
-                new_rec[k] = result[k]
-            new_recs.append(new_rec)
-        
-        next_id = rec.response_id + 1
-        
-        sys.stdout.write("%d / %d\r" % (next_id-start_id, stop_id-start_id))
-        sys.stdout.flush()
-
-        prof('process')
-        if source == 'pulse_response':
-            session.bulk_insert_mappings(PulseResponseStrength, new_recs)
-        else:
-            session.bulk_insert_mappings(BaselineResponseStrength, new_recs)
-        prof('insert')
-        new_recs = []
-
-        session.commit()
-        prof('commit')
 
 
 @db.default_session
