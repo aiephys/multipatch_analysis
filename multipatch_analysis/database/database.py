@@ -206,6 +206,33 @@ table_schemas = {
 }
 
 
+class TableGroup(object):
+    """Class used to manage a group of tables that act as a single unit--tables in a group
+    are always created and deleted together.
+    """
+    def __init__(self):
+        self.mappings = {}
+        self.create_mappings()
+
+    def __getitem__(self, item):
+        return self.mappings[item]
+
+    def create_mappings(self):
+        for k,schema in self.schemas.items():
+            self.mappings[k] = db.generate_mapping(k, schema)
+
+    def drop_tables(self):
+        for k in self.schemas:
+            if k in db.engine.table_names():
+                self[k].__table__.drop(bind=db.engine)
+
+    def create_tables(self):
+        for k in self.schemas:
+            if k not in db.engine.table_names():
+                self[k].__table__.create(bind=db.engine)
+
+
+
 
 
 #----------- define ORM classes -------------

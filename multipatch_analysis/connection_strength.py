@@ -19,29 +19,7 @@ from neuroanalysis.fitting import Psp
 
 from multipatch_analysis.database import database as db
 from multipatch_analysis.connection_detection import fit_psp
-
-
-class TableGroup(object):
-    def __init__(self):
-        self.mappings = {}
-        self.create_mappings()
-
-    def __getitem__(self, item):
-        return self.mappings[item]
-
-    def create_mappings(self):
-        for k,schema in self.schemas.items():
-            self.mappings[k] = db.generate_mapping(k, schema)
-
-    def drop_tables(self):
-        for k in self.schemas:
-            if k in db.engine.table_names():
-                self[k].__table__.drop(bind=db.engine)
-
-    def create_tables(self):
-        for k in self.schemas:
-            if k not in db.engine.table_names():
-                self[k].__table__.create(bind=db.engine)
+from multipatch_analysis.database import TableGroup
 
 
 class PulseResponseStrengthTableGroup(TableGroup):
@@ -185,9 +163,6 @@ class ConnectionStrengthTableGroup(TableGroup):
 
 pulse_response_strength_tables = PulseResponseStrengthTableGroup()
 connection_strength_tables = ConnectionStrengthTableGroup()
-PulseResponseStrength = pulse_response_strength_tables['pulse_response_strength']
-BaselineResponseStrength = pulse_response_strength_tables['baseline_response_strength']
-ConnectionStrength = connection_strength_tables['connection_strength']
 
 
 def init_tables():
@@ -198,6 +173,10 @@ def init_tables():
     PulseResponseStrength = pulse_response_strength_tables['pulse_response_strength']
     BaselineResponseStrength = pulse_response_strength_tables['baseline_response_strength']
     ConnectionStrength = connection_strength_tables['connection_strength']
+
+
+# create tables in database and add global variables for ORM classes
+init_tables()
 
 
 def measure_peak(trace, sign, spike_time, pulse_times, spike_delay=1e-3, response_window=4e-3):
