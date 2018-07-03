@@ -334,8 +334,8 @@ class ExperimentMetadataSubmission(object):
         except KeyError:
             warnings.append("Could not import any old-format metadata (uid=%s)." % uid)
             return
-
-        connections = expt.connections[:]
+        
+        connections = None if expt.connections is None else expt.connections[:]
         for cell in expt.cells.values():
             if cell.cell_id not in self.pipettes:
                 warnings.append("Old-format metadata contains a cell ID %s, but this does not exist in the current submission." % cell.cell_id)
@@ -409,17 +409,18 @@ class ExperimentMetadataSubmission(object):
 
             # import connections
             cell_connects = []
-            for pre, post in connections[:]:
-                if pre != pid:
-                    continue
-                connections.remove((pre, post))
-                cell_connects.append(post)
-            if pip['synapse_to'] is None:
-                pip['synapse_to'] = cell_connects
-                warnings.append("Pipette %d: imported connections %s from old metadata." % (pid, cell_connects))
-            else:
-                if list(sorted(pip['synapse_to'])) != list(sorted(cell_connects)):
-                    warnings.append("Pipette %d: old metadata connections %s conflicts with current value: %s." % (pid, cell_connects, pip['synapse_to']))
+            if connections is not None:
+                for pre, post in connections[:]:
+                    if pre != pid:
+                        continue
+                    connections.remove((pre, post))
+                    cell_connects.append(post)
+                if pip['synapse_to'] is None:
+                    pip['synapse_to'] = cell_connects
+                    warnings.append("Pipette %d: imported connections %s from old metadata." % (pid, cell_connects))
+                else:
+                    if list(sorted(pip['synapse_to'])) != list(sorted(cell_connects)):
+                        warnings.append("Pipette %d: old metadata connections %s conflicts with current value: %s." % (pid, cell_connects, pip['synapse_to']))
 
-        if len(connections) > 0:
+        if connections is not None and len(connections) > 0:
             warnings.append("Could not import old metadata connections:" % (connections))
