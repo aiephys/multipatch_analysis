@@ -2,6 +2,7 @@ from multipatch_analysis.database import database as db
 from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.fitting import fit_psp
 from neuroanalysis.baseline import float_mode
+from neuroanalysis.ui.plot_grid import PlotGrid
 import argparse, sys, strength_analysis
 import pyqtgraph as pg
 import numpy as np
@@ -44,6 +45,7 @@ class FirstPulseFeaturesTableGroup(TableGroup):
             ('avg_psp', 'array', 'average psp time series, spike aligned, baseline subtracted'),
             ('n_sweeps', 'int', 'number of sweeps in avg_psp'),
             ('pulse_ids', 'object', 'list of first pulse ids in avg_psp, len(pulse_ids) == n_sweeps')
+            #('ic_fit_NRMSE', 'float', 'NRMSE returned from psp_fit')
             #TODO: consider removing 50Hz responses from decay calculation
         ]
     }
@@ -81,6 +83,7 @@ def update_analysis(limit=None):
             s.add(fpf)
             if i % 10 == 0:
                 s.commit()
+                print("%d pairs added to the DB of %d" %(i, len(records)))
     s.commit()
     s.close()
 
@@ -102,7 +105,8 @@ def first_pulse_features(pair, pulse_responses, pulse_response_amps):
     elif synapse_type == 'in':
         amp_sign = '-'
     else:
-        raise Exception('Synapse type is not defined, reconsider fitting this pair')
+        raise Exception('Synapse type is not defined, reconsider fitting this pair %s %d->%d' %
+                        (pair.expt_id, pair.pre_cell_id, pair.post_cell_id))
 
     weight = np.ones(len(avg_psp.data)) * 10.  # set everything to ten initially
     weight[int(10e-3 / dt):int(12e-3 / dt)] = 0.  # area around stim artifact
@@ -122,6 +126,7 @@ def first_pulse_features(pair, pulse_responses, pulse_response_amps):
                 'ic_fit_decay_tau': psp_fits.best_values['decay_tau'],
                 'ic_amp_cv': amp_cv,
                 'avg_psp': avg_psp_bsub.data}
+                #'ic_fit_NRMSE': psp_fits.nrmse()} TODO: nrmse not returned from psp_fits?
 
     return features
 
@@ -187,11 +192,100 @@ def filter_pulse_responses(pair):
 
     return pulse_responses, pulse_ids, pulse_response_amps
 
+def plot_features(organism=None, conn_type=None, calcium=None, age=None, sweep_thresh=None, fit_thresh=None):
+    s = db.Session()
+
+    filters = {
+        'organism': organism,
+        'conn_type': conn_type,
+        'calcium': calcium,
+        'age': age
+    }
+
+    selection = [{}]
+    for key, value in filters.iteritems():
+        if value is not None:
+            temp_list = []
+            value_list = value.split(',')
+            for v in value_list:
+                temp = [s1.copy() for s1 in selection]
+                for t in temp:
+                    t[key] = v
+                temp_list = temp_list + temp
+            selection = list(temp_list)
+
+    if len(selection) > 0:
+
+        response_grid = PlotGrid()
+        response_grid.set_shape(len(selection), 1)
+        feature_grid = PlotGrid()
+        feature_grid.set_shape(6, 1)
+
+        for select in selection:
+            pre_cell = db.aliased(db.Cell)
+            post_cell = db.aliased(db.Cell)
+            q_filter = []
+            if sweep_thresh is not None:
+                q_filter.append(FirstPulseFeatures.n_sweeps>=sweep_thresh)
+            species = select.get('organism')
+            if species is not None:
+                q_filter.append(db.Slice.species==species)
+            c_type = select.get('conn_type')
+            if c_type is not None:
+                pre_type, post_type = c_type.split('-')
+                pre_layer, pre_cre = pre_type.split(';')
+                post_layer, post_cre = post_type.split(';')
+                q_filter.extend([pre_cell.cre_type==pre_cre, pre_cell.target_layer==pre_layer,
+                                post_cell.cre_type==post_cre, post_cell.target_layer==post_layer])
+            calc_conc = select.get('calcium')
+            if calc_conc is not None:
+                q_filter.append(db.Experiment.acsf.like(calc_conc + '%'))
+            age_range = select.get('age')
+            if age_range is not None:
+                age_lower, age_upper = int(age_range.split('-'))
+                q_filter.append(db.Slice.age.between(age_lower, age_upper))
+
+            q = s.query(FirstPulseFeatures).join(db.Pair, FirstPulseFeatures.pair_id==db.Pair.id)\
+                .join(pre_cell, db.Pair.pre_cell_id==pre_cell.id)\
+                .join(post_cell, db.Pair.post_cell_id==post_cell.id)\
+                .join(db.Experiment, db.Experiment.id==db.Pair.expt_id)\
+                .join(db.Slice, db.Slice.id==db.Experiment.slice_id)
+
+            for filter_arg in q_filter:
+                q = q.filter(filter_arg)
+
+            results = q.all()
+            pg.stack()
+
+
+    ## select those from the database
+        ## use pair_id to get back to all other metadata
+        ## how to query both pre and post cell IDs in the cell table?
+        ## query base on other 1-to-1 factors and the iterate through the pairs and use the ORM?
+        ## split query to 2 instances of Cell:
+            ##pre_cell = db.aliased(db.Cell)
+            ##post_cell = db.aliased(db.Cell)
+            ##q = s.query(db.Pair).join(pre_cell, db.Pair.pre_cell_id==pre_cell.id).
+            # join(post_cell, db.Pair.post_cell_id==post_cell.id).filter(pre_cell.cre_type==pre_cre).
+            # filter(post_cell.cre_type==post_cre)
+
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--rebuild', action='store_true', default=False)
     parser.add_argument('--limit', type=int)
+    selection = parser.add_argument_group('Selection criteria', 'Filters for experiment analysis')
+    selection.add_argument('--organism', type=str, help='mouse, human, or mouse,human will show both')
+    selection.add_argument('--conn-type', type=str, help="""Enter as layer;cre-pre-layer;cre-post.
+                                                      If using multiple connection types separate with ",".
+                                                      Ex 5;pvalb-5;pavalb,5;pvalb-5;sst""")
+    selection.add_argument('--calcium', type=str , help='Enter calcium concentration, may enter multiple separated by ","')
+    selection.add_argument('--age', type=str, help="""Enter the age range separate by "-". May enter multiple ranges
+                                                separated by ",". Will only apply to mouse """)
+    selection.add_argument('--sweep-thresh', type=int, help='Minimum number of sweeps required for analysis')
+    selection.add_argument('--fit-thresh', type=float, help="Discard results who's NRMSE from the fit exeed this value")
+
     args = parser.parse_args(sys.argv[1:])
 
     if args.rebuild:
@@ -201,4 +295,14 @@ if __name__ == '__main__':
 
     init_tables()
 
+    app = pg.mkQApp()
+    pg.dbg()
+    pg.setConfigOption('background', 'w')
+    pg.setConfigOption('foreground', 'k')
     update_analysis(limit=args.limit)
+
+
+    plot_features(organism=args.organism, conn_type=args.conn_type, calcium=args.calcium, age=args.age,
+                  sweep_thresh=args.sweep_thresh, fit_thresh=args.fit_thresh)
+
+
