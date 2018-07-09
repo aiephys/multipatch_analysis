@@ -132,7 +132,7 @@ table_schemas = {
     ],
     'patch_clamp_recording': [
         "Extra data for recordings made with a patch clamp amplifier",
-        ('recording_id', 'recording.id', '', {'index': True}),
+        ('recording_id', 'recording.id', '', {'index': True, 'unique': True}),
         ('clamp_mode', 'str', 'The mode used by the patch clamp amplifier: "ic" or "vc"', {'index': True}),
         ('patch_mode', 'str', "The state of the membrane patch. E.g. 'whole cell', 'cell attached', 'loose seal', 'bath', 'inside out', 'outside out'"),
         ('stim_name', 'str', "The name of the stimulus protocol"),
@@ -144,7 +144,7 @@ table_schemas = {
     ],
     'multi_patch_probe': [
         "Extra data for multipatch recordings intended to test synaptic dynamics.",
-        ('patch_clamp_recording_id', 'patch_clamp_recording.id', '', {'index': True}),
+        ('patch_clamp_recording_id', 'patch_clamp_recording.id', '', {'index': True, 'unique': True}),
         ('induction_frequency', 'float', 'The induction frequency (Hz) of presynaptic pulses', {'index': True}),
         ('recovery_delay', 'float', 'The recovery delay (s) inserted between presynaptic pulses', {'index': True}),
         ('n_spikes_evoked', 'int', 'The number of presynaptic spikes evoked'),
@@ -195,7 +195,7 @@ table_schemas = {
     'pulse_response': [
         "A chunk of postsynaptic recording taken during a presynaptic pulse stimulus",
         ('recording_id', 'recording.id', 'The full recording from which this pulse was extracted', {'index': True}),
-        ('stim_pulse_id', 'stim_pulse.id', 'The presynaptic pulse', {'index': True}),
+        ('stim_pulse_id', 'stim_pulse.id', 'The presynaptic pulse', {'index': True, 'unique': True}),
         ('pair_id', 'pair.id', 'The pre-post cell pair involved in this pulse response', {'index': True}),
         ('start_time', 'float', 'Starting time of this chunk of the recording in seconds, relative to the beginning of the recording'),
         ('data', 'array', 'numpy array of response data sampled at '+_sample_rate_str, {'deferred': True}),

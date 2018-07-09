@@ -28,7 +28,7 @@ class PulseResponseStrengthTableGroup(TableGroup):
     """
     schemas = {
         'pulse_response_strength': [
-            ('pulse_response_id', 'pulse_response.id', '', {'index': True}),
+            ('pulse_response_id', 'pulse_response.id', '', {'index': True, 'unique': True}),
             ('pos_amp', 'float'),
             ('neg_amp', 'float'),
             ('pos_dec_amp', 'float'),
@@ -38,7 +38,7 @@ class PulseResponseStrengthTableGroup(TableGroup):
             ('crosstalk', 'float'),
         ],
         'baseline_response_strength' : [
-            ('baseline_id', 'baseline.id', '', {'index': True}),
+            ('baseline_id', 'baseline.id', '', {'index': True, 'unique': True}),
             ('pos_amp', 'float'),
             ('neg_amp', 'float'),
             ('pos_dec_amp', 'float'),
