@@ -236,7 +236,11 @@ def plot_features(organism=None, conn_type=None, calcium=None, age=None, sweep_t
             if c_type is not None:
                 pre_type, post_type = c_type.split('-')
                 pre_layer, pre_cre = pre_type.split(';')
+                if pre_layer == 'None':
+                    pre_layer = None
                 post_layer, post_cre = post_type.split(';')
+                if post_layer == 'None':
+                    post_layer = None
                 q_filter.extend([pre_cell.cre_type==pre_cre, pre_cell.target_layer==pre_layer,
                                 post_cell.cre_type==post_cre, post_cell.target_layer==post_layer])
             calc_conc = select.get('calcium')
@@ -244,8 +248,8 @@ def plot_features(organism=None, conn_type=None, calcium=None, age=None, sweep_t
                 q_filter.append(db.Experiment.acsf.like(calc_conc + '%'))
             age_range = select.get('age')
             if age_range is not None:
-                age_lower, age_upper = int(age_range.split('-'))
-                q_filter.append(db.Slice.age.between(age_lower, age_upper))
+                age_lower, age_upper = age_range.split('-')
+                q_filter.append(db.Slice.age.between(int(age_lower), int(age_upper)))
 
             q = s.query(FirstPulseFeatures).join(db.Pair, FirstPulseFeatures.pair_id==db.Pair.id)\
                 .join(pre_cell, db.Pair.pre_cell_id==pre_cell.id)\
@@ -263,10 +267,15 @@ def plot_features(organism=None, conn_type=None, calcium=None, age=None, sweep_t
                 trace = Trace(data=pair.avg_psp, sample_rate=db.default_sample_rate)
                 trace_list.append(trace)
                 response_grid[i, 0].plot(trace.time_values, trace.data)
-            grand_trace = TraceList(trace_list).mean()
-            response_grid[i, 0].plot(grand_trace.time_values, grand_trace.data, pen='b')
+            if len(trace_list) > 0:
+                grand_trace = TraceList(trace_list).mean()
+                response_grid[i, 0].plot(grand_trace.time_values, grand_trace.data, pen='b')
+                response_grid[i, 0].setTitle('layer %s, %s-> layer %s, %s; n_synapses = %d' %
+                                          (pre_layer, pre_cre, post_layer, post_cre, len(trace_list)))
+            else:
+                print('No synapses for layer %s, %s-> layer %s, %s' % (pre_layer, pre_cre, post_layer, post_cre))
 
-            pg.stack()
+    return response_grid, feature_grid
 
 
 
@@ -275,6 +284,8 @@ def plot_features(organism=None, conn_type=None, calcium=None, age=None, sweep_t
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--rebuild', action='store_true', default=False)
+    parser.add_argument('--update', action='store_true', default=False)
+    parser.add_argument('--plot', action='store_true', default=False)
     parser.add_argument('--limit', type=int)
     selection = parser.add_argument_group('Selection criteria', 'Filters for experiment analysis')
     selection.add_argument('--organism', type=str, help='mouse, human, or mouse,human will show both')
@@ -287,12 +298,15 @@ if __name__ == '__main__':
     selection.add_argument('--sweep-thresh', type=int, help='Minimum number of sweeps required for analysis')
     selection.add_argument('--fit-thresh', type=float, help="Discard results who's NRMSE from the fit exeed this value")
 
+
     args = parser.parse_args(sys.argv[1:])
 
     if args.rebuild:
         args.rebuild = raw_input("Rebuild first pulse features? ") == 'y'
     if args.rebuild:
         first_pulse_features_tables.drop_tables()
+        args.update = True
+
 
     init_tables()
 
@@ -300,10 +314,12 @@ if __name__ == '__main__':
     pg.dbg()
     pg.setConfigOption('background', 'w')
     pg.setConfigOption('foreground', 'k')
-    update_analysis(limit=args.limit)
 
+    if args.update:
+        update_analysis(limit=args.limit)
 
-    plot_features(organism=args.organism, conn_type=args.conn_type, calcium=args.calcium, age=args.age,
+    if args.plot:
+        response_plot, feature_plot = plot_features(organism=args.organism, conn_type=args.conn_type, calcium=args.calcium, age=args.age,
                   sweep_thresh=args.sweep_thresh, fit_thresh=args.fit_thresh)
 
 
