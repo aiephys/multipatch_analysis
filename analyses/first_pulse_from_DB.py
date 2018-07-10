@@ -218,10 +218,12 @@ def plot_features(organism=None, conn_type=None, calcium=None, age=None, sweep_t
 
         response_grid = PlotGrid()
         response_grid.set_shape(len(selection), 1)
+        response_grid.show()
         feature_grid = PlotGrid()
         feature_grid.set_shape(6, 1)
+        feature_grid.show()
 
-        for select in selection:
+        for i, select in enumerate(selection):
             pre_cell = db.aliased(db.Cell)
             post_cell = db.aliased(db.Cell)
             q_filter = []
@@ -255,19 +257,18 @@ def plot_features(organism=None, conn_type=None, calcium=None, age=None, sweep_t
                 q = q.filter(filter_arg)
 
             results = q.all()
+
+            trace_list = []
+            for pair in results:
+                trace = Trace(data=pair.avg_psp, sample_rate=db.default_sample_rate)
+                trace_list.append(trace)
+                response_grid[i, 0].plot(trace.time_values, trace.data)
+            grand_trace = TraceList(trace_list).mean()
+            response_grid[i, 0].plot(grand_trace.time_values, grand_trace.data, pen='b')
+
             pg.stack()
 
 
-    ## select those from the database
-        ## use pair_id to get back to all other metadata
-        ## how to query both pre and post cell IDs in the cell table?
-        ## query base on other 1-to-1 factors and the iterate through the pairs and use the ORM?
-        ## split query to 2 instances of Cell:
-            ##pre_cell = db.aliased(db.Cell)
-            ##post_cell = db.aliased(db.Cell)
-            ##q = s.query(db.Pair).join(pre_cell, db.Pair.pre_cell_id==pre_cell.id).
-            # join(post_cell, db.Pair.post_cell_id==post_cell.id).filter(pre_cell.cre_type==pre_cre).
-            # filter(post_cell.cre_type==post_cre)
 
 
 
