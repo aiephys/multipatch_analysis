@@ -246,11 +246,12 @@ def remove_crosstalk_artifacts(data, pulse_times):
 def rebuild_strength(limit=0, parallel=True, workers=6, session=None):
     """Rebuild connection strength tables for all experiments
     """
-    experiments = session.query(db.Experiment.id).all()
+    experiments = session.query(db.Experiment.acq_timestamp).all()
     if limit > 0:
+        np.random.shuffle(experiments)
         experiments = experiments[:limit]
 
-    jobs = [(expt_id, index, len(experiments)) for index, expt_id in enumerate(experiments)]
+    jobs = [(record.acq_timestamp, index, len(experiments)) for index, record in enumerate(experiments)]
 
     if parallel:
         pool = multiprocessing.Pool(processes=workers)
@@ -264,7 +265,7 @@ def compute_strength(job_info, session=None):
     """Fill connection strength tables for all pulse-responses in the given experiment.
     """
     expt_id, index, n_jobs = job_info
-    print("Generating connection strength: %d/%d" % (index, n_jobs))
+    print("Generating connection strength (expt_id=%f): %d/%d" % (expt_id, index, n_jobs))
     _compute_strength('pulse_response', expt_id, session=session)
     _compute_strength('baseline', expt_id, session=session)
 
@@ -281,7 +282,7 @@ def _compute_strength(source, expt_id, session=None):
         raise ValueError("Invalid source %s" % source)
 
     # select just data for the selected experiment
-    q = q.join(db.SyncRec).join(db.Experiment).filter(db.Experiment.id==expt_id)
+    q = q.join(db.SyncRec).join(db.Experiment).filter(db.Experiment.acq_timestamp==expt_id)
 
     prof = pg.debug.Profiler(delayed=False)
     
