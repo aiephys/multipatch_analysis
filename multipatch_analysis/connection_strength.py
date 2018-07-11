@@ -244,8 +244,8 @@ def remove_crosstalk_artifacts(data, pulse_times):
 
 
 @db.default_session
-def rebuild_strength(limit=0, parallel=True, workers=6, session=None):
-    """Rebuild connection strength tables for all experiments
+def update_strength(limit=0, parallel=True, workers=6, session=None):
+    """Update connection strength tables for all experiments
     """
     experiments = session.query(db.Experiment.acq_timestamp).all()
     if limit > 0:
@@ -415,8 +415,8 @@ def analyze_response_strength(rec, source, remove_artifacts=False, lpf=True, bsu
 
 
 @db.default_session
-def rebuild_connectivity(session):
-    print("Rebuilding connectivity table..")
+def update_connectivity(session):
+    print("Updating connectivity table..")
     expts_in_db = db.list_experiments(session=session)
     for i,expt in enumerate(expts_in_db):
         sys.stdout.write("%d / %d       \r" % (i, len(expts_in_db)))
