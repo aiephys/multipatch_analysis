@@ -264,6 +264,7 @@ def plot_features(organism=None, conn_type=None, calcium=None, age=None, sweep_t
 
             trace_list = []
             for pair in results:
+                #TODO set t0 to latency to align to foot of PSP
                 trace = Trace(data=pair.avg_psp, sample_rate=db.default_sample_rate)
                 trace_list.append(trace)
                 response_grid[i, 0].plot(trace.time_values, trace.data)
