@@ -8,6 +8,7 @@ from __future__ import print_function, division
 import sys, multiprocessing
 
 import numpy as np
+import pandas
 import scipy.stats
 import pyqtgraph as pg
 
@@ -416,9 +417,15 @@ def analyze_response_strength(rec, source, remove_artifacts=False, lpf=True, bsu
 @db.default_session
 def rebuild_connectivity(session):
     print("Rebuilding connectivity table..")
-    
-    expts_in_db = list_experiments(session=session)
+    expts_in_db = db.list_experiments(session=session)
     for i,expt in enumerate(expts_in_db):
+        sys.stdout.write("%d / %d       \r" % (i, len(expts_in_db)))
+        sys.stdout.flush()
+
+        n_pr = session.query(PulseResponseStrength.id).join(db.PulseResponse).join(db.Recording).join(db.SyncRec).join(db.Experiment).filter(db.Experiment.id==expt.id).count()
+        if n_pr == 0:
+            continue
+
         for pair in expt.pairs:
             # Query all pulse amplitude records for each clamp mode
             amps = {}
@@ -428,16 +435,143 @@ def rebuild_connectivity(session):
                 amps[clamp_mode, 'fg'] = clamp_mode_fg
                 amps[clamp_mode, 'bg'] = clamp_mode_bg
             
+            if all([len(a) == 0 for a in amps]):
+                # nothing to analyze here.
+                continue
+
             # Generate summary results for this pair
             results = analyze_pair_connectivity(amps)
-            
+
             # Write new record to DB
             conn = ConnectionStrength(pair_id=pair.id, **results)
             session.add(conn)
         
         session.commit()
-        sys.stdout.write("%d / %d       \r" % (i, len(expts_in_db)))
-        sys.stdout.flush()
+
+
+def get_amps(session, pair, clamp_mode='ic', get_data=False):
+    """Select records from pulse_response_strength table
+    """
+    cols = [
+        PulseResponseStrength.id,
+        PulseResponseStrength.pos_amp,
+        PulseResponseStrength.neg_amp,
+        PulseResponseStrength.pos_dec_amp,
+        PulseResponseStrength.neg_dec_amp,
+        PulseResponseStrength.pos_dec_latency,
+        PulseResponseStrength.neg_dec_latency,
+        PulseResponseStrength.crosstalk,
+        db.PulseResponse.ex_qc_pass,
+        db.PulseResponse.in_qc_pass,
+        db.PatchClampRecording.clamp_mode,
+        db.StimPulse.pulse_number,
+        db.StimSpike.max_dvdt_time,
+        db.PulseResponse.start_time.label('response_start_time'),
+    ]
+    if get_data:
+        cols.append(db.PulseResponse.data)
+
+    q = session.query(*cols)
+    q = q.join(db.PulseResponse)
+    
+    q, pre_rec, post_rec = join_pulse_response_to_expt(q)
+    q = q.join(db.StimSpike)
+    q = q.add_columns(post_rec.start_time.label('rec_start_time'))
+        
+    filters = [
+        (pre_rec.electrode==pair.pre_cell.electrode,),
+        (post_rec.electrode==pair.post_cell.electrode,),
+        (db.PatchClampRecording.clamp_mode==clamp_mode,),
+        (db.PatchClampRecording.qc_pass==True,),
+    ]
+    for filter_args in filters:
+        q = q.filter(*filter_args)
+    
+    # should result in chronological order
+    q = q.order_by(db.PulseResponse.id)
+
+    df = pandas.read_sql_query(q.statement, q.session.bind)
+    recs = df.to_records()
+    return recs
+
+
+def get_baseline_amps(session, pair, clamp_mode='ic', amps=None, get_data=True):
+    """Select records from baseline_response_strength table
+
+    If *amps* is given (output from get_amps), then baseline records will be selected from the same
+    sweeps as the responses.
+    """
+    cols = [
+        BaselineResponseStrength.id,
+        BaselineResponseStrength.pos_amp,
+        BaselineResponseStrength.neg_amp,
+        BaselineResponseStrength.pos_dec_amp,
+        BaselineResponseStrength.neg_dec_amp,
+        BaselineResponseStrength.pos_dec_latency,
+        BaselineResponseStrength.neg_dec_latency,
+        BaselineResponseStrength.crosstalk,
+        db.Baseline.ex_qc_pass,
+        db.Baseline.in_qc_pass,
+        db.PatchClampRecording.clamp_mode,
+        db.Recording.start_time.label('rec_start_time'),
+        db.Baseline.start_time.label('response_start_time'),
+    ]
+    if get_data:
+        cols.append(db.Baseline.data)
+        
+    q = session.query(*cols)
+    q = q.join(db.Baseline).join(db.Recording).join(db.PatchClampRecording).join(db.SyncRec).join(db.Experiment)
+    
+    filters = [
+        (db.Recording.electrode==pair.post_cell.electrode,),
+        (db.PatchClampRecording.clamp_mode==clamp_mode,),
+        (db.PatchClampRecording.qc_pass==True,),
+    ]
+    for filter_args in filters:
+        q = q.filter(*filter_args)
+    
+    # should result in chronological order
+    q = q.order_by(db.Recording.start_time)
+
+    # if amps is not None:
+    #     q = q.limit(len(amps))
+
+    df = pandas.read_sql_query(q.statement, q.session.bind)
+    recs = df.to_records()
+
+    if amps is not None:
+        # for each record returned from get_amps, return the nearest baseline record
+        mask = np.zeros(len(recs), dtype=bool)
+        amp_times = amps['rec_start_time'].astype(float)*1e-9 + amps['response_start_time']
+        base_times = recs['rec_start_time'].astype(float)*1e-9 + recs['response_start_time']
+        for i in range(len(amps)):
+            order = np.argsort(np.abs(base_times - amp_times[i]))
+            for j in order:
+                if mask[j]:
+                    continue
+                mask[j] = True
+                break
+        recs = recs[mask]
+
+    return recs
+
+
+def join_pulse_response_to_expt(query):
+    pre_rec = db.aliased(db.Recording)
+    post_rec = db.aliased(db.Recording)
+    joins = [
+        (post_rec, db.PulseResponse.recording),
+        (db.PatchClampRecording,),
+        (db.SyncRec,),
+        (db.Experiment,),
+        (db.StimPulse, db.PulseResponse.stim_pulse),
+        (pre_rec, db.StimPulse.recording),
+    ]
+    for join_args in joins:
+        query = query.join(*join_args)
+
+    return query, pre_rec, post_rec
+
 
 
 def norm_pvalue(pval):

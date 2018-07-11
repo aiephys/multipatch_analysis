@@ -562,4 +562,7 @@ def experiment_from_timestamp(ts, session=None):
     return expts[0]
 
 
+@default_session
+def list_experiments(session=None):
+    return session.query(Experiment).all()
 
