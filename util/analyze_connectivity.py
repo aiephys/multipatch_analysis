@@ -12,9 +12,10 @@ if __name__ == '__main__':
                                                "store to connection_strength table.")
     parser.add_argument('--update', action='store_true', default=False, help="Update tables with analysis from new experiments")
     parser.add_argument('--rebuild', action='store_true', default=False, help="Remove and rebuild tables for this analysis")
-    parser.add_argument('--workers', type=int, default=6, help="Set the number of concurrent processes during update")
-    parser.add_argument('--local', action='store_true', default=False, help="Disable concurrent processing to make debugging easier")
-    parser.add_argument('--limit', type=int, default=0, help="Limit the number of experiments to process")
+    # parser.add_argument('--workers', type=int, default=6, help="Set the number of concurrent processes during update")
+    # parser.add_argument('--local', action='store_true', default=False, help="Disable concurrent processing to make debugging easier")
+    parser.add_argument('--raise-exc', action='store_true', default=False, help="Disable catching exceptions encountered during processing", dest='raise_exc')
+    parser.add_argument('--limit', type=int, default=None, help="Limit the number of experiments to process")
     
     args = parser.parse_args(sys.argv[1:])
     if args.rebuild:
@@ -29,4 +30,4 @@ if __name__ == '__main__':
     init_tables()
 
     if args.update:
-        update_connectivity()
+        update_connectivity(limit=args.limit, raise_exceptions=args.raise_exc)

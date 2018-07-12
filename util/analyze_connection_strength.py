@@ -14,6 +14,7 @@ if __name__ == '__main__':
     parser.add_argument('--rebuild', action='store_true', default=False, help="Remove and rebuild tables for this analysis")
     parser.add_argument('--workers', type=int, default=6, help="Set the number of concurrent processes during update")
     parser.add_argument('--local', action='store_true', default=False, help="Disable concurrent processing to make debugging easier")
+    parser.add_argument('--raise-exc', action='store_true', default=False, help="Disable catching exceptions encountered during processing", target='raise_exc')
     parser.add_argument('--limit', type=int, default=0, help="Limit the number of experiments to process")
     
     args = parser.parse_args(sys.argv[1:])
@@ -29,4 +30,4 @@ if __name__ == '__main__':
     init_tables()
 
     if args.update:
-        update_strength(limit=args.limit, parallel=(not args.local), workers=args.workers)
+        update_strength(limit=args.limit, parallel=(not args.local), workers=args.workers, raise_exc=args.raise_exc)
