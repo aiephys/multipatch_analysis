@@ -10,7 +10,6 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description="Analyze strength and other properties of individual pulse responses, "
                                                "store to pulse_response_strength and baseline_response_strength tables.")
-    parser.add_argument('--update', action='store_true', default=False, help="Update tables with analysis from new experiments")
     parser.add_argument('--rebuild', action='store_true', default=False, help="Remove and rebuild tables for this analysis")
     parser.add_argument('--workers', type=int, default=6, help="Set the number of concurrent processes during update")
     parser.add_argument('--local', action='store_true', default=False, help="Disable concurrent processing to make debugging easier")
@@ -24,10 +23,8 @@ if __name__ == '__main__':
     pg.dbg()
 
     if args.rebuild:
-        args.update = True
         pulse_response_strength_tables.drop_tables()
     
     init_tables()
 
-    if args.update:
-        update_strength(limit=args.limit, parallel=(not args.local), workers=args.workers, raise_exceptions=args.raise_exc)
+    update_strength(limit=args.limit, parallel=(not args.local), workers=args.workers, raise_exceptions=args.raise_exc)
