@@ -1,14 +1,14 @@
 from __future__ import print_function
 import argparse, sys
 import pyqtgraph as pg 
-from multipatch_analysis.connection_strength import connection_strength_tables, init_tables, update_connectivity
+from multipatch_analysis.connection_strength import connection_strength_tables, init_tables, update_connection_strength
 import multipatch_analysis.database as db
 
 
 if __name__ == '__main__':
     import user
 
-    parser = argparse.ArgumentParser(description="Analyze connectivity and other properties of pairs, "
+    parser = argparse.ArgumentParser(description="Analyze connection strength and other properties of pairs, "
                                                "store to connection_strength table.")
     parser.add_argument('--update', action='store_true', default=False, help="Update tables with analysis from new experiments")
     parser.add_argument('--rebuild', action='store_true', default=False, help="Remove and rebuild tables for this analysis")
@@ -30,4 +30,4 @@ if __name__ == '__main__':
     init_tables()
 
     if args.update:
-        update_connectivity(limit=args.limit, raise_exceptions=args.raise_exc)
+        update_connection_strength(limit=args.limit, raise_exceptions=args.raise_exc)

@@ -415,8 +415,8 @@ def analyze_response_strength(rec, source, remove_artifacts=False, lpf=True, bsu
 
 
 @db.default_session
-def update_connectivity(limit=0, parallel=True, workers=6, raise_exceptions=False, session=None):
-    print("Updating connectivity table..")
+def update_connection_strength(limit=0, parallel=True, workers=6, raise_exceptions=False, session=None):
+    print("Updating connection_strength table..")
     expts_in_db = db.list_experiments(session=session)
     skipped_no_data = 0
     skipped_already_done = 0
