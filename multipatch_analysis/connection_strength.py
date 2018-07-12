@@ -244,10 +244,14 @@ def remove_crosstalk_artifacts(data, pulse_times):
 
 
 @db.default_session
-def update_strength(limit=0, parallel=True, workers=6, session=None):
+def update_strength(limit=0, parallel=True, workers=6, raise_exceptions=False, session=None):
     """Update connection strength tables for all experiments
     """
     experiments = session.query(db.Experiment.acq_timestamp).all()
+    expts_done = session.query(db.Experiment.acq_timestamp).join(db.SyncRec).join(db.Recording).join(db.PulseResponse).join(PulseResponseStrength).distinct().all()
+    print("Skipping %d already complete experiments" % (len(expts_done)))
+    experiments = [e for e in experiments if e not in set(expts_done)]
+
     if limit > 0:
         np.random.shuffle(experiments)
         experiments = experiments[:limit]
@@ -259,7 +263,11 @@ def update_strength(limit=0, parallel=True, workers=6, session=None):
         pool.map(compute_strength, jobs)
     else:
         for job in jobs:
-            compute_strength(job)
+            try:
+                compute_strength(job)
+            except:
+                if raise_exceptions:
+                    raise
 
 
 def compute_strength(job_info, session=None):
@@ -310,6 +318,8 @@ def _compute_strength(source, expt_id, session=None):
 
     session.commit()
     prof('commit')
+
+    return "succeeded"
 
 
 def response_query(session):
