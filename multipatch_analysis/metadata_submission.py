@@ -163,9 +163,9 @@ class ExperimentMetadataSubmission(object):
             dod = self.spec_info['date_of_birth'].date() + timedelta(self.spec_info['age'])
             days_since_death = (site_date.date() - dod).days
             if days_since_death > 0:
-                warnings.append("Specimen was dissected before today")
+                warnings.append("Specimen was dissected before today, likely need to update LabTracks info in LIMS")
             if days_since_death < 0:
-                warnings.append("Specimen is from the future")
+                warnings.append("Specimen is from the future, likely need to update LabTracks info in LIMS")
 
         # slice project is specified
         if slice_info.get('project', '') == '':
