@@ -282,6 +282,8 @@ class Experiment(object):
             if not isinstance(cell._target_layer, str):
                 raise Exception('Target layer must be str, not "%r"' % cell._target_layer)
 
+            cell._morphology = pip_meta.get('morphology', '')
+
             # load labels
             colors = {}
             for label,value in pip_meta['cell_labels'].items():
