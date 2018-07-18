@@ -23,11 +23,13 @@ from .database import TableGroup
 class ConnectionStrengthTableGroup(TableGroup):
     schemas = {
         'connection_strength': [
-            ('pair_id', 'pair.id', '', {'index': True}),
-            ('synapse_type', 'str', '"ex" or "in"'),
+            """Describes the statistics of per-pair properties aggregated from the pulse_response_strength table.
+            """,
+            ('pair_id', 'pair.id', 'The ID of the entry in the pair table to which these results apply', {'index': True}),
+            ('synapse_type', 'str', 'String "ex" or "in", indicating whether this analysis chose to treat the pair as excitatory or inhibitory'),
 
             # current clamp metrics
-            ('ic_n_samples', 'int'),
+            ('ic_n_samples', 'int', "Number of samples (pulse responses) that were pooled from current clamp recordings"),
             ('ic_crosstalk_mean', 'float'),
             ('ic_base_crosstalk_mean', 'float'),
             # amplitude,
