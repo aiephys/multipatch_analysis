@@ -30,11 +30,11 @@ from neuroanalysis.fitting import Psp
 
 from multipatch_analysis.database import database as db
 from multipatch_analysis.ui.multipatch_nwb_viewer import MultipatchNwbViewer
-from multipatch_analysis.connection_strength import (
-    init_tables, PulseResponseStrength, BaselineResponseStrength, ConnectionStrength, response_query,
-    baseline_query, analyze_response_strength, connection_strength_tables, pulse_response_strength_tables,
-    rebuild_strength,
+from multipatch_analysis.pulse_response_strength import (
+    PulseResponseStrength, BaselineResponseStrength, response_query,
+    baseline_query, analyze_response_strength, pulse_response_strength_tables,
 )
+from multipatch_analysis.connection_strength import ConnectionStrength, get_amps, get_baseline_amps
 
 
 class ExperimentBrowser(pg.TreeWidget):
@@ -50,7 +50,7 @@ class ExperimentBrowser(pg.TreeWidget):
         self.items_by_pair_id = {}
         
         self.session = db.Session()
-        db_expts = list_experiments(session=self.session)
+        db_expts = db.list_experiments(session=self.session)
         db_expts.sort(key=lambda e: e.acq_timestamp)
         for expt in db_expts:
             date = expt.acq_timestamp
@@ -591,9 +591,6 @@ def prs_qc():
     return rrec, w
 
 
-init_tables()
-
-
 class PairClassifier(object):
     """Supervised classifier used to predict whether a cell pair is synaptically connected.
 
@@ -1051,6 +1048,10 @@ def simulate_connection(fg_recs, bg_results, classifier, amp, rtime, n_trials=8)
 if __name__ == '__main__':
     import user
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--seed', type=int, default=0, help="Seed used to randomize classifier inputs")
+    args = parser.parse_args(sys.argv[1:])
+
     from multipatch_analysis.ui.multipatch_nwb_viewer import MultipatchNwbViewer    
     from multipatch_analysis.experiment_list import cached_experiments
     expts = cached_experiments()
@@ -1069,3 +1070,6 @@ if __name__ == '__main__':
     pair_view = PairView()
     spw.pair_clicked.connect(pair_view.select_pair)
 
+
+    if sys.flags.interactive == 0:
+        pg.mkQApp().exec_()
