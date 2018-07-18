@@ -1,7 +1,7 @@
 from __future__ import print_function
 import argparse, sys
 import pyqtgraph as pg 
-from multipatch_analysis.connection_strength import pulse_response_strength_tables, init_tables, update_strength
+from multipatch_analysis.pulse_response_strength import pulse_response_strength_tables, init_tables, update_strength
 import multipatch_analysis.database as db
 
 
