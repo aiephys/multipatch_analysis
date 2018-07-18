@@ -140,9 +140,15 @@ class Dashboard(QtGui.QWidget):
         self.console_btn.setCheckable(True)
         self.console_btn.toggled.connect(self.console_toggled)
 
+        self.poll_btn = QtGui.QPushButton('poll')
+        self.poll_btn.setCheckable(True)
+        self.poll_btn.setChecked(True)
+        self.poll_btn.toggled.connect(self.poll_toggled)
+
         self.status = QtGui.QStatusBar()
         self.status.setMaximumHeight(25)
         self.layout.addWidget(self.status, 1, 0)
+        self.status.addPermanentWidget(self.poll_btn)
         self.status.addPermanentWidget(self.console_btn)
 
         self.resize(1000, 900)
@@ -212,6 +218,25 @@ class Dashboard(QtGui.QWidget):
 
         self.handle_checker_record_timer = QtCore.QTimer()
         self.handle_checker_record_timer.timeout.connect(self.handle_all_checker_records)
+
+    def poll_toggled(self):
+        if self.poll_btn.isChecked():
+            self.start_polling()
+        else:
+            self.stop_polling()
+
+    def start_polling(self):
+        for poller in self.pollers:
+            poller.enable_polling = True
+            poller.waker.set()
+
+    def stop_polling(self):
+        for poller in self.pollers:
+            poller.enable_polling = False
+
+        # empty out the queue
+        while self.expt_queue.qsize() > 0:
+            self.expt_queue.get()
 
     def contextMenuEvent(self, event):
         self.menu.popup(event.globalPos())
@@ -374,13 +399,11 @@ class Dashboard(QtGui.QWidget):
             rec['item'].setHidden(hidden)
 
     def quit(self):
-        print("Stopping pollers..")
         for t in self.pollers:
             if t.isRunning():
                 t.stop()
                 t.wait()
 
-        print("Stopping checkers..")
         stopped = []
         for t in self.checkers:
             if t.isRunning():
@@ -448,6 +471,7 @@ class PollThread(QtCore.QThread):
         self.interval = interval
         self._stop = False
         self.waker = threading.Event()
+        self.enable_polling = True   # set False to temporarily disable polling
         
     def stop(self):
         self._stop = True
@@ -475,7 +499,7 @@ class PollThread(QtCore.QThread):
         # iterate over all expt sites in this path
         for day_name in sorted(os.listdir(root_dh.name()), reverse=True):
             for expt_path in glob.iglob(os.path.join(root_dh.name(), day_name, 'slice_*', 'site_*')):
-                if self._stop:
+                if self._stop or not self.enable_polling:
                     return
 
                 expt = ExperimentMetadata(path=expt_path)
