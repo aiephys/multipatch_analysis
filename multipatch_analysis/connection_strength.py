@@ -19,9 +19,9 @@ from neuroanalysis.event_detection import exp_deconvolve
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.fitting import Psp
 
-from multipatch_analysis.database import database as db
-from multipatch_analysis.connection_detection import fit_psp
-from multipatch_analysis.database import TableGroup
+from .database import database as db
+from .connection_detection import fit_psp
+from .database import TableGroup
 
 
 class PulseResponseStrengthTableGroup(TableGroup):
