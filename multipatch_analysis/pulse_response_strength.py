@@ -142,7 +142,7 @@ def remove_crosstalk_artifacts(data, pulse_times):
 
 @db.default_session
 def update_strength(limit=0, parallel=True, workers=6, raise_exceptions=False, session=None):
-    """Update connection strength tables for all experiments
+    """Update pulse response strength tables for all experiments
     """
     experiments = session.query(db.Experiment.acq_timestamp).all()
     expts_done = session.query(db.Experiment.acq_timestamp).join(db.SyncRec).join(db.Recording).join(db.PulseResponse).join(PulseResponseStrength).distinct().all()
@@ -171,7 +171,7 @@ def compute_strength(job_info, session=None):
     """Fill connection strength tables for all pulse-responses in the given experiment.
     """
     expt_id, index, n_jobs = job_info
-    print("Generating connection strength (expt_id=%f): %d/%d" % (expt_id, index, n_jobs))
+    print("Analyzing pulse response strength (expt_id=%f): %d/%d" % (expt_id, index, n_jobs))
     _compute_strength('pulse_response', expt_id, session=session)
     _compute_strength('baseline', expt_id, session=session)
 

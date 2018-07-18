@@ -131,64 +131,63 @@ def init_tables():
 init_tables()
 
 
+
 @db.default_session
 def update_connection_strength(limit=0, parallel=True, workers=6, raise_exceptions=False, session=None):
-    print("Updating connection_strength table..")
-    expts_in_db = db.list_experiments(session=session)
-    skipped_no_data = 0
-    skipped_already_done = 0
-    processed_failed = 0
-    processed_succeeded = 0
+    """Update connection strength table for all experiments
+    """
+    expts_ready = session.query(db.Experiment.acq_timestamp).join(db.SyncRec).join(db.Recording).join(db.PulseResponse).join(PulseResponseStrength).distinct().all()
+    expts_done = session.query(db.Experiment.acq_timestamp).join(db.Pair).join(ConnectionStrength).distinct().all()
 
-    for i,expt in enumerate(expts_in_db):
-        sys.stdout.write("%d / %d       \r" % (i, len(expts_in_db)))
-        sys.stdout.flush()
+    print("Skipping %d already complete experiments" % (len(expts_done)))
+    experiments = [e for e in expts_ready if e not in set(expts_done)]
 
-        n_pr = session.query(PulseResponseStrength.id).join(db.PulseResponse).join(db.Recording).join(db.SyncRec).join(db.Experiment).filter(db.Experiment.id==expt.id).count()
-        if n_pr == 0:
-            skipped_no_data += 1
+    if limit > 0:
+        np.random.shuffle(experiments)
+        experiments = experiments[:limit]
+
+    jobs = [(record.acq_timestamp, index, len(experiments)) for index, record in enumerate(experiments)]
+
+    if parallel:
+        pool = multiprocessing.Pool(processes=workers)
+        pool.map(compute_connection_strength, jobs)
+    else:
+        for job in jobs:
+            try:
+                compute_connection_strength(job, session)
+            except:
+                if raise_exceptions:
+                    raise
+
+
+def compute_connection_strength(job_info, session=None):
+    expt_id, index, n_jobs = job_info
+    print("Analyzing connection strength (expt_id=%f): %d/%d" % (expt_id, index, n_jobs))
+
+    if session is None:
+        session = db.Session()
+    expt = db.experiment_from_timestamp(expt_id, session=session)
+
+    for pair in expt.pairs:
+        # Query all pulse amplitude records for each clamp mode
+        amps = {}
+        for clamp_mode in ('ic', 'vc'):
+            clamp_mode_fg = get_amps(session, pair, clamp_mode=clamp_mode, get_data=True)
+            clamp_mode_bg = get_baseline_amps(session, pair, amps=clamp_mode_fg, clamp_mode=clamp_mode, get_data=False)
+            amps[clamp_mode, 'fg'] = clamp_mode_fg
+            amps[clamp_mode, 'bg'] = clamp_mode_bg
+        
+        if all([len(a) == 0 for a in amps]):
+            # nothing to analyze here.
             continue
 
-        n_conn = session.query(ConnectionStrength.id).join(db.Pair).join(db.Experiment).filter(db.Experiment.id==expt.id).count()
-        if n_conn > 0:
-            skipped_already_done += 1
-            continue
+        # Generate summary results for this pair
+        results = analyze_pair_connectivity(amps)
 
-        try:
-            for pair in expt.pairs:
-                # Query all pulse amplitude records for each clamp mode
-                amps = {}
-                for clamp_mode in ('ic', 'vc'):
-                    clamp_mode_fg = get_amps(session, pair, clamp_mode=clamp_mode, get_data=True)
-                    clamp_mode_bg = get_baseline_amps(session, pair, amps=clamp_mode_fg, clamp_mode=clamp_mode, get_data=False)
-                    amps[clamp_mode, 'fg'] = clamp_mode_fg
-                    amps[clamp_mode, 'bg'] = clamp_mode_bg
-                
-                if all([len(a) == 0 for a in amps]):
-                    # nothing to analyze here.
-                    continue
-
-                # Generate summary results for this pair
-                results = analyze_pair_connectivity(amps)
-
-                # Write new record to DB
-                conn = ConnectionStrength(pair_id=pair.id, **results)
-                session.add(conn)
-            session.commit()
-            processed_succeeded += 1
-        except:
-            processed_failed += 1
-            if raise_exceptions:
-                raise
-            else:
-                sys.excepthook(*sys.exc_info())
-
-        if limit > 0 and processed_failed + processed_succeeded >= limit:
-            break        
-
-    print("Updated connection_strength table: %d succeeded  %d failed  %d skipped (no data)  %d skipped (already done)" %
-        (processed_succeeded, processed_failed, skipped_no_data, skipped_already_done))
-
+        # Write new record to DB
+        conn = ConnectionStrength(pair_id=pair.id, **results)
+        session.add(conn)
+    session.commit()
 
 
 def get_amps(session, pair, clamp_mode='ic', get_data=False):
