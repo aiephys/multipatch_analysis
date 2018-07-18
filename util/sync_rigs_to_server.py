@@ -84,6 +84,10 @@ def _sync_paths(source, target, changes):
     if not os.path.isdir(target):
         os.mkdir(target)
         changes.append(('mkdir', source, target))
+
+    # Leave a note about the source of this data
+    open(os.path.join(target, 'sync_source'), 'wb').write(source)
+
     for fname in os.listdir(source):
         src_path = os.path.join(source, fname)
         if os.path.isfile(src_path):
@@ -115,8 +119,6 @@ def _sync_paths(source, target, changes):
                 log("    updt %s => %s" % (src_path, dst_path))
                 changes.append(('update', src_path, dst_path))
 
-    # Leave a note about the source of this data
-    open(os.path.join(target, 'sync_source'), 'wb').write(source)
     return skipped
 
 
@@ -164,7 +166,7 @@ def sync_all(source='archive'):
 
             # synchronize files for each experiment to the server
             log.extend(sync_experiments(paths))
-            synced_paths.append((rig_name, data_path))
+            synced_paths.append((rig_name, data_path, len(paths)))
     
     return log, synced_paths
 
@@ -192,8 +194,8 @@ if __name__ == '__main__':
         # Synchronize all known rig data paths
         log, synced_paths = sync_all(source='archive')
         print("==========================\nSynchronized files from:")
-        for rig_name, data_path in synced_paths:
-            print("%s  :  %s" % (rig_name, data_path))
+        for rig_name, data_path, n_expts in synced_paths:
+            print("%s  :  %s  (%d expts)" % (rig_name, data_path, n_expts))
 
     else:
         # synchronize just the specified path(s)
