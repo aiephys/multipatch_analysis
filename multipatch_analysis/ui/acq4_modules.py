@@ -126,7 +126,7 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         safe_aff_image_path = lims.lims.safe_system_path(aff_image_path)
 
         if os.path.exists(safe_aff_image_path) == False:
-            raise Exception("Couldn't find image in LIMS. Check you have the selected the correct slice.")
+            raise Exception('Couldn\'t find image "%s". Check you have the selected the correct slice.' % safe_aff_image_path)
         
         aff_image_name = os.path.split(aff_image_path)[-1]
         
