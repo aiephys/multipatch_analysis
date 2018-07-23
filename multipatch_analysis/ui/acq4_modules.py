@@ -91,15 +91,10 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         self.layout.addWidget(self.load_btn, 0, 0)
         self.load_btn.clicked.connect(self.load_clicked)
 
-        self.create_json_btn = QtGui.QPushButton("Create Cell Location Json")
-        self.layout.addWidget(self.create_json_btn, 1, 0)
-        self.create_json_btn.setEnabled(False)
-        self.create_json_btn.clicked.connect(self.create_lims_json)
-
-        self.save_json_btn = QtGui.QPushButton("Save and Upload Json")
-        self.layout.addWidget(self.save_json_btn, 2, 0)
-        self.save_json_btn.setEnabled(False)
-        self.save_json_btn.clicked.connect(self.save_json_and_trigger)
+        self.submit_btn = QtGui.QPushButton("Submit cell positions to LIMS")
+        self.layout.addWidget(self.submit_btn, 1, 0)
+        self.submit_btn.setEnabled(False)
+        self.submit_btn.clicked.connect(self.submit)
 
     def load_clicked(self):
         """
@@ -112,31 +107,29 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         if self.base_dir.info()['dirType'] != 'Slice':
             raise Exception('No Slice Selected')
         self.base_path = self.base_dir.name()
-        self.slice_name = self.base_dir.info()['specimen_ID'].strip()
-        self.slice_id = lims.specimen_id_from_name(self.slice_name)
-        clusters = lims.cell_cluster_ids(self.slice_id)
-        try:
-            aff_image_path = lims.specimen_20x_image(self.slice_name)
-        except KeyError:
-            raise Exception('No Slice Selected')
+        self.specimen_name = self.base_dir.info()['specimen_ID'].strip()
 
-        if os.path.exists(safe_aff_image_path) == False:
-            raise Exception('Couldn\'t find image "%s". Check you have the selected the correct slice.' % safe_aff_image_path)
+        aff_image_path = lims.specimen_20x_image(self.specimen_name, treatment='Biocytin')
+        if aff_image_path is None:
+            raise Exception("No 20x biocytin image for specimen %s" % self.specimen_name)
+
+        if not os.path.exists(aff_image_path):
+            raise Exception("No image found at path '%s'" % aff_image_path)
         
         aff_image_name = os.path.split(aff_image_path)[-1]
-        
         save_path = os.path.join(self.base_path, aff_image_name)
-        safe_save_path = lims.lims.safe_system_path(save_path)
 
-        if os.path.exists(safe_save_path) == False:
+        if not os.path.exists(save_path):
             with pg.BusyCursor():
-                shutil.copy2(safe_aff_image_path,safe_save_path)
-
+                shutil.copy2(aff_image_path, save_path)
                 self.base_dir.indexFile(aff_image_name)
-                print("20x image moved")
-        self.image_20 = safe_save_path
-        self.create_json_btn.setEnabled(True)
-        self.save_json_btn.setEnabled(False)
+        
+        self.image_20 = save_path
+        self.submit_btn.setEnabled(True)
+
+    def submit(self):
+        self.create_lims_json()
+        self.save_json_and_trigger()
 
     def create_lims_json(self):
         """
@@ -145,17 +138,25 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         Creates dictionary of cell locations and enables the save button
         """
         items = self.mosaic_editor.canvas.items 
+
+        # Find item that marks cell positions
         markers = [i for i in items if isinstance(i, MarkersCanvasItem)]
         if len(markers) != 1:
             raise Exception("Must have exactly 1 Markers item in the canvas.")
         
+        # Find the 20x image that was loaded in to the editor
+        image = None
         for i in items:
-                try:
-                    if i.opts['handle'].name() == self.image_20:
-                        image = i
-                except AttributeError:
-                    pass
+            try:
+                if i.opts['handle'].name() == self.image_20:
+                    image = i
+            except AttributeError:
+                pass
+        if image is None:
+            raise Exception("Could not find 20x image loaded into mosaic editor.")
 
+        # Infer the site folder to submit from based on the files that have been loaded.
+        # This is really indirect, but it seems to work.
         sites = set()
         for item in items:
             handle = item.opts.get('handle')
@@ -164,48 +165,41 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
             parent = handle.parent()
             if parent.shortName().startswith('site_'):
                 sites.add(parent)
-
         if len(sites) == 0:
             raise Exception("No files loaded from site; can't determine which site to submit.")
         if len(sites) > 1:
             raise Exception("Files loaded from multiple sites; can't determine which site to submit.")
         self.site_dh = list(sites)[0]
+
+        # Grab the timestamp for this site; we need it to look up the cell cluster from LIMS
         ts = self.site_dh.info()['__timestamp__']
 
-        
-        self.cluster_id = []
-        clusters = lims.cell_cluster_ids(self.slice_id)
-        for cid in clusters:
-            if lims.specimen_metadata(cid) != None:
-                cluster_tmsp = lims.specimen_metadata(cid).get('acq_timestamp')
-                if cluster_tmsp == ts:
-                    self.cluster_id.append(cid)
-                    self.cluster_name = lims.specimen_name(cid)
-            
+        # Find the LIMS CellCluster ID for this experiment 
+        cluster_ids = lims.expt_cluster_ids(self.specimen_name, ts)
+        if len(cluster_ids) == 0:
+            raise Exception("No CellCluster found for %s %s" % (self.specimen_name, ts))
+        if len(cluster_ids) > 1:
+            raise Exception("Multiple CellClusters found for %s %s" % (self.specimen_name, ts))
+        self.cluster_id = cluster_ids[0]
+        self.cluster_name = lims.specimen_name(self.cluster_id)
 
-        if self.cluster_id == None:
-            raise Exception("Couldn't match Multipatch Log to data in LIMS")
-        
-        if len(self.cluster_id) > 1:
-            raise Exception("Multiple clusters found with same timestamp")
-
+        # Load up the piettes.yml file so we know which cells are considered "ephys pass"
         pipette_path = os.path.join(self.site_dh.name(), 'pipettes.yml')
-        print(pipette_path)
-
-        if os.path.exists(pipette_path) == False:
-            raise Exception("Could not find pipette log")
-
+        if not os.path.exists(pipette_path):
+            raise Exception("Could not find pipettes.yml")
         pipette_log = yaml.load(open(pipette_path))
 
+        # grab info about cell positions from Markers
         pipettes = markers[0].saveState()['markers']
 
+        # Construct JSON to send to LIMS.
         self.data = {}  
         self.data['cells'] = []
         for cell in pipettes:
             cell_name = int(cell[0].split('_')[-1])
             p = cell[1]
-            x_float = markers[0].graphicsItem().mapToItem(image.graphicsItem(),pg.Point(*p[:2])).x()
-            y_float = markers[0].graphicsItem().mapToItem(image.graphicsItem(),pg.Point(*p[:2])).y()
+            x_float = markers[0].graphicsItem().mapToItem(image.graphicsItem(), pg.Point(*p[:2])).x()
+            y_float = markers[0].graphicsItem().mapToItem(image.graphicsItem(), pg.Point(*p[:2])).y()
             self.data['cells'].append({      
                 'ephys_cell_id': cell_name,                  
                 'coordinates_20x': 
@@ -216,10 +210,6 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
                 'ephys_qc_result': ('pass' if pipette_log[cell_name]['got_data'] == True else 'fail'),                 
                 'start_time_sec': time.mktime(pipette_log[cell_name]['patch_start'].timetuple())
             })
-        print('Found {} cells in the cluster'.format(len(self.data['cells'])))
-
-        self.save_json_btn.setEnabled(True)
-
         
     def save_json_and_trigger(self):
         """
@@ -230,32 +220,31 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
 
         json_save_file = self.cluster_name + "_ephys_cell_cluster.json"
 
-        incoming_path = lims.get_incoming_dir(self.slice_name)
-        if incoming_path == None:
-            raise Exception("Could not find incoming directory in LIMS")
+        # Ask LIMS where to put incoming files
+        incoming_path = lims.get_incoming_dir(self.specimen_name)
+        if incoming_path is None:
+            raise Exception("Could not find LIMS incoming directory for specimen '%s'" % self.specimen_name)
 
-        incoming_save_path = os.path.sep*2 + os.path.join(*incoming_path.split("/"))
+        incoming_save_path = '//' + incoming_path.lstrip('/')
+        if not os.path.isdir(incoming_save_path):
+            raise Exception("LIMS incoming directory for specimen '%s' does not exist: '%s'" % (self.specimen_name, incoming_save_path))
+        
+        # Save payload json file
         incoming_json_save_path = os.path.join(incoming_save_path, json_save_file)
-
         with open(incoming_json_save_path, 'w') as outfile:  
             json.dump(self.data, outfile)
 
-
         trigger_file = self.cluster_name + "_ephys_cell_cluster.mpc"
 
-        trigger_path = lims.get_trigger_dir(self.slice_name)
-        if trigger_path == None:
-            raise Exception("Could not find trigger directory in LIMS")
-
-        trigger_path = os.path.sep*2 + os.path.join(*trigger_path.split("/"))
+        trigger_path = lims.get_trigger_dir(self.specimen_name)
+        if trigger_path is None:
+            raise Exception("Could not find LIMS trigger directory for specimen '%s'" % self.specimen_name)
+        trigger_path = '//' + trigger_path.lstrip('/')
         
-        trigger_save_path = os.path.join(trigger_path,trigger_file)
+        trigger_save_path = os.path.join(trigger_path, trigger_file)
         with open(trigger_save_path, 'w') as the_file:
             the_file.write("specimen_id: {}\n".format(self.cluster_id[0]))     
             the_file.write("cells_info: '{}'\n".format(incoming_json_save_path))
-       
-        raise Exception("Thanks for tagging your cells!")
-        self.save_json_btn.setEnabled(False)
         
 
 MosaicEditor.addExtension("Multi Patch", {

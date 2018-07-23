@@ -836,8 +836,7 @@ class Experiment(object):
     def cluster_id(self):
         """LIMS CellCluster ID
         """
-        spec_id = lims.specimen_id_from_name(self.specimen_name)
-        cids = lims.expt_cluster_ids(spec_id, self.timestamp)
+        cids = lims.expt_cluster_ids(self.specimen_name, self.timestamp)
         if len(cids) == 0:
             return None
         if len(cids) > 1:
