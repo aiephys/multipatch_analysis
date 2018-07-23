@@ -20,7 +20,8 @@ if __name__ == '__main__':
     if args.rebuild:
         args.rebuild = raw_input("Rebuild %s pulse response strength tables? " % db.db_name) == 'y'
 
-    pg.dbg()
+    if args.local:
+        pg.dbg()
 
     if args.rebuild:
         pulse_response_strength_tables.drop_tables()

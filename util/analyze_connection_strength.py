@@ -20,7 +20,8 @@ if __name__ == '__main__':
     if args.rebuild:
         args.rebuild = raw_input("Rebuild %s connectivity table? " % db.db_name) == 'y'
 
-    pg.dbg()
+    if args.local:
+        pg.dbg()
 
     if args.rebuild:
         connection_strength_tables.drop_tables()
