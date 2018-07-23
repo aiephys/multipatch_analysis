@@ -202,24 +202,19 @@ def specimen_images(specimen):
             
     return images
 
-def specimen_20x_image(specimen_name):
-    """Return file path for 20x, biocytin image for a specimen.
+
+def specimen_20x_image(specimen, treatment='Biocytin'):
+    """Return the path to a 20x aff image file.
     """
-    q = """
-        select slides.storage_directory, slides.barcode as barcode_start, treatments.id as barcode_end 
-        from slides join image_series_slides iss on iss.slide_id = slides.id 
-        join image_series on image_series.id = iss.image_series_id 
-        join specimens on image_series.specimen_id=specimens.id 
-        join sub_images on sub_images.image_series_id=image_series.id 
-        join images on images.id = sub_images.image_id 
-        left join treatments on treatments.id = images.treatment_id 
-        where treatments.name = 'Biocytin' and specimens.name = '%s';
-        """ % specimen_name
-    r = lims.query(q)
-    if len(r) == 0:
-        raise ValueError("No 20x image found for '%s'" % specimen_name)
-    path_string = str(r[0]['storage_directory']) + str(r[0]['barcode_start']) + '_' + str(r[0]['barcode_end']) + '.aff'
-    return path_string
+    images = specimen_images(specimen)
+    for image in images:
+        if image['treatment'] == treatment:
+            file_base = os.path.splitext(image['file'])[0]
+            # Double // ensures the path is treated as a network location on windows.
+            # On posix, this should have no effect.
+            return '//' + file_base.lstrip('/') + '.aff'
+    return None
+
 
 def specimen_species(specimen_name):
     """returns species information

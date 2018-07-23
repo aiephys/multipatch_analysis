@@ -101,7 +101,6 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         self.save_json_btn.setEnabled(False)
         self.save_json_btn.clicked.connect(self.save_json_and_trigger)
 
-
     def load_clicked(self):
         """
         Checks that directory is pointed at a slice
@@ -116,14 +115,10 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         self.slice_name = self.base_dir.info()['specimen_ID'].strip()
         self.slice_id = lims.specimen_id_from_name(self.slice_name)
         clusters = lims.cell_cluster_ids(self.slice_id)
-        """if len(clusters) == 0:
-                raise Exception("No Clusters Recorded in LIMS")"""
         try:
             aff_image_path = lims.specimen_20x_image(self.slice_name)
         except KeyError:
             raise Exception('No Slice Selected')
-        
-        safe_aff_image_path = lims.lims.safe_system_path(aff_image_path)
 
         if os.path.exists(safe_aff_image_path) == False:
             raise Exception('Couldn\'t find image "%s". Check you have the selected the correct slice.' % safe_aff_image_path)
@@ -142,8 +137,6 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         self.image_20 = safe_save_path
         self.create_json_btn.setEnabled(True)
         self.save_json_btn.setEnabled(False)
-
-                
 
     def create_lims_json(self):
         """
