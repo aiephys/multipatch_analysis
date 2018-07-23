@@ -91,7 +91,7 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         self.layout.addWidget(self.load_btn, 0, 0)
         self.load_btn.clicked.connect(self.load_clicked)
 
-        self.submit_btn = QtGui.QPushButton("Submit cell positions to LIMS")
+        self.submit_btn = pg.FeedbackButton("Submit cell positions to LIMS")
         self.layout.addWidget(self.submit_btn, 1, 0)
         self.submit_btn.setEnabled(False)
         self.submit_btn.clicked.connect(self.submit)
@@ -128,8 +128,13 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         self.submit_btn.setEnabled(True)
 
     def submit(self):
-        self.create_lims_json()
-        self.save_json_and_trigger()
+        try:
+            self.create_lims_json()
+            self.save_json_and_trigger()
+            self.submit_btn.success()
+        except:
+            self.submit_btn.failure()
+            raise
 
     def create_lims_json(self):
         """
@@ -218,7 +223,7 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         disables create json button
         """
 
-        json_save_file = self.cluster_name + "_ephys_cell_cluster.json"
+        json_save_file = 'synphys_' + self.cluster_name + "_ephys_cell_cluster.json"
 
         # Ask LIMS where to put incoming files
         incoming_path = lims.get_incoming_dir(self.specimen_name)
@@ -230,11 +235,11 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
             raise Exception("LIMS incoming directory for specimen '%s' does not exist: '%s'" % (self.specimen_name, incoming_save_path))
         
         # Save payload json file
-        incoming_json_save_path = os.path.join(incoming_save_path, json_save_file)
+        incoming_json_save_path = incoming_save_path + '/' + json_save_file # using '/' on windows because it is a network path
         with open(incoming_json_save_path, 'w') as outfile:  
             json.dump(self.data, outfile)
 
-        trigger_file = self.cluster_name + "_ephys_cell_cluster.mpc"
+        trigger_file = 'synphys_' + self.cluster_name + "_ephys_cell_cluster.mpc"
 
         trigger_path = lims.get_trigger_dir(self.specimen_name)
         if trigger_path is None:
@@ -242,8 +247,10 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         trigger_path = '//' + trigger_path.lstrip('/')
         
         trigger_save_path = os.path.join(trigger_path, trigger_file)
+        print trigger_save_path
+        print incoming_json_save_path
         with open(trigger_save_path, 'w') as the_file:
-            the_file.write("specimen_id: {}\n".format(self.cluster_id[0]))     
+            the_file.write("specimen_id: {}\n".format(self.cluster_id))     
             the_file.write("cells_info: '{}'\n".format(incoming_json_save_path))
         
 
