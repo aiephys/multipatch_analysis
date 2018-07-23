@@ -466,9 +466,38 @@ def create_all_mappings():
 
 
 #-------------- initial DB access ----------------
-engine = create_engine(db_address, pool_size=10, max_overflow=40)
+engine = None
+engine_pid = None  # pid of process that created this engine. 
+def init_engine():
+    global engine
+    if engine is not None:
+        engine.dispose()
+    
+    engine = create_engine(db_address, pool_size=10, max_overflow=40)
+    engine_pid = os.getpid()
+
+init_engine()
+
+
+_sessionmaker = None
 # external users should create sessions from here.
-Session = sessionmaker(bind=engine)
+def Session():
+    """Create and return a new database Session instance.
+    """
+    global _sessionmaker, engine, engine_pid
+    if os.getpid() != engine_pid:
+        # In forked processes, we need to re-initialize the engine before
+        # creating a new session, otherwise child processes will
+        # inherit and muck with the same connections. See:
+        # http://docs.sqlalchemy.org/en/rel_1_0/faq/connections.html#how-do-i-use-engines-connections-sessions-with-python-multiprocessing-or-os-fork
+        if engine_pid is not None:
+            print("Making new session for subprocess %d != %d" % (os.getpid(), engine_pid))
+        init_engine()
+        _sessionmaker = None
+    if _sessionmaker is None:
+        _sessionmaker = sessionmaker(bind=engine)
+    return _sessionmaker()
+
 
 create_all_mappings()
 
@@ -489,8 +518,7 @@ def reset_db():
         conn.execute('create database %s' % db_name)
 
     # reconnect to DB
-    global engine
-    engine = create_engine(config.synphys_db_host + '/' + db_name)
+    init_engine()
 
     # Grant readonly permissions
     ro_user = config.synphys_db_readonly_user

@@ -73,6 +73,10 @@ if __name__ == '__main__':
     pairs = pairs.join(db.Experiment)
     pairs = pairs.join(ConnectionStrength)
     pairs = pairs.filter(db.Experiment.project_name=="mouse V1 coarse matrix")
+    # calcium
+    # age
+    # egta
+    
     pairs = pairs.all()
 
 

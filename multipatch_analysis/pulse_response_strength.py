@@ -159,21 +159,28 @@ def update_strength(limit=0, parallel=True, workers=6, raise_exceptions=False, s
         pool.map(compute_strength, jobs)
     else:
         for job in jobs:
-            try:
-                compute_strength(job)
-            except:
-                if raise_exceptions:
-                    raise
+            compute_strength(job, raise_exceptions=raise_exceptions)
 
 
-def compute_strength(job_info, session=None):
-    """Fill connection strength tables for all pulse-responses in the given experiment.
+def compute_strength(job_info, raise_exceptions=False):
+    """Fill pulse_response_strength and baseline_response_strength tables for all pulse responses in the given experiment.
     """
-    expt_id, index, n_jobs = job_info
-    print("Analyzing pulse response strength (expt_id=%f): %d/%d" % (expt_id, index, n_jobs))
-    _compute_strength('pulse_response', expt_id, session=session)
-    _compute_strength('baseline', expt_id, session=session)
-
+    session = db.Session()
+    
+    try:
+        expt_id, index, n_jobs = job_info
+        print("Analyzing pulse response strength (expt_id=%f): %d/%d" % (expt_id, index, n_jobs))
+        _compute_strength('pulse_response', expt_id, session=session)
+        _compute_strength('baseline', expt_id, session=session)
+        session.commit()
+    except:
+        session.rollback()
+        print("Error in experiment: %f" % expt_id)
+        if raise_exceptions:
+            raise
+        else:
+            sys.excepthook(*sys.exc_info())
+    
 
 @db.default_session
 def _compute_strength(source, expt_id, session=None):
@@ -222,9 +229,6 @@ def _compute_strength(source, expt_id, session=None):
 
     prof('insert')
     new_recs = []
-
-    session.commit()
-    prof('commit')
 
     return "succeeded"
 

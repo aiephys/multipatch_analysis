@@ -155,41 +155,45 @@ def update_connection_strength(limit=0, parallel=True, workers=6, raise_exceptio
         pool.map(compute_connection_strength, jobs)
     else:
         for job in jobs:
-            try:
-                compute_connection_strength(job, session)
-            except:
-                if raise_exceptions:
-                    raise
+            compute_connection_strength(job, raise_exceptions=raise_exceptions)
 
 
-def compute_connection_strength(job_info, session=None):
-    expt_id, index, n_jobs = job_info
-    print("Analyzing connection strength (expt_id=%f): %d/%d" % (expt_id, index, n_jobs))
+def compute_connection_strength(job_info, raise_exceptions=False):
+    session = db.Session()
+    
+    try:
+        expt_id, index, n_jobs = job_info
+        print("Analyzing connection strength (expt_id=%f): %d/%d" % (expt_id, index, n_jobs))
 
-    if session is None:
-        session = db.Session()
-    expt = db.experiment_from_timestamp(expt_id, session=session)
+        expt = db.experiment_from_timestamp(expt_id, session=session)
 
-    for pair in expt.pairs:
-        # Query all pulse amplitude records for each clamp mode
-        amps = {}
-        for clamp_mode in ('ic', 'vc'):
-            clamp_mode_fg = get_amps(session, pair, clamp_mode=clamp_mode, get_data=True)
-            clamp_mode_bg = get_baseline_amps(session, pair, amps=clamp_mode_fg, clamp_mode=clamp_mode, get_data=False)
-            amps[clamp_mode, 'fg'] = clamp_mode_fg
-            amps[clamp_mode, 'bg'] = clamp_mode_bg
-        
-        if all([len(a) == 0 for a in amps]):
-            # nothing to analyze here.
-            continue
+        for pair in expt.pairs:
+            # Query all pulse amplitude records for each clamp mode
+            amps = {}
+            for clamp_mode in ('ic', 'vc'):
+                clamp_mode_fg = get_amps(session, pair, clamp_mode=clamp_mode, get_data=True)
+                clamp_mode_bg = get_baseline_amps(session, pair, amps=clamp_mode_fg, clamp_mode=clamp_mode, get_data=False)
+                amps[clamp_mode, 'fg'] = clamp_mode_fg
+                amps[clamp_mode, 'bg'] = clamp_mode_bg
+            
+            if all([len(a) == 0 for a in amps]):
+                # nothing to analyze here.
+                continue
 
-        # Generate summary results for this pair
-        results = analyze_pair_connectivity(amps)
+            # Generate summary results for this pair
+            results = analyze_pair_connectivity(amps)
 
-        # Write new record to DB
-        conn = ConnectionStrength(pair_id=pair.id, **results)
-        session.add(conn)
-    session.commit()
+            # Write new record to DB
+            conn = ConnectionStrength(pair_id=pair.id, **results)
+            session.add(conn)
+        session.commit()
+    except:
+        session.rollback()
+        print("Error in experiment: %f" % expt_id)
+        if raise_exceptions:
+            raise
+        else:
+            sys.excepthook(*sys.exc_info())
 
 
 def get_amps(session, pair, clamp_mode='ic', get_data=False):
