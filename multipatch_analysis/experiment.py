@@ -27,7 +27,7 @@ from . import yaml_local, config
 
 
 class Experiment(object):
-    def __init__(self, entry=None, yml_file=None, verify=True):
+    def __init__(self, site_path=None, entry=None, yml_file=None, verify=True):
         self.entry = entry
         self.source_id = (None, None)
         self.electrodes = None
@@ -54,10 +54,14 @@ class Experiment(object):
         self._target_layers = None
         self._rig_name = None
         
+        if site_path is not None:
+            yml_file = os.path.join(site_path, 'pipettes.yml')
+        
         if entry is not None:
             self._load_old_format(entry)
         elif yml_file is not None:
             self._load_yml(yml_file)
+            
 
         if verify:
             self.verify()
@@ -269,7 +273,7 @@ class Experiment(object):
         all_colors = set(FLUOROPHORES.values())
         genotype = self.genotype
         for pip_id, pip_meta in pips.pipettes.items():
-            elec = Electrode(pip_id, pip_meta['patch_start'], pip_meta['patch_stop'], pip_meta['ad_channel'])
+            elec = Electrode(pip_id, start_time=pip_meta['patch_start'], stop_time=pip_meta['patch_stop'], device_id=pip_meta['ad_channel'], patch_status=pip_meta['pipette_status'])
             self.electrodes[pip_id] = elec
 
             if pip_meta['got_data'] is False:
@@ -319,7 +323,7 @@ class Experiment(object):
                 for driver,positive in genotype.predict_driver_expression(colors).items():
                     cell.labels[driver] = positive
 
-            # load QC keys
+            # load old QC keys
             # (sets attributes: holding_qc, access_qc, spiking_qc)
             if 'cell_qc' in pip_meta:
                 for k in ['holding', 'access', 'spiking']:
@@ -331,9 +335,6 @@ class Experiment(object):
                             raise ValueError('Invalid cell %s QC string: "%s"' % (k, qc_pass))
                         qc_pass = qc_pass in '+/'
                     setattr(cell, k+'_qc', qc_pass)
-            else:
-                # derive from NWB
-                cell.holding_qc, cell.access_qc, cell.spiking_qc = self._generate_cell_qc(pip_meta['ad_channel'], pip_id)
                 
         # load synapse/gap connections
         for cell in self.cells.values():
@@ -362,68 +363,6 @@ class Experiment(object):
                         raise ValueError("Postsynaptic cell ID %r is invalid" % post_id)
                     conn_list.append((cell.cell_id, post_id))
                 
-    def _generate_cell_qc(self, ad_chan, pipette_id):
-        # tempporary qc used to decide how many connections were probed in an
-        # experiment. will be replaced with per-pulse-response qc later.
-        cache_file = os.path.join(os.path.dirname(config.configfile), 'cell_qc_cache.pkl')
-        
-        cache = {}
-        if os.path.isfile(cache_file):
-            try:
-                cache = pickle.load(open(cache_file, 'rb'))
-            except Exception:
-                sys.excepthook(*sys.exc_info())
-                print("Failed to load cell qc cache (error above).")
-        
-        # old key format
-        cache_key = (self.nwb_file, ad_chan)
-        if cache_key in cache:
-            return cache[cache_key]
-
-        cache_key = (self.timestamp, pipette_id)
-        if cache_key in cache:
-            return cache[cache_key]
-
-        # cache miss; generate new
-        print("Generating cell QC for", cache_key)
-        nwb = self.data
-        holding_qc = False
-        access_qc = False
-        spiking_qc = False
-        try:
-            passed_holding = 0
-            for srec in nwb.contents:
-                try:
-                    rec = srec[ad_chan]
-                except KeyError:
-                    continue
-                if rec.clamp_mode == 'vc':
-                    if rec.baseline_current is not None and abs(rec.baseline_current) < 800e-12:
-                        passed_holding += 1
-                else:
-                    vm = rec.baseline_potential
-                    if vm > -75e-3 and vm < -50e-3:
-                        passed_holding += 1
-                if passed_holding >= 5:
-                    break
-            if passed_holding >= 5:
-                holding_qc = True
-                # need to fix these!
-                access_qc = True
-                spiking_qc = True
-        finally:
-            self.close_data()
-        result = (holding_qc, access_qc, spiking_qc)
-        cache[cache_key] = result
-        
-        tmp_file = cache_file+'_tmp'
-        pickle.dump(cache, open(tmp_file, 'wb'))
-        if os.path.exists(cache_file):
-            os.remove(cache_file)
-        os.rename(tmp_file, cache_file)
-            
-        return result
-
     def _load_old_format(self, entry):
         """Load experiment metadata from an old-style summary file
         """
@@ -763,7 +702,7 @@ class Experiment(object):
 
     @property
     def slice_timestamp(self):
-        return datetime.datetime.fromtimestamp(self.slice_info['__timestamp__'])
+        return self.slice_info['__timestamp__']
 
     @property
     def slice_dir(self):
@@ -1009,6 +948,12 @@ class Experiment(object):
                 if m is not None:
                    self._rig_name = m.groups()[0]
         return self._rig_name
+
+    @property
+    def project_name(self):
+        """The name of the project to which this experiment belongs.
+        """
+        return self.slice_info.get('project', None)
 
     def show(self):
         if self._view is None:

@@ -15,10 +15,13 @@ class Electrode(object):
     device_id : int
         ID of the ephys device connected to this electrode
         (same as neuroanalysis.data.Recording.device_id)
+    patch_status : str | None
+        Status of patch attempt: No seal, Low seal, GOhm seal, Technical failure, or No attempt
     """
-    def __init__(self, electrode_id, start_time, stop_time, device_id):
+    def __init__(self, electrode_id, start_time, stop_time, device_id, patch_status=None):
         self.electrode_id = electrode_id
         self.start_time = start_time
         self.stop_time = stop_time
         self.device_id = device_id
+        self.patch_status = patch_status
         self.cell = None
