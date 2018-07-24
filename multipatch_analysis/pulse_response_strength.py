@@ -140,19 +140,22 @@ def remove_crosstalk_artifacts(data, pulse_times):
 
 
 @db.default_session
-def update_strength(limit=0, parallel=True, workers=6, raise_exceptions=False, session=None):
+def update_strength(limit=0, expts=None, parallel=True, workers=6, raise_exceptions=False, session=None):
     """Update pulse response strength tables for all experiments
     """
-    experiments = session.query(db.Experiment.acq_timestamp).all()
-    expts_done = session.query(db.Experiment.acq_timestamp).join(db.SyncRec).join(db.Recording).join(db.PulseResponse).join(PulseResponseStrength).distinct().all()
-    print("Skipping %d already complete experiments" % (len(expts_done)))
-    experiments = [e for e in experiments if e not in set(expts_done)]
+    if expts is None:
+        experiments = session.query(db.Experiment.acq_timestamp).all()
+        expts_done = session.query(db.Experiment.acq_timestamp).join(db.SyncRec).join(db.Recording).join(db.Baseline).join(BaselineResponseStrength).distinct().all()
+        print("Skipping %d already complete experiments" % (len(expts_done)))
+        experiments = [e for e in experiments if e not in set(expts_done)]
 
-    if limit > 0:
-        np.random.shuffle(experiments)
-        experiments = experiments[:limit]
+        if limit > 0:
+            np.random.shuffle(experiments)
+            experiments = experiments[:limit]
 
-    jobs = [(record.acq_timestamp, index, len(experiments)) for index, record in enumerate(experiments)]
+        jobs = [(record.acq_timestamp, index, len(experiments)) for index, record in enumerate(experiments)]
+    else:
+        jobs = [(expt, i, len(expts)) for i, expt in enumerate(expts)]
 
     if parallel:
         pool = multiprocessing.Pool(processes=workers)

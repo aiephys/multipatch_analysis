@@ -15,6 +15,7 @@ if __name__ == '__main__':
     parser.add_argument('--local', action='store_true', default=False, help="Disable concurrent processing to make debugging easier")
     parser.add_argument('--raise-exc', action='store_true', default=False, help="Disable catching exceptions encountered during processing", dest='raise_exc')
     parser.add_argument('--limit', type=int, default=0, help="Limit the number of experiments to process")
+    parser.add_argument('--expts', type=lambda s: [float(x) for x in s.split(',')], default=None, help="Select specific experiment IDs to analyze", )
     
     args = parser.parse_args(sys.argv[1:])
     if args.rebuild:
@@ -28,4 +29,4 @@ if __name__ == '__main__':
     
     init_tables()
 
-    update_strength(limit=args.limit, parallel=(not args.local), workers=args.workers, raise_exceptions=args.raise_exc)
+    update_strength(limit=args.limit, expts=args.expts, parallel=(not args.local), workers=args.workers, raise_exceptions=args.raise_exc)
