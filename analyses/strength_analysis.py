@@ -1052,12 +1052,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0, help="Seed used to randomize classifier inputs")
     args = parser.parse_args(sys.argv[1:])
 
-    from multipatch_analysis.ui.multipatch_nwb_viewer import MultipatchNwbViewer    
-    from multipatch_analysis.experiment_list import cached_experiments
-    expts = cached_experiments()
-
     pg.dbg()
-
 
     # Load records on all pairs and train a classifier to predict connections
     classifier = get_pair_classifier(seed=None if args.seed < 0 else args.seed)
