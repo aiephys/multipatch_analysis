@@ -29,4 +29,4 @@ if __name__ == '__main__':
 
     init_tables()
 
-    update_connection_strength(limit=args.limit, args.expts=expts, parallel=not args.local, workers=args.workers, raise_exceptions=args.raise_exc)
+    update_connection_strength(limit=args.limit, expts=args.expts, parallel=not args.local, workers=args.workers, raise_exceptions=args.raise_exc)
