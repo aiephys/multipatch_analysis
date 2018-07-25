@@ -757,7 +757,7 @@ class Experiment(object):
                 os.remove(self.nwb_cache_file)
                 self._data = MultiPatchExperiment(self.nwb_cache_file)
             except Exception as exc:
-                if 'is not inside' in exc.args[0]:
+                if isinstance(exc.args[0], str) and 'is not inside' in exc.args[0]:
                     return MultiPatchExperiment(self.nwb_file)
                 else:
                     raise

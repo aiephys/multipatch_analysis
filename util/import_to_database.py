@@ -45,7 +45,7 @@ def submit_expt(expt_id, raise_exc=False):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Import new experiments into the database.")
     parser.add_argument('--limit', type=int, default=None)
     parser.add_argument('--local', action='store_true', default=False)
     parser.add_argument('--workers', type=int, default=6)
