@@ -1,25 +1,16 @@
 # *-* coding: utf-8 *-*
 """
-CLI script for generating reports from multipatch experiment data.
-
+2018 E-E manuscript fig 4:
+Connectivity and its relationship to intersomatic distance
 """
 from __future__ import print_function, division
 
-import argparse
-import datetime
-import os
-import re
-import sys
 from collections import OrderedDict
-import user
-import scipy.stats as st
 
+import numpy as np
 import pyqtgraph as pg
 
 from multipatch_analysis.experiment_list import ExperimentList, cache_file
-from multipatch_analysis import config
-from neuroanalysis.data import Trace
-import numpy as np
 
 #write csvs
 def write_csv(fh, data, description, units='connection probability %'):
