@@ -157,7 +157,7 @@ def filter_pulse_responses(pair):
         stim_pulse = pr.stim_pulse
         n_spikes = stim_pulse.n_spikes
         pulse_number = stim_pulse.pulse_number
-        pulse_id = pr.pulse_id
+        pulse_id = pr.stim_pulse_id
         ex_qc_pass = pr.ex_qc_pass
         in_qc_pass = pr.in_qc_pass
         pcr = stim_pulse.recording.patch_clamp_recording
@@ -195,7 +195,7 @@ def filter_pulse_responses(pair):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description='Populate first pulse table')
     parser.add_argument('--rebuild', action='store_true', default=False)
     parser.add_argument('--update', action='store_true', default=False)
     parser.add_argument('--limit', type=int)
