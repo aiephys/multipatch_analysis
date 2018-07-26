@@ -12,7 +12,7 @@ import pyqtgraph as pg
 
 from multipatch_analysis.experiment_list import ExperimentList, cache_file
 
-#write csvs
+
 def write_csv(fh, data, description, units='connection probability %'):
     """Used to generate csv file accompanying figure.
     """
@@ -24,7 +24,6 @@ def write_csv(fh, data, description, units='connection probability %'):
         line = ','.join(map(str, cols))
         fh.write(line)
         fh.write('\n')
-
 
 
 all_expts = ExperimentList(cache=cache_file)

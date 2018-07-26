@@ -327,10 +327,12 @@ class ExperimentList(object):
                 dist = ci.distance(cj)
                 probed.append(dist)
                 connected.append((i, j) in expt.connections)
+        
         if name is None:
             pre_strs = [("" if layer is None else ("L" + layer + " ")) + (cre_type or "") for layer, cre_type in pre_types]
             post_strs = [("" if layer is None else ("L" + layer + " ")) + (cre_type or "") for layer, cre_type in post_types]
             name = ("%s->%s "%(','.join(pre_strs), ','.join(post_strs)))
+        
         return distance_plot(connected, distance=probed, plots=plots, color=color, name=name, window=40e-6, spacing=40e-6)
 
     def connectivity_matrix(self, rows, cols):

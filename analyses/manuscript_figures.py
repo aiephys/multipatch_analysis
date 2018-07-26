@@ -537,5 +537,5 @@ def get_expts(all_expts, cre_type, calcium=None, age=None, start=None, stop=None
     else:
         age2 = 'All'
     legend = ("%s->%s, calcium = %s, age = %s" % (cre_type[0], cre_type[1], mM, age2))
-    dist_plot = expts.distance_plot(cre_type[0], cre_type[1], plots=dist_plot, color=color, name=legend)
+    dist_plot = expts.distance_plot(cre_type[0], cre_type[1], plots=dist_plot, color=color, name=legend)[0]
     return expts, legend, dist_plot

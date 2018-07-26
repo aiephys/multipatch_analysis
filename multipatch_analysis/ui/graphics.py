@@ -254,4 +254,4 @@ def distance_plot(connected, distance, plots=None, color=(100, 100, 255), window
     fill.setZValue(-10)
     plots[0].addItem(fill, ignoreBounds=True)
     
-    return plots
+    return plots, ci_xvals, prop, upper, lower
