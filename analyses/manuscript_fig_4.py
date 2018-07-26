@@ -10,6 +10,7 @@ from collections import OrderedDict
 import numpy as np
 import pyqtgraph as pg
 
+from neuroanalysis.data import Trace
 from multipatch_analysis.experiment_list import ExperimentList, cache_file
 
 

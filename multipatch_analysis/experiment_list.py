@@ -285,7 +285,7 @@ class ExperimentList(object):
             if expt.region is None:
                 print("Warning: Experiment %s has no region" % str(expt.source_id))
 
-    def distance_plot(self, pre_types=None, post_types=None, connection_types=None, plots=None, color=(100, 100, 255), name=None):
+    def count_connections(self, pre_types=None, post_types=None, connection_types=None):
         # get all connected and unconnected distances for pre->post
         probed = []
         connected = []
@@ -328,6 +328,16 @@ class ExperimentList(object):
                 probed.append(dist)
                 connected.append((i, j) in expt.connections)
         
+        return connected, probed
+        
+    def distance_plot(self, pre_types=None, post_types=None, connection_types=None, plots=None, color=(100, 100, 255), name=None):
+        if isinstance(pre_types, str):
+            pre_types = [(None, pre_types)]
+        if isinstance(post_types, str):
+            post_types = [(None, post_types)]
+
+        connected, probed = self.count_connections(pre_types, post_types, connection_types)
+
         if name is None:
             pre_strs = [("" if layer is None else ("L" + layer + " ")) + (cre_type or "") for layer, cre_type in pre_types]
             post_strs = [("" if layer is None else ("L" + layer + " ")) + (cre_type or "") for layer, cre_type in post_types]
