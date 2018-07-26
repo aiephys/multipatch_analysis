@@ -4,6 +4,8 @@ import numpy as np
 import pyqtgraph as pg
 from neuroanalysis.stats import binomial_ci
 from neuroanalysis.ui.plot_grid import PlotGrid
+from statsmodels.stats.proportion import proportion_confint
+
 
 
 class MatrixItem(pg.QtGui.QGraphicsItemGroup):
@@ -182,7 +184,7 @@ def distance_plot(connected, distance, plots=None, color=(100, 100, 255), window
         mx = abs(cscat).max()
         if mx != 0:
             cscat = cscat * 0.2# / mx
-        pts[:,1][conn] = -2e-5 - cscat
+        pts[:,1][conn] = -5e-5 - cscat
     if np.any(unconn):
         uscat = pg.pseudoScatter(pts[:,0][unconn], spacing=10e-6, bidir=False)
         mx = abs(uscat).max()
@@ -235,7 +237,7 @@ def distance_plot(connected, distance, plots=None, color=(100, 100, 255), window
             prop.append(np.nan)
         else:
             prop.append(n_conn / n_probed)
-            ci = binomial_ci(n_conn, n_probed)
+            ci = proportion_confint(n_conn, n_probed, method='beta')
             lower.append(ci[0])
             upper.append(ci[1])
             ci_xvals.append(x)
