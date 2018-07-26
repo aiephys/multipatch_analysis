@@ -20,7 +20,9 @@ from sqlalchemy.sql.expression import func
 from .. import config
 
 # database version should be incremented whenever the schema has changed
-db_version = 5
+db_version = 6
+db_name = '{database}_{version}'.format(database=config.synphys_db, version=db_version)
+db_address = '{host}/{database}'.format(host=config.synphys_db_host, database=db_name)
 
 default_sample_rate = 20000
 
@@ -30,7 +32,7 @@ _sample_rate_str = '%dkHz' % (default_sample_rate // 1000)
 table_schemas = {
     'slice': [
         "All brain slices on which an experiment was attempted.",
-        ('acq_timestamp', 'datetime', 'Creation timestamp for slice data acquisition folder.', {'unique': True}),
+        ('acq_timestamp', 'float', 'Creation timestamp for slice data acquisition folder.', {'unique': True}),
         ('species', 'str', 'Human | mouse (from LIMS)'),
         ('age', 'int', 'Specimen age (in days) at time of dissection (from LIMS)'),
         ('sex', 'str', 'Specimen sex ("M", "F", or "unknown"; from LIMS)'),
@@ -52,7 +54,8 @@ table_schemas = {
         ('storage_path', 'str', 'Location of data within server or cache storage.'),
         ('ephys_file', 'str', 'Name of ephys NWB file relative to storage_path.'),
         ('rig_name', 'str', 'Identifier for the rig that generated these results.'),
-        ('acq_timestamp', 'datetime', 'Creation timestamp for site data acquisition folder.', {'unique': True, 'index': True}),
+        ('project_name', 'str', 'Name of the project to which this experiment belongs.'),
+        ('acq_timestamp', 'float', 'Creation timestamp for site data acquisition folder.', {'unique': True, 'index': True}),
         ('slice_id', 'slice.id', 'ID of the slice used for this experiment'),
         ('target_region', 'str', 'The intended brain region for this experiment'),
         ('internal', 'str', 'The name of the internal solution used in this experiment. '
@@ -70,10 +73,10 @@ table_schemas = {
     'electrode': [
         "Each electrode records a patch attempt, whether or not it resulted in a "
         "successful cell recording.",
-        ('expt_id', 'experiment.id', '', {'index': True}),
-        ('patch_status', 'str', 'no seal, low seal, GOhm seal, tech fail, ...'),
-        ('start_time', 'datetime'),
-        ('stop_time', 'datetime'),
+        ('experiment_id', 'experiment.id', '', {'index': True}),
+        ('patch_status', 'str', 'Status of the patch attempt: no seal, low seal, GOhm seal, tech fail, or no attempt'),
+        ('start_time', 'datetime', 'The time when recording began for this electrode.'),
+        ('stop_time', 'datetime', 'The time when recording ended for this electrode.'),
         ('device_id', 'int', 'External identifier for the device attached to this electrode (usually the MIES A/D channel)'),
         ('initial_resistance', 'float'),
         ('initial_current', 'float'),
@@ -95,15 +98,13 @@ table_schemas = {
         ('seal_resistance', 'float', 'The seal resistance recorded for this cell immediately before membrane rupture'),
         ('has_biocytin', 'bool', 'If true, then the soma was seen to be darkly stained with biocytin (this indicates a good reseal, but does may not indicate a high-quality fill)'),
         ('has_dye_fill', 'bool', 'Indicates whether the cell was filled with fluorescent dye during the experiment'),
-        ('pass_qc', 'bool'),
-        ('pass_spike_qc', 'bool'),
         ('depth', 'float', 'Depth of the cell (in m) from the cut surface of the slice.'),
         ('position', 'object', '3D location of this cell in the arbitrary coordinate system of the experiment'),
         ('ext_id', 'int', 'Cell ID (usually 1-8) referenced in external metadata records'),
     ],
     'pair': [
-        "All possible putative synaptic connections",
-        ('expt_id', 'experiment.id', '', {'index': True}),
+        "All possible putative synaptic connections. Each pair represents a pre- and postsynaptic cell that were recorded from simultaneously.",
+        ('experiment_id', 'experiment.id', '', {'index': True}),
         ('pre_cell_id', 'cell.id', 'ID of the presynaptic cell', {'index': True}),
         ('post_cell_id', 'cell.id', 'ID of the postsynaptic cell', {'index': True}),
         ('synapse', 'bool', 'Whether the experimenter thinks there is a synapse', {'index': True}),
@@ -131,10 +132,10 @@ table_schemas = {
     ],
     'patch_clamp_recording': [
         "Extra data for recordings made with a patch clamp amplifier",
-        ('recording_id', 'recording.id', '', {'index': True}),
+        ('recording_id', 'recording.id', '', {'index': True, 'unique': True}),
         ('clamp_mode', 'str', 'The mode used by the patch clamp amplifier: "ic" or "vc"', {'index': True}),
         ('patch_mode', 'str', "The state of the membrane patch. E.g. 'whole cell', 'cell attached', 'loose seal', 'bath', 'inside out', 'outside out'"),
-        ('stim_name', 'object', "The name of the stimulus protocol"),
+        ('stim_name', 'str', "The name of the stimulus protocol"),
         ('baseline_potential', 'float', 'Median steady-state potential (recorded for IC or commanded for VC) during the recording'),
         ('baseline_current', 'float', 'Median steady-state current (recorded for VC or commanded for IC) during the recording'),
         ('baseline_rms_noise', 'float', 'RMS noise of the steady-state part of the recording'),
@@ -143,7 +144,7 @@ table_schemas = {
     ],
     'multi_patch_probe': [
         "Extra data for multipatch recordings intended to test synaptic dynamics.",
-        ('patch_clamp_recording_id', 'patch_clamp_recording.id', '', {'index': True}),
+        ('patch_clamp_recording_id', 'patch_clamp_recording.id', '', {'index': True, 'unique': True}),
         ('induction_frequency', 'float', 'The induction frequency (Hz) of presynaptic pulses', {'index': True}),
         ('recovery_delay', 'float', 'The recovery delay (s) inserted between presynaptic pulses', {'index': True}),
         ('n_spikes_evoked', 'int', 'The number of presynaptic spikes evoked'),
@@ -175,7 +176,7 @@ table_schemas = {
     ],
     'stim_spike': [
         "An action potential evoked by a stimulus pulse",
-        ('pulse_id', 'stim_pulse.id', '', {'index': True}),
+        ('stim_pulse_id', 'stim_pulse.id', '', {'index': True}),
         ('peak_time', 'float', "The time of the peak of the spike, relative to the beginning of the recording."),
         ('peak_diff', 'float', 'Amplitude of the spike peak, relative to baseline'),
         ('peak_val', 'float', 'Absolute value of the spike peak'),
@@ -194,7 +195,7 @@ table_schemas = {
     'pulse_response': [
         "A chunk of postsynaptic recording taken during a presynaptic pulse stimulus",
         ('recording_id', 'recording.id', 'The full recording from which this pulse was extracted', {'index': True}),
-        ('pulse_id', 'stim_pulse.id', 'The presynaptic pulse', {'index': True}),
+        ('stim_pulse_id', 'stim_pulse.id', 'The presynaptic pulse', {'index': True, 'unique': True}),
         ('pair_id', 'pair.id', 'The pre-post cell pair involved in this pulse response', {'index': True}),
         ('start_time', 'float', 'Starting time of this chunk of the recording in seconds, relative to the beginning of the recording'),
         ('data', 'array', 'numpy array of response data sampled at '+_sample_rate_str, {'deferred': True}),
@@ -203,6 +204,35 @@ table_schemas = {
         ('baseline_id', 'baseline.id'),
     ],
 }
+
+
+class TableGroup(object):
+    """Class used to manage a group of tables that act as a single unit--tables in a group
+    are always created and deleted together.
+    """
+    def __init__(self):
+        self.mappings = {}
+        self.create_mappings()
+
+    def __getitem__(self, item):
+        return self.mappings[item]
+
+    def create_mappings(self):
+        for k,schema in self.schemas.items():
+            self.mappings[k] = generate_mapping(k, schema)
+
+    def drop_tables(self):
+        global engine
+        for k in self.schemas:
+            if k in engine.table_names():
+                self[k].__table__.drop(bind=engine)
+
+    def create_tables(self):
+        global engine
+        for k in self.schemas:
+            if k not in engine.table_names():
+                self[k].__table__.create(bind=engine)
+
 
 
 
@@ -436,10 +466,38 @@ def create_all_mappings():
 
 
 #-------------- initial DB access ----------------
-db_address = '{host}/{database}_{version}'.format(host=config.synphys_db_host, database=config.synphys_db, version=db_version)
-engine = create_engine(db_address, pool_size=10, max_overflow=40)
+engine = None
+engine_pid = None  # pid of process that created this engine. 
+def init_engine():
+    global engine
+    if engine is not None:
+        engine.dispose()
+    
+    engine = create_engine(db_address, pool_size=10, max_overflow=40)
+    engine_pid = os.getpid()
+
+init_engine()
+
+
+_sessionmaker = None
 # external users should create sessions from here.
-Session = sessionmaker(bind=engine)
+def Session():
+    """Create and return a new database Session instance.
+    """
+    global _sessionmaker, engine, engine_pid
+    if os.getpid() != engine_pid:
+        # In forked processes, we need to re-initialize the engine before
+        # creating a new session, otherwise child processes will
+        # inherit and muck with the same connections. See:
+        # http://docs.sqlalchemy.org/en/rel_1_0/faq/connections.html#how-do-i-use-engines-connections-sessions-with-python-multiprocessing-or-os-fork
+        if engine_pid is not None:
+            print("Making new session for subprocess %d != %d" % (os.getpid(), engine_pid))
+        init_engine()
+        _sessionmaker = None
+    if _sessionmaker is None:
+        _sessionmaker = sessionmaker(bind=engine)
+    return _sessionmaker()
+
 
 create_all_mappings()
 
@@ -452,16 +510,15 @@ def reset_db():
     with pg_engine.begin() as conn:
         conn.connection.set_isolation_level(0)
         try:
-            conn.execute('drop database %s' % config.synphys_db)
+            conn.execute('drop database %s' % db_name)
         except sqlalchemy.exc.ProgrammingError as err:
             if 'does not exist' not in err.message:
                 raise
 
-        conn.execute('create database %s' % config.synphys_db)
+        conn.execute('create database %s' % db_name)
 
     # reconnect to DB
-    global engine
-    engine = create_engine(config.synphys_db_host + '/' + config.synphys_db)
+    init_engine()
 
     # Grant readonly permissions
     ro_user = config.synphys_db_readonly_user
@@ -519,13 +576,11 @@ def slice_from_timestamp(ts, session=None):
 
 @default_session
 def experiment_from_timestamp(ts, session=None):
-    if isinstance(ts, float):
-        ts = datetime.fromtimestamp(ts)
     expts = session.query(Experiment).filter(Experiment.acq_timestamp==ts).all()
     if len(expts) == 0:
         # For backward compatibility, check for timestamp truncated to 2 decimal places
         for expt in session.query(Experiment).all():
-            if abs((expt.acq_timestamp - ts).total_seconds()) < 0.01:
+            if abs((expt.acq_timestamp - ts)) < 0.01:
                 return expt
         
         raise KeyError("No experiment found for timestamp %s" % ts)
@@ -535,4 +590,7 @@ def experiment_from_timestamp(ts, session=None):
     return expts[0]
 
 
+@default_session
+def list_experiments(session=None):
+    return session.query(Experiment).all()
 

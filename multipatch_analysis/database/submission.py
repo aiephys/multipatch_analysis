@@ -53,7 +53,7 @@ class SliceSubmission(object):
                         slice_time = datetime(year, mon, day, hh, mm)
 
             self._fields = {
-                'acq_timestamp': datetime.fromtimestamp(info['__timestamp__']),
+                'acq_timestamp': info['__timestamp__'],
                 'species': limsdata['organism'],
                 'age': limsdata['age'],
                 'sex': limsdata['sex'],
@@ -75,7 +75,7 @@ class SliceSubmission(object):
         errors = []
         fields = self.fields
         
-        ts = datetime.fromtimestamp(self.dh.info()['__timestamp__'])
+        ts = self.dh.info()['__timestamp__']
         try:
             slice_entry = db.slice_from_timestamp(ts)
             update_fields = []
@@ -96,7 +96,7 @@ class SliceSubmission(object):
         
     def submitted(self):
         slice_dir = self.dh
-        ts = datetime.fromtimestamp(slice_dir.info()['__timestamp__'])
+        ts = slice_dir.info()['__timestamp__']
         try:
             slice_entry = db.slice_from_timestamp(ts)
             return True
@@ -136,7 +136,7 @@ class ExperimentDBSubmission(object):
         self._fields = None
 
     def submitted(self):
-        ts = self.expt.datetime
+        ts = self.expt.timestamp
         try:
             expt_entry = db.experiment_from_timestamp(ts)
             return True
@@ -160,18 +160,15 @@ class ExperimentDBSubmission(object):
         except:
             warnings.append("Experiment temperature '%s' is invalid." % self.expt.expt_info['temperature'])
 
-        nwb_file = expt.nwb_file
-        if not os.path.isfile(nwb_file):
-            errors.append('Could not find NWB file "%s"' % nwb_file)
-        
         expt_info = expt.expt_info
 
         self.fields = {
             'original_path': expt.original_path,
             'storage_path': expt.server_path,
-            'ephys_file': os.path.relpath(expt.nwb_file, expt.path),
+            'ephys_file': None if expt.nwb_file is None else os.path.relpath(expt.nwb_file, expt.path),
             'rig_name': expt.rig_name,
-            'acq_timestamp': expt.datetime,
+            'project_name': expt.project_name,
+            'acq_timestamp': expt.timestamp,
             'target_region': expt_info.get('region'),
             'internal': expt_info.get('internal'),
             'acsf': expt_info.get('solution'),
@@ -269,7 +266,8 @@ class ExperimentDBSubmission(object):
                 pairs_by_device_id[(pre_id, post_id)] = pair_entry
 
         # Load NWB file and create data entries
-        self._load_nwb(session, expt_entry, elecs_by_ad_channel, pairs_by_device_id)
+        if self.expt.nwb_file is not None:
+            self._load_nwb(session, expt_entry, elecs_by_ad_channel, pairs_by_device_id)
 
         return expt_entry
 
