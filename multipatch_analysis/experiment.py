@@ -362,7 +362,60 @@ class Experiment(object):
                     if post_id not in self.cells:
                         raise ValueError("Postsynaptic cell ID %r is invalid" % post_id)
                     conn_list.append((cell.cell_id, post_id))
-                
+
+    def _generate_cell_qc(self, ad_chan):
+        # tempporary qc used to decide how many connections were probed in an
+        # experiment. will be replaced with per-pulse-response qc later.
+        cache_file = os.path.join(os.path.dirname(config.configfile), 'cell_qc_cache.pkl')
+        
+        cache = {}
+        if os.path.isfile(cache_file):
+            try:
+                cache = pickle.load(open(cache_file, 'rb'))
+            except Exception:
+                sys.excepthook(*sys.exc_info())
+                print("Failed to load cell qc cache (error above).")
+        
+        cache_key = (self.nwb_file, ad_chan)
+        if cache_key not in cache:
+            print("Generate cell QC for", str(cache_key))
+            nwb = self.data
+            holding_qc = False
+            access_qc = False
+            spiking_qc = False
+            try:
+                passed_holding = 0
+                for srec in nwb.contents:
+                    try:
+                        rec = srec[ad_chan]
+                    except KeyError:
+                        continue
+                    if rec.clamp_mode == 'vc':
+                        if rec.baseline_current is not None and abs(rec.baseline_current) < 800e-12:
+                            passed_holding += 1
+                    else:
+                        vm = rec.baseline_potential
+                        if vm > -75e-3 and vm < -50e-3:
+                            passed_holding += 1
+                    if passed_holding >= 5:
+                        break
+                if passed_holding >= 5:
+                    holding_qc = True
+                    # need to fix these!
+                    access_qc = True
+                    spiking_qc = True
+            finally:
+                self.close_data()
+            cache[cache_key] = (holding_qc, access_qc, spiking_qc)
+            
+            tmp_file = cache_file+'_tmp'
+            pickle.dump(cache, open(tmp_file, 'wb'))
+            if os.path.exists(cache_file):
+                os.remove(cache_file)
+            os.rename(tmp_file, cache_file)
+            
+        return cache[cache_key]
+
     def _load_old_format(self, entry):
         """Load experiment metadata from an old-style summary file
         """
@@ -573,6 +626,10 @@ class Experiment(object):
                 for j,cj in self.cells.items():
                     if i == j:
                         continue
+                    
+                    if ci.spiking_qc is None:
+                        self._generate_cell_qc(ci.electrode.device_id)
+
                     if ci.spiking_qc is not True:
                         # presynaptic cell failed spike QC; ignore
                         continue
