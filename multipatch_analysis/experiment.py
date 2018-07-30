@@ -376,7 +376,7 @@ class Experiment(object):
                 sys.excepthook(*sys.exc_info())
                 print("Failed to load cell qc cache (error above).")
         
-        cache_key = (self.nwb_file, ad_chan)
+        cache_key = (self.timestamp, ad_chan)
         if cache_key not in cache:
             print("Generate cell QC for", str(cache_key))
             nwb = self.data
@@ -628,7 +628,7 @@ class Experiment(object):
                         continue
                     
                     if ci.spiking_qc is None:
-                        self._generate_cell_qc(ci.electrode.device_id)
+                        ci.holding_qc, ci.access_qc, ci.spiking_qc = self._generate_cell_qc(ci.electrode.device_id)
 
                     if ci.spiking_qc is not True:
                         # presynaptic cell failed spike QC; ignore

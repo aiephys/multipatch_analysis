@@ -68,6 +68,10 @@ if len(all_expts) == 0:
     print("No experiments loaded; bailing out.")
     sys.exit(-1)
 
+# force cell QC to run before caching
+for expt in all_expts:
+    expt.connections_probed
+
 # cache everything!
 all_expts.write_cache()
 print("Cache successfully updated!")
