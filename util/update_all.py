@@ -29,7 +29,7 @@ def run(cmd, msg):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Run all analysis pipeline stages to import / analyze new data on a schedule.")
-    parser.add_argument('--now', default=False, help="Run once immediately before starting scheduled updates.")
+    parser.add_argument('--now', default=False, action='store_true', help="Run once immediately before starting scheduled updates.")
 
     args = parser.parse_args(sys.argv[1:])
 
