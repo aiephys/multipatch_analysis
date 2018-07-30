@@ -9,6 +9,7 @@ from __future__ import print_function, division
 from collections import OrderedDict
 from multipatch_analysis.database import database as db
 from multipatch_analysis.connection_strength import ConnectionStrength, get_amps, get_baseline_amps
+from multipatch_analysis.morphology import Morphology
 from multipatch_analysis import constants
 
 
@@ -28,10 +29,12 @@ def cell_in_class(cell, cell_class):
     return True
 
 
-def cell_class_name(cre_type=None, target_layer=None):
+def cell_class_name(cre_type=None, target_layer=None, pyramidal=None):
     name = []
     if target_layer is not None:
         name.append('L' + target_layer)
+    if pyramidal is not None:
+        name.append('pyr')
     if cre_type is not None:
         name.append(cre_type)
     return ' '.join(name)
@@ -44,15 +47,22 @@ if __name__ == '__main__':
 
     # 0. Define cell classes
 
+    # cell_classes = [
+    #     {'cre_type': 'sim1'},
+    #     {'pyramidal': True, 'target_layer': '2/3'},
+    #     {'cre_type': 'sst', 'target_layer': '2/3'},
+    #     {'cre_type': 'pvalb', 'target_layer': '2/3'},
+    #     {'cre_type': 'vip', 'target_layer': '2/3'},
+    #     {'cre_type': 'sst', 'target_layer': '5'},
+    #     {'cre_type': 'pvalb', 'target_layer': '5'},
+    #     {'cre_type': 'vip', 'target_layer': '5'},
+    # ]
     cell_classes = [
-        {'cre_type': 'sim1'},
-        {'cre_type': 'unknown', 'target_layer': '2/3'},
-        {'cre_type': 'sst', 'target_layer': '2/3'},
-        {'cre_type': 'pvalb', 'target_layer': '2/3'},
-        {'cre_type': 'vip', 'target_layer': '2/3'},
-        {'cre_type': 'sst', 'target_layer': '5'},
-        {'cre_type': 'pvalb', 'target_layer': '5'},
-        {'cre_type': 'vip', 'target_layer': '5'},
+        {'pyramidal': True, 'target_layer': '2'},
+        {'pyramidal': True, 'target_layer': '3'},
+        {'pyramidal': True, 'target_layer': '4'},
+        {'pyramidal': True, 'target_layer': '5'},
+        {'pyramidal': True, 'target_layer': '6'},
     ]
     cell_classes = OrderedDict([(cell_class_name(**cls), cls) for cls in cell_classes])
 
@@ -72,7 +82,8 @@ if __name__ == '__main__':
     pairs = pairs.join(pre_cell, pre_cell.id==db.Pair.pre_cell_id).join(post_cell, post_cell.id==db.Pair.post_cell_id)
     pairs = pairs.join(db.Experiment)
     pairs = pairs.join(ConnectionStrength)
-    pairs = pairs.filter(db.Experiment.project_name=="mouse V1 coarse matrix")
+    # pairs = pairs.filter(db.Experiment.project_name=="mouse V1 coarse matrix")
+    pairs = pairs.filter(db.Experiment.project_name=="human coarse matrix")
     # calcium
     # age
     # egta
@@ -82,7 +93,7 @@ if __name__ == '__main__':
 
     # 2. Group cells by class
 
-    cells = session.query(db.Cell, db.Cell.cre_type, db.Cell.target_layer)
+    cells = session.query(db.Cell, db.Cell.cre_type, db.Cell.target_layer, Morphology.pyramidal).join(Morphology)
     cell_groups = {}
     for cell in cells:
         for class_name, cell_class in cell_classes.items():
@@ -106,10 +117,10 @@ if __name__ == '__main__':
             connections_probed = len(probed_pairs)
             if connections_probed == 0:
                 continue
-            print("{pre_class:>20s} -> {post_class:20s} {connections_found} / {connections_probed}".format(
+            print("{pre_class:>20s} -> {post_class:20s} {connections_found:>5s} / {connections_probed}".format(
                 pre_class=pre_class, 
                 post_class=post_class, 
-                connections_found=connections_found, 
+                connections_found=str(connections_found),
                 connections_probed=connections_probed,
             ))
 
