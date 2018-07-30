@@ -38,6 +38,14 @@ win.show()
 win.resize(1200, 600)
 
 
+# set up connectivity plots
+mouse_conn_plot = win.addPlot(0, 0, rowspan=3, labels={'left': 'connection probability %'})
+human_conn_plot = win.addPlot(3, 0, rowspan=3, labels={'left': 'connection probability %'})
+mouse_conn_plot.getAxis('bottom').setTicks([[(0, 'L2/3'), (1, 'Rorb'), (2, 'Tlx3'), (3, 'Sim1'), (4, 'Ntsr1')]])
+human_conn_plot.getAxis('bottom').setTicks([[(0, 'L2'), (1, 'L3'), (2, 'L4'), (3, 'L5'), (4, 'L6')]])
+mouse_conn_plot.setFixedWidth(350)
+
+
 
 # set up distance plots
 mouse_dist_plots = []
@@ -47,10 +55,11 @@ human_hist_plots = []
 for row, plots in enumerate([(mouse_hist_plots, mouse_dist_plots), (human_hist_plots, human_dist_plots)]):
     hist_plots, dist_plots = plots
     xlabel = pg.LabelItem(u'distance (µm)')
-    win.addItem(xlabel, row=row*3+2, col=0, colspan=5)
+    xlabel.setFixedHeight(20)
+    win.addItem(xlabel, row=row*3+2, col=1, colspan=5)
     for i in range(5):
-        hist_plot = win.addPlot(row*3, i)
-        dist_plot = win.addPlot(row*3+1, i)
+        hist_plot = win.addPlot(row*3, i+1)
+        dist_plot = win.addPlot(row*3+1, i+1)
         hist_plots.append(hist_plot)
         dist_plots.append(dist_plot)
 
