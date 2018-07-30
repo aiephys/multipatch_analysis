@@ -325,8 +325,9 @@ class ExperimentList(object):
                     if not (pre_ok and post_ok):
                         continue
                 dist = ci.distance(cj)
-                probed.append(dist)
-                connected.append((i, j) in expt.connections)
+                if dist is not None and np.isfinite(dist):
+                    probed.append(dist)
+                    connected.append((i, j) in expt.connections)
         
         return connected, probed
         

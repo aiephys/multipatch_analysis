@@ -202,7 +202,7 @@ def distance_plot(connected, distance, plots=None, color=(100, 100, 255), window
         plots[0].grid = grid
         plots[0].addLegend()
         grid.show()
-    plots[0].setLabels(bottom=('distance', 'm'), left='connection probability')
+        plots[0].setLabels(bottom=('distance', 'm'), left='connection probability')
 
     if plots[1] is not None:
         plots[1].setXLink(plots[0])
