@@ -39,6 +39,7 @@ if __name__ == '__main__':
     while True:
         run('python util/sync_rigs_to_server.py', 'sync raw data')
         run('python util/import_to_database.py', 'import to DB')
+        run('python util/update_morphology.py', 'update morphology')
         run('python util/analyze_pulse_response_strength.py', 'pulse response strength')
         run('python util/analyze_connection_strength.py', 'connection strength')
         run('python util/database.py --vacuum', 'vacuum')
