@@ -21,21 +21,22 @@ def measure_connectivity(pairs, cell_groups, cell_classes):
     for pre_class, pre_group in cell_groups.items():
         # inhibitory or excitatory class?
         pre_cre = cell_classes[pre_class].get('cre_type')
-        is_exc = pre_cre == 'unknown' or pre_cre in constants.EXCITATORY_CRE_TYPES
+        pre_pyr = cell_classes[pre_class].get('pyramidal')
+        class_is_exc = pre_cre == 'unknown' or pre_cre in constants.EXCITATORY_CRE_TYPES or pre_pyr is True
 
         for post_class, post_group in cell_groups.items():
             post_group = cell_groups[post_class]
             class_pairs = [p for p in pairs if p.pre_cell in pre_group and p.post_cell in post_group]
-            probed_pairs = [p for p in class_pairs if pair_was_probed(p, is_exc)]
-            connections_found = len([p for p in probed_pairs if p.synapse])
-            connections_probed = len(probed_pairs)
-            if connections_probed == 0:
-                continue
+            probed_pairs = [p for p in class_pairs if pair_was_probed(p, class_is_exc)]
+            connections_found = [p for p in probed_pairs if p.synapse]
 
             results[(pre_class, post_class)] = {
                 'connections_found': connections_found,
-                'connections_probed': connections_probed,
+                'pairs_probed': probed_pairs,
             }
+
+            # if pre_class == 'L2/3 pyr' and post_class=='L2/3 pyr':
+            #     raise Exception()
     
     return results
 
@@ -56,11 +57,11 @@ def classify_cells(cell_classes, cells=None, session=None):
     """
     if cells is None:
         cells = session.query(db.Cell, db.Cell.cre_type, db.Cell.target_layer, Morphology.pyramidal).join(Morphology)
-    cell_groups = {}
+    cell_groups = OrderedDict([(class_name, set()) for class_name in cell_classes])
     for cell in cells:
         for class_name, cell_class in cell_classes.items():
             if cell_in_class(cell, cell_class):
-                cell_groups.setdefault(class_name, set()).add(cell.Cell)
+                cell_groups[class_name].add(cell)
     return cell_groups
 
 
@@ -87,7 +88,10 @@ def query_pairs(project_name, session):
     pairs = pairs.join(ConnectionStrength)
     # pairs = pairs.filter(db.Experiment.project_name=="mouse V1 coarse matrix")
     if project_name is not None:
-        pairs = pairs.filter(db.Experiment.project_name==project_name)
+        if isinstance(project_name, str):
+            pairs = pairs.filter(db.Experiment.project_name==project_name)
+        else:
+            pairs = pairs.filter(db.Experiment.project_name.in_(project_name))
     # calcium
     # age
     # egta
@@ -105,9 +109,16 @@ def pair_was_probed(pair, excitatory):
 
 
 def cell_in_class(cell, cell_class):
+    morpho = cell.morphology
     for k, v in cell_class.items():
-        if getattr(cell, k, None) != v:
-            return False
+        if hasattr(cell, k):
+            if getattr(cell, k) != v:
+                return False
+        elif hasattr(morpho, k):
+            if getattr(morpho, k) != v:
+                return False
+        else:
+            raise Exception('Cannot use "%s" for cell typing; attribute not found on cell or cell.morphology' % k)
     return True
 
 

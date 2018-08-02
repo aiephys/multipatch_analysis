@@ -25,6 +25,7 @@ if __name__ == '__main__':
     # 0. Define cell classes
 
     mouse_cell_classes = [
+        {'cre_type': 'unknown', 'pyramidal': True, 'target_layer': '2/3'},
         {'pyramidal': True, 'target_layer': '2/3'},
         {'cre_type': 'sst', 'target_layer': '2/3'},
         {'cre_type': 'pvalb', 'target_layer': '2/3'},
@@ -44,6 +45,7 @@ if __name__ == '__main__':
         {'cre_type': 'pvalb', 'target_layer': '6'},
         {'cre_type': 'vip', 'target_layer': '6'},
     ]
+
     human_cell_classes = [
         {'pyramidal': True, 'target_layer': '2'},
         {'pyramidal': True, 'target_layer': '3'},
@@ -52,25 +54,26 @@ if __name__ == '__main__':
         {'pyramidal': True, 'target_layer': '6'},
     ]
 
-    for cell_classes, project_name in [(mouse_cell_classes, 'mouse V1 coarse matrix'), (human_cell_classes, 'human coarse matrix')]:
+    for cell_classes, project_names in [(mouse_cell_classes, ['mouse V1 coarse matrix', 'mouse V1 pre-production']), (human_cell_classes, ['human coarse matrix'])]:
         cell_classes = OrderedDict([(cell_class_name(**cls), cls) for cls in cell_classes])
 
-        # 1. Select pairs
-        records = query_pairs(project_name=project_name, session=session).all()
+        # 1. Select pairs (todo: age, acsf, internal, temp, etc.)
+        records = query_pairs(project_name=project_names, session=session).all()
         pairs = [r[0] for r in records]
+        cells = set([r[1] for r in records] + [r[2] for r in records])
 
         # 2. Group all cells by selected classes
-        cell_groups = classify_cells(cell_classes, session=session)
+        cell_groups = classify_cells(cell_classes, cells)
 
         # 3. measure connectivity between groups
         results = measure_connectivity(pairs, cell_groups, cell_classes)
 
-        print("\n-------------------- %s ------------------\n" % project_name)
+        print("\n-------------------- %s ------------------\n" % ', '.join(project_names))
         for key, result in results.items():
             pre_class, post_class = key
             print("{pre_class:>20s} -> {post_class:20s} {connections_found:>5s} / {connections_probed}".format(
                 pre_class=pre_class, 
                 post_class=post_class, 
-                connections_found=str(result['connections_found']),
-                connections_probed=result['connections_probed'],
+                connections_found=str(len(result['connections_found'])),
+                connections_probed=len(result['pairs_probed']),
             ))
