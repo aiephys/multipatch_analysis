@@ -89,8 +89,16 @@ def import_morphology(job_info, raise_exceptions=False):
             # How the experimenter described the morphology
             user_morpho = pip_meta.pipettes[cell.ext_id].get('morphology')
 
+            if user_morpho in (None, ''):
+                pyramidal = None
+            elif user_morpho == 'pyr':
+                pyramidal = True
+            else:
+                print("Unknown morphology string: %s" % user_morpho)
+                pyramidal = None
+
             results = {
-                'pyramidal': None if user_morpho is None else ('pyr' in user_morpho),
+                'pyramidal': pyramidal,
             }
 
             # Write new record to DB
