@@ -13,21 +13,20 @@ from multipatch_analysis.morphology import Morphology
 from multipatch_analysis import constants
 
 
-def measure_connectivity(pairs, cell_classes, cell_groups):
+def measure_connectivity(pairs, cell_groups, cell_classes):
     """Given a list of cell pairs and a dict that groups cells together by class,
     return a structure that describes connectivity between cell classes.
     """
     results = OrderedDict()
-    for pre_class in cell_classes:
+    for pre_class, pre_group in cell_groups.items():
         # inhibitory or excitatory class?
         pre_cre = cell_classes[pre_class].get('cre_type')
         is_exc = pre_cre == 'unknown' or pre_cre in constants.EXCITATORY_CRE_TYPES
-        pre_group = cell_groups[pre_class]
 
-        for post_class in cell_classes:
+        for post_class, post_group in cell_groups.items():
             post_group = cell_groups[post_class]
             class_pairs = [p for p in pairs if p.pre_cell in pre_group and p.post_cell in post_group]
-            probed_pairs = [p for p in class_pairs if pair_was_probed(p.Pair, is_exc)]
+            probed_pairs = [p for p in class_pairs if pair_was_probed(p, is_exc)]
             connections_found = len([p for p in probed_pairs if p.synapse])
             connections_probed = len(probed_pairs)
             if connections_probed == 0:
@@ -37,8 +36,7 @@ def measure_connectivity(pairs, cell_classes, cell_groups):
                 'connections_found': connections_found,
                 'connections_probed': connections_probed,
             }
-            if pre_class == 'L5 pvalb' and post_class == 'L5 pvalb':
-                raise Exception()
+    
     return results
 
 
@@ -89,7 +87,7 @@ def query_pairs(project_name, session):
     pairs = pairs.join(ConnectionStrength)
     # pairs = pairs.filter(db.Experiment.project_name=="mouse V1 coarse matrix")
     if project_name is not None:
-        pairs = pairs.filter(db.Experiment.project_name=="human coarse matrix")
+        pairs = pairs.filter(db.Experiment.project_name==project_name)
     # calcium
     # age
     # egta

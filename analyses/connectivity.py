@@ -25,14 +25,24 @@ if __name__ == '__main__':
     # 0. Define cell classes
 
     mouse_cell_classes = [
-        {'cre_type': 'sim1'},
         {'pyramidal': True, 'target_layer': '2/3'},
         {'cre_type': 'sst', 'target_layer': '2/3'},
         {'cre_type': 'pvalb', 'target_layer': '2/3'},
         {'cre_type': 'vip', 'target_layer': '2/3'},
+        {'cre_type': 'rorb'},
+        {'cre_type': 'nr5a1'},
+        {'cre_type': 'sst', 'target_layer': '4'},
+        {'cre_type': 'pvalb', 'target_layer': '4'},
+        {'cre_type': 'vip', 'target_layer': '4'},
+        {'cre_type': 'sim1'},
+        {'cre_type': 'tlx3'},
         {'cre_type': 'sst', 'target_layer': '5'},
         {'cre_type': 'pvalb', 'target_layer': '5'},
         {'cre_type': 'vip', 'target_layer': '5'},
+        {'cre_type': 'ntsr1'},
+        {'cre_type': 'sst', 'target_layer': '6'},
+        {'cre_type': 'pvalb', 'target_layer': '6'},
+        {'cre_type': 'vip', 'target_layer': '6'},
     ]
     human_cell_classes = [
         {'pyramidal': True, 'target_layer': '2'},
@@ -46,13 +56,14 @@ if __name__ == '__main__':
         cell_classes = OrderedDict([(cell_class_name(**cls), cls) for cls in cell_classes])
 
         # 1. Select pairs
-        pairs = query_pairs(project_name=project_name, session=session).all()
+        records = query_pairs(project_name=project_name, session=session).all()
+        pairs = [r[0] for r in records]
 
         # 2. Group all cells by selected classes
         cell_groups = classify_cells(cell_classes, session=session)
 
         # 3. measure connectivity between groups
-        results = measure_connectivity(pairs, cell_classes, cell_groups)
+        results = measure_connectivity(pairs, cell_groups, cell_classes)
 
         print("\n-------------------- %s ------------------\n" % project_name)
         for key, result in results.items():
@@ -63,4 +74,3 @@ if __name__ == '__main__':
                 connections_found=str(result['connections_found']),
                 connections_probed=result['connections_probed'],
             ))
-        break
