@@ -3,10 +3,10 @@ Prototype code for analyzing connectivity and synaptic properties between cell c
 
 
 """
-
 from __future__ import print_function, division
 
 from collections import OrderedDict
+from statsmodels.stats.proportion import proportion_confint
 from .database import database as db
 from .connection_strength import ConnectionStrength
 from .morphology import Morphology
@@ -26,15 +26,22 @@ def measure_connectivity(pairs, cell_groups):
             probed_pairs = [p for p in class_pairs if pair_was_probed(p, pre_class.is_excitatory)]
             connections_found = [p for p in probed_pairs if p.synapse]
 
+            n_connected = len(connections_found)
+            n_probed = len(probed_pairs)
+            conf_interval = connection_probability_ci(n_connected, n_probed)
+
             results[(pre_class, post_class)] = {
                 'connections_found': connections_found,
                 'pairs_probed': probed_pairs,
+                'connection_probability': (n_connected / n_probed,) + conf_interval,
             }
-
-            # if pre_class == 'L2/3 pyr' and post_class=='L2/3 pyr':
-            #     raise Exception()
     
     return results
+
+
+def connection_probability_ci(n_connected, n_probed):
+    # make sure we are consistent about how we measure connectivity confidence intervals
+    return proportion_confint(n_connected, n_probed, method='beta')
 
 
 def query_pairs(project_name, session):
@@ -49,11 +56,11 @@ def query_pairs(project_name, session):
     post_cell = db.aliased(db.Cell, name='post_cell')
     pairs = session.query(
         db.Pair, 
-        pre_cell,
-        post_cell,
-        db.Experiment,
-        db.Pair.synapse,
-        ConnectionStrength.synapse_type,
+        # pre_cell,
+        # post_cell,
+        # db.Experiment,
+        # db.Pair.synapse,
+        # ConnectionStrength.synapse_type,
     )
     pairs = pairs.join(pre_cell, pre_cell.id==db.Pair.pre_cell_id).join(post_cell, post_cell.id==db.Pair.post_cell_id)
     pairs = pairs.join(db.Experiment)

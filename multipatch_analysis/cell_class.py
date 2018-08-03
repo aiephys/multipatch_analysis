@@ -60,7 +60,7 @@ class CellClass(object):
         return self.name
 
 
-def classify_cells(cell_classes, cells=None, session=None):
+def classify_cells(cell_classes, cells=None, pairs=None, session=None):
     """Given cell class definitions and a list of cells, return a dict indicating which cells
     are members of each class.
 
@@ -70,10 +70,16 @@ def classify_cells(cell_classes, cells=None, session=None):
         Dict of {class_name: class_criteria}, where each *class_criteria* value describes selection criteria for a cell class.
     cells : list | None
         List of Cell instances to be classified.
+    pairs : list | None
+        List of pairs from which cells will be collected. May not be used with *cells* or *session*
     session: Session | None
         If *cells* is not provided, then a database session may be given instead from which
         cells will be selected.
     """
+    if pairs is not None:
+        assert cells is None, "cells and pairs arguments are mutually exclusive"
+        assert session is None, "session and pairs arguments are mutually exclusive"
+        cells = set([p.pre_cell for p in pairs] + [p.post_cell for p in pairs])
     if cells is None:
         cells = session.query(db.Cell, db.Cell.cre_type, db.Cell.target_layer, Morphology.pyramidal).join(Morphology)
     cell_groups = OrderedDict([(cell_class, set()) for cell_class in cell_classes])
@@ -82,3 +88,6 @@ def classify_cells(cell_classes, cells=None, session=None):
             if cell in cell_class:
                 cell_groups[cell_class].add(cell)
     return cell_groups
+
+
+

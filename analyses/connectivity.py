@@ -60,12 +60,10 @@ if __name__ == '__main__':
         cell_classes = [CellClass(**c) for c in cell_classes]
 
         # 1. Select pairs (todo: age, acsf, internal, temp, etc.)
-        records = query_pairs(project_name=project_names, session=session).all()
-        pairs = [r[0] for r in records]
-        cells = set([r[1] for r in records] + [r[2] for r in records])
+        pairs = query_pairs(project_name=project_names, session=session).all()
 
         # 2. Group all cells by selected classes
-        cell_groups = classify_cells(cell_classes, cells)
+        cell_groups = classify_cells(cell_classes, pairs=pairs)
 
         # 3. measure connectivity between groups
         results = measure_connectivity(pairs, cell_groups)
