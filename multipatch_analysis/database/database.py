@@ -195,7 +195,7 @@ table_schemas = {
     'pulse_response': [
         "A chunk of postsynaptic recording taken during a presynaptic pulse stimulus",
         ('recording_id', 'recording.id', 'The full recording from which this pulse was extracted', {'index': True}),
-        ('stim_pulse_id', 'stim_pulse.id', 'The presynaptic pulse', {'index': True, 'unique': True}),
+        ('stim_pulse_id', 'stim_pulse.id', 'The presynaptic pulse', {'index': True}),
         ('pair_id', 'pair.id', 'The pre-post cell pair involved in this pulse response', {'index': True}),
         ('start_time', 'float', 'Starting time of this chunk of the recording in seconds, relative to the beginning of the recording'),
         ('data', 'array', 'numpy array of response data sampled at '+_sample_rate_str, {'deferred': True}),
