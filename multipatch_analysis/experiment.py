@@ -363,9 +363,10 @@ class Experiment(object):
                         raise ValueError("Postsynaptic cell ID %r is invalid" % post_id)
                     conn_list.append((cell.cell_id, post_id))
 
-    def _generate_cell_qc(self, ad_chan):
+    def _generate_cell_qc(self, cell):
         # tempporary qc used to decide how many connections were probed in an
         # experiment. will be replaced with per-pulse-response qc later.
+        ad_chan = cell.electrode.device_id
         cache_file = os.path.join(os.path.dirname(config.configfile), 'cell_qc_cache.pkl')
         
         cache = {}
@@ -414,7 +415,7 @@ class Experiment(object):
                 os.remove(cache_file)
             os.rename(tmp_file, cache_file)
             
-        return cache[cache_key]
+        cell.holding_qc, cell.access_qc, cell.spiking_qc = cache[cache_key]
 
     def _load_old_format(self, entry):
         """Load experiment metadata from an old-style summary file
@@ -628,7 +629,9 @@ class Experiment(object):
                         continue
                     
                     if ci.spiking_qc is None:
-                        ci.holding_qc, ci.access_qc, ci.spiking_qc = self._generate_cell_qc(ci.electrode.device_id)
+                        self._generate_cell_qc(ci)
+                    if cj.spiking_qc is None:
+                        self._generate_cell_qc(cj)
 
                     if ci.spiking_qc is not True:
                         # presynaptic cell failed spike QC; ignore
