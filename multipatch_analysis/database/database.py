@@ -351,7 +351,7 @@ def create_all_mappings():
                     if cell.ext_id == item:
                         return cell
             elif isinstance(item, tuple):
-                for pair in self.pairs:
+                for pair in self.pair_lists:
                     if item == (pair.pre_cell.ext_id, pair.post_cell.ext_id):
                         return pair
         
@@ -361,7 +361,7 @@ def create_all_mappings():
 
         @property
         def pairs(self):
-            return {(pair.pre_cell.ext_id, pair.post_cell.ext_id): pair for pair in self.pairs}
+            return {(pair.pre_cell.ext_id, pair.post_cell.ext_id): pair for pair in self.pair_list}
 
         @property
         def nwb_file(self):
@@ -425,8 +425,8 @@ def create_all_mappings():
     Electrode.cell = relationship(Cell, back_populates="electrode", cascade="delete", single_parent=True, uselist=False)
     Cell.electrode = relationship(Electrode, back_populates="cell", single_parent=True)
 
-    Experiment.pairs = relationship(Pair, back_populates="experiment", cascade="delete", single_parent=True)
-    Pair.experiment = relationship(Experiment, back_populates="pairs")
+    Experiment.pair_list = relationship(Pair, back_populates="experiment", cascade="delete", single_parent=True)
+    Pair.experiment = relationship(Experiment, back_populates="pair_list")
 
     Pair.pre_cell = relationship(Cell, foreign_keys=[Pair.pre_cell_id])
     #Cell.pre_pairs = relationship(Pair, back_populates="pre_cell", single_parent=True, foreign_keys=[Pair.pre_cell])

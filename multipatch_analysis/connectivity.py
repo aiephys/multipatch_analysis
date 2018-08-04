@@ -6,6 +6,7 @@ Prototype code for analyzing connectivity and synaptic properties between cell c
 from __future__ import print_function, division
 
 from collections import OrderedDict
+import numpy as np
 from statsmodels.stats.proportion import proportion_confint
 from .database import database as db
 from .connection_strength import ConnectionStrength
@@ -29,11 +30,14 @@ def measure_connectivity(pairs, cell_groups):
             n_connected = len(connections_found)
             n_probed = len(probed_pairs)
             conf_interval = connection_probability_ci(n_connected, n_probed)
+            conn_prob = float('nan') if n_probed == 0 else n_connected / n_probed
 
             results[(pre_class, post_class)] = {
+                'n_probed': n_probed,
+                'n_connected': n_connected,
+                'connection_probability': (conn_prob,) + conf_interval,
                 'connections_found': connections_found,
                 'pairs_probed': probed_pairs,
-                'connection_probability': (n_connected / n_probed,) + conf_interval,
             }
     
     return results
@@ -44,7 +48,7 @@ def connection_probability_ci(n_connected, n_probed):
     return proportion_confint(n_connected, n_probed, method='beta')
 
 
-def query_pairs(project_name, session):
+def query_pairs(project_name=None, acsf=None, age=None, species=None, distance=None, session=None):
     """Generate a query for selecting pairs from the database.
 
     Parameters
@@ -63,14 +67,33 @@ def query_pairs(project_name, session):
         # ConnectionStrength.synapse_type,
     )
     pairs = pairs.join(pre_cell, pre_cell.id==db.Pair.pre_cell_id).join(post_cell, post_cell.id==db.Pair.post_cell_id)
-    pairs = pairs.join(db.Experiment)
+    pairs = pairs.join(db.Experiment).join(db.Slice)
     pairs = pairs.join(ConnectionStrength)
-    # pairs = pairs.filter(db.Experiment.project_name=="mouse V1 coarse matrix")
+    
     if project_name is not None:
         if isinstance(project_name, str):
             pairs = pairs.filter(db.Experiment.project_name==project_name)
         else:
             pairs = pairs.filter(db.Experiment.project_name.in_(project_name))
+
+    if acsf is not None:
+        pairs = pairs.filter(db.Experiment.acsf==acsf)
+
+    if age is not None:
+        if age[0] is not None:
+            pairs = pairs.filter(db.Slice.age>=age[0])
+        if age[1] is not None:
+            pairs = pairs.filter(db.Slice.age<=age[1])
+
+    if distance is not None:
+        if distance[0] is not None:
+            pairs = pairs.filter(db.Pair.distance>=distance[0])
+        if distance[1] is not None:
+            pairs = pairs.filter(db.Pair.distance<=distance[1])
+
+    if species is not None:
+        pairs = pairs.filter(db.Slice.species==species)
+
     # calcium
     # age
     # egta

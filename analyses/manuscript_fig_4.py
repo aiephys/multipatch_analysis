@@ -12,6 +12,9 @@ import pyqtgraph as pg
 
 from neuroanalysis.data import Trace
 from multipatch_analysis.experiment_list import ExperimentList, cache_file
+from multipatch_analysis.cell_class import CellClass, classify_cells
+from multipatch_analysis.connectivity import query_pairs, measure_connectivity
+from multipatch_analysis.database import database as db
 
 
 def write_csv(fh, data, description, units='connection probability %'):
@@ -41,8 +44,6 @@ win.resize(1200, 600)
 # set up connectivity plots
 mouse_conn_plot = win.addPlot(0, 0, rowspan=3, labels={'left': 'connection probability %'})
 human_conn_plot = win.addPlot(3, 0, rowspan=3, labels={'left': 'connection probability %'})
-mouse_conn_plot.getAxis('bottom').setTicks([[(0, 'L2/3'), (1, 'Rorb'), (2, 'Tlx3'), (3, 'Sim1'), (4, 'Ntsr1')]])
-human_conn_plot.getAxis('bottom').setTicks([[(0, 'L2'), (1, 'L3'), (2, 'L4'), (3, 'L5'), (4, 'L6')]])
 mouse_conn_plot.setFixedWidth(350)
 
 
@@ -86,29 +87,88 @@ for row, plots in enumerate([(mouse_hist_plots, mouse_dist_plots), (human_hist_p
 
 app.processEvents()
 
-all_expts = ExperimentList(cache=cache_file)
+# all_expts = ExperimentList(cache=cache_file)
 
 
-mouse_expts = all_expts.select(calcium='high', age='40-1000', organism='mouse')
-human_expts = all_expts.select(organism='human')
+# mouse_expts = all_expts.select(calcium='high', age='40-1000', organism='mouse')
+# human_expts = all_expts.select(organism='human')
 
-mouse_ee_types = OrderedDict([
-    (('2/3', 'unknown'), 'L23pyr'),
-    ((None, 'rorb'), 'rorb'),
-    ((None, 'tlx3'), 'tlx3'),
-    ((None, 'sim1'), 'sim1'),
-    ((None, 'ntsr1'), 'ntsr1'),
-])
+# mouse_ee_types = OrderedDict([
+#     (('2/3', 'unknown'), 'L23pyr'),
+#     ((None, 'rorb'), 'rorb'),
+#     ((None, 'tlx3'), 'tlx3'),
+#     ((None, 'sim1'), 'sim1'),
+#     ((None, 'ntsr1'), 'ntsr1'),
+# ])
 
-human_types = OrderedDict([
-    (('1', 'unknown'), 'L1'),
-    (('2', 'unknown'), 'L2'),
-    (('3', 'unknown'), 'L3'), 
-    (('4', 'unknown'), 'L4'), 
-    (('5', 'unknown'), 'L5'), 
-    (('6', 'unknown'), 'L6'),
-])
-human_types = OrderedDict([(typ, "L%s %s" % typ) for typ in human_types])
+# human_types = OrderedDict([
+#     (('1', 'unknown'), 'L1'),
+#     (('2', 'unknown'), 'L2'),
+#     (('3', 'unknown'), 'L3'), 
+#     (('4', 'unknown'), 'L4'), 
+#     (('5', 'unknown'), 'L5'), 
+#     (('6', 'unknown'), 'L6'),
+# ])
+# human_types = OrderedDict([(typ, "L%s %s" % typ) for typ in human_types])
+
+mouse_types = [
+    CellClass(target_layer='2/3', pyramidal=True),
+    CellClass(cre_type='rorb'),
+    CellClass(cre_type='tlx3'),
+    CellClass(cre_type='sim1'),
+    CellClass(cre_type='ntsr1'),
+]
+
+human_types = [
+    CellClass(target_layer='2', pyramidal=True),
+    CellClass(target_layer='3', pyramidal=True),
+    CellClass(target_layer='4', pyramidal=True),
+    CellClass(target_layer='5', pyramidal=True),
+    CellClass(target_layer='6', pyramidal=True),
+]
+
+session = db.Session()
+
+mouse_pairs = query_pairs(acsf="2mM Ca & Mg", age=(40, None), species='mouse', distance=(0, 100e-6), session=session).all()
+mouse_groups = classify_cells(mouse_types, pairs=mouse_pairs)
+mouse_results = measure_connectivity(mouse_pairs, mouse_groups)
+mouse_conn_plot.getAxis('bottom').setTicks([[(0, 'L2/3'), (1, 'Rorb'), (2, 'Tlx3'), (3, 'Sim1'), (4, 'Ntsr1')]])
+mouse_data = np.empty((len(mouse_types), 3))
+for i,cell_class in enumerate(mouse_types):
+    results = mouse_results[(cell_class, cell_class)]
+    mouse_data[i] = results['connection_probability']
+    print("Cell class: %s  connected: %d  probed: %d  probability: %0.3f  min_ci: %0.3f  max_ci: %0.3f" % (
+        cell_class.name, results['n_connected'], results['n_probed'], 
+        results['connection_probability'][0], results['connection_probability'][1], results['connection_probability'][2],
+    ))
+
+mouse_conn_plot.plot(mouse_data[:,0], pen=None, symbol='o')
+mouse_conn_errbar = pg.ErrorBarItem(x=np.arange(len(mouse_types)), y=mouse_data[:,0], bottom=mouse_data[:,0] - mouse_data[:,1], top=mouse_data[:,2] - mouse_data[:,0])
+mouse_conn_plot.addItem(mouse_conn_errbar)
+
+
+
+human_pairs = query_pairs(species='human', session=session).all()
+human_groups = classify_cells(human_types, pairs=human_pairs)
+human_results = measure_connectivity(human_pairs, human_groups)
+human_conn_plot.getAxis('bottom').setTicks([[(0, 'L2'), (1, 'L3'), (2, 'L4'), (3, 'L5'), (4, 'L6')]])
+human_data = np.empty((len(human_types), 3))
+for i,cell_class in enumerate(human_types):
+    results = human_results[(cell_class, cell_class)]
+    human_data[i] = results['connection_probability']
+    print("Cell class: %s  connected: %d  probed: %d  probability: %0.3f  min_ci: %0.3f  max_ci: %0.3f" % (
+        cell_class.name, results['n_connected'], results['n_probed'], 
+        results['connection_probability'][0], results['connection_probability'][1], results['connection_probability'][2],
+    ))
+
+human_conn_plot.plot(human_data[:,0], pen=None, symbol='o')
+human_conn_errbar = pg.ErrorBarItem(x=np.arange(len(human_types)), y=human_data[:,0], bottom=human_data[:,0] - human_data[:,1], top=human_data[:,2] - human_data[:,0])
+human_conn_plot.addItem(human_conn_errbar)
+
+
+
+
+
 
 # mm = expts.matrix(mouse_ee_types, mouse_ee_types)
 # hm = expts.matrix(human_types, human_types)
