@@ -280,11 +280,6 @@ class Experiment(object):
                 continue
 
             cell = Cell(self, pip_id, elec)
-            if pip_meta['got_data'] is False:
-                cell.access_qc = False
-                cell.spiking_qc = False
-                cell.holding_qc = False
-
             elec.cell = cell
 
             cell._target_layer = pip_meta.get('target_layer', '')
@@ -330,7 +325,11 @@ class Experiment(object):
 
             # load old QC keys
             # (sets attributes: holding_qc, access_qc, spiking_qc)
-            if 'cell_qc' in pip_meta:
+            if pip_meta['got_data'] is False:
+                cell.access_qc = False
+                cell.spiking_qc = False
+                cell.holding_qc = False
+            elif 'cell_qc' in pip_meta:
                 for k in ['holding', 'access', 'spiking']:
                     qc_pass = pip_meta['cell_qc'][k]
                     if qc_pass == '':
@@ -385,7 +384,7 @@ class Experiment(object):
         
         cache_key = (self.timestamp, ad_chan)
         if cache_key not in cache:
-            print("Generate cell QC for", str(cache_key))
+            print("Generate cell QC for", str(cache_key), self)
             nwb = self.data
             holding_qc = False
             access_qc = False
@@ -562,6 +561,7 @@ class Experiment(object):
         
         Where + means pass, / means borderline pass, - means fail, ? means unknown
         """
+        qc = {}
         for ch in entry.children:
             parts = re.split('\s+', ch.lines[0].strip())
             for part in parts[1:]:
@@ -570,16 +570,23 @@ class Experiment(object):
                     raise Exception('Invalid cell QC string "%s"' % part)
                 cell_id = int(m.groups()[0])
                 val = m.groups()[1]
-                cell = self.cells[cell_id]
+                qc.setdefault(cell_id, {})
 
                 if parts[0] == 'Holding:':
-                    cell.holding_qc = val in '+/'
+                    qc[cell_id]['holding_qc'] = val in '+/'
                 elif parts[0] == 'Access:':
-                    cell.access_qc = val in '+/'
+                    qc[cell_id]['access_qc'] = val in '+/'
                 elif parts[0] == 'Spiking:':
-                    cell.spiking_qc = val in '+/'
+                    qc[cell_id]['spiking_qc'] = val in '+/'
                 else:
                     raise Exception("Invalid Cell QC line: %s" % ch.lines[0])
+
+        # anything not reported is interpreted as fail
+        for cell_id, cell in self.cells.items():
+            cell_qc = qc.get(cell_id, {})
+            cell.holding_qc = cell_qc.get('holding_qc', False)
+            cell.access_qc = cell_qc.get('access_qc', False)
+            cell.spiking_qc = cell_qc.get('spiking_qc', False)
 
     def _parse_connections(self, entry):
         if len(entry.children) == 0 or entry.children[0].lines[0] == 'None':
@@ -820,6 +827,8 @@ class Experiment(object):
 
     @property
     def nwb_cache_file(self):
+        if self.nwb_file is None:
+            return None
         return SynPhysCache().get_cache(self.nwb_file)
 
     @property
