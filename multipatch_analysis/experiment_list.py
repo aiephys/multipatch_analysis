@@ -165,7 +165,7 @@ class ExperimentList(object):
                     print("SKIPPED:", expt_id)
                     cached += 1
                     continue
-                expt = Experiment(entry)
+                expt = Experiment(entry=entry)
             except Exception as exc:
                 errs.append((entry, sys.exc_info()))
                 continue
@@ -519,11 +519,13 @@ class ExperimentList(object):
                 if cre_type is not None and list(cre_type) != [x[1] for x in k]:
                     continue
                 if k not in summary:
-                    summary[k] = {'connected':0, 'unconnected':0, 'cdist':[], 'udist':[]}
+                    summary[k] = {'connected':0, 'unconnected':0, 'cdist':[], 'udist':[], 'connected_pairs': [], 'probed_pairs': []}
                 summary[k]['connected'] += v['connected']
                 summary[k]['unconnected'] += v['unconnected']
                 summary[k]['cdist'].extend(v['cdist'])
                 summary[k]['udist'].extend(v['udist'])
+                summary[k]['connected_pairs'].extend([(expt.timestamp, i, j) for i,j in v['connected_pairs']])
+                summary[k]['probed_pairs'].extend([(expt.timestamp, i, j) for i,j in v['probed_pairs']])
         return summary
 
     def compare_connectivity(self, expts):
