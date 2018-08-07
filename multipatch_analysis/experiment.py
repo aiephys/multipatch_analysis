@@ -276,10 +276,15 @@ class Experiment(object):
             elec = Electrode(pip_id, start_time=pip_meta['patch_start'], stop_time=pip_meta['patch_stop'], device_id=pip_meta['ad_channel'], patch_status=pip_meta['pipette_status'])
             self.electrodes[pip_id] = elec
 
-            if pip_meta['got_data'] is False and pip_meta['pipette_status'] not in ['Low seal', 'GOhm seal']:
+            if pip_meta['got_data'] is False and pip_meta['pipette_status'] not in ['Low seal', 'GOhm seal', 'Not recorded']:
                 continue
 
             cell = Cell(self, pip_id, elec)
+            if pip_meta['got_data'] is False:
+                cell.access_qc = False
+                cell.spiking_qc = False
+                cell.holding_qc = False
+
             elec.cell = cell
 
             cell._target_layer = pip_meta.get('target_layer', '')
@@ -355,7 +360,8 @@ class Experiment(object):
                         m = re.match("^(\d+)(\?)?$", post_id)
                         if m is None:
                             post_id = None  # triggers ValueError below
-                        post_id = int(m.groups()[0])
+                        else:
+                            post_id = int(m.groups()[0])
                         if m.groups()[1] == '?':
                             # ignore questionable connections for now
                             continue
