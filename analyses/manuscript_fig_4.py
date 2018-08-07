@@ -118,6 +118,7 @@ mouse_types = [
     CellClass(cre_type='sim1'),
     CellClass(cre_type='ntsr1'),
 ]
+mouse_type_names = ['L2/3', 'Rorb', 'Tlx3', 'Sim1', 'Ntsr1']
 
 human_types = [
     CellClass(target_layer='2', pyramidal=True),
@@ -126,44 +127,55 @@ human_types = [
     CellClass(target_layer='5', pyramidal=True),
     CellClass(target_layer='6', pyramidal=True),
 ]
+human_type_names = ['L2', 'L3', 'L4', 'L5', 'L6']
+
 
 session = db.Session()
 
+# analyze connectivity for mouse
 mouse_pairs = query_pairs(acsf="2mM Ca & Mg", age=(40, None), species='mouse', distance=(0, 100e-6), session=session).all()
 mouse_groups = classify_cells(mouse_types, pairs=mouse_pairs)
 mouse_results = measure_connectivity(mouse_pairs, mouse_groups)
-mouse_conn_plot.getAxis('bottom').setTicks([[(0, 'L2/3'), (1, 'Rorb'), (2, 'Tlx3'), (3, 'Sim1'), (4, 'Ntsr1')]])
-mouse_data = np.empty((len(mouse_types), 3))
-for i,cell_class in enumerate(mouse_types):
-    results = mouse_results[(cell_class, cell_class)]
-    mouse_data[i] = results['connection_probability']
-    print("Cell class: %s  connected: %d  probed: %d  probability: %0.3f  min_ci: %0.3f  max_ci: %0.3f" % (
-        cell_class.name, results['n_connected'], results['n_probed'], 
-        results['connection_probability'][0], results['connection_probability'][1], results['connection_probability'][2],
-    ))
 
-mouse_conn_plot.plot(mouse_data[:,0], pen=None, symbol='o')
-mouse_conn_errbar = pg.ErrorBarItem(x=np.arange(len(mouse_types)), y=mouse_data[:,0], bottom=mouse_data[:,0] - mouse_data[:,1], top=mouse_data[:,2] - mouse_data[:,0])
-mouse_conn_plot.addItem(mouse_conn_errbar)
-
-
-
+# analyze connectivity for human
 human_pairs = query_pairs(species='human', session=session).all()
 human_groups = classify_cells(human_types, pairs=human_pairs)
 human_results = measure_connectivity(human_pairs, human_groups)
-human_conn_plot.getAxis('bottom').setTicks([[(0, 'L2'), (1, 'L3'), (2, 'L4'), (3, 'L5'), (4, 'L6')]])
-human_data = np.empty((len(human_types), 3))
-for i,cell_class in enumerate(human_types):
-    results = human_results[(cell_class, cell_class)]
-    human_data[i] = results['connection_probability']
-    print("Cell class: %s  connected: %d  probed: %d  probability: %0.3f  min_ci: %0.3f  max_ci: %0.3f" % (
-        cell_class.name, results['n_connected'], results['n_probed'], 
-        results['connection_probability'][0], results['connection_probability'][1], results['connection_probability'][2],
-    ))
 
-human_conn_plot.plot(human_data[:,0], pen=None, symbol='o')
-human_conn_errbar = pg.ErrorBarItem(x=np.arange(len(human_types)), y=human_data[:,0], bottom=human_data[:,0] - human_data[:,1], top=human_data[:,2] - human_data[:,0])
-human_conn_plot.addItem(human_conn_errbar)
+# plot connectivity
+for conn_plot, results, cell_types, type_names in [
+        (mouse_conn_plot, mouse_results, mouse_types, mouse_type_names),
+        (human_conn_plot, human_results, human_types, human_type_names)]:
+
+    conn_plot.getAxis('bottom').setTicks([list(enumerate(type_names))])
+    conn_data = np.empty((len(cell_types), 3))
+    for i,cell_class in enumerate(cell_types):
+        class_results = results[(cell_class, cell_class)]
+        conn_data[i] = class_results['connection_probability']
+        print("Cell class: %s  connected: %d  probed: %d  probability: %0.3f  min_ci: %0.3f  max_ci: %0.3f" % (
+            cell_class.name, class_results['n_connected'], class_results['n_probed'], 
+            class_results['connection_probability'][0], class_results['connection_probability'][1], class_results['connection_probability'][2],
+        ))
+
+    conn_plot.plot(conn_data[:,0], pen=None, symbol='o')
+    mouse_conn_errbar = pg.ErrorBarItem(x=np.arange(len(cell_types)), y=conn_data[:,0], bottom=conn_data[:,0] - conn_data[:,1], top=conn_data[:,2] - conn_data[:,0])
+    conn_plot.addItem(mouse_conn_errbar)
+
+
+
+# human_conn_plot.getAxis('bottom').setTicks([[(0, 'L2'), (1, 'L3'), (2, 'L4'), (3, 'L5'), (4, 'L6')]])
+# human_data = np.empty((len(human_types), 3))
+# for i,cell_class in enumerate(human_types):
+#     results = human_results[(cell_class, cell_class)]
+#     human_data[i] = results['connection_probability']
+#     print("Cell class: %s  connected: %d  probed: %d  probability: %0.3f  min_ci: %0.3f  max_ci: %0.3f" % (
+#         cell_class.name, results['n_connected'], results['n_probed'], 
+#         results['connection_probability'][0], results['connection_probability'][1], results['connection_probability'][2],
+#     ))
+
+# human_conn_plot.plot(human_data[:,0], pen=None, symbol='o')
+# human_conn_errbar = pg.ErrorBarItem(x=np.arange(len(human_types)), y=human_data[:,0], bottom=human_data[:,0] - human_data[:,1], top=human_data[:,2] - human_data[:,0])
+# human_conn_plot.addItem(human_conn_errbar)
 
 
 
