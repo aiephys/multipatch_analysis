@@ -92,8 +92,8 @@ class Experiment(object):
             try:
                 self.load_cell_positions()
             except Exception as exc:
-                #sys.excepthook(*sys.exc_info())
-                print("Warning: Could not load cell positions for %s" % (self,))
+                # sys.excepthook(*sys.exc_info())
+                print("Warning: Could not load cell positions for %s (%s)" % (self, str(exc)))
 
 
     @staticmethod
@@ -276,7 +276,7 @@ class Experiment(object):
             elec = Electrode(pip_id, start_time=pip_meta['patch_start'], stop_time=pip_meta['patch_stop'], device_id=pip_meta['ad_channel'], patch_status=pip_meta['pipette_status'])
             self.electrodes[pip_id] = elec
 
-            if pip_meta['got_data'] is False:
+            if pip_meta['got_data'] is False and pip_meta['pipette_status'] not in ['Low seal', 'GOhm seal']:
                 continue
 
             cell = Cell(self, pip_id, elec)
@@ -522,14 +522,18 @@ class Experiment(object):
                 uncertain = grps[3] == '?'
                 cell._raw_labels[cre] = ''.join([x or '' for x in grps[1:]])
 
+                pyr = 'x' if absent else ({'+':'pyr', '-':'nonpyr', None:''}[positive]  + ('?' if uncertain else ''))
+
                 # some target layers have been entered as a label (old data)
-                if cre.startswith('human_') and positive == '+':
-                    # positive=='+' is actually currently used to mean that the cell is in this layer and excitatory,
-                    # but for now we are just recording the layer and excluding all other cells.
-                    layer = cre[7:].upper()
-                    if layer == '23':
-                        layer = '2/3'
-                    cell._target_layer = layer
+                if cre.startswith('human_'):
+                    cell._morphology['pyramidal'] = pyr
+                    if positive == '+':
+                        # positive=='+' is actually currently used to mean that the cell is in this layer and excitatory,
+                        # but for now we are just recording the layer and excluding all other cells.
+                        layer = cre[7:].upper()
+                        if layer == '23':
+                            layer = '2/3'
+                        cell._target_layer = layer
                 elif cre in layer_labels:
                     # labels like "L23pyr" were used to denote unlabeled cells that are likely pyramidal,
                     # but where the morphology may not have been verified.
@@ -537,6 +541,8 @@ class Experiment(object):
                     if layer == '23':
                         layer = '2/3'
                     cell._target_layer = layer
+                    if 'pyr' in cre.lower():
+                        cell._morphology['pyramidal'] = pyr
                 else:
                     assert cre not in cell.labels
                     cell.labels[cre] = positive
@@ -591,7 +597,9 @@ class Experiment(object):
                 'connected': n, 
                 'unconnected': m, 
                 'cdist': [...], 
-                'udist': [...]
+                'udist': [...],
+                'connected_pairs': [(i, j), ...],
+                'probed_pairs': [(i, j), ...],
                 }, 
             ...}
         """
@@ -603,10 +611,12 @@ class Experiment(object):
                 ci, cj = self.cells[i], self.cells[j]
                 typ = ((ci.target_layer, ci.cre_type), (cj.target_layer, cj.cre_type))
                 if typ not in csum:
-                    csum[typ] = {'connected': 0, 'unconnected': 0, 'cdist':[], 'udist':[]}
+                    csum[typ] = {'connected': 0, 'unconnected': 0, 'cdist':[], 'udist':[], 'connected_pairs': [], 'probed_pairs': []}
+                csum[typ]['probed_pairs'].append((i, j))
                 if (i, j) in self.connections:
                     csum[typ]['connected'] += 1
                     csum[typ]['cdist'].append(ci.distance(cj))
+                    csum[typ]['connected_pairs'].append((i, j))
                 else:
                     csum[typ]['unconnected'] += 1
                     csum[typ]['udist'].append(ci.distance(cj))
@@ -664,6 +674,8 @@ class Experiment(object):
         """Load cell positions from external file.
         """
         sitefile = self.mosaic_file
+        if sitefile is None or not os.path.exists(sitefile):
+            raise Exception("Experiment %s site file %s does not exist" % (self, sitefile))
         mosaic = json.load(open(sitefile))
         marker_items = [i for i in mosaic['items'] if i['type'] == 'MarkersCanvasItem']
         if len(marker_items) == 0:
