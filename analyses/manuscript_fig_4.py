@@ -40,12 +40,12 @@ pg.setConfigOption('foreground', 'k')
 
 win = pg.GraphicsLayoutWidget()
 win.show()
-win.resize(1200, 600)
+win.resize(800, 480)
 
 # set up connectivity plots
 mouse_conn_plot = win.addPlot(0, 0, rowspan=3, labels={'left': 'connection probability %'})
 human_conn_plot = win.addPlot(3, 0, rowspan=3, labels={'left': 'connection probability %'})
-mouse_conn_plot.setFixedWidth(350)
+mouse_conn_plot.setFixedWidth(220)
 mouse_conn_plot.setYRange(0, 0.3)
 human_conn_plot.setYRange(0, 0.6)
 
@@ -65,9 +65,6 @@ for row, plots in enumerate([(mouse_hist_plots, mouse_dist_plots), (human_hist_p
         hist_plots.append(hist_plot)
         dist_plots.append(dist_plot)
 
-        dist_plot.setXRange(20e-6, 180e-6)
-        hist_plot.setXRange(20e-6, 180e-6)
-
         hist_plot.setMaximumHeight(40)
         dist_plot.setXLink(hist_plot)
         hist_plot.getAxis('bottom').hide()
@@ -75,15 +72,29 @@ for row, plots in enumerate([(mouse_hist_plots, mouse_dist_plots), (human_hist_p
         dist_plot.getAxis('left').setScale(100)
         hist_plot.setXLink(mouse_hist_plots[0])
 
+        hist_plot.hideAxis('bottom')
+
         if i == 0:
             dist_plot.setLabels(left='connection probability %')
             dist_plot.getAxis('left').setWidth(50)
             hist_plot.getAxis('left').setWidth(50)
         else:
-            dist_plot.getAxis('left').setWidth(30)
-            hist_plot.getAxis('left').setWidth(30)
+            dist_plot.getAxis('left').setWidth(0)
+            hist_plot.getAxis('left').setWidth(0)
             dist_plot.setYLink(dist_plots[0])
             hist_plot.setYLink(hist_plots[0])
+
+            dist_plot.getAxis('left').setStyle(showValues=False, tickTextWidth=0, tickTextHeight=0)
+            hist_plot.getAxis('left').setStyle(showValues=False, tickTextWidth=0, tickTextHeight=0)
+
+        dist_plot.vb.setFixedWidth(80)
+        hist_plot.vb.setFixedWidth(80)
+
+mouse_dist_plots[0].setXRange(20e-6, 180e-6, padding=0)
+mouse_dist_plots[0].setYRange(0, 0.5)
+human_dist_plots[0].setYRange(0, 0.5)
+mouse_hist_plots[0].setYRange(0, 200)
+human_hist_plots[0].setYRange(0, 50)
 
 
 app.processEvents()
@@ -188,6 +199,12 @@ for dist_plots, hist_plots, results, cell_classes, fig_letter in [
     # iterate over cell classes
     for i, class_info in enumerate(cell_classes):
         cell_class, class_name, color = class_info
+
+        # Add text label
+        label = pg.LabelItem(class_name)
+        label.setFixedWidth(80)
+        label.setParentItem(dist_plots[i].vb)
+
         class_results = results[(cell_class, cell_class)]
 
         probed_pairs = class_results['probed_pairs']
@@ -210,11 +227,3 @@ for dist_plots, hist_plots, results, cell_classes, fig_letter in [
         write_csv(csv_file, lower, "Figure 4%s, %s distance plot x vals" % (fig_letter, class_name))
 
 
-# set plot ranges
-mouse_dist_plots[0].setXRange(0,180e-6)
-mouse_dist_plots[0].setYRange(0,0.3)
-mouse_hist_plots[0].setYRange(0,215)
-
-human_dist_plots[0].setXRange(0,180e-6)
-human_dist_plots[0].setYRange(0,0.6)
-human_hist_plots[0].setYRange(0,50)
