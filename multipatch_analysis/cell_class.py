@@ -53,6 +53,19 @@ class CellClass(object):
     def __hash__(self):
         return hash(self.name)
 
+    def __eq__(self, a):
+        """Cell class is considered equal to its *name* to allow it to be indexed from a dict more
+        easily::
+
+            cc = CellClass(cre_type='sst', layer='6')
+            cc.name => 'L6 sst'
+            {cc: 1}['L6 sst'] => 1 
+        """
+        if isinstance(a, str):
+            return a == self.name
+        else:
+            return object.__eq__(self, a)
+
     def __repr__(self):
         return "<CellClass %s>" % self.name
 
