@@ -15,6 +15,7 @@ from multipatch_analysis.experiment_list import ExperimentList, cache_file
 from multipatch_analysis.cell_class import CellClass, classify_cells
 from multipatch_analysis.connectivity import query_pairs, measure_connectivity
 from multipatch_analysis.database import database as db
+from multipatch_analysis.ui.graphics import distance_plot
 
 
 def write_csv(fh, data, description, units='connection probability %'):
@@ -30,9 +31,10 @@ def write_csv(fh, data, description, units='connection probability %'):
         fh.write('\n')
 
 
+# Set up UI
 app = pg.mkQApp()
+# pg.dbg()
 
-pg.dbg()
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
 
@@ -40,13 +42,12 @@ win = pg.GraphicsLayoutWidget()
 win.show()
 win.resize(1200, 600)
 
-
 # set up connectivity plots
 mouse_conn_plot = win.addPlot(0, 0, rowspan=3, labels={'left': 'connection probability %'})
 human_conn_plot = win.addPlot(3, 0, rowspan=3, labels={'left': 'connection probability %'})
 mouse_conn_plot.setFixedWidth(350)
-
-
+mouse_conn_plot.setYRange(0, 0.3)
+human_conn_plot.setYRange(0, 0.6)
 
 # set up distance plots
 mouse_dist_plots = []
@@ -87,252 +88,133 @@ for row, plots in enumerate([(mouse_hist_plots, mouse_dist_plots), (human_hist_p
 
 app.processEvents()
 
-# all_expts = ExperimentList(cache=cache_file)
 
-
-# mouse_expts = all_expts.select(calcium='high', age='40-1000', organism='mouse')
-# human_expts = all_expts.select(organism='human')
-
-# mouse_ee_types = OrderedDict([
-#     (('2/3', 'unknown'), 'L23pyr'),
-#     ((None, 'rorb'), 'rorb'),
-#     ((None, 'tlx3'), 'tlx3'),
-#     ((None, 'sim1'), 'sim1'),
-#     ((None, 'ntsr1'), 'ntsr1'),
-# ])
-
-# human_types = OrderedDict([
-#     (('1', 'unknown'), 'L1'),
-#     (('2', 'unknown'), 'L2'),
-#     (('3', 'unknown'), 'L3'), 
-#     (('4', 'unknown'), 'L4'), 
-#     (('5', 'unknown'), 'L5'), 
-#     (('6', 'unknown'), 'L6'),
-# ])
-# human_types = OrderedDict([(typ, "L%s %s" % typ) for typ in human_types])
-
-mouse_types = [
-    CellClass(target_layer='2/3', pyramidal=True),
-    CellClass(cre_type='rorb'),
-    CellClass(cre_type='tlx3'),
-    CellClass(cre_type='sim1'),
-    CellClass(cre_type='ntsr1'),
+# define CellClass, short name, and color for each class
+mouse_classes = [
+    (CellClass(target_layer='2/3', pyramidal=True), 'L2/3', (249, 144, 92)),
+    (CellClass(cre_type='rorb'), 'Rorb', (100, 202, 103)),
+    (CellClass(cre_type='tlx3'), 'Tlx3', (81, 221, 209)),
+    (CellClass(cre_type='sim1'), 'Sim1', (45, 77, 247)),
+    (CellClass(cre_type='ntsr1'), 'Ntsr1', (153, 51, 255)),
 ]
-mouse_type_names = ['L2/3', 'Rorb', 'Tlx3', 'Sim1', 'Ntsr1']
 
-human_types = [
-    CellClass(target_layer='2', pyramidal=True),
-    CellClass(target_layer='3', pyramidal=True),
-    CellClass(target_layer='4', pyramidal=True),
-    CellClass(target_layer='5', pyramidal=True),
-    CellClass(target_layer='6', pyramidal=True),
+human_classes = [
+    (CellClass(target_layer='2', pyramidal=True), 'L2', (247, 118, 118)),
+    (CellClass(target_layer='3', pyramidal=True), 'L3', (246, 197, 97)),
+    (CellClass(target_layer='4', pyramidal=True), 'L4', (100, 202, 103)),
+    (CellClass(target_layer='5', pyramidal=True), 'L5', (107, 155, 250)),
+    (CellClass(target_layer='6', pyramidal=True), 'L6', (153, 51, 255)),
 ]
-human_type_names = ['L2', 'L3', 'L4', 'L5', 'L6']
 
 
 session = db.Session()
 
-# analyze connectivity for mouse
-mouse_pairs = query_pairs(acsf="2mM Ca & Mg", age=(40, None), species='mouse', distance=(0, 100e-6), session=session).all()
-mouse_groups = classify_cells(mouse_types, pairs=mouse_pairs)
+
+# analyze connectivity <100 um for mouse
+mouse_pairs = query_pairs(acsf="2mM Ca & Mg", age=(40, None), species='mouse', distance=(None, 100e-6), session=session).all()
+mouse_groups = classify_cells([c[0] for c in mouse_classes], pairs=mouse_pairs)
 mouse_results = measure_connectivity(mouse_pairs, mouse_groups)
 
-# analyze connectivity for human
-human_pairs = query_pairs(species='human', session=session).all()
-human_groups = classify_cells(human_types, pairs=human_pairs)
+# analyze connectivity < 100 um for human
+human_pairs = query_pairs(species='human', distance=(None, 100e-6), session=session).all()
+human_groups = classify_cells([c[0] for c in human_classes], pairs=human_pairs)
 human_results = measure_connectivity(human_pairs, human_groups)
 
-# plot connectivity
-for conn_plot, results, cell_types, type_names in [
-        (mouse_conn_plot, mouse_results, mouse_types, mouse_type_names),
-        (human_conn_plot, human_results, human_types, human_type_names)]:
+csv_file = open("manuscript_fig_4.csv", 'wb')
 
-    conn_plot.getAxis('bottom').setTicks([list(enumerate(type_names))])
-    conn_data = np.empty((len(cell_types), 3))
-    for i,cell_class in enumerate(cell_types):
+# plot connectivity < 100 um
+for conn_plot, results, cell_classes, fig_letter in [
+        (mouse_conn_plot, mouse_results, mouse_classes, 'A'),
+        (human_conn_plot, human_results, human_classes, 'C')]:
+
+    # set axis labels
+    class_names = [class_info[1] for class_info in cell_classes]
+    conn_plot.getAxis('bottom').setTicks([list(enumerate(class_names))])
+
+    # make arrays of results for plotting
+    conn_data = np.empty((len(cell_classes), 3))
+    n_probed = []
+    n_connected = []
+    brushes = []
+    pens = []
+    for i,class_info in enumerate(cell_classes):
+        cell_class, _, color = class_info
         class_results = results[(cell_class, cell_class)]
         conn_data[i] = class_results['connection_probability']
+        n_probed.append(class_results['n_probed'])
+        n_connected.append(class_results['n_connected'])
         print("Cell class: %s  connected: %d  probed: %d  probability: %0.3f  min_ci: %0.3f  max_ci: %0.3f" % (
             cell_class.name, class_results['n_connected'], class_results['n_probed'], 
             class_results['connection_probability'][0], class_results['connection_probability'][1], class_results['connection_probability'][2],
         ))
+        brushes.append(pg.mkBrush(color))
 
-    conn_plot.plot(conn_data[:,0], pen=None, symbol='o')
-    mouse_conn_errbar = pg.ErrorBarItem(x=np.arange(len(cell_types)), y=conn_data[:,0], bottom=conn_data[:,0] - conn_data[:,1], top=conn_data[:,2] - conn_data[:,0])
-    conn_plot.addItem(mouse_conn_errbar)
+        # Add confidence interval line for this class
+        errbar = pg.QtGui.QGraphicsLineItem(i, class_results['connection_probability'][1], i, class_results['connection_probability'][2])
+        errbar.setPen(pg.mkPen(color))
+        conn_plot.addItem(errbar)
 
+    write_csv(csv_file, class_names, "Figure 4%s cell classes" % fig_letter)
+    write_csv(csv_file, n_connected, "Figure 4%s n connected pairs < 100um" % fig_letter)
+    write_csv(csv_file, n_probed, "Figure 4%s n probed pairs < 100um" % fig_letter)
 
+    # plot connection probability points
+    conn_plot.plot(conn_data[:,0], pen=None, symbol='o', symbolBrush=brushes, symbolPen=None)
+    write_csv(csv_file, conn_data[:, 0], "Figure 4%s connection probability < 100um" % fig_letter)
 
-# human_conn_plot.getAxis('bottom').setTicks([[(0, 'L2'), (1, 'L3'), (2, 'L4'), (3, 'L5'), (4, 'L6')]])
-# human_data = np.empty((len(human_types), 3))
-# for i,cell_class in enumerate(human_types):
-#     results = human_results[(cell_class, cell_class)]
-#     human_data[i] = results['connection_probability']
-#     print("Cell class: %s  connected: %d  probed: %d  probability: %0.3f  min_ci: %0.3f  max_ci: %0.3f" % (
-#         cell_class.name, results['n_connected'], results['n_probed'], 
-#         results['connection_probability'][0], results['connection_probability'][1], results['connection_probability'][2],
-#     ))
-
-# human_conn_plot.plot(human_data[:,0], pen=None, symbol='o')
-# human_conn_errbar = pg.ErrorBarItem(x=np.arange(len(human_types)), y=human_data[:,0], bottom=human_data[:,0] - human_data[:,1], top=human_data[:,2] - human_data[:,0])
-# human_conn_plot.addItem(human_conn_errbar)
+    # write confidence intervals into csv
+    write_csv(csv_file, conn_data[:, 1], "Figure 4%s connection probability < 100um lower 95%% confidence interval" % fig_letter)
+    write_csv(csv_file, conn_data[:, 2], "Figure 4%s connection probability < 100um upper 95%% confidence interval" % fig_letter)
 
 
 
 
+# analyze connectivity (all distances) for mouse
+#   note: the distance filter removes pairs that don't have a distance reported
+mouse_pairs = query_pairs(acsf="2mM Ca & Mg", age=(40, None), distance=(None, float('inf')), species='mouse', session=session).all()
+mouse_groups = classify_cells([c[0] for c in mouse_classes], pairs=mouse_pairs)
+mouse_results = measure_connectivity(mouse_pairs, mouse_groups)
+
+# analyze connectivity (all distances) for human
+human_pairs = query_pairs(species='human', distance=(None, float('inf')), session=session).all()
+human_groups = classify_cells([c[0] for c in human_classes], pairs=human_pairs)
+human_results = measure_connectivity(human_pairs, human_groups)
+
+# plot connectivity vs distance
+for dist_plots, hist_plots, results, cell_classes, fig_letter in [
+        (mouse_dist_plots, mouse_hist_plots, mouse_results, mouse_classes, 'B'),
+        (human_dist_plots, human_hist_plots, human_results, human_classes, 'D')]:
+
+    # iterate over cell classes
+    for i, class_info in enumerate(cell_classes):
+        cell_class, class_name, color = class_info
+        class_results = results[(cell_class, cell_class)]
+
+        probed_pairs = class_results['probed_pairs']
+        connected_pairs = class_results['connected_pairs']
+
+        probed_distance = [p.distance for p in probed_pairs]
+        connections = [(p in connected_pairs) for p in probed_pairs]
+
+        plot, xvals, prop, upper, lower = distance_plot(connections, probed_distance, plots=(dist_plots[i], None), color=color, window=40e-6, spacing=40e-6)
+
+        bins = np.arange(0, 180e-6, 20e-6)
+        hist = np.histogram(probed_distance, bins=bins)
+        hist_plots[i].plot(hist[1], hist[0], stepMode=True, fillLevel=0, brush=color + (80,))
+
+        write_csv(csv_file, hist[1], "Figure 4%s, %s histogram values" % (fig_letter, class_name))
+        write_csv(csv_file, hist[0], "Figure 4%s, %s histogram bin edges" % (fig_letter, class_name))
+        write_csv(csv_file, xvals, "Figure 4%s, %s distance plot x vals" % (fig_letter, class_name))
+        write_csv(csv_file, prop, "Figure 4%s, %s distance plot trace" % (fig_letter, class_name))
+        write_csv(csv_file, upper, "Figure 4%s, %s distance plot upper CI" % (fig_letter, class_name))
+        write_csv(csv_file, lower, "Figure 4%s, %s distance plot x vals" % (fig_letter, class_name))
 
 
-# mm = expts.matrix(mouse_ee_types, mouse_ee_types)
-# hm = expts.matrix(human_types, human_types)
-
-
-#populate mouse d/hist plots
-#L2/3
-plot, xvals, prop, upper, lower = mouse_expts.distance_plot([('2/3', None)], [('2/3', None)], plots=(mouse_dist_plots[0], None), color=(249, 144, 92))
-connected, probed = mouse_expts.count_connections([('2/3', None)], [('2/3', None)])
-bins = np.arange(0, 180e-6, 20e-6)
-hist = np.histogram(probed, bins=bins)
-mouse_hist_plots[0].plot(hist[1], hist[0], stepMode=True, fillLevel=0, brush=(249, 144, 92, 80))
-
-fig4B = open('fig4B.csv', 'wb')
-
-write_csv(fig4B, hist[1], "Figure4B, L2/3 histogram values")
-write_csv(fig4B, hist[0], "Figure4B, L2/3 histogram bin edges")
-write_csv(fig4B, xvals, "Figure 4B, L2/3 distance plot x vals")
-write_csv(fig4B, prop, "Figure 4B, L2/3 distance plot trace")
-write_csv(fig4B, upper, "Figure 4B, L2/3 distance plot upper CI")
-write_csv(fig4B, lower, "Figure 4B, L2/3 distance plot x vals")
-
-#rorb
-mouse_expts.distance_plot('rorb', 'rorb', plots=(mouse_dist_plots[1], None), color=(100, 202, 103))
-connected, probed = mouse_expts.count_connections('rorb', 'rorb')
-bins = np.arange(0, 180e-6, 20e-6)
-hist = np.histogram(probed, bins=bins)
-mouse_hist_plots[1].plot(hist[1], hist[0], stepMode=True, fillLevel=0, brush=(100, 202, 103, 25))
-
-write_csv(fig4B, hist[1], "Figure4B, rorb histogram values")
-write_csv(fig4B, hist[0], "Figure4B, rorb histogram bin edges")
-write_csv(fig4B, xvals, "Figure 4B, rorb distance plot x vals")
-write_csv(fig4B, prop, "Figure 4B, rorb distance plot trace")
-write_csv(fig4B, upper, "Figure 4B, rorb distance plot upper CI")
-write_csv(fig4B, lower, "Figure 4B, rorb distance plot x vals")
-
-#sim1
-mouse_expts.distance_plot('sim1', 'sim1', plots=(mouse_dist_plots[2], None), color=(45, 77, 247))
-connected, probed = mouse_expts.count_connections('sim1', 'sim1')
-hist = np.histogram(probed, bins=bins)
-mouse_hist_plots[2].plot(hist[1], hist[0], stepMode=True, fillLevel=0, brush=(45, 77, 247, 80))
-
-write_csv(fig4B, hist[1], "Figure4B, sim1 histogram values")
-write_csv(fig4B, hist[0], "Figure4B, sim1 histogram bin edges")
-write_csv(fig4B, xvals, "Figure 4B, sim1 distance plot x vals")
-write_csv(fig4B, prop, "Figure 4B, sim1 distance plot trace")
-write_csv(fig4B, upper, "Figure 4B, sim1 distance plot upper CI")
-write_csv(fig4B, lower, "Figure 4B, sim1 distance plot x vals")
-
-#tlx3
-mouse_expts.distance_plot('tlx3', 'tlx3', plots=(mouse_dist_plots[3], None), color=(81, 221, 209))
-connected, probed = mouse_expts.count_connections('tlx3', 'tlx3')
-hist = np.histogram(probed, bins=bins)
-mouse_hist_plots[3].plot(hist[1], hist[0], stepMode=True, fillLevel=0, brush=(81, 221, 209, 80))
-
-write_csv(fig4B, hist[1], "Figure4B, tlx3 histogram values")
-write_csv(fig4B, hist[0], "Figure4B, tlx3 histogram bin edges")
-write_csv(fig4B, xvals, "Figure 4B, tlx3 distance plot x vals")
-write_csv(fig4B, prop, "Figure 4B, tlx3 distance plot trace")
-write_csv(fig4B, upper, "Figure 4B, tlx3 distance plot upper CI")
-write_csv(fig4B, lower, "Figure 4B, tlx3 distance plot x vals")
-
-#ntsr1
-mouse_expts.distance_plot('ntsr1', 'ntsr1', plots=(mouse_dist_plots[4], None), color=(153, 51, 255))
-connected, probed = mouse_expts.count_connections('ntsr1', 'ntsr1')
-hist = np.histogram(probed, bins=bins)
-mouse_hist_plots[4].plot(hist[1], hist[0], stepMode=True, fillLevel=0, brush=(153, 51, 255, 80))
-
-write_csv(fig4B, hist[1], "Figure4B, ntsr1 histogram values")
-write_csv(fig4B, hist[0], "Figure4B, ntsr1 histogram bin edges")
-write_csv(fig4B, xvals, "Figure 4B, ntsr1 distance plot x vals")
-write_csv(fig4B, prop, "Figure 4B, ntsr1 distance plot trace")
-write_csv(fig4B, upper, "Figure 4B, ntsr1 distance plot upper CI")
-write_csv(fig4B, lower, "Figure 4B, ntsr1 distance plot x vals")
-
-fig4B.close()
-
-#populate human d/hist plots
-#L2
-
-fig4D = open('fig4D.csv', 'wb')
-
-human_expts.distance_plot([('2', None)], [('2', None)], plots=(human_dist_plots[0], None), color=(247, 118, 118))
-connected, probed = human_expts.count_connections([('2', None)], [('2', None)])
-bins = np.arange(0, 180e-6, 20e-6)
-hist = np.histogram(probed, bins=bins)
-human_hist_plots[0].plot(hist[1], hist[0], stepMode=True, fillLevel=0, brush=(247, 118, 118, 80))
-
-write_csv(fig4D, hist[1], "Figure4D, L2 histogram values")
-write_csv(fig4D, hist[0], "Figure4D, L2 histogram bin edges")
-write_csv(fig4D, xvals, "Figure 4D, L2 distance plot x vals")
-write_csv(fig4D, prop, "Figure 4D, L2 distance plot trace")
-write_csv(fig4D, upper, "Figure 4D, L2 distance plot upper CI")
-write_csv(fig4D, lower, "Figure 4D, L2 distance plot x vals")
-
-#L3
-human_expts.distance_plot([('3', None)], [('3', None)], plots=(human_dist_plots[1], None), color=(246, 197, 97))
-connected, probed = human_expts.count_connections([('3', None)], [('3', None)])
-bins = np.arange(0, 180e-6, 20e-6)
-hist = np.histogram(probed, bins=bins)
-human_hist_plots[1].plot(hist[1], hist[0], stepMode=True, fillLevel=0, brush=(246, 197, 97, 80))
-
-write_csv(fig4D, hist[1], "Figure4D, L3 histogram values")
-write_csv(fig4D, hist[0], "Figure4D, L3 histogram bin edges")
-write_csv(fig4D, xvals, "Figure 4D, L3 distance plot x vals")
-write_csv(fig4D, prop, "Figure 4D, L3 distance plot trace")
-write_csv(fig4D, upper, "Figure 4D, L3 distance plot upper CI")
-write_csv(fig4D, lower, "Figure 4D, L3 distance plot x vals")
-
-#L4
-human_expts.distance_plot([('4', None)], [('4', None)], plots=(human_dist_plots[2], None), color=(100, 202, 103))
-connected, probed = human_expts.count_connections([('4', None)], [('4', None)])
-bins = np.arange(0, 180e-6, 20e-6)
-hist = np.histogram(probed, bins=bins)
-human_hist_plots[2].plot(hist[1], hist[0], stepMode=True, fillLevel=0, brush=(100, 202, 103, 80))
-
-write_csv(fig4D, hist[1], "Figure4D, L4 histogram values")
-write_csv(fig4D, hist[0], "Figure4D, L4 histogram bin edges")
-write_csv(fig4D, xvals, "Figure 4D, L4 distance plot x vals")
-write_csv(fig4D, prop, "Figure 4D, L4 distance plot trace")
-write_csv(fig4D, upper, "Figure 4D, L4 distance plot upper CI")
-write_csv(fig4D, lower, "Figure 4D, L4 distance plot x vals")
-
-#L5
-human_expts.distance_plot([('5', None)], [('5', None)], plots=(human_dist_plots[3], None), color=(107, 155, 250))
-connected, probed = human_expts.count_connections([('5', None)], [('5', None)])
-bins = np.arange(0, 180e-6, 20e-6)
-hist = np.histogram(probed, bins=bins)
-human_hist_plots[3].plot(hist[1], hist[0], stepMode=True, fillLevel=0, brush=(107, 155, 250, 80))
-
-write_csv(fig4D, hist[1], "Figure4D, L5 histogram values")
-write_csv(fig4D, hist[0], "Figure4D, L5 histogram bin edges")
-write_csv(fig4D, xvals, "Figure 4D, L5 distance plot x vals")
-write_csv(fig4D, prop, "Figure 4D, L5 distance plot trace")
-write_csv(fig4D, upper, "Figure 4D, L5 distance plot upper CI")
-write_csv(fig4D, lower, "Figure 4D, L5 distance plot x vals")
-
-fig4D.close()
-
-#L6
-human_expts.distance_plot([('6', None)], [('6', None)], plots=(human_dist_plots[4], None), color=(153, 51, 255))
-connected, probed = human_expts.count_connections([('6', None)], [('6', None)])
-bins = np.arange(0, 180e-6, 20e-6)
-hist = np.histogram(probed, bins=bins)
-human_hist_plots[4].plot(hist[1], hist[0], stepMode=True, fillLevel=0, brush=(153, 51, 255, 80))
-
-#fix plot sizing
+# set plot ranges
 mouse_dist_plots[0].setXRange(0,180e-6)
 mouse_dist_plots[0].setYRange(0,0.3)
 mouse_hist_plots[0].setYRange(0,215)
 
 human_dist_plots[0].setXRange(0,180e-6)
 human_dist_plots[0].setYRange(0,0.6)
-human_hist_plots[0].setYRange(0,35)
-
+human_hist_plots[0].setYRange(0,50)

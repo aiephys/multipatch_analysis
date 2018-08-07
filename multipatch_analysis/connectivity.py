@@ -36,8 +36,8 @@ def measure_connectivity(pairs, cell_groups):
                 'n_probed': n_probed,
                 'n_connected': n_connected,
                 'connection_probability': (conn_prob,) + conf_interval,
-                'connections_found': connections_found,
-                'pairs_probed': probed_pairs,
+                'connected_pairs': connections_found,
+                'probed_pairs': probed_pairs,
             }
     
     return results

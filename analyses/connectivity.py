@@ -54,6 +54,7 @@ if __name__ == '__main__':
         {'pyramidal': True, 'target_layer': '4'},
         {'pyramidal': True, 'target_layer': '5'},
         {'pyramidal': True, 'target_layer': '6'},
+        {'cre_type': 'unknown', 'target_layer': '6'},
     ]
 
     for cell_classes, project_names in [(mouse_cell_classes, ['mouse V1 coarse matrix', 'mouse V1 pre-production']), (human_cell_classes, ['human coarse matrix'])]:
@@ -74,7 +75,6 @@ if __name__ == '__main__':
             print("{pre_class:>20s} -> {post_class:20s} {connections_found:>5s} / {connections_probed}".format(
                 pre_class=pre_class.name, 
                 post_class=post_class.name, 
-                connections_found=str(len(result['connections_found'])),
-                connections_probed=len(result['pairs_probed']),
+                connections_found=str(len(result['connected_pairs'])),
+                connections_probed=len(result['probed_pairs']),
             ))
-        break
