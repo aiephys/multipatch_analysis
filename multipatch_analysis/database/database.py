@@ -396,12 +396,19 @@ def create_all_mappings():
             from ..experiment_list import cached_experiments
             return cached_experiments()[self.acq_timestamp]
     
+        def __repr__(self):
+            return "<%s %0.3f>" % (self.__class__.__name__, self.acq_timestamp)
+
+    class PairBase(object):
+        def __repr__(self):
+            return "<%s %0.3f %d %d>" % (self.__class__.__name__, self.experiment.acq_timestamp, self.pre_cell.ext_id, self.post_cell.ext_id)
+
 
     Slice = _generate_mapping('slice')
     Experiment = _generate_mapping('experiment', base=ExperimentBase)
     Electrode = _generate_mapping('electrode')
     Cell = _generate_mapping('cell')
-    Pair = _generate_mapping('pair')
+    Pair = _generate_mapping('pair', base=PairBase)
     SyncRec = _generate_mapping('sync_rec')
     Recording = _generate_mapping('recording')
     PatchClampRecording = _generate_mapping('patch_clamp_recording')
