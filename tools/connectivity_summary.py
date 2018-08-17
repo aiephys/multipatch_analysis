@@ -11,7 +11,6 @@ import os
 import re
 import sys
 from collections import OrderedDict
-import user
 import numpy as np
 import pyqtgraph as pg
 
@@ -68,6 +67,10 @@ for f in args.files:
 if len(all_expts) == 0:
     print("No experiments loaded; bailing out.")
     sys.exit(-1)
+
+# force cell QC to run before caching
+for expt in all_expts:
+    expt.connections_probed
 
 # cache everything!
 all_expts.write_cache()
@@ -182,21 +185,20 @@ if args.organism == 'mouse':
     progress = np.clip(np.where(probed > connected, probed, connected), 0, 1)
     print("Total progress %0.1f%%  (%d started)" % (100 * progress.sum()/90., n_started))
 
+    #mouse distance plots
+    plots = expts.distance_plot(pre_types=[('2/3', None)], post_types=[('2/3', None)], color=(255, 153, 51))
+    expts.distance_plot('rorb', 'rorb', plots=plots, color=(102, 255, 102))
+    expts.distance_plot('sim1', 'sim1', plots=plots, color=(102, 255, 255))
+    expts.distance_plot('ntsr1', 'ntsr1', plots=plots, color=(153, 51, 255))
 
 elif args.organism == 'human':
     m1 = expts.matrix(human_types, human_types, title='Human Cp Matrix')
     # m1 = expts.matrix(human_types, human_types, mode='progress')
 
-#human distance plots
-plots = expts.distance_plot(pre_types=[('5', None)], post_types=[('5', None)], color=(102, 255, 255))
-expts.distance_plot(pre_types=[('4', None)], post_types=[('4', None)], plots=plots, color=(102, 255, 102))
-expts.distance_plot(pre_types=[('6', None)], post_types=[('6', None)], plots=plots, color=(153, 51, 255))
-expts.distance_plot(pre_types=[('2', None)], post_types=[('2', None)], plots=plots, color=(255, 153, 153))
-expts.distance_plot(pre_types=[('3', None)], post_types=[('3', None)], plots=plots, color=(255, 255, 102))
+    #human distance plots
+    plots = expts.distance_plot(pre_types=[('2', None)], post_types=[('2', None)], color=(255, 153, 153))
+    expts.distance_plot(pre_types=[('3', None)], post_types=[('3', None)], plots=plots, color=(255, 255, 102))
+    # expts.distance_plot(pre_types=[('4', None)], post_types=[('4', None)], plots=plots, color=(102, 255, 102))
+    expts.distance_plot(pre_types=[('5', None)], post_types=[('5', None)], plots=plots, color=(102, 255, 255))
+    # expts.distance_plot(pre_types=[('6', None)], post_types=[('6', None)], plots=plots, color=(153, 51, 255))
 
-#mouse distance plots
-plots = expts.distance_plot(pre_types=[('2/3', None)], post_types=[('2/3', None)], color=(255, 153, 51))
-expts.distance_plot('rorb', 'rorb', plots=plots, color=(102, 255, 102))
-expts.distance_plot('tlx3', 'tlx3', plots=plots, color=(51, 51, 255))
-expts.distance_plot('sim1', 'sim1', plots=plots, color=(102, 255, 255))
-expts.distance_plot('ntsr1', 'ntsr1', plots=plots, color=(153, 51, 255))

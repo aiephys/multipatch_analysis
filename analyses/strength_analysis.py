@@ -35,13 +35,15 @@ from multipatch_analysis.pulse_response_strength import (
     baseline_query, analyze_response_strength, pulse_response_strength_tables,
 )
 from multipatch_analysis.connection_strength import ConnectionStrength, get_amps, get_baseline_amps
+import multipatch_analysis.morphology  # just to initialize ORM
+from multipatch_analysis import constants
 
 
 class ExperimentBrowser(pg.TreeWidget):
     def __init__(self):
         pg.TreeWidget.__init__(self)
         self.setColumnCount(7)
-        self.setHeaderLabels(['date', 'rig', 'organism', 'region', 'genotype', 'acsf'])
+        self.setHeaderLabels(['date', 'timestamp', 'rig', 'organism', 'region', 'genotype', 'acsf'])
         self.setDragDropMode(self.NoDragDrop)
         self.populate()
         self._last_expanded = None
@@ -56,7 +58,7 @@ class ExperimentBrowser(pg.TreeWidget):
             date = expt.acq_timestamp
             date_str = datetime.fromtimestamp(date).strftime('%Y-%m-%d')
             slice = expt.slice
-            expt_item = pg.TreeWidgetItem(map(str, [date_str, expt.rig_name, slice.species, expt.target_region, slice.genotype, expt.acsf]))
+            expt_item = pg.TreeWidgetItem(map(str, [date_str, '%0.3f'%expt.acq_timestamp, expt.rig_name, slice.species, expt.target_region, slice.genotype, expt.acsf]))
             expt_item.expt = expt
             self.addTopLevelItem(expt_item)
 
@@ -500,9 +502,11 @@ def query_all_pairs(classifier=None):
         "pre_cell.ext_id as pre_cell_id",
         "pre_cell.cre_type as pre_cre_type",
         "pre_cell.target_layer as pre_target_layer",
+        "pre_morphology.pyramidal as pre_pyramidal",
         "post_cell.ext_id as post_cell_id",
         "post_cell.cre_type as post_cre_type",
         "post_cell.target_layer as post_target_layer",
+        "post_morphology.pyramidal as post_pyramidal",
         "pair.synapse",
         "pair.distance",
         "pair.crosstalk_artifact",
@@ -516,6 +520,8 @@ def query_all_pairs(classifier=None):
         "join pair on connection_strength.pair_id=pair.id",
         "join cell pre_cell on pair.pre_cell_id=pre_cell.id",
         "join cell post_cell on pair.post_cell_id=post_cell.id",
+        "join morphology pre_morphology on pre_morphology.cell_id=pre_cell.id",
+        "join morphology post_morphology on post_morphology.cell_id=post_cell.id",
         "join experiment on pair.experiment_id=experiment.id",
         "join slice on experiment.slice_id=slice.id",
     ]
@@ -808,6 +814,8 @@ class PairScatterPlot(pg.QtCore.QObject):
             ('confidence', {}),
             ('pre_cre_type', {'mode': 'enum', 'values': list(set(recs['pre_cre_type']))}),
             ('post_cre_type', {'mode': 'enum', 'values': list(set(recs['post_cre_type']))}),
+            ('pre_pyramidal', {'mode': 'enum', 'values': list(set(recs['pre_pyramidal']))}),
+            ('post_pyramidal', {'mode': 'enum', 'values': list(set(recs['post_pyramidal']))}),
             ('pre_target_layer', {'mode': 'enum'}),
             ('post_target_layer', {'mode': 'enum'}),
             ('ic_n_samples', {}),
@@ -1064,6 +1072,32 @@ if __name__ == '__main__':
     # add another window for analyzing selected pairs
     pair_view = PairView()
     spw.pair_clicked.connect(pair_view.select_pair)
+
+
+    # Print a little report about synapses that may have been misclassified
+    session = db.Session()
+
+    fn_mask = (recs['confidence'] > 0.2) & (recs['synapse'] == False)
+    fp_mask = (recs['confidence'] < 0.2) & (recs['synapse'] == True)
+    for mask, name in [(fn_mask, 'negatives'), (fp_mask, 'positives')]:
+        print("\n================ Possible false %s: ==============\n" % name)
+        for rec in recs[mask]:
+            pid = rec['pair_id']
+            pair = session.query(db.Pair).filter(db.Pair.id==pid).all()[0]
+            pre_cell = pair.pre_cell
+            post_cell = pair.post_cell
+
+            # just select excitatory for now
+            if pre_cell.cre_type not in constants.EXCITATORY_CRE_TYPES and pre_cell.morphology.pyramidal is not True:
+                continue
+            if post_cell.cre_type not in constants.EXCITATORY_CRE_TYPES and post_cell.morphology.pyramidal is not True:
+                continue
+            
+            print("{:s} {:0.3f} {:d} {:d} {:15s} {:20s}  (L{:<3s} {:7s} {:6s}) (L{:<3s} {:7s} {:6s})".format(
+                pair.experiment.rig_name, pair.experiment.acq_timestamp, pre_cell.ext_id, post_cell.ext_id, pair.experiment.internal, pair.experiment.acsf,
+                pre_cell.target_layer, pre_cell.cre_type, {True: 'pyr', None: '?', False: 'nonpyr'}[pre_cell.morphology.pyramidal], 
+                post_cell.target_layer, post_cell.cre_type, {True: 'pyr', None: '?', False: 'nonpyr'}[post_cell.morphology.pyramidal]
+            ))
 
 
     if sys.flags.interactive == 0:

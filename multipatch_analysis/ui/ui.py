@@ -284,7 +284,7 @@ class PipetteParameter(pg.parametertree.parameterTypes.GroupParameter):
             {'name': 'internal', 'type': 'list', 'values': [''] + constants.INTERNAL_RECIPES},
             {'name': 'internal dye', 'type': 'list', 'values': [''] + constants.INTERNAL_DYES},
             {'name': 'target layer', 'type': 'list', 'values': [''] + constants.LAYERS},
-            {'name': 'morphology', 'type': 'list', 'values': ['', 'pyr']},
+            {'name': 'morphology', 'type': 'list', 'values': {'':'', 'pyramidal':'pyr', 'non-pyramidal':'nonpyr', 'ambiguous':'?', 'no morphology':'x'}},
         ]
         pg.parametertree.parameterTypes.GroupParameter.__init__(self, name="Pipette?", children=params, removable=True)
         self.child('got data').sigValueChanged.connect(self._got_data_changed)

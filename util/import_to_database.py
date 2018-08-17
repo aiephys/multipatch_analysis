@@ -18,7 +18,7 @@ def submit_expt(expt_id, raise_exc=False):
     try:
         site_path = all_expts[expt_id]
         expt = Experiment(site_path=site_path)
-        print("submit experiment:", expt)
+        print("submit experiment: %0.3f" % expt_id, expt)
         
         slice_dir = expt.slice_dir
         sub = SliceSubmission(slice_dir)
@@ -32,20 +32,22 @@ def submit_expt(expt_id, raise_exc=False):
             print("   expt %s already in DB" % expt)
         else:
             sub.submit()
-            print("   expt %s done" % expt)
+            print("   expt %s done (%s)" % (expt_id, expt))
 
         print("    %g sec" % (time.time()-start))
-    except Exception:
-        print(">>>> %d Error importing experiment %s" % (os.getpid(), expt_id))
+        return (expt_id, None)
+    except Exception as exc:
+        print(">>>> %d Error importing experiment %0.3f" % (os.getpid(), expt_id))
         sys.excepthook(*sys.exc_info())
-        print("<<<< %s" % expt_id)
+        print("<<<< %0.3f" % expt_id)
         if raise_exc:
             raise
+        return (expt_id, str(exc))
     # print(os.getpid(), expt_id, "return")
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Import new experiments into the database.")
     parser.add_argument('--limit', type=int, default=None)
     parser.add_argument('--local', action='store_true', default=False)
     parser.add_argument('--workers', type=int, default=6)
@@ -75,8 +77,9 @@ if __name__ == '__main__':
     print(selected_expts)
     
     if args.local is True:
+        errors = []
         for i, expt in enumerate(selected_expts):
-            submit_expt(expt, raise_exc=args.raise_exc)
+            errors.append(submit_expt(expt, raise_exc=args.raise_exc))
     else:
         ids = [expt for expt in selected_expts]
 
@@ -86,4 +89,10 @@ if __name__ == '__main__':
         database.engine.dispose()
         
         pool = multiprocessing.Pool(processes=args.workers, maxtasksperchild=1)
-        pool.map(submit_expt, ids, chunksize=1)  # note: maxtasksperchild is broken unless we also force chunksize
+        errors = pool.map(submit_expt, ids, chunksize=1)  # note: maxtasksperchild is broken unless we also force chunksize
+
+    errors = [e for e in errors if e[1] is not None]
+    print("======= DB import complete with %d/%d errors =========" % (len(errors), len(selected_expts)))
+    for expt_id, err in errors:
+        print("%0.3f\t%s" % (expt_id, err))
+    print("===================================================")
