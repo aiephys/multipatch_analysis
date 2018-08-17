@@ -290,6 +290,7 @@ class Experiment(object):
             cell._morphology = {'initial_call': pip_meta.get('morphology', '')}
 
             # load labels
+            cell._raw_labels = pip_meta['cell_labels']
             colors = {}
             for label,value in pip_meta['cell_labels'].items():
                 assert label not in cell.labels
@@ -307,7 +308,11 @@ class Experiment(object):
                 if label in ALL_LABELS:
                     cell.labels[label] = positive
                 elif label in all_colors:
-                    colors[label] = None if (absent or uncertain) else positive
+                    # May need to re-evaluate in the future whether "uncertain" labels should be taken as positives.
+                    # The conservative approach is to say no, but it's likely that the vast majority of these uncertains
+                    # really are correct.
+                    # colors[label] = None if (absent or uncertain) else positive
+                    colors[label] = None if absent else positive
                 else:
                     raise Exception("Invalid label or fluorescent color: %s" % label)
 

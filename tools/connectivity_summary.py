@@ -13,6 +13,7 @@ import sys
 from collections import OrderedDict
 import numpy as np
 import pyqtgraph as pg
+import user
 
 from multipatch_analysis.experiment_list import ExperimentList, cache_file
 from multipatch_analysis import config
