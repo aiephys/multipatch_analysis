@@ -9,6 +9,7 @@ from collections import OrderedDict
 
 import numpy as np
 import pyqtgraph as pg
+import scipy.stats
 
 from neuroanalysis.data import Trace
 from multipatch_analysis.experiment_list import ExperimentList, cache_file
@@ -43,11 +44,17 @@ win.show()
 win.resize(800, 480)
 
 # set up connectivity plots
-mouse_conn_plot = win.addPlot(0, 0, rowspan=3, labels={'left': 'connection probability %'})
-human_conn_plot = win.addPlot(3, 0, rowspan=3, labels={'left': 'connection probability %'})
-mouse_conn_plot.setFixedWidth(220)
-mouse_conn_plot.setYRange(0, 0.3)
-human_conn_plot.setYRange(0, 0.6)
+mouse_conn_plot = win.addPlot(0, 0, rowspan=3, labels={'left': 'connection probability %', 'bottom': ''})
+human_conn_plot = win.addPlot(3, 0, rowspan=3, labels={'left': 'connection probability %', 'bottom': ''})
+human_conn_plot.setXLink(mouse_conn_plot)
+mouse_conn_plot.setXRange(-0.5, 4.5, padding=0)
+for plt in mouse_conn_plot, human_conn_plot:
+    plt.setFixedWidth(220)
+    plt.setYRange(0, 0.3)
+    plt.getAxis('left').setStyle(tickLength=0)
+    plt.getAxis('bottom').setStyle(tickLength=0)
+    plt.getAxis('left').setScale(100)
+
 
 # set up distance plots
 mouse_dist_plots = []
@@ -84,15 +91,24 @@ for row, plots in enumerate([(mouse_hist_plots, mouse_dist_plots), (human_hist_p
             dist_plot.setYLink(dist_plots[0])
             hist_plot.setYLink(hist_plots[0])
 
-            dist_plot.getAxis('left').setStyle(showValues=False, tickTextWidth=0, tickTextHeight=0)
-            hist_plot.getAxis('left').setStyle(showValues=False, tickTextWidth=0, tickTextHeight=0)
+            dist_plot.getAxis('left').setStyle(showValues=False, tickTextWidth=0, tickTextHeight=0, tickLength=0)
+            hist_plot.getAxis('left').setStyle(showValues=False, tickTextWidth=0, tickTextHeight=0, tickLength=0)
+        dist_plot.getAxis('left').setStyle(tickLength=0)
+        hist_plot.getAxis('left').setStyle(tickLength=0)
+        dist_plot.getAxis('bottom').setStyle(tickLength=0)
 
-        dist_plot.vb.setFixedWidth(80)
-        hist_plot.vb.setFixedWidth(80)
+        dist_plot.vb.setMinimumWidth(80)
+        hist_plot.vb.setMinimumWidth(80)
+
+mouse_hist_plots[0].getAxis('left').setTicks([[(0, '0'), (200, '200')]])
+human_hist_plots[0].getAxis('left').setTicks([[(0, '0'), (50, '50')]])
+
+
+app.processEvents()
 
 mouse_dist_plots[0].setXRange(20e-6, 180e-6, padding=0)
-mouse_dist_plots[0].setYRange(0, 0.5)
-human_dist_plots[0].setYRange(0, 0.5)
+mouse_dist_plots[0].setYRange(0, 0.4, padding=0)
+human_dist_plots[0].setYRange(0, 0.4, padding=0)
 mouse_hist_plots[0].setYRange(0, 200)
 human_hist_plots[0].setYRange(0, 50)
 
@@ -121,13 +137,15 @@ human_classes = [
 session = db.Session()
 
 
+max_distance = None#100e-6
+
 # analyze connectivity <100 um for mouse
-mouse_pairs = query_pairs(acsf="2mM Ca & Mg", age=(40, None), species='mouse', distance=(None, 100e-6), session=session).all()
+mouse_pairs = query_pairs(acsf="2mM Ca & Mg", age=(40, None), species='mouse', distance=(None, max_distance), session=session).all()
 mouse_groups = classify_cells([c[0] for c in mouse_classes], pairs=mouse_pairs)
 mouse_results = measure_connectivity(mouse_pairs, mouse_groups)
 
 # analyze connectivity < 100 um for human
-human_pairs = query_pairs(species='human', distance=(None, 100e-6), session=session).all()
+human_pairs = query_pairs(species='human', distance=(None, max_distance), session=session).all()
 human_groups = classify_cells([c[0] for c in human_classes], pairs=human_pairs)
 human_results = measure_connectivity(human_pairs, human_groups)
 
@@ -162,7 +180,7 @@ for conn_plot, results, cell_classes, fig_letter in [
 
         # Add confidence interval line for this class
         errbar = pg.QtGui.QGraphicsLineItem(i, class_results['connection_probability'][1], i, class_results['connection_probability'][2])
-        errbar.setPen(pg.mkPen(color))
+        errbar.setPen(pg.mkPen(color, width=3))
         conn_plot.addItem(errbar)
 
     write_csv(csv_file, class_names, "Figure 4%s cell classes" % fig_letter)
@@ -170,12 +188,49 @@ for conn_plot, results, cell_classes, fig_letter in [
     write_csv(csv_file, n_probed, "Figure 4%s n probed pairs < 100um" % fig_letter)
 
     # plot connection probability points
-    conn_plot.plot(conn_data[:,0], pen=None, symbol='o', symbolBrush=brushes, symbolPen=None)
+    conn_plot.plot(conn_data[:,0], pen=None, symbol='o', symbolBrush=brushes, symbolPen='k')
     write_csv(csv_file, conn_data[:, 0], "Figure 4%s connection probability < 100um" % fig_letter)
 
     # write confidence intervals into csv
     write_csv(csv_file, conn_data[:, 1], "Figure 4%s connection probability < 100um lower 95%% confidence interval" % fig_letter)
     write_csv(csv_file, conn_data[:, 2], "Figure 4%s connection probability < 100um upper 95%% confidence interval" % fig_letter)
+
+
+# statistical tests
+# Is mouse L6 really different from other layers?
+compare_classes = ['L2/3 pyr', 'rorb', 'tlx3', 'sim1']
+print(u"========================\nMouse L6 connectivity < 100 µm vs %d classes (bonferroni corrected p=%0.3f:" % (len(compare_classes), 0.05 / len(compare_classes)))
+a, b = mouse_results[('ntsr1', 'ntsr1')]['n_connected'], mouse_results[('ntsr1', 'ntsr1')]['n_probed']
+for comp_class in compare_classes:
+    c, d = mouse_results[(comp_class, comp_class)]['n_connected'], mouse_results[(comp_class, comp_class)]['n_probed']
+    table = [[a, b], [c, d]]
+    fe_r, fe_p = scipy.stats.fisher_exact(table)
+    print("   {:10s} {:20s} p={:g}".format(comp_class, str(table), fe_p))
+        
+# Is human L4 really different from other layers?
+compare_classes = ['L2 pyr', 'L3 pyr', 'L5 pyr']
+print(u"========================\nHuman L4 connectivity < 100 µm vs %d classes (bonferroni corrected p=%0.3f:" % (len(compare_classes), 0.05 / len(compare_classes)))
+a, b = human_results[('L4 pyr', 'L4 pyr')]['n_connected'], human_results[('L4 pyr', 'L4 pyr')]['n_probed']
+for comp_class in compare_classes:
+    c, d = human_results[(comp_class, comp_class)]['n_connected'], human_results[(comp_class, comp_class)]['n_probed']
+    table = [[a, b], [c, d]]
+    fe_r, fe_p = scipy.stats.fisher_exact(table)
+    print("   {:10s} {:20s} p={:g}".format(comp_class, str(table), fe_p))
+        
+
+# does mouse connectivity differ from human?
+# (this is a weird analysis given that we have sampled the classes unevenly)
+table = [[0, 0], [0, 0]]
+for i, species_opts in enumerate([(mouse_classes, mouse_results), (human_classes, human_results)]):
+    cell_classes, results = species_opts
+    for class_opts in cell_classes:
+        cell_class = class_opts[0]
+        a, b = results[(cell_class, cell_class)]['n_connected'], results[(cell_class, cell_class)]['n_probed']
+        table[i][0] += a
+        table[i][1] += b
+print(u"========================\nHuman vs mouse overall connectivity < 100 µm:")
+fe_r, fe_p = scipy.stats.fisher_exact(table)
+print("    {:s} r={:0.2f} p={:g}".format(str(table), fe_r, fe_p))
 
 
 
