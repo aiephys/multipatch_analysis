@@ -13,6 +13,7 @@ import sys
 from collections import OrderedDict
 import numpy as np
 import pyqtgraph as pg
+import user
 
 from multipatch_analysis.experiment_list import ExperimentList, cache_file
 from multipatch_analysis import config
@@ -109,7 +110,7 @@ expts.print_label_summary()
 
 
 pg.mkQApp()
-
+pg.dbg()
 
 mouse_types = [
     ('1', 'ndnf'),
@@ -139,10 +140,10 @@ mouse_types[('2/3', 'unknown')] = ('L2/3', 'pyr')
 
 mouse_ee_types = OrderedDict([
     (('2/3', 'unknown'), 'L23pyr'),
-    ((None, 'rorb'), 'rorb'),
-    ((None, 'sim1'), 'sim1'),
-    ((None, 'tlx3'), 'tlx3'),
-    ((None, 'ntsr1'), 'ntsr1'),
+    (('4', 'rorb'), 'rorb'),
+    (('5', 'tlx3'), 'tlx3'),
+    (('5', 'sim1'), 'sim1'),
+    (('6', 'ntsr1'), 'ntsr1'),
 ])
 
 mouse_nolayer_types = OrderedDict([
@@ -186,7 +187,7 @@ if args.organism == 'mouse':
     print("Total progress %0.1f%%  (%d started)" % (100 * progress.sum()/90., n_started))
 
     #mouse distance plots
-    plots = expts.distance_plot(pre_types=[('2/3', None)], post_types=[('2/3', None)], color=(255, 153, 51))
+    plots = expts.distance_plot(pre_types=[('2/3', None)], post_types=[('2/3', None)], color=(255, 153, 51))[0]
     expts.distance_plot('rorb', 'rorb', plots=plots, color=(102, 255, 102))
     expts.distance_plot('sim1', 'sim1', plots=plots, color=(102, 255, 255))
     expts.distance_plot('ntsr1', 'ntsr1', plots=plots, color=(153, 51, 255))
@@ -196,7 +197,7 @@ elif args.organism == 'human':
     # m1 = expts.matrix(human_types, human_types, mode='progress')
 
     #human distance plots
-    plots = expts.distance_plot(pre_types=[('2', None)], post_types=[('2', None)], color=(255, 153, 153))
+    plots = expts.distance_plot(pre_types=[('2', None)], post_types=[('2', None)], color=(255, 153, 153))[0]
     expts.distance_plot(pre_types=[('3', None)], post_types=[('3', None)], plots=plots, color=(255, 255, 102))
     # expts.distance_plot(pre_types=[('4', None)], post_types=[('4', None)], plots=plots, color=(102, 255, 102))
     expts.distance_plot(pre_types=[('5', None)], post_types=[('5', None)], plots=plots, color=(102, 255, 255))

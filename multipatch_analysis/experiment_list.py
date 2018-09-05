@@ -165,7 +165,7 @@ class ExperimentList(object):
                     print("SKIPPED:", expt_id)
                     cached += 1
                     continue
-                expt = Experiment(entry)
+                expt = Experiment(entry=entry)
             except Exception as exc:
                 errs.append((entry, sys.exc_info()))
                 continue
@@ -285,7 +285,7 @@ class ExperimentList(object):
             if expt.region is None:
                 print("Warning: Experiment %s has no region" % str(expt.source_id))
 
-    def distance_plot(self, pre_types=None, post_types=None, connection_types=None, plots=None, color=(100, 100, 255), name=None):
+    def count_connections(self, pre_types=None, post_types=None, connection_types=None):
         # get all connected and unconnected distances for pre->post
         probed = []
         connected = []
@@ -325,12 +325,25 @@ class ExperimentList(object):
                     if not (pre_ok and post_ok):
                         continue
                 dist = ci.distance(cj)
-                probed.append(dist)
-                connected.append((i, j) in expt.connections)
+                if dist is not None and np.isfinite(dist):
+                    probed.append(dist)
+                    connected.append((i, j) in expt.connections)
+        
+        return connected, probed
+        
+    def distance_plot(self, pre_types=None, post_types=None, connection_types=None, plots=None, color=(100, 100, 255), name=None):
+        if isinstance(pre_types, str):
+            pre_types = [(None, pre_types)]
+        if isinstance(post_types, str):
+            post_types = [(None, post_types)]
+
+        connected, probed = self.count_connections(pre_types, post_types, connection_types)
+
         if name is None:
             pre_strs = [("" if layer is None else ("L" + layer + " ")) + (cre_type or "") for layer, cre_type in pre_types]
             post_strs = [("" if layer is None else ("L" + layer + " ")) + (cre_type or "") for layer, cre_type in post_types]
             name = ("%s->%s "%(','.join(pre_strs), ','.join(post_strs)))
+        
         return distance_plot(connected, distance=probed, plots=plots, color=color, name=name, window=40e-6, spacing=40e-6)
 
     def connectivity_matrix(self, rows, cols):
@@ -506,11 +519,13 @@ class ExperimentList(object):
                 if cre_type is not None and list(cre_type) != [x[1] for x in k]:
                     continue
                 if k not in summary:
-                    summary[k] = {'connected':0, 'unconnected':0, 'cdist':[], 'udist':[]}
+                    summary[k] = {'connected':0, 'unconnected':0, 'cdist':[], 'udist':[], 'connected_pairs': [], 'probed_pairs': []}
                 summary[k]['connected'] += v['connected']
                 summary[k]['unconnected'] += v['unconnected']
                 summary[k]['cdist'].extend(v['cdist'])
                 summary[k]['udist'].extend(v['udist'])
+                summary[k]['connected_pairs'].extend([(expt.timestamp, i, j) for i,j in v['connected_pairs']])
+                summary[k]['probed_pairs'].extend([(expt.timestamp, i, j) for i,j in v['probed_pairs']])
         return summary
 
     def compare_connectivity(self, expts):
@@ -764,7 +779,7 @@ class ExperimentList(object):
             distance = (c1.distance(c2))*10**6
             expt = conn['expt']
             i = self._expts.index(expt)
-            print(u"%s %d->%d: \t%s,%s -> %s,%s; %.0f um" % (expt.uid, c1.cell_id, c2.cell_id, c1.target_layer, c1.cre_type,
+            print(u"%0.3f %d->%d: \t%s,%s -> %s,%s; %.0f um" % (expt.timestamp, c1.cell_id, c2.cell_id, c1.target_layer, c1.cre_type,
                                                              c2.target_layer, c2.cre_type, distance))
             if 'stims' in conn:
                 stims = conn['stims']

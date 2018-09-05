@@ -92,8 +92,8 @@ class Experiment(object):
             try:
                 self.load_cell_positions()
             except Exception as exc:
-                #sys.excepthook(*sys.exc_info())
-                print("Warning: Could not load cell positions for %s" % (self,))
+                # sys.excepthook(*sys.exc_info())
+                print("Warning: Could not load cell positions for %s (%s)" % (self, str(exc)))
 
 
     @staticmethod
@@ -276,7 +276,7 @@ class Experiment(object):
             elec = Electrode(pip_id, start_time=pip_meta['patch_start'], stop_time=pip_meta['patch_stop'], device_id=pip_meta['ad_channel'], patch_status=pip_meta['pipette_status'])
             self.electrodes[pip_id] = elec
 
-            if pip_meta['got_data'] is False:
+            if pip_meta['got_data'] is False and pip_meta['pipette_status'] not in ['Low seal', 'GOhm seal', 'Not recorded']:
                 continue
 
             cell = Cell(self, pip_id, elec)
@@ -290,6 +290,7 @@ class Experiment(object):
             cell._morphology = {'initial_call': pip_meta.get('morphology', '')}
 
             # load labels
+            cell._raw_labels = pip_meta['cell_labels']
             colors = {}
             for label,value in pip_meta['cell_labels'].items():
                 assert label not in cell.labels
@@ -307,7 +308,11 @@ class Experiment(object):
                 if label in ALL_LABELS:
                     cell.labels[label] = positive
                 elif label in all_colors:
-                    colors[label] = None if (absent or uncertain) else positive
+                    # May need to re-evaluate in the future whether "uncertain" labels should be taken as positives.
+                    # The conservative approach is to say no, but it's likely that the vast majority of these uncertains
+                    # really are correct.
+                    # colors[label] = None if (absent or uncertain) else positive
+                    colors[label] = None if absent else positive
                 else:
                     raise Exception("Invalid label or fluorescent color: %s" % label)
 
@@ -325,7 +330,11 @@ class Experiment(object):
 
             # load old QC keys
             # (sets attributes: holding_qc, access_qc, spiking_qc)
-            if 'cell_qc' in pip_meta:
+            if pip_meta['got_data'] is False:
+                cell.access_qc = False
+                cell.spiking_qc = False
+                cell.holding_qc = False
+            elif 'cell_qc' in pip_meta:
                 for k in ['holding', 'access', 'spiking']:
                     qc_pass = pip_meta['cell_qc'][k]
                     if qc_pass == '':
@@ -355,7 +364,8 @@ class Experiment(object):
                         m = re.match("^(\d+)(\?)?$", post_id)
                         if m is None:
                             post_id = None  # triggers ValueError below
-                        post_id = int(m.groups()[0])
+                        else:
+                            post_id = int(m.groups()[0])
                         if m.groups()[1] == '?':
                             # ignore questionable connections for now
                             continue
@@ -379,7 +389,7 @@ class Experiment(object):
         
         cache_key = (self.timestamp, ad_chan)
         if cache_key not in cache:
-            print("Generate cell QC for", str(cache_key))
+            print("Generate cell QC for", str(cache_key), self)
             nwb = self.data
             holding_qc = False
             access_qc = False
@@ -522,14 +532,18 @@ class Experiment(object):
                 uncertain = grps[3] == '?'
                 cell._raw_labels[cre] = ''.join([x or '' for x in grps[1:]])
 
+                pyr = 'x' if absent else ({'+':'pyr', '-':'nonpyr', None:''}[positive]  + ('?' if uncertain else ''))
+
                 # some target layers have been entered as a label (old data)
-                if cre.startswith('human_') and positive == '+':
-                    # positive=='+' is actually currently used to mean that the cell is in this layer and excitatory,
-                    # but for now we are just recording the layer and excluding all other cells.
-                    layer = cre[7:].upper()
-                    if layer == '23':
-                        layer = '2/3'
-                    cell._target_layer = layer
+                if cre.startswith('human_'):
+                    cell._morphology['pyramidal'] = pyr
+                    if positive == '+':
+                        # positive=='+' is actually currently used to mean that the cell is in this layer and excitatory,
+                        # but for now we are just recording the layer and excluding all other cells.
+                        layer = cre[7:].upper()
+                        if layer == '23':
+                            layer = '2/3'
+                        cell._target_layer = layer
                 elif cre in layer_labels:
                     # labels like "L23pyr" were used to denote unlabeled cells that are likely pyramidal,
                     # but where the morphology may not have been verified.
@@ -537,6 +551,8 @@ class Experiment(object):
                     if layer == '23':
                         layer = '2/3'
                     cell._target_layer = layer
+                    if 'pyr' in cre.lower():
+                        cell._morphology['pyramidal'] = pyr
                 else:
                     assert cre not in cell.labels
                     cell.labels[cre] = positive
@@ -550,6 +566,7 @@ class Experiment(object):
         
         Where + means pass, / means borderline pass, - means fail, ? means unknown
         """
+        qc = {}
         for ch in entry.children:
             parts = re.split('\s+', ch.lines[0].strip())
             for part in parts[1:]:
@@ -558,16 +575,23 @@ class Experiment(object):
                     raise Exception('Invalid cell QC string "%s"' % part)
                 cell_id = int(m.groups()[0])
                 val = m.groups()[1]
-                cell = self.cells[cell_id]
+                qc.setdefault(cell_id, {})
 
                 if parts[0] == 'Holding:':
-                    cell.holding_qc = val in '+/'
+                    qc[cell_id]['holding_qc'] = val in '+/'
                 elif parts[0] == 'Access:':
-                    cell.access_qc = val in '+/'
+                    qc[cell_id]['access_qc'] = val in '+/'
                 elif parts[0] == 'Spiking:':
-                    cell.spiking_qc = val in '+/'
+                    qc[cell_id]['spiking_qc'] = val in '+/'
                 else:
                     raise Exception("Invalid Cell QC line: %s" % ch.lines[0])
+
+        # anything not reported is interpreted as fail
+        for cell_id, cell in self.cells.items():
+            cell_qc = qc.get(cell_id, {})
+            cell.holding_qc = cell_qc.get('holding_qc', False)
+            cell.access_qc = cell_qc.get('access_qc', False)
+            cell.spiking_qc = cell_qc.get('spiking_qc', False)
 
     def _parse_connections(self, entry):
         if len(entry.children) == 0 or entry.children[0].lines[0] == 'None':
@@ -591,7 +615,9 @@ class Experiment(object):
                 'connected': n, 
                 'unconnected': m, 
                 'cdist': [...], 
-                'udist': [...]
+                'udist': [...],
+                'connected_pairs': [(i, j), ...],
+                'probed_pairs': [(i, j), ...],
                 }, 
             ...}
         """
@@ -603,10 +629,12 @@ class Experiment(object):
                 ci, cj = self.cells[i], self.cells[j]
                 typ = ((ci.target_layer, ci.cre_type), (cj.target_layer, cj.cre_type))
                 if typ not in csum:
-                    csum[typ] = {'connected': 0, 'unconnected': 0, 'cdist':[], 'udist':[]}
+                    csum[typ] = {'connected': 0, 'unconnected': 0, 'cdist':[], 'udist':[], 'connected_pairs': [], 'probed_pairs': []}
+                csum[typ]['probed_pairs'].append((i, j))
                 if (i, j) in self.connections:
                     csum[typ]['connected'] += 1
                     csum[typ]['cdist'].append(ci.distance(cj))
+                    csum[typ]['connected_pairs'].append((i, j))
                 else:
                     csum[typ]['unconnected'] += 1
                     csum[typ]['udist'].append(ci.distance(cj))
@@ -664,6 +692,8 @@ class Experiment(object):
         """Load cell positions from external file.
         """
         sitefile = self.mosaic_file
+        if sitefile is None or not os.path.exists(sitefile):
+            raise Exception("Experiment %s site file %s does not exist" % (self, sitefile))
         mosaic = json.load(open(sitefile))
         marker_items = [i for i in mosaic['items'] if i['type'] == 'MarkersCanvasItem']
         if len(marker_items) == 0:
@@ -802,6 +832,8 @@ class Experiment(object):
 
     @property
     def nwb_cache_file(self):
+        if self.nwb_file is None:
+            return None
         return SynPhysCache().get_cache(self.nwb_file)
 
     @property

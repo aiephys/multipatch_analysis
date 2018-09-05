@@ -383,10 +383,10 @@ class ExperimentMetadataSubmission(object):
                     if genotype is None:
                         warnings.append("Pipette %d: ignoring old cre label %s" % (pid, label))
                         continue
-                    if label not in genotype.drivers():
+                    if label not in genotype.all_drivers:
                         warnings.append("Pipette %d: old cre label %s is not in genotype!" % (pid, label))
                         continue
-                    for color in genotype.colors(driver=label):
+                    for color in genotype.expressed_colors([label]):
                         if color in labels:
                             warnings.append("Pipette %d: color %s is specified twice!" % (pid, color))
                         labels[color] = pos
