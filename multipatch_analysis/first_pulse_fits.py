@@ -1,5 +1,5 @@
 """THIS IS ONLY PARTAIALLY CONVERTED"""
-import pdb
+#import pdb
 from neuroanalysis.data import Trace, TraceList
 from multipatch_analysis.database import database as db
 import multipatch_analysis.connection_strength as cs 
@@ -86,6 +86,7 @@ class FirstPulseFitTableGroup(TableGroup):
             """Contains results of psp_fit on spike aligned, average first pulse PSP for each
             connection that passed qc in current clamp""",
             ('pair_id', 'pair.id', '', {'index': True}),
+            ('uid', 'float','timestamp attached to the experiment for ease of viewing'),
             ('amp', 'float', ''),
             ('latency', 'float', '(seconds) from presynaptic spike (max dv/dt)'),
             ('rise_time', 'float', ''),
@@ -108,14 +109,14 @@ class FirstPulseFitTableGroup(TableGroup):
             ('n_sweeps', 'int', ''),
             ('pulse_ids', 'object', ''),
             ('NRMSE', 'float', '')
-        ],
+        ]
 
     }
     
     def create_mappings(self):
         TableGroup.create_mappings(self)
         
-        IndividualFirstPulseFits = self['individual_first_pulse_fit']
+#        IndividualFirstPulseFits = self['individual_first_pulse_fit']
         AverageFirstPulseFits = self['average_first_pulse_fit']
         
         db.Pair.average_first_pulse_fit = db.relationship(AverageFirstPulseFits, back_populates="pair", cascade="delete",
@@ -132,40 +133,63 @@ def init_tables():
     IndividualFirstPulseFits = first_pulse_fit_tables['individual_first_pulse_fit']
     AverageFirstPulseFits = first_pulse_fit_tables['average_first_pulse_fit']
 
+# TODO: FIGURE OUT WHETHER YOU WANT THIS INIT HERE
+# create tables in database and add global variables for ORM classes
+#init_tables()
+####################
 
-def update_fit(limit=None,parallel=True, workers=6, raise_exceptions=False, session=None):
+def update_fit(limit=None, expts=None, parallel=True, workers=6, raise_exceptions=False, session=None):
     """Update table
     """
-    # experiments = session.query(db.Experiment.acq_timestamp).all()
-    # expts_done = session.query(db.Experiment.acq_timestamp).join(db.SyncRec).join(db.Recording).join(db.PulseResponse).join(PulseResponseStrength).distinct().all()
-    # print("Skipping %d already complete experiments" % (len(expts_done)))
-    # experiments = [e for e in experiments if e not in set(expts_done)]
-    init_tables()
-    s = db.Session() #start a database session
-    
-    # get Pair objects from the database
-    pairs=get_pairs_from_DB(s, limit)
-    s.rollback()
-    
-    if parallel:
-        pool = multiprocessing.Pool(processes=workers)
-        pool.map(pair, pairs)
-    else:
-        pair_count =0
-        processed_count=0
-        for ii, (pair, uid, pre_cell_id, post_cell_id, pre_cell_cre, post_cell_cre) in enumerate(pairs):
-#            skip connection if not in Stephs set 
-#            if (str(np.round(uid, 2)), pre_cell_id, post_cell_id) not in Steph_uids:
-#                #print ("SKIPPING: %s, cell ids:%s %s" % (uid, pre_cell_id, post_cell_id))
-#                continue
-#            else:
-            print ("RUNNING: %s, cell ids:%s %s" % (uid, pre_cell_id, post_cell_id))
-            pair_count=pair_count+1
-            if np.mod(pair_count, 10)==0:
-                print('pair count %i, processed count %i' % (pair_count, processed_count))
+    session=db.Session()
+    if expts is None:
+        experiments = session.query(db.Experiment.acq_timestamp).all()
+        #TODO: confirm this query is good enough
+        expts_done=session.query(db.Experiment.acq_timestamp).join(db.Pair).join(AverageFirstPulseFits).all()
+#        expts_done = session.query(db.Experiment.acq_timestamp).join(db.SyncRec).join(db.Recording).join(AverageFirstPulseFits).join().distinct().all()
+        print("Skipping %d already complete experiments" % (len(expts_done)))
+        experiments = [e for e in experiments if e not in set(expts_done)]
 
-            pulse_responses, pulse_ids, psp_amps_measured, freq = extract_first_pulse_info_from_Pair_object(pair, uid)
-            s.rollback()
+        if limit > 0:
+            np.random.shuffle(experiments)
+            experiments = experiments[:limit]
+
+        jobs = [(record.acq_timestamp, index, len(experiments)) for index, record in enumerate(experiments)]
+    # if parallel:
+    #     pool = multiprocessing.Pool(processes=workers)
+    #     pool.map(pair, pairs)
+    # else:
+        for job in jobs:
+            compute_fit(job, raise_exceptions=raise_exceptions)
+
+def compute_fit(job_info, raise_exceptions=False):
+    
+    session = db.Session() #create session
+
+    expt_id, index, n_jobs = job_info
+    print("QUERYING (expt_id=%f): %d/%d" % (expt_id, index, n_jobs))
+
+    #do the query
+    pre_cell = db.aliased(db.Cell)
+    post_cell = db.aliased(db.Cell)
+    expt_stuff = session.query(db.Pair, db.Experiment.acq_timestamp, pre_cell.ext_id, post_cell.ext_id,pre_cell.cre_type, post_cell.cre_type)\
+                        .join(db.Experiment)\
+                        .join(pre_cell, db.Pair.pre_cell_id==pre_cell.id)\
+                        .join(post_cell, db.Pair.post_cell_id==post_cell.id).filter(db.Experiment.acq_timestamp==expt_id).all()
+    # make sure query returned something
+    if len(expt_stuff) <=0:
+        print('No pairs found for expt_id=%f', expt_id)
+        return
+
+    processed_count = 0 #index for keeping track of how many cells pairs in experiemnt have been analized
+    for ii, (pair, uid, pre_cell_id, post_cell_id, pre_cell_cre, post_cell_cre) in enumerate(expt_stuff):
+    #            skip connection if not in Stephs set 
+    #            if (str(np.round(uid, 2)), pre_cell_id, post_cell_id) not in Steph_uids:
+    #                #print ("SKIPPING: %s, cell ids:%s %s" % (uid, pre_cell_id, post_cell_id))
+    #                continue
+    #            else:
+        print ("\tTRYING TO GET FIRST PULSES: number %i of %i experiment pairs: %s, cell ids:%s %s" % (ii, len(expt_stuff), uid, pre_cell_id, post_cell_id))
+        pulse_responses, pulse_ids, psp_amps_measured, freq = extract_first_pulse_info_from_Pair_object(pair, uid)
             #-----Example code-------
                 # if len(pulse_responses) > 0:
                 #     #do the fit here
@@ -177,38 +201,46 @@ def update_fit(limit=None,parallel=True, workers=6, raise_exceptions=False, sess
                 #         s.commit()
                 #         print("%d pairs added to the DB of %d" %(i, len(records)))
                 #------------------------
-            if len(pulse_responses)>0:
-                processed_count=processed_count+1
-                avg_psp=TraceList(pulse_responses).mean()
-#                for pr in pulse_responses:
-#                    plt.plot(pr.time_values, pr.data)
-#                plt.plot(ave_psp.time_values, ave_psp.data, lw=5)
-#                plt.show()
-            else:
-                print ("SKIPPING: %s, cell ids:%s %s: no pulse responses" % (uid, pre_cell_id, post_cell_id))                                                           
-                continue
-            #                #print ("SKIPPING: %s, cell ids:%s %s" % (uid, pre_cell_id, post_cell_id))                                                                              
+        if len(pulse_responses)>0:
+            print ("\t\tFITTING: %s, cell ids:%s %s" % (uid, pre_cell_id, post_cell_id))
 
-            # deal with when there is not distance measurement in pair table
-            if pair.distance:
-                pair_distance=pair.distance*1e6
-            else: pair_distance =np.inf
+            avg_psp=TraceList(pulse_responses).mean()
+    #                for pr in pulse_responses:
+    #                    plt.plot(pr.time_values, pr.data)
+    #                plt.plot(ave_psp.time_values, ave_psp.data, lw=5)
+    #                plt.show()
+        else:
+            print ("\t\tSKIPPING: %s, cell ids:%s %s: no pulse responses" % (uid, pre_cell_id, post_cell_id))                                                           
+            continue
 
-            title='%s, cells %i %s to %i %s; distance=%.1f um' % (uid, pre_cell_id, pre_cell_cre, post_cell_id,post_cell_cre, pair_distance)
-            save_name='/home/corinnet/workspace/DBfit_pics/%s_%s%s_%s%s_average_fit.png'  % (uid, pre_cell_id, pre_cell_cre, post_cell_id,post_cell_cre)
-            avg_fit=fit_trace(avg_psp, plot_save_name=save_name, title=title)
-            result_dict={'amp': avg_fit.best_values['amp'], 
-                        'latency': avg_fit.best_values['xoffset']-time_before_spike,
-                        'rise_time':  avg_fit.best_values['rise_time'],
-                        'decay_tau': avg_fit.best_values['decay_tau'],
-                        'avg_psp': avg_fit.best_fit,
-                        'NRMSE': avg_fit.nrmse()}
-            afpf=AverageFirstPulseFits(pair=pair, n_sweeps=len(pulse_ids), pulse_ids=pulse_ids, **result_dict)
-            # s.add(afpf)
-            # if i % 10 == 0:
-            #     s.commit()
-            #     print("%d pairs added to the DB of %d" %(i, len(records)))              
+        # deal with when there is not distance measurement in pair table
+        if pair.distance:
+            pair_distance=pair.distance*1e6
+        else: pair_distance =np.infty
+
+        title='%s, cells %i %s to %i %s; distance=%.1f um' % (uid, pre_cell_id, pre_cell_cre, post_cell_id,post_cell_cre, pair_distance)
+        save_name='/home/corinnet/workspace/DBfit_pics/%s_%s%s_%s%s_average_fit.png'  % (uid, pre_cell_id, pre_cell_cre, post_cell_id,post_cell_cre)
+        avg_fit=fit_trace(avg_psp, plot_save_name=save_name, title=title)
+        result_dict={'amp': avg_fit.best_values['amp'], 
+                    'latency': avg_fit.best_values['xoffset']-time_before_spike,
+                    'rise_time':  avg_fit.best_values['rise_time'],
+                    'decay_tau': avg_fit.best_values['decay_tau'],
+                    'avg_psp': avg_fit.best_fit,
+                    'NRMSE': avg_fit.nrmse()}
+
+        afpf=AverageFirstPulseFits(pair=pair, uid=uid, n_sweeps=len(pulse_ids), pulse_ids=pulse_ids, **result_dict)
+        session.add(afpf)
+        processed_count=processed_count+1
+
             
+        #     # s.add(afpf)
+        #     # if i % 10 == 0:
+        #     #     s.commit()
+        #     #     print("%d pairs added to the DB of %d" %(i, len(records)))              
+    session.commit()
+    print("COMMITED expt_id=%f: %d/%d" % (expt_id, index, n_jobs))
+
+
 def fit_trace(voltage_trace, plot_show=False, plot_save_name=False, title=''):
     """
     Input
@@ -238,7 +270,9 @@ def fit_trace(voltage_trace, plot_show=False, plot_save_name=False, title=''):
                     xoffset=(time_before_spike+2e-3, time_before_spike, time_before_spike+5e-3), #since these are spike aligned the psp should not happen before the spike that happens at pre_pad by definition 
                     sign='any', 
                     weight=weight) 
+    return fit
 
+def plot_fit():
     if plot_show is True or plot_save_name:
         plt.figure(figsize=(14,14))
         ax1=plt.subplot(1,1,1)
@@ -263,54 +297,54 @@ def fit_trace(voltage_trace, plot_show=False, plot_save_name=False, title=''):
                 plt.savefig(plot_save_name)
                 plt.close()
 
-    return fit
 
-def get_pairs_from_DB(s, limit):
-    """Grab pairs from the database.
-    input
-    -----
-    limit: None or integer
-        specifies how many database entries to load 
-    returns
-    -------
-    list of multipatch_analysis.database.database.Pair objects
-    """
-    # get all pairs that are in pair table but are not in AverageFirstPulseFits table
+#TODO: depricate
+# def get_pairs_from_DB(s, limit):
+#     """Grab pairs from the database.
+#     input
+#     -----
+#     limit: None or integer
+#         specifies how many database entries to load 
+#     returns
+#     -------
+#     list of multipatch_analysis.database.database.Pair objects
+#     """
+#     # get all pairs that are in pair table but are not in AverageFirstPulseFits table
     
-    #TODO: dont think the AverageFirstPulseFits is needed in the first parenthesis.  it gives none which I get rid of below 
-    #q = s.query(db.Pair, AverageFirstPulseFits).outerjoin(AverageFirstPulseFits).filter(AverageFirstPulseFits.pair_id == None)
-    #q = s.query(db.Pair, db.Experiment.acq_timestamp).join(db.Experiment).outerjoin(AverageFirstPulseFits).filter(AverageFirstPulseFits.pair_id == None)
-#    q = s.query(db.Pair, db.Experiment.acq_timestamp).join(db.Experiment).join(db.Cell).outerjoin(AverageFirstPulseFits).filter(AverageFirstPulseFits.pair_id == None)
-#    q = s.query(db.Pair).limit(100)
-    #need to figure out how to do this pair.pre_cell.ext_id
-    pre_cell = db.aliased(db.Cell)
-    post_cell = db.aliased(db.Cell)
-    # q = s.query(db.Pair, AverageFirstPulseFits, db.Pair.pre_cell_if, db.Pair.post_cell_id)\
-    #                      .join(pre_cell, db.Pair.pre_cell_id==pre_cell.id)\
-    #                      .join(post_cell, db.Pair.post_cell_id==post_cell.id)\
-    #                      .outerjoin(AverageFirstPulseFits).filter(AverageFirstPulseFits.pair_id == None)
-    q = s.query(db.Pair, db.Experiment.acq_timestamp, pre_cell.ext_id, post_cell.ext_id,pre_cell.cre_type, post_cell.cre_type)\
-                        .join(db.Experiment)\
-                        .join(pre_cell, db.Pair.pre_cell_id==pre_cell.id)\
-                        .join(post_cell, db.Pair.post_cell_id==post_cell.id)
+#     #TODO: dont think the AverageFirstPulseFits is needed in the first parenthesis.  it gives none which I get rid of below 
+#     #q = s.query(db.Pair, AverageFirstPulseFits).outerjoin(AverageFirstPulseFits).filter(AverageFirstPulseFits.pair_id == None)
+#     #q = s.query(db.Pair, db.Experiment.acq_timestamp).join(db.Experiment).outerjoin(AverageFirstPulseFits).filter(AverageFirstPulseFits.pair_id == None)
+# #    q = s.query(db.Pair, db.Experiment.acq_timestamp).join(db.Experiment).join(db.Cell).outerjoin(AverageFirstPulseFits).filter(AverageFirstPulseFits.pair_id == None)
+# #    q = s.query(db.Pair).limit(100)
+#     #need to figure out how to do this pair.pre_cell.ext_id
+#     pre_cell = db.aliased(db.Cell)
+#     post_cell = db.aliased(db.Cell)
+#     # q = s.query(db.Pair, AverageFirstPulseFits, db.Pair.pre_cell_if, db.Pair.post_cell_id)\
+#     #                      .join(pre_cell, db.Pair.pre_cell_id==pre_cell.id)\
+#     #                      .join(post_cell, db.Pair.post_cell_id==post_cell.id)\
+#     #                      .outerjoin(AverageFirstPulseFits).filter(AverageFirstPulseFits.pair_id == None)
+#     q = s.query(db.Pair, db.Experiment.acq_timestamp, pre_cell.ext_id, post_cell.ext_id,pre_cell.cre_type, post_cell.cre_type)\
+#                         .join(db.Experiment)\
+#                         .join(pre_cell, db.Pair.pre_cell_id==pre_cell.id)\
+#                         .join(post_cell, db.Pair.post_cell_id==post_cell.id)
 
-#                        .join(db.Experiment, db.Experiment.acq_timestamp==db.Pair.experiment.acq_timestamp)\
+# #                        .join(db.Experiment, db.Experiment.acq_timestamp==db.Pair.experiment.acq_timestamp)\
 
-#    q = s.query(db.Pair).limit(100)
-    # perform the query with the given limits
-    if limit is not None:
-        q = q.limit(limit)
-    print("Updating %d pairs.." % q.count())
-    records=q.all()
-#    return records  #return the results of the query
-    # TODO: depricate line below when TODO above is resolved
-    # remove irrelevant None returned from database query
-    # return [record[0] for record in records]
-    # time.sleep(10)
-    # print(records[0])
-    # print(records[0][0].experiment.acq_timestamp)
-    # pairs=[r[0] for r in records]
-    return records
+# #    q = s.query(db.Pair).limit(100)
+#     # perform the query with the given limits
+#     if limit is not None:
+#         q = q.limit(limit)
+#     print("Updating %d pairs.." % q.count())
+#     records=q.all()
+# #    return records  #return the results of the query
+#     # TODO: depricate line below when TODO above is resolved
+#     # remove irrelevant None returned from database query
+#     # return [record[0] for record in records]
+#     # time.sleep(10)
+#     # print(records[0])
+#     # print(records[0][0].experiment.acq_timestamp)
+#     # pairs=[r[0] for r in records]
+#     return records
 
 def extract_first_pulse_info_from_Pair_object(pair, uid):
     """Extract first pulse responses and relevant information 
@@ -348,7 +382,7 @@ def extract_first_pulse_info_from_Pair_object(pair, uid):
     try: 
         pair.connection_strength.synapse_type
     except:
-        print ("skipping pair_id %s, uid %s, is not in connection_strength" % (pair.id, uid))
+        print ("\t\tSKIPPING: pair_id %s, uid %s, is not yielding pair.connection_strength.synapse_type" % (pair.id, uid))
         raise
         return [], [], [], []
     synapse_type = pair.connection_strength.synapse_type
@@ -399,5 +433,8 @@ def extract_first_pulse_info_from_Pair_object(pair, uid):
 
 if __name__=='__main__':
 
-    update_fit(limit=None,parallel=False, workers=6, raise_exceptions=False, session=None)
+    #Note that after this is done being prototyped delete so dont accedently overwrite table
+    first_pulse_fit_tables.drop_tables()   
+    init_tables()
+    update_fit(limit=100, expts=None, parallel=False, workers=6, raise_exceptions=False, session=None)
 
