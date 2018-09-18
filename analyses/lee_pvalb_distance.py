@@ -37,7 +37,7 @@ for p,c,d in zip(n_probed, n_connected, dist):
     nc2.extend([False] * (p-c))
     d2.extend([d*1e-6] * p)
 
-plots = distance_plot(nc2, d2, color=(255, 255, 0), name="Brian/Gil Pvalb")
+plots = distance_plot(nc2, d2, color=(255, 255, 0), name="Brian/Gil Pvalb")[0]
 
 # compare to latest results (but note these are from a different layer)
 expts = cached_experiments()

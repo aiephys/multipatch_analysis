@@ -170,7 +170,7 @@ def compute_connection_strength(job_info, raise_exceptions=False):
 
         expt = db.experiment_from_timestamp(expt_id, session=session)
 
-        for pair in expt.pairs:
+        for pair in expt.pair_list:
             # Query all pulse amplitude records for each clamp mode
             amps = {}
             for clamp_mode in ('ic', 'vc'):
