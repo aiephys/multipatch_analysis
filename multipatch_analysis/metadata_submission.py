@@ -125,6 +125,11 @@ class ExperimentMetadataSubmission(object):
         if m is None:
             errors.append('Unrecognized temperature: "%s"' % temp)
         
+        # is operator name set?
+        operator = expt_info.get('rig_operator', '')
+        if operator is None or not operator.startswith('Operator '):
+            errors.append('Rig operator field is not set.')
+        
         # Slice time ok?
         site_date = datetime.fromtimestamp(site_info['__timestamp__'])
         tod = expt_info.get('time_of_dissection', '')
