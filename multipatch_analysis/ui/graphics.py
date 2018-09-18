@@ -21,9 +21,11 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
     bgcolor : 2d array or nested lists
         Background colors for each cell
     rows : 1d array or list
-        Strings to display as row header
+        Strings or tuples to display as row header. If tuple, then there are multiple headers,
+        with rows grouped together. For example, ``[('l4', 'pv'), ('l4', 'sst'), ('l5', 'pv'), ...]``
+        specifies rows grouped first by layer (l4, l5) then by cre type.
     cols : 1d array or list
-        Strings to display as col header
+        Strings to display as col header. See *rows*.
     size : float
         Width of each cell
     border_color : 2d array or nested lists
