@@ -28,4 +28,4 @@ if __name__ == '__main__':
         first_pulse_fit_tables.drop_tables()
         init_tables()
 
-    update_fit(limit=args.limit, parallel=(not args.local), workers=args.workers, raise_exceptions=args.raise_exc)
+    update_fit(limit=100, expts=None, parallel=False, workers=6, raise_exceptions=False, session=None)
