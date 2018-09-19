@@ -153,12 +153,14 @@ def update_fit(limit=None, expts=None, parallel=True, workers=6, raise_exception
             experiments = experiments[:limit]
 
         jobs = [(record.acq_timestamp, index, len(experiments)) for index, record in enumerate(experiments)]
+    else:
+        jobs = [(expt, i, len(expts)) for i, expt in enumerate(expts)]
     # if parallel:
     #     pool = multiprocessing.Pool(processes=workers)
     #     pool.map(pair, pairs)
     # else:
-        for job in jobs:
-            compute_fit(job, raise_exceptions=raise_exceptions)
+    for job in jobs:
+        compute_fit(job, raise_exceptions=raise_exceptions)
 
 def compute_fit(job_info, raise_exceptions=False):
     
@@ -208,7 +210,7 @@ def compute_fit(job_info, raise_exceptions=False):
     #                plt.plot(ave_psp.time_values, ave_psp.data, lw=5)
     #                plt.show()
         else:
-            print ("\t\tSKIPPING: %s, cell ids:%s %s: no pulse responses" % (uid, pre_cell_id, post_cell_id))                                                           
+            print ("\t\tSKIPPING: %s, cell ids:%s %s: no passing pulse responses" % (uid, pre_cell_id, post_cell_id))                                                           
             continue
 
         # deal with when there is not distance measurement in pair table
@@ -325,6 +327,9 @@ def extract_first_pulse_info_from_Pair_object(pair, uid):
     psp_amps_measured = []
     pulse_ids = []
     stim_freqs = []
+    if len(pair.pulse_responses)==0:
+        print ("\t\tSKIPPING: pair_id %s, uid %s, no pulse responses in pair table" % (pair.id, uid))
+        return [], [], [], []
     for pr in pair.pulse_responses:
         stim_pulse = pr.stim_pulse
         n_spikes = stim_pulse.n_spikes
@@ -369,7 +374,7 @@ def extract_first_pulse_info_from_Pair_object(pair, uid):
 if __name__=='__main__':
 
     #Note that after this is done being prototyped delete so dont accedently overwrite table
-    first_pulse_fit_tables.drop_tables()   
+    first_pulse_fit_tables.drop_tables()
     init_tables()
     update_fit(limit=None, expts=None, parallel=False, workers=6, raise_exceptions=False, session=None)
 

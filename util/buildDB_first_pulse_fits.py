@@ -3,9 +3,8 @@ import argparse, sys
 # sys.path.append('/home/corinnet/workspace/aiephys/multipatch_analysis/analyses')
 # import strength_analysis
 import pyqtgraph as pg 
-from multipatch_analysis.first_pulse_fits import first_pulse_fit_tables, init_tables, update_fit
+from multipatch_analysis.first_pulse_fits_average import first_pulse_fit_tables, init_tables, update_fit
 import multipatch_analysis.database as db
-
 
 if __name__ == '__main__':
     import user
@@ -20,12 +19,14 @@ if __name__ == '__main__':
     
     args = parser.parse_args(sys.argv[1:])
     if args.rebuild:
-        args.rebuild = raw_input("Rebuild '%s' first pulse fit tables? " % db.db_name) == 'y'
+        args.rebuild = raw_input("Rebuild %s average first pulse fits table? " % db.db_name) == 'y'
 
-    pg.dbg()
+    # if args.local:
+    #     pg.dbg()
 
     if args.rebuild:
         first_pulse_fit_tables.drop_tables()
-        init_tables()
 
-    update_fit(limit=100, expts=None, parallel=False, workers=6, raise_exceptions=False, session=None)
+    init_tables()
+
+    update_fit(limit=None, expts=None, parallel=False, workers=6, raise_exceptions=False, session=None)
