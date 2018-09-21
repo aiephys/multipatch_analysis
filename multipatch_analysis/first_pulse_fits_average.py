@@ -136,6 +136,9 @@ def init_tables():
     IndividualFirstPulseFits = first_pulse_fit_tables['individual_first_pulse_fit']
     AverageFirstPulseFits = first_pulse_fit_tables['average_first_pulse_fit']
 
+# create tables in database and add global variables for ORM classes
+init_tables()
+
 def update_fit(limit=None, expts=None, parallel=True, workers=6, raise_exceptions=False, session=None):
     """Update table
     """
@@ -202,7 +205,7 @@ def compute_fit(job_info, raise_exceptions=False):
                 #         print("%d pairs added to the DB of %d" %(i, len(records)))
                 #------------------------
         if len(pulse_responses)>0:
-            print ("\t\tFITTING: %s, cell ids:%s %s" % (uid, pre_cell_id, post_cell_id))
+            print ("\tFITTING: %s, cell ids:%s %s" % (uid, pre_cell_id, post_cell_id))
 
             avg_psp=TraceList(pulse_responses).mean()
     #                for pr in pulse_responses:
@@ -317,9 +320,11 @@ def extract_first_pulse_info_from_Pair_object(pair, uid):
     stim_freq
     """
 
-    try: 
-        pair.connection_strength.synapse_type
-    except:
+    
+    if pair.connection_strength is None:
+        print ("\t\tSKIPPING: pair_id %s, uid %s, is not yielding pair.connection_strength" % (pair.id, uid))
+        return [], [], [], []
+    if pair.connection_strength.synapse_type is None:
         print ("\t\tSKIPPING: pair_id %s, uid %s, is not yielding pair.connection_strength.synapse_type" % (pair.id, uid))
         return [], [], [], []
     synapse_type = pair.connection_strength.synapse_type
@@ -376,5 +381,6 @@ if __name__=='__main__':
     #Note that after this is done being prototyped delete so dont accedently overwrite table
     first_pulse_fit_tables.drop_tables()
     init_tables()
-    update_fit(limit=None, expts=None, parallel=False, workers=6, raise_exceptions=False, session=None)
+#    update_fit(limit=None, expts=[1533768797.736], parallel=False, workers=6, raise_exceptions=False, session=None)
+    update_fit(limit=None, expts=[1492545925.146], parallel=False, workers=6, raise_exceptions=False, session=None)
 
