@@ -1,4 +1,3 @@
-"""THIS IS ONLY PARTAIALLY CONVERTED"""
 #import pdb
 from neuroanalysis.data import Trace, TraceList
 from multipatch_analysis.database import database as db
@@ -82,12 +81,14 @@ class FirstPulseFitTableGroup(TableGroup):
     """
     schemas = {
 
-        'average_first_pulse_fit': [
+        'avg_first_pulse_fit_any_sign': [
             """Contains results of psp_fit on spike aligned, average first pulse PSP for each
             connection that passed qc in current clamp. Created via first_pulse_fits_average.py.
              All units in SI.""",
             ('pair_id', 'pair.id', '', {'index': True}),
             ('uid', 'float','timestamp attached to the experiment for ease of viewing'),
+            ('pre_cell_id', 'int', 'the integer id of the pre synaptic cell (from cell table)'),
+            ('post_cell_id', 'int', 'the integer id of the post synaptic cell (from cell table)'),
             ('amp', 'float', 'amplitude '),
             ('latency', 'float', 'time elapsed since the time of presynaptic spike (max dv/dt)'),
             ('rise_time', 'float', 'rise time of psp', ),
@@ -97,22 +98,50 @@ class FirstPulseFitTableGroup(TableGroup):
             ('n_sweeps', 'int', 'number of sweeps used in the fit'),
             ('pulse_ids', 'object', 'data base pulse ids included in fit'),
             ('distance', 'float', 'distance between pairs'),
-            ('NRMSE', 'float', 'error of fit')
+            ('NRMSE', 'float', 'error of fit'),
+            ('synapse_sign', 'str', '"ex" or "in" (also in connection strength table but here for convenience)'),
+            ('measured_baseline', 'float', 'average voltage measured between 10 and 1 ms before a spike'),
+            ('measured_amp', 'float', 'amplitude within a window of 0.5 ms after spike initiation (max dv/dt) until end of array specified in the pulse_response table'),
+            ('connected', 'bool', 'specifies whether human thinks their is a connection')
         ],
-        'individual_first_pulse_fit': [
-            """Best parameters fit to individual first pulses with initial conditions set 
-            by the fit of the average first pulse available in the average_first_pulse_fit table.""",
-            ('pulse_response_id', 'pulse_response.id', '', {'index': True, 'unique': True}),
+        'avg_first_pulse_fit_force_sign': [
+            """Contains results of psp_fit on spike aligned, average first pulse PSP for each
+            connection that passed qc in current clamp. Created via first_pulse_fits_average.py.
+             All units in SI.""",
             ('pair_id', 'pair.id', '', {'index': True}),
-            ('amp', 'float', ''),
-            ('latency', 'float', '(seconds) from presynaptic spike (max dv/dt)'),
-            ('rise_time', 'float', ''),
-            ('decay_tau', 'float', ''),
-            ('avg_psp', 'array', ''),
-            ('n_sweeps', 'int', ''),
-            ('pulse_ids', 'object', ''),
-            ('NRMSE', 'float', '')
+            ('uid', 'float','timestamp attached to the experiment for ease of viewing'),
+            ('pre_cell_id', 'int', 'the integer id of the pre synaptic cell (from cell table)'),
+            ('post_cell_id', 'int', 'the integer id of the post synaptic cell (from cell table)'),
+            ('amp', 'float', 'amplitude '),
+            ('latency', 'float', 'time elapsed since the time of presynaptic spike (max dv/dt)'),
+            ('rise_time', 'float', 'rise time of psp', ),
+            ('decay_tau', 'float', 'decay of psp'),
+            ('avg_psp', 'array', 'array of the best fit voltage waveform starting 10 ms before pre-synaptic spike'),
+            ('dt', 'float', 'time step of *avg_psp* array'),
+            ('n_sweeps', 'int', 'number of sweeps used in the fit'),
+            ('pulse_ids', 'object', 'data base pulse ids included in fit'),
+            ('distance', 'float', 'distance between pairs'),
+            ('NRMSE', 'float', 'error of fit'),
+            ('synapse_sign', 'str', '"ex" or "in" (also in connection strength table but here for convenience)'),
+            ('measured_baseline', 'float', 'average voltage measured between 10 and 1 ms before a spike'),
+            ('measured_amp', 'float', 'amplitude within a window of 0.5 ms after spike initiation (max dv/dt) until end of array specified in the pulse_response table'),
+            ('connected', 'bool', 'specifies whether human thinks their is a connection')
+
         ]
+        # 'individual_first_pulse_fit': [
+        #     """Best parameters fit to individual first pulses with initial conditions set 
+        #     by the fit of the average first pulse available in the avg_first_pulse_fit_force_sign table.""",
+        #     ('pulse_response_id', 'pulse_response.id', '', {'index': True, 'unique': True}),
+        #     ('pair_id', 'pair.id', '', {'index': True}),
+        #     ('amp', 'float', ''),
+        #     ('latency', 'float', '(seconds) from presynaptic spike (max dv/dt)'),
+        #     ('rise_time', 'float', ''),
+        #     ('decay_tau', 'float', ''),
+        #     ('avg_psp', 'array', ''),
+        #     ('n_sweeps', 'int', ''),
+        #     ('pulse_ids', 'object', ''),
+        #     ('NRMSE', 'float', '')
+        # ]
 
     }
     
@@ -120,21 +149,29 @@ class FirstPulseFitTableGroup(TableGroup):
         TableGroup.create_mappings(self)
         
 #        IndividualFirstPulseFits = self['individual_first_pulse_fit']
-        AverageFirstPulseFits = self['average_first_pulse_fit']
+        AvgFirstPulseFitsAnySign = self['avg_first_pulse_fit_any_sign']
+        AvgFirstPulseFitsForceSign = self['avg_first_pulse_fit_force_sign']
         
-        db.Pair.average_first_pulse_fit = db.relationship(AverageFirstPulseFits, back_populates="pair", cascade="delete",
+        db.Pair.avg_first_pulse_fit_force_sign = db.relationship(AvgFirstPulseFitsForceSign, back_populates="pair", cascade="delete",
                                                       single_parent=True, uselist=False)
-        AverageFirstPulseFits.pair = db.relationship(db.Pair, back_populates="average_first_pulse_fit", single_parent=True)
+        AvgFirstPulseFitsForceSign.pair = db.relationship(db.Pair, back_populates="avg_first_pulse_fit_force_sign", single_parent=True)
+        
+        db.Pair.avg_first_pulse_fit_any_sign = db.relationship(AvgFirstPulseFitsAnySign, back_populates="pair", cascade="delete",
+                                                      single_parent=True, uselist=False)
+        AvgFirstPulseFitsAnySign.pair = db.relationship(db.Pair, back_populates="avg_first_pulse_fit_any_sign", single_parent=True)
 
 
 first_pulse_fit_tables = FirstPulseFitTableGroup()
 
 def init_tables():
-    global IndividualFirstPulseFits, AverageFirstPulseFits
+    global AvgFirstPulseFitsForceSign, AvgFirstPulseFitsForceSign 
+#    global IndividualFirstPulseFits, 
     first_pulse_fit_tables.create_tables()
 
-    IndividualFirstPulseFits = first_pulse_fit_tables['individual_first_pulse_fit']
-    AverageFirstPulseFits = first_pulse_fit_tables['average_first_pulse_fit']
+#    IndividualFirstPulseFits = first_pulse_fit_tables['individual_first_pulse_fit']
+    AvgFirstPulseFitsAnySign = first_pulse_fit_tables['avg_first_pulse_fit_any_sign']
+    AvgFirstPulseFitsForceSign = first_pulse_fit_tables['avg_first_pulse_fit_force_sign']
+
 
 # create tables in database and add global variables for ORM classes
 init_tables()
@@ -146,7 +183,7 @@ def update_fit(limit=None, expts=None, parallel=True, workers=6, raise_exception
     if expts is None:
         experiments = session.query(db.Experiment.acq_timestamp).all()
         #TODO: confirm this query is good enough
-        expts_done=session.query(db.Experiment.acq_timestamp).join(db.Pair).join(AverageFirstPulseFits).all()
+        expts_done=session.query(db.Experiment.acq_timestamp).join(db.Pair).join(AvgFirstPulseFitsForceSign).all()
 #        #TODO: deprecate this line when line above is confirmed expts_done = session.query(db.Experiment.acq_timestamp).join(db.SyncRec).join(db.Recording).join(AverageFirstPulseFits).join().distinct().all()
         print("Skipping %d already complete experiments" % (len(expts_done)))
         experiments = [e for e in experiments if e not in set(expts_done)]
@@ -193,17 +230,8 @@ def compute_fit(job_info, raise_exceptions=False):
     #            else:
         print ("\tTRYING TO GET FIRST PULSES: number %i of %i experiment pairs: %s, cell ids:%s %s" % (ii, len(expt_stuff), uid, pre_cell_id, post_cell_id))
         pulse_responses, pulse_ids, psp_amps_measured, freq = extract_first_pulse_info_from_Pair_object(pair, uid)
-            #-----Example code-------
-                # if len(pulse_responses) > 0:
-                #     #do the fit here
-                #     results = first_pulse_features(pair, pulse_responses, psp_amps_measured)
-                #     #format the table #TODO finish this
-                #     fpf = FirstPulseFeatures(pair=pair, n_sweeps=len(pulse_ids), pulse_ids=pulse_ids, **results)
-                #     s.add(fpf)
-                #     if i % 10 == 0:
-                #         s.commit()
-                #         print("%d pairs added to the DB of %d" %(i, len(records)))
-                #------------------------
+        
+        # if pulses are returned fit the average
         if len(pulse_responses)>0:
             print ("\tFITTING: %s, cell ids:%s %s" % (uid, pre_cell_id, post_cell_id))
 
@@ -216,14 +244,28 @@ def compute_fit(job_info, raise_exceptions=False):
             print ("\t\tSKIPPING: %s, cell ids:%s %s: no passing pulse responses" % (uid, pre_cell_id, post_cell_id))                                                           
             continue
 
+        # get the measured baseline and amplitude of psp
+        measured_relative_amp, measured_baseline=measure_amp(avg_psp.data, 
+                            [0, int((time_before_spike-1.e-3)/avg_psp.dt)], 
+                            [int((time_before_spike+.5e-3)/avg_psp.dt), -1])
+
         # deal with when there is not distance measurement in pair table
         if pair.distance:
             pair_distance=pair.distance
-        else: pair_distance =np.infty
+        else: pair_distance =np.infty 
 
+        # grab syapse from the table
+        synapse_sign=pair.connection_strength.synapse_type
+        connected=pair.synapse
+
+        # specify where to save files
         title='%s, cells %i %s to %i %s; distance=%.1f um' % (uid, pre_cell_id, pre_cell_cre, post_cell_id,post_cell_cre, pair_distance*1e6)
-        save_name='/home/corinnet/workspace/DBfit_pics/%s_%s%s_%s%s_average_fit.png'  % (uid, pre_cell_id, pre_cell_cre, post_cell_id,post_cell_cre)
-        avg_fit=fit_trace(avg_psp, plot_save_name=save_name, title=title)
+        save_name='/home/corinnet/workspace/DBfit_pics_force_sign/%s_%s%s_%s%s_average_fit.png'  % (uid, pre_cell_id, pre_cell_cre, post_cell_id,post_cell_cre)
+        
+        # fit the trace
+        avg_fit=fit_trace(avg_psp, synapse_sign, plot_save_name=save_name, title=title)
+        
+        # specify results and fit them
         result_dict={'dt' : avg_psp.dt,
                     'amp': avg_fit.best_values['amp'], 
                     'latency': avg_fit.best_values['xoffset']-time_before_spike,
@@ -232,7 +274,18 @@ def compute_fit(job_info, raise_exceptions=False):
                     'avg_psp': avg_fit.best_fit,
                     'NRMSE': avg_fit.nrmse()}
 
-        afpf=AverageFirstPulseFits(pair=pair, distance=pair_distance, uid=uid, n_sweeps=len(pulse_ids), pulse_ids=pulse_ids, **result_dict)
+        afpf=AvgFirstPulseFitsForceSign(pair=pair, 
+                                    distance=pair_distance, 
+                                    uid=uid, 
+                                    pre_cell_id=pre_cell_id,
+                                    post_cell_id=post_cell_id,
+                                    n_sweeps=len(pulse_ids), 
+                                    pulse_ids=pulse_ids,
+                                    synapse_sign=synapse_sign, 
+                                    measured_amp=measured_relative_amp,
+                                    measured_baseline=measured_baseline,
+                                    connected=connected,
+                                    **result_dict)
         session.add(afpf)
         processed_count=processed_count+1
 
@@ -244,13 +297,47 @@ def compute_fit(job_info, raise_exceptions=False):
     session.commit()
     print("COMMITED %i pairs from expt_id=%f: %d/%d" % (processed_count, expt_id, index, n_jobs))
 
+def measure_amp(v_array, baseline_index_window, psp_amp_index_window):
+    '''measures the max of a trace within a window of the predicted psp.
+    
+    Input
+    -----
+    v_array: array-like
+        voltage wave-form
+    baseline_index_window: list containing two integers
+        integers specify index of the beginning and end of baseline window
+    psp_amp_index_window: list containing two integers
+        integers specify index of the beginning and end of window to look for max/min (psp amplitude)
+        
+    Returns
+    -------
+        relative_amp: float
+            measured amplitude relative to baseline
+        baseline: float
+            value of baseline
+    '''
 
-def fit_trace(voltage_trace, plot_show=False, plot_save_name=False, title=''):
+    # get baseline
+    baseline = v_array[baseline_index_window[0]: baseline_index_window[1]].mean()  #baseline voltage
+    # get the maximum value in a region around where psp amp should be
+    max_psp_region = v_array[psp_amp_index_window[0]: psp_amp_index_window[1]].max()
+    # get the minimum value in a region around where psp amp should be
+    min_psp_region = v_array[psp_amp_index_window[0]: psp_amp_index_window[1]].min()
+    # subtract the baseline value from min and max values
+    bsub=np.array([max_psp_region-baseline, min_psp_region-baseline])
+    # find the absolute maximum deflection from base_line
+    relative_amp=bsub[np.where(abs(bsub)==max(abs(bsub)))[0][0]] 
+
+    return relative_amp, baseline
+
+def fit_trace(voltage_trace, synaptic_sign, plot_show=False, plot_save_name=False, title=''):
     """
     Input
     -----
     voltage_trace: Trace Object
-        contains dat to be fit
+        contains data to be fit
+    synaptic_sign: str
+        'ex' or 'in' specifying excitation of synapse
     plot_show: boolean 
         plot resulting fit if True
     plot_save_name: False or string
@@ -270,13 +357,20 @@ def fit_trace(voltage_trace, plot_show=False, plot_save_name=False, title=''):
     weight[int((time_before_spike-3e-3)/voltage_trace.dt):int(time_before_spike/voltage_trace.dt)] = 0.   #area around stim artifact note that since this is spike aligned there will be some blur in where the cross talk is
     weight[int((time_before_spike+1e-3)/voltage_trace.dt):int((time_before_spike+5e-3)/voltage_trace.dt)] = 30.  #area around steep PSP rise 
 
+    #converting synaptic sign from database to convention for fitting
+    if synaptic_sign == 'in':
+        sign = '-'
+    elif synaptic_sign == 'ex':
+        sign = '+'
+    else:
+        raise Exception('synaptic sign not defined')
+
+
     fit = fit_psp(voltage_trace, 
                     xoffset=(time_before_spike+2e-3, time_before_spike, time_before_spike+5e-3), #since these are spike aligned the psp should not happen before the spike that happens at pre_pad by definition 
-                    sign='any', 
+                    sign=sign, 
                     weight=weight) 
-    return fit
 
-def plot_fit():
     if plot_show is True or plot_save_name:
         plt.figure(figsize=(14,14))
         ax1=plt.subplot(1,1,1)
@@ -301,6 +395,7 @@ def plot_fit():
                 plt.savefig(plot_save_name)
                 plt.close()
 
+    return fit
 
 def extract_first_pulse_info_from_Pair_object(pair, uid):
     """Extract first pulse responses and relevant information 
@@ -368,13 +463,16 @@ def extract_first_pulse_info_from_Pair_object(pair, uid):
         if (synapse_type == 'ex' and ex_qc_pass is True) or (synapse_type == 'in' and in_qc_pass is True):
             pulse_responses.append(data_trace)
             pulse_ids.append(pulse_id)
-            stim_freqs.append(stim_freq)            
+            stim_freqs.append(stim_freq)        
         if synapse_type == 'in' and in_qc_pass is True:
             psp_amps_measured.append(pr.pulse_response_strength.neg_amp)
         if synapse_type == 'ex' and ex_qc_pass is True:
             psp_amps_measured.append(pr.pulse_response_strength.pos_amp)
 
     return pulse_responses, pulse_ids, psp_amps_measured, stim_freq
+
+
+
 
 if __name__=='__main__':
 
@@ -384,3 +482,4 @@ if __name__=='__main__':
 #    update_fit(limit=None, expts=[1533768797.736], parallel=False, workers=6, raise_exceptions=False, session=None)
     update_fit(limit=None, expts=[1492545925.146], parallel=False, workers=6, raise_exceptions=False, session=None)
 
+#    update_fit(limit=None, expts=None, parallel=False, workers=6, raise_exceptions=False, session=None)
