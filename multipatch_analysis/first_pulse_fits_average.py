@@ -1,3 +1,5 @@
+#WARNING THE FORCED SIGN AND ANY SIGN SHOULD BE PULLED APART
+
 #import pdb
 from neuroanalysis.data import Trace, TraceList
 from multipatch_analysis.database import database as db
@@ -126,7 +128,6 @@ class FirstPulseFitTableGroup(TableGroup):
             ('measured_baseline', 'float', 'average voltage measured between 10 and 1 ms before a spike'),
             ('measured_amp', 'float', 'amplitude within a window of 0.5 ms after spike initiation (max dv/dt) until end of array specified in the pulse_response table'),
             ('connected', 'bool', 'specifies whether human thinks their is a connection')
-
         ]
         # 'individual_first_pulse_fit': [
         #     """Best parameters fit to individual first pulses with initial conditions set 
@@ -164,7 +165,8 @@ class FirstPulseFitTableGroup(TableGroup):
 first_pulse_fit_tables = FirstPulseFitTableGroup()
 
 def init_tables():
-    global AvgFirstPulseFitsForceSign, AvgFirstPulseFitsForceSign 
+    global AvgFirstPulseFitsAnySign
+    global AvgFirstPulseFitsForceSign 
 #    global IndividualFirstPulseFits, 
     first_pulse_fit_tables.create_tables()
 
@@ -177,13 +179,13 @@ def init_tables():
 init_tables()
 
 def update_fit(limit=None, expts=None, parallel=True, workers=6, raise_exceptions=False, session=None):
-    """Update table
+    """
     """
     session=db.Session()
     if expts is None:
         experiments = session.query(db.Experiment.acq_timestamp).all()
         #TODO: confirm this query is good enough
-        expts_done=session.query(db.Experiment.acq_timestamp).join(db.Pair).join(AvgFirstPulseFitsForceSign).all()
+        expts_done=session.query(db.Experiment.acq_timestamp).join(db.Pair).join(AvgFirstPulseFitsAnySign).all()
 #        #TODO: deprecate this line when line above is confirmed expts_done = session.query(db.Experiment.acq_timestamp).join(db.SyncRec).join(db.Recording).join(AverageFirstPulseFits).join().distinct().all()
         print("Skipping %d already complete experiments" % (len(expts_done)))
         experiments = [e for e in experiments if e not in set(expts_done)]
@@ -260,10 +262,10 @@ def compute_fit(job_info, raise_exceptions=False):
 
         # specify where to save files
         title='%s, cells %i %s to %i %s; distance=%.1f um' % (uid, pre_cell_id, pre_cell_cre, post_cell_id,post_cell_cre, pair_distance*1e6)
-        save_name='/home/corinnet/workspace/DBfit_pics_force_sign/%s_%s%s_%s%s_average_fit.png'  % (uid, pre_cell_id, pre_cell_cre, post_cell_id,post_cell_cre)
+        save_name='/home/corinnet/workspace/DBfit_pics_any_sign/%s_%s%s_%s%s_average_fit.png'  % (uid, pre_cell_id, pre_cell_cre, post_cell_id,post_cell_cre)
         
         # fit the trace
-        avg_fit=fit_trace(avg_psp, synapse_sign, plot_save_name=save_name, title=title)
+        avg_fit=fit_trace(avg_psp, synaptic_sign='any', plot_save_name=save_name, title=title)
         
         # specify results and fit them
         result_dict={'dt' : avg_psp.dt,
@@ -274,7 +276,7 @@ def compute_fit(job_info, raise_exceptions=False):
                     'avg_psp': avg_fit.best_fit,
                     'NRMSE': avg_fit.nrmse()}
 
-        afpf=AvgFirstPulseFitsForceSign(pair=pair, 
+        afpf=AvgFirstPulseFitsAnySign(pair=pair, 
                                     distance=pair_distance, 
                                     uid=uid, 
                                     pre_cell_id=pre_cell_id,
@@ -362,6 +364,8 @@ def fit_trace(voltage_trace, synaptic_sign, plot_show=False, plot_save_name=Fals
         sign = '-'
     elif synaptic_sign == 'ex':
         sign = '+'
+    elif synaptic_sign == 'any':
+        sign = 'any'
     else:
         raise Exception('synaptic sign not defined')
 
@@ -477,7 +481,7 @@ def extract_first_pulse_info_from_Pair_object(pair, uid):
 if __name__=='__main__':
 
     #Note that after this is done being prototyped delete so dont accedently overwrite table
-    first_pulse_fit_tables.drop_tables()
+#    first_pulse_fit_tables.drop_tables()
     init_tables()
 #    update_fit(limit=None, expts=[1533768797.736], parallel=False, workers=6, raise_exceptions=False, session=None)
     update_fit(limit=None, expts=[1492545925.146], parallel=False, workers=6, raise_exceptions=False, session=None)
