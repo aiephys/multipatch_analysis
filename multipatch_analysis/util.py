@@ -2,10 +2,12 @@ from __future__ import print_function
 import os, sys, time
 
 
-def sync_dir(source_path, dest_path, test=False):
+def sync_dir(source_path, dest_path, test=False, make_dir=False):
     """Safely duplicate a directory structure
     """
     assert os.path.isdir(source_path), 'Source path "%s" does not exist.' % source_path
+    if make_dir:
+        mkdir(dest_path)
     assert os.path.isdir(dest_path), 'Destination path "%s" does not exist.' % dest_path
 
     for subpath, subdirs, files in os.walk(source_path):
@@ -119,3 +121,11 @@ def chunk_copy(src, dst, chunk_size=100e6):
         if os.path.isfile(dst):
             os.remove(dst)
         raise
+
+
+def mkdir(path):
+    if not os.path.isdir(path):
+        root, _ = os.path.split(path)
+        if root != '':
+            mkdir(root)
+        os.mkdir(path)

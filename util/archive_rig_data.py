@@ -19,7 +19,7 @@ def archive_rig_data(rig_name, test=False, source='primary', dest='archive'):
         source = path_set['primary']
         dest = path_set['archive']
         print("Archiving data for %s : %s => %s..." % (rig_name, source, dest))
-        util.sync_dir(source, dest, test=test)
+        util.sync_dir(source, dest, test=test, make_dir=True)
 
 
 if __name__ == '__main__':
