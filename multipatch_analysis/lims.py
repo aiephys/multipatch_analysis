@@ -305,12 +305,10 @@ def child_specimens(specimen):
 
 
 def parent_specimen(specimen):
-    if not isinstance(specimen, int):
-        specimen = specimen_id_from_name(specimen)
-    q = """
-    select parent_id from specimens 
-    where specimens.id=%d
-    """ % spec_id
+    if isinstance(specimen, int):
+        q = """select parent_id from specimens where specimens.id=%d""" % specimen
+    else:
+        q = """select parent_id from specimens where specimens.name='%s'""" % specimen
     recs = lims.query(q)
     return recs[0]['parent_id']
 

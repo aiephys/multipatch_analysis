@@ -20,7 +20,7 @@ from sqlalchemy.sql.expression import func
 from .. import config
 
 # database version should be incremented whenever the schema has changed
-db_version = 6
+db_version = 8
 db_name = '{database}_{version}'.format(database=config.synphys_db, version=db_version)
 db_address = '{host}/{database}'.format(host=config.synphys_db_host, database=db_name)
 
@@ -195,7 +195,7 @@ table_schemas = {
     'pulse_response': [
         "A chunk of postsynaptic recording taken during a presynaptic pulse stimulus",
         ('recording_id', 'recording.id', 'The full recording from which this pulse was extracted', {'index': True}),
-        ('stim_pulse_id', 'stim_pulse.id', 'The presynaptic pulse', {'index': True, 'unique': True}),
+        ('stim_pulse_id', 'stim_pulse.id', 'The presynaptic pulse', {'index': True}),
         ('pair_id', 'pair.id', 'The pre-post cell pair involved in this pulse response', {'index': True}),
         ('start_time', 'float', 'Starting time of this chunk of the recording in seconds, relative to the beginning of the recording'),
         ('data', 'array', 'numpy array of response data sampled at '+_sample_rate_str, {'deferred': True}),
@@ -351,7 +351,7 @@ def create_all_mappings():
                     if cell.ext_id == item:
                         return cell
             elif isinstance(item, tuple):
-                for pair in self.pairs:
+                for pair in self.pair_lists:
                     if item == (pair.pre_cell.ext_id, pair.post_cell.ext_id):
                         return pair
         
@@ -361,7 +361,7 @@ def create_all_mappings():
 
         @property
         def pairs(self):
-            return {(pair.pre_cell.ext_id, pair.post_cell.ext_id): pair for pair in self.pairs}
+            return {(pair.pre_cell.ext_id, pair.post_cell.ext_id): pair for pair in self.pair_list}
 
         @property
         def nwb_file(self):
@@ -396,12 +396,19 @@ def create_all_mappings():
             from ..experiment_list import cached_experiments
             return cached_experiments()[self.acq_timestamp]
     
+        def __repr__(self):
+            return "<%s %0.3f>" % (self.__class__.__name__, self.acq_timestamp)
+
+    class PairBase(object):
+        def __repr__(self):
+            return "<%s %0.3f %d %d>" % (self.__class__.__name__, self.experiment.acq_timestamp, self.pre_cell.ext_id, self.post_cell.ext_id)
+
 
     Slice = _generate_mapping('slice')
     Experiment = _generate_mapping('experiment', base=ExperimentBase)
     Electrode = _generate_mapping('electrode')
     Cell = _generate_mapping('cell')
-    Pair = _generate_mapping('pair')
+    Pair = _generate_mapping('pair', base=PairBase)
     SyncRec = _generate_mapping('sync_rec')
     Recording = _generate_mapping('recording')
     PatchClampRecording = _generate_mapping('patch_clamp_recording')
@@ -425,8 +432,8 @@ def create_all_mappings():
     Electrode.cell = relationship(Cell, back_populates="electrode", cascade="delete", single_parent=True, uselist=False)
     Cell.electrode = relationship(Electrode, back_populates="cell", single_parent=True)
 
-    Experiment.pairs = relationship(Pair, back_populates="experiment", cascade="delete", single_parent=True)
-    Pair.experiment = relationship(Experiment, back_populates="pairs")
+    Experiment.pair_list = relationship(Pair, back_populates="experiment", cascade="delete", single_parent=True)
+    Pair.experiment = relationship(Experiment, back_populates="pair_list")
 
     Pair.pre_cell = relationship(Cell, foreign_keys=[Pair.pre_cell_id])
     #Cell.pre_pairs = relationship(Pair, back_populates="pre_cell", single_parent=True, foreign_keys=[Pair.pre_cell])

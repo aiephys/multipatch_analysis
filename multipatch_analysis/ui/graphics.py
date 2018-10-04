@@ -4,6 +4,8 @@ import numpy as np
 import pyqtgraph as pg
 from neuroanalysis.stats import binomial_ci
 from neuroanalysis.ui.plot_grid import PlotGrid
+from statsmodels.stats.proportion import proportion_confint
+
 
 
 class MatrixItem(pg.QtGui.QGraphicsItemGroup):
@@ -19,9 +21,11 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
     bgcolor : 2d array or nested lists
         Background colors for each cell
     rows : 1d array or list
-        Strings to display as row header
+        Strings or tuples to display as row header. If tuple, then there are multiple headers,
+        with rows grouped together. For example, ``[('l4', 'pv'), ('l4', 'sst'), ('l5', 'pv'), ...]``
+        specifies rows grouped first by layer (l4, l5) then by cre type.
     cols : 1d array or list
-        Strings to display as col header
+        Strings to display as col header. See *rows*.
     size : float
         Width of each cell
     border_color : 2d array or nested lists
@@ -182,7 +186,7 @@ def distance_plot(connected, distance, plots=None, color=(100, 100, 255), window
         mx = abs(cscat).max()
         if mx != 0:
             cscat = cscat * 0.2# / mx
-        pts[:,1][conn] = -2e-5 - cscat
+        pts[:,1][conn] = -5e-5 - cscat
     if np.any(unconn):
         uscat = pg.pseudoScatter(pts[:,0][unconn], spacing=10e-6, bidir=False)
         mx = abs(uscat).max()
@@ -200,7 +204,7 @@ def distance_plot(connected, distance, plots=None, color=(100, 100, 255), window
         plots[0].grid = grid
         plots[0].addLegend()
         grid.show()
-    plots[0].setLabels(bottom=('distance', 'm'), left='connection probability')
+        plots[0].setLabels(bottom=('distance', 'm'), left='connection probability')
 
     if plots[1] is not None:
         plots[1].setXLink(plots[0])
@@ -235,7 +239,7 @@ def distance_plot(connected, distance, plots=None, color=(100, 100, 255), window
             prop.append(np.nan)
         else:
             prop.append(n_conn / n_probed)
-            ci = binomial_ci(n_conn, n_probed)
+            ci = proportion_confint(n_conn, n_probed, method='beta')
             lower.append(ci[0])
             upper.append(ci[1])
             ci_xvals.append(x)
@@ -252,4 +256,4 @@ def distance_plot(connected, distance, plots=None, color=(100, 100, 255), window
     fill.setZValue(-10)
     plots[0].addItem(fill, ignoreBounds=True)
     
-    return plots
+    return plots, ci_xvals, prop, upper, lower

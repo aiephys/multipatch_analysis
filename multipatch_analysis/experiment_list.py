@@ -16,6 +16,7 @@ from .ui.graphics import MatrixItem, distance_plot
 from .experiment import Experiment
 from .constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
 from . import config
+from statsmodels.stats.proportion import proportion_confint
 
 
 _expt_list = None
@@ -164,7 +165,7 @@ class ExperimentList(object):
                     print("SKIPPED:", expt_id)
                     cached += 1
                     continue
-                expt = Experiment(entry)
+                expt = Experiment(entry=entry)
             except Exception as exc:
                 errs.append((entry, sys.exc_info()))
                 continue
@@ -284,7 +285,7 @@ class ExperimentList(object):
             if expt.region is None:
                 print("Warning: Experiment %s has no region" % str(expt.source_id))
 
-    def distance_plot(self, pre_types=None, post_types=None, connection_types=None, plots=None, color=(100, 100, 255), name=None):
+    def count_connections(self, pre_types=None, post_types=None, connection_types=None):
         # get all connected and unconnected distances for pre->post
         probed = []
         connected = []
@@ -324,12 +325,25 @@ class ExperimentList(object):
                     if not (pre_ok and post_ok):
                         continue
                 dist = ci.distance(cj)
-                probed.append(dist)
-                connected.append((i, j) in expt.connections)
+                if dist is not None and np.isfinite(dist):
+                    probed.append(dist)
+                    connected.append((i, j) in expt.connections)
+        
+        return connected, probed
+        
+    def distance_plot(self, pre_types=None, post_types=None, connection_types=None, plots=None, color=(100, 100, 255), name=None):
+        if isinstance(pre_types, str):
+            pre_types = [(None, pre_types)]
+        if isinstance(post_types, str):
+            post_types = [(None, post_types)]
+
+        connected, probed = self.count_connections(pre_types, post_types, connection_types)
+
         if name is None:
             pre_strs = [("" if layer is None else ("L" + layer + " ")) + (cre_type or "") for layer, cre_type in pre_types]
             post_strs = [("" if layer is None else ("L" + layer + " ")) + (cre_type or "") for layer, cre_type in post_types]
             name = ("%s->%s "%(','.join(pre_strs), ','.join(post_strs)))
+        
         return distance_plot(connected, distance=probed, plots=plots, color=color, name=name, window=40e-6, spacing=40e-6)
 
     def connectivity_matrix(self, rows, cols):
@@ -492,6 +506,7 @@ class ExperimentList(object):
         print("")
 
         print("Mean age: %0.1f" % np.nanmean(ages))
+        print("Age stdev: %0.1f" % np.nanstd(ages))
         print("")
 
     def connectivity_summary(self, cre_type=None):
@@ -504,11 +519,13 @@ class ExperimentList(object):
                 if cre_type is not None and list(cre_type) != [x[1] for x in k]:
                     continue
                 if k not in summary:
-                    summary[k] = {'connected':0, 'unconnected':0, 'cdist':[], 'udist':[]}
+                    summary[k] = {'connected':0, 'unconnected':0, 'cdist':[], 'udist':[], 'connected_pairs': [], 'probed_pairs': []}
                 summary[k]['connected'] += v['connected']
                 summary[k]['unconnected'] += v['unconnected']
                 summary[k]['cdist'].extend(v['cdist'])
                 summary[k]['udist'].extend(v['udist'])
+                summary[k]['connected_pairs'].extend([(expt.timestamp, i, j) for i,j in v['connected_pairs']])
+                summary[k]['probed_pairs'].extend([(expt.timestamp, i, j) for i,j in v['probed_pairs']])
         return summary
 
     def compare_connectivity(self, expts):
@@ -584,9 +601,9 @@ class ExperimentList(object):
         return summary
 
     def print_connectivity_summary(self, cre_type=None):
-        print("-------------------------------------------------------------")
-        print("     Connectivity  (# connected/probed, # reciprocal, % connectivity, %250, %100, cdist, udist, adist)")
-        print("-------------------------------------------------------------")
+        print("------------------------------------------------------------------------------------------------------------------------------------------------------------------------")
+        print("     Connectivity                           (# connected/probed, # reciprocal, % connectivity, lower CI, upper CI, %250, lower CI, upper CI, %100, lower CI, upper CI, cdist, udist, adist)")
+        print("------------------------------------------------------------------------------------------------------------------------------------------------------------------------")
 
         tot_probed, tot_connected = self.n_connections_probed()
 
@@ -602,8 +619,7 @@ class ExperimentList(object):
                     #if reciprocal_summary[k]['Total_connections'] == v['connected']:
                     reciprocal = str(reciprocal_summary[k]['Reciprocal'])
                 else:
-                    reciprocal = 'nan'
-
+                    reciprocal = 'nan' 
                 # calculate probability of connectivity over all points,
                 # within 250um, and within 100um.
                 pconn = []
@@ -612,6 +628,30 @@ class ExperimentList(object):
                     t = c + np.sum(np.array(v['udist']) <= max_dist)
                     pconn.append(c / t)
                 
+                #calculate upper and lower confidence intervals for connectivity
+                #over all distances and within 100 and 250um
+
+                #all connections
+                all_CI = proportion_confint(v['connected'], probed, method='beta')
+
+                #within 250um
+                twofifty_um_connected = sum(np.array(v['cdist']) <= 250e-6)
+                twofifty_um_probed = twofifty_um_connected + np.sum(np.array(v['udist']) <= 250e-6)
+                twofifty_um_CI = 0 
+                if twofifty_um_probed == 0:
+                    twofifty_um_CI = [0,0]
+                else:
+                    twofifty_um_CI = proportion_confint(twofifty_um_connected, twofifty_um_probed, method='beta')
+
+                #within 100um
+                hundred_um_connected = sum(np.array(v['cdist']) <= 100e-6)
+                hundred_um_probed = hundred_um_connected + np.sum(np.array(v['udist']) <= 100e-6)
+                hundred_um_CI = 0
+                if hundred_um_probed == 0:
+                    hundred_um_CI = [0,0]
+                else:
+                    hundred_um_CI = proportion_confint(hundred_um_connected, hundred_um_probed, method='beta')
+
                 totals.append((
                     "L%s %s"%k[0],               # pre type
                     "L%s %s"%k[1],               # post type
@@ -619,8 +659,14 @@ class ExperimentList(object):
                     probed,                      # n probed
                     reciprocal,                  # n reciprocal
                     100*pconn[0],                # % connected
+                    100*all_CI[0],               # lower CI of all connectivity
+                    100*all_CI[1],               # upper CI of all connectivity
                     100*pconn[1],                # % connected <= 250um
+                    100*twofifty_um_CI[0],       # lower CI for connectivity within 250um
+                    100*twofifty_um_CI[1],       # upper CI for connectivity within 250um
                     100*pconn[2],                # % connected <= 100um
+                    100*hundred_um_CI[0],        # lower CI for connectivity within 100um
+                    100*hundred_um_CI[1],        # upper CI for connectivity within 100um
                     np.nanmean(v['cdist'])*1e6,  # avg cdist
                     np.nanmean(v['udist'])*1e6,  # avg udist
                     np.nanmean(v['cdist']+v['udist'])*1e6   # avg dist
@@ -634,9 +680,9 @@ class ExperimentList(object):
             fields.insert(2, pad)
             fields = tuple(fields)
             try:
-                print(u"%s → %s%s\t:\t%d/%d\t%s\t%0.2f%%\t%0.2f%%\t%0.2f%%\t%0.2f\t%0.2f\t%0.2f" % fields)
+                print(u"%s → %s%s\t:\t%d/%d\t%s\t%0.2f\t%0.2f,%0.2f\t%0.2f\t%0.2f,%0.2f\t%0.2f\t%0.2f,%0.2f\t%0.2f\t%0.2f\t%0.2f" % fields)
             except UnicodeEncodeError:
-                print("%s - %s%s\t:\t%d/%d\t%s\t%0.2f%%\t%0.2f%%\t%0.2f%%\t%0.2f\t%0.2f\t%0.2f" % fields)
+                print("%s → %s%s\t:\t%d/%d\t%s\t%0.2f\t%0.2f,%0.2f\t%0.2f\t%0.2f,%0.2f\t%0.2f\t%0.2f,%0.2f\t%0.2f\t%0.2f\t%0.2f" % fields)
 
         print("\nTotal:  \t%d/%d\t%0.2f%%" % (tot_connected, tot_probed, 100*tot_connected/(tot_connected+tot_probed)))
         print("")
@@ -733,7 +779,7 @@ class ExperimentList(object):
             distance = (c1.distance(c2))*10**6
             expt = conn['expt']
             i = self._expts.index(expt)
-            print(u"%s %d->%d: \t%s,%s -> %s,%s; %.0f um" % (expt.uid, c1.cell_id, c2.cell_id, c1.target_layer, c1.cre_type,
+            print(u"%0.3f %d->%d: \t%s,%s -> %s,%s; %.0f um" % (expt.timestamp, c1.cell_id, c2.cell_id, c1.target_layer, c1.cre_type,
                                                              c2.target_layer, c2.cre_type, distance))
             if 'stims' in conn:
                 stims = conn['stims']
