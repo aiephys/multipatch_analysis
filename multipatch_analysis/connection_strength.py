@@ -5,7 +5,7 @@ Analyses that measure the strength of synaptic connections.
 """
 from __future__ import print_function, division
 
-import sys, multiprocessing
+import sys, multiprocessing, time
 
 import numpy as np
 import pandas
@@ -189,6 +189,10 @@ def compute_connection_strength(job_info, raise_exceptions=False):
             # Write new record to DB
             conn = ConnectionStrength(pair_id=pair.id, **results)
             session.add(conn)
+
+        expt.meta = expt.meta.copy()  # required by sqlalchemy to flag as modified
+        expt.meta['connection_strength_timestamp'] = time.time()
+
         session.commit()
     except:
         session.rollback()

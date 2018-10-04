@@ -20,7 +20,7 @@ from sqlalchemy.sql.expression import func
 from .. import config
 
 # database version should be incremented whenever the schema has changed
-db_version = 8
+db_version = 9
 db_name = '{database}_{version}'.format(database=config.synphys_db, version=db_version)
 db_address = '{host}/{database}'.format(host=config.synphys_db_host, database=db_name)
 
@@ -46,7 +46,6 @@ table_schemas = {
         ('slice_conditions', 'object', 'JSON containing solutions, perfusion, incubation time, etc.'),
         ('lims_specimen_name', 'str', 'Name of LIMS "slice" specimen'),
         ('storage_path', 'str', 'Location of data within server or cache storage'),
-        ('submission_data', 'object'),          # structure generated for original submission
     ],
     'experiment': [
         "A group of cells patched simultaneously in the same slice.",
@@ -58,17 +57,14 @@ table_schemas = {
         ('acq_timestamp', 'float', 'Creation timestamp for site data acquisition folder.', {'unique': True, 'index': True}),
         ('slice_id', 'slice.id', 'ID of the slice used for this experiment'),
         ('target_region', 'str', 'The intended brain region for this experiment'),
-        ('internal', 'str', 'The name of the internal solution used in this experiment. '
+        ('internal', 'str', 'The name of the internal solution used in this experiment '
+                            '(or "mixed" if more than one solution was used). '
                             'The solution should be described in the pycsf database.'),
         ('acsf', 'str', 'The name of the ACSF solution used in this experiment. '
                         'The solution should be described in the pycsf database.'),
         ('target_temperature', 'float', 'The intended temperature of the experiment (but actual recording temperature is stored elsewhere)'),
         ('date', 'datetime', 'The date of this experiment'),
         ('lims_specimen_id', 'int', 'ID of LIMS "CellCluster" specimen.'),
-        ('submission_data', 'object', 'structure generated for original submission.'),
-        ('lims_trigger_id', 'int', 'ID used to query status of LIMS upload.'),
-        ('connectivity_analysis_complete', 'bool'),
-        ('kinetics_analysis_complete', 'bool'),
     ],
     'electrode': [
         "Each electrode records a patch attempt, whether or not it resulted in a "
@@ -78,6 +74,7 @@ table_schemas = {
         ('start_time', 'datetime', 'The time when recording began for this electrode.'),
         ('stop_time', 'datetime', 'The time when recording ended for this electrode.'),
         ('device_id', 'int', 'External identifier for the device attached to this electrode (usually the MIES A/D channel)'),
+        ('internal', 'str', 'The name of the internal solution used in this electrode.'),
         ('initial_resistance', 'float'),
         ('initial_current', 'float'),
         ('pipette_offset', 'float'),
