@@ -40,7 +40,7 @@ if __name__ == '__main__':
         ('vacuum',                  ('python util/database.py --vacuum', 'vacuum')),
     ])
 
-    skip = args.skip.split(',')
+    skip = [] if args.skip == '' else args.skip.split(',')
     for name in skip:
         if name not in stages:
             print("Unknown stage %r. Options are: %r" % (name, list(stages.keys())))
