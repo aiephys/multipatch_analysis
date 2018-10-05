@@ -1029,6 +1029,12 @@ class Experiment(object):
         return os.path.join(expt_dir, *subpath)
 
     @property
+    def rig_operator(self):
+        """The rig operator running this experiment.
+        """
+        return self.expt_info.get('rig_operator', None)
+
+    @property
     def rig_name(self):
         """The name of the rig used to acquire this experiment.
         """
