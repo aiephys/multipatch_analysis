@@ -32,12 +32,12 @@ class Dashboard(QtGui.QWidget):
         self.visible_fields = [
             ('timestamp', float), 
             ('rig', 'U100'), 
+            ('operator', 'U100'), 
             ('path', 'U100'), 
             ('project', 'U100'),
             ('description', 'U100'), 
             ('primary', 'U100'), 
             ('archive', 'U100'), 
-            ('backup', 'U100'), 
             ('NAS', 'U100'), 
             ('data', 'U100'),
             ('submitted', 'U100'),
@@ -54,6 +54,7 @@ class Dashboard(QtGui.QWidget):
         # data tracked but not displayed
         self.hidden_fields = [
             ('experiment', object),
+            ('backup', 'U100'), 
             ('lims_slice_name', object),
             ('item', object),
             ('error', object),
@@ -98,6 +99,7 @@ class Dashboard(QtGui.QWidget):
         self.filter.setFields(self.filter_fields)
         self.left_vbox.addWidget(self.filter)
         self.filter.sigFilterChanged.connect(self.filter_changed)
+        self.filter.addFilter('operator')
         self.filter.addFilter('rig')
         self.filter.addFilter('project')
 
@@ -579,6 +581,7 @@ class ExperimentMetadata(Experiment):
 
             rec['timestamp'] = self.timestamp
             rec['rig'] = self.rig_name
+            rec['operator'] = self.rig_operator
             rec['path'] = self.expt_subpath
             rec['project'] = self.slice_info.get('project', None)
             rec['primary'] = False if self.primary_path is None else (True if os.path.exists(self.primary_path) else "-")
