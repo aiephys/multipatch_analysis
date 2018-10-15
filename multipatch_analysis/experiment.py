@@ -398,18 +398,22 @@ class Experiment(object):
                 passed_holding = 0
                 for srec in nwb.contents:
                     try:
-                        rec = srec[ad_chan]
-                    except KeyError:
-                        continue
-                    if rec.clamp_mode == 'vc':
-                        if rec.baseline_current is not None and abs(rec.baseline_current) < 800e-12:
-                            passed_holding += 1
-                    else:
-                        vm = rec.baseline_potential
-                        if vm > -75e-3 and vm < -50e-3:
-                            passed_holding += 1
-                    if passed_holding >= 5:
-                        break
+                        try:
+                            rec = srec[ad_chan]
+                        except KeyError:
+                            continue
+                        if rec.clamp_mode == 'vc':
+                            if rec.baseline_current is not None and abs(rec.baseline_current) < 800e-12:
+                                passed_holding += 1
+                        else:
+                            vm = rec.baseline_potential
+                            if vm > -75e-3 and vm < -50e-3:
+                                passed_holding += 1
+                        if passed_holding >= 5:
+                            break
+                    except Exception as exc:
+                        print("Warning: error occurred analyzing cell qc for %s: %s" % (srec, exc))
+                        
                 if passed_holding >= 5:
                     holding_qc = True
                     # need to fix these!
