@@ -2,6 +2,10 @@ from __future__ import print_function
 import os, sys, time
 
 
+def datetime_to_timestamp(d):
+    return time.mktime(d.timetuple()) + d.microsecond * 1e-6
+
+
 def sync_dir(source_path, dest_path, test=False, make_dir=False):
     """Safely duplicate a directory structure
     """
