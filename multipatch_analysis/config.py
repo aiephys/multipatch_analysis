@@ -45,9 +45,12 @@ rig_data_paths:
 
 # directories to be synchronized nightly
 backup_paths:
-    mp1:
+    rig_data:
         source: "D:\\"
         dest: "E:\\archive"
+    system_drive:
+        source: "C:\\"
+        dest: "E:\\C_backup"
         
 """
 
