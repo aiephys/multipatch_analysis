@@ -315,9 +315,10 @@ class ExperimentDBSubmission(object):
                 # import test pulse information
                 tp = rec.nearest_test_pulse
                 if tp is not None:
+                    indices = tp.indices or [None, None]
                     tp_entry = db.TestPulse(
-                        start_index=tp.indices[0],
-                        stop_index=tp.indices[1],
+                        start_index=indices[0],
+                        stop_index=indices[1],
                         baseline_current=tp.baseline_current,
                         baseline_potential=tp.baseline_potential,
                         access_resistance=tp.access_resistance,

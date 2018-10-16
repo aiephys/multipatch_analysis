@@ -571,9 +571,9 @@ def default_session(fn):
 def slice_from_timestamp(ts, session=None):
     slices = session.query(Slice).filter(Slice.acq_timestamp==ts).all()
     if len(slices) == 0:
-        raise KeyError("No slice found for timestamp %s" % ts)
+        raise KeyError("No slice found for timestamp %0.3f" % ts)
     elif len(slices) > 1:
-        raise KeyError("Multiple slices found for timestamp %s" % ts)
+        raise KeyError("Multiple slices found for timestamp %0.3f" % ts)
     
     return slices[0]
 
@@ -587,9 +587,9 @@ def experiment_from_timestamp(ts, session=None):
             if abs((expt.acq_timestamp - ts)) < 0.01:
                 return expt
         
-        raise KeyError("No experiment found for timestamp %s" % ts)
+        raise KeyError("No experiment found for timestamp %0.3f" % ts)
     elif len(expts) > 1:
-        raise RuntimeError("Multiple experiments found for timestamp %s" % ts)
+        raise RuntimeError("Multiple experiments found for timestamp %0.3f" % ts)
     
     return expts[0]
 
