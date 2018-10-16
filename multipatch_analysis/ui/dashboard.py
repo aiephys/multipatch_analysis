@@ -155,7 +155,7 @@ class Dashboard(QtGui.QWidget):
 
         self.resize(1000, 900)
         self.splitter.setSizes([200, 800])
-        colsizes = [150, 50, 230, 150, 200]
+        colsizes = [150, 50, 100, 230, 150, 200]
         for i in range(len(self.visible_fields)):
             size = colsizes[i] if i < len(colsizes) else 50
             self.expt_tree.setColumnWidth(i, size)
@@ -254,7 +254,7 @@ class Dashboard(QtGui.QWidget):
 
         msg = [
             "\n======= Selected: ======================",
-            "       timestamp: %s" % expt.timestamp,
+            "       timestamp: %0.3f" % expt.timestamp,
             "     description: %s" % rec['description'],
         ]
         print_fields = [
