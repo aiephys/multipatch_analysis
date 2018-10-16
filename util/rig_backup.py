@@ -27,11 +27,13 @@ parser.add_argument('--test', action='store_true', default=False, help="Print ac
 args = parser.parse_args(sys.argv[1:])
 
 if args.rigs == '*':
-    rigs = config.rig_backup_paths.keys()
+    rigs = config.backup_paths.keys()
 else:
     rigs = args.rigs.split(',')
 
 for rig in rigs:
-    source_path, dest_path = config.rig_backup_paths[rig]
+    spec = config.backup_paths[rig]
+    source_path = spec['source']
+    dest_path = spec['dest']
     log_file = os.path.join(dest_path, 'backup.log')
     sync_dir(source_path, dest_path, test=args.test, log_file=log_file)
