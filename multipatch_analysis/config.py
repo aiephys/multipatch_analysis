@@ -19,7 +19,7 @@ raw_data_paths = []
 summary_files = []
 
 
-template = """
+template = r"""
 # synphys database
 synphys_db_host: "postgresql://readonly:readonly@10.128.36.109"
 synphys_db: "synphys"
