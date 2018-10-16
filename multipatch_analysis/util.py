@@ -14,7 +14,7 @@ def datetime_to_timestamp(d):
     return time.mktime(d.timetuple()) + d.microsecond * 1e-6
 
 
-def sync_dir(source_path, dest_path, test=False, log_file=None, depth=0):
+def sync_dir(source_path, dest_path, test=False, log_file=None, depth=0, archive_deleted=False):
     """Safely duplicate a directory structure
     
     All files/folders are recursively synchronized from source_path to dest_path.
@@ -32,6 +32,9 @@ def sync_dir(source_path, dest_path, test=False, log_file=None, depth=0):
         If True, then no changes are made to the destination
     log_file : str
         Path to a file for logging all chages made. Log files are rotated once per week.
+    archive_deleted : bool
+        If True, then files that have been deleted from the source path will be archived in the 
+        destination path. If False, then such files are simply left in place.
     """
     log_handler = None
     if log_file is not None and test is False:
@@ -56,25 +59,26 @@ def sync_dir(source_path, dest_path, test=False, log_file=None, depth=0):
             src_name = os.path.join(source_path, child)
             dst_name = os.path.join(dest_path, child)
             if os.path.isdir(src_name):
-                sync_dir(src_name, dst_name, test=test, depth=depth+1)
+                sync_dir(src_name, dst_name, test=test, depth=depth+1, archive_deleted=archive_deleted)
             else:
                 sync_file(src_name, dst_name, test=test)
 
         # check for deleted files
-        for child in os.listdir(dest_path):
-            src_name = os.path.join(source_path, child)
-            dst_name = os.path.join(dest_path, child)
-            
-            # log files are expected to exist only in destination 
-            if log_file is not None and dst_name.startswith(log_file):
-                continue
-            
-            # don't compare archived versions
-            if archived_filename(dst_name) is not None:
-                continue
+        if archive_deleted:
+            for child in os.listdir(dest_path):
+                src_name = os.path.join(source_path, child)
+                dst_name = os.path.join(dest_path, child)
                 
-            if not os.path.exists(src_name):
-                archive_file(dst_name, test=test)
+                # log files are expected to exist only in destination 
+                if log_file is not None and dst_name.startswith(log_file):
+                    continue
+                
+                # don't compare archived versions
+                if archived_filename(dst_name) is not None:
+                    continue
+                    
+                if not os.path.exists(src_name):
+                    archive_file(dst_name, test=test)
     
     except BaseException as exc:
         logger.error("Error during sync_dir(%s, %s): %s", source_path, dest_path, str(exc))

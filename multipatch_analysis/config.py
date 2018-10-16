@@ -48,9 +48,11 @@ backup_paths:
     rig_data:
         source: "D:\\"
         dest: "E:\\archive"
+        archive_deleted: false
     system_drive:
         source: "C:\\"
         dest: "E:\\C_backup"
+        archive_deleted: true
         
 """
 
