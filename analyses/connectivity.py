@@ -53,7 +53,6 @@ def display_connectivity(pre_class, post_class, result, show_confidence=True):
         [(0,0,100), (80,0,80), (140,0,0), (255,100,0), (255,255,100), (255,255,255)],
     )
 
-
     connectivity, lower_ci, upper_ci = result['connection_probability']
 
     if show_confidence:

@@ -39,6 +39,7 @@ class Dashboard(QtGui.QWidget):
             ('primary', 'U100'), 
             ('archive', 'U100'), 
             ('NAS', 'U100'), 
+            ('backup', 'U100'), 
             ('data', 'U100'),
             ('submitted', 'U100'),
             ('connections', 'U100'),
@@ -54,7 +55,6 @@ class Dashboard(QtGui.QWidget):
         # data tracked but not displayed
         self.hidden_fields = [
             ('experiment', object),
-            ('backup', 'U100'), 
             ('lims_slice_name', object),
             ('item', object),
             ('error', object),
@@ -349,6 +349,10 @@ class Dashboard(QtGui.QWidget):
                     color = fail_color
                 elif val in ('ERROR', 'MISSING'):
                     color = fail_color
+                elif val == '-':
+                    # dash means item is incomplete but still acceptable
+                    color = [c * 0.5 + 128 for c in pass_color]
+            
             display_val = str(val)
 
             if field == 'timestamp' and rec.get('error') is not None:
