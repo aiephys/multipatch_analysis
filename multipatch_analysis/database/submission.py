@@ -136,12 +136,17 @@ class ExperimentDBSubmission(object):
         self._fields = None
 
     def submitted(self):
+        """Return (is_in_db, needs_update)
+        """
+        session = db.Session()
         ts = self.expt.timestamp
+        mod_time = self.expt.last_modification_time
         try:
-            expt_entry = db.experiment_from_timestamp(ts)
-            return True
+            expt_entry = db.experiment_from_timestamp(ts, session=session)
         except KeyError:
-            return False
+            return False, False
+            
+        return True, mod_time < expt_entry.meta['db_timestamp'] - 10000
 
     def check(self):
         warnings = []
@@ -175,7 +180,8 @@ class ExperimentDBSubmission(object):
             'target_temperature': temp,
         }
         
-        if self.submitted():
+        in_db, needs_update = self.submitted()
+        if in_db and not needs_update:
             errors.append("Experiment is already submitted.")
 
         return errors, warnings
@@ -253,7 +259,7 @@ class ExperimentDBSubmission(object):
                     experiment=expt_entry,
                     pre_cell=pre_cell_entry,
                     post_cell=post_cell_entry,
-                    synapse=synapse,
+                    synapse=True,
                     electrical=electrical,
                     n_ex_test_spikes=0,  # will be counted later
                     n_in_test_spikes=0,
@@ -465,7 +471,6 @@ class ExperimentDBSubmission(object):
                     )
                     session.add(base_entry)
             
-        
     def submit(self):
         session = db.Session(readonly=False)
         try:
@@ -476,3 +481,11 @@ class ExperimentDBSubmission(object):
             raise
         finally:
             session.close()
+
+    def remove_from_db(self):
+        session = db.Session()
+        ts = self.expt.timestamp
+        expt_entry = db.experiment_from_timestamp(ts, session=session)
+        session.delete(expt_entry)
+        session.commit()         
+        

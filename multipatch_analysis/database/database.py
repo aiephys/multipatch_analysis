@@ -59,7 +59,7 @@ table_schemas = {
         ('rig_name', 'str', 'Identifier for the rig that generated these results.'),
         ('project_name', 'str', 'Name of the project to which this experiment belongs.'),
         ('acq_timestamp', 'float', 'Creation timestamp for site data acquisition folder.', {'unique': True, 'index': True}),
-        ('slice_id', 'slice.id', 'ID of the slice used for this experiment'),
+        ('slice_id', 'slice.id', 'ID of the slice used for this experiment', {'index': True}),
         ('target_region', 'str', 'The intended brain region for this experiment'),
         ('internal', 'str', 'The name of the internal solution used in this experiment '
                             '(or "mixed" if more than one solution was used). '
@@ -89,7 +89,7 @@ table_schemas = {
     ],
     'cell': [
         "Each row represents a single patched cell.",
-        ('electrode_id', 'electrode.id'),
+        ('electrode_id', 'electrode.id', '', {'index': True}),
         ('cre_type', 'str', 'Comma-separated list of cre drivers apparently expressed by this cell'),
         ('target_layer', 'str', 'The intended cortical layer for this cell (used as a placeholder until the actual layer call is made)'),
         ('is_excitatory', 'bool', 'True if the cell is determined to be excitatory by synaptic current, cre type, or morphology'),
@@ -467,7 +467,8 @@ def create_all_mappings():
 
     StimSpike.pulse = relationship(StimPulse, back_populates="spikes")
     StimPulse.spikes = relationship(StimSpike, back_populates="pulse", single_parent=True)
-
+    StimPulse.pulse_response = relationship(PulseResponse, back_populates="stim_pulse", cascade="delete", single_parent=True)
+    
     Recording.baselines = relationship(Baseline, back_populates="recording", cascade="delete", single_parent=True)
     Baseline.recording = relationship(Recording, back_populates="baselines")
 

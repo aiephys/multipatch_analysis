@@ -123,6 +123,24 @@ class Experiment(object):
         return self.datetime.date()
 
     @property
+    def last_modification_time(self):
+        """The timestamp of the most recently modified file in this experiment.
+        """
+        files = [
+            self.path,
+            self.pipette_file,
+            self.nwb_file,
+            self.mosaic_file,
+        ]
+        mtime = 0
+        for file in files:
+            if file is None or not os.path.exists(file):
+                continue
+            mtime = max(mtime, os.stat(file).st_mtime)
+        
+        return mtime
+
+    @property
     def connections(self):
         """A list of synaptic connections reported for this experiment, excluding any that did not pass QC.
         

@@ -11,6 +11,9 @@ from multipatch_analysis.database.submission import SliceSubmission, ExperimentD
 from multipatch_analysis.database import database
 from multipatch_analysis import config, synphys_cache, experiment_list, constants
 
+# these are needed to make sure ORM constraints are loaded in case we delete an experiment
+from multipatch_analysis import morphology, pulse_response_strength, connection_strength
+
 
 def submit_expt(expt_id, raise_exc=False):
     # print(os.getpid(), expt_id, "start")
@@ -28,9 +31,15 @@ def submit_expt(expt_id, raise_exc=False):
         start = time.time()
         
         sub = ExperimentDBSubmission(expt)
-        if sub.submitted():
-            print("   expt %s already in DB" % expt)
+        expt_in_db, expt_needs_update = sub.submitted()
+        if expt_in_db and not expt_needs_update:
+            print("   expt %s already in DB; skip" % expt)
         else:
+            if expt_needs_update:
+                print("   expt needs update..")
+                sub.remove_from_db()
+                print("   deleted, resubmitting..")
+                
             sub.submit()
             print("   expt %s done (%s)" % (expt_id, expt))
 
