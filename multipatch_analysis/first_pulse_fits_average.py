@@ -17,10 +17,15 @@ import os
 #----- specify things up here------------------------------
 #----------------------------------------------------------
 
-fitting_type = 'force_latency' #options 'default', 'force_sign', force_latency
+fitting_type = 'default' #options 'default', 'force_sign', force_latency
+general_image_path='/home/corinnet/workspace/DBfit_pics/'
+
+#----------------------------------------------------------
+#----------------------------------------------------------
+#----------------------------------------------------------
 
 date=datetime.datetime.today().strftime('%Y-%m-%d')
-general_image_path='/home/corinnet/workspace/DBfit_pics/'
+
 if fitting_type == 'default':
     image_path=os.path.join(general_image_path, 'default'+date)
 elif fitting_type == 'force_sign':
@@ -30,15 +35,13 @@ elif fitting_type == 'force_latency':
 else:
     raise Exception('A recognized type of fitting has not been specified')
 
-save_image = False  #specifies whether to save images
+save_image = True  #specifies whether to save images
 if save_image==True:
     confirm_save = raw_input("You are preforming %s fitting. Save fitting images to %s? " % (fitting_type, image_path)) == 'y'
-    os.makedirs(image_path)
+    if not os.path.exists(image_path):
+        os.makedirs(image_path)
 else:
     print('WARNING YOU ARE NOT SAVING FIGURES')
-#----------------------------------------------------------
-#----------------------------------------------------------
-#----------------------------------------------------------
 
 class FirstPulseFitTableGroup(TableGroup):
     """Fits first pulse for each individual sweeps.
@@ -190,7 +193,7 @@ def compute_fit(job_info, raise_exceptions=False):
         title='%s, cells %i %s to %i %s; distance=%.1f um' % (uid, pre_cell_id, pre_cell_cre, post_cell_id,post_cell_cre, pair_distance*1e6)
         #Specify name for plot saving.
         if save_image:
-            save_image_name=os.path.join(image_folder,'%s_%s%s_%s%s_average_fit.png'  % (uid, pre_cell_id, pre_cell_cre, post_cell_id,post_cell_cre))
+            save_image_name=os.path.join(image_path,'%s_%s%s_%s%s_average_fit.png'  % (uid, pre_cell_id, pre_cell_cre, post_cell_id,post_cell_cre))
         else:
             save_image_name=None
 
@@ -254,6 +257,6 @@ if __name__=='__main__':
 #    first_pulse_fit_tables.drop_tables()
     init_tables()
 #    update_fit(limit=None, expts=[1533768797.736], parallel=False, workers=6, raise_exceptions=False, session=None)
-    update_fit(limit=None, expts=[1492545925.146], parallel=False, workers=6, raise_exceptions=False, session=None)
+#    update_fit(limit=None, expts=[1492545925.146], parallel=False, workers=6, raise_exceptions=False, session=None)
 
-#    update_fit(limit=None, expts=None, parallel=False, workers=6, raise_exceptions=False, session=None)
+    update_fit(limit=None, expts=None, parallel=False, workers=6, raise_exceptions=False, session=None)

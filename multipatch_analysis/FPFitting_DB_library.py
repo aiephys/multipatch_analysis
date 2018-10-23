@@ -190,6 +190,12 @@ def fit_trace(voltage_trace, synaptic_sign, latency=None, plot_show=False, plot_
         if string is supplied then save the plot to the specified path
     title: string
         title of the resulting plot
+    latency: float or None
+        amount of time that has passed in reference to the time of
+        the pre-synaptic spike.  Note that this value has to be transformed in
+        reference to the start of the data waveform being fit within
+        this function.
+
     Note there is a 'time_before_spike' variable in this code that is
     note passed in and therefore must be global.  It specifies the
     the amount of time before the spike that is being considered in 
@@ -220,7 +226,7 @@ def fit_trace(voltage_trace, synaptic_sign, latency=None, plot_show=False, plot_
         raise Exception('synaptic sign not defined')
     
     if latency:
-        xoffset=(latency, 'fixed')
+        xoffset=(latency+time_before_spike, 'fixed')
     else:
         #since these are spike aligned the psp should not happen before the spike that happens at pre_pad by definition
         xoffset=([time_before_spike+1e-3, time_before_spike+4e-3], time_before_spike, time_before_spike+5e-3)
@@ -234,12 +240,18 @@ def fit_trace(voltage_trace, synaptic_sign, latency=None, plot_show=False, plot_
     if plot_show is True or plot_save_name:
         plt.figure(figsize=(14,14))
         ax1=plt.subplot(1,1,1)
-        ln1=ax1.plot(voltage_trace.time_values*1.e3, voltage_trace.data, 'b', label='data')
-        ln2=ax1.plot(voltage_trace.time_values*1.e3, fit.best_fit, 'r', label='nrmse=%f' % fit.nrmse())
+        ln1=ax1.plot(voltage_trace.time_values*1.e3, voltage_trace.data*1e3, 'b', label='data')
+        ln2=ax1.plot(voltage_trace.time_values*1.e3, fit.best_fit*1e3, 'r', label='nrmse=%f \namp (mV)=%f \nlatency (ms)=%f \nrise time (ms)=%f \ndecay tau=%f' % \
+                                            (fit.nrmse(), \
+                                            fit.best_values['amp']*1e3, \
+                                            (fit.best_values['xoffset']-time_before_spike)*1e3, \
+                                            fit.best_values['rise_time']*1e3, \
+                                            fit.best_values['decay_tau']))
         ax2=ax1.twinx()
-        ln3=ax2.plot(voltage_trace.time_values*1.e3,weight, 'k', label='weight')
-        ax1.set_ylabel('voltage')
+        ln3=ax2.plot(voltage_trace.time_values*1.e3, weight, 'k', label='weight')
+        ax1.set_ylabel('voltage (mV)')
         ax2.set_ylabel('weight')
+        ax1.set_xlabel('time (ms): spike happens at 10 ms')
 
         lines_plot= ln1+ln2+ln3
         label_plot = [l.get_label() for l in lines_plot]
