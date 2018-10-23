@@ -19,20 +19,22 @@ raw_data_paths = []
 summary_files = []
 
 
-template = """
-synphys_db_host: "postgresql://postgres:xxxxx@10.128.38.98"
+template = r"""
+# synphys database
+synphys_db_host: "postgresql://readonly:readonly@10.128.36.109"
 synphys_db: "synphys"
-synphys_data: "/path/to/server/synphys_data"
-cache_path: "cache"
+
+# path to synphys network storage
+synphys_data: "N:\\"
+
+cache_path: "E:\\multipatch_analysis_cache"
 rig_name: 'MP_'
 n_headstages: 8
 
+editor_command: '"C:\\Program Files\\Sublime Text 2\\sublime_text.exe" "{file}"'
+browser_command: '"C:\\Program Files (x86)\\Mozilla Firefox\\firefox.exe" {url}'
 
-summary_files:
-    - '/path/to/old/connectivity_summary'
-    - '/path/to/old/connectivity_summary'    
-
-
+# local paths to data sources
 rig_data_paths:
     mp1:
         - primary: /path/to/mp1/primary_data_1
@@ -41,6 +43,19 @@ rig_data_paths:
         - primary: /path/to/mp1/primary_data_2
           archive: /path/to/mp1/data_2_archive
           backup:  /path/to/mp1/data_2_backup
+
+
+# directories to be synchronized nightly
+backup_paths:
+    rig_data:
+        source: "D:\\"
+        dest: "E:\\archive"
+        archive_deleted: false
+    system_drive:
+        source: "C:\\"
+        dest: "E:\\C_backup"
+        archive_deleted: true
+        
 """
 
 configfile = os.path.join(os.path.dirname(__file__), '..', 'config.yml')

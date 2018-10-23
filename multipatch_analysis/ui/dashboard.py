@@ -32,13 +32,14 @@ class Dashboard(QtGui.QWidget):
         self.visible_fields = [
             ('timestamp', float), 
             ('rig', 'U100'), 
+            ('operator', 'U100'), 
             ('path', 'U100'), 
             ('project', 'U100'),
             ('description', 'U100'), 
             ('primary', 'U100'), 
             ('archive', 'U100'), 
-            ('backup', 'U100'), 
             ('NAS', 'U100'), 
+            ('backup', 'U100'), 
             ('data', 'U100'),
             ('submitted', 'U100'),
             ('connections', 'U100'),
@@ -98,6 +99,7 @@ class Dashboard(QtGui.QWidget):
         self.filter.setFields(self.filter_fields)
         self.left_vbox.addWidget(self.filter)
         self.filter.sigFilterChanged.connect(self.filter_changed)
+        self.filter.addFilter('operator')
         self.filter.addFilter('rig')
         self.filter.addFilter('project')
 
@@ -153,7 +155,7 @@ class Dashboard(QtGui.QWidget):
 
         self.resize(1000, 900)
         self.splitter.setSizes([200, 800])
-        colsizes = [150, 50, 230, 150, 200]
+        colsizes = [150, 50, 100, 230, 150, 200]
         for i in range(len(self.visible_fields)):
             size = colsizes[i] if i < len(colsizes) else 50
             self.expt_tree.setColumnWidth(i, size)
@@ -252,7 +254,7 @@ class Dashboard(QtGui.QWidget):
 
         msg = [
             "\n======= Selected: ======================",
-            "       timestamp: %s" % expt.timestamp,
+            "       timestamp: %0.3f" % expt.timestamp,
             "     description: %s" % rec['description'],
         ]
         print_fields = [
@@ -347,6 +349,10 @@ class Dashboard(QtGui.QWidget):
                     color = fail_color
                 elif val in ('ERROR', 'MISSING'):
                     color = fail_color
+                elif val == '-':
+                    # dash means item is incomplete but still acceptable
+                    color = [c * 0.5 + 128 for c in pass_color]
+            
             display_val = str(val)
 
             if field == 'timestamp' and rec.get('error') is not None:
@@ -579,6 +585,7 @@ class ExperimentMetadata(Experiment):
 
             rec['timestamp'] = self.timestamp
             rec['rig'] = self.rig_name
+            rec['operator'] = self.rig_operator
             rec['path'] = self.expt_subpath
             rec['project'] = self.slice_info.get('project', None)
             rec['primary'] = False if self.primary_path is None else (True if os.path.exists(self.primary_path) else "-")
@@ -625,7 +632,7 @@ class ExperimentMetadata(Experiment):
             rec['submitted'] = submitted
             rec['data'] = '-' if self.nwb_file is None else True
             slice_fixed = self.slice_fixed
-            if slice_fixed:
+            if slice_fixed is True:
                 image_20x = self.biocytin_20x_file
                 rec['20x'] = image_20x is not None
             else:

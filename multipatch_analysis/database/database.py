@@ -20,7 +20,7 @@ from sqlalchemy.sql.expression import func
 from .. import config
 
 # database version should be incremented whenever the schema has changed
-db_version = 8
+db_version = 9
 db_name = '{database}_{version}'.format(database=config.synphys_db, version=db_version)
 db_address = '{host}/{database}'.format(host=config.synphys_db_host, database=db_name)
 
@@ -46,7 +46,6 @@ table_schemas = {
         ('slice_conditions', 'object', 'JSON containing solutions, perfusion, incubation time, etc.'),
         ('lims_specimen_name', 'str', 'Name of LIMS "slice" specimen'),
         ('storage_path', 'str', 'Location of data within server or cache storage'),
-        ('submission_data', 'object'),          # structure generated for original submission
     ],
     'experiment': [
         "A group of cells patched simultaneously in the same slice.",
@@ -58,17 +57,14 @@ table_schemas = {
         ('acq_timestamp', 'float', 'Creation timestamp for site data acquisition folder.', {'unique': True, 'index': True}),
         ('slice_id', 'slice.id', 'ID of the slice used for this experiment'),
         ('target_region', 'str', 'The intended brain region for this experiment'),
-        ('internal', 'str', 'The name of the internal solution used in this experiment. '
+        ('internal', 'str', 'The name of the internal solution used in this experiment '
+                            '(or "mixed" if more than one solution was used). '
                             'The solution should be described in the pycsf database.'),
         ('acsf', 'str', 'The name of the ACSF solution used in this experiment. '
                         'The solution should be described in the pycsf database.'),
         ('target_temperature', 'float', 'The intended temperature of the experiment (but actual recording temperature is stored elsewhere)'),
         ('date', 'datetime', 'The date of this experiment'),
         ('lims_specimen_id', 'int', 'ID of LIMS "CellCluster" specimen.'),
-        ('submission_data', 'object', 'structure generated for original submission.'),
-        ('lims_trigger_id', 'int', 'ID used to query status of LIMS upload.'),
-        ('connectivity_analysis_complete', 'bool'),
-        ('kinetics_analysis_complete', 'bool'),
     ],
     'electrode': [
         "Each electrode records a patch attempt, whether or not it resulted in a "
@@ -78,6 +74,7 @@ table_schemas = {
         ('start_time', 'datetime', 'The time when recording began for this electrode.'),
         ('stop_time', 'datetime', 'The time when recording ended for this electrode.'),
         ('device_id', 'int', 'External identifier for the device attached to this electrode (usually the MIES A/D channel)'),
+        ('internal', 'str', 'The name of the internal solution used in this electrode.'),
         ('initial_resistance', 'float'),
         ('initial_current', 'float'),
         ('pipette_offset', 'float'),
@@ -92,9 +89,9 @@ table_schemas = {
         ('cre_type', 'str', 'Comma-separated list of cre drivers apparently expressed by this cell'),
         ('target_layer', 'str', 'The intended cortical layer for this cell (used as a placeholder until the actual layer call is made)'),
         ('is_excitatory', 'bool', 'True if the cell is determined to be excitatory by synaptic current, cre type, or morphology'),
-        ('synapse_sign', 'int', 'The sign of synaptic currents produced by this cell: excitatory=+1, inhibitory=-1, mixed=0'),
-        ('patch_start', 'float'),
-        ('patch_stop', 'float'),
+        ('synapse_sign', 'int', 'The sign of synaptic potentials produced by this cell: excitatory=+1, inhibitory=-1, mixed=0'),
+        ('patch_start', 'float', 'Time at which this cell was first patched'),
+        ('patch_stop', 'float', 'Time at which the electrode was detached from the cell'),
         ('seal_resistance', 'float', 'The seal resistance recorded for this cell immediately before membrane rupture'),
         ('has_biocytin', 'bool', 'If true, then the soma was seen to be darkly stained with biocytin (this indicates a good reseal, but does may not indicate a high-quality fill)'),
         ('has_dye_fill', 'bool', 'Indicates whether the cell was filled with fluorescent dye during the experiment'),
@@ -574,9 +571,9 @@ def default_session(fn):
 def slice_from_timestamp(ts, session=None):
     slices = session.query(Slice).filter(Slice.acq_timestamp==ts).all()
     if len(slices) == 0:
-        raise KeyError("No slice found for timestamp %s" % ts)
+        raise KeyError("No slice found for timestamp %0.3f" % ts)
     elif len(slices) > 1:
-        raise KeyError("Multiple slices found for timestamp %s" % ts)
+        raise KeyError("Multiple slices found for timestamp %0.3f" % ts)
     
     return slices[0]
 
@@ -590,9 +587,9 @@ def experiment_from_timestamp(ts, session=None):
             if abs((expt.acq_timestamp - ts)) < 0.01:
                 return expt
         
-        raise KeyError("No experiment found for timestamp %s" % ts)
+        raise KeyError("No experiment found for timestamp %0.3f" % ts)
     elif len(expts) > 1:
-        raise RuntimeError("Multiple experiments found for timestamp %s" % ts)
+        raise RuntimeError("Multiple experiments found for timestamp %0.3f" % ts)
     
     return expts[0]
 

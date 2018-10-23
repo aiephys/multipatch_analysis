@@ -5,7 +5,7 @@ Analyses that measure the strength of synaptic connections.
 """
 from __future__ import print_function, division
 
-import sys, multiprocessing
+import sys, multiprocessing, time
 
 import numpy as np
 import pyqtgraph as pg
@@ -175,6 +175,11 @@ def compute_strength(job_info, raise_exceptions=False):
         print("Analyzing pulse response strength (expt_id=%f): %d/%d" % (expt_id, index, n_jobs))
         _compute_strength('pulse_response', expt_id, session=session)
         _compute_strength('baseline', expt_id, session=session)
+
+        expt = db.experiment_from_timestamp(expt_id, session=session)
+        expt.meta = expt.meta.copy()  # required by sqlalchemy to flag as modified
+        expt.meta['pulse_response_strength_timestamp'] = time.time()
+
         session.commit()
     except:
         session.rollback()
