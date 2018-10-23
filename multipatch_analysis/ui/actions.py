@@ -56,10 +56,14 @@ class ExperimentActions(pg.QtCore.QObject):
         os.system('python %s %s' % (path, self.experiment.nwb_file))
 
     def connection_detection(self):
-        print(self.experiment)
+        path = os.path.join(os.path.dirname(multipatch_analysis.__file__), '..', 'tools', 'connection_detection.py')
+        os.system('python %s %s' % (path, self.experiment.nwb_file))
 
     def submission_tool(self):
-        print(self.experiment)
+        from acq4.Manager import getManager 
+        man = getManager()
+        st = man.getModule('MultipatchSubmissionModule') 
+        st.ui.set_path(man.dirHandle(self.experiment.path))
 
     def lims_drawing_tool(self):
         # really should use QDesktopServices for this, but it appears to be broken.
