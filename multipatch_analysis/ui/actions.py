@@ -69,7 +69,7 @@ class ExperimentActions(pg.QtCore.QObject):
         # really should use QDesktopServices for this, but it appears to be broken.
         # url = QtCore.QUrl(self.experiment.lims_drawing_tool_url)
         # QtGui.QDesktopServices.openUrl(url)
-        os.system('firefox ' + self.experiment.lims_drawing_tool_url)
+        os.system(config.browser_command.format(url=self.experiment.lims_drawing_tool_url))
 
     def edit_pipettes_yml(self):
         pip_file = self.experiment.pipette_file
