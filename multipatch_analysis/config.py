@@ -31,7 +31,7 @@ cache_path: "E:\\multipatch_analysis_cache"
 rig_name: 'MP_'
 n_headstages: 8
 
-editor_command: '"C:\\Program Files\\Sublime Text 2\\sublime_text.exe" {file}'
+editor_command: '"C:\\Program Files\\Sublime Text 2\\sublime_text.exe" "{file}"'
 browser_command: '"C:\\Program Files (x86)\\Mozilla Firefox\\firefox.exe" {url}'
 
 # local paths to data sources

@@ -53,11 +53,11 @@ class ExperimentActions(pg.QtCore.QObject):
 
     def nwb_viewer(self):
         path = os.path.join(os.path.dirname(multipatch_analysis.__file__), '..', 'tools', 'mies_nwb_viewer.py')
-        os.system('python %s %s' % (path, self.experiment.nwb_file))
+        os.system('python "%s" "%s"' % (path, self.experiment.nwb_file))
 
     def connection_detection(self):
         path = os.path.join(os.path.dirname(multipatch_analysis.__file__), '..', 'tools', 'connection_detection.py')
-        os.system('python %s %s' % (path, self.experiment.nwb_file))
+        os.system('python "%s" "%s"' % (path, self.experiment.nwb_file))
 
     def submission_tool(self):
         from acq4.Manager import getManager 
