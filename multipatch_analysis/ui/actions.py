@@ -1,4 +1,4 @@
-import os
+import os, threading
 from collections import OrderedDict
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtGui, QtCore
@@ -53,11 +53,11 @@ class ExperimentActions(pg.QtCore.QObject):
 
     def nwb_viewer(self):
         path = os.path.join(os.path.dirname(multipatch_analysis.__file__), '..', 'tools', 'mies_nwb_viewer.py')
-        os.system('python "%s" "%s"' % (path, self.experiment.nwb_file))
+        subprocess.Popen('python "%s" "%s"' % (path, self.experiment.nwb_file), shell=True)
 
     def connection_detection(self):
         path = os.path.join(os.path.dirname(multipatch_analysis.__file__), '..', 'tools', 'connection_detection.py')
-        os.system('python "%s" "%s"' % (path, self.experiment.nwb_file))
+        subprocess.Popen('python "%s" "%s"' % (path, self.experiment.nwb_file), shell=True)
 
     def submission_tool(self):
         from acq4.Manager import getManager 
