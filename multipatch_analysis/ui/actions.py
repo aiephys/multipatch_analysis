@@ -69,14 +69,15 @@ class ExperimentActions(pg.QtCore.QObject):
         # really should use QDesktopServices for this, but it appears to be broken.
         # url = QtCore.QUrl(self.experiment.lims_drawing_tool_url)
         # QtGui.QDesktopServices.openUrl(url)
-        os.system(config.browser_command.format(url=self.experiment.lims_drawing_tool_url))
+        cmd = config.browser_command.format(url=self.experiment.lims_drawing_tool_url)
+        subprocess.Popen(cmd, shell=True)
 
     def edit_pipettes_yml(self):
         pip_file = self.experiment.pipette_file
         if pip_file is None:
             raise Exception("No pipettes.yml file for this experiment.")
         cmd = config.editor_command.format(file=pip_file)
-        os.system(cmd)
+        subprocess.Popen(cmd, shell=True)
 
 
 class CellActions(pg.QtCore.QObject):
