@@ -25,6 +25,7 @@ if __name__ == '__main__':
     #     pg.dbg()
 
     if args.rebuild:
+        #TODO: THIS IS CURRENTLY PROBLEMATIC AS YOU WILL NOT WANT TO DROP ALL THE TABLES IN THIS GROUP TO START AGAIN
         first_pulse_fit_tables.drop_tables()
 
     init_tables()
