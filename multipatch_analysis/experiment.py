@@ -140,7 +140,6 @@ class Experiment(object):
     def connection_calls(self):
         """Manually curated list of synaptic connections seen in this experiment, without applying any QC.
         """
-
         return None if self._connections is None else self._connections[:]
 
     @property

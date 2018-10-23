@@ -2,6 +2,8 @@ import os
 from collections import OrderedDict
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtGui, QtCore
+import multipatch_analysis.config as config
+import multipatch_analysis
 
 
 class ExperimentActions(pg.QtCore.QObject):
@@ -19,6 +21,7 @@ class ExperimentActions(pg.QtCore.QObject):
             ('Connection Detection', self.connection_detection),
             ('Submission Tool', self.submission_tool),
             ('LIMS Drawing Tool', self.lims_drawing_tool),
+            ('Edit pipettes.yml', self.edit_pipettes_yml),
         ]
         self.actions = OrderedDict()
         for name, callback in actions:
@@ -49,7 +52,8 @@ class ExperimentActions(pg.QtCore.QObject):
         mod.selectFile(expt.path)
 
     def nwb_viewer(self):
-        print(self.experiment)
+        path = os.path.join(os.path.dirname(multipatch_analysis.__file__), '..', 'tools', 'mies_nwb_viewer.py')
+        os.system('python %s %s' % (path, self.experiment.nwb_file))
 
     def connection_detection(self):
         print(self.experiment)
@@ -62,6 +66,13 @@ class ExperimentActions(pg.QtCore.QObject):
         # url = QtCore.QUrl(self.experiment.lims_drawing_tool_url)
         # QtGui.QDesktopServices.openUrl(url)
         os.system('firefox ' + self.experiment.lims_drawing_tool_url)
+
+    def edit_pipettes_yml(self):
+        pip_file = self.experiment.pipette_file
+        if pip_file is None:
+            raise Exception("No pipettes.yml file for this experiment.")
+        cmd = config.editor_command.format(file=pip_file)
+        os.system(cmd)
 
 
 class CellActions(pg.QtCore.QObject):

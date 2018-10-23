@@ -632,7 +632,7 @@ class ExperimentMetadata(Experiment):
             rec['submitted'] = submitted
             rec['data'] = '-' if self.nwb_file is None else True
             slice_fixed = self.slice_fixed
-            if slice_fixed:
+            if slice_fixed is True:
                 image_20x = self.biocytin_20x_file
                 rec['20x'] = image_20x is not None
             else:
