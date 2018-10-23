@@ -1,7 +1,9 @@
-import os
+import os, subprocess
 from collections import OrderedDict
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtGui, QtCore
+import multipatch_analysis.config as config
+import multipatch_analysis
 
 
 class ExperimentActions(pg.QtCore.QObject):
@@ -19,6 +21,7 @@ class ExperimentActions(pg.QtCore.QObject):
             ('Connection Detection', self.connection_detection),
             ('Submission Tool', self.submission_tool),
             ('LIMS Drawing Tool', self.lims_drawing_tool),
+            ('Edit pipettes.yml', self.edit_pipettes_yml),
         ]
         self.actions = OrderedDict()
         for name, callback in actions:
@@ -49,19 +52,32 @@ class ExperimentActions(pg.QtCore.QObject):
         mod.selectFile(expt.path)
 
     def nwb_viewer(self):
-        print(self.experiment)
+        path = os.path.join(os.path.dirname(multipatch_analysis.__file__), '..', 'tools', 'mies_nwb_viewer.py')
+        subprocess.Popen('python "%s" "%s"' % (path, self.experiment.nwb_file), shell=True)
 
     def connection_detection(self):
-        print(self.experiment)
+        path = os.path.join(os.path.dirname(multipatch_analysis.__file__), '..', 'tools', 'connection_detection.py')
+        subprocess.Popen('python "%s" "%s"' % (path, self.experiment.nwb_file), shell=True)
 
     def submission_tool(self):
-        print(self.experiment)
+        from acq4.Manager import getManager 
+        man = getManager()
+        st = man.getModule('MultipatchSubmissionModule') 
+        st.ui.set_path(man.dirHandle(self.experiment.path))
 
     def lims_drawing_tool(self):
         # really should use QDesktopServices for this, but it appears to be broken.
         # url = QtCore.QUrl(self.experiment.lims_drawing_tool_url)
         # QtGui.QDesktopServices.openUrl(url)
-        os.system('firefox ' + self.experiment.lims_drawing_tool_url)
+        cmd = config.browser_command.format(url=self.experiment.lims_drawing_tool_url)
+        subprocess.Popen(cmd, shell=True)
+
+    def edit_pipettes_yml(self):
+        pip_file = self.experiment.pipette_file
+        if pip_file is None:
+            raise Exception("No pipettes.yml file for this experiment.")
+        cmd = config.editor_command.format(file=pip_file)
+        subprocess.Popen(cmd, shell=True)
 
 
 class CellActions(pg.QtCore.QObject):

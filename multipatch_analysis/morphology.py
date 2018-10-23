@@ -5,7 +5,7 @@ For generating a DB table describing cell morphology.
 """
 from __future__ import print_function, division
 
-import os, sys, multiprocessing
+import os, sys, multiprocessing, time
 
 from .database import database as db
 from .database import TableGroup
@@ -104,6 +104,10 @@ def import_morphology(job_info, raise_exceptions=False):
             # Write new record to DB
             morphology = Morphology(cell_id=cell.id, **results)
             session.add(morphology)
+
+        expt.meta = expt.meta.copy()  # required by sqlalchemy to flag as modified
+        expt.meta['morphology_timestamp'] = time.time()
+
         session.commit()
     except:
         session.rollback()

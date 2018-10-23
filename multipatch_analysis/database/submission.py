@@ -1,5 +1,5 @@
 from acq4.util.DataManager import getDirHandle
-import os, re, json, yaml, shutil
+import os, re, json, yaml, shutil, time
 from collections import OrderedDict
 from datetime import datetime, timedelta
 import numpy as np
@@ -66,7 +66,6 @@ class SliceSubmission(object):
                 'slice_conditions': {},
                 'lims_specimen_name': sid,
                 'storage_path': self.dh.name(relativeTo=self.dh.parent().parent()),
-                'submission_data': None,
             }
         return self._fields
 
@@ -111,6 +110,7 @@ class SliceSubmission(object):
             raise Exception("Submission has errors; see SliceSubmission.check()")
         data = self.fields
         sl = db.Slice(**data)
+        sl.meta = {'db_timestamp': time.time()}
         return sl
         
     def submit(self):
@@ -269,6 +269,8 @@ class ExperimentDBSubmission(object):
         if self.expt.nwb_file is not None:
             self._load_nwb(session, expt_entry, elecs_by_ad_channel, pairs_by_device_id)
 
+        expt_entry.meta = {'db_timestamp': time.time()}
+
         return expt_entry
 
     def _load_nwb(self, session, expt_entry, elecs_by_ad_channel, pairs_by_device_id):
@@ -313,9 +315,10 @@ class ExperimentDBSubmission(object):
                 # import test pulse information
                 tp = rec.nearest_test_pulse
                 if tp is not None:
+                    indices = tp.indices or [None, None]
                     tp_entry = db.TestPulse(
-                        start_index=tp.indices[0],
-                        stop_index=tp.indices[1],
+                        start_index=indices[0],
+                        stop_index=indices[1],
                         baseline_current=tp.baseline_current,
                         baseline_potential=tp.baseline_potential,
                         access_resistance=tp.access_resistance,

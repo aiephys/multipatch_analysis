@@ -1082,7 +1082,7 @@ if __name__ == '__main__':
     for mask, name in [(fn_mask, 'negatives'), (fp_mask, 'positives')]:
         print("\n================ Possible false %s: ==============\n" % name)
         for rec in recs[mask]:
-            pid = rec['pair_id']
+            pid = int(rec['pair_id'])
             pair = session.query(db.Pair).filter(db.Pair.id==pid).all()[0]
             pre_cell = pair.pre_cell
             post_cell = pair.post_cell

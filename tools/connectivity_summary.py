@@ -71,7 +71,11 @@ if len(all_expts) == 0:
 
 # force cell QC to run before caching
 for expt in all_expts:
-    expt.connections_probed
+    try:
+        expt.connections_probed
+    except Exception as exc:
+        print("Error counting probed connections for experiment %s:" % exc)
+        sys.excepthook(*sys.exc_info())
 
 # cache everything!
 all_expts.write_cache()
