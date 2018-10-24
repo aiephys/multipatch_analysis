@@ -574,6 +574,10 @@ class ExperimentMetadata(Experiment):
             if path is not None and os.path.exists(path):
                 self._site_path = path
                 self.site_dh = getDirHandle(path)
+                # reset values loaded while determining path
+                self._expt_info = None
+                self._slice_info = None
+                self._site_info = None
                 break
 
     def check(self):
@@ -583,7 +587,7 @@ class ExperimentMetadata(Experiment):
         try:
             rec = {'experiment': self, 'error': None}
 
-            rec['timestamp'] = self.timestamp
+            rec['timestamp'] = '%0.3f' % self.timestamp
             rec['rig'] = self.rig_name
             rec['operator'] = self.rig_operator
             rec['path'] = self.expt_subpath
