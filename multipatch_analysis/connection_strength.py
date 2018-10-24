@@ -269,6 +269,8 @@ def get_baseline_amps(session, pair, clamp_mode='ic', amps=None, get_data=True):
         db.Baseline.ex_qc_pass,
         db.Baseline.in_qc_pass,
         db.PatchClampRecording.clamp_mode,
+        db.PatchClampRecording.baseline_potential,
+        db.PatchClampRecording.baseline_current,
         db.Recording.start_time.label('rec_start_time'),
         db.Baseline.start_time.label('response_start_time'),
     ]

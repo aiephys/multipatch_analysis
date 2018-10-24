@@ -4,7 +4,7 @@ import pyqtgraph as pg
 import scipy.stats as stats
 from multipatch_analysis.database import database as db
 from multipatch_analysis.pulse_response_strength import PulseResponseStrength
-from multipatch_analysis.connection_strength import ConnectionStrength, get_amps
+from multipatch_analysis.connection_strength import ConnectionStrength, get_amps, get_baseline_amps
 from neuroanalysis.synaptic_release import ReleaseModel
 
 
@@ -30,16 +30,16 @@ class StochasticReleaseModel(object):
             t = times[i]
             amplitude = amplitudes[i]
             
-            likelihood = self._likelihood(amplitude, available_vesicles)
-            sample_likelihood.append(likelihood)
+            likelihood = self._likelihood([amplitude], available_vesicles)
+            sample_likelihood.append(likelihood[0])
             
         return sample_likelihood
             
-    def _likelihood(self, amplitude, available_vesicles):
+    def _likelihood(self, amplitudes, available_vesicles):
         """Estimate the probability density of seeing a particular *amplitude*
         given a number of *available_vesicles*.
         """
-        likelihood = 0
+        likelihood = np.zeros(len(amplitudes))
         release_prob = stats.binom(available_vesicles, self.release_probability)
         for n_vesicles in range(available_vesicles):
             # probability of releasing n_vesicles given available_vesicles and release_probability
@@ -50,15 +50,23 @@ class StochasticReleaseModel(object):
             
             # distribution of amplitudes expected for n_vesicles
             amp_stdev = (self.mini_amplitude_stdev**2 + self.measurement_stdev**2) ** 0.5
-            amp_prob = stats.norm(amp_mean, amp_stdev).pdf(amplitude)
+            amp_prob = p_n * stats.norm(amp_mean, amp_stdev).pdf(amplitudes)
             
             # increment likelihood of seeing this amplitude
-            likelihood += p_n * amp_prob
+            likelihood += amp_prob
         
         return likelihood
 
 
+def event_qc(events):
+    mask = events['ex_qc_pass'] == True
+    # need more stringent qc for dynamics:
+    mask &= np.abs(events['baseline_current']) < 500e-12
+    return mask   
+
+
 if __name__ == '__main__':
+    
     expt_id = 1535402792.695
     pre_cell_id = 8
     post_cell_id = 7
@@ -79,21 +87,15 @@ if __name__ == '__main__':
 
     # 1. Get a list of all presynaptic spike times and the amplitudes of postsynaptic responses
 
-    events = get_amps(session, pair, clamp_mode='ic')
-    mask = events['ex_qc_pass'] == True
-    # need more stringent qc for dynamics:
-    mask &= np.abs(events['baseline_current']) < 500e-12
-    events = events[mask]
+    raw_events = get_amps(session, pair, clamp_mode='ic')
+    mask = event_qc(raw_events)
+    events = raw_events[mask]
 
     rec_times = 1e-9 * (events['rec_start_time'].astype(float) - float(events['rec_start_time'][0]))
     spike_times = events['max_dvdt_time'] + rec_times
-
-    # log spike intervals to make visualization a little easier
-    compressed_spike_times = np.empty(len(spike_times))
-    compressed_spike_times[0] = 0.0
-    np.cumsum(np.diff(spike_times)**0.25, out=compressed_spike_times[1:])
-    pg.plot(compressed_spike_times, events['pos_dec_amp'], pen=None, symbol='o', title="deconvolved amplitude vs compressed time")
-
+    amplitude_field = 'pos_dec_amp'
+    amplitudes = events[amplitude_field]
+    
 
     # 2. Initialize model parameters:
     #    - release model with depression, facilitation
@@ -101,17 +103,36 @@ if __name__ == '__main__':
     #    - measured distribution of background noise
     #    - parameter space to be searched
 
-    first_pulse_amps = events[events['pulse_number'] == 1]
-    first_pulse_stdev = first_pulse_amps['pos_dec_amp'].std()
+    first_pulse_mask = events['pulse_number'] == 1
+    first_pulse_amps = amplitudes[first_pulse_mask]
+    first_pulse_stdev = first_pulse_amps.std()
 
-
-            
     model = StochasticReleaseModel()
+    model.mini_amplitude = first_pulse_amps.mean() / (model.n_release_sites * model.release_probability)
+    model.mini_amplitude_stdev = model.mini_amplitude / 3.
+    
+    raw_bg_events = get_baseline_amps(session, pair, clamp_mode='ic')
+    mask = event_qc(raw_bg_events)
+    bg_events = raw_bg_events[mask]
 
+    model.measurement_stdev = bg_events[amplitude_field].std()
+    
 
     # 3. For each point in the parameter space, simulate a synapse and estimate the joint probability of the set of measured amplitudes
-    likelihood = model.measure_likelihood(spike_times, 
+    
+    likelihood = model.measure_likelihood(spike_times, amplitudes)
+
 
     # 4. Visualize / characterize mapped parameter space. Somehow.
+    
+    # log spike intervals to make visualization a little easier
+    compressed_spike_times = np.empty(len(spike_times))
+    compressed_spike_times[0] = 0.0
+    np.cumsum(np.diff(spike_times)**0.25, out=compressed_spike_times[1:])
+    
+    pg.plot(compressed_spike_times, amplitudes, pen=None, symbol='o', title="deconvolved amplitude vs compressed time")
+    pg.plot(compressed_spike_times, likelihood, pen=None, symbol='o', title="likelihood vs compressed time")
+
+
 
 
