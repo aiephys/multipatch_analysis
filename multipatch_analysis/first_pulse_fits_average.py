@@ -17,9 +17,10 @@ import os
 #----- specify things up here------------------------------
 #----------------------------------------------------------
 
-fitting_type = 'default' #options 'default', 'force_sign', force_latency
+fitting_type = 'force_latency' #options 'default', 'force_sign', force_latency
 general_image_path='/home/corinnet/workspace/DBfit_pics/'
-
+save_image = True  #specifies whether to save images
+commiting = True
 #----------------------------------------------------------
 #----------------------------------------------------------
 #----------------------------------------------------------
@@ -35,7 +36,6 @@ elif fitting_type == 'force_latency':
 else:
     raise Exception('A recognized type of fitting has not been specified')
 
-save_image = True  #specifies whether to save images
 if save_image==True:
     confirm_save = raw_input("You are preforming %s fitting. Save fitting images to %s? " % (fitting_type, image_path)) == 'y'
     if not os.path.exists(image_path):
@@ -113,9 +113,9 @@ def update_fit(limit=None, expts=None, parallel=True, workers=6, raise_exception
         if fitting_type == 'default':
             expts_done=session.query(db.Experiment.acq_timestamp).join(db.Pair).join(AvgFirstPulseFitsDefault).all()
         elif fitting_type == 'force_sign':
-            expts_done=session.query(db.Experiment.acq_timestamp).join(db.Pair).join(AvgFirstPulseForceSign).all()
-        elif fittying_type == 'force_latency':
-            expts_done=session.query(db.Experiment.acq_timestamp).join(db.Pair).join(AvgFirstPulseForceLatency).all()
+            expts_done=session.query(db.Experiment.acq_timestamp).join(db.Pair).join(AvgFirstPulseFitsForceSign).all()
+        elif fitting_type == 'force_latency':
+            expts_done=session.query(db.Experiment.acq_timestamp).join(db.Pair).join(AvgFirstPulseFitsForceLatency).all()
 #        #TODO: deprecate this line when line above is confirmed expts_done = session.query(db.Experiment.acq_timestamp).join(db.SyncRec).join(db.Recording).join(AverageFirstPulseFits).join().distinct().all()
         print("Skipping %d already complete experiments" % (len(expts_done)))
         experiments = [e for e in experiments if e not in set(expts_done)]
@@ -241,22 +241,26 @@ def compute_fit(job_info, raise_exceptions=False):
             afpf=AvgFirstPulseFitsForceLatency(pair=pair, **out_dict)
         else:
             raise Exception('The type of fitting has not been specified')
-        session.add(afpf)
+        if commiting is True:
+            session.add(afpf)
 #---------------------------------------------------------------------------------------        
         processed_count=processed_count+1
 
             
-    # expt.meta = expt.meta.copy()  # required by sqlalchemy to flag as modified
-    # expt.meta['Corinne_timestamp'] = time.time()  
-#    session.commit()
-    print("COMMITED %i pairs from expt_id=%f: %d/%d" % (processed_count, expt_id, index, n_jobs))
+
+    if commiting is True:
+        # pair.meta = pair.meta.copy()  # required by sqlalchemy to flag as modified
+        # pair.meta['Corinne_timestamp'] = time.time()  
+        session.commit()
+        print("COMMITED %i pairs from expt_id=%f: %d/%d" % (processed_count, expt_id, index, n_jobs))
 
 if __name__=='__main__':
 
     #Note that after this is done being prototyped delete so dont accedently overwrite table
-#    first_pulse_fit_tables.drop_tables()
+#    first_pulse_fit_tables.drop_tables() #note this will drop all the tables here!
     init_tables()
 #    update_fit(limit=None, expts=[1533768797.736], parallel=False, workers=6, raise_exceptions=False, session=None)
 #    update_fit(limit=None, expts=[1492545925.146], parallel=False, workers=6, raise_exceptions=False, session=None)
+#    update_fit(limit=None, expts=[1533765069.19], parallel=False, workers=6, raise_exceptions=False, session=None)
 
     update_fit(limit=None, expts=None, parallel=False, workers=6, raise_exceptions=False, session=None)
