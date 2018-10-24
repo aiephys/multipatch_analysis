@@ -218,6 +218,8 @@ def get_amps(session, pair, clamp_mode='ic', get_data=False):
         db.PulseResponse.ex_qc_pass,
         db.PulseResponse.in_qc_pass,
         db.PatchClampRecording.clamp_mode,
+        db.PatchClampRecording.baseline_potential,
+        db.PatchClampRecording.baseline_current,
         db.StimPulse.pulse_number,
         db.StimSpike.max_dvdt_time,
         db.PulseResponse.start_time.label('response_start_time'),
