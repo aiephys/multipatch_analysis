@@ -25,7 +25,7 @@ class StochasticReleaseModel(object):
         # state parameters:
         # available_vesicles is a float as a means of avoiding the need to model stochastic vesicle docking;
         # we just assume that recovery is a continuous process. 
-        available_vesicles = 10
+        available_vesicles = self.n_release_sites
         
         sample_likelihood = []
         sample_available_vesicles = []
@@ -33,23 +33,24 @@ class StochasticReleaseModel(object):
         for i in range(len(times)):
             t = times[i]
             amplitude = amplitudes[i]
+
+            # recover vesicles
+            dt = t - last_t
+            last_t = t
+            recovery = np.exp(-dt / self.recovery_tau)
+            available_vesicles = available_vesicles * recovery + self.n_release_sites * (1.0 - recovery)
+            initial_available_vesicles = available_vesicles
             
             # measure likelihood of seeing this amplitude
             likelihood = self._likelihood([amplitude], available_vesicles)
             sample_likelihood.append(likelihood[0])
             
             # update state
-            dt = t - last_t
-            last_t = t
-            
-            # recover vesicles
-            recovery = np.exp(-dt / self.recovery_tau)
-            available_vesicles = available_vesicles * recovery + self.n_release_sites * (1.0 - recovery)
             
             # release vesicles
             available_vesicles -= amplitude / self.mini_amplitude
             
-            sample_available_vesicles.append(available_vesicles)
+            sample_available_vesicles.append([initial_available_vesicles, available_vesicles])
             
         self.sample_available_vesicles = np.array(sample_available_vesicles)
         
@@ -167,7 +168,8 @@ if __name__ == '__main__':
     plt2.plot(compressed_spike_times, amplitudes, pen=None, symbol='o', symbolBrush=brushes)
     plt2.setXLink(plt1)
     plt3 = win.addPlot(2, 0, title="available_vesicles vs compressed time")
-    plt3.plot(compressed_spike_times, model.sample_available_vesicles, pen=None, symbol='o', symbolBrush=brushes)
+    plt3.plot(compressed_spike_times, model.sample_available_vesicles[:,0], pen=None, symbol='t', symbolBrush=brushes)
+    plt3.plot(compressed_spike_times, model.sample_available_vesicles[:,1], pen=None, symbol='o', symbolBrush=brushes)
     plt3.setXLink(plt1)
 
 
