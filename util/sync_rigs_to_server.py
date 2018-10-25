@@ -102,7 +102,7 @@ def _sync_paths(source, target, changes):
             #   - others > 5GB
             src_size = os.stat(src_path).st_size
             ext = os.path.splitext(src_path)[1]
-            max_size = {'.pxp': 20e9}.get(ext, 5e9)
+            max_size = {'.pxp': 20e9, '.nwb': 7e9}.get(ext, 5e9)
 
             if src_size > max_size:
                 log("    err! %s => %s" % (src_path, dst_path))
