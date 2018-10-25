@@ -15,7 +15,7 @@ class StochasticReleaseModel(object):
         self.release_probability = 0.1
         self.mini_amplitude = 50e-6
         self.mini_amplitude_stdev = 20e-6
-        # self.tau_recovery = 100e-3
+        self.recovery_tau = 100e-3
         self.measurement_stdev = 100e-6
     
     def measure_likelihood(self, times, amplitudes):
@@ -23,22 +23,39 @@ class StochasticReleaseModel(object):
         by a synapse with the current dynamic parameters.
         """
         # state parameters:
+        # available_vesicles is a float as a means of avoiding the need to model stochastic vesicle docking;
+        # we just assume that recovery is a continuous process. 
         available_vesicles = 10
         
         sample_likelihood = []
+        last_t = times[0]
         for i in range(len(times)):
             t = times[i]
             amplitude = amplitudes[i]
             
+            # measure likelihood of seeing this amplitude
             likelihood = self._likelihood([amplitude], available_vesicles)
             sample_likelihood.append(likelihood[0])
             
-        return sample_likelihood
+            # update state
+            dt = t - last_t
+            last_t = t
+            
+            # recover vesicles
+            recovery = np.exp(-dt / self.recovery_tau)
+            available_vesicles = available_vesicles * recovery + self.n_release_sites * (1.0 - recovery)
+            
+            # release vesicles
+            available_vesicles -= amplitude / self.mini_amplitude
+            
+        return np.array(sample_likelihood)
             
     def _likelihood(self, amplitudes, available_vesicles):
         """Estimate the probability density of seeing a particular *amplitude*
         given a number of *available_vesicles*.
         """
+        available_vesicles = int(max(0, available_vesicles))
+        
         likelihood = np.zeros(len(amplitudes))
         release_prob = stats.binom(available_vesicles, self.release_probability)
         for n_vesicles in range(available_vesicles):
@@ -125,14 +142,22 @@ if __name__ == '__main__':
 
     # 4. Visualize / characterize mapped parameter space. Somehow.
     
+    # color events by likelihood
+    cmap = pg.ColorMap([0, 1.0], [(0, 0, 0), (255, 0, 0)])
+    err = 1.0 / likelihood
+    err_norm = 0.5 + (err - err.mean()) / err.std()
+    err_colors = cmap.map(err_norm)
+    brushes = [pg.mkBrush(c) for c in err_colors]
+
     # log spike intervals to make visualization a little easier
     compressed_spike_times = np.empty(len(spike_times))
     compressed_spike_times[0] = 0.0
     np.cumsum(np.diff(spike_times)**0.25, out=compressed_spike_times[1:])
     
-    pg.plot(compressed_spike_times, amplitudes, pen=None, symbol='o', title="deconvolved amplitude vs compressed time")
-    pg.plot(compressed_spike_times, likelihood, pen=None, symbol='o', title="likelihood vs compressed time")
-
+    plt1 = pg.plot(compressed_spike_times, likelihood, pen=None, symbol='o', symbolBrush=brushes, title="likelihood vs compressed time")
+    plt2 = pg.plot(compressed_spike_times, amplitudes, pen=None, symbol='o', symbolBrush=brushes, title="deconvolved amplitude vs compressed time")
+    plt2.setXLink(plt1)
+    
 
 
 
