@@ -28,6 +28,7 @@ class StochasticReleaseModel(object):
         available_vesicles = 10
         
         sample_likelihood = []
+        sample_available_vesicles = []
         last_t = times[0]
         for i in range(len(times)):
             t = times[i]
@@ -48,6 +49,10 @@ class StochasticReleaseModel(object):
             # release vesicles
             available_vesicles -= amplitude / self.mini_amplitude
             
+            sample_available_vesicles.append(available_vesicles)
+            
+        self.sample_available_vesicles = np.array(sample_available_vesicles)
+        
         return np.array(sample_likelihood)
             
     def _likelihood(self, amplitudes, available_vesicles):
@@ -154,10 +159,16 @@ if __name__ == '__main__':
     compressed_spike_times[0] = 0.0
     np.cumsum(np.diff(spike_times)**0.25, out=compressed_spike_times[1:])
     
-    plt1 = pg.plot(compressed_spike_times, likelihood, pen=None, symbol='o', symbolBrush=brushes, title="likelihood vs compressed time")
-    plt2 = pg.plot(compressed_spike_times, amplitudes, pen=None, symbol='o', symbolBrush=brushes, title="deconvolved amplitude vs compressed time")
+    win = pg.GraphicsLayoutWidget()
+    win.show()
+    plt1 = win.addPlot(0, 0, title="likelihood vs compressed time")
+    plt1.plot(compressed_spike_times, likelihood, pen=None, symbol='o', symbolBrush=brushes)
+    plt2 = win.addPlot(1, 0, title="deconvolved amplitude vs compressed time")
+    plt2.plot(compressed_spike_times, amplitudes, pen=None, symbol='o', symbolBrush=brushes)
     plt2.setXLink(plt1)
-    
+    plt3 = win.addPlot(2, 0, title="available_vesicles vs compressed time")
+    plt3.plot(compressed_spike_times, model.sample_available_vesicles, pen=None, symbol='o', symbolBrush=brushes)
+    plt3.setXLink(plt1)
 
 
 
