@@ -15,7 +15,7 @@ if __name__ == '__main__':
     pre_cell = int(sys.argv[2])
     post_cell = int(sys.argv[3])
 
-    method = 'deconv' if '--deconv' in sys.argv else 'fit'
+    method = 'fit' if '--no-deconv' in sys.argv else 'deconv'
 
     analyzer = DynamicsAnalyzer(expt, pre_cell, post_cell, method=method)
     if len(analyzer.pulse_responses) == 0:
@@ -27,12 +27,7 @@ if __name__ == '__main__':
     if '--no-fit' in sys.argv:
         sys.exit(0)  # user requested no fitting; bail out early
 
-    if '--deconv' in sys.argv:
-        # get deconvolved response trains
-        analyzer.plot_deconvolved_trains(train_plots)
-        analyzer.measure_train_amps_from_deconv(plot_grid=train_plots)
-        
-    else:
+    if '--no-deconv' in sys.argv:
         # Estimate PSP amplitude
         amp_est, amp_sign, avg_amp, amp_plot, n_sweeps = analyzer.estimate_amplitude(plot=True)
         app.processEvents()
@@ -43,8 +38,13 @@ if __name__ == '__main__':
         
         # Fit trains to multi-event models and plot the results
         analyzer.plot_train_fits(train_plots)
+        
+    else:
+        # get deconvolved response trains
+        analyzer.plot_deconvolved_trains(train_plots)
+        analyzer.measure_train_amps_from_deconv(plot_grid=train_plots)
 
-    if '--no-model' in sys.argv:
+    if '--model' not in sys.argv:
         sys.exit(0)  # user requested no model; bail out early
         
     # update GUI before doing model fit
