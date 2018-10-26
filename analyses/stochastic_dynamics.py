@@ -9,6 +9,18 @@ from neuroanalysis.synaptic_release import ReleaseModel
 
 
 class StochasticReleaseModel(object):
+    
+    result_dtype = [
+        ('spike_time', float),
+        ('amplitude', float),
+        ('expected_amplitude', float),
+        ('likelihood', float),
+    ]
+    
+    state_dtype = [
+        ('available_vesicle', float),
+    ]
+    
     def __init__(self):
         # model parameters
         self.n_release_sites = 20
@@ -18,49 +30,73 @@ class StochasticReleaseModel(object):
         self.recovery_tau = 100e-3
         self.measurement_stdev = 100e-6
     
-    def measure_likelihood(self, times, amplitudes):
-        """Return a measure of the likelihood that *times* and *amplitudes* could be generated
+    def measure_likelihood(self, spike_times, amplitudes):
+        """Compute a measure of the likelihood that *times* and *amplitudes* could be generated
         by a synapse with the current dynamic parameters.
+        
+        Returns
+        -------
+        result : array
+            result contains fields: spike_time, amplitude, expected_amplitude, likelihood
+        pre_spike_state:
+            state variables immediately before each spike
+        post_spike_state:
+            state variables immediately after each spike
         """
+        result = np.empty(len(spike_times), dtype=self.result_dtype)
+        pre_spike_state = np.empty(len(spike_times), dtype=self.state_dtype)
+        post_spike_state = np.empty(len(spike_times), dtype=self.state_dtype)
+        
         # state parameters:
         # available_vesicles is a float as a means of avoiding the need to model stochastic vesicle docking;
-        # we just assume that recovery is a continuous process. 
-        available_vesicles = self.n_release_sites
+        # we just assume that recovery is a continuous process. (maybe we should just call this "neurotransmitter"
+        # instead)
+        state = {
+            'available_vesicle': self.n_release_sites,
+        }
         
-        sample_likelihood = []
-        sample_available_vesicles = []
-        last_t = times[0]
-        for i in range(len(times)):
-            t = times[i]
+        previous_t = spike_times[0]
+        
+        for i,t in enumerate(spike_times):
             amplitude = amplitudes[i]
 
-            # recover vesicles
-            dt = t - last_t
-            last_t = t
+            # recover vesicles up to the current timepoint
+            dt = t - previous_t
+            previous_t = t
             recovery = np.exp(-dt / self.recovery_tau)
-            available_vesicles = available_vesicles * recovery + self.n_release_sites * (1.0 - recovery)
-            initial_available_vesicles = available_vesicles
+            state['available_vesicle'] = state['available_vesicle'] * recovery + self.n_release_sites * (1.0 - recovery)
             
-            # measure likelihood of seeing this amplitude
-            likelihood = self._likelihood([amplitude], available_vesicles)
-            sample_likelihood.append(likelihood[0])
-            
-            # update state
+            # record model state immediately before spike
+            for k in state:
+                pre_spike_state[i][k] = state[k]
+                
+            # measure likelihood of seeing this response amplitude
+            expected_amplitude = state['available_vesicle'] * self.release_probability * self.mini_amplitude
+            likelihood = self.likelihood([amplitude], state)[0]
             
             # release vesicles
-            available_vesicles -= amplitude / self.mini_amplitude
+            # note: we allow available_vesicle to become negative because this help to ensure
+            # that the overall likelihood will be low for such models
+            depleted_vesicle = amplitude / self.mini_amplitude
+            state['available_vesicle'] -= depleted_vesicle
+
+            # record model state immediately after spike
+            for k in state:
+                post_spike_state[i][k] = state[k]
             
-            sample_available_vesicles.append([initial_available_vesicles, available_vesicles])
+            # record results
+            result[i]['spike_time'] = t
+            result[i]['amplitude'] = amplitude
+            result[i]['expected_amplitude'] = expected_amplitude
+            result[i]['likelihood'] = likelihood
             
-        self.sample_available_vesicles = np.array(sample_available_vesicles)
-        
-        return np.array(sample_likelihood)
+        return result, pre_spike_state, post_spike_state
             
-    def _likelihood(self, amplitudes, available_vesicles):
+    def likelihood(self, amplitudes, state):
         """Estimate the probability density of seeing a particular *amplitude*
         given a number of *available_vesicles*.
         """
-        available_vesicles = int(max(0, available_vesicles))
+        available_vesicles = int(max(0, state['available_vesicle']))
         
         likelihood = np.zeros(len(amplitudes))
         release_prob = stats.binom(available_vesicles, self.release_probability)
@@ -88,7 +124,70 @@ def event_qc(events):
     return mask   
 
 
+class ModelResultWidget(pg.QtGui.QWidget):
+    def __init__(self):
+        pg.QtGui.QWidget.__init__(self)
+        self.layout = pg.QtGui.QGridLayout()
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.setLayout(self.layout)
+        
+        self.glw = pg.GraphicsLayoutWidget()
+        self.layout.addWidget(self.glw, 0, 0)
+        
+        self.plt1 = self.glw.addPlot(0, 0, title="likelihood vs compressed time")
+        
+        self.plt2 = self.glw.addPlot(1, 0, title="deconvolved amplitude vs compressed time")
+        self.plt2.setXLink(self.plt1)
+        
+        self.plt3 = self.glw.addPlot(2, 0, title="available_vesicles vs compressed time")
+        self.plt3.setXLink(self.plt1)
+        
+        self.plt4 = self.glw.addPlot(1, 1, title="expected amplitude distribution")
+        self.plt4.setYLink(self.plt2)
+        self.plt4.setMaximumWidth(300)
+
+    def set_result(self, model, result, pre_state, post_state):
+        self.model = model
+        self.result = result
+        self.pre_state = pre_state
+        self.post_state = post_state
+
+        # color events by likelihood
+        cmap = pg.ColorMap([0, 1.0], [(0, 0, 0), (255, 0, 0)])
+        err = 1.0 / result['likelihood']
+        err_norm = 0.5 + (err - err.mean()) / err.std()
+        err_colors = cmap.map(err_norm)
+        brushes = [pg.mkBrush(c) for c in err_colors]
+
+        # log spike intervals to make visualization a little easier
+        compressed_spike_times = np.empty(len(spike_times))
+        compressed_spike_times[0] = 0.0
+        np.cumsum(np.diff(spike_times)**0.25, out=compressed_spike_times[1:])
+
+        self.plt1.plot(compressed_spike_times, result['likelihood'], pen=None, symbol='o', symbolBrush=brushes)
+        
+        self.plt2.plot(compressed_spike_times, result['expected_amplitude'], pen=None, symbol='x', symbolPen=0.5, symbolBrush=brushes)
+        amp_sp = self.plt2.plot(compressed_spike_times, result['amplitude'], pen=None, symbol='o', symbolBrush=brushes)
+        amp_sp.scatter.sigClicked.connect(self.amp_sp_clicked)
+        
+        self.plt3.plot(compressed_spike_times, pre_state['available_vesicle'], pen=None, symbol='t', symbolBrush=brushes)
+        self.plt3.plot(compressed_spike_times, post_state['available_vesicle'], pen=None, symbol='o', symbolBrush=brushes)
+    
+    def amp_sp_clicked(self, sp, pts):
+        i = pts[0].index()
+        state = self.pre_state[i]
+        expected_amp = self.result[i]['expected_amplitude']
+        amps = np.linspace(-expected_amp, expected_amp * 4, 2000)
+        self.plt4.clear()
+        self.plt4.plot(self.model.likelihood(amps, state), amps)
+        self.plt4.addLine(y=self.result[i]['amplitude'])
+        self.plt4.addLine(y=expected_amp, pen='r')
+
+        
+
+
 if __name__ == '__main__':
+    pg.mkQApp()
     
     expt_id = 1535402792.695
     pre_cell_id = 8
@@ -143,34 +242,11 @@ if __name__ == '__main__':
 
     # 3. For each point in the parameter space, simulate a synapse and estimate the joint probability of the set of measured amplitudes
     
-    likelihood = model.measure_likelihood(spike_times, amplitudes)
+    result, pre_state, post_state = model.measure_likelihood(spike_times, amplitudes)
 
 
     # 4. Visualize / characterize mapped parameter space. Somehow.
-    
-    # color events by likelihood
-    cmap = pg.ColorMap([0, 1.0], [(0, 0, 0), (255, 0, 0)])
-    err = 1.0 / likelihood
-    err_norm = 0.5 + (err - err.mean()) / err.std()
-    err_colors = cmap.map(err_norm)
-    brushes = [pg.mkBrush(c) for c in err_colors]
-
-    # log spike intervals to make visualization a little easier
-    compressed_spike_times = np.empty(len(spike_times))
-    compressed_spike_times[0] = 0.0
-    np.cumsum(np.diff(spike_times)**0.25, out=compressed_spike_times[1:])
-    
-    win = pg.GraphicsLayoutWidget()
+    win = ModelResultWidget()
     win.show()
-    plt1 = win.addPlot(0, 0, title="likelihood vs compressed time")
-    plt1.plot(compressed_spike_times, likelihood, pen=None, symbol='o', symbolBrush=brushes)
-    plt2 = win.addPlot(1, 0, title="deconvolved amplitude vs compressed time")
-    plt2.plot(compressed_spike_times, amplitudes, pen=None, symbol='o', symbolBrush=brushes)
-    plt2.setXLink(plt1)
-    plt3 = win.addPlot(2, 0, title="available_vesicles vs compressed time")
-    plt3.plot(compressed_spike_times, model.sample_available_vesicles[:,0], pen=None, symbol='t', symbolBrush=brushes)
-    plt3.plot(compressed_spike_times, model.sample_available_vesicles[:,1], pen=None, symbol='o', symbolBrush=brushes)
-    plt3.setXLink(plt1)
-
-
+    win.set_result(model, result, pre_state, post_state)
 
