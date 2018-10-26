@@ -1,3 +1,4 @@
+from __future__ import print_function, division
 import sys
 import numpy as np
 import pyqtgraph as pg
@@ -160,16 +161,19 @@ class ModelResultWidget(pg.QtGui.QWidget):
         brushes = [pg.mkBrush(c) for c in err_colors]
 
         # log spike intervals to make visualization a little easier
-        compressed_spike_times = np.empty(len(spike_times))
+        compressed_spike_times = np.empty(len(result['spike_time']))
         compressed_spike_times[0] = 0.0
-        np.cumsum(np.diff(spike_times)**0.25, out=compressed_spike_times[1:])
+        np.cumsum(np.diff(result['spike_time'])**0.25, out=compressed_spike_times[1:])
 
+        self.plt1.clear()
         self.plt1.plot(compressed_spike_times, result['likelihood'], pen=None, symbol='o', symbolBrush=brushes)
         
+        self.plt2.clear()
         self.plt2.plot(compressed_spike_times, result['expected_amplitude'], pen=None, symbol='x', symbolPen=0.5, symbolBrush=brushes)
         amp_sp = self.plt2.plot(compressed_spike_times, result['amplitude'], pen=None, symbol='o', symbolBrush=brushes)
         amp_sp.scatter.sigClicked.connect(self.amp_sp_clicked)
         
+        self.plt3.clear()
         self.plt3.plot(compressed_spike_times, pre_state['available_vesicle'], pen=None, symbol='t', symbolBrush=brushes)
         self.plt3.plot(compressed_spike_times, post_state['available_vesicle'], pen=None, symbol='o', symbolBrush=brushes)
     
@@ -184,10 +188,81 @@ class ModelResultWidget(pg.QtGui.QWidget):
         self.plt4.addLine(y=expected_amp, pen='r')
 
         
+class ParameterSpace(object):
+    def __init__(self, params):
+        self.params = params
+        
+        static_params = {}
+        for param, val in params.items():
+            if np.isscalar(val):
+                static_params[param] = params.pop(param)
+        self.static_params = static_params
+        
+        self.param_order = list(params.keys())
+        shape = tuple([len(params[p]) for p in self.param_order])
+        
+        self.result = np.zeros(shape, dtype=object)
+        
+    def run(self, func):
+        all_inds = list(np.ndindex(self.result.shape))
+        for i,inds in enumerate(all_inds):
+            params = self[inds]
+            self.result[inds] = func(params)
+            yield i, inds, len(all_inds)
+        
+    def __getitem__(self, inds):
+        params = self.static_params.copy()
+        for i,param in enumerate(self.param_order):
+            params[param] = self.params[param][inds[i]]
+        return params
+
+
+class ParameterSearchWidget(pg.QtGui.QWidget):
+    def __init__(self, param_space):
+        pg.QtGui.QWidget.__init__(self)
+        self.layout = pg.QtGui.QGridLayout()
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.setLayout(self.layout)
+        
+        self.img_view = pg.ImageView()
+        self.img_view.imageItem.setBorder(0.5)
+        self.layout.addWidget(self.img_view)
+
+        self.view = self.img_view.view
+        
+        self.select_rect = pg.QtGui.QGraphicsRectItem(pg.QtCore.QRectF(0, 0, 1, 1))
+        self.select_rect.setPen(pg.mkPen('g'))
+        self.select_rect.setZValue(20)
+        self.view.addItem(self.select_rect)
+        
+        self.view.scene().sigMouseClicked.connect(self.view_clicked)
+        
+        self.result_widget = ModelResultWidget()
+        self.layout.addWidget(self.result_widget, 1, 0)
+        
+        self.param_space = param_space
+        
+        result_img = np.zeros(param_space.result.shape)
+        for ind in np.ndindex(result_img.shape):
+            result_img[ind] = param_space.result[ind][1]['likelihood'].mean()
+        self.img_view.setImage(result_img)        
+        
+    def view_clicked(self, event):
+        spos = event.scenePos()
+        param_pos = self.view.mapSceneToView(spos)
+        i, j = int(param_pos.x()), int(param_pos.y())
+        
+        self.select_result(i, j)
+
+    def select_result(self, i, j):
+        self.select_rect.setPos(i, j)
+        result = self.param_space.result[i, j]
+        self.result_widget.set_result(*result)
 
 
 if __name__ == '__main__':
     pg.mkQApp()
+    pg.dbg()
     
     expt_id = 1535402792.695
     pre_cell_id = 8
@@ -229,24 +304,36 @@ if __name__ == '__main__':
     first_pulse_amps = amplitudes[first_pulse_mask]
     first_pulse_stdev = first_pulse_amps.std()
 
-    model = StochasticReleaseModel()
-    model.mini_amplitude = first_pulse_amps.mean() / (model.n_release_sites * model.release_probability)
-    model.mini_amplitude_stdev = model.mini_amplitude / 3.
-    
     raw_bg_events = get_baseline_amps(session, pair, clamp_mode='ic')
     mask = event_qc(raw_bg_events)
     bg_events = raw_bg_events[mask]
 
-    model.measurement_stdev = bg_events[amplitude_field].std()
-    
+    n_release_sites = 20
+    release_probability = 0.1
+    mini_amp_estimate = first_pulse_amps.mean() / (n_release_sites * release_probability)
+    params = {
+        'n_release_sites': 1.3**np.arange(-5, 5) * n_release_sites,
+        'release_probability': release_probability,
+        'mini_amplitude': mini_amp_estimate,
+        'mini_amplitude_stdev': mini_amp_estimate / 3.,
+        'measurement_stdev': bg_events[amplitude_field].std(),
+        'recovery_tau': 20e-3 * 4.0**np.arange(-5, 5),
+    }
+
 
     # 3. For each point in the parameter space, simulate a synapse and estimate the joint probability of the set of measured amplitudes
     
-    result, pre_state, post_state = model.measure_likelihood(spike_times, amplitudes)
-
+    def run_model(params):    
+        model = StochasticReleaseModel()
+        for k,v in params.items():
+            setattr(model, k, v)
+        return (model,) + model.measure_likelihood(spike_times[:10], amplitudes[:10])
+    
+    
+    param_space = ParameterSpace(params)
+    for i, inds, n_inds in param_space.run(run_model):
+        print(i+1, n_inds)
 
     # 4. Visualize / characterize mapped parameter space. Somehow.
-    win = ModelResultWidget()
+    win = ParameterSearchWidget(param_space)
     win.show()
-    win.set_result(model, result, pre_state, post_state)
-
