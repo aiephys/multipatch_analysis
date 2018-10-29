@@ -155,9 +155,7 @@ class ModelResultWidget(pg.QtGui.QWidget):
 
         # color events by likelihood
         cmap = pg.ColorMap([0, 1.0], [(0, 0, 0), (255, 0, 0)])
-        err = 1.0 / result['likelihood']
-        err_norm = 0.5 + (err - err.mean()) / err.std()
-        err_colors = cmap.map(err_norm)
+        err_colors = cmap.map((10 - result['likelihood']) / 10.)
         brushes = [pg.mkBrush(c) for c in err_colors]
 
         # log spike intervals to make visualization a little easier
@@ -308,16 +306,18 @@ if __name__ == '__main__':
     mask = event_qc(raw_bg_events)
     bg_events = raw_bg_events[mask]
 
+    def log_space(start, stop, steps):
+        return start * (stop/start)**(np.arange(steps) / (steps-1))
     n_release_sites = 20
     release_probability = 0.1
     mini_amp_estimate = first_pulse_amps.mean() / (n_release_sites * release_probability)
     params = {
-        'n_release_sites': 1.3**np.arange(-5, 5) * n_release_sites,
+        'n_release_sites': np.array([1, 2, 3, 4, 6, 8, 12, 16, 24, 32]),
         'release_probability': release_probability,
         'mini_amplitude': mini_amp_estimate,
         'mini_amplitude_stdev': mini_amp_estimate / 3.,
         'measurement_stdev': bg_events[amplitude_field].std(),
-        'recovery_tau': 20e-3 * 4.0**np.arange(-5, 5),
+        'recovery_tau': log_space(2e-5, 20, 11),
     }
 
 
@@ -327,7 +327,7 @@ if __name__ == '__main__':
         model = StochasticReleaseModel()
         for k,v in params.items():
             setattr(model, k, v)
-        return (model,) + model.measure_likelihood(spike_times[:10], amplitudes[:10])
+        return (model,) + model.measure_likelihood(spike_times[:30], amplitudes[:30])
     
     
     param_space = ParameterSpace(params)
