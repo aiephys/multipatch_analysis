@@ -9,20 +9,24 @@ import os, yaml
 
 
 synphys_db_host = None
+synphys_db_host_rw = None
 synphys_db = "synphys"
-synphys_db_readonly_user = None
+synphys_db_readonly_user = "readonly"
 synphys_data = None
 cache_path = "cache"
 rig_name = None
 n_headstages = 8
 raw_data_paths = []
-summary_files = []
+rig_data_paths = {}
 
 
 template = r"""
 # synphys database
 synphys_db_host: "postgresql://readonly:readonly@10.128.36.109"
 synphys_db: "synphys"
+# optional DB access with write privileges
+synphys_db_host_rw: null
+synphys_db_readonly_user = "readonly"
 
 # path to synphys network storage
 synphys_data: "N:\\"

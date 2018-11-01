@@ -22,7 +22,11 @@ from .. import config
 # database version should be incremented whenever the schema has changed
 db_version = 9
 db_name = '{database}_{version}'.format(database=config.synphys_db, version=db_version)
-db_address = '{host}/{database}'.format(host=config.synphys_db_host, database=db_name)
+db_address_ro = '{host}/{database}'.format(host=config.synphys_db_host, database=db_name)
+if config.synphys_db_host_rw is None:
+    db_address_rw = None
+else:
+    db_address_rw = '{host}/{database}'.format(host=config.synphys_db_host_rw, database=db_name)
 
 default_sample_rate = 20000
 
@@ -219,16 +223,16 @@ class TableGroup(object):
             self.mappings[k] = generate_mapping(k, schema)
 
     def drop_tables(self):
-        global engine
+        global engine_rw
         for k in self.schemas:
-            if k in engine.table_names():
-                self[k].__table__.drop(bind=engine)
+            if k in engine_rw.table_names():
+                self[k].__table__.drop(bind=engine_rw)
 
     def create_tables(self):
-        global engine
+        global engine_rw
         for k in self.schemas:
-            if k not in engine.table_names():
-                self[k].__table__.create(bind=engine)
+            if k not in engine_rw.table_names():
+                self[k].__table__.create(bind=engine_rw)
 
 
 
@@ -470,25 +474,35 @@ def create_all_mappings():
 
 
 #-------------- initial DB access ----------------
-engine = None
+engine_ro = None
+engine_rw = None
 engine_pid = None  # pid of process that created this engine. 
 def init_engine():
-    global engine
-    if engine is not None:
-        engine.dispose()
+    global engine_ro, engine_rw, engine_pid
+    if engine_ro is not None:
+        engine_ro.dispose()
+    if engine_rw is not None:
+        engine_rw.dispose()
     
-    engine = create_engine(db_address, pool_size=10, max_overflow=40)
+    engine_ro = create_engine(db_address_ro, pool_size=10, max_overflow=40, isolation_level='AUTOCOMMIT')
+    if db_address_rw is not None:
+        engine_rw = create_engine(db_address_rw, pool_size=10, max_overflow=40)
     engine_pid = os.getpid()
 
 init_engine()
 
 
-_sessionmaker = None
+_sessionmaker_ro = None
+_sessionmaker_rw = None
 # external users should create sessions from here.
-def Session():
+def Session(readonly=True):
     """Create and return a new database Session instance.
+    
+    If readonly is True, then the session is created using read-only credentials and has autocommit enabled.
+    This prevents idle-in-transaction timeouts that occur when GUI analysis tools would otherwise leave transactions
+    open after each request.
     """
-    global _sessionmaker, engine, engine_pid
+    global _sessionmaker_ro, _sessionmaker_rw, engine_ro, engine_rw, engine_pid
     if os.getpid() != engine_pid:
         # In forked processes, we need to re-initialize the engine before
         # creating a new session, otherwise child processes will
@@ -497,10 +511,17 @@ def Session():
         if engine_pid is not None:
             print("Making new session for subprocess %d != %d" % (os.getpid(), engine_pid))
         init_engine()
-        _sessionmaker = None
-    if _sessionmaker is None:
-        _sessionmaker = sessionmaker(bind=engine)
-    return _sessionmaker()
+        _sessionmaker_ro = None
+    
+    if _sessionmaker_ro is None:
+        _sessionmaker_ro = sessionmaker(bind=engine_ro)
+    if _sessionmaker_rw is None and engine_rw is not None:    
+        _sessionmaker_rw = sessionmaker(bind=engine_rw)
+        
+    if readonly:
+        return _sessionmaker_ro()
+    else:
+        return _sessionmaker_rw()
 
 
 create_all_mappings()
@@ -510,7 +531,9 @@ create_all_mappings()
 def reset_db():
     """Drop the existing synphys database and initialize a new one.
     """
-    pg_engine = create_engine(config.synphys_db_host + '/postgres')
+    global engine_rw
+    
+    pg_engine = create_engine(config.synphys_db_host_rw + '/postgres')
     with pg_engine.begin() as conn:
         conn.connection.set_isolation_level(0)
         try:
@@ -527,7 +550,7 @@ def reset_db():
     # Grant readonly permissions
     ro_user = config.synphys_db_readonly_user
     if ro_user is not None:
-        with engine.begin() as conn:
+        with engine_rw.begin() as conn:
             conn.execute('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO %s;' % ro_user)
             # should only be needed if there are already tables present
             #conn.execute('GRANT SELECT ON ALL TABLES IN SCHEMA public TO %s;' % ro_user)
@@ -536,14 +559,15 @@ def reset_db():
     global ORMBase
     ORMBase = declarative_base()
     create_all_mappings()
-    ORMBase.metadata.create_all(engine)
+    ORMBase.metadata.create_all(engine_rw)
 
 
 def vacuum(tables=None):
     """Cleans up database and analyzes table statistics in order to improve query planning.
     Should be run after any significant changes to the database.
     """
-    with engine.begin() as conn:
+    global engine_rw
+    with engine_rw.begin() as conn:
         conn.connection.set_isolation_level(0)
         if tables is None:
             conn.execute('vacuum analyze')
@@ -556,7 +580,7 @@ def default_session(fn):
     def wrap_with_session(*args, **kwds):
         close = False
         if kwds.get('session', None) is None:
-            kwds['session'] = Session()
+            kwds['session'] = Session(readonly=True)
             close = True
         try:
             ret = fn(*args, **kwds)
