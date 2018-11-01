@@ -16,7 +16,7 @@ class NDSlicer(QtGui.QWidget):
         self.layout.addWidget(self.dockarea)
 
         self.viewers = []
-        
+        self.data = None
         self.axes = axes.copy()
         for ax in axes:
             axes[ax].setdefault('index', 0)
@@ -38,6 +38,11 @@ class NDSlicer(QtGui.QWidget):
         self.ptree_dock = pg.dockarea.Dock("view selection")
         self.ptree_dock.addWidget(self.ptree)
         self.dockarea.addDock(self.ptree_dock, 'left')
+
+    def set_data(self, data):
+        self.data = data
+        for viewer in self.viewers:
+            viewer.set_data(self.data)
         
     def add_view(self, axes):
         dock = pg.dockarea.Dock("viewer", area=self.dockarea)
@@ -84,25 +89,57 @@ class MultiAxisParam(pg.parametertree.types.GroupParameter):
         param.viewer.set_axes(axes)
 
 
-class OneDViewer(pg.PlotWidget):
+
+class Viewer(object):
+    def __init__(self, ax):
+        self.data = None
+        self.index = None
+        self.axes = None
+
+    def set_axes(self, axes):
+        self.axes = axes
+        self.update_display()
+        
+    def get_data(self):
+        index = self.index[:]
+        for 
+        for i,
+
+
+class OneDViewer(Viewer, pg.PlotWidget):
     selection_changed = QtCore.Signal(object, object)  # self, {axis: selection}
     
     def __init__(self, axes):
         pg.PlotWidget.__init__(self)
         self.line = self.addLine(x=0, movable=True)
-        self.set_axes(axes)
+
+        Viewer.__init__(self, axes)
+        
         self.line.sigDragged.connect(self.line_moved)
         
     def set_axes(self, axes):
         assert len(axes) == 1
-        self.axes = axes
         self.setLabels(bottom=axes[0])
+        Viewer.set_axes(self, axes)
 
     def set_index(self, axes):
+        self.index = axes
         self.line.setValue(axes[self.axes[0]]['index'])
+        self.update_display()
 
     def line_moved(self):
         self.selection_changed.emit(self, {self.axes[0]: self.line.value()})
+
+    def set_data(self, data):
+        self.data = data
+        self.update_display()
+        
+    def update_display(self):
+        data = self.data
+        for ax in self.index:
+            if ax in self.axes:
+                continue
+            data = data[ax:self.index[ax]
         
 
 class TwoDViewer(pg.ImageView):
@@ -110,6 +147,7 @@ class TwoDViewer(pg.ImageView):
 
     def __init__(self, axes):
         self.plot = pg.PlotItem()
+        
         pg.ImageView.__init__(self, view=self.plot)
         self.plot.invertY(False)
         self.plot.setAspectLocked(False)

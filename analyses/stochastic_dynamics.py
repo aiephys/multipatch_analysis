@@ -2,6 +2,7 @@ from __future__ import print_function, division
 import sys
 import numpy as np
 import pyqtgraph as pg
+from pyqtgraph.Qt import QtGui, QtCore
 import scipy.stats as stats
 from multipatch_analysis.database import database as db
 from multipatch_analysis.pulse_response_strength import PulseResponseStrength
@@ -125,10 +126,10 @@ def event_qc(events):
     return mask   
 
 
-class ModelResultWidget(pg.QtGui.QWidget):
+class ModelResultWidget(QtGui.QWidget):
     def __init__(self):
-        pg.QtGui.QWidget.__init__(self)
-        self.layout = pg.QtGui.QGridLayout()
+        QtGui.QWidget.__init__(self)
+        self.layout = QtGui.QGridLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(self.layout)
         
@@ -185,6 +186,58 @@ class ModelResultWidget(pg.QtGui.QWidget):
         self.plt4.addLine(y=self.result[i]['amplitude'])
         self.plt4.addLine(y=expected_amp, pen='r')
 
+
+class PixelSelector(QtGui.QGraphicsRectItem):
+    
+    sigPixelSelectionChanged = QtCore.Signal(object, object)  # self, (x, y)
+    
+    def __init__(self, image=None, pen='y'):
+        self.image = None
+        QtGui.QGraphicsRectItem.__init__(self, QtCore.QRectF(0, 0, 1, 1))
+        self.setImage(image)
+        self.setPen(pen)
+        
+    def selectedPos(self):
+        """Return the currently selected data location (row, col).
+        """
+        if self.image is None or self.image.width() == 0 or self.image.height() == 0:
+            return (np.nan, np.nan)
+        dataPos = self.image.mapToData(self.pos())
+        return (dataPos.y(), dataPos.x())
+        
+    def setPen(self, pen):
+        QtGui.QGraphicsRectItem.setPen(self, pg.mkPen(pen))
+        
+    def setImage(self, image):
+        if self.scene() is not None:
+            self.scene().sigMouseClicked.disconnect(self._sceneClicked)
+        self.image = image
+        if image is not None:
+            self.setParentItem(image)
+            self.scene().sigMouseClicked.connect(self._sceneClicked)            
+        self.imageChanged()
+        
+    def imageChanged(self):
+        # check new image bounds
+        if self.image is None or self.image.width() == 0 or self.image.height() == 0:
+            pos = (np.nan, np.nan)
+        else:
+            pos = [min(self.pos().x(), self.image.width()), min(self.pos.y(), self.image.height())]
+        
+        self.setPos(*pos)
+        
+    def setPos(self, *args):
+        prevPos = self.pos()
+        QtGui.QGraphicsRectItem.setPos(*args)
+        if self.pos() != prevPos():
+            self.sigPixelSelectionChanged.emit(self, self.selectedPixel())
+
+    def _sceneClicked(self, event):
+        spos = event.scenePos()
+        imgPos = self.image.mapFromScene(spos)
+        i, j = int(imgPos.x()), int(imgPos.y())
+        self.setPos(i, j)
+
         
 class ParameterSpace(object):
     def __init__(self, params):
@@ -215,10 +268,10 @@ class ParameterSpace(object):
         return params
 
 
-class ParameterSearchWidget(pg.QtGui.QWidget):
+class ParameterSearchWidget(QtGui.QWidget):
     def __init__(self, param_space):
-        pg.QtGui.QWidget.__init__(self)
-        self.layout = pg.QtGui.QGridLayout()
+        QtGui.QWidget.__init__(self)
+        self.layout = QtGui.QGridLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(self.layout)
         
@@ -228,12 +281,13 @@ class ParameterSearchWidget(pg.QtGui.QWidget):
 
         self.view = self.img_view.view
         
-        self.select_rect = pg.QtGui.QGraphicsRectItem(pg.QtCore.QRectF(0, 0, 1, 1))
+        self.select_rect = QtGui.QGraphicsRectItem(QtCore.QRectF(0, 0, 1, 1))
         self.select_rect.setPen(pg.mkPen('g'))
         self.select_rect.setZValue(20)
         self.view.addItem(self.select_rect)
         
-        self.view.scene().sigMouseClicked.connect(self.view_clicked)
+        self.px_selector = PixelSelector(self.img_view.imageItem)
+        self.px_selector.sigPixelSelectionChanged.connect(self.pixel_selected)
         
         self.result_widget = ModelResultWidget()
         self.layout.addWidget(self.result_widget, 1, 0)
@@ -245,12 +299,8 @@ class ParameterSearchWidget(pg.QtGui.QWidget):
             result_img[ind] = param_space.result[ind][1]['likelihood'].mean()
         self.img_view.setImage(result_img)        
         
-    def view_clicked(self, event):
-        spos = event.scenePos()
-        param_pos = self.view.mapSceneToView(spos)
-        i, j = int(param_pos.x()), int(param_pos.y())
-        
-        self.select_result(i, j)
+    def pixel_selected(self, px_sel, px):
+        self.select_result(*px)
 
     def select_result(self, i, j):
         self.select_rect.setPos(i, j)
