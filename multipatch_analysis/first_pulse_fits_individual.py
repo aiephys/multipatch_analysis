@@ -11,7 +11,7 @@ import numpy as np
 import time
 from neuroanalysis.fitting import fit_psp
 
-class FirstPulseFitTableGroup(TableGroup):
+class IndFirstPulseFitTableGroup(TableGroup):
     """Fits first pulse for each individual sweeps.
     """
     schemas = {
@@ -23,16 +23,20 @@ class FirstPulseFitTableGroup(TableGroup):
     
     def create_mappings(self):
         TableGroup.create_mappings(self)
-
         IndividualFirstPulseFits = self['individual_first_pulse_fit']
 
-#----------------------------------------------------------------------------------------------
-        #here might want to back populate by pulse response not pair
-        db.Pair.avg_first_pulse_fit_force_sign = db.relationship(AvgFirstPulseFitsForceSign, back_populates="pair", cascade="delete",
+        here might want to back populate by pulse response not pair
+        db.Pair.individual_first_pulse_fit = db.relationship(IndividualFirstPulseFits, back_populates="pair", cascade="delete",
                                                       single_parent=True, uselist=False)
-        AvgFirstPulseFitsForceSign.pair = db.relationship(db.Pair, back_populates="avg_first_pulse_fit_force_sign", single_parent=True)
-#-----------------------------------------------------------------------------------        
+        IndividualFirstPulseFits.pair = db.relationship(db.Pair, back_populates="individual_first_pulse_fit", single_parent=True)
 
+ind_first_pulse_fit_table = IndFirstPulseFitTableGroup()
 
+def init_tables():
+    global IndividualFirstPulseFits 
+    ind_first_pulse_fit_table.create_tables()
 
-first_pulse_fit_tables = FirstPulseFitTableGroup()
+    IndividualFirstPulseFits = ind_first_pulse_fit_table['individual_first_pulse_fit']
+
+# create tables in database and add global variables for ORM classes
+init_tables()

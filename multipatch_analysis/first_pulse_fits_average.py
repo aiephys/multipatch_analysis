@@ -17,10 +17,10 @@ import os
 #----- specify things up here------------------------------
 #----------------------------------------------------------
 
-fitting_type = 'force_latency' #options 'default', 'force_sign', force_latency
+fitting_type = 'dynamic_weight_jitter_latency' #options 'default', 'force_sign', force_latency, force_sign_and_latency, dynamic_weight, dynamic_weight_jitter_latency
 general_image_path='/home/corinnet/workspace/DBfit_pics/'
-save_image = True  #specifies whether to save images
-commiting = True
+save_image = False  #specifies whether to save images
+commiting = False
 #----------------------------------------------------------
 #----------------------------------------------------------
 #----------------------------------------------------------
@@ -33,6 +33,12 @@ elif fitting_type == 'force_sign':
     image_path=os.path.join(general_image_path, 'force_sign'+date)
 elif fitting_type == 'force_latency':
     image_path=os.path.join(general_image_path, 'force_latency'+date)
+elif fitting_type == 'force_sign_and_latency':
+    image_path=os.path.join(general_image_path, 'force_SL'+date)
+elif fitting_type == 'dynamic_weight':
+    image_path=os.path.join(general_image_path, 'dynamic_weight'+date)
+elif fitting_type == 'dynamic_weight_jitter_latency':
+    image_path=os.path.join(general_image_path, 'dynamic_weight_jitter_latency'+date)
 else:
     raise Exception('A recognized type of fitting has not been specified')
 
@@ -61,8 +67,32 @@ class FirstPulseFitTableGroup(TableGroup):
         'avg_first_pulse_fit_force_latency': [
             """Contains results of psp_fit on spike aligned, average first pulse PSP for each
             connection that passed qc in current clamp. During the fit the latency is forced
-            to be the value found via fitting all of the pulses (available in the connection. Created via 
-            first_pulse_fits_average.py. All units in SI."""]+FPF_lib.common
+            to be the value found via fitting all of the pulses (available in  
+            connection_strengthic_fit_xoffset). The sign is forced to be in the direction 
+            specified in the connection strength tableCreated via first_pulse_fits_average.py. 
+            All units in SI."""]+FPF_lib.common,
+        'avg_first_pulse_fit_force_SL': [
+             """Contains results of psp_fit on spike aligned, average first pulse PSP for each
+            connection that passed qc in current clamp. During the fit the latency is forced
+            to be the value found via fitting all of the pulses (available in the 
+            connection_strengthic_fit_xoffset). Created via first_pulse_fits_average.py. 
+            All units in SI."""]+FPF_lib.common,
+        'avg_first_pulse_fit_dynamic_weight': [
+             """Contains results of psp_fit on spike aligned, average first pulse PSP for each
+            connection that passed qc in current clamp. During the fit the latency is forced
+            to be the value found via fitting all of the pulses (available in the 
+            connection_strength.ic_fit_xoffset). The heavily weighted section meant to 
+            place more importance of the wave form during the rise time is shifted to 
+            begin at the latency. Created via first_pulse_fits_average.py. 
+            All units in SI."""]+FPF_lib.common,
+        'avg_first_pulse_fit_dynamic_w_latency_jitter': [
+             """Contains results of psp_fit on spike aligned, average first pulse PSP for each
+            connection that passed qc in current clamp. During the fit the latency is forced
+            to be the value +/-.5 ms found via fitting all of the pulses (available in the 
+            connection_strength.ic_fit_xoffset). The heavily weighted section meant to 
+            place more importance of the wave form during the rise time is shifted to 
+            begin at the latency. Created via first_pulse_fits_average.py. 
+            All units in SI."""]+FPF_lib.common
     }
     
     def create_mappings(self):
@@ -85,6 +115,20 @@ class FirstPulseFitTableGroup(TableGroup):
                                                       single_parent=True, uselist=False)
         AvgFirstPulseFitsForceLatency.pair = db.relationship(db.Pair, back_populates="avg_first_pulse_fit_force_latency", single_parent=True)
 #-----------------------------------------------------------------------------------
+        AvgFirstPulseFitsForceSL = self['avg_first_pulse_fit_force_SL']
+        db.Pair.avg_first_pulse_fit_force_SL = db.relationship(AvgFirstPulseFitsForceSL, back_populates="pair", cascade="delete",
+                                                      single_parent=True, uselist=False)
+        AvgFirstPulseFitsForceSL.pair = db.relationship(db.Pair, back_populates="avg_first_pulse_fit_force_SL", single_parent=True)
+#-----------------------------------------------------------------------------------
+        AvgFirstPulseFitsDynamicWeight = self['avg_first_pulse_fit_dynamic_weight']
+        db.Pair.avg_first_pulse_fit_dynamic_weight = db.relationship(AvgFirstPulseFitsDynamicWeight, back_populates="pair", cascade="delete",
+                                                      single_parent=True, uselist=False)
+        AvgFirstPulseFitsDynamicWeight.pair = db.relationship(db.Pair, back_populates="avg_first_pulse_fit_dynamic_weight", single_parent=True)
+#-----------------------------------------------------------------------------------
+        AFPFForceSignJitterLatency = self['avg_first_pulse_fit_dynamic_w_latency_jitter']
+        db.Pair.avg_first_pulse_fit_dynamic_w_latency_jitter = db.relationship(AFPFForceSignJitterLatency, back_populates="pair", cascade="delete",
+                                                      single_parent=True, uselist=False)
+        AFPFForceSignJitterLatency.pair = db.relationship(db.Pair, back_populates="avg_first_pulse_fit_dynamic_w_latency_jitter", single_parent=True)
 
 first_pulse_fit_tables = FirstPulseFitTableGroup()
 
@@ -92,6 +136,9 @@ def init_tables():
     global AvgFirstPulseFitsDefault
     global AvgFirstPulseFitsForceSign
     global AvgFirstPulseFitsForceLatency     
+    global AvgFirstPulseFitsForceSL
+    global AvgFirstPulseFitsDynamicWeight
+    global AFPFForceSignJitterLatency
 #    global IndividualFirstPulseFits, 
     first_pulse_fit_tables.create_tables()
 
@@ -99,7 +146,9 @@ def init_tables():
     AvgFirstPulseFitsDefault = first_pulse_fit_tables['avg_first_pulse_fit_default']
     AvgFirstPulseFitsForceSign = first_pulse_fit_tables['avg_first_pulse_fit_force_sign']
     AvgFirstPulseFitsForceLatency = first_pulse_fit_tables['avg_first_pulse_fit_force_latency']
-
+    AvgFirstPulseFitsForceSL = first_pulse_fit_tables['avg_first_pulse_fit_force_SL']
+    AvgFirstPulseFitsDynamicWeight = first_pulse_fit_tables['avg_first_pulse_fit_dynamic_weight']
+    AFPFForceSignJitterLatency = first_pulse_fit_tables['avg_first_pulse_fit_dynamic_w_latency_jitter']
 # create tables in database and add global variables for ORM classes
 init_tables()
 
@@ -116,6 +165,15 @@ def update_fit(limit=None, expts=None, parallel=True, workers=6, raise_exception
             expts_done=session.query(db.Experiment.acq_timestamp).join(db.Pair).join(AvgFirstPulseFitsForceSign).all()
         elif fitting_type == 'force_latency':
             expts_done=session.query(db.Experiment.acq_timestamp).join(db.Pair).join(AvgFirstPulseFitsForceLatency).all()
+        elif fitting_type == 'force_sign_and_latency':
+            expts_done=session.query(db.Experiment.acq_timestamp).join(db.Pair).join(AvgFirstPulseFitsForceSL).all()
+        elif fitting_type == 'dynamic_weight':
+            # this moves the heavily weighted section meant to happen during the rise time to a pre
+            # defined latency found by fitting all of the psps together
+            expts_done=session.query(db.Experiment.acq_timestamp).join(db.Pair).join(AvgFirstPulseFitsDynamicWeight).all() 
+        elif fitting_type == 'dynamic_weight_jitter_latency':
+            expts_done=session.query(db.Experiment.acq_timestamp).join(db.Pair).join(AFPFForceSignJitterLatency).all()
+
 #        #TODO: deprecate this line when line above is confirmed expts_done = session.query(db.Experiment.acq_timestamp).join(db.SyncRec).join(db.Recording).join(AverageFirstPulseFits).join().distinct().all()
         print("Skipping %d already complete experiments" % (len(expts_done)))
         experiments = [e for e in experiments if e not in set(expts_done)]
@@ -190,7 +248,7 @@ def compute_fit(job_info, raise_exceptions=False):
         synapse_sign=pair.connection_strength.synapse_type
         connected=pair.synapse
 
-        title='%s, cells %i %s to %i %s; distance=%.1f um' % (uid, pre_cell_id, pre_cell_cre, post_cell_id,post_cell_cre, pair_distance*1e6)
+        title='%s, cells %i %s to %i %s; distance=%.1f um; n=%i' % (uid, pre_cell_id, pre_cell_cre, post_cell_id,post_cell_cre, pair_distance*1e6, len(pulse_ids))
         #Specify name for plot saving.
         if save_image:
             save_image_name=os.path.join(image_path,'%s_%s%s_%s%s_average_fit.png'  % (uid, pre_cell_id, pre_cell_cre, post_cell_id,post_cell_cre))
@@ -209,6 +267,34 @@ def compute_fit(job_info, raise_exceptions=False):
             else:
                 print('No latency to do forced latency fitting')
                 continue
+        elif fitting_type == 'force_sign_and_latency':
+            if pair.connection_strength.ic_fit_xoffset:
+                xoffset=pair.connection_strength.ic_fit_xoffset
+                avg_fit = FPF_lib.fit_trace(avg_psp, synaptic_sign=synapse_sign, latency=xoffset, plot_save_name=save_image_name, title=title)
+            else:
+                print('No latency to do forced latency fitting')
+                continue
+        elif fitting_type == 'dynamic_weight':
+            if pair.connection_strength.ic_fit_xoffset:
+                xoffset=pair.connection_strength.ic_fit_xoffset
+                weight = np.ones(len(avg_psp.data))*10.  #set everything to ten initially
+                weight[int((FPF_lib.time_before_spike-3e-3)/avg_psp.dt):int(FPF_lib.time_before_spike/avg_psp.dt)] = 0.   #area around stim artifact note that since this is spike aligned there will be some blur in where the cross talk is
+                weight[int((FPF_lib.time_before_spike+.0001+xoffset)/avg_psp.dt):int((FPF_lib.time_before_spike+.0001+xoffset+4e-3)/avg_psp.dt)] = 30.  #area around steep PSP rise 
+                avg_fit = FPF_lib.fit_trace(avg_psp, synaptic_sign=synapse_sign, weight=weight, latency=xoffset, plot_save_name=save_image_name, title=title)
+            else:
+                print('No latency to do forced latency fitting')
+                continue
+        elif fitting_type == 'dynamic_weight_jitter_latency':
+            if pair.connection_strength.ic_fit_xoffset:
+                xoffset=pair.connection_strength.ic_fit_xoffset
+                weight = np.ones(len(avg_psp.data))*10.  #set everything to ten initially
+                weight[int((FPF_lib.time_before_spike-3e-3)/avg_psp.dt):int(FPF_lib.time_before_spike/avg_psp.dt)] = 0.   #area around stim artifact note that since this is spike aligned there will be some blur in where the cross talk is
+                weight[int((FPF_lib.time_before_spike+.0001+xoffset)/avg_psp.dt):int((FPF_lib.time_before_spike+.0001+xoffset+4e-3)/avg_psp.dt)] = 30.  #area around steep PSP rise 
+                avg_fit = FPF_lib.fit_trace(avg_psp, synaptic_sign=synapse_sign, weight=weight, latency=xoffset, latency_jitter=.5e-3, plot_save_name=save_image_name, title=title)
+            else:
+                print('No latency to do forced latency fitting')
+                continue
+
         else:
             raise Exception('The type of fitting has not been specified')
 #---------------------------------------------------------------------------------------------
@@ -239,6 +325,13 @@ def compute_fit(job_info, raise_exceptions=False):
             afpf=AvgFirstPulseFitsForceSign(pair=pair, **out_dict)
         elif fitting_type == 'force_latency':
             afpf=AvgFirstPulseFitsForceLatency(pair=pair, **out_dict)
+        elif fitting_type == 'force_sign_and_latency':
+            afpf=AvgFirstPulseFitsForceSL(pair=pair, **out_dict)
+        elif fitting_type == 'dynamic_weight':
+            afpf=AvgFirstPulseFitsDynamicWeight(pair=pair, **out_dict)
+        elif fitting_type == 'dynamic_weight_jitter_latency':
+            afpf=AFPFForceSignJitterLatency(pair=pair, **out_dict)
+
         else:
             raise Exception('The type of fitting has not been specified')
         if commiting is True:

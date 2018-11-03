@@ -7,6 +7,8 @@ from neuroanalysis.data import Trace, TraceList
 from multipatch_analysis.database import database as db
 import multipatch_analysis.connection_strength as cs 
 from multipatch_analysis.database.database import TableGroup
+import matplotlib
+matplotlib.rcParams.update({'font.size': 16})
 import matplotlib.pyplot as plt
 import numpy as np
 # import time
@@ -176,7 +178,7 @@ def extract_first_pulse_info_from_Pair_object(pair, uid):
 
     return pulse_responses, pulse_ids, psp_amps_measured, stim_freq
 
-def fit_trace(voltage_trace, synaptic_sign, latency=None, plot_show=False, plot_save_name=False, title=''):
+def fit_trace(voltage_trace, synaptic_sign, weight=None, latency=None, latency_jitter=None, plot_show=False, plot_save_name=False, title=''):
     """
     Input
     -----
@@ -185,20 +187,27 @@ def fit_trace(voltage_trace, synaptic_sign, latency=None, plot_show=False, plot_
     synaptic_sign: str
         'ex' or 'in' specifying excitation of synapse
     plot_show: boolean 
-        plot resulting fit if True
+        show plot resulting from fit if True.
     plot_save_name: False or string
         if string is supplied then save the plot to the specified path
     title: string
         title of the resulting plot
     latency: float or None
-        amount of time that has passed in reference to the time of
+        Amount of time that has passed in reference to the time of
         the pre-synaptic spike.  Note that this value has to be transformed in
         reference to the start of the data waveform being fit within
         this function.
+    latency_jitter: None or float
+        Amount of jitter to allow before and after the latency value. If
+        *latency* is None, this value must be none.
+    weight: numpy array
+        Relative weighting of different sections of the voltage array
+        for fitting.  If specified it must be the same length as the 
+        voltage_trace
 
     Note there is a 'time_before_spike' variable in this code that is
-    note passed in and therefore must be global.  It specifies the
-    the amount of time before the spike that is being considered in 
+    not passed in and therefore must be global.  It specifies the
+    the amount of data before the spike that is being considered in 
     the here and in the rest of the code.  Note that the value is positive,
     i.e. if we start looking at the trace 10 ms before the spike we use
     10e-3 not -10e-3.
@@ -211,9 +220,10 @@ def fit_trace(voltage_trace, synaptic_sign, latency=None, plot_show=False, plot_
         the weight assigned to each index of the input waveform for fitting
     """
     #weighting
-    weight = np.ones(len(voltage_trace.data))*10.  #set everything to ten initially
-    weight[int((time_before_spike-3e-3)/voltage_trace.dt):int(time_before_spike/voltage_trace.dt)] = 0.   #area around stim artifact note that since this is spike aligned there will be some blur in where the cross talk is
-    weight[int((time_before_spike+1e-3)/voltage_trace.dt):int((time_before_spike+5e-3)/voltage_trace.dt)] = 30.  #area around steep PSP rise 
+    if weight is None:
+        weight = np.ones(len(voltage_trace.data))*10.  #set everything to ten initially
+        weight[int((time_before_spike-3e-3)/voltage_trace.dt):int(time_before_spike/voltage_trace.dt)] = 0.   #area around stim artifact note that since this is spike aligned there will be some blur in where the cross talk is
+        weight[int((time_before_spike+1e-3)/voltage_trace.dt):int((time_before_spike+5e-3)/voltage_trace.dt)] = 30.  #area around steep PSP rise 
 
     #converting synaptic sign from database to convention for fitting
     if synaptic_sign == 'in':
@@ -225,7 +235,16 @@ def fit_trace(voltage_trace, synaptic_sign, latency=None, plot_show=False, plot_
     else:
         raise Exception('synaptic sign not defined')
     
-    if latency:
+
+    if latency is None and latency_jitter:
+        raise Exception('latency_jitter cannot be specified if latency is not')
+    if latency_jitter:
+        if latency < latency_jitter:
+            lower_bound = time_before_spike
+        else:
+            lower_bound = latency + time_before_spike - latency_jitter
+        xoffset=(latency+time_before_spike, lower_bound, latency+time_before_spike+latency_jitter)  
+    elif latency:
         xoffset=(latency+time_before_spike, 'fixed')
     else:
         #since these are spike aligned the psp should not happen before the spike that happens at pre_pad by definition
@@ -238,7 +257,7 @@ def fit_trace(voltage_trace, synaptic_sign, latency=None, plot_show=False, plot_
                     weight=weight) 
 
     if plot_show is True or plot_save_name:
-        plt.figure(figsize=(14,14))
+        plt.figure(figsize=(14,10))
         ax1=plt.subplot(1,1,1)
         ln1=ax1.plot(voltage_trace.time_values*1.e3, voltage_trace.data*1e3, 'b', label='data')
         ln2=ax1.plot(voltage_trace.time_values*1.e3, fit.best_fit*1e3, 'r', label='nrmse=%f \namp (mV)=%f \nlatency (ms)=%f \nrise time (ms)=%f \ndecay tau=%f' % \
