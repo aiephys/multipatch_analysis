@@ -64,6 +64,7 @@ DRIVER_LINES = {                  # dependencies     products
     'Chrna2-Cre_OE25':            [(['chrna2'],       ['cre'])],
     'Penk-IRES2-Cre-neo':         [(['penk'],         ['cre'])],
     'Slc17a6-IRES2-FlpO':         [(['slc17a6'],      ['flp'])],
+    'Slc17a8-iCre':               [(['slc17a8'],      ['cre'])],
     'Ctgf-T2A-dgCre':             [(['ctgf'],         ['cre'])],
 }
 

@@ -401,6 +401,8 @@ class Dashboard(QtGui.QWidget):
                     search_hit = True
                 elif rec['description'] is not None and search in rec['description']:
                     search_hit = True
+                elif rec['path'] is not None and search in rec['path']:
+                    search_hit = True
                 hidden = hidden or not search_hit
             rec['item'].setHidden(hidden)
 

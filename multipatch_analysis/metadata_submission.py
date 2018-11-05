@@ -179,6 +179,14 @@ class ExperimentMetadataSubmission(object):
         # Sanity checks on pipette metadata:
         
         for pip_id, pip in self.pipettes.items():
+            # Check pipette status
+            if pip['pipette_status'] not in ['No seal', 'Low seal', 'GOhm seal', 'Technical failure', 'No attempt', 'Not recorded']:
+                warnings.append('Pipette %d has unrecognized status "%s"' % (pip_id, pip['pipette_status']))
+            
+            # Following checks only apply if we got data from this pipette.    
+            if not pip['got_data']:
+                continue
+            
             # Did we specify a known dye for each pipette?
             if pip['internal_dye'] not in constants.INTERNAL_DYES:
                 errors.append('Pipette %d has unrecognized dye "%s"' % (pip_id, pip['internal_dye']))
@@ -189,9 +197,6 @@ class ExperimentMetadataSubmission(object):
             
             # Does the selected dye overlap with cre reporters?
 
-            # Check pipette status
-            if pip['pipette_status'] not in ['No seal', 'Low seal', 'GOhm seal', 'Technical failure', 'No attempt', 'Not recorded']:
-                warnings.append('Pipette %d has unrecognized status "%s"' % (pip_id, pip['pipette_status']))
         
         # If slice was not fixed, don't attempt LIMS submission
         try:
