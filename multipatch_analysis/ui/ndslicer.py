@@ -39,10 +39,16 @@ class NDSlicer(QtGui.QWidget):
         self.ptree_dock.addWidget(self.ptree)
         self.dockarea.addDock(self.ptree_dock, 'left')
 
-    def set_data(self, data):
+    def set_data(self, data, axes=None):
         self.data = data
+        axes = axes or  {}
+        for ax in axes:
+            self.axes[ax].update(axes[ax])
+        for ax in self.axes:
+            self.axes[ax]['index'] = self.axes[ax]['values'][0]
         for viewer in self.viewers:
-            viewer.set_data(self.data)
+            viewer.set_data(self.data, self.axes)
+            viewer.set_index(self.index())
         
     def add_view(self, axes):
         dock = pg.dockarea.Dock("viewer", area=self.dockarea)
@@ -55,6 +61,8 @@ class NDSlicer(QtGui.QWidget):
         viewer.dock = dock
         viewer.selection_changed.connect(self.viewer_selection_changed)
         self.viewers.append(viewer)
+        viewer.set_data(self.data, self.axes)
+        viewer.set_index(self.index())    
         return viewer
 
     def one_d_show_changed(self, param):
@@ -64,8 +72,13 @@ class NDSlicer(QtGui.QWidget):
         for ax,val in axes.items():
             self.axes[ax]['index'] = val
             self.params['index', ax] = val
+        index = self.index()
         for viewer in self.viewers:
-            viewer.set_index(self.axes)
+            viewer.set_index(index)
+
+    def index(self):
+        index = {ax:val['index'] for ax,val in self.axes.items()}
+        return index        
 
 
 class MultiAxisParam(pg.parametertree.types.GroupParameter):
@@ -86,64 +99,87 @@ class MultiAxisParam(pg.parametertree.types.GroupParameter):
 
     def axes_changed(self, param, changes):
         axes = [ch.value() for ch in param.children()]
-        param.viewer.set_axes(axes)
-
+        param.viewer.set_selected_axes(axes)
 
 
 class Viewer(object):
     def __init__(self, ax):
         self.data = None
+        self.data_axes = None
         self.index = None
-        self.axes = None
+        self.set_selected_axes(ax)
 
-    def set_axes(self, axes):
-        self.axes = axes
+    def set_data(self, data, axes):
+        self.data = data
+        self.data_axes = axes
+        self.index = {ax:0 for ax in axes}
         self.update_display()
         
+    def set_selected_axes(self, axes):
+        self.selected_axes = axes
+        if self.index is not None:
+            self.set_index(self.index)
+
+    def set_index(self, index):
+        self.index = index
+        self.update_display()
+        
+    def update_display(self):
+        raise NotImplementedError()
+        
     def get_data(self):
-        index = self.index[:]
-        for 
-        for i,
+        sl = []
+        for ax in self.data_axes:
+            x = self.index[ax]
+            i = self._closest_axis_index(ax, x)
+            sl.append(i)
+        order = []
+        for ax in self.selected_axes:
+            i = list(self.data_axes.keys()).index(ax)
+            order.append(i)
+            sl[i] = slice(None)
+        data = self.data[tuple(sl)].transpose(np.argsort(order))
+        
+        return data
+
+    def _closest_axis_index(self, axis, x):
+        vals = self.data_axes[axis]['values']
+        return np.argmin(np.abs(vals - x))
 
 
 class OneDViewer(Viewer, pg.PlotWidget):
-    selection_changed = QtCore.Signal(object, object)  # self, {axis: selection}
+    selection_changed = QtCore.Signal(object, object)  # self, {axis: value, ...}
     
     def __init__(self, axes):
         pg.PlotWidget.__init__(self)
         self.line = self.addLine(x=0, movable=True)
+        self.curve = self.plot()
 
         Viewer.__init__(self, axes)
-        
-        self.line.sigDragged.connect(self.line_moved)
-        
-    def set_axes(self, axes):
-        assert len(axes) == 1
-        self.setLabels(bottom=axes[0])
-        Viewer.set_axes(self, axes)
 
-    def set_index(self, axes):
-        self.index = axes
-        self.line.setValue(axes[self.axes[0]]['index'])
-        self.update_display()
+        self.line.sigDragged.connect(self.line_moved)
+
+    def set_index(self, index):
+        axis = self.selected_axes[0]
+        self.line.setValue(self.data_axes[axis]['index'])
+        Viewer.set_index(self, index)
 
     def line_moved(self):
-        self.selection_changed.emit(self, {self.axes[0]: self.line.value()})
-
-    def set_data(self, data):
-        self.data = data
-        self.update_display()
+        self.selection_changed.emit(self, {self.selected_axes[0]: self.line.value()})
         
     def update_display(self):
-        data = self.data
-        for ax in self.index:
-            if ax in self.axes:
-                continue
-            data = data[ax:self.index[ax]
+        if self.data is None:
+            self.curve.setData([])
+            return
+        axis = self.selected_axes[0]
+        self.setLabels(bottom=axis)
+        data = self.get_data()
+        axvals = self.data_axes[axis]['values']
+        self.curve.setData(axvals, data)
         
 
-class TwoDViewer(pg.ImageView):
-    selection_changed = QtCore.Signal(object, object)  # self, {axis: selection, ...}
+class TwoDViewer(Viewer, pg.ImageView):
+    selection_changed = QtCore.Signal(object, object)  # self, {axis: value, ...}
 
     def __init__(self, axes):
         self.plot = pg.PlotItem()
@@ -151,35 +187,53 @@ class TwoDViewer(pg.ImageView):
         pg.ImageView.__init__(self, view=self.plot)
         self.plot.invertY(False)
         self.plot.setAspectLocked(False)
-        self.lines = [self.plot.addLine(x=0), self.plot.addLine(y=0)]
-        self.set_axes(axes)
+        self.lines = [self.plot.addLine(x=0, movable=True), self.plot.addLine(y=0, movable=True)]
+        Viewer.__init__(self, axes)
         for line in self.lines:
             line.sigDragged.connect(self.line_moved)
         
-    def set_axes(self, axes):
-        assert len(axes) == 2
-        self.axes = axes
-        self.plot.setLabels(left=axes[1], bottom=axes[0])
-        
-    def set_index(self, axes):
+    def set_index(self, index):
         for i,line in enumerate(self.lines):
-            line.setValue(axes[self.axes[i]]['index'])
+            ax = self.selected_axes[i]
+            line.setValue(index[ax])
+        Viewer.set_index(self, index)
 
     def line_moved(self):
-        axes = {self.axes[i]: self.lines[i].value() for i in (0, 1)}
+        axes = {self.selected_axes[i]: self.lines[i].value() for i in (0, 1)}
         self.selection_changed.emit(self, axes)
+
+    def update_display(self):
+        if self.data is None:
+            self.setImage(np.zeros((1, 1)))
+            return
+        axes = self.selected_axes
+        self.plot.setLabels(left=axes[1], bottom=axes[0])
+        data = self.get_data()
+        xvals = self.data_axes[axes[0]]['values']
+        yvals = self.data_axes[axes[1]]['values']
+        
+        scale = [xvals[1]-xvals[0], yvals[1]-yvals[0]]
+        self.setImage(data, pos=[xvals[0]-scale[0]*0.5, yvals[0]-scale[1]*0.5], scale=scale)
+        
 
 
 if __name__ == '__main__':
     pg.mkQApp()
     pg.dbg()
     
+    data = np.random.normal(size=(10, 20, 40)) * 0.1
+    data += np.sin(np.linspace(0, 2*np.pi, data.shape[0]))[:, None, None]
+    data += np.sin(np.linspace(0, 4*np.pi, data.shape[1]))[None, :, None]
+    data += np.sin(np.linspace(0, 8*np.pi, data.shape[2]))[None, None, :]
+    
     axes = OrderedDict([
-        ('X', {}),
-        ('Y', {}),
-        ('Z', {}),
+        ('X', {'values': np.arange(data.shape[0])}),
+        ('Y', {'values': np.arange(data.shape[1]) * 200}),
+        ('Z', {'values': np.arange(data.shape[2]) * 0.01 + 3.4}),
     ])
         
     nds = NDSlicer(axes)
     nds.show()
-                
+    
+    nds.set_data(data)
+    
