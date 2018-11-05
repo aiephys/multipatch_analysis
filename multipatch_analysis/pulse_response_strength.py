@@ -168,7 +168,7 @@ def update_strength(limit=0, expts=None, parallel=True, workers=6, raise_excepti
 def compute_strength(job_info, raise_exceptions=False):
     """Fill pulse_response_strength and baseline_response_strength tables for all pulse responses in the given experiment.
     """
-    session = db.Session()
+    session = db.Session(readonly=False)
     
     try:
         expt_id, index, n_jobs = job_info

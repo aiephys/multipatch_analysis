@@ -114,7 +114,7 @@ class SliceSubmission(object):
         return sl
         
     def submit(self):
-        session = db.Session()
+        session = db.Session(readonly=False)
         try:
             sl = self.create()
             session.add(sl)
@@ -467,7 +467,7 @@ class ExperimentDBSubmission(object):
             
         
     def submit(self):
-        session = db.Session()
+        session = db.Session(readonly=False)
         try:
             exp = self.create(session)
             session.commit()
