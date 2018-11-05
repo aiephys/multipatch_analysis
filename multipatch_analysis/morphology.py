@@ -75,7 +75,7 @@ def update_morphology(limit=0, expts=None, parallel=True, workers=6, raise_excep
 
 
 def import_morphology(job_info, raise_exceptions=False):
-    session = db.Session()
+    session = db.Session(readonly=False)
     
     try:
         expt_id, index, n_jobs = job_info

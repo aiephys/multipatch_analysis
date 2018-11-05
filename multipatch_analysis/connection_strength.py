@@ -162,7 +162,7 @@ def update_connection_strength(limit=0, expts=None, parallel=True, workers=6, ra
 
 
 def compute_connection_strength(job_info, raise_exceptions=False):
-    session = db.Session()
+    session = db.Session(readonly=False)
     
     try:
         expt_id, index, n_jobs = job_info
