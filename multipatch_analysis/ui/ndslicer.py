@@ -6,6 +6,8 @@ import pyqtgraph.dockarea
 
 
 class NDSlicer(QtGui.QWidget):
+    selection_changed = QtCore.Signal(object)
+    
     def __init__(self, axes):
         QtGui.QWidget.__init__(self)
         self.layout = QtGui.QGridLayout()
@@ -17,12 +19,10 @@ class NDSlicer(QtGui.QWidget):
 
         self.viewers = []
         self.data = None
-        self.axes = axes.copy()
-        for ax in axes:
-            axes[ax].setdefault('index', 0)
+        self.axes = OrderedDict([(ax, AxisData(name=ax, **ax_info)) for ax, ax_info in axes.items()])
         
         self.params = pg.parametertree.Parameter(name='params', type='group', children=[
-            {'name': 'index', 'type': 'group', 'children': [{'name': ax, 'type': 'int', 'value': axes[ax]['index']} for ax in axes]},
+            {'name': 'index', 'type': 'group', 'children': [{'name': ax, 'type': 'int', 'value': self.axes[ax].selection} for ax in self.axes]},
             {'name': '1D views', 'type': 'group'},
             MultiAxisParam(ndim=2, slicer=self),
         ])
@@ -42,13 +42,11 @@ class NDSlicer(QtGui.QWidget):
     def set_data(self, data, axes=None):
         self.data = data
         axes = axes or  {}
-        for ax in axes:
-            self.axes[ax].update(axes[ax])
-        for ax in self.axes:
-            self.axes[ax]['index'] = self.axes[ax]['values'][0]
+        for ax,info in axes.items():
+            for k,v in info.items():
+                setattr(self.axes[ax], k, v)
         for viewer in self.viewers:
             viewer.set_data(self.data, self.axes)
-            viewer.set_index(self.index())
         
     def add_view(self, axes):
         dock = pg.dockarea.Dock("viewer", area=self.dockarea)
@@ -62,7 +60,6 @@ class NDSlicer(QtGui.QWidget):
         viewer.selection_changed.connect(self.viewer_selection_changed)
         self.viewers.append(viewer)
         viewer.set_data(self.data, self.axes)
-        viewer.set_index(self.index())    
         return viewer
 
     def one_d_show_changed(self, param):
@@ -70,15 +67,35 @@ class NDSlicer(QtGui.QWidget):
         
     def viewer_selection_changed(self, viewer, axes):
         for ax,val in axes.items():
-            self.axes[ax]['index'] = val
+            self.axes[ax].selection = val
             self.params['index', ax] = val
-        index = self.index()
         for viewer in self.viewers:
-            viewer.set_index(index)
+            viewer.update_selection()
+        self.selection_changed.emit(self)
+
+    def selection(self):
+        vals = OrderedDict([(ax,val.selection) for ax,val in self.axes.items()])
+        return vals
 
     def index(self):
-        index = {ax:val['index'] for ax,val in self.axes.items()}
-        return index        
+        return OrderedDict([(ax,val.index) for ax,val in self.axes.items()])
+
+
+class AxisData(object):
+    def __init__(self, name, values):
+        self.name = name
+        self.values = values
+        self.selection = values[0]
+
+    def index_at(self, x):
+        return np.argmin(np.abs(self.values - x))
+        
+    def value_at(self, i):
+        return self.values[i]
+
+    @property
+    def index(self):
+        return self.index_at(self.selection)
 
 
 class MultiAxisParam(pg.parametertree.types.GroupParameter):
@@ -106,33 +123,26 @@ class Viewer(object):
     def __init__(self, ax):
         self.data = None
         self.data_axes = None
-        self.index = None
         self.set_selected_axes(ax)
 
     def set_data(self, data, axes):
         self.data = data
         self.data_axes = axes
-        self.index = {ax:0 for ax in axes}
-        self.update_display()
+        self.update_selection()
         
     def set_selected_axes(self, axes):
         self.selected_axes = axes
-        if self.index is not None:
-            self.set_index(self.index)
+        if self.data is not None:        
+            self.update_selection()
 
-    def set_index(self, index):
-        self.index = index
+    def update_selection(self):
         self.update_display()
         
     def update_display(self):
         raise NotImplementedError()
         
     def get_data(self):
-        sl = []
-        for ax in self.data_axes:
-            x = self.index[ax]
-            i = self._closest_axis_index(ax, x)
-            sl.append(i)
+        sl = [ax.index for ax in self.data_axes.values()]
         order = []
         for ax in self.selected_axes:
             i = list(self.data_axes.keys()).index(ax)
@@ -141,10 +151,6 @@ class Viewer(object):
         data = self.data[tuple(sl)].transpose(np.argsort(order))
         
         return data
-
-    def _closest_axis_index(self, axis, x):
-        vals = self.data_axes[axis]['values']
-        return np.argmin(np.abs(vals - x))
 
 
 class OneDViewer(Viewer, pg.PlotWidget):
@@ -159,10 +165,10 @@ class OneDViewer(Viewer, pg.PlotWidget):
 
         self.line.sigDragged.connect(self.line_moved)
 
-    def set_index(self, index):
+    def update_selection(self):
         axis = self.selected_axes[0]
-        self.line.setValue(self.data_axes[axis]['index'])
-        Viewer.set_index(self, index)
+        self.line.setValue(self.data_axes[axis].selection)
+        Viewer.update_selection(self)
 
     def line_moved(self):
         self.selection_changed.emit(self, {self.selected_axes[0]: self.line.value()})
@@ -174,7 +180,7 @@ class OneDViewer(Viewer, pg.PlotWidget):
         axis = self.selected_axes[0]
         self.setLabels(bottom=axis)
         data = self.get_data()
-        axvals = self.data_axes[axis]['values']
+        axvals = self.data_axes[axis].values
         self.curve.setData(axvals, data)
         
 
@@ -192,11 +198,11 @@ class TwoDViewer(Viewer, pg.ImageView):
         for line in self.lines:
             line.sigDragged.connect(self.line_moved)
         
-    def set_index(self, index):
+    def update_selection(self):
         for i,line in enumerate(self.lines):
             ax = self.selected_axes[i]
-            line.setValue(index[ax])
-        Viewer.set_index(self, index)
+            line.setValue(self.data_axes[ax].selection)
+        Viewer.update_selection(self)
 
     def line_moved(self):
         axes = {self.selected_axes[i]: self.lines[i].value() for i in (0, 1)}
@@ -209,12 +215,11 @@ class TwoDViewer(Viewer, pg.ImageView):
         axes = self.selected_axes
         self.plot.setLabels(left=axes[1], bottom=axes[0])
         data = self.get_data()
-        xvals = self.data_axes[axes[0]]['values']
-        yvals = self.data_axes[axes[1]]['values']
+        xvals = self.data_axes[axes[0]].values
+        yvals = self.data_axes[axes[1]].values
         
         scale = [xvals[1]-xvals[0], yvals[1]-yvals[0]]
         self.setImage(data, pos=[xvals[0]-scale[0]*0.5, yvals[0]-scale[1]*0.5], scale=scale)
-        
 
 
 if __name__ == '__main__':

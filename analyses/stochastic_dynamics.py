@@ -1,5 +1,6 @@
 from __future__ import print_function, division
 import sys
+from collections import OrderedDict
 import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtGui, QtCore
@@ -7,6 +8,7 @@ import scipy.stats as stats
 from multipatch_analysis.database import database as db
 from multipatch_analysis.pulse_response_strength import PulseResponseStrength
 from multipatch_analysis.connection_strength import ConnectionStrength, get_amps, get_baseline_amps
+from multipatch_analysis.ui.ndslicer import NDSlicer
 from neuroanalysis.synaptic_release import ReleaseModel
 
 
@@ -254,6 +256,9 @@ class ParameterSpace(object):
         
         self.result = np.zeros(shape, dtype=object)
         
+    def axes(self):
+        return OrderedDict([(ax, {'values': self.params[ax]}) for ax in self.param_order])
+        
     def run(self, func):
         all_inds = list(np.ndindex(self.result.shape))
         for i,inds in enumerate(all_inds):
@@ -275,19 +280,9 @@ class ParameterSearchWidget(QtGui.QWidget):
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(self.layout)
         
-        self.img_view = pg.ImageView()
-        self.img_view.imageItem.setBorder(0.5)
-        self.layout.addWidget(self.img_view)
-
-        self.view = self.img_view.view
-        
-        self.select_rect = QtGui.QGraphicsRectItem(QtCore.QRectF(0, 0, 1, 1))
-        self.select_rect.setPen(pg.mkPen('g'))
-        self.select_rect.setZValue(20)
-        self.view.addItem(self.select_rect)
-        
-        self.px_selector = PixelSelector(self.img_view.imageItem)
-        self.px_selector.sigPixelSelectionChanged.connect(self.pixel_selected)
+        self.slicer = NDSlicer(param_space.axes())
+        self.slicer.selection_changed.connect(self.selection_changed)
+        self.layout.addWidget(self.slicer, 0, 0)
         
         self.result_widget = ModelResultWidget()
         self.layout.addWidget(self.result_widget, 1, 0)
@@ -297,13 +292,13 @@ class ParameterSearchWidget(QtGui.QWidget):
         result_img = np.zeros(param_space.result.shape)
         for ind in np.ndindex(result_img.shape):
             result_img[ind] = param_space.result[ind][1]['likelihood'].mean()
-        self.img_view.setImage(result_img)        
+        self.slicer.set_data(result_img)
         
-    def pixel_selected(self, px_sel, px):
-        self.select_result(*px)
+    def selection_changed(self, slicer):
+        index = slicer.index()
+        self.select_result(*index.values())
 
     def select_result(self, i, j):
-        self.select_rect.setPos(i, j)
         result = self.param_space.result[i, j]
         self.result_widget.set_result(*result)
 
