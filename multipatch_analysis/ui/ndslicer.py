@@ -167,11 +167,13 @@ class OneDViewer(Viewer, pg.PlotWidget):
 
     def update_selection(self):
         axis = self.selected_axes[0]
-        self.line.setValue(self.data_axes[axis].selection)
+        self.line.setValue(self.data_axes[axis].index)
         Viewer.update_selection(self)
 
     def line_moved(self):
-        self.selection_changed.emit(self, {self.selected_axes[0]: self.line.value()})
+        ax = self.selected_axes[0]
+        val = self.data_axes[ax].value_at(int(np.round(self.line.value())))
+        self.selection_changed.emit(self, {ax: val})
         
     def update_display(self):
         if self.data is None:
@@ -180,8 +182,9 @@ class OneDViewer(Viewer, pg.PlotWidget):
         axis = self.selected_axes[0]
         self.setLabels(bottom=axis)
         data = self.get_data()
+        self.curve.setData(data)
         axvals = self.data_axes[axis].values
-        self.curve.setData(axvals, data)
+        self.getAxis('bottom').setTicks([[(i, "%0.2g"%axvals[i]) for i in range(len(axvals))]])
         
 
 class TwoDViewer(Viewer, pg.ImageView):
@@ -201,11 +204,11 @@ class TwoDViewer(Viewer, pg.ImageView):
     def update_selection(self):
         for i,line in enumerate(self.lines):
             ax = self.selected_axes[i]
-            line.setValue(self.data_axes[ax].selection)
+            line.setValue(self.data_axes[ax].index)
         Viewer.update_selection(self)
 
     def line_moved(self):
-        axes = {self.selected_axes[i]: self.lines[i].value() for i in (0, 1)}
+        axes = {ax: self.data_axes[ax].value_at(int(np.round(self.lines[i].value()))) for i,ax in enumerate(self.selected_axes)}
         self.selection_changed.emit(self, axes)
 
     def update_display(self):
@@ -215,11 +218,14 @@ class TwoDViewer(Viewer, pg.ImageView):
         axes = self.selected_axes
         self.plot.setLabels(left=axes[1], bottom=axes[0])
         data = self.get_data()
+        
+        # scale = [xvals[1]-xvals[0], yvals[1]-yvals[0]]
+        self.setImage(data, pos=[-0.5, -0.5]) #, pos=[xvals[0]-scale[0]*0.5, yvals[0]-scale[1]*0.5], scale=scale)
+
         xvals = self.data_axes[axes[0]].values
         yvals = self.data_axes[axes[1]].values
-        
-        scale = [xvals[1]-xvals[0], yvals[1]-yvals[0]]
-        self.setImage(data, pos=[xvals[0]-scale[0]*0.5, yvals[0]-scale[1]*0.5], scale=scale)
+        self.plot.getAxis('bottom').setTicks([[(i, "%0.2g"%xvals[i]) for i in range(len(xvals))]])
+        self.plot.getAxis('left').setTicks([[(i, "%0.2g"%yvals[i]) for i in range(len(yvals))]])
 
 
 if __name__ == '__main__':

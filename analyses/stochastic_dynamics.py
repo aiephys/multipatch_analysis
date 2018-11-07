@@ -279,13 +279,15 @@ class ParameterSearchWidget(QtGui.QWidget):
         self.layout = QtGui.QGridLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(self.layout)
+        self.splitter = QtGui.QSplitter(QtCore.Qt.Vertical)
+        self.layout.addWidget(self.splitter)
         
         self.slicer = NDSlicer(param_space.axes())
         self.slicer.selection_changed.connect(self.selection_changed)
-        self.layout.addWidget(self.slicer, 0, 0)
+        self.splitter.addWidget(self.slicer)
         
         self.result_widget = ModelResultWidget()
-        self.layout.addWidget(self.result_widget, 1, 0)
+        self.splitter.addWidget(self.result_widget)
         
         self.param_space = param_space
         
