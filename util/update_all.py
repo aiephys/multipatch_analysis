@@ -55,6 +55,7 @@ if __name__ == '__main__':
             
             if name in skip:
                 print("   [ skipping ]")
+                skip.remove(name)  # only skip once
                 continue
 
             os.system(cmd)
