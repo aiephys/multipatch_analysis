@@ -3,6 +3,7 @@ import sys
 from collections import OrderedDict
 import numpy as np
 import pyqtgraph as pg
+import pyqtgraph.multiprocess
 from pyqtgraph.Qt import QtGui, QtCore
 import scipy.stats as stats
 from multipatch_analysis.database import database as db
@@ -100,25 +101,38 @@ class StochasticReleaseModel(object):
         """Estimate the probability density of seeing a particular *amplitude*
         given a number of *available_vesicles*.
         """
-        available_vesicles = int(max(0, state['available_vesicle']))
-        
-        likelihood = np.zeros(len(amplitudes))
-        release_prob = stats.binom(available_vesicles, self.release_probability)
-        for n_vesicles in range(available_vesicles):
-            # probability of releasing n_vesicles given available_vesicles and release_probability
-            p_n = release_prob.pmf(n_vesicles)
-            
-            # expected amplitude for n_vesicles
-            amp_mean = n_vesicles * self.mini_amplitude
-            
-            # distribution of amplitudes expected for n_vesicles
-            amp_stdev = (self.mini_amplitude_stdev**2 + self.measurement_stdev**2) ** 0.5
-            amp_prob = p_n * stats.norm(amp_mean, amp_stdev).pdf(amplitudes)
-            
-            # increment likelihood of seeing this amplitude
-            likelihood += amp_prob
-        
-        return likelihood
+        return release_likelihood(amplitudes, state, self.release_probability, self.mini_amplitude, self.mini_amplitude_stdev, self.measurement_stdev)
+
+
+def release_likelihood(amplitudes, state, release_probability, mini_amplitude, mini_amplitude_stdev, measurement_stdev):
+    amplitudes = np.array(amplitudes)
+    available_vesicles = int(max(0, state['available_vesicle']))
+    
+    likelihood = np.zeros(len(amplitudes))
+    release_prob = stats.binom(available_vesicles, release_probability)
+    
+    n_vesicles = np.arange(available_vesicles)
+    
+    # probability of releasing n_vesicles given available_vesicles and release_probability
+    p_n = release_prob.pmf(n_vesicles)
+    
+    # expected amplitude for n_vesicles
+    amp_mean = n_vesicles * mini_amplitude
+    
+    # distributions of amplitudes expected for n_vesicles
+    amp_stdev = (mini_amplitude_stdev**2 + measurement_stdev**2) ** 0.5
+    amp_prob = p_n[None, :] * normal_pdf(amp_mean[None, :], amp_stdev, amplitudes[:, None])
+    
+    # sum all distributions across n_vesicles
+    likelihood = amp_prob.sum(axis=1)
+    
+    return likelihood
+
+
+def normal_pdf(mu, sigma, x):
+    """Probability distribution function of normal distribution
+    """
+    return (1.0 / (2 * np.pi * sigma**2))**0.5 * np.exp(- (x-mu)**2 / (2 * sigma**2))
 
 
 def event_qc(events):
@@ -146,8 +160,8 @@ class ModelResultWidget(QtGui.QWidget):
         self.plt3 = self.glw.addPlot(2, 0, title="available_vesicles vs compressed time")
         self.plt3.setXLink(self.plt1)
         
-        self.plt4 = self.glw.addPlot(1, 1, title="expected amplitude distribution")
-        self.plt4.setYLink(self.plt2)
+        self.plt4 = self.glw.addPlot(0, 1, title="expected amplitude distribution", rowspan=3)
+        # self.plt4.setYLink(self.plt2)
         self.plt4.setMaximumWidth(300)
 
     def set_result(self, model, result, pre_state, post_state):
@@ -158,7 +172,8 @@ class ModelResultWidget(QtGui.QWidget):
 
         # color events by likelihood
         cmap = pg.ColorMap([0, 1.0], [(0, 0, 0), (255, 0, 0)])
-        err_colors = cmap.map((10 - result['likelihood']) / 10.)
+        threshold = 20
+        err_colors = cmap.map((threshold - result['likelihood']) / threshold)
         brushes = [pg.mkBrush(c) for c in err_colors]
 
         # log spike intervals to make visualization a little easier
@@ -182,7 +197,11 @@ class ModelResultWidget(QtGui.QWidget):
         i = pts[0].index()
         state = self.pre_state[i]
         expected_amp = self.result[i]['expected_amplitude']
-        amps = np.linspace(-expected_amp, expected_amp * 4, 2000)
+        measured_amps = self.result[i]['amplitude']
+        min_amp = min(expected_amp, measured_amps.min())
+        max_amp = 4 * max(expected_amp, measured_amps.max())
+        
+        amps = np.linspace(-max_amp, max_amp, 2000)
         self.plt4.clear()
         self.plt4.plot(self.model.likelihood(amps, state), amps)
         self.plt4.addLine(y=self.result[i]['amplitude'])
@@ -261,10 +280,11 @@ class ParameterSpace(object):
         
     def run(self, func):
         all_inds = list(np.ndindex(self.result.shape))
-        for i,inds in enumerate(all_inds):
-            params = self[inds]
-            self.result[inds] = func(params)
-            yield i, inds, len(all_inds)
+
+        with pg.multiprocess.Parallelize(enumerate(all_inds), results=self.result, progressDialog='synapticulating...', workers=8) as tasker:
+            for i, inds in tasker:
+                params = self[inds]
+                tasker.results[inds] = func(params)
         
     def __getitem__(self, inds):
         params = self.static_params.copy()
@@ -293,15 +313,15 @@ class ParameterSearchWidget(QtGui.QWidget):
         
         result_img = np.zeros(param_space.result.shape)
         for ind in np.ndindex(result_img.shape):
-            result_img[ind] = param_space.result[ind][1]['likelihood'].mean()
+            result_img[ind] = np.log(param_space.result[ind][1]['likelihood'] + 1).mean()
         self.slicer.set_data(result_img)
         
     def selection_changed(self, slicer):
         index = slicer.index()
         self.select_result(*index.values())
 
-    def select_result(self, i, j):
-        result = self.param_space.result[i, j]
+    def select_result(self, *index):
+        result = self.param_space.result[index]
         self.result_widget.set_result(*result)
 
 
@@ -360,13 +380,22 @@ if __name__ == '__main__':
     mini_amp_estimate = first_pulse_amps.mean() / (n_release_sites * release_probability)
     params = {
         'n_release_sites': np.array([1, 2, 3, 4, 6, 8, 12, 16, 24, 32]),
-        'release_probability': release_probability,
-        'mini_amplitude': mini_amp_estimate,
-        'mini_amplitude_stdev': mini_amp_estimate / 3.,
+        'release_probability': np.array([0.05, 0.1, 0.2, 0.4, 0.8]),
+        'mini_amplitude': mini_amp_estimate * 1.2**np.arange(-3, 4),
+        'mini_amplitude_stdev': mini_amp_estimate / np.array([8., 4., 2.]),
         'measurement_stdev': bg_events[amplitude_field].std(),
-        'recovery_tau': log_space(2e-5, 20, 11),
+        'recovery_tau': log_space(2e-5, 20, 5),
     }
 
+    # Effects of mini_amp_stdev
+    params = {
+        'n_release_sites': np.arange(30),
+        'release_probability': release_probability,
+        'mini_amplitude': mini_amp_estimate * 1.2**np.arange(-24, 24),
+        'mini_amplitude_stdev': mini_amp_estimate * 1.2**np.arange(-24, 24),
+        'measurement_stdev': 0,
+        'recovery_tau': 0.01,
+    }
 
     # 3. For each point in the parameter space, simulate a synapse and estimate the joint probability of the set of measured amplitudes
     
@@ -378,8 +407,7 @@ if __name__ == '__main__':
     
     
     param_space = ParameterSpace(params)
-    for i, inds, n_inds in param_space.run(run_model):
-        print(i+1, n_inds)
+    param_space.run(run_model)
 
     # 4. Visualize / characterize mapped parameter space. Somehow.
     win = ParameterSearchWidget(param_space)
