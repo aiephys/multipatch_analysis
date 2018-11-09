@@ -1,7 +1,9 @@
+# coding: utf8
 from __future__ import print_function, division
 import sys
 from collections import OrderedDict
 import numpy as np
+import numba
 import pyqtgraph as pg
 import pyqtgraph.multiprocess
 from pyqtgraph.Qt import QtGui, QtCore
@@ -101,17 +103,54 @@ class StochasticReleaseModel(object):
         """Estimate the probability density of seeing a particular *amplitude*
         given a number of *available_vesicles*.
         """
-        return release_likelihood(amplitudes, state, self.release_probability, self.mini_amplitude, self.mini_amplitude_stdev, self.measurement_stdev)
+        available_vesicles = int(np.clip(np.round(state['available_vesicle']), 0, self.n_release_sites))
+        return release_likelihood(amplitudes, available_vesicles, self.release_probability, self.mini_amplitude, self.mini_amplitude_stdev, self.measurement_stdev)
 
 
-def release_likelihood(amplitudes, state, release_probability, mini_amplitude, mini_amplitude_stdev, measurement_stdev):
+# @numba.jit
+def release_likelihood(amplitudes, available_vesicles, release_probability, mini_amplitude, mini_amplitude_stdev, measurement_stdev):
+    """Return a measure of the likelihood that a synaptic response will have certain amplitude(s),
+    given the state parameters for the synapse.
+    
+    Parameters
+    ----------
+    amplitudes : array
+        The amplitudes for which likelihood values will be returned
+    available_vesicles : int
+        Number of vesicles available for release
+    release_probability : float
+        Probability for each available vesicle to be released
+    mini_amplitude : float
+        Mean amplitude of response evoked by a single vesicle release
+    mini_amplitude_stdev : float
+        Standard deviation of response amplitudes evoked by a single vesicle release
+    measurement_stdev : float
+        Standard deviation of response amplitude measurement errors
+        
+        
+    For each value in *amplitudes*, we calculate the likelihood that a synapse would evoke a response
+    of that amplitude. Likelihood is calculated as follows:
+    
+    1. Given the number of vesicles available to be released (nV) and the release probability (pR), determine
+       the probability that each possible number of vesicles (nR) will be released using the binomial distribution
+       probability mass function. For example, if there are 3 vesicles available and the release probability is
+       0.1, then the possibilities are:
+           vesicles released (nR)    probability
+                                0    0.729
+                                1    0.243
+                                2    0.27
+                                3    0.001
+    2. For each possible number of released vesicles, calculate the likelihood that this possibility could
+       evoke a response of the tested amplitude. This is calculated using the Gaussian probability distribution 
+       function where µ = nR * mini_amplitude and σ = sqrt(mini_amplitude_stdev^2 * nR + measurement_stdev)
+    3. The total likelihood is the sum of likelihoods for all possible values of nR.
+    """
     amplitudes = np.array(amplitudes)
-    available_vesicles = int(max(0, state['available_vesicle']))
     
     likelihood = np.zeros(len(amplitudes))
     release_prob = stats.binom(available_vesicles, release_probability)
     
-    n_vesicles = np.arange(available_vesicles)
+    n_vesicles = np.arange(available_vesicles + 1)
     
     # probability of releasing n_vesicles given available_vesicles and release_probability
     p_n = release_prob.pmf(n_vesicles)
@@ -119,9 +158,11 @@ def release_likelihood(amplitudes, state, release_probability, mini_amplitude, m
     # expected amplitude for n_vesicles
     amp_mean = n_vesicles * mini_amplitude
     
+    # amplitude stdev increases by sqrt(n) with number of released vesicles
+    amp_stdev = (mini_amplitude_stdev**2 * n_vesicles + measurement_stdev**2) ** 0.5
+    
     # distributions of amplitudes expected for n_vesicles
-    amp_stdev = (mini_amplitude_stdev**2 + measurement_stdev**2) ** 0.5
-    amp_prob = p_n[None, :] * normal_pdf(amp_mean[None, :], amp_stdev, amplitudes[:, None])
+    amp_prob = p_n[None, :] * normal_pdf(amp_mean[None, :], amp_stdev[None, :], amplitudes[:, None])
     
     # sum all distributions across n_vesicles
     likelihood = amp_prob.sum(axis=1)
@@ -130,7 +171,7 @@ def release_likelihood(amplitudes, state, release_probability, mini_amplitude, m
 
 
 def normal_pdf(mu, sigma, x):
-    """Probability distribution function of normal distribution
+    """Probability density function of normal distribution
     """
     return (1.0 / (2 * np.pi * sigma**2))**0.5 * np.exp(- (x-mu)**2 / (2 * sigma**2))
 
@@ -172,7 +213,7 @@ class ModelResultWidget(QtGui.QWidget):
 
         # color events by likelihood
         cmap = pg.ColorMap([0, 1.0], [(0, 0, 0), (255, 0, 0)])
-        threshold = 20
+        threshold = 10
         err_colors = cmap.map((threshold - result['likelihood']) / threshold)
         brushes = [pg.mkBrush(c) for c in err_colors]
 
@@ -375,27 +416,47 @@ if __name__ == '__main__':
 
     def log_space(start, stop, steps):
         return start * (stop/start)**(np.arange(steps) / (steps-1))
-    n_release_sites = 20
+        
+    # n_release_sites = 20
+    # release_probability = 0.1
+    # max_events = -1
+    # mini_amp_estimate = first_pulse_amps.mean() / (n_release_sites * release_probability)
+    # params = {
+    #     'n_release_sites': np.array([1, 2, 3, 4, 6, 8, 12, 16, 24, 32]),
+    #     'release_probability': log_space(0.01, 0.8, 15),
+    #     'mini_amplitude': log_space(mini_amp_estimate * 1, mini_amp_estimate * 10, 15),
+    #     'mini_amplitude_stdev': mini_amp_estimate / np.array([12., 8., 6., 4., 3., 2.]),
+    #     'measurement_stdev': 0, #bg_events[amplitude_field].std(),
+    #     'recovery_tau': log_space(2e-5, 20, 15),
+    # }
+
+    # quick test
+    n_release_sites = 8
     release_probability = 0.1
     mini_amp_estimate = first_pulse_amps.mean() / (n_release_sites * release_probability)
+    max_events = 30
     params = {
-        'n_release_sites': np.array([1, 2, 3, 4, 6, 8, 12, 16, 24, 32]),
-        'release_probability': np.array([0.05, 0.1, 0.2, 0.4, 0.8]),
-        'mini_amplitude': mini_amp_estimate * 1.2**np.arange(-3, 4),
-        'mini_amplitude_stdev': mini_amp_estimate / np.array([8., 4., 2.]),
-        'measurement_stdev': bg_events[amplitude_field].std(),
-        'recovery_tau': log_space(2e-5, 20, 5),
-    }
-
-    # Effects of mini_amp_stdev
-    params = {
-        'n_release_sites': np.arange(30),
-        'release_probability': release_probability,
-        'mini_amplitude': mini_amp_estimate * 1.2**np.arange(-24, 24),
-        'mini_amplitude_stdev': mini_amp_estimate * 1.2**np.arange(-24, 24),
-        'measurement_stdev': 0,
+        'n_release_sites': np.array([1, 2, 4, 8, 16]),
+        'release_probability': release_probability * np.array([0.5, 1, 2, 4]),
+        'mini_amplitude': mini_amp_estimate * 1.2**np.arange(-24, 24, 8),
+        'mini_amplitude_stdev': mini_amp_estimate * 0.2 * 1.2**np.arange(-24, 24, 8),
+        'measurement_stdev': 0.001,
         'recovery_tau': 0.01,
     }
+
+    # # Effects of mini_amp_stdev
+    # n_release_sites = 20
+    # release_probability = 0.1
+    # max_events = -1
+    # mini_amp_estimate = first_pulse_amps.mean() / (n_release_sites * release_probability)
+    # params = {
+    #     'n_release_sites': np.arange(1, 30),
+    #     'release_probability': release_probability,
+    #     'mini_amplitude': mini_amp_estimate * 1.2**np.arange(-24, 24),
+    #     'mini_amplitude_stdev': mini_amp_estimate * 1.2**np.arange(-24, 24),
+    #     'measurement_stdev': 0,
+    #     'recovery_tau': 0.01,
+    # }
 
     # 3. For each point in the parameter space, simulate a synapse and estimate the joint probability of the set of measured amplitudes
     
@@ -403,7 +464,7 @@ if __name__ == '__main__':
         model = StochasticReleaseModel()
         for k,v in params.items():
             setattr(model, k, v)
-        return (model,) + model.measure_likelihood(spike_times[:30], amplitudes[:30])
+        return (model,) + model.measure_likelihood(spike_times[:max_events], amplitudes[:max_events])
     
     
     param_space = ParameterSpace(params)
