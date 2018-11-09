@@ -113,7 +113,7 @@ class MultiAxisParam(pg.parametertree.types.GroupParameter):
             {'name': 'axis %d' % i, 'type': 'list', 'values': axis_names, 'value': axis_names[i]} for i in range(self.ndim)
         ], removable=True)
         self.addChild(param)
-        viewer = self.slicer.add_view(axes=list(self.slicer.axes.keys())[:self.ndim])
+        viewer, dock = self.slicer.add_view(axes=list(self.slicer.axes.keys())[:self.ndim])
         param.viewer = viewer
         param.sigTreeStateChanged.connect(self.axes_changed)
 

@@ -201,9 +201,12 @@ class ModelResultWidget(QtGui.QWidget):
         self.plt3 = self.glw.addPlot(2, 0, title="available_vesicles vs compressed time")
         self.plt3.setXLink(self.plt1)
         
-        self.plt4 = self.glw.addPlot(0, 1, title="expected amplitude distribution", rowspan=3)
+        self.plt4 = self.glw.addPlot(0, 1, title="amplitude distributions", rowspan=3)
         # self.plt4.setYLink(self.plt2)
-        self.plt4.setMaximumWidth(300)
+        self.plt4.setMaximumWidth(300)        
+        self.plt4.selected_items = []
+
+        self.amp_sample_values = np.linspace(-0.02, 0.1, 200)
 
     def set_result(self, model, result, pre_state, post_state):
         self.model = model
@@ -233,20 +236,41 @@ class ModelResultWidget(QtGui.QWidget):
         self.plt3.clear()
         self.plt3.plot(compressed_spike_times, pre_state['available_vesicle'], pen=None, symbol='t', symbolBrush=brushes)
         self.plt3.plot(compressed_spike_times, post_state['available_vesicle'], pen=None, symbol='o', symbolBrush=brushes)
+
+        self.plt4.clear()
+        
+        # plot full distribution of event amplitudes
+        bins = np.linspace(self.amp_sample_values[0], self.amp_sample_values[-1], 40)
+        amp_hist = np.histogram(self.result['amplitude'], bins=bins)
+        p = self.plt4.plot(amp_hist[1], amp_hist[0] / amp_hist[0].sum(), stepMode=True, fillLevel=0, brush=0.3)
+        p.rotate(-90)
+        p.scale(-1, 1)
+
+        # plot average model event distribution
+        amps = self.amp_sample_values
+        total_dist = np.zeros(len(amps))
+        for i in range(self.result.shape[0]):
+            state = self.pre_state[i]
+            total_dist += self.model.likelihood(amps, state)
+        total_dist /= total_dist.sum()
+        p = self.plt4.plot(amps, total_dist, fillLevel=0, brush=(255, 0, 0, 50))
+        p.rotate(-90)
+        p.scale(-1, 1)        
     
     def amp_sp_clicked(self, sp, pts):
         i = pts[0].index()
         state = self.pre_state[i]
         expected_amp = self.result[i]['expected_amplitude']
         measured_amps = self.result[i]['amplitude']
-        min_amp = min(expected_amp, measured_amps.min())
-        max_amp = 4 * max(expected_amp, measured_amps.max())
+        amps = self.amp_sample_values
         
-        amps = np.linspace(-max_amp, max_amp, 2000)
-        self.plt4.clear()
-        self.plt4.plot(self.model.likelihood(amps, state), amps)
-        self.plt4.addLine(y=self.result[i]['amplitude'])
-        self.plt4.addLine(y=expected_amp, pen='r')
+        for item in self.plt4.selected_items:
+            self.plt4.removeItem(item)
+        l = self.model.likelihood(amps, state)
+        p = self.plt4.plot(l / l.sum(), amps, pen=(255, 255, 0, 100))
+        l1 = self.plt4.addLine(y=self.result[i]['amplitude'])
+        l2 = self.plt4.addLine(y=expected_amp, pen='r')
+        self.plt4.selected_items = [p, l1, l2]
 
 
 class PixelSelector(QtGui.QGraphicsRectItem):
@@ -356,6 +380,10 @@ class ParameterSearchWidget(QtGui.QWidget):
         for ind in np.ndindex(result_img.shape):
             result_img[ind] = np.log(param_space.result[ind][1]['likelihood'] + 1).mean()
         self.slicer.set_data(result_img)
+        self.results = result_img
+        
+        best = np.unravel_index(np.argmax(result_img), result_img.shape)
+        self.select_result(*best)
         
     def selection_changed(self, slicer):
         index = slicer.index()
@@ -396,9 +424,7 @@ if __name__ == '__main__':
 
     rec_times = 1e-9 * (events['rec_start_time'].astype(float) - float(events['rec_start_time'][0]))
     spike_times = events['max_dvdt_time'] + rec_times
-    amplitude_field = 'pos_dec_amp'
-    amplitudes = events[amplitude_field]
-    
+    amplitude_field = 'pos_dec_amp'    
 
     # 2. Initialize model parameters:
     #    - release model with depression, facilitation
@@ -406,13 +432,16 @@ if __name__ == '__main__':
     #    - measured distribution of background noise
     #    - parameter space to be searched
 
-    first_pulse_mask = events['pulse_number'] == 1
-    first_pulse_amps = amplitudes[first_pulse_mask]
-    first_pulse_stdev = first_pulse_amps.std()
-
     raw_bg_events = get_baseline_amps(session, pair, clamp_mode='ic')
     mask = event_qc(raw_bg_events)
     bg_events = raw_bg_events[mask]
+    mean_bg_amp = bg_events[amplitude_field].mean()
+    amplitudes = events[amplitude_field] - mean_bg_amp
+
+    first_pulse_mask = events['pulse_number'] == 1
+    first_pulse_amps = amplitudes[first_pulse_mask]
+    first_pulse_stdev = first_pulse_amps.std()
+    
 
     def log_space(start, stop, steps):
         return start * (stop/start)**(np.arange(steps) / (steps-1))
@@ -426,7 +455,7 @@ if __name__ == '__main__':
     #     'release_probability': log_space(0.01, 0.8, 15),
     #     'mini_amplitude': log_space(mini_amp_estimate * 1, mini_amp_estimate * 10, 15),
     #     'mini_amplitude_stdev': mini_amp_estimate / np.array([12., 8., 6., 4., 3., 2.]),
-    #     'measurement_stdev': 0, #bg_events[amplitude_field].std(),
+    #     'measurement_stdev': bg_events[amplitude_field].std(),
     #     'recovery_tau': log_space(2e-5, 20, 15),
     # }
 
@@ -434,11 +463,11 @@ if __name__ == '__main__':
     n_release_sites = 8
     release_probability = 0.1
     mini_amp_estimate = first_pulse_amps.mean() / (n_release_sites * release_probability)
-    max_events = 30
+    max_events = 20
     params = {
         'n_release_sites': np.array([1, 2, 4, 8, 16]),
-        'release_probability': release_probability * np.array([0.5, 1, 2, 4]),
-        'mini_amplitude': mini_amp_estimate * 1.2**np.arange(-24, 24, 8),
+        'release_probability': np.array([0.1, 0.2, 0.4, 0.6, 0.8, 1.0]),
+        'mini_amplitude': mini_amp_estimate * 1.2**np.arange(-24, 24, 2),
         'mini_amplitude_stdev': mini_amp_estimate * 0.2 * 1.2**np.arange(-24, 24, 8),
         'measurement_stdev': 0.001,
         'recovery_tau': 0.01,
