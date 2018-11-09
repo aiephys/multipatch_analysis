@@ -27,11 +27,13 @@ class NDSlicer(QtGui.QWidget):
             MultiAxisParam(ndim=2, slicer=self),
         ])
 
+        pos = {'position': 'right', 'relativeTo': None}
         for ax in axes:
             ch = pg.parametertree.Parameter.create(name=ax, type='bool', value=True)
             self.params.child('1D views').addChild(ch)
             ch.sigValueChanged.connect(self.one_d_show_changed)
-            ch.viewer = self.add_view(axes=[ax])
+            ch.viewer, dock = self.add_view(axes=[ax], position=pos)
+            pos = {'position': 'bottom', 'relativeTo': dock}
         
         self.ptree = pg.parametertree.ParameterTree(showHeader=False)
         self.ptree.setParameters(self.params, showTop=False)
@@ -48,19 +50,20 @@ class NDSlicer(QtGui.QWidget):
         for viewer in self.viewers:
             viewer.set_data(self.data, self.axes)
         
-    def add_view(self, axes):
+    def add_view(self, axes, position=None):
         dock = pg.dockarea.Dock("viewer", area=self.dockarea)
         if len(axes) == 1:
             viewer = OneDViewer(axes)
         elif len(axes) == 2:
             viewer = TwoDViewer(axes)
         dock.addWidget(viewer)
-        self.dockarea.addDock(dock, 'right')
+        position = position or {'position': 'right'}
+        self.dockarea.addDock(dock, **position)
         viewer.dock = dock
         viewer.selection_changed.connect(self.viewer_selection_changed)
         self.viewers.append(viewer)
         viewer.set_data(self.data, self.axes)
-        return viewer
+        return viewer, dock
 
     def one_d_show_changed(self, param):
         param.viewer.dock.setVisible(param.value())
