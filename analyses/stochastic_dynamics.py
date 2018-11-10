@@ -203,7 +203,7 @@ class ModelResultWidget(QtGui.QWidget):
         
         self.plt4 = self.glw.addPlot(0, 1, title="amplitude distributions", rowspan=3)
         # self.plt4.setYLink(self.plt2)
-        self.plt4.setMaximumWidth(300)        
+        self.plt4.setMaximumWidth(500)
         self.plt4.selected_items = []
 
         self.amp_sample_values = np.linspace(-0.02, 0.1, 200)
@@ -242,9 +242,7 @@ class ModelResultWidget(QtGui.QWidget):
         # plot full distribution of event amplitudes
         bins = np.linspace(self.amp_sample_values[0], self.amp_sample_values[-1], 40)
         amp_hist = np.histogram(self.result['amplitude'], bins=bins)
-        p = self.plt4.plot(amp_hist[1], amp_hist[0] / amp_hist[0].sum(), stepMode=True, fillLevel=0, brush=0.3)
-        p.rotate(-90)
-        p.scale(-1, 1)
+        self.plt4.plot(amp_hist[1], amp_hist[0] * len(amp_hist[0]) / amp_hist[0].sum(), stepMode=True, fillLevel=0, brush=0.3)
 
         # plot average model event distribution
         amps = self.amp_sample_values
@@ -252,10 +250,8 @@ class ModelResultWidget(QtGui.QWidget):
         for i in range(self.result.shape[0]):
             state = self.pre_state[i]
             total_dist += self.model.likelihood(amps, state)
-        total_dist /= total_dist.sum()
-        p = self.plt4.plot(amps, total_dist, fillLevel=0, brush=(255, 0, 0, 50))
-        p.rotate(-90)
-        p.scale(-1, 1)        
+        total_dist *= len(total_dist) / total_dist.sum()
+        self.plt4.plot(amps, total_dist, fillLevel=0, brush=(255, 0, 0, 50))
     
     def amp_sp_clicked(self, sp, pts):
         i = pts[0].index()
@@ -267,7 +263,7 @@ class ModelResultWidget(QtGui.QWidget):
         for item in self.plt4.selected_items:
             self.plt4.removeItem(item)
         l = self.model.likelihood(amps, state)
-        p = self.plt4.plot(l / l.sum(), amps, pen=(255, 255, 0, 100))
+        p = self.plt4.plot(amps, l * len(l) / l.sum(), pen=(255, 255, 0, 100))
         l1 = self.plt4.addLine(y=self.result[i]['amplitude'])
         l2 = self.plt4.addLine(y=expected_amp, pen='r')
         self.plt4.selected_items = [p, l1, l2]
@@ -383,15 +379,17 @@ class ParameterSearchWidget(QtGui.QWidget):
         self.results = result_img
         
         best = np.unravel_index(np.argmax(result_img), result_img.shape)
-        self.select_result(*best)
+        self.select_result(best)
         
     def selection_changed(self, slicer):
-        index = slicer.index()
-        self.select_result(*index.values())
+        index = tuple(slicer.index().values())
+        self.select_result(index, update_slicer=False)
 
-    def select_result(self, *index):
+    def select_result(self, index, update_slicer=True):
         result = self.param_space.result[index]
         self.result_widget.set_result(*result)
+        if update_slicer:
+            self.slicer.set_index(index)
 
 
 if __name__ == '__main__':
@@ -401,6 +399,12 @@ if __name__ == '__main__':
     expt_id = 1535402792.695
     pre_cell_id = 8
     post_cell_id = 7
+    
+    expt_id = 1537820585.767
+    pre_cell_id = 1
+    post_cell_id = 2
+    
+    
 
     # expt_id = float(sys.argv[1])
     # pre_cell_id = int(sys.argv[2])
@@ -463,7 +467,7 @@ if __name__ == '__main__':
     n_release_sites = 8
     release_probability = 0.1
     mini_amp_estimate = first_pulse_amps.mean() / (n_release_sites * release_probability)
-    max_events = 20
+    max_events = -1
     params = {
         'n_release_sites': np.array([1, 2, 4, 8, 16]),
         'release_probability': np.array([0.1, 0.2, 0.4, 0.6, 0.8, 1.0]),

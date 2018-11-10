@@ -83,6 +83,13 @@ class NDSlicer(QtGui.QWidget):
     def index(self):
         return OrderedDict([(ax,val.index) for ax,val in self.axes.items()])
 
+    def set_index(self, index):
+        for i,x in enumerate(index):
+            ax = self.axes.values()[i]
+            ax.selection = ax.values[x]
+        for viewer in self.viewers:
+            viewer.update_selection()        
+
 
 class AxisData(object):
     def __init__(self, name, values):
