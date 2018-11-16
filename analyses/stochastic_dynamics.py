@@ -264,8 +264,8 @@ class ModelResultWidget(QtGui.QWidget):
             self.plt4.removeItem(item)
         l = self.model.likelihood(amps, state)
         p = self.plt4.plot(amps, l * len(l) / l.sum(), pen=(255, 255, 0, 100))
-        l1 = self.plt4.addLine(y=self.result[i]['amplitude'])
-        l2 = self.plt4.addLine(y=expected_amp, pen='r')
+        l1 = self.plt4.addLine(x=self.result[i]['amplitude'])
+        l2 = self.plt4.addLine(x=expected_amp, pen='r')
         self.plt4.selected_items = [p, l1, l2]
 
 
@@ -396,15 +396,20 @@ if __name__ == '__main__':
     pg.mkQApp()
     pg.dbg()
     
+    # strong ex, no failures, no depression
     expt_id = 1535402792.695
     pre_cell_id = 8
     post_cell_id = 7
     
+    # strong ex with failures
     expt_id = 1537820585.767
     pre_cell_id = 1
     post_cell_id = 2
     
-    
+    # strong ex, depressing
+    expt_id = 1536781898.381
+    pre_cell_id = 8
+    post_cell_id = 2
 
     # expt_id = float(sys.argv[1])
     # pre_cell_id = int(sys.argv[2])
@@ -450,32 +455,32 @@ if __name__ == '__main__':
     def log_space(start, stop, steps):
         return start * (stop/start)**(np.arange(steps) / (steps-1))
         
-    # n_release_sites = 20
-    # release_probability = 0.1
-    # max_events = -1
-    # mini_amp_estimate = first_pulse_amps.mean() / (n_release_sites * release_probability)
-    # params = {
-    #     'n_release_sites': np.array([1, 2, 3, 4, 6, 8, 12, 16, 24, 32]),
-    #     'release_probability': log_space(0.01, 0.8, 15),
-    #     'mini_amplitude': log_space(mini_amp_estimate * 1, mini_amp_estimate * 10, 15),
-    #     'mini_amplitude_stdev': mini_amp_estimate / np.array([12., 8., 6., 4., 3., 2.]),
-    #     'measurement_stdev': bg_events[amplitude_field].std(),
-    #     'recovery_tau': log_space(2e-5, 20, 15),
-    # }
+    n_release_sites = 20
+    release_probability = 0.1
+    max_events = -1
+    mini_amp_estimate = first_pulse_amps.mean() / (n_release_sites * release_probability)
+    params = {
+        'n_release_sites': np.array([1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64]),
+        'release_probability': log_space(0.01, 0.9, 21),
+        'mini_amplitude': log_space(0.001, 0.3, 21),
+        'mini_amplitude_stdev': log_space(0.0001, 0.1, 21),
+        'measurement_stdev': bg_events[amplitude_field].std(),
+        'recovery_tau': log_space(2e-5, 20, 21),
+    }
 
     # quick test
-    n_release_sites = 8
-    release_probability = 0.1
-    mini_amp_estimate = first_pulse_amps.mean() / (n_release_sites * release_probability)
-    max_events = -1
-    params = {
-        'n_release_sites': np.array([1, 2, 4, 8, 16]),
-        'release_probability': np.array([0.1, 0.2, 0.4, 0.6, 0.8, 1.0]),
-        'mini_amplitude': mini_amp_estimate * 1.2**np.arange(-24, 24, 2),
-        'mini_amplitude_stdev': mini_amp_estimate * 0.2 * 1.2**np.arange(-24, 24, 8),
-        'measurement_stdev': 0.001,
-        'recovery_tau': 0.01,
-    }
+    # n_release_sites = 8
+    # release_probability = 0.1
+    # mini_amp_estimate = first_pulse_amps.mean() / (n_release_sites * release_probability)
+    # max_events = 20
+    # params = {
+    #     'n_release_sites': np.array([1, 2, 4, 8, 16]),
+    #     'release_probability': np.array([0.1, 0.2, 0.4, 0.6, 0.8, 1.0]),
+    #     'mini_amplitude': mini_amp_estimate * 1.2**np.arange(-24, 24, 2),
+    #     'mini_amplitude_stdev': mini_amp_estimate * 0.2 * 1.2**np.arange(-24, 24, 8),
+    #     'measurement_stdev': 0.001,
+    #     'recovery_tau': 0.01,
+    # }
 
     # # Effects of mini_amp_stdev
     # n_release_sites = 20
