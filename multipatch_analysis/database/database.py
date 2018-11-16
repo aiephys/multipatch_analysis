@@ -229,7 +229,12 @@ class TableGroup(object):
                 self[k].__table__.drop(bind=engine_rw)
 
     def create_tables(self):
-        global engine_rw
+        global engine_rw, engine_ro
+        if engine_rw is None:
+            for k in self.schemas:
+                if k not in engine_ro.table_names():
+                    raise Exception("Table %s not found in database %s" % (k, db_address_ro))
+            return
         for k in self.schemas:
             if k not in engine_rw.table_names():
                 self[k].__table__.create(bind=engine_rw)
