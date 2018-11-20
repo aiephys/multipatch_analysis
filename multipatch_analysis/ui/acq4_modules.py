@@ -12,6 +12,7 @@ from acq4.util.Canvas.items.MultiPatchLogCanvasItem import MultiPatchLogCanvasIt
 from . import submit_expt
 from . import multipatch_nwb_viewer
 from .. import lims
+from . import vimaging
 import os
 import shutil
 import json
@@ -273,6 +274,33 @@ class DashboardModule(Module):
         self.ui = dashboard.Dashboard(limit=config.get('limit', None), filter_defaults=config.get('filters', None))
         self.ui.resize(1600, 900)
         self.ui.show()
+        
+    def window(self):
+        return self.ui
+
+
+class VoltageImagingAnalysisModule(Module):
+    """
+    """
+    moduleDisplayName = "Voltage Imaging"
+    moduleCategory = "Analysis"
+
+    def __init__(self, manager, name, config):
+        Module.__init__(self, manager, name, config)
+        self.ui = vimaging.VImagingAnalyzer()
+        self.ui.resize(1600, 900)
+        self.ui.show()
+        
+        self.load_from_dm_btn = QtGui.QPushButton("load from data manager")
+        self.load_from_dm_btn.setParent(self.ui)
+        self.load_from_dm_btn.resize(160, 30)
+        self.load_from_dm_btn.show()
+        self.load_from_dm_btn.clicked.connect(self.load_from_dm_clicked)
+        
+    def load_from_dm_clicked(self):
+        man = getManager()
+        sel_dir = man.currentFile
+        self.ui.load_data(sel_dir)
         
     def window(self):
         return self.ui
