@@ -93,7 +93,6 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
 
         self.submit_btn = pg.FeedbackButton("Submit cell positions to LIMS")
         self.layout.addWidget(self.submit_btn, 1, 0)
-        self.submit_btn.setEnabled(False)
         self.submit_btn.clicked.connect(self.submit)
 
     def load_clicked(self):
@@ -118,14 +117,13 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         
         aff_image_name = os.path.split(aff_image_path)[-1]
         save_path = os.path.join(self.base_path, aff_image_name)
-
+            
         if not os.path.exists(save_path):
             with pg.BusyCursor():
                 shutil.copy2(aff_image_path, save_path)
                 self.base_dir.indexFile(aff_image_name)
         
         self.image_20 = save_path
-        self.submit_btn.setEnabled(True)
 
     def submit(self):
         try:
@@ -142,6 +140,13 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         Gets timestamp
         Creates dictionary of cell locations and enables the save button
         """
+        
+        if hasattr(self, 'specimen_name') is False:
+            self.base_dir = self.mosaic_editor.ui.fileLoader.baseDir()
+            if self.base_dir.info()['dirType'] != 'Slice':
+                raise Exception('No Slice Selected')
+            self.specimen_name = self.base_dir.info()['specimen_ID'].strip()
+
         items = self.mosaic_editor.canvas.items 
 
         # Find item that marks cell positions
@@ -157,8 +162,8 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
                     image = i
             except AttributeError:
                 pass
-        if image is None:
-            raise Exception("Could not find 20x image loaded into mosaic editor.")
+        # if image is None:
+        #     raise Exception("Could not find 20x image loaded into mosaic editor.")
 
         # Infer the site folder to submit from based on the files that have been loaded.
         # This is really indirect, but it seems to work.
@@ -203,8 +208,12 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         for cell in pipettes:
             cell_name = int(cell[0].split('_')[-1])
             p = cell[1]
-            x_float = markers[0].graphicsItem().mapToItem(image.graphicsItem(), pg.Point(*p[:2])).x()
-            y_float = markers[0].graphicsItem().mapToItem(image.graphicsItem(), pg.Point(*p[:2])).y()
+            if image is None:
+                x_float = 0
+                y_float = 0
+            else:
+                x_float = markers[0].graphicsItem().mapToItem(image.graphicsItem(), pg.Point(*p[:2])).x()
+                y_float = markers[0].graphicsItem().mapToItem(image.graphicsItem(), pg.Point(*p[:2])).y()
             self.data['cells'].append({      
                 'ephys_cell_id': cell_name,                  
                 'coordinates_20x': 
