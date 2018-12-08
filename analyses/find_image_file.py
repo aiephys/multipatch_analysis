@@ -23,14 +23,16 @@ def find_image_file(path, uid_desired, pre_cell_id, post_cell_id):
     either a string specifying the path of the image or a np.nan if an image could not be found
     """
     path, uid_desired, pre_cell_id, post_cell_id
-    uid_desired=str(np.round(np.float(uid_desired), 2))
+    uid_desired=str(np.round(np.float(uid_desired), 3))
     files=os.listdir(path)
     for f in files:
         uid_f, pre, post, _, _ = f.split('_') #split the file names into parts
         #convert file name uid into comparable format
-        if len(uid_f) != 13:  #if the uid is not a 10 digit number with 2 decimal places 
-            if len(uid_f) == 12:  #usually the zero gets left off during the file naming
+        if len(uid_f) != 14:  #if the uid is not a 10 digit number with 2 decimal places 
+            if len(uid_f) == 13:  #usually the zero gets left off during the file naming
                 uid_f=uid_f+'0'
+            elif len(uid_f) == 12:  #usually the zero gets left off during the file naming
+                uid_f=uid_f+'00'
             else:
                 raise Exception("Don't know how to deal with %s uid in file name" % uid_f)  
         if uid_f == uid_desired:  # when you find the matching uids check for matching cell ids

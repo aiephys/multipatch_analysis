@@ -17,10 +17,10 @@ import os
 #----- specify things up here------------------------------
 #----------------------------------------------------------
 
-fitting_type = 'dynamic_weight_jitter_latency' #options 'default', 'force_sign', force_latency, force_sign_and_latency, dynamic_weight, dynamic_weight_jitter_latency
+fitting_type = 'vclamp' #dynamic_weight_jitter_latency' #options 'default', 'force_sign', force_latency, force_sign_and_latency, dynamic_weight, dynamic_weight_jitter_latency
 general_image_path='/home/corinnet/workspace/DBfit_pics/'
-save_image = False  #specifies whether to save images
-commiting = False
+save_image = True    #specifies whether to save images
+commiting = True
 #----------------------------------------------------------
 #----------------------------------------------------------
 #----------------------------------------------------------
@@ -39,6 +39,8 @@ elif fitting_type == 'dynamic_weight':
     image_path=os.path.join(general_image_path, 'dynamic_weight'+date)
 elif fitting_type == 'dynamic_weight_jitter_latency':
     image_path=os.path.join(general_image_path, 'dynamic_weight_jitter_latency'+date)
+elif fitting_type == 'vclamp':
+    image_path=os.path.join(general_image_path, 'vclamp'+date)
 else:
     raise Exception('A recognized type of fitting has not been specified')
 
@@ -85,14 +87,16 @@ class FirstPulseFitTableGroup(TableGroup):
             place more importance of the wave form during the rise time is shifted to 
             begin at the latency. Created via first_pulse_fits_average.py. 
             All units in SI."""]+FPF_lib.common,
-        'avg_first_pulse_fit_dynamic_w_latency_jitter': [
+        'avg_first_pulse_fit_dynamic_w_latency_jitter2': [
              """Contains results of psp_fit on spike aligned, average first pulse PSP for each
             connection that passed qc in current clamp. During the fit the latency is forced
             to be the value +/-.5 ms found via fitting all of the pulses (available in the 
             connection_strength.ic_fit_xoffset). The heavily weighted section meant to 
             place more importance of the wave form during the rise time is shifted to 
             begin at the latency. Created via first_pulse_fits_average.py. 
-            All units in SI."""]+FPF_lib.common
+            All units in SI."""]+FPF_lib.common,
+        'avg_first_pulse_fit_vclamp4': [
+            """Fits of average first pulse voltage clamp traces."""]+FPF_lib.common
     }
     
     def create_mappings(self):
@@ -125,10 +129,15 @@ class FirstPulseFitTableGroup(TableGroup):
                                                       single_parent=True, uselist=False)
         AvgFirstPulseFitsDynamicWeight.pair = db.relationship(db.Pair, back_populates="avg_first_pulse_fit_dynamic_weight", single_parent=True)
 #-----------------------------------------------------------------------------------
-        AFPFForceSignJitterLatency = self['avg_first_pulse_fit_dynamic_w_latency_jitter']
-        db.Pair.avg_first_pulse_fit_dynamic_w_latency_jitter = db.relationship(AFPFForceSignJitterLatency, back_populates="pair", cascade="delete",
+        AFPFForceSignJitterLatency = self['avg_first_pulse_fit_dynamic_w_latency_jitter2']
+        db.Pair.avg_first_pulse_fit_dynamic_w_latency_jitter2 = db.relationship(AFPFForceSignJitterLatency, back_populates="pair", cascade="delete",
                                                       single_parent=True, uselist=False)
-        AFPFForceSignJitterLatency.pair = db.relationship(db.Pair, back_populates="avg_first_pulse_fit_dynamic_w_latency_jitter", single_parent=True)
+        AFPFForceSignJitterLatency.pair = db.relationship(db.Pair, back_populates="avg_first_pulse_fit_dynamic_w_latency_jitter2", single_parent=True)
+#-----------------------------------------------------------------------------------
+        VClamp = self['avg_first_pulse_fit_vclamp4']
+        db.Pair.avg_first_pulse_fit_vclamp4 = db.relationship(VClamp, back_populates="pair", cascade="delete",
+                                                      single_parent=True, uselist=False)
+        VClamp.pair = db.relationship(db.Pair, back_populates="avg_first_pulse_fit_vclamp4", single_parent=True)
 
 first_pulse_fit_tables = FirstPulseFitTableGroup()
 
@@ -139,6 +148,7 @@ def init_tables():
     global AvgFirstPulseFitsForceSL
     global AvgFirstPulseFitsDynamicWeight
     global AFPFForceSignJitterLatency
+    global VClamp
 #    global IndividualFirstPulseFits, 
     first_pulse_fit_tables.create_tables()
 
@@ -148,7 +158,9 @@ def init_tables():
     AvgFirstPulseFitsForceLatency = first_pulse_fit_tables['avg_first_pulse_fit_force_latency']
     AvgFirstPulseFitsForceSL = first_pulse_fit_tables['avg_first_pulse_fit_force_SL']
     AvgFirstPulseFitsDynamicWeight = first_pulse_fit_tables['avg_first_pulse_fit_dynamic_weight']
-    AFPFForceSignJitterLatency = first_pulse_fit_tables['avg_first_pulse_fit_dynamic_w_latency_jitter']
+    AFPFForceSignJitterLatency = first_pulse_fit_tables['avg_first_pulse_fit_dynamic_w_latency_jitter2']
+    VClamp = first_pulse_fit_tables['avg_first_pulse_fit_vclamp4']
+
 # create tables in database and add global variables for ORM classes
 init_tables()
 
@@ -173,6 +185,9 @@ def update_fit(limit=None, expts=None, parallel=True, workers=6, raise_exception
             expts_done=session.query(db.Experiment.acq_timestamp).join(db.Pair).join(AvgFirstPulseFitsDynamicWeight).all() 
         elif fitting_type == 'dynamic_weight_jitter_latency':
             expts_done=session.query(db.Experiment.acq_timestamp).join(db.Pair).join(AFPFForceSignJitterLatency).all()
+        elif fitting_type == 'vclamp':
+            expts_done=session.query(db.Experiment.acq_timestamp).join(db.Pair).join(VClamp).all()
+
 
 #        #TODO: deprecate this line when line above is confirmed expts_done = session.query(db.Experiment.acq_timestamp).join(db.SyncRec).join(db.Recording).join(AverageFirstPulseFits).join().distinct().all()
         print("Skipping %d already complete experiments" % (len(expts_done)))
@@ -218,12 +233,15 @@ def compute_fit(job_info, raise_exceptions=False):
     #                #print ("SKIPPING: %s, cell ids:%s %s" % (uid, pre_cell_id, post_cell_id))
     #                continue
     #            else:
-        print ("\tTRYING TO GET FIRST PULSES: number %i of %i experiment pairs: %s, cell ids:%s %s" % (ii, len(expt_stuff), uid, pre_cell_id, post_cell_id))
-        pulse_responses, pulse_ids, psp_amps_measured, freq = FPF_lib.extract_first_pulse_info_from_Pair_object(pair, uid)
+        print ("\tTRYING TO GET FIRST PULSES: number %i of %i experiment pairs: %0.3f, cell ids:%s %s" % (ii, len(expt_stuff), uid, pre_cell_id, post_cell_id))
+        if fitting_type == 'vclamp':
+            pulse_responses, pulse_ids, psp_amps_measured, freq = FPF_lib.extract_first_pulse_info_from_Pair_object(pair, uid, desired_clamp='vc')
+        else:
+            pulse_responses, pulse_ids, psp_amps_measured, freq = FPF_lib.extract_first_pulse_info_from_Pair_object(pair, uid)
         
         # if pulses are returned fit the average
         if len(pulse_responses)>0:
-            print ("\tFITTING: %s, cell ids:%s %s" % (uid, pre_cell_id, post_cell_id))
+            print ("\tFITTING: %0.3f, cell ids:%s %s" % (uid, pre_cell_id, post_cell_id))
 
             avg_psp=TraceList(pulse_responses).mean()
     #                for pr in pulse_responses:
@@ -248,10 +266,10 @@ def compute_fit(job_info, raise_exceptions=False):
         synapse_sign=pair.connection_strength.synapse_type
         connected=pair.synapse
 
-        title='%s, cells %i %s to %i %s; distance=%.1f um; n=%i' % (uid, pre_cell_id, pre_cell_cre, post_cell_id,post_cell_cre, pair_distance*1e6, len(pulse_ids))
+        title='%0.3f, cells %i %s to %i %s; distance=%.1f um; n=%i' % (uid, pre_cell_id, pre_cell_cre, post_cell_id,post_cell_cre, pair_distance*1e6, len(pulse_ids))
         #Specify name for plot saving.
         if save_image:
-            save_image_name=os.path.join(image_path,'%s_%s%s_%s%s_average_fit.png'  % (uid, pre_cell_id, pre_cell_cre, post_cell_id,post_cell_cre))
+            save_image_name=os.path.join(image_path,'%0.3f_%s%s_%s%s_average_fit.png'  % (uid, pre_cell_id, pre_cell_cre, post_cell_id,post_cell_cre))
         else:
             save_image_name=None
 
@@ -294,7 +312,21 @@ def compute_fit(job_info, raise_exceptions=False):
             else:
                 print('No latency to do forced latency fitting')
                 continue
-
+        elif fitting_type == 'vclamp':
+            if pair.connection_strength.ic_fit_xoffset:
+                xoffset=pair.connection_strength.ic_fit_xoffset
+                weight = np.ones(len(avg_psp.data))*10.  #set everything to ten initially
+#                weight[int((FPF_lib.time_before_spike-3e-3)/avg_psp.dt):int(FPF_lib.time_before_spike/avg_psp.dt)] = 0.   #area around stim artifact note that since this is spike aligned there will be some blur in where the cross talk is
+                weight[int((FPF_lib.time_before_spike+.0001+xoffset)/avg_psp.dt):int((FPF_lib.time_before_spike+.0001+xoffset+4e-3)/avg_psp.dt)] = 30.  #area around steep PSP rise 
+                #TODO: FIX THIS IN THE CODE fit_trace FUNCTION
+                if synapse_sign == 'ex':
+                    synapse_sign = 'in'
+                else:
+                    synapse_sign = 'ex'
+                avg_fit = FPF_lib.fit_trace(avg_psp, synaptic_sign=synapse_sign, clamp_mode = 'vc', weight=weight, latency=xoffset, latency_jitter=.5e-3, plot_save_name=save_image_name, title=title)
+            else:
+                print('No latency to do forced latency fitting')
+                continue
         else:
             raise Exception('The type of fitting has not been specified')
 #---------------------------------------------------------------------------------------------
@@ -331,15 +363,14 @@ def compute_fit(job_info, raise_exceptions=False):
             afpf=AvgFirstPulseFitsDynamicWeight(pair=pair, **out_dict)
         elif fitting_type == 'dynamic_weight_jitter_latency':
             afpf=AFPFForceSignJitterLatency(pair=pair, **out_dict)
-
+        elif fitting_type == 'vclamp':
+            afpf=VClamp(pair=pair, **out_dict)
         else:
             raise Exception('The type of fitting has not been specified')
         if commiting is True:
             session.add(afpf)
 #---------------------------------------------------------------------------------------        
         processed_count=processed_count+1
-
-            
 
     if commiting is True:
         # pair.meta = pair.meta.copy()  # required by sqlalchemy to flag as modified
@@ -354,6 +385,15 @@ if __name__=='__main__':
     init_tables()
 #    update_fit(limit=None, expts=[1533768797.736], parallel=False, workers=6, raise_exceptions=False, session=None)
 #    update_fit(limit=None, expts=[1492545925.146], parallel=False, workers=6, raise_exceptions=False, session=None)
-#    update_fit(limit=None, expts=[1533765069.19], parallel=False, workers=6, raise_exceptions=False, session=None)
+#    update_fit(limit=None, expts=[1533765069.190], parallel=False, workers=6, raise_exceptions=False, session=None)
+#    update_fit(limit=None, expts=[1496435165.254], parallel=False, workers=6, raise_exceptions=False, session=None)
+#    update_fit(limit=None, expts=[1507235159.776], parallel=False, workers=6, raise_exceptions=False, session=None)
+#    update_fit(limit=None, expts=[1486511976.478], parallel=False, workers=6, raise_exceptions=False, session=None)
+#    update_fit(limit=None, expts=[1524091806.551], parallel=False, workers=6, raise_exceptions=False, session=None)
+#    update_fit(limit=None, expts=[1486769398.428], parallel=False, workers=6, raise_exceptions=False, session=None)
+#    update_fit(limit=None, expts=[1523658475.023], parallel=False, workers=6, raise_exceptions=False, session=None)
+#    update_fit(limit=None, expts=[1486753952.16], parallel=False, workers=6, raise_exceptions=False, session=None)
+#    update_fit(limit=None, expts=[1483648804.078], parallel=False, workers=6, raise_exceptions=False, session=None)
+#    update_fit(limit=None, expts=[1499890136.257], parallel=False, workers=6, raise_exceptions=False, session=None)
 
     update_fit(limit=None, expts=None, parallel=False, workers=6, raise_exceptions=False, session=None)

@@ -104,7 +104,7 @@ common = [('pair_id', 'pair.id', '', {'index': True}),
         ('measured_amp', 'float', 'amplitude within a window of 0.5 ms after spike initiation (max dv/dt) until end of array specified in the pulse_response table'),
         ('connected', 'bool', 'specifies whether human thinks their is a connection')]
 
-def extract_first_pulse_info_from_Pair_object(pair, uid):
+def extract_first_pulse_info_from_Pair_object(pair, uid, desired_clamp='ic'):
     """Extract first pulse responses and relevant information 
     from entry in the pair database. Screen out pulses that are
     not current clamp or do not pass the corresponding
@@ -148,7 +148,7 @@ def extract_first_pulse_info_from_Pair_object(pair, uid):
         stim_freq = pcr.multi_patch_probe[0].induction_frequency
         clamp_mode = pcr.clamp_mode
         # current clamp
-        if clamp_mode != 'ic':
+        if clamp_mode != desired_clamp:
             continue
         # ensure that there was only 1 presynaptic spike
         if n_spikes != 1:
@@ -178,12 +178,15 @@ def extract_first_pulse_info_from_Pair_object(pair, uid):
 
     return pulse_responses, pulse_ids, psp_amps_measured, stim_freq
 
-def fit_trace(voltage_trace, synaptic_sign, weight=None, latency=None, latency_jitter=None, plot_show=False, plot_save_name=False, title=''):
+def fit_trace(waveform, synaptic_sign, clamp_mode='ic', weight=None, latency=None, latency_jitter=None, plot_show=False, plot_save_name=False, title=''):
     """
     Input
     -----
-    voltage_trace: Trace Object
+    waveform: Trace Object
         contains data to be fit
+    clamp_mode: string
+        'vc' denotes voltage clamp
+        'ic' denotes current clamp
     synaptic_sign: str
         'ex' or 'in' specifying excitation of synapse
     plot_show: boolean 
@@ -203,7 +206,7 @@ def fit_trace(voltage_trace, synaptic_sign, weight=None, latency=None, latency_j
     weight: numpy array
         Relative weighting of different sections of the voltage array
         for fitting.  If specified it must be the same length as the 
-        voltage_trace
+        waveform
 
     Note there is a 'time_before_spike' variable in this code that is
     not passed in and therefore must be global.  It specifies the
@@ -221,9 +224,9 @@ def fit_trace(voltage_trace, synaptic_sign, weight=None, latency=None, latency_j
     """
     #weighting
     if weight is None:
-        weight = np.ones(len(voltage_trace.data))*10.  #set everything to ten initially
-        weight[int((time_before_spike-3e-3)/voltage_trace.dt):int(time_before_spike/voltage_trace.dt)] = 0.   #area around stim artifact note that since this is spike aligned there will be some blur in where the cross talk is
-        weight[int((time_before_spike+1e-3)/voltage_trace.dt):int((time_before_spike+5e-3)/voltage_trace.dt)] = 30.  #area around steep PSP rise 
+        weight = np.ones(len(waveform.data))*10.  #set everything to ten initially
+        weight[int((time_before_spike-3e-3)/waveform.dt):int(time_before_spike/waveform.dt)] = 0.   #area around stim artifact note that since this is spike aligned there will be some blur in where the cross talk is
+        weight[int((time_before_spike+1e-3)/waveform.dt):int((time_before_spike+5e-3)/waveform.dt)] = 30.  #area around steep PSP rise 
 
     #converting synaptic sign from database to convention for fitting
     if synaptic_sign == 'in':
@@ -239,36 +242,53 @@ def fit_trace(voltage_trace, synaptic_sign, weight=None, latency=None, latency_j
     if latency is None and latency_jitter:
         raise Exception('latency_jitter cannot be specified if latency is not')
     if latency_jitter:
+        if latency_jitter < .1e-3:
+            raise Exception('specified latency jitter less than .0e-3 may have implications for initial conditions')
         if latency < latency_jitter:
             lower_bound = time_before_spike
         else:
             lower_bound = latency + time_before_spike - latency_jitter
-        xoffset=(latency+time_before_spike, lower_bound, latency+time_before_spike+latency_jitter)  
+        xoffset=([lower_bound, latency+time_before_spike, latency+time_before_spike+latency_jitter-.1e-3], lower_bound, latency+time_before_spike+latency_jitter)  
     elif latency:
         xoffset=(latency+time_before_spike, 'fixed')
     else:
         #since these are spike aligned the psp should not happen before the spike that happens at pre_pad by definition
         xoffset=([time_before_spike+1e-3, time_before_spike+4e-3], time_before_spike, time_before_spike+5e-3)
 
-
-    fit = fit_psp(voltage_trace, 
+    fit = fit_psp(waveform, 
+                    clamp_mode=clamp_mode,
                     xoffset=xoffset,
                     sign=sign, 
                     weight=weight) 
 
+    if clamp_mode == 'ic':
+        scale_factor = 1.e3
+        ylabel='voltage (mV)'
+    if clamp_mode == 'vc':
+        scale_factor = 1.e12
+        ylabel='current (pA)'        
+
     if plot_show is True or plot_save_name:
         plt.figure(figsize=(14,10))
         ax1=plt.subplot(1,1,1)
-        ln1=ax1.plot(voltage_trace.time_values*1.e3, voltage_trace.data*1e3, 'b', label='data')
-        ln2=ax1.plot(voltage_trace.time_values*1.e3, fit.best_fit*1e3, 'r', label='nrmse=%f \namp (mV)=%f \nlatency (ms)=%f \nrise time (ms)=%f \ndecay tau=%f' % \
+        ln1=ax1.plot(waveform.time_values*1.e3, waveform.data*scale_factor, 'b', label='data')
+        if clamp_mode == 'ic':
+            ln2=ax1.plot(waveform.time_values*1.e3, fit.best_fit*scale_factor, 'r', label='nrmse=%f \namp (mV)=%f \nlatency (ms)=%f \nrise time (ms)=%f \ndecay tau=%f' % \
                                             (fit.nrmse(), \
-                                            fit.best_values['amp']*1e3, \
+                                            fit.best_values['amp']*scale_factor, \
+                                            (fit.best_values['xoffset']-time_before_spike)*1e3, \
+                                            fit.best_values['rise_time']*1e3, \
+                                            fit.best_values['decay_tau']))
+        elif clamp_mode == 'vc': 
+            ln2=ax1.plot(waveform.time_values*1.e3, fit.best_fit*scale_factor, 'r', label='nrmse=%f \namp (pA)=%f \nlatency (ms)=%f \nrise time (ms)=%f \ndecay tau=%f' % \
+                                            (fit.nrmse(), \
+                                            fit.best_values['amp']*scale_factor, \
                                             (fit.best_values['xoffset']-time_before_spike)*1e3, \
                                             fit.best_values['rise_time']*1e3, \
                                             fit.best_values['decay_tau']))
         ax2=ax1.twinx()
-        ln3=ax2.plot(voltage_trace.time_values*1.e3, weight, 'k', label='weight')
-        ax1.set_ylabel('voltage (mV)')
+        ln3=ax2.plot(waveform.time_values*1.e3, weight, 'k', label='weight')
+        ax1.set_ylabel(ylabel)
         ax2.set_ylabel('weight')
         ax1.set_xlabel('time (ms): spike happens at 10 ms')
 
