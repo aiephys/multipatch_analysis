@@ -59,6 +59,6 @@ session.close()
 df=pd.DataFrame(data_dict)
 df['uid']=df['uid'].astype(str)
 df['image_path']=df.apply(lambda row: 
-                          find_image_file.find_image_file('/home/corinnet/workspace/DBfit_pics/vclamp2018-12-03', #make sure this is correct
+                          find_image_file.find_image_file('/home/corinnet/workspace/DBfit_pics/vclamp2018-12-07', #make sure this is correct
                           row.uid, str(row.pre_cell_id), str(row.post_cell_id)), axis=1)
-#df.to_csv('average_fit_vclamp_2018_12_06.csv')  #comment out after using so dont overwrite something
+#df.to_csv('average_fit_vclamp_2018_12_10.csv')  #comment out after using so dont overwrite something
