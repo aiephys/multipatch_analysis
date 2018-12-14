@@ -124,7 +124,15 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
                 self.base_dir.indexFile(aff_image_name)
         
         self.image_20 = save_path
-
+    @property
+    def base_dir(self):
+        return self.mosaic_editor.ui.fileLoader.baseDir()
+    
+    @property
+    def specimen_name(self):
+        if self.base_dir.info()['dirType'] != 'Slice':
+            raise Exception('No Slice Selected')
+        return self.base_dir.info()['specimen_ID'].strip()
     def submit(self):
         try:
             self.create_lims_json()
