@@ -102,11 +102,9 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         If image not saved locally then copies file from LIMS.
         Enables button to create a JSON of the cell locations
         """
-        self.base_dir = self.mosaic_editor.ui.fileLoader.baseDir()
         if self.base_dir.info()['dirType'] != 'Slice':
             raise Exception('No Slice Selected')
         self.base_path = self.base_dir.name()
-        self.specimen_name = self.base_dir.info()['specimen_ID'].strip()
 
         aff_image_path = lims.specimen_20x_image(self.specimen_name, treatment='Biocytin')
         if aff_image_path is None:
@@ -124,6 +122,7 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
                 self.base_dir.indexFile(aff_image_name)
         
         self.image_20 = save_path
+    
     @property
     def base_dir(self):
         return self.mosaic_editor.ui.fileLoader.baseDir()
@@ -133,6 +132,7 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         if self.base_dir.info()['dirType'] != 'Slice':
             raise Exception('No Slice Selected')
         return self.base_dir.info()['specimen_ID'].strip()
+
     def submit(self):
         try:
             self.create_lims_json()
@@ -148,12 +148,6 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         Gets timestamp
         Creates dictionary of cell locations and enables the save button
         """
-        
-        if hasattr(self, 'specimen_name') is False:
-            self.base_dir = self.mosaic_editor.ui.fileLoader.baseDir()
-            if self.base_dir.info()['dirType'] != 'Slice':
-                raise Exception('No Slice Selected')
-            self.specimen_name = self.base_dir.info()['specimen_ID'].strip()
 
         items = self.mosaic_editor.canvas.items 
 
