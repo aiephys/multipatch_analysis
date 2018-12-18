@@ -1,14 +1,15 @@
+# Extract relevant data from the database for analysis
+# NOTE: that you need to make sure the import on line 10,
+# the query on line 35, the image path on line 68, and
+# the out put file path on line 72 are appropriately 
+# matched
+
 from multipatch_analysis.database import database as db
-#from multipatch_analysis.database.database import TableGroup
-#import multipatch_analysis.connection_strength as cs 
 import pandas as pd
 import find_image_file
+from multipatch_analysis.first_pulse_fits_average import AFPFForceSignJitterLatency   
 
-#THIS DOES QUERY, EXTRACTS DATA, AND SAVES IN A CSV.
-# MAKE SURE YOU HAVE THE FORCE VERSUS ANY CORRECT THOUGHOUT THIS SECTION:
-# search for any or force and make sure all are converted
-'''Note that this query can take several minutes'''
-from multipatch_analysis.first_pulse_fits_average import VClamp   
+# Initialize output dictionary
 data_dict= {'uid':[],
             'pre_cell_id':[],
             'post_cell_id':[],
@@ -29,9 +30,10 @@ data_dict= {'uid':[],
             'pre_layer':[],
             'post_layer':[]}
 
-#Note that it is annoying that 
+# Do the query. Note this can take several minutes
 session=db.Session()
-data=session.query(VClamp, db.Pair).join(db.Pair).all() #this need to correspond to import
+data=session.query(AFPFForceSignJitterLatency, db.Pair).join(db.Pair).all() #this need to correspond to import
+
 # extract the relevant data from the query
 for afpf, pair in data:
     #stuff from average_first_pulse_fit table
@@ -56,9 +58,15 @@ for afpf, pair in data:
     data_dict['pre_layer'].append(pair.pre_cell.target_layer)
     data_dict['post_layer'].append(pair.pre_cell.target_layer)
 session.close()
+
+# put data in dataframe
 df=pd.DataFrame(data_dict)
 df['uid']=df['uid'].astype(str)
+
+# add the image path
 df['image_path']=df.apply(lambda row: 
-                          find_image_file.find_image_file('/home/corinnet/workspace/DBfit_pics/vclamp2018-12-07', #make sure this is correct
+                          find_image_file.find_image_file('/home/corinnet/workspace/DBfit_pics/dynamic_weight_jitter_latency2018-11-12', #make sure this is correct
                           row.uid, str(row.pre_cell_id), str(row.post_cell_id)), axis=1)
-#df.to_csv('average_fit_vclamp_2018_12_10.csv')  #comment out after using so dont overwrite something
+
+# save data to csv                          
+df.to_csv('dynamic_weight_jitter_latency2018-11-12.csv')  #comment out after using so dont overwrite something
