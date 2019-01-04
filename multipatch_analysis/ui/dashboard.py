@@ -268,6 +268,7 @@ class Dashboard(QtGui.QWidget):
             ('drawing tool', 'lims_drawing_tool_url'),
             ('cluster ID', 'cluster_id'),
             ('slice fixed', 'slice_fixed'),
+            ('LIMS status', 'lims_message')
         ]
         for name,attr in print_fields:
             try:
@@ -347,7 +348,7 @@ class Dashboard(QtGui.QWidget):
                     color = pass_color
                 elif val is False:
                     color = fail_color
-                elif val in ('ERROR', 'MISSING'):
+                elif val in ('ERROR', 'MISSING', 'FAILED'):
                     color = fail_color
                 elif val == '-':
                     # dash means item is incomplete but still acceptable
@@ -651,7 +652,14 @@ class ExperimentMetadata(Experiment):
                     rec['DB'] = self.in_database
 
                     cell_cluster = self.lims_cell_cluster_id
-                    in_lims = cell_cluster is not None
+                    lims_ignore_file = os.path.join(self.archive_path, '.mpe_ignore')
+                    lims_fail = os.path.isfile(lims_ignore_file)
+                    if lims_fail:
+                        in_lims = "FAILED"
+                        self.lims_message = open(lims_ignore_file, 'r').read()
+                    else:
+                        in_lims = cell_cluster is not None
+                        self.lims_message = self.lims_submissions
                     rec['LIMS'] = in_lims
 
                     if slice_fixed and in_lims is True and image_20x is not None:
