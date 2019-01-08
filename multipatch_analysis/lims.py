@@ -339,6 +339,20 @@ def specimen_metadata(specimen):
         meta = json.loads(meta)  # unserialization corrects for a LIMS bug; we can remove this later.
     return meta
 
+def specimen_tags(specimen):
+    q = """
+    select name from specimen_tags
+    join specimen_tags_specimens on specimen_tags_specimens.specimen_tag_id=specimen_tags.id
+    where specimen_tags_specimens.specimen_id=%d""" % specimen
+    recs = lims.query(q)
+    tags = []
+    if len(recs)==0:
+        tags = None
+    else:
+        for rec in recs:
+            tags.append(rec['name'])
+    return tags    
+
 
 def specimen_type(specimen):
     if not isinstance(specimen, int):
