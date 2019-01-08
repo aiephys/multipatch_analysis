@@ -347,10 +347,7 @@ def specimen_tags(specimen):
     join specimen_tags_specimens on specimen_tags_specimens.specimen_tag_id=specimen_tags.id
     where specimen_tags_specimens.specimen_id=%d""" % specimen
     recs = lims.query(q)
-    tags = []
-    for rec in recs:
-        tags.append(rec['name'])
-    return tags    
+    return [rec['name'] for rec in recs]
 
 
 def specimen_type(specimen):
