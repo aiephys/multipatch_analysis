@@ -653,7 +653,7 @@ class ExperimentMetadata(Experiment):
 
                     cell_cluster = self.lims_cell_cluster_id
                     lims_ignore_file = os.path.join(self.archive_path, '.mpe_ignore')
-                    lims_fail = os.path.isfile(lims_ignore_file)
+                    lims_fail = False #os.path.isfile(lims_ignore_file)
                     if lims_fail:
                         in_lims = "FAILED"
                         self.lims_message = open(lims_ignore_file, 'r').read()
@@ -662,13 +662,20 @@ class ExperimentMetadata(Experiment):
                         self.lims_message = self.lims_submissions
                     rec['LIMS'] = in_lims
 
-                    if slice_fixed and in_lims is True and image_20x is not None:
-                        image_63x = self.biocytin_63x_files
-                        rec['63x'] = image_63x is not None
+                    if in_lims and slice_fixed:
+                        image_tags = lims.specimen_tags(cell_cluster)
+                        if image_tags is not None:
+                            image_63x_go = '63x go' in image_tags
+                            if image_63x_go:
+                                image_63x = self.biocytin_63x_files
+                                rec['63x'] = image_63x is not None
 
-                        cell_info = lims.cluster_cells(cell_cluster)
-                        mapped = len(cell_info) > 0 and all([ci['x_coord'] is not None  for ci in cell_info])
-                        rec['cell map'] = mapped
+                                cell_info = lims.cluster_cells(cell_cluster)
+                                mapped = len(cell_info) > 0 and all([ci['x_coord'] is not None  for ci in cell_info])
+                                rec['cell map'] = mapped
+                            else:
+                                rec['63x'] = '-'
+                                rec['cell map'] = '-'
             else:
                 if self.mosaic_file is not None:
                     rec['site.mosaic'] = True
