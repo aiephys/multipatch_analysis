@@ -36,8 +36,8 @@ class VImagingAnalyzer(QtGui.QWidget):
         self.rois = [pg.RectROI([0, 0], [10, 10], pen=(i,4)) for i in range(2)]
         for roi in self.rois:
             self.vb1.addItem(roi)
-            roi.sigRegionChanged.connect(self.roi_changed)
-            roi.sigRegionChangeFinished.connect(self.update_sequence_analysis)
+            roi.sigRegionChangeFinished.connect(self.roi_changed)
+        self.ignore_roi_change = False
             
         self.plt2 = self.gw.addPlot(row=3, col=0)
         self.plt2.setXLink(self.plt1)
@@ -47,7 +47,7 @@ class VImagingAnalyzer(QtGui.QWidget):
         self.test_time_rgn = pg.LinearRegionItem([0.1, 0.11])
         for time_rgn in (self.base_time_rgn, self.test_time_rgn):
             self.plt1.addItem(time_rgn)
-            time_rgn.sigRegionChanged.connect(self.time_rgn_changed)
+            time_rgn.sigRegionChangeFinished.connect(self.time_rgn_changed)
             time_rgn.sigRegionChangeFinished.connect(self.update_sequence_analysis)
         self.clamp_plots = []
         
@@ -84,10 +84,22 @@ class VImagingAnalyzer(QtGui.QWidget):
             self.seqColors = [pg.mkColor('w')]
         else:
             nSeq = len(seqParams[0][1])
+            if nSeq == 2:
+                # Special case: add in difference between two sequence trials
+                seqParams[0] = (seqParams[0][0], list(seqParams[0][1]) + [np.mean(seqParams[0][1])])
+                nSeq = 3
+                img_data = np.empty((3,) + self.img_data.shape[1:], dtype=self.img_data.dtype)
+                img_data[:2] = self.img_data
+                for i in range(img_data.shape[1]):
+                    minlen = min(self.img_data[0,i].shape[0], self.img_data[1,i].shape[0])
+                    img_data[2,i] = self.img_data[0,i][:minlen] - self.img_data[1,i][:minlen]
+                self.img_data = img_data
+                
+                
             self.seqColors = [pg.intColor(i, nSeq*1.6) for i in range(nSeq)]
 
         # cull out truncated recordings :(
-        self.img_data = [[d for d in row if d.xvals('Time')[-1] > 150e-3] for row in self.img_data]
+        self.img_data = [[d['Time':0:200e-3] for d in row if d.xvals('Time')[-1] > 150e-3] for row in self.img_data]
 
         # crop / concatenate
         img_len = min([min([d.shape[0] for d in row]) for row in self.img_data])
@@ -102,13 +114,17 @@ class VImagingAnalyzer(QtGui.QWidget):
             
         # read all clamp data
         first_subdir = seqDir[seqDir.ls()[0]]
-        clamp_file = first_subdir['Clamp2.ma']
+        clamp_name = 'Clamp1'
+        if not first_subdir[clamp_name + '.ma'].exists():
+            clamp_name = 'Clamp2'
+        
+        clamp_file = first_subdir[clamp_name + '.ma']
         if clamp_file.exists():
             self.clamp_mode = model.getClampMode(clamp_file)
             chan = 'command' if self.clamp_mode == 'VC' else 'primary'
             self.clamp_data = model.buildSequenceArray(
                 seqDir, 
-                lambda dh: dh['Clamp2.ma'].read()['Channel': chan],
+                lambda dh: dh[clamp_name + '.ma'].read()['Channel': chan],
                 join=False).asarray()
             if self.clamp_data.ndim == 1:
                 self.clamp_data = self.clamp_data[np.newaxis, :]
@@ -137,10 +153,27 @@ class VImagingAnalyzer(QtGui.QWidget):
         self.update_sequence_analysis()
 
     def roi_changed(self, roi):
+        if self.ignore_roi_change:
+            return
+        
+        # Update other ROI to match
+        roi1, roi2 = self.rois
+        try:
+            if roi is not None:
+                self.ignore_roi_change = True
+                other_roi = roi2 if roi is roi1 else roi1
+                pos1 = roi.pos()
+                pos2 = other_roi.pos()
+                pos2.setY(pos1.y())
+                other_roi.setPos(pos2)
+                other_roi.setSize(roi.size())            
+        finally:
+            self.ignore_roi_change = False
+        
+        
         for item in self.plt1_items:
             self.plt1.removeItem(item)
 
-        roi1, roi2 = self.rois
         
         for i, img_data in enumerate(self.img_arrays):
             color = self.seqColors[i]
@@ -161,6 +194,8 @@ class VImagingAnalyzer(QtGui.QWidget):
             # plot average
             self.plt1_items.append(self.plt1.plot(self.img_t, difmean, pen=color, antialias=True))
             self.plt1_items[-1].setZValue(10)
+            
+        self.update_sequence_analysis()
         
     def time_rgn_changed(self, rgn):
         img_data = self.img_arrays[-1]
@@ -228,3 +263,10 @@ class VImagingAnalyzer(QtGui.QWidget):
         else:
             self.plt3.plot(xvals, yvals, symbol='o', pen=None, symbolBrush=brushes, symbolPen=None)
             self.plt3.plot(avg_x, avg_y, pen='w', antialias=True)
+    
+    def closeEvent(self, ev):
+        self.img_data = None
+        self.img_arrays = None
+        self.img_mean = None
+        self.clamp_data = None
+        self.clamp_mode = None        
