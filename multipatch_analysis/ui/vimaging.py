@@ -92,7 +92,8 @@ class VImagingAnalyzer(QtGui.QWidget):
                 img_data[:2] = self.img_data
                 for i in range(img_data.shape[1]):
                     minlen = min(self.img_data[0,i].shape[0], self.img_data[1,i].shape[0])
-                    img_data[2,i] = self.img_data[0,i][:minlen] - self.img_data[1,i][:minlen]
+                    img_data[2,i] = self.img_data[0,i][:minlen].copy()
+                    img_data[2,i]._data = self.img_data[0,i][:minlen].asarray().astype('float') - self.img_data[1,i][:minlen].asarray()
                 self.img_data = img_data
                 
                 
@@ -269,4 +270,68 @@ class VImagingAnalyzer(QtGui.QWidget):
         self.img_arrays = None
         self.img_mean = None
         self.clamp_data = None
-        self.clamp_mode = None        
+        self.clamp_mode = None
+
+
+class VImagingAnalyzer2(QtGui.QWidget):
+    def __init__(self):
+        QtGui.QWidget.__init__(self)
+
+        self.layout = QtGui.QVBoxLayout()
+        self.setLayout(self.layout)
+        self.imv1 = pg.ImageView()
+        self.layout.addWidget(self.imv1)
+
+        self.plt1 = pg.PlotWidget()
+        self.layout.addWidget(self.plt1)
+
+        self.base_time_rgn = pg.LinearRegionItem([0.07, 0.099])
+        self.test_time_rgn = pg.LinearRegionItem([0.104, 0.112])
+        for time_rgn in (self.base_time_rgn, self.test_time_rgn):
+            self.plt1.addItem(time_rgn)
+            time_rgn.sigRegionChangeFinished.connect(self.time_rgn_changed)
+
+        self.plot_data = []
+
+    def load_data(self, seq_dir):
+        with pg.BusyCursor():
+            self._load_data(seq_dir)
+
+    def _load_data(self, seq_dir):
+        self.clear_plot_data()
+
+        man = getManager()
+        model = man.dataModel
+
+        # read all image data
+        self.img_data = model.buildSequenceArray(
+            seq_dir, 
+            lambda dh: dh['Camera']['frames.ma'].read()['Time':0:200e-3].asarray(),
+            join=True)
+        
+        first_subdir = seq_dir[seq_dir.ls()[0]]
+        first_img = first_subdir['Camera']['frames.ma'].read()['Time':0:200e-3]
+        self.img_data._info[2] = first_img._info[0]
+
+        time_vals = self.img_data.xvals('Time')
+        time_prof = self.img_data[:, 1].mean(axis=0).mean(axis=1).mean(axis=1)
+        self.plot_data.append(self.plt1.plot(time_vals, time_prof))
+
+        self.time_rgn_changed()
+
+    def time_rgn_changed(self):
+        base_start, base_stop = self.base_time_rgn.getRegion()
+        test_start, test_stop = self.test_time_rgn.getRegion()
+        base = self.img_data['Time':base_start:base_stop].asarray().mean(axis=2)
+        test = self.img_data['Time':test_start:test_stop].asarray().mean(axis=2)
+
+        base_diff = base[:,0] - base[:,1]
+        test_diff = test[:,0] - test[:,1]
+
+        self.diff_img = test_diff - base_diff
+        self.imv1.setImage(self.diff_img)
+
+    def clear_plot_data(self):
+        for item in self.plot_data:
+            self.plt1.removeItem(item)
+        self.plot_data = []
