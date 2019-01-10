@@ -484,15 +484,23 @@ engine_rw = None
 engine_pid = None  # pid of process that created this engine. 
 def init_engine():
     global engine_ro, engine_rw, engine_pid
-    if engine_ro is not None:
-        engine_ro.dispose()
-    if engine_rw is not None:
-        engine_rw.dispose()
+    dispose_engines()
     
     engine_ro = create_engine(db_address_ro, pool_size=10, max_overflow=40, isolation_level='AUTOCOMMIT')
     if db_address_rw is not None:
         engine_rw = create_engine(db_address_rw, pool_size=10, max_overflow=40)
     engine_pid = os.getpid()
+
+
+def dispose_engines():
+    global engine_ro, engine_rw, engine_pid
+    if engine_ro is not None:
+        engine_ro.dispose()
+        engine_ro = None
+    if engine_rw is not None:
+        engine_rw.dispose()
+        engine_rw = None
+    engine_pid = None    
 
 init_engine()
 
