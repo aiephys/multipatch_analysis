@@ -600,6 +600,7 @@ class ExperimentMetadata(Experiment):
             rec['backup'] = False if self.backup_path is None else (True if os.path.exists(self.backup_path) else "MISSING")
             rec['NAS'] = False if self.nas_path is None else (True if os.path.exists(self.nas_path) else "MISSING")
 
+            self.lims_message = None
             org = self.organism
             if org is None:
                 description = ("no LIMS spec info", fail_color)
