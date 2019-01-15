@@ -83,10 +83,10 @@ if __name__ == '__main__':
     else:
         ids = [expt for expt in selected_expts]
 
-        # Dispose DB engine before forking, otherwise child processes will
+        # Dispose DB engines before forking, otherwise child processes will
         # inherit and muck with the same connections. See:
         # http://docs.sqlalchemy.org/en/rel_1_0/faq/connections.html#how-do-i-use-engines-connections-sessions-with-python-multiprocessing-or-os-fork
-        database.engine.dispose()
+        database.dispose_engines()
         
         pool = multiprocessing.Pool(processes=args.workers, maxtasksperchild=1)
         errors = pool.map(submit_expt, ids, chunksize=1)  # note: maxtasksperchild is broken unless we also force chunksize

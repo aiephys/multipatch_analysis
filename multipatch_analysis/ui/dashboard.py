@@ -268,6 +268,7 @@ class Dashboard(QtGui.QWidget):
             ('drawing tool', 'lims_drawing_tool_url'),
             ('cluster ID', 'cluster_id'),
             ('slice fixed', 'slice_fixed'),
+            ('LIMS status', 'lims_message')
         ]
         for name,attr in print_fields:
             try:
@@ -347,7 +348,7 @@ class Dashboard(QtGui.QWidget):
                     color = pass_color
                 elif val is False:
                     color = fail_color
-                elif val in ('ERROR', 'MISSING'):
+                elif val in ('ERROR', 'MISSING', 'FAILED'):
                     color = fail_color
                 elif val == '-':
                     # dash means item is incomplete but still acceptable
@@ -400,6 +401,8 @@ class Dashboard(QtGui.QWidget):
                 elif search in str(rec['timestamp']) or search in str(np.round(rec['timestamp'], 2)):
                     search_hit = True
                 elif rec['description'] is not None and search in rec['description']:
+                    search_hit = True
+                elif rec['path'] is not None and search in rec['path']:
                     search_hit = True
                 hidden = hidden or not search_hit
             rec['item'].setHidden(hidden)
@@ -574,6 +577,10 @@ class ExperimentMetadata(Experiment):
             if path is not None and os.path.exists(path):
                 self._site_path = path
                 self.site_dh = getDirHandle(path)
+                # reset values loaded while determining path
+                self._expt_info = None
+                self._slice_info = None
+                self._site_info = None
                 break
 
     def check(self):
@@ -583,7 +590,7 @@ class ExperimentMetadata(Experiment):
         try:
             rec = {'experiment': self, 'error': None}
 
-            rec['timestamp'] = self.timestamp
+            rec['timestamp'] = '%0.3f' % self.timestamp
             rec['rig'] = self.rig_name
             rec['operator'] = self.rig_operator
             rec['path'] = self.expt_subpath
@@ -645,16 +652,30 @@ class ExperimentMetadata(Experiment):
                     rec['DB'] = self.in_database
 
                     cell_cluster = self.lims_cell_cluster_id
-                    in_lims = cell_cluster is not None
+                    lims_ignore_file = os.path.join(self.archive_path, '.mpe_ignore')
+                    lims_fail = False #os.path.isfile(lims_ignore_file)
+                    if lims_fail:
+                        in_lims = "FAILED"
+                        self.lims_message = open(lims_ignore_file, 'r').read()
+                    else:
+                        in_lims = cell_cluster is not None
+                        self.lims_message = self.lims_submissions
                     rec['LIMS'] = in_lims
 
-                    if slice_fixed and in_lims is True and image_20x is not None:
-                        image_63x = self.biocytin_63x_files
-                        rec['63x'] = image_63x is not None
+                    if in_lims and slice_fixed:
+                        image_tags = lims.specimen_tags(cell_cluster)
+                        if image_tags is not None:
+                            image_63x_go = '63x go' in image_tags
+                            if image_63x_go:
+                                image_63x = self.biocytin_63x_files
+                                rec['63x'] = image_63x is not None
 
-                        cell_info = lims.cluster_cells(cell_cluster)
-                        mapped = len(cell_info) > 0 and all([ci['x_coord'] is not None  for ci in cell_info])
-                        rec['cell map'] = mapped
+                                cell_info = lims.cluster_cells(cell_cluster)
+                                mapped = len(cell_info) > 0 and all([ci['x_coord'] is not None  for ci in cell_info])
+                                rec['cell map'] = mapped
+                            else:
+                                rec['63x'] = '-'
+                                rec['cell map'] = '-'
             else:
                 if self.mosaic_file is not None:
                     rec['site.mosaic'] = True

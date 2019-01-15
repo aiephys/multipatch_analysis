@@ -12,6 +12,7 @@ from acq4.util.Canvas.items.MultiPatchLogCanvasItem import MultiPatchLogCanvasIt
 from . import submit_expt
 from . import multipatch_nwb_viewer
 from .. import lims
+from . import vimaging
 import os
 import shutil
 import json
@@ -19,7 +20,6 @@ import urllib
 from datetime import datetime
 import time
 import yaml
-import affpyramid
 
 from acq4.util.Canvas.items.CanvasItem import CanvasItem
 from acq4.util.Canvas.items import registerItemType
@@ -93,7 +93,6 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
 
         self.submit_btn = pg.FeedbackButton("Submit cell positions to LIMS")
         self.layout.addWidget(self.submit_btn, 1, 0)
-        self.submit_btn.setEnabled(False)
         self.submit_btn.clicked.connect(self.submit)
 
     def load_clicked(self):
@@ -103,11 +102,9 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         If image not saved locally then copies file from LIMS.
         Enables button to create a JSON of the cell locations
         """
-        self.base_dir = self.mosaic_editor.ui.fileLoader.baseDir()
         if self.base_dir.info()['dirType'] != 'Slice':
             raise Exception('No Slice Selected')
         self.base_path = self.base_dir.name()
-        self.specimen_name = self.base_dir.info()['specimen_ID'].strip()
 
         aff_image_path = lims.specimen_20x_image(self.specimen_name, treatment='Biocytin')
         if aff_image_path is None:
@@ -118,14 +115,23 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         
         aff_image_name = os.path.split(aff_image_path)[-1]
         save_path = os.path.join(self.base_path, aff_image_name)
-
+            
         if not os.path.exists(save_path):
             with pg.BusyCursor():
                 shutil.copy2(aff_image_path, save_path)
                 self.base_dir.indexFile(aff_image_name)
         
         self.image_20 = save_path
-        self.submit_btn.setEnabled(True)
+    
+    @property
+    def base_dir(self):
+        return self.mosaic_editor.ui.fileLoader.baseDir()
+    
+    @property
+    def specimen_name(self):
+        if self.base_dir.info()['dirType'] != 'Slice':
+            raise Exception('No Slice Selected')
+        return self.base_dir.info()['specimen_ID'].strip()
 
     def submit(self):
         try:
@@ -142,6 +148,7 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         Gets timestamp
         Creates dictionary of cell locations and enables the save button
         """
+
         items = self.mosaic_editor.canvas.items 
 
         # Find item that marks cell positions
@@ -157,8 +164,8 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
                     image = i
             except AttributeError:
                 pass
-        if image is None:
-            raise Exception("Could not find 20x image loaded into mosaic editor.")
+        # if image is None:
+        #     raise Exception("Could not find 20x image loaded into mosaic editor.")
 
         # Infer the site folder to submit from based on the files that have been loaded.
         # This is really indirect, but it seems to work.
@@ -203,8 +210,12 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         for cell in pipettes:
             cell_name = int(cell[0].split('_')[-1])
             p = cell[1]
-            x_float = markers[0].graphicsItem().mapToItem(image.graphicsItem(), pg.Point(*p[:2])).x()
-            y_float = markers[0].graphicsItem().mapToItem(image.graphicsItem(), pg.Point(*p[:2])).y()
+            if image is None:
+                x_float = 0
+                y_float = 0
+            else:
+                x_float = markers[0].graphicsItem().mapToItem(image.graphicsItem(), pg.Point(*p[:2])).x()
+                y_float = markers[0].graphicsItem().mapToItem(image.graphicsItem(), pg.Point(*p[:2])).y()
             self.data['cells'].append({      
                 'ephys_cell_id': cell_name,                  
                 'coordinates_20x': 
@@ -273,6 +284,60 @@ class DashboardModule(Module):
         self.ui = dashboard.Dashboard(limit=config.get('limit', None), filter_defaults=config.get('filters', None))
         self.ui.resize(1600, 900)
         self.ui.show()
+        
+    def window(self):
+        return self.ui
+
+
+class VoltageImagingAnalysisModule(Module):
+    """
+    """
+    moduleDisplayName = "Voltage Imaging"
+    moduleCategory = "Analysis"
+
+    def __init__(self, manager, name, config):
+        Module.__init__(self, manager, name, config)
+        self.ui = vimaging.VImagingAnalyzer()
+        self.ui.resize(1600, 900)
+        self.ui.show()
+        
+        self.load_from_dm_btn = QtGui.QPushButton("load from data manager")
+        self.load_from_dm_btn.setParent(self.ui)
+        self.load_from_dm_btn.resize(160, 30)
+        self.load_from_dm_btn.show()
+        self.load_from_dm_btn.clicked.connect(self.load_from_dm_clicked)
+        
+    def load_from_dm_clicked(self):
+        man = getManager()
+        sel_dir = man.currentFile
+        self.ui.load_data(sel_dir)
+        
+    def window(self):
+        return self.ui
+
+
+class VoltageImagingAnalysis2Module(Module):
+    """
+    """
+    moduleDisplayName = "Voltage Imaging 2"
+    moduleCategory = "Analysis"
+
+    def __init__(self, manager, name, config):
+        Module.__init__(self, manager, name, config)
+        self.ui = vimaging.VImagingAnalyzer2()
+        self.ui.resize(1600, 900)
+        self.ui.show()
+        
+        self.load_from_dm_btn = QtGui.QPushButton("load from data manager")
+        self.load_from_dm_btn.setParent(self.ui)
+        self.load_from_dm_btn.resize(160, 30)
+        self.load_from_dm_btn.show()
+        self.load_from_dm_btn.clicked.connect(self.load_from_dm_clicked)
+        
+    def load_from_dm_clicked(self):
+        man = getManager()
+        sel_dir = man.currentFile
+        self.ui.load_data(sel_dir)
         
     def window(self):
         return self.ui

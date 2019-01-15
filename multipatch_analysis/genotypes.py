@@ -64,6 +64,7 @@ DRIVER_LINES = {                  # dependencies     products
     'Chrna2-Cre_OE25':            [(['chrna2'],       ['cre'])],
     'Penk-IRES2-Cre-neo':         [(['penk'],         ['cre'])],
     'Slc17a6-IRES2-FlpO':         [(['slc17a6'],      ['flp'])],
+    'Slc17a8-iCre':               [(['slc17a8'],      ['cre'])],
     'Ctgf-T2A-dgCre':             [(['ctgf'],         ['cre'])],
 }
 
@@ -109,6 +110,8 @@ REPORTER_LINES = {                # dependencies             products
     'Ai139(TIT2L-GFP-ICL-TPT)-D': [(['cre'],                  ['EGFP', 'tdTomato'])],
     'Ai139(TIT2L-GFP-ICL-TPT)':   [(['cre'],                  ['EGFP', 'tdTomato'])],
     'Ai140(TIT2L-GFP-ICL-tTA2)':  [(['cre'],                  ['EGFP', 'tTA'])],
+    'Ai167(TIT2L-ChrimsonR-tdT-ICL-tTA2)': [
+                                   (['cre'],                  ['ChrimsonR', 'tdTomato'])],
     'Snap25-LSL-F2A-GFP':         [(['cre'],                  ['EGFP'])],
 }
 
@@ -355,7 +358,7 @@ class Genotype(object):
                     if color is not None:
                         self.model.add_rule([reporter], [color])
 
-        self.all_colors = set([FLUOROPHORES[r] for r in self.all_reporters])
+        self.all_colors = set([FLUOROPHORES[r] for r in self.all_reporters if r in FLUOROPHORES])
 
 
 class GeneticModel:

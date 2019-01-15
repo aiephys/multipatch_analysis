@@ -804,11 +804,15 @@ class Experiment(object):
     @property
     def expt_info(self):
         if self._expt_info is None:
-            index = os.path.join(self.path, '..', '..', '.index')
+            index = os.path.join(self.expt_path, '.index')
             if not os.path.isfile(index):
                 raise TypeError("Cannot find index file (%s) for experiment %s" % (index, self))
             self._expt_info = pg.configfile.readConfigFile(index)['.']
         return self._expt_info
+
+    @property
+    def expt_path(self):
+        return os.path.abspath(os.path.join(self.path, '..', '..'))
 
     @property
     def nwb_file(self):
@@ -1027,7 +1031,10 @@ class Experiment(object):
     def server_path(self):
         """The path of this experiment relative to the server storage directory.
         """
-        expt_dir = '%0.3f' % self.expt_info['__timestamp__']
+        try:
+            expt_dir = '%0.3f' % self.expt_info['__timestamp__']
+        except KeyError:
+            raise Exception("Directory %s index is missing __timestamp__!" % self.expt_path)
         subpath = self.path.split(os.path.sep)[-2:]
         return os.path.join(expt_dir, *subpath)
 

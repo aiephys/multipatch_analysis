@@ -162,7 +162,7 @@ def update_connection_strength(limit=0, expts=None, parallel=True, workers=6, ra
 
 
 def compute_connection_strength(job_info, raise_exceptions=False):
-    session = db.Session()
+    session = db.Session(readonly=False)
     
     try:
         expt_id, index, n_jobs = job_info
@@ -218,6 +218,8 @@ def get_amps(session, pair, clamp_mode='ic', get_data=False):
         db.PulseResponse.ex_qc_pass,
         db.PulseResponse.in_qc_pass,
         db.PatchClampRecording.clamp_mode,
+        db.PatchClampRecording.baseline_potential,
+        db.PatchClampRecording.baseline_current,
         db.StimPulse.pulse_number,
         db.StimSpike.max_dvdt_time,
         db.PulseResponse.start_time.label('response_start_time'),
@@ -267,6 +269,8 @@ def get_baseline_amps(session, pair, clamp_mode='ic', amps=None, get_data=True):
         db.Baseline.ex_qc_pass,
         db.Baseline.in_qc_pass,
         db.PatchClampRecording.clamp_mode,
+        db.PatchClampRecording.baseline_potential,
+        db.PatchClampRecording.baseline_current,
         db.Recording.start_time.label('rec_start_time'),
         db.Baseline.start_time.label('response_start_time'),
     ]
