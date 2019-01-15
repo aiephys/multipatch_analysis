@@ -69,4 +69,4 @@ df['image_path']=df.apply(lambda row:
                           row.uid, str(row.pre_cell_id), str(row.post_cell_id)), axis=1)
 
 # save data to csv                          
-df.to_csv('dynamic_weight_jitter_latency2018-11-12.csv')  #comment out after using so dont overwrite something
+#df.to_csv('dynamic_weight_jitter_latency2018-11-12.csv')  #comment out after using so dont overwrite something

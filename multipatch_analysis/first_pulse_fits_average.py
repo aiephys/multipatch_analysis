@@ -19,8 +19,8 @@ import os
 
 fitting_type = 'vclamp' #dynamic_weight_jitter_latency' #options 'default', 'force_sign', force_latency, force_sign_and_latency, dynamic_weight, dynamic_weight_jitter_latency
 general_image_path='/home/corinnet/workspace/DBfit_pics/'
-save_image = True    #specifies whether to save images
-commiting = True
+save_image = False    #specifies whether to save images
+commiting = False
 #----------------------------------------------------------
 #----------------------------------------------------------
 #----------------------------------------------------------
