@@ -1,6 +1,8 @@
 config.yml
 *.pyc
+*.py~
 *.pkl
 .directory
 .idea
 cache
+*.csv

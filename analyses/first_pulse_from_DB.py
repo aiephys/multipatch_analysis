@@ -89,7 +89,6 @@ def update_analysis(limit=None):
 
 
 def first_pulse_features(pair, pulse_responses, pulse_response_amps):
-
     avg_psp = TraceList(pulse_responses).mean()
     dt = avg_psp.dt
     avg_psp_baseline = float_mode(avg_psp.data[:int(10e-3/dt)])

@@ -435,6 +435,22 @@ if __name__ == '__main__':
 
         # Get the average of the baseline subtracted first pulses
         avg_voltage, dt, avg_command=fitting.get_baseline_sub_average(first_pulse_list)
+
+        # not needed sanity check do average and then baseline subtract
+        check_response=[fp['response'] for fp in first_pulse_list]
+        check_baseline=[fp['baseline'] for fp in first_pulse_list]
+        average_response=TraceList(check_response).mean()
+        average_baseline=TraceList(check_baseline).mean()
+        fm=float_mode(average_baseline.data)
+        new_voltage=average_response.data-fm
+
+        plt.figure()
+        plt.plot(avg_voltage.data)
+        plt.plot(new_voltage.data)
+        plt.title(np.isclose(avg_voltage.data, new_voltage.data))
+        plt.show()
+
+        # fit the average   
         ave_psp_fit, weight_for_average=fitting.fit_avg()
 
         # set up output directory and naming convention output files
