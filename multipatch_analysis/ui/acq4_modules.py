@@ -20,7 +20,6 @@ import urllib
 from datetime import datetime
 import time
 import yaml
-import affpyramid
 
 from acq4.util.Canvas.items.CanvasItem import CanvasItem
 from acq4.util.Canvas.items import registerItemType
@@ -299,6 +298,33 @@ class VoltageImagingAnalysisModule(Module):
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
         self.ui = vimaging.VImagingAnalyzer()
+        self.ui.resize(1600, 900)
+        self.ui.show()
+        
+        self.load_from_dm_btn = QtGui.QPushButton("load from data manager")
+        self.load_from_dm_btn.setParent(self.ui)
+        self.load_from_dm_btn.resize(160, 30)
+        self.load_from_dm_btn.show()
+        self.load_from_dm_btn.clicked.connect(self.load_from_dm_clicked)
+        
+    def load_from_dm_clicked(self):
+        man = getManager()
+        sel_dir = man.currentFile
+        self.ui.load_data(sel_dir)
+        
+    def window(self):
+        return self.ui
+
+
+class VoltageImagingAnalysis2Module(Module):
+    """
+    """
+    moduleDisplayName = "Voltage Imaging 2"
+    moduleCategory = "Analysis"
+
+    def __init__(self, manager, name, config):
+        Module.__init__(self, manager, name, config)
+        self.ui = vimaging.VImagingAnalyzer2()
         self.ui.resize(1600, 900)
         self.ui.show()
         

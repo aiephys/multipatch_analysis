@@ -661,18 +661,23 @@ class ExperimentMetadata(Experiment):
                         self.lims_message = self.lims_submissions
                     else:
                         lims_ignore_file = os.path.join(self.archive_path, '.mpe_ignore')
-                        lims_fail = os.path.isfile(lims_ignore_file)
                         in_lims = "FAILED"
                         self.lims_message = open(lims_ignore_file, 'r').read() 
                     rec['LIMS'] = in_lims
 
-                    if slice_fixed and in_lims is True and image_20x is not None:
-                        image_63x = self.biocytin_63x_files
-                        rec['63x'] = image_63x is not None
-
-                        cell_info = lims.cluster_cells(cell_cluster)
-                        mapped = len(cell_info) > 0 and all([ci['x_coord'] is not None  for ci in cell_info])
-                        rec['cell map'] = mapped
+                    if in_lims and slice_fixed and image_20x:
+                        image_tags = lims.specimen_tags(cell_cluster)
+                        if image_tags is not None:   
+                            if '63x no go' in image_tags:
+                                rec['63x'] = '-'
+                                rec['cell map'] = '-'
+                            else:
+                                image_63x = self.biocytin_63x_files
+                                rec['63x'] = image_63x is not None
+                                cell_info = lims.cluster_cells(cell_cluster)
+                                mapped = len(cell_info) > 0 and all([ci['x_coord'] is not None  for ci in cell_info])
+                                rec['cell map'] = mapped
+                                
             else:
                 if self.mosaic_file is not None:
                     rec['site.mosaic'] = True
