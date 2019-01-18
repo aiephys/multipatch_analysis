@@ -511,9 +511,12 @@ class PollThread(QtCore.QThread):
                 if self._stop or not self.enable_polling:
                     return
 
-                expt = ExperimentMetadata(path=expt_path)
-                ts = expt.timestamp
-
+                try:
+                    expt = ExperimentMetadata(path=expt_path)
+                    ts = expt.timestamp
+                except:
+                    print ('Error loading %s, ignoring and moving on...' % expt_path)    
+                    continue
                 # Couldn't get timestamp; show an error message
                 if ts is None:
                     print("Error getting timestamp for %s" % expt)
@@ -694,6 +697,8 @@ class ExperimentMetadata(Experiment):
                 if not os.path.isdir(test_path):
                     continue
                 dh = getDirHandle(test_path)
+                if self.site_info is None:
+                    raise Exception ('%s %s missing index file' % (self, self.path))
                 if dh.info()['__timestamp__'] == self.site_info['__timestamp__']:
                     found_paths = True
                     # set self._primary_path, self._archive_path, etc.
