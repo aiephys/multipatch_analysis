@@ -20,7 +20,7 @@ from sqlalchemy.sql.expression import func
 from .. import config
 
 # database version should be incremented whenever the schema has changed
-db_version = 9
+db_version = 10
 db_name = '{database}_{version}'.format(database=config.synphys_db, version=db_version)
 db_address_ro = '{host}/{database}'.format(host=config.synphys_db_host, database=db_name)
 if config.synphys_db_host_rw is None:
