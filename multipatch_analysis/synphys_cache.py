@@ -20,7 +20,7 @@ class SynPhysCache(object):
         if not os.path.isabs(local_path):
             local_path = os.path.join(os.path.dirname(__file__), '..', local_path)
 
-        self.local_path = os.path.abspath(local_path)
+        self.local_path = None if local_path is None else os.path.abspath(local_path)
         self.remote_path = os.path.abspath(remote_path)
         
     def list_experiments(self):
@@ -36,6 +36,9 @@ class SynPhysCache(object):
         return glob.glob(os.path.join(self.remote_path, '*', 'slice_*', 'site_*', 'pipettes.yml'))
 
     def get_cache(self, filename):
+        if self.local_path is None:
+            return os.path.join(self.remote_path, filename)
+        
         filename = os.path.abspath(filename)
         if not filename.startswith(self.remote_path):
             raise Exception("Requested file %s is not inside %s" % (filename, self.remote_path))
@@ -44,12 +47,16 @@ class SynPhysCache(object):
         path, _ = os.path.split(rel_filename)
         
         local_path = os.path.join(self.local_path, path)
-        self._mkdir(local_path)
-        
         local_filename = os.path.join(self.local_path, rel_filename)
         
-        sync_file(filename, local_filename)
-        return local_filename
+        if config.grow_cache:
+            self._mkdir(local_path)
+            sync_file(filename, local_filename)        
+        
+        if os.path.exists(local_filename):
+            return local_filename
+        else:
+            return filename
         
     def _mkdir(self, path):
         if not os.path.isdir(path):

@@ -14,6 +14,7 @@ synphys_db = "synphys"
 synphys_db_readonly_user = "readonly"
 synphys_data = None
 cache_path = "cache"
+grow_cache = False
 rig_name = None
 n_headstages = 8
 raw_data_paths = []
@@ -32,6 +33,7 @@ synphys_db_readonly_user = "readonly"
 synphys_data: "N:\\"
 
 cache_path: "E:\\multipatch_analysis_cache"
+grow_cache: true
 rig_name: 'MP_'
 n_headstages: 8
 
