@@ -511,9 +511,12 @@ class PollThread(QtCore.QThread):
                 if self._stop or not self.enable_polling:
                     return
 
-                expt = ExperimentMetadata(path=expt_path)
-                ts = expt.timestamp
-
+                try:
+                    expt = ExperimentMetadata(path=expt_path)
+                    ts = expt.timestamp
+                except:
+                    print ('Error loading %s, ignoring and moving on...' % expt_path)    
+                    continue
                 # Couldn't get timestamp; show an error message
                 if ts is None:
                     print("Error getting timestamp for %s" % expt)
@@ -600,6 +603,7 @@ class ExperimentMetadata(Experiment):
             rec['backup'] = False if self.backup_path is None else (True if os.path.exists(self.backup_path) else "MISSING")
             rec['NAS'] = False if self.nas_path is None else (True if os.path.exists(self.nas_path) else "MISSING")
 
+            self.lims_message = None
             org = self.organism
             if org is None:
                 description = ("no LIMS spec info", fail_color)
@@ -652,30 +656,28 @@ class ExperimentMetadata(Experiment):
                     rec['DB'] = self.in_database
 
                     cell_cluster = self.lims_cell_cluster_id
-                    lims_ignore_file = os.path.join(self.archive_path, '.mpe_ignore')
-                    lims_fail = False #os.path.isfile(lims_ignore_file)
-                    if lims_fail:
-                        in_lims = "FAILED"
-                        self.lims_message = open(lims_ignore_file, 'r').read()
-                    else:
+                    if cell_cluster is not None:
                         in_lims = cell_cluster is not None
                         self.lims_message = self.lims_submissions
+                    else:
+                        lims_ignore_file = os.path.join(self.archive_path, '.mpe_ignore')
+                        in_lims = "FAILED"
+                        self.lims_message = open(lims_ignore_file, 'r').read() 
                     rec['LIMS'] = in_lims
 
-                    if in_lims and slice_fixed:
+                    if in_lims is True and slice_fixed is True and image_20x is True:
                         image_tags = lims.specimen_tags(cell_cluster)
-                        if image_tags is not None:
-                            image_63x_go = '63x go' in image_tags
-                            if image_63x_go:
+                        if image_tags is not None:   
+                            if '63x no go' in image_tags:
+                                rec['63x'] = '-'
+                                rec['cell map'] = '-'
+                            else:
                                 image_63x = self.biocytin_63x_files
                                 rec['63x'] = image_63x is not None
-
                                 cell_info = lims.cluster_cells(cell_cluster)
                                 mapped = len(cell_info) > 0 and all([ci['x_coord'] is not None  for ci in cell_info])
                                 rec['cell map'] = mapped
-                            else:
-                                rec['63x'] = '-'
-                                rec['cell map'] = '-'
+                                
             else:
                 if self.mosaic_file is not None:
                     rec['site.mosaic'] = True
@@ -700,6 +702,8 @@ class ExperimentMetadata(Experiment):
                 if not os.path.isdir(test_path):
                     continue
                 dh = getDirHandle(test_path)
+                if self.site_info is None:
+                    raise Exception ('%s %s missing index file' % (self, self.path))
                 if dh.info()['__timestamp__'] == self.site_info['__timestamp__']:
                     found_paths = True
                     # set self._primary_path, self._archive_path, etc.
