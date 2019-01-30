@@ -19,7 +19,7 @@ rig_name = None
 n_headstages = 8
 raw_data_paths = []
 rig_data_paths = {}
-
+known_addrs = {}
 
 template = r"""
 # synphys database
