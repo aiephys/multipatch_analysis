@@ -210,7 +210,8 @@ class ExperimentMetadataSubmission(object):
         
 
         # Attempt import of old-format metadata
-        self._import_old_metadata(site_info, warnings, errors)
+        if config.import_old_data_on_submission is True:
+            self._import_old_metadata(site_info, warnings, errors)
 
         return errors, warnings
         

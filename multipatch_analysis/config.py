@@ -20,6 +20,8 @@ n_headstages = 8
 raw_data_paths = []
 rig_data_paths = {}
 known_addrs = {}
+import_old_data_on_submission = False
+
 
 template = r"""
 # synphys database
