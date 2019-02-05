@@ -665,7 +665,7 @@ class ExperimentMetadata(Experiment):
                         self.lims_message = open(lims_ignore_file, 'r').read() 
                     rec['LIMS'] = in_lims
 
-                    if in_lims is True and slice_fixed is True and image_20x is True:
+                    if in_lims is True and slice_fixed is True and image_20x is not None:
                         image_tags = lims.specimen_tags(cell_cluster)
                         if image_tags is not None:   
                             if '63x no go' in image_tags:
