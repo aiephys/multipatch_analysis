@@ -33,8 +33,15 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
     header_color : str | tuple
         Color of header text
     """
+    class SignalHandler(pg.QtCore.QObject):
+        """Because we can't subclass from both QObject and QGraphicsRectItem at the same time
+        """
+        sigClicked = pg.QtCore.Signal(object, object, object, object) # self, event, row, col
+
     def __init__(self, text, fgcolor, bgcolor, rows, cols, size=50, border_color='k', header_color='w'):
         pg.QtGui.QGraphicsItemGroup.__init__(self)
+        self._signalHandler = MatrixItem.SignalHandler()
+        self.sigClicked = self._signalHandler.sigClicked
         self.cell_size = size
         self.header_color = header_color
 
@@ -51,11 +58,14 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
             for j,col in enumerate(cols):
                 x = j * size
                 y = i * size
-                rect = pg.QtGui.QGraphicsRectItem(0, 0, size, size, parent=self)
+                rect = MatrixElementItem(size, parent=self)
                 rect.setPos(x, y)
                 rect.setBrush(pg.mkBrush(bgcolor[i][j]))
                 rect.setPen(pg.mkPen(border_color[i][j]))
                 rect.setZValue(-10)
+                rect.row = i
+                rect.col = j
+                rect.sigClicked.connect(self.element_clicked)
                 self.cells[-1].append(rect)
 
                 txt = pg.QtGui.QGraphicsTextItem(text[i][j], parent=self)
@@ -68,6 +78,10 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
         for item in self.childItems():
             br = br.united(self.mapRectFromItem(item, item.boundingRect()))
         self._bounding_rect = br
+
+    def element_clicked(self, rect, event):
+        self.sigClicked.emit(self, event, rect.row, rect.col)  
+
 
     def _make_header(self, labels, side):
         padding = 10
@@ -147,7 +161,20 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
 
     def boundingRect(self):
         return self._bounding_rect
-    
+
+class MatrixElementItem(pg.QtGui.QGraphicsRectItem):
+    class SignalHandler(pg.QtCore.QObject):
+        """Because we can't subclass from both QObject and QGraphicsRectItem at the same time
+        """
+        sigClicked = pg.QtCore.Signal(object, object) # self, event
+
+    def __init__(self, size, parent):
+        self._signalHandler = MatrixElementItem.SignalHandler()
+        self.sigClicked = self._signalHandler.sigClicked
+        pg.QtGui.QGraphicsRectItem.__init__(self, 0, 0, size, size, parent=parent)
+
+    def mouseClickEvent(self, event):
+        self.sigClicked.emit(self, event)    
     
 def distance_plot(connected, distance, plots=None, color=(100, 100, 255), window=40e-6, spacing=None, name=None, fill_alpha=30):
     """Draw connectivity vs distance profiles with confidence intervals.
@@ -257,3 +284,6 @@ def distance_plot(connected, distance, plots=None, color=(100, 100, 255), window
     plots[0].addItem(fill, ignoreBounds=True)
     
     return plots, ci_xvals, prop, upper, lower
+
+
+        

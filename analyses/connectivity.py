@@ -68,6 +68,7 @@ class FilterControlPanel(pg.QtGui.QWidget):
         return project_names
 
 class MatrixWidget(pg.GraphicsLayoutWidget):
+    sigClicked = pg.QtCore.Signal(object, object, object, object) # self, matrix_widget, row, col
     def __init__(self):
         pg.GraphicsLayoutWidget.__init__(self)
         self.setRenderHints(self.renderHints() | pg.QtGui.QPainter.Antialiasing)
@@ -84,7 +85,11 @@ class MatrixWidget(pg.GraphicsLayoutWidget):
 
         self.matrix = MatrixItem(text=text, fgcolor=fgcolor, bgcolor=bgcolor, border_color=border_color,
                     rows=rows, cols=rows, size=50, header_color='k')
+        self.matrix.sigClicked.connect(self.matrix_element_clicked)
         self.view_box.addItem(self.matrix)
+
+    def matrix_element_clicked(self, matrix_widget, event, row, col):
+        self.sigClicked.emit(self, event, row, col) 
 
 class ScatterPlot(pg.GraphicsLayoutWidget):
     def __init__(self):
@@ -153,10 +158,26 @@ class MatrixAnalyzer(object):
         self.win.setWindowTitle(title)
 
         self.win.filter_control_panel.update_button.clicked.connect(self.update_clicked)
+        self.win.matrix_widget.sigClicked.connect(self.display_matrix_element_data)
 
     def update_clicked(self):
         with pg.BusyCursor():
             self.update_matrix()
+
+    def display_connection_list(self, pre_class, post_class):
+        connections = self.results[(pre_class, post_class)]['connected_pairs']
+        print ("Connection type: %s -> %s" % (pre_class, post_class))
+        print ("Connected Pairs:")
+        for connection in connections:
+            print ("\t %s" % (connection))
+        probed_pairs = self.results[(pre_class, post_class)]['probed_pairs']
+        print ("Probed Pairs")
+        for probed in probed_pairs:
+            print ("\t %s" % (probed))
+
+    def display_matrix_element_data(self, matrix_widget, event, row, col):
+        pre_class, post_class = self.matrix_map[row, col]
+        self.display_connection_list(pre_class, post_class)
 
     def update_matrix(self):
         project_names = self.win.filter_control_panel.selected_project_names()
@@ -171,7 +192,7 @@ class MatrixAnalyzer(object):
         pair_groups = classify_pairs(self.pairs, cell_groups)
 
         # analyze matrix elements
-        results = self.analysis_func(pair_groups)
+        self.results = self.analysis_func(pair_groups)
 
         shape = (len(cell_groups),) * 2
         text = np.empty(shape, dtype=object)
@@ -180,9 +201,15 @@ class MatrixAnalyzer(object):
         bordercolor = np.empty(shape, dtype=object)
 
         # call display function on every matrix element
+        total_connected = 0
+        total_probed = 0
+        self.matrix_map = {}
         for i,row in enumerate(cell_groups):
             for j,col in enumerate(cell_groups):
-                output = self.display_func(row, col, results[(row, col)])
+                output = self.display_func(row, col, self.results[(row, col)])
+                self.matrix_map[i, j] = (row, col)
+                total_connected += self.results[(row, col)]['n_connected']
+                total_probed += self.results[(row, col)]['n_probed']
                 text[i, j] = output['text']
                 fgcolor[i, j] = output['fgcolor']
                 bgcolor[i, j] = output['bgcolor']
@@ -200,6 +227,7 @@ class MatrixAnalyzer(object):
 
         self.win.matrix_widget.set_matrix_data(text=text, fgcolor=fgcolor, bgcolor=bgcolor, border_color=bordercolor,
                     rows=rows, cols=rows, size=50, header_color='k')
+        print ("Total connected / probed        %d / %d" % (total_connected, total_probed))
 
 
 if __name__ == '__main__':
