@@ -429,12 +429,12 @@ def compute_fit(job_info, raise_exceptions=False):
             nrmse_i = avg_fit_i.nrmse()
         else:
             print('\tskipping: no suitable first pulses found in current clamp')
-            weight_i = None
+            weight_i = np.array([0])
             latency_i = None
             amp_i = None
             rise_time_i = None
             decay_tau_i = None
-            avg_fit_waveform_i = None
+            avg_fit_waveform_i = np.array([0])
             dt_i = None
             nrmse_i = None
         # --------------fit voltage clamp data---------------------        
@@ -457,12 +457,12 @@ def compute_fit(job_info, raise_exceptions=False):
 
         else:
             print('\tskipping: no suitable first pulses found in voltage clamp')
-            weight_v = None
+            weight_v = np.array([0])
             latency_v = None
             amp_v = None
             rise_time_v = None
             decay_tau_v = None
-            avg_fit_waveform_v = None
+            avg_fit_waveform_v = np.array([0])
             dt_v = None
             nrmse_v = None
         #------------ done with fitting section ------------------------------
@@ -479,7 +479,7 @@ def compute_fit(job_info, raise_exceptions=False):
              'ic_NRMSE': nrmse_i,
              'ic_measured_baseline': measured_baseline_i,
              'ic_measured_amp': measured_relative_amp_i,
-             'ic_weight': np.array(weight_i),
+             'ic_weight': weight_i,
 
              'vc_amp': amp_v,
              'vc_latency': latency_v,
@@ -491,7 +491,7 @@ def compute_fit(job_info, raise_exceptions=False):
              'vc_NRMSE': nrmse_v,
              'vc_measured_baseline': measured_baseline_v,
              'vc_measured_amp': measured_relative_amp_v,
-             'vc_weight': np.array(weight_v)
+             'vc_weight': weight_v
              } 
         # map to pair table and commit
         afpf=AvgFirstPulseFit(pair=pair, **out_dict)
