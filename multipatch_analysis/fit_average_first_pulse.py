@@ -375,7 +375,7 @@ def fit_trace(waveform, excitation, clamp_mode='ic', weight=None, latency=None, 
 
 def compute_fit(job_info, raise_exceptions=False):
     
-    session = db.Session() #create session
+    session = db.Session(readonly=False) #create session
 
     expt_id, index, n_jobs = job_info
     print("QUERYING (expt_id=%f): %d/%d" % (expt_id, index, n_jobs))
@@ -510,7 +510,7 @@ def compute_fit(job_info, raise_exceptions=False):
 
 if __name__=='__main__':
 
-#    first_pulse_fit_tables.drop_tables() #note this will drop all the tables here!
+    first_pulse_fit_tables.drop_tables() #note this will drop all the tables here!
     init_tables()
 #    update_DB(limit=None, expts=[1533768797.736], parallel=False, workers=6, raise_exceptions=False, session=None)
 
