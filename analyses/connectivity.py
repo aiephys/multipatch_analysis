@@ -140,8 +140,8 @@ class MatrixAnalyzer(object):
         with pg.BusyCursor():
             self.update_matrix()
 
-    def display_connection_list(self, pre_class, post_class):
-        results = measure_connectivity(self.pair_groups)
+    def element_connection_list(self, pre_class, post_class):
+        results = ConnectivityAnalyzer(self.pair_groups).measure()
         connections = results[(pre_class, post_class)]['connected_pairs']
         print ("Connection type: %s -> %s" % (pre_class, post_class))
         print ("Connected Pairs:")
@@ -154,7 +154,7 @@ class MatrixAnalyzer(object):
 
     def display_matrix_element_data(self, matrix_widget, event, row, col):
         pre_class, post_class = self.matrix_map[row, col]
-        self.display_connection_list(pre_class, post_class)
+        self.element_connection_list(pre_class, post_class)
 
     def update_matrix(self):
         project_names = self.win.filter_control_panel.selected_project_names()
