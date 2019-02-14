@@ -7,52 +7,103 @@ from __future__ import print_function, division
 
 from collections import OrderedDict
 import numpy as np
+import pyqtgraph as pg
 from statsmodels.stats.proportion import proportion_confint
 from .database import database as db
 from .connection_strength import ConnectionStrength
 from .morphology import Morphology
 
 
-def measure_connectivity(pair_groups):
-    """Given a list of cell pairs and a dict that groups cells together by class,
-    return a structure that describes connectivity between cell classes.
-    """    
-    results = OrderedDict()
-    for key, class_pairs in pair_groups.items():
-        pre_class, post_class = key
+class ConnectivityAnalyzer(object):
+    def __init__(self, pair_groups):
+        self.pair_groups = pair_groups
+
+
+    def measure(self):
+        """Given a list of cell pairs and a dict that groups cells together by class,
+        return a structure that describes connectivity between cell classes.
+        """    
+        results = OrderedDict()
+        for key, class_pairs in self.pair_groups.items():
+            pre_class, post_class = key
+            
+            probed_pairs = [p for p in class_pairs if pair_was_probed(p, pre_class.is_excitatory)]
+            connections_found = [p for p in probed_pairs if p.synapse]
+
+            n_connected = len(connections_found)
+            n_probed = len(probed_pairs)
+            conf_interval = connection_probability_ci(n_connected, n_probed)
+            conn_prob = float('nan') if n_probed == 0 else n_connected / n_probed
+
+            results[(pre_class, post_class)] = {
+                'n_probed': n_probed,
+                'n_connected': n_connected,
+                'connection_probability': (conn_prob,) + conf_interval,
+                'connected_pairs': connections_found,
+                'probed_pairs': probed_pairs,
+            }
         
-        probed_pairs = [p for p in class_pairs if pair_was_probed(p, pre_class.is_excitatory)]
-        connections_found = [p for p in probed_pairs if p.synapse]
+        return results
 
-        n_connected = len(connections_found)
-        n_probed = len(probed_pairs)
-        conf_interval = connection_probability_ci(n_connected, n_probed)
-        conn_prob = float('nan') if n_probed == 0 else n_connected / n_probed
+    def display(self, pre_class, post_class, result, show_confidence=True):
+        # Print results
+        print("{pre_class:>20s} -> {post_class:20s} {connections_found:>5s} / {connections_probed}".format(
+            pre_class=pre_class.name, 
+            post_class=post_class.name, 
+            connections_found=str(len(result['connected_pairs'])),
+            connections_probed=len(result['probed_pairs']),
+        ))
 
-        results[(pre_class, post_class)] = {
-            'n_probed': n_probed,
-            'n_connected': n_connected,
-            'connection_probability': (conn_prob,) + conf_interval,
-            'connected_pairs': connections_found,
-            'probed_pairs': probed_pairs,
-        }
-    
-    return results
+        # Pretty matrix results
+        colormap = pg.ColorMap(
+            [0, 0.01, 0.03, 0.1, 0.3, 1.0],
+            [(0,0,100), (80,0,80), (140,0,0), (255,100,0), (255,255,100), (255,255,255)],
+        )
+
+        connectivity, lower_ci, upper_ci = result['connection_probability']
+
+        if show_confidence:
+            output = {'bordercolor': 0.6}
+            default_bgcolor = np.array([128., 128., 128.])
+        else:
+            output = {'bordercolor': 0.8}
+            default_bgcolor = np.array([220., 220., 220.])
+        
+        if np.isnan(connectivity):
+            output['bgcolor'] = tuple(default_bgcolor)
+            output['fgcolor'] = 0.6
+            output['text'] = ''
+        else:
+            # get color based on connectivity
+            color = colormap.map(connectivity)
+            
+            # desaturate low confidence cells
+            if show_confidence:
+                confidence = (1.0 - (upper_ci - lower_ci)) ** 2
+                color = color * confidence + default_bgcolor * (1.0 - confidence)
+            
+            # invert text color for dark background
+            output['fgcolor'] = 'w' if sum(color[:3]) < 384 else 'k'
+            output['text'] = "%d/%d" % (result['n_connected'], result['n_probed'])
+            output['bgcolor'] = tuple(color)
+
+        return output
+
+    def summary(self, results):
+        total_connected = 0
+        total_probed = 0
+        for connectivity in results.values():
+            total_connected += connectivity['n_connected']
+            total_probed += connectivity['n_probed']
+
+        print ("Total connected / probed\t %d / %d" % (total_connected, total_probed))
 
 
 def connection_probability_ci(n_connected, n_probed):
     # make sure we are consistent about how we measure connectivity confidence intervals
     return proportion_confint(n_connected, n_probed, method='beta')
 
-def total_connectivity(pair_groups):
-    results = measure_connectivity(pair_groups)
-    total_connected = 0
-    total_probed = 0
-    for connectivity in results.values():
-        total_connected += connectivity['n_connected']
-        total_probed += connectivity['n_probed']
 
-    print ("Total connected / probed\t %d / %d" % (total_connected, total_probed))
 
 def query_pairs(project_name=None, acsf=None, age=None, species=None, distance=None, session=None):
     """Generate a query for selecting pairs from the database.

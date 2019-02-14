@@ -10,7 +10,7 @@ from collections import OrderedDict
 import numpy as np
 import pyqtgraph as pg
 from multipatch_analysis.database import database as db
-from multipatch_analysis.connectivity import query_pairs, measure_connectivity, total_connectivity
+from multipatch_analysis.connectivity import query_pairs, ConnectivityAnalyzer
 from multipatch_analysis.connection_strength import ConnectionStrength, get_amps, get_baseline_amps
 from multipatch_analysis.morphology import Morphology
 from multipatch_analysis import constants
@@ -45,8 +45,18 @@ class FilterControlPanel(pg.QtGui.QWidget):
         self.setLayout(self.layout)
         self.update_button = pg.QtGui.QPushButton("Update Matrix")
         self.layout.addWidget(self.update_button)
+        self.analyzer_list = pg.QtGui.QListWidget()
+        self.layout.addWidget(self.analyzer_list)
         self.project_list = pg.QtGui.QListWidget()
         self.layout.addWidget(self.project_list)
+        
+        self.analyzers = {'Connectivity': ConnectivityAnalyzer}
+        for analyzer in self.analyzers.keys():
+            analyzer_item = pg.QtGui.QListWidgetItem(analyzer)
+            analyzer_item.setFlags(analyzer_item.flags() | pg.QtCore.Qt.ItemIsUserCheckable)
+            analyzer_item.setCheckState(pg.QtCore.Qt.Unchecked)
+            self.analyzer_list.addItem(analyzer_item)
+
         s = db.Session()
         projects = s.query(db.Experiment.project_name).distinct().all()
         for record in projects:
@@ -66,6 +76,19 @@ class FilterControlPanel(pg.QtGui.QWidget):
                 project_names.append(str(project_item.text()))
 
         return project_names
+
+    def selected_analyzer(self):
+        n_analyzers = self.analyzer_list.count()
+        analyzer = []
+        for n in range(n_analyzers):
+            analyzer_item = self.analyzer_list.item(n)
+            check_state = analyzer_item.checkState()
+            if check_state == pg.QtCore.Qt.Checked:
+                analyzer.append(str(analyzer_item.text()))
+        if len(analyzer) != 1:
+            raise Exception ("Must select one and only one Matrix Analyzer")
+
+        return analyzer
 
 class MatrixWidget(pg.GraphicsLayoutWidget):
     sigClicked = pg.QtCore.Signal(object, object, object, object) # self, matrix_widget, row, col
@@ -101,58 +124,10 @@ class TracePlot(pg.GraphicsLayoutWidget):
         pg.GraphicsLayoutWidget.__init__(self)
         self.setRenderHints(self.renderHints() | pg.QtGui.QPainter.Antialiasing)
 
-def display_connectivity(pre_class, post_class, result, show_confidence=True):
-    # Print results
-    print("{pre_class:>20s} -> {post_class:20s} {connections_found:>5s} / {connections_probed}".format(
-        pre_class=pre_class.name, 
-        post_class=post_class.name, 
-        connections_found=str(len(result['connected_pairs'])),
-        connections_probed=len(result['probed_pairs']),
-    ))
-
-    # Pretty matrix results
-    colormap = pg.ColorMap(
-        [0, 0.01, 0.03, 0.1, 0.3, 1.0],
-        [(0,0,100), (80,0,80), (140,0,0), (255,100,0), (255,255,100), (255,255,255)],
-    )
-
-    connectivity, lower_ci, upper_ci = result['connection_probability']
-
-    if show_confidence:
-        output = {'bordercolor': 0.6}
-        default_bgcolor = np.array([128., 128., 128.])
-    else:
-        output = {'bordercolor': 0.8}
-        default_bgcolor = np.array([220., 220., 220.])
-    
-    if np.isnan(connectivity):
-        output['bgcolor'] = tuple(default_bgcolor)
-        output['fgcolor'] = 0.6
-        output['text'] = ''
-    else:
-        # get color based on connectivity
-        color = colormap.map(connectivity)
-        
-        # desaturate low confidence cells
-        if show_confidence:
-            confidence = (1.0 - (upper_ci - lower_ci)) ** 2
-            color = color * confidence + default_bgcolor * (1.0 - confidence)
-        
-        # invert text color for dark background
-        output['fgcolor'] = 'w' if sum(color[:3]) < 384 else 'k'
-        output['text'] = "%d/%d" % (result['n_connected'], result['n_probed'])
-        output['bgcolor'] = tuple(color)
-
-    return output
-
-
 class MatrixAnalyzer(object):
-    def __init__(self, cell_classes, analysis_func, display_func, summary_func, title, session):
+    def __init__(self, cell_classes, title, session):
         self.session = session
         self.cell_classes = cell_classes
-        self.analysis_func = analysis_func
-        self.display_func = display_func
-        self.summary_func = summary_func
         self.session = session
         self.win = MainWindow()
         self.win.show()
@@ -183,6 +158,7 @@ class MatrixAnalyzer(object):
 
     def update_matrix(self):
         project_names = self.win.filter_control_panel.selected_project_names()
+        matrix_analysis_name = self.win.filter_control_panel.selected_analyzer()
 
         # Select pairs (todo: age, acsf, internal, temp, etc.)
         self.pairs = query_pairs(project_name=project_names, session=self.session).all()
@@ -194,7 +170,8 @@ class MatrixAnalyzer(object):
         self.pair_groups = classify_pairs(self.pairs, cell_groups)
 
         # analyze matrix elements
-        results = self.analysis_func(self.pair_groups)
+        matrix_analysis = self.win.filter_control_panel.analyzers[matrix_analysis_name[0]](self.pair_groups)
+        results = matrix_analysis.measure()
 
         shape = (len(cell_groups),) * 2
         text = np.empty(shape, dtype=object)
@@ -207,7 +184,7 @@ class MatrixAnalyzer(object):
         self.matrix_map = {}
         for i,row in enumerate(cell_groups):
             for j,col in enumerate(cell_groups):
-                output = self.display_func(row, col, results[(row, col)])
+                output = matrix_analysis.display(row, col, results[(row, col)])
                 self.matrix_map[i, j] = (row, col)
                 text[i, j] = output['text']
                 fgcolor[i, j] = output['fgcolor']
@@ -227,7 +204,7 @@ class MatrixAnalyzer(object):
         self.win.matrix_widget.set_matrix_data(text=text, fgcolor=fgcolor, bgcolor=bgcolor, border_color=bordercolor,
                     rows=rows, cols=rows, size=50, header_color='k')
         
-        self.summary_func(self.pair_groups)
+        matrix_analysis.summary(results)
 
 
 if __name__ == '__main__':
@@ -280,5 +257,5 @@ if __name__ == '__main__':
     for cell_classes, title in [(mouse_cell_classes, 'Mouse'), (human_cell_classes, 'Human')]:
         cell_classes = [CellClass(**c) for c in cell_classes]
 
-        maz = MatrixAnalyzer(cell_classes, analysis_func=measure_connectivity, display_func=display_connectivity, summary_func=total_connectivity, title=title, session=session)
+        maz = MatrixAnalyzer(cell_classes, title=title, session=session)
         analyzers.append(maz)
