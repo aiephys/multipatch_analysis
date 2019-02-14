@@ -10,7 +10,7 @@ from collections import OrderedDict
 import numpy as np
 import pyqtgraph as pg
 from multipatch_analysis.database import database as db
-from multipatch_analysis.connectivity import query_pairs, measure_connectivity
+from multipatch_analysis.connectivity import query_pairs, measure_connectivity, total_connectivity
 from multipatch_analysis.connection_strength import ConnectionStrength, get_amps, get_baseline_amps
 from multipatch_analysis.morphology import Morphology
 from multipatch_analysis import constants
@@ -147,11 +147,12 @@ def display_connectivity(pre_class, post_class, result, show_confidence=True):
 
 
 class MatrixAnalyzer(object):
-    def __init__(self, cell_classes, analysis_func, display_func, title, session):
+    def __init__(self, cell_classes, analysis_func, display_func, summary_func, title, session):
         self.session = session
         self.cell_classes = cell_classes
         self.analysis_func = analysis_func
         self.display_func = display_func
+        self.summary_func = summary_func
         self.session = session
         self.win = MainWindow()
         self.win.show()
@@ -165,13 +166,14 @@ class MatrixAnalyzer(object):
             self.update_matrix()
 
     def display_connection_list(self, pre_class, post_class):
-        connections = self.results[(pre_class, post_class)]['connected_pairs']
+        results = measure_connectivity(self.pair_groups)
+        connections = results[(pre_class, post_class)]['connected_pairs']
         print ("Connection type: %s -> %s" % (pre_class, post_class))
         print ("Connected Pairs:")
         for connection in connections:
             print ("\t %s" % (connection))
-        probed_pairs = self.results[(pre_class, post_class)]['probed_pairs']
-        print ("Probed Pairs")
+        probed_pairs = results[(pre_class, post_class)]['probed_pairs']
+        print ("Probed Pairs:")
         for probed in probed_pairs:
             print ("\t %s" % (probed))
 
@@ -189,10 +191,10 @@ class MatrixAnalyzer(object):
         cell_groups = classify_cells(self.cell_classes, pairs=self.pairs)
 
         # Group pairs into (pre_class, post_class) groups
-        pair_groups = classify_pairs(self.pairs, cell_groups)
+        self.pair_groups = classify_pairs(self.pairs, cell_groups)
 
         # analyze matrix elements
-        self.results = self.analysis_func(pair_groups)
+        results = self.analysis_func(self.pair_groups)
 
         shape = (len(cell_groups),) * 2
         text = np.empty(shape, dtype=object)
@@ -201,15 +203,12 @@ class MatrixAnalyzer(object):
         bordercolor = np.empty(shape, dtype=object)
 
         # call display function on every matrix element
-        total_connected = 0
-        total_probed = 0
+        
         self.matrix_map = {}
         for i,row in enumerate(cell_groups):
             for j,col in enumerate(cell_groups):
-                output = self.display_func(row, col, self.results[(row, col)])
+                output = self.display_func(row, col, results[(row, col)])
                 self.matrix_map[i, j] = (row, col)
-                total_connected += self.results[(row, col)]['n_connected']
-                total_probed += self.results[(row, col)]['n_probed']
                 text[i, j] = output['text']
                 fgcolor[i, j] = output['fgcolor']
                 bgcolor[i, j] = output['bgcolor']
@@ -227,7 +226,8 @@ class MatrixAnalyzer(object):
 
         self.win.matrix_widget.set_matrix_data(text=text, fgcolor=fgcolor, bgcolor=bgcolor, border_color=bordercolor,
                     rows=rows, cols=rows, size=50, header_color='k')
-        print ("Total connected / probed        %d / %d" % (total_connected, total_probed))
+        
+        self.summary_func(self.pair_groups)
 
 
 if __name__ == '__main__':
@@ -280,5 +280,5 @@ if __name__ == '__main__':
     for cell_classes, title in [(mouse_cell_classes, 'Mouse'), (human_cell_classes, 'Human')]:
         cell_classes = [CellClass(**c) for c in cell_classes]
 
-        maz = MatrixAnalyzer(cell_classes, analysis_func=measure_connectivity, display_func=display_connectivity, title=title, session=session)
+        maz = MatrixAnalyzer(cell_classes, analysis_func=measure_connectivity, display_func=display_connectivity, summary_func=total_connectivity, title=title, session=session)
         analyzers.append(maz)

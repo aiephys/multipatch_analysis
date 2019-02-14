@@ -44,6 +44,15 @@ def connection_probability_ci(n_connected, n_probed):
     # make sure we are consistent about how we measure connectivity confidence intervals
     return proportion_confint(n_connected, n_probed, method='beta')
 
+def total_connectivity(pair_groups):
+    results = measure_connectivity(pair_groups)
+    total_connected = 0
+    total_probed = 0
+    for connectivity in results.values():
+        total_connected += connectivity['n_connected']
+        total_probed += connectivity['n_probed']
+
+    print ("Total connected / probed\t %d / %d" % (total_connected, total_probed))
 
 def query_pairs(project_name=None, acsf=None, age=None, species=None, distance=None, session=None):
     """Generate a query for selecting pairs from the database.
