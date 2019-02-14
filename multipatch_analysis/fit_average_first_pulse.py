@@ -9,7 +9,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import time
 from neuroanalysis.fitting import fit_psp
-#import FPFitting_DB_library as FPF_lib
 import datetime
 import os
 
@@ -35,7 +34,8 @@ class FirstPulseFitTableGroup(TableGroup):
             ('ic_latency', 'float', 'fit time elapsed since the time of presynaptic spike (max dv/dt) of current clamp data'),
             ('ic_rise_time', 'float', 'fit rise time of psp of current clamp data'),
             ('ic_decay_tau', 'float', 'fit decay of psp of current clamp data'),
-            ('ic_avg_psp', 'array', 'fit array of the best fit voltage waveform starting 10 ms before pre-synaptic spike'),
+            ('ic_avg_psp_data', 'array', 'array of the data voltage waveform used in fitting; starts 10 ms before pre-synaptic spike'),
+            ('ic_avg_psp_fit', 'array', 'fit array of the best fit voltage waveform starting 10 ms before pre-synaptic spike'),
             ('ic_dt', 'float', 'time step of *avg_psp* array from current clamp data'),
             ('ic_pulse_ids', 'object', 'data base pulse ids included in the current clamp fit'),
             ('ic_NRMSE', 'float', 'error of fit of current clamp fit'),
@@ -48,7 +48,8 @@ class FirstPulseFitTableGroup(TableGroup):
             ('vc_latency', 'float', 'fit time elapsed since the time of presynaptic spike (max dv/dt) of voltage clamp data'),
             ('vc_rise_time', 'float', 'fit rise time of psp measured in voltage clamp'),
             ('vc_decay_tau', 'float', 'fit decay of psp measured in voltage clamp'),
-            ('vc_avg_psp', 'array', 'fit array of the best fit current waveform starting 10 ms before pre-synaptic spike'),
+            ('vc_avg_psp_data', 'array', 'array of the data current waveform used in fitting; starts 10 ms before pre-synaptic spike'),            
+            ('vc_avg_psp_fit', 'array', 'fit array of the best fit current waveform starting 10 ms before pre-synaptic spike'),
             ('vc_dt', 'float', 'time step of *avg_psp* array from voltage clamp data'),
             ('vc_pulse_ids', 'object', 'data base pulse ids included in the voltage clamp fit'),
             ('vc_NRMSE', 'float', 'error of fit of voltage clamp fit'),
@@ -388,7 +389,7 @@ def compute_fit(job_info, raise_exceptions=False):
                         .join(pre_cell, db.Pair.pre_cell_id==pre_cell.id)\
                         .join(post_cell, db.Pair.post_cell_id==post_cell.id).filter(db.Experiment.acq_timestamp==expt_id).all()
     # make sure query returned something
-    if len(expt_stuff) <=0:
+    if len(expt_stuff) <= 0:
         print('No pairs found for expt_id=%f', expt_id)
         return
 
@@ -424,6 +425,7 @@ def compute_fit(job_info, raise_exceptions=False):
             amp_i = avg_fit_i.best_values['amp']
             rise_time_i = avg_fit_i.best_values['rise_time']
             decay_tau_i = avg_fit_i.best_values['decay_tau']
+            avg_data_waveform_i = avg_psp_i.data
             avg_fit_waveform_i = avg_fit_i.best_fit
             dt_i = avg_psp_i.dt
             nrmse_i = avg_fit_i.nrmse()
@@ -434,6 +436,7 @@ def compute_fit(job_info, raise_exceptions=False):
             amp_i = None
             rise_time_i = None
             decay_tau_i = None
+            avg_data_waveform_i = np.array([0])
             avg_fit_waveform_i = np.array([0])
             dt_i = None
             nrmse_i = None
@@ -451,6 +454,7 @@ def compute_fit(job_info, raise_exceptions=False):
             amp_v = avg_fit_v.best_values['amp']
             rise_time_v = avg_fit_v.best_values['rise_time']
             decay_tau_v = avg_fit_v.best_values['decay_tau']
+            avg_data_waveform_v = avg_psp_v.data
             avg_fit_waveform_v = avg_fit_v.best_fit
             dt_v = avg_psp_v.dt
             nrmse_v = avg_fit_v.nrmse()
@@ -462,6 +466,7 @@ def compute_fit(job_info, raise_exceptions=False):
             amp_v = None
             rise_time_v = None
             decay_tau_v = None
+            avg_data_waveform_v = np.array([0])
             avg_fit_waveform_v = np.array([0])
             dt_v = None
             nrmse_v = None
@@ -473,7 +478,8 @@ def compute_fit(job_info, raise_exceptions=False):
              'ic_latency': latency_i,
              'ic_rise_time': rise_time_i,
              'ic_decay_tau': decay_tau_i,
-             'ic_avg_psp': avg_fit_waveform_i,
+             'ic_avg_psp_data': avg_data_waveform_i,
+             'ic_avg_psp_fit': avg_fit_waveform_i,
              'ic_dt': dt_i,
              'ic_pulse_ids': pulse_ids_i,
              'ic_NRMSE': nrmse_i,
@@ -485,7 +491,8 @@ def compute_fit(job_info, raise_exceptions=False):
              'vc_latency': latency_v,
              'vc_rise_time': rise_time_v,
              'vc_decay_tau': decay_tau_v,
-             'vc_avg_psp': avg_fit_waveform_v,
+             'vc_avg_psp_data':avg_data_waveform_v,
+             'vc_avg_psp_fit': avg_fit_waveform_v,
              'vc_dt': dt_v,
              'vc_pulse_ids': pulse_ids_v,
              'vc_NRMSE': nrmse_v,
@@ -498,15 +505,16 @@ def compute_fit(job_info, raise_exceptions=False):
         if commiting is True:
             session.add(afpf)
             session.commit()
+            
+            # TODO: I guess I need to query expt before I do this
+            # expt.meta = expt.meta.copy()  # required by sqlalchemy to flag as modified
+            # expt.meta['avg_first_pulse_fit_timestamp'] = time.time()
+
+        print("COMMITED %i pairs from expt_id=%f: %d/%d" % (processed_count, expt_id, index, n_jobs))
 #---------------------------------------------------------------------------------------        
         processed_count=processed_count+1
         print('processed', processed_count+1)
 
-    # if commiting is True:
-    #     # pair.meta = pair.meta.copy()  # required by sqlalchemy to flag as modified
-    #     # pair.meta['avg_first_pulse_fit_timestamp'] = time.time()  
-
-        print("COMMITED %i pairs from expt_id=%f: %d/%d" % (processed_count, expt_id, index, n_jobs))
 
 if __name__=='__main__':
 
