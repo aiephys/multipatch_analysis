@@ -43,7 +43,17 @@ class ExperimentMetadataSubmission(object):
         expt_info = expt_dh.info()
         
         spec_name = slice_info['specimen_ID'].strip()
-        self.spec_info = lims.specimen_info(spec_name)
+
+        # slice project is specified
+        project = slice_info.get('project', '')
+        if project == '':
+            errors.append("Must specify slice.project")
+
+        if project in ["human_mFISH_pilot"]:
+            # Some projects may use specimens that are not tracked in LIMS
+            self.spec_info = None
+        else:
+            self.spec_info = lims.specimen_info(spec_name)
 
         
         # Do all categorized files actually exist?
@@ -160,21 +170,17 @@ class ExperimentMetadataSubmission(object):
                     warnings.append("Time of dissection is more than 10 hours prior to experiment")
 
         # check specimen age
-        if self.spec_info['age'] is None:
+        if self.spec_info is not None and self.spec_info['age'] is None:
             warnings.append("Donor age is not set in LIMS.")
 
         # Check specimen death was today
-        if self.spec_info['date_of_birth'] is not None:
+        if self.spec_info is not None and self.spec_info['date_of_birth'] is not None:
             dod = self.spec_info['date_of_birth'].date() + timedelta(self.spec_info['age'])
             days_since_death = (site_date.date() - dod).days
             if days_since_death > 0:
                 warnings.append("Specimen was dissected before today, likely need to update LabTracks info in LIMS")
             if days_since_death < 0:
                 warnings.append("Specimen is from the future, likely need to update LabTracks info in LIMS")
-
-        # slice project is specified
-        if slice_info.get('project', '') == '':
-            errors.append("Must specify slice.project")
 
         # Sanity checks on pipette metadata:
         
