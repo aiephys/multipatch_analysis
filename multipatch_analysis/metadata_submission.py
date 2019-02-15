@@ -33,6 +33,13 @@ class ExperimentMetadataSubmission(object):
         * warning if existing files are not mentioned in file list
         * warning if any metadata would be overwritten with a new value
         """
+
+        # Projects for which we do not require a LIMS specimen 
+        no_lims_specimen_projects = ["human_mFISH_pilot"]
+
+        # Projects for which we can skip dissection timing checks
+        no_dissection_time_projects = ["human_mFISH_pilot"]
+
         errors = []
         warnings = []
         
@@ -49,7 +56,7 @@ class ExperimentMetadataSubmission(object):
         if project == '':
             errors.append("Must specify slice.project")
 
-        if project in ["human_mFISH_pilot"]:
+        if project in no_lims_specimen_projects:
             # Some projects may use specimens that are not tracked in LIMS
             self.spec_info = None
         else:
@@ -143,7 +150,9 @@ class ExperimentMetadataSubmission(object):
         # Slice time ok?
         site_date = datetime.fromtimestamp(site_info['__timestamp__'])
         tod = expt_info.get('time_of_dissection', '')
-        if tod == '':
+        if project in no_dissection_time_projects:
+            pass
+        elif tod == '':
             warnings.append("Time of dissection not specified")
         else:
             m = re.match(r'((20\d{2})-(\d{1,2})-(\d{1,2}) )?(\d{1,2}):(\d{1,2})', tod)
@@ -204,15 +213,15 @@ class ExperimentMetadataSubmission(object):
             # Does the selected dye overlap with cre reporters?
 
         
-        # If slice was not fixed, don't attempt LIMS submission
-        try:
-            sid = lims.specimen_id_from_name(spec_name)
-        except ValueError as err:
-            errors.append(err.message)
-            sid = None
-
-        if slice_info['plate_well_ID'] != 'not fixed' and sid is not None:
-            self._check_lims(errors, warnings, spec_name, sid, site_info, slice_info)
+        if project not in no_lims_specimen_projects:
+            # If slice was not fixed, don't attempt LIMS submission
+            try:
+                sid = lims.specimen_id_from_name(spec_name)
+            except ValueError as err:
+                errors.append(err.message)
+                sid = None
+            if slice_info['plate_well_ID'] != 'not fixed' and sid is not None:
+                self._check_lims(errors, warnings, spec_name, sid, site_info, slice_info)
         
 
         # Attempt import of old-format metadata
