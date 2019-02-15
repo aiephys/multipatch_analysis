@@ -26,37 +26,80 @@ class MainWindow(pg.QtGui.QWidget):
         self.h_splitter = pg.QtGui.QSplitter()
         self.h_splitter.setOrientation(pg.QtCore.Qt.Horizontal)
         self.layout.addWidget(self.h_splitter, 0, 0)
+        self.control_panel_splitter = pg.QtGui.QSplitter()
+        self.control_panel_splitter.setOrientation(pg.QtCore.Qt.Vertical)
+        self.h_splitter.addWidget(self.control_panel_splitter)
+        self.update_button = pg.QtGui.QPushButton("Update Matrix")
+        self.control_panel_splitter.addWidget(self.update_button)
+        self.analysis_control_panel = AnalysisControlPanel()
+        self.control_panel_splitter.addWidget(self.analysis_control_panel)
+        self.cell_class_control_panel = CellClassControlPanel(cell_class_groups)
+        self.control_panel_splitter.addWidget(self.cell_class_control_panel)
         self.filter_control_panel = FilterControlPanel()
-        self.h_splitter.addWidget(self.filter_control_panel)
+        self.control_panel_splitter.addWidget(self.filter_control_panel)
         self.matrix_widget = MatrixWidget()
         self.h_splitter.addWidget(self.matrix_widget)
-        self.v_splitter = pg.QtGui.QSplitter()
-        self.v_splitter.setOrientation(pg.QtCore.Qt.Vertical)
-        self.h_splitter.addWidget(self.v_splitter)
+        self.plot_splitter = pg.QtGui.QSplitter()
+        self.plot_splitter.setOrientation(pg.QtCore.Qt.Vertical)
+        self.h_splitter.addWidget(self.plot_splitter)
         self.scatter_plot = ScatterPlot()
         self.trace_plot = TracePlot()
-        self.v_splitter.addWidget(self.scatter_plot)
-        self.v_splitter.addWidget(self.trace_plot)
+        self.plot_splitter.addWidget(self.scatter_plot)
+        self.plot_splitter.addWidget(self.trace_plot)
 
-class FilterControlPanel(pg.QtGui.QWidget):
-    def __init__(self):
+
+class CellClassControlPanel(pg.QtGui.QWidget):
+    def __init__(self, cell_class_groups):
         pg.QtGui.QWidget.__init__(self)
         self.layout = pg.QtGui.QVBoxLayout()
         self.setLayout(self.layout)
-        self.update_button = pg.QtGui.QPushButton("Update Matrix")
-        self.layout.addWidget(self.update_button)
+        self.cell_class_list = pg.QtGui.QListWidget()
+        self.layout.addWidget(self.cell_class_list)
+        self.cell_class_groups = cell_class_groups.keys()
+        for cell_class_group in self.cell_class_groups:
+            cell_class_item = pg.QtGui.QListWidgetItem(cell_class_group)
+            cell_class_item.setFlags(cell_class_item.flags() | pg.QtCore.Qt.ItemIsSelectable)
+            self.cell_class_list.addItem(cell_class_item)
+
+    def selected_cell_class_group(self):
+        n_cell_class_groups = self.cell_class_list.count()
+        for n in range(n_cell_class_groups):
+            cell_class_item = self.cell_class_list.item(n)
+            if cell_class_item.isSelected():
+                cell_class_group = str(cell_class_item.text())
+                cell_classes = cell_class_groups[cell_class_group]
+            return cell_classes
+
+
+class AnalysisControlPanel(pg.QtGui.QWidget):
+    def __init__(self):
+        pg.QtGui.QWidget.__init__(self)
         self.analyzer_list = pg.QtGui.QListWidget()
+        self.layout = pg.QtGui.QVBoxLayout()
+        self.setLayout(self.layout)
         self.layout.addWidget(self.analyzer_list)
-        self.project_list = pg.QtGui.QListWidget()
-        self.layout.addWidget(self.project_list)
-        
-        self.analyzers = {'Connectivity': ConnectivityAnalyzer}
+        self.analyzers = {'Connectivity': ConnectivityAnalyzer, 'Strength': ConnectivityAnalyzer}
         for analyzer in self.analyzers.keys():
             analyzer_item = pg.QtGui.QListWidgetItem(analyzer)
-            analyzer_item.setFlags(analyzer_item.flags() | pg.QtCore.Qt.ItemIsUserCheckable)
-            analyzer_item.setCheckState(pg.QtCore.Qt.Unchecked)
+            analyzer_item.setFlags(analyzer_item.flags() | pg.QtCore.Qt.ItemIsSelectable)
             self.analyzer_list.addItem(analyzer_item)
 
+    def selected_analyzer(self):
+        n_analyzers = self.analyzer_list.count()
+        for n in range(n_analyzers):
+            analyzer_item = self.analyzer_list.item(n)
+            if analyzer_item.isSelected():
+                analyzer = str(analyzer_item.text())
+        return analyzer
+
+
+class FilterControlPanel(pg.QtGui.QWidget):
+    def __init__(self): 
+        pg.QtGui.QWidget.__init__(self)
+        self.project_list = pg.QtGui.QListWidget()
+        self.layout = pg.QtGui.QVBoxLayout()
+        self.setLayout(self.layout)
+        self.layout.addWidget(self.project_list)   
         s = db.Session()
         projects = s.query(db.Experiment.project_name).distinct().all()
         for record in projects:
@@ -77,21 +120,9 @@ class FilterControlPanel(pg.QtGui.QWidget):
 
         return project_names
 
-    def selected_analyzer(self):
-        n_analyzers = self.analyzer_list.count()
-        analyzer = []
-        for n in range(n_analyzers):
-            analyzer_item = self.analyzer_list.item(n)
-            check_state = analyzer_item.checkState()
-            if check_state == pg.QtCore.Qt.Checked:
-                analyzer.append(str(analyzer_item.text()))
-        if len(analyzer) != 1:
-            raise Exception ("Must select one and only one Matrix Analyzer")
-
-        return analyzer
 
 class MatrixWidget(pg.GraphicsLayoutWidget):
-    sigClicked = pg.QtCore.Signal(object, object, object, object) # self, matrix_widget, row, col
+    sigClicked = pg.QtCore.Signal(object, object, object, object) # self, matrix_item, row, col
     def __init__(self):
         pg.GraphicsLayoutWidget.__init__(self)
         self.setRenderHints(self.renderHints() | pg.QtGui.QPainter.Antialiasing)
@@ -111,29 +142,30 @@ class MatrixWidget(pg.GraphicsLayoutWidget):
         self.matrix.sigClicked.connect(self.matrix_element_clicked)
         self.view_box.addItem(self.matrix)
 
-    def matrix_element_clicked(self, matrix_widget, event, row, col):
+    def matrix_element_clicked(self, matrix_item, event, row, col):
         self.sigClicked.emit(self, event, row, col) 
+
 
 class ScatterPlot(pg.GraphicsLayoutWidget):
     def __init__(self):
         pg.GraphicsLayoutWidget.__init__(self)
         self.setRenderHints(self.renderHints() | pg.QtGui.QPainter.Antialiasing)
 
+
 class TracePlot(pg.GraphicsLayoutWidget):
     def __init__(self):
         pg.GraphicsLayoutWidget.__init__(self)
         self.setRenderHints(self.renderHints() | pg.QtGui.QPainter.Antialiasing)
 
+
 class MatrixAnalyzer(object):
-    def __init__(self, cell_classes, title, session):
-        self.session = session
-        self.cell_classes = cell_classes
+    def __init__(self, session):
         self.session = session
         self.win = MainWindow()
         self.win.show()
-        self.win.setWindowTitle(title)
+        self.win.setWindowTitle('Matrix Analyzer')
 
-        self.win.filter_control_panel.update_button.clicked.connect(self.update_clicked)
+        self.win.update_button.clicked.connect(self.update_clicked)
         self.win.matrix_widget.sigClicked.connect(self.display_matrix_element_data)
 
     def update_clicked(self):
@@ -157,20 +189,26 @@ class MatrixAnalyzer(object):
         self.element_connection_list(pre_class, post_class)
 
     def update_matrix(self):
-        project_names = self.win.filter_control_panel.selected_project_names()
-        matrix_analysis_name = self.win.filter_control_panel.selected_analyzer()
-
+        acp = self.win.analysis_control_panel
+        cccp = self.win.cell_class_control_panel
+        fcp = self.win.filter_control_panel
+        
+        matrix_analysis_name = acp.selected_analyzer()
+        cell_classes = cccp.selected_cell_class_group()
+        cell_classes = [CellClass(**c) for c in cell_classes]
+        project_names = fcp.selected_project_names()
+        
         # Select pairs (todo: age, acsf, internal, temp, etc.)
         self.pairs = query_pairs(project_name=project_names, session=self.session).all()
 
         # Group all cells by selected classes
-        cell_groups = classify_cells(self.cell_classes, pairs=self.pairs)
+        cell_groups = classify_cells(cell_classes, pairs=self.pairs)
 
         # Group pairs into (pre_class, post_class) groups
         self.pair_groups = classify_pairs(self.pairs, cell_groups)
 
         # analyze matrix elements
-        matrix_analysis = self.win.filter_control_panel.analyzers[matrix_analysis_name[0]](self.pair_groups)
+        matrix_analysis = acp.analyzers[matrix_analysis_name](self.pair_groups)
         results = matrix_analysis.measure()
 
         shape = (len(cell_groups),) * 2
@@ -194,7 +232,7 @@ class MatrixAnalyzer(object):
         # Force cell class descriptions down to tuples of 2 items
         # Kludgy, but works for now.
         rows = []
-        for cell_class in self.cell_classes:
+        for cell_class in cell_classes:
             tup = cell_class.as_tuple
             row = tup[:1]
             if len(tup) > 1:
@@ -215,47 +253,44 @@ if __name__ == '__main__':
     session = db.Session()
     
     # Define cell classes
+    cell_class_groups = {
+        'Mouse E/I Cre-type by layer': [
+            # {'cre_type': 'unknown', 'pyramidal': True, 'target_layer': '2/3'},
+            # {'cre_type': 'unknown', 'target_layer': '2/3'},
+            # {'pyramidal': True, 'target_layer': '2/3'},
+            {'pyramidal': True, 'target_layer': '2/3'},
+            {'cre_type': 'pvalb', 'target_layer': '2/3'},
+            {'cre_type': 'sst', 'target_layer': '2/3'},
+            {'cre_type': 'vip', 'target_layer': '2/3'},
+            {'cre_type': 'rorb', 'target_layer': '4'},
+            {'cre_type': 'nr5a1', 'target_layer': '4'},
+            {'cre_type': 'pvalb', 'target_layer': '4'},
+            {'cre_type': 'sst', 'target_layer': '4'},
+            {'cre_type': 'vip', 'target_layer': '4'},
+            {'cre_type': 'sim1', 'target_layer': '5'},
+            {'cre_type': 'tlx3', 'target_layer': '5'},
+            {'cre_type': 'pvalb', 'target_layer': '5'},
+            {'cre_type': 'sst', 'target_layer': '5'},
+            {'cre_type': 'vip', 'target_layer': '5'},
+            {'cre_type': 'ntsr1', 'target_layer': '6'},
+            {'cre_type': 'pvalb', 'target_layer': '6'},
+            {'cre_type': 'sst', 'target_layer': '6'},
+            {'cre_type': 'vip', 'target_layer': '6'},
+        ],
 
-    mouse_cell_classes = [
-        # {'cre_type': 'unknown', 'pyramidal': True, 'target_layer': '2/3'},
-        # {'cre_type': 'unknown', 'target_layer': '2/3'},
-        # {'pyramidal': True, 'target_layer': '2/3'},
-        {'pyramidal': True, 'target_layer': '2/3'},
-        {'cre_type': 'pvalb', 'target_layer': '2/3'},
-        {'cre_type': 'sst', 'target_layer': '2/3'},
-        {'cre_type': 'vip', 'target_layer': '2/3'},
-        {'cre_type': 'rorb', 'target_layer': '4'},
-        {'cre_type': 'nr5a1', 'target_layer': '4'},
-        {'cre_type': 'pvalb', 'target_layer': '4'},
-        {'cre_type': 'sst', 'target_layer': '4'},
-        {'cre_type': 'vip', 'target_layer': '4'},
-        {'cre_type': 'sim1', 'target_layer': '5'},
-        {'cre_type': 'tlx3', 'target_layer': '5'},
-        {'cre_type': 'pvalb', 'target_layer': '5'},
-        {'cre_type': 'sst', 'target_layer': '5'},
-        {'cre_type': 'vip', 'target_layer': '5'},
-        {'cre_type': 'ntsr1', 'target_layer': '6'},
-        {'cre_type': 'pvalb', 'target_layer': '6'},
-        {'cre_type': 'sst', 'target_layer': '6'},
-        {'cre_type': 'vip', 'target_layer': '6'},
-    ]
+        'Pyramidal by layer': [
+            {'pyramidal': True, 'target_layer': '2'},
+            {'pyramidal': False, 'target_layer': '2'},
+            {'pyramidal': True, 'target_layer': '3'},
+            {'pyramidal': False, 'target_layer': '3'},
+            {'pyramidal': True, 'target_layer': '4'},
+            {'pyramidal': False, 'target_layer': '4'},
+            {'pyramidal': True, 'target_layer': '5'},
+            {'pyramidal': False, 'target_layer': '5'},
+            {'pyramidal': True, 'target_layer': '6'},
+            {'pyramidal': False, 'target_layer': '6'},
+        ],
+    }
 
-    human_cell_classes = [
-        {'pyramidal': True, 'target_layer': '2'},
-        {'pyramidal': False, 'target_layer': '2'},
-        {'pyramidal': True, 'target_layer': '3'},
-        {'pyramidal': False, 'target_layer': '3'},
-        {'pyramidal': True, 'target_layer': '4'},
-        {'pyramidal': False, 'target_layer': '4'},
-        {'pyramidal': True, 'target_layer': '5'},
-        {'pyramidal': False, 'target_layer': '5'},
-        {'pyramidal': True, 'target_layer': '6'},
-        {'pyramidal': False, 'target_layer': '6'},
-    ]
 
-    analyzers = []
-    for cell_classes, title in [(mouse_cell_classes, 'Mouse'), (human_cell_classes, 'Human')]:
-        cell_classes = [CellClass(**c) for c in cell_classes]
-
-        maz = MatrixAnalyzer(cell_classes, title=title, session=session)
-        analyzers.append(maz)
+    maz = MatrixAnalyzer(session=session)
