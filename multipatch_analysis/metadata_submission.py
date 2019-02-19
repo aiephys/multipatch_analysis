@@ -325,11 +325,12 @@ class ExperimentMetadataSubmission(object):
             
         # Write LIMS info to top-level and slice directory handles.
         # This is just for convenience when browsing the raw data.
-        slice_info = self.spec_info.copy()
-        donor_keys = ['organism', 'age', 'date_of_birth', 'genotype', 'weight', 'sex']
-        donor_info = {k:slice_info.pop(k) for k in donor_keys}
-        expt_dh.setInfo(LIMS_donor_info=donor_info)
-        slice_dh.setInfo(LIMS_specimen_info=slice_info)
+        if self.spec_info is not None:
+            slice_info = self.spec_info.copy()
+            donor_keys = ['organism', 'age', 'date_of_birth', 'genotype', 'weight', 'sex']
+            donor_info = {k:slice_info.pop(k) for k in donor_keys}
+            expt_dh.setInfo(LIMS_donor_info=donor_info)
+            slice_dh.setInfo(LIMS_specimen_info=slice_info)
             
         # Write category labels for each image
         for file_info in self.files:
