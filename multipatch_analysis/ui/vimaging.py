@@ -329,7 +329,7 @@ class VImagingAnalyzer2(QtGui.QWidget):
         test_diff = test[:,0] - test[:,1]
 
         self.diff_img = test_diff - base_diff
-        self.imv1.setImage(self.diff_img)
+        self.imv1.setImage(ndimage.median_filter(self.diff_img, (3, 3, 3)))
 
     def clear_plot_data(self):
         for item in self.plot_data:

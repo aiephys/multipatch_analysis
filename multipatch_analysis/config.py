@@ -19,6 +19,8 @@ rig_name = None
 n_headstages = 8
 raw_data_paths = []
 rig_data_paths = {}
+known_addrs = {}
+import_old_data_on_submission = False
 
 
 template = r"""
@@ -27,7 +29,7 @@ synphys_db_host: "postgresql://readonly:readonly@10.128.36.109"
 synphys_db: "synphys"
 # optional DB access with write privileges
 synphys_db_host_rw: null
-synphys_db_readonly_user = "readonly"
+synphys_db_readonly_user: "readonly"
 
 # path to synphys network storage
 synphys_data: "N:\\"

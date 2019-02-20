@@ -113,6 +113,8 @@ REPORTER_LINES = {                # dependencies             products
     'Ai167(TIT2L-ChrimsonR-tdT-ICL-tTA2)': [
                                    (['cre'],                  ['ChrimsonR', 'tdTomato'])],
     'Snap25-LSL-F2A-GFP':         [(['cre'],                  ['EGFP'])],
+    'Ai193-hyg-440167':           [(['cre'],                  ['EGFP']),
+                                   (['flp'],                  ['tdTomato'])],
 }
 
 
