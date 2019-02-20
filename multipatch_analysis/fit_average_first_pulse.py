@@ -518,7 +518,7 @@ def compute_fit(job_info, raise_exceptions=False):
 
 if __name__=='__main__':
 
-    first_pulse_fit_tables.drop_tables() #note this will drop all the tables here!
+#    first_pulse_fit_tables.drop_tables() #note this will drop all the tables here!
     init_tables()
 #    update_DB(limit=None, expts=[1533768797.736], parallel=False, workers=6, raise_exceptions=False, session=None)
 
