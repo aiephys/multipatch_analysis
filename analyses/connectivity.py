@@ -10,12 +10,14 @@ from collections import OrderedDict
 import numpy as np
 import pyqtgraph as pg
 from multipatch_analysis.database import database as db
-from multipatch_analysis.connectivity import query_pairs, ConnectivityAnalyzer
+from multipatch_analysis.connectivity import query_pairs, ConnectivityAnalyzer, StrengthAnalyzer
 from multipatch_analysis.connection_strength import ConnectionStrength, get_amps, get_baseline_amps
 from multipatch_analysis.morphology import Morphology
 from multipatch_analysis import constants
 from multipatch_analysis.cell_class import CellClass, classify_cells, classify_pairs
 from multipatch_analysis.ui.graphics import MatrixItem
+from pyqtgraph import parametertree as ptree
+from pyqtgraph.parametertree import Parameter
 
 
 class MainWindow(pg.QtGui.QWidget):
@@ -31,12 +33,8 @@ class MainWindow(pg.QtGui.QWidget):
         self.h_splitter.addWidget(self.control_panel_splitter)
         self.update_button = pg.QtGui.QPushButton("Update Matrix")
         self.control_panel_splitter.addWidget(self.update_button)
-        self.analysis_control_panel = AnalysisControlPanel()
-        self.control_panel_splitter.addWidget(self.analysis_control_panel)
-        self.cell_class_control_panel = CellClassControlPanel(cell_class_groups)
-        self.control_panel_splitter.addWidget(self.cell_class_control_panel)
-        self.filter_control_panel = FilterControlPanel()
-        self.control_panel_splitter.addWidget(self.filter_control_panel)
+        self.ptree = ptree.ParameterTree(showHeader=False)
+        self.control_panel_splitter.addWidget(self.ptree)
         self.matrix_widget = MatrixWidget()
         self.h_splitter.addWidget(self.matrix_widget)
         self.plot_splitter = pg.QtGui.QSplitter()
@@ -46,79 +44,122 @@ class MainWindow(pg.QtGui.QWidget):
         self.trace_plot = TracePlot()
         self.plot_splitter.addWidget(self.scatter_plot)
         self.plot_splitter.addWidget(self.trace_plot)
+        self.h_splitter.setSizes([150, 300, 150])
 
 
-class CellClassControlPanel(pg.QtGui.QWidget):
-    def __init__(self, cell_class_groups):
-        pg.QtGui.QWidget.__init__(self)
-        self.layout = pg.QtGui.QVBoxLayout()
-        self.setLayout(self.layout)
-        self.cell_class_list = pg.QtGui.QListWidget()
-        self.layout.addWidget(self.cell_class_list)
-        self.cell_class_groups = cell_class_groups.keys()
-        for cell_class_group in self.cell_class_groups:
-            cell_class_item = pg.QtGui.QListWidgetItem(cell_class_group)
-            cell_class_item.setFlags(cell_class_item.flags() | pg.QtCore.Qt.ItemIsSelectable)
-            self.cell_class_list.addItem(cell_class_item)
+class SignalHandler(pg.QtCore.QObject):
+        """Because we can't subclass from both QObject and QGraphicsRectItem at the same time
+        """
+        sigOutputChanged = pg.QtCore.Signal(object) #self
 
-    def selected_cell_class_group(self):
-        n_cell_class_groups = self.cell_class_list.count()
-        for n in range(n_cell_class_groups):
-            cell_class_item = self.cell_class_list.item(n)
-            if cell_class_item.isSelected():
-                cell_class_group = str(cell_class_item.text())
-                cell_classes = cell_class_groups[cell_class_group]
-            return cell_classes
+class ExperimentFilter(object):
 
-
-class AnalysisControlPanel(pg.QtGui.QWidget):
-    def __init__(self):
-        pg.QtGui.QWidget.__init__(self)
-        self.analyzer_list = pg.QtGui.QListWidget()
-        self.layout = pg.QtGui.QVBoxLayout()
-        self.setLayout(self.layout)
-        self.layout.addWidget(self.analyzer_list)
-        self.analyzers = {'Connectivity': ConnectivityAnalyzer, 'Strength': ConnectivityAnalyzer}
-        for analyzer in self.analyzers.keys():
-            analyzer_item = pg.QtGui.QListWidgetItem(analyzer)
-            analyzer_item.setFlags(analyzer_item.flags() | pg.QtCore.Qt.ItemIsSelectable)
-            self.analyzer_list.addItem(analyzer_item)
-
-    def selected_analyzer(self):
-        n_analyzers = self.analyzer_list.count()
-        for n in range(n_analyzers):
-            analyzer_item = self.analyzer_list.item(n)
-            if analyzer_item.isSelected():
-                analyzer = str(analyzer_item.text())
-        return analyzer
-
-
-class FilterControlPanel(pg.QtGui.QWidget):
-    def __init__(self): 
-        pg.QtGui.QWidget.__init__(self)
-        self.project_list = pg.QtGui.QListWidget()
-        self.layout = pg.QtGui.QVBoxLayout()
-        self.setLayout(self.layout)
-        self.layout.addWidget(self.project_list)   
+    def __init__(self):  
         s = db.Session()
+        self._signalHandler = SignalHandler()
+        self.sigOutputChanged = self._signalHandler.sigOutputChanged
+        self.pairs = None
+        self.acsf = None
         projects = s.query(db.Experiment.project_name).distinct().all()
-        for record in projects:
-            project = record[0]
-            project_item = pg.QtGui.QListWidgetItem(project)
-            project_item.setFlags(project_item.flags() | pg.QtCore.Qt.ItemIsUserCheckable)
-            project_item.setCheckState(pg.QtCore.Qt.Unchecked)
-            self.project_list.addItem(project_item)
+        project_list = [{'name': str(record[0]), 'type': 'bool'} for record in projects]
+        acsf = s.query(db.Experiment.acsf).distinct().all()
+        acsf_list = [{'name': str(record[0]), 'type': 'bool'} for record in acsf]
+        self.params = Parameter.create(name='Data Filters', type='group', children=[
+            {'name': 'Projects', 'type': 'group', 'children':project_list},
+            {'name': 'ACSF', 'type': 'group', 'children':acsf_list},
+        ])
+        self.params.sigTreeStateChanged.connect(self.invalidate_output)
 
-    def selected_project_names(self):
-        n_projects = self.project_list.count()
-        project_names = []
-        for n in range(n_projects):
-            project_item = self.project_list.item(n)
-            check_state = project_item.checkState()
-            if check_state == pg.QtCore.Qt.Checked:
-                project_names.append(str(project_item.text()))
+    def get_pair_list(self, session):
+        """ Given a set of user selected experiment filters, return a list of pairs.
+        Internally uses multipatch_analysis.connectivity.query_pairs.
+        """
+        if self.pairs is None:
+            project_names = [child.name() for child in self.params.child('Projects').children() if child.value() is True]
+            project_names = project_names if len(project_names) > 0 else None 
+            acsf_recipes = [child.name() for child in self.params.child('ACSF').children() if child.value() is True]
+            acsf_recipes = acsf_recipes if len(acsf_recipes) > 0 else None 
+            self.pairs = query_pairs(project_name=project_names, acsf=acsf_recipes, session=session).all()
+        return self.pairs
 
-        return project_names
+    def invalidate_output(self):
+        self.pairs = None
+        self.sigOutputChanged.emit(self)
+
+class CellClassFilter(object):
+    def __init__(self, cell_class_groups):
+        self.cell_groups = None
+        self.cell_classes = None
+        self._signalHandler = SignalHandler()
+        self.sigOutputChanged = self._signalHandler.sigOutputChanged
+        self.experiment_filter = ExperimentFilter() 
+        self.cell_class_groups = cell_class_groups.keys()
+        cell_group_list = [{'name': group, 'type': 'bool'} for group in self.cell_class_groups]
+        self.params = Parameter.create(name="Cell Classes", type="group", children=cell_group_list)
+
+        self.params.sigTreeStateChanged.connect(self.invalidate_output)
+
+    def get_cell_groups(self, pairs):
+        """Given a list of cell pairs, return a dict indicating which cells
+        are members of each user selected cell class.
+        This internally calls cell_class.classify_cells
+        """
+        if self.cell_groups is None:
+            self.cell_classes = []
+            for group in self.params.children():
+                if group.value() is True:
+                    self.cell_classes.extend(cell_class_groups[group.name()]) 
+            self.cell_classes = [CellClass(**c) for c in self.cell_classes]
+            self.cell_groups = classify_cells(self.cell_classes, pairs=pairs)
+        return self.cell_groups, self.cell_classes
+
+    def invalidate_output(self):
+        self.cell_groups = None
+        self.cell_classes = None
+
+
+class Analysis(object):
+    def __init__(self):
+        self.analyzer = None
+        self._signalHandler = SignalHandler()
+        self.sigOutputChanged = self._signalHandler.sigOutputChanged
+        self.analyzers = {'Connectivity': ConnectivityAnalyzer, 'Strength': StrengthAnalyzer}
+        analyzer_list = [{'name': 'Analysis', 'type': 'list', 'values': self.analyzers.keys()}]
+        self.params = Parameter.create(name='Analyzers', type='group', children=analyzer_list)
+
+        self.params.sigTreeStateChanged.connect(self.invalidate_output)
+
+    def get_analyzer(self):
+        if self.analyzer is None:
+            analyzer_key = self.params.children()[0].value()
+            self.analyzer = self.analyzers[analyzer_key]
+        return self.analyzer
+
+    def invalidate_output(self):
+        self.analyzer = None
+
+
+class DisplayFilter(object):
+    def __init__(self):
+        self.displays = None
+        self._signalHandler = SignalHandler()
+        self.sigOutputChanged = self._signalHandler.sigOutputChanged
+        self.params = Parameter.create(name='Display Options', type='group', children=[
+            {'name': 'Matrix Color Gradient', 'type': 'colormap', 'value': pg.ColorMap(
+            [0, 0.01, 0.03, 0.1, 0.3, 1.0],
+            [(0,0,100), (80,0,80), (140,0,0), (255,100,0), (255,255,100), (255,255,255)])},
+            {'name': 'Shade by CI', 'type': 'bool', 'value': True},
+            {'name': 'Periodic Table Style', 'type': 'bool', 'value': False},
+        ])
+
+        self.params.sigTreeStateChanged.connect(self.invalidate_output)
+        
+        # def get_displays(self):
+        #     if self.displays is None:
+        #         self.disp
+
+    def invalidate_output(self):
+        self.displays = None
 
 
 class MatrixWidget(pg.GraphicsLayoutWidget):
@@ -161,12 +202,29 @@ class TracePlot(pg.GraphicsLayoutWidget):
 class MatrixAnalyzer(object):
     def __init__(self, session):
         self.session = session
+
+        self.experiment_filter = ExperimentFilter()
+        self.cell_class_filter = CellClassFilter(cell_class_groups)
+        self.analysis = Analysis()
+        self.display_filter = DisplayFilter()
+        self.params = ptree.Parameter.create(name='params', type='group', children=[
+            self.experiment_filter.params, 
+            self.cell_class_filter.params, 
+            self.analysis.params, 
+            self.display_filter.params
+        ])
+
         self.win = MainWindow()
         self.win.show()
+        self.win.resize(1500, 800)
         self.win.setWindowTitle('Matrix Analyzer')
+        self.win.ptree.setParameters(self.params, showTop=False)
 
         self.win.update_button.clicked.connect(self.update_clicked)
         self.win.matrix_widget.sigClicked.connect(self.display_matrix_element_data)
+        self.experiment_filter.sigOutputChanged.connect(self.cell_class_filter.invalidate_output)
+        self.cell_class_filter.sigOutputChanged.connect(self.analysis.invalidate_output)
+        self.analysis.sigOutputChanged.connect(self.display_filter.invalidate_output)
 
     def update_clicked(self):
         with pg.BusyCursor():
@@ -189,26 +247,19 @@ class MatrixAnalyzer(object):
         self.element_connection_list(pre_class, post_class)
 
     def update_matrix(self):
-        acp = self.win.analysis_control_panel
-        cccp = self.win.cell_class_control_panel
-        fcp = self.win.filter_control_panel
-        
-        matrix_analysis_name = acp.selected_analyzer()
-        cell_classes = cccp.selected_cell_class_group()
-        cell_classes = [CellClass(**c) for c in cell_classes]
-        project_names = fcp.selected_project_names()
-        
         # Select pairs (todo: age, acsf, internal, temp, etc.)
-        self.pairs = query_pairs(project_name=project_names, session=self.session).all()
+        self.pairs = self.experiment_filter.get_pair_list(self.session)
 
         # Group all cells by selected classes
-        cell_groups = classify_cells(cell_classes, pairs=self.pairs)
+        cell_groups, cell_classes = self.cell_class_filter.get_cell_groups(self.pairs)
+        
 
         # Group pairs into (pre_class, post_class) groups
         self.pair_groups = classify_pairs(self.pairs, cell_groups)
 
         # analyze matrix elements
-        matrix_analysis = acp.analyzers[matrix_analysis_name](self.pair_groups)
+        analyzer = self.analysis.get_analyzer()
+        matrix_analysis = analyzer(self.pair_groups)
         results = matrix_analysis.measure()
 
         shape = (len(cell_groups),) * 2
@@ -254,7 +305,7 @@ if __name__ == '__main__':
     
     # Define cell classes
     cell_class_groups = {
-        'Mouse E/I Cre-type by layer': [
+        'Mouse All Cre-types by layer': [
             # {'cre_type': 'unknown', 'pyramidal': True, 'target_layer': '2/3'},
             # {'cre_type': 'unknown', 'target_layer': '2/3'},
             # {'pyramidal': True, 'target_layer': '2/3'},
@@ -262,7 +313,7 @@ if __name__ == '__main__':
             {'cre_type': 'pvalb', 'target_layer': '2/3'},
             {'cre_type': 'sst', 'target_layer': '2/3'},
             {'cre_type': 'vip', 'target_layer': '2/3'},
-            {'cre_type': 'rorb', 'target_layer': '4'},
+           # {'cre_type': 'rorb', 'target_layer': '4'},
             {'cre_type': 'nr5a1', 'target_layer': '4'},
             {'cre_type': 'pvalb', 'target_layer': '4'},
             {'cre_type': 'sst', 'target_layer': '4'},
@@ -278,7 +329,7 @@ if __name__ == '__main__':
             {'cre_type': 'vip', 'target_layer': '6'},
         ],
 
-        'Pyramidal by layer': [
+        'Pyramidal / Nonpyramidal by layer': [
             {'pyramidal': True, 'target_layer': '2'},
             {'pyramidal': False, 'target_layer': '2'},
             {'pyramidal': True, 'target_layer': '3'},

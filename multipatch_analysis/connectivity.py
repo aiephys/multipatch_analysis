@@ -18,7 +18,6 @@ class ConnectivityAnalyzer(object):
     def __init__(self, pair_groups):
         self.pair_groups = pair_groups
 
-
     def measure(self):
         """Given a list of cell pairs and a dict that groups cells together by class,
         return a structure that describes connectivity between cell classes.
@@ -45,7 +44,7 @@ class ConnectivityAnalyzer(object):
         
         return results
 
-    def display(self, pre_class, post_class, result, show_confidence=True):
+    def display(self, pre_class, post_class, result):
         # Print results
         print("{pre_class:>20s} -> {post_class:20s} {connections_found:>5s} / {connections_probed}".format(
             pre_class=pre_class.name, 
@@ -61,31 +60,8 @@ class ConnectivityAnalyzer(object):
         )
 
         connectivity, lower_ci, upper_ci = result['connection_probability']
-
-        if show_confidence:
-            output = {'bordercolor': 0.6}
-            default_bgcolor = np.array([128., 128., 128.])
-        else:
-            output = {'bordercolor': 0.8}
-            default_bgcolor = np.array([220., 220., 220.])
-        
-        if np.isnan(connectivity):
-            output['bgcolor'] = tuple(default_bgcolor)
-            output['fgcolor'] = 0.6
-            output['text'] = ''
-        else:
-            # get color based on connectivity
-            color = colormap.map(connectivity)
-            
-            # desaturate low confidence cells
-            if show_confidence:
-                confidence = (1.0 - (upper_ci - lower_ci)) ** 2
-                color = color * confidence + default_bgcolor * (1.0 - confidence)
-            
-            # invert text color for dark background
-            output['fgcolor'] = 'w' if sum(color[:3]) < 384 else 'k'
-            output['text'] = "%d/%d" % (result['n_connected'], result['n_probed'])
-            output['bgcolor'] = tuple(color)
+        text = "%d/%d" % (result['n_connected'], result['n_probed'])
+        output = set_display(connectivity, text, colormap, upper_ci=upper_ci, lower_ci=lower_ci)
 
         return output
 
@@ -99,11 +75,54 @@ class ConnectivityAnalyzer(object):
         print ("Total connected / probed\t %d / %d" % (total_connected, total_probed))
 
 
+class StrengthAnalyzer(object):
+    def __init__(self, pair_groups):
+        self.pair_groups = pair_groups
+
+    def measure(self):
+        results = OrderedDict()
+        for key, class_pairs in self.pair_groups.items():
+            pre_class, post_class = key
+
+            connections = [p for p in class_pairs if p.synapse]
+            if len(connections) > 0:
+                connection_strength = [c.connection_strength for c in connections]
+                results[(pre_class, post_class)] = {
+                    'n_connections': len(connections),
+                    'ic_mean_amp': [cs.ic_amp_mean for cs in connection_strength],
+                    'ic_amp_stdev': [cs.ic_amp_stdev for cs in connection_strength],
+                }
+            else: 
+                results[(pre_class, post_class)] = {'n_connections': 0}
+
+
+        return results
+
+    def display(self, pre_class, post_class, result):
+        # this needs to be scaled by the range of amplitudes
+        colormap = pg.ColorMap(
+            [0, 0.5, 1.0],
+            [(0, 0, 255), (255, 255, 255), (255, 0, 0)],
+            )
+
+        n_connections = result['n_connections']
+        if n_connections > 0:
+            amps = filter(None, result['ic_mean_amp'])
+            grand_amp = np.mean(amps)
+            text = ("%.2f mV" % (grand_amp*1e3))
+            grand_stdev = np.std(amps)
+            output = set_display(grand_amp, text, colormap, upper_ci=grand_stdev, lower_ci=(-grand_stdev))
+        else:
+            output = set_display(float('nan'), '', colormap)
+
+        return output
+
+    def summary(self, results):
+        print('')
+
 def connection_probability_ci(n_connected, n_probed):
     # make sure we are consistent about how we measure connectivity confidence intervals
     return proportion_confint(n_connected, n_probed, method='beta')
-
-
 
 def query_pairs(project_name=None, acsf=None, age=None, species=None, distance=None, session=None):
     """Generate a query for selecting pairs from the database.
@@ -134,7 +153,10 @@ def query_pairs(project_name=None, acsf=None, age=None, species=None, distance=N
             pairs = pairs.filter(db.Experiment.project_name.in_(project_name))
 
     if acsf is not None:
-        pairs = pairs.filter(db.Experiment.acsf==acsf)
+        if isinstance(acsf, str):
+            pairs = pairs.filter(db.Experiment.acsf==acsf)
+        else:
+            pairs = pairs.filter(db.Experiment.acsf.in_(acsf))
 
     if age is not None:
         if age[0] is not None:
@@ -166,3 +188,35 @@ def pair_was_probed(pair, excitatory):
     # of experiments included, but increase sensitivity for weaker connections
     return getattr(pair, qc_field) > 10
 
+def set_display(metric, text, colormap, upper_ci=None, lower_ci=None):
+    if upper_ci is not None and lower_ci is not None:
+        show_confidence = True
+    else:
+        show_confidence = False
+
+    if show_confidence:
+        output = {'bordercolor': 0.6}
+        default_bgcolor = np.array([128., 128., 128.])
+    else:
+        output = {'bordercolor': 0.8}
+        default_bgcolor = np.array([220., 220., 220.])
+    
+    if np.isnan(metric):
+        output['bgcolor'] = tuple(default_bgcolor)
+        output['fgcolor'] = 0.6
+        output['text'] = ''
+    else:
+        # get color based on metric
+        color = colormap.map(metric)
+        
+        # desaturate low confidence cells
+        if show_confidence:
+            confidence = (1.0 - (upper_ci - lower_ci)) ** 2
+            color = color * confidence + default_bgcolor * (1.0 - confidence)
+    
+        # invert text color for dark background
+        output['fgcolor'] = 'w' if sum(color[:3]) < 384 else 'k'
+        output['text'] = text
+        output['bgcolor'] = tuple(color)
+
+    return output
