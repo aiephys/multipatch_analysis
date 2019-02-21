@@ -12,7 +12,7 @@ from neuroanalysis.fitting import fit_psp
 import datetime
 import os
 
-commiting = True
+commiting = False  # specifies whether to commit results
 time_before_spike = 10.e-3 #time in seconds before spike to start trace waveforms
 
 class FirstPulseFitTableGroup(TableGroup):
@@ -115,10 +115,10 @@ def measure_amp(v_array, baseline_index_window, psp_amp_index_window):
         
     Returns
     -------
-        relative_amp: float
-            measured amplitude relative to baseline
-        baseline: float
-            value of baseline
+    relative_amp: float
+        measured amplitude relative to baseline
+    baseline: float
+        value of baseline
     '''
 
     # get baseline
@@ -194,9 +194,6 @@ def extract_first_pulse_info_from_Pair_object(pair, desired_clamp='ic'):
         # we only want the first pulse of the train
         if pulse_number != 1:
             continue
-        # # only include frequencies up to 50Hz
-        # if stim_freq >= 100:
-        #     continue
 
         data = pr.data
         start_time = pr.start_time
@@ -230,13 +227,21 @@ def get_average_pulse_response(pair, desired_clamp='ic'):
 
     Returns
     -------
-    pulse_responses
-    pulse_ids
-    psp_amps_measured
-    freq
-    avg_psp
-    measured_relative_amp
-    measured_baseline
+    Note that all returned variables are set to None if there are no acceptable (qc pasing) sweeps
+    pulse_responses: TraceList 
+        traces where the start of each trace is 10 ms before the spike 
+    pulse_ids: list of ints
+        pulse ids of *pulse_responses*
+    psp_amps_measured: list of floats
+        amplitude of *pulse_responses* from the *pulse_response* table
+    freq: list of floats
+        the stimulation frequency corresponding to the *pulse_responses* 
+    avg_psp: Trace
+        average of the pulse_responses
+    measured_relative_amp: float
+        measured amplitude relative to baseline
+    measured_baseline: float
+        value of baseline
     """
     # get pulses that pass qc
     pulse_responses, pulse_ids, psp_amps_measured, freq = extract_first_pulse_info_from_Pair_object(pair, desired_clamp=desired_clamp)
@@ -244,10 +249,6 @@ def get_average_pulse_response(pair, desired_clamp='ic'):
     # if pulses are returned take the average
     if len(pulse_responses)>0:
         avg_psp=TraceList(pulse_responses).mean()
-#                for pr in pulse_responses:
-#                    plt.plot(pr.time_values, pr.data)
-#                plt.plot(ave_psp.time_values, ave_psp.data, lw=5)
-#                plt.show()
     else:
         return None, None, None, None, None, None, None
 
@@ -506,7 +507,7 @@ def compute_fit(job_info, raise_exceptions=False):
             session.add(afpf)
             session.commit()
             
-            # TODO: I guess I need to query expt before I do this
+            # TODO: I guess I need to query expt before I do this...
             # expt.meta = expt.meta.copy()  # required by sqlalchemy to flag as modified
             # expt.meta['avg_first_pulse_fit_timestamp'] = time.time()
 
