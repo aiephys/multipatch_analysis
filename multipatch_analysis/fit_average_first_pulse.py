@@ -1,4 +1,5 @@
-"""Fit average of first pulses
+"""Fit average of first pulses in for voltage and current clamp and place in 
+avg_first_pulse_fit table.
 """
 
 from neuroanalysis.data import Trace, TraceList
