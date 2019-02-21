@@ -1,4 +1,4 @@
-"""Queries and plots data from avg_first_pulse_fit table
+"""Queries and plots voltage and current clamp data fits from avg_first_pulse_fit table.
 """
 
 import numpy as np
