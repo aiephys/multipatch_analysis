@@ -111,7 +111,7 @@ for fit, pair in data:
             time = np.arange(len(i_data)) * fit.ic_dt * 1e3 # converting to ms
             ln1 = ax1.plot(time, i_data*scale_factor, 'b', label='current clamp, n=%i' % len(fit.ic_pulse_ids))
             ln2 = ax1.plot(time, fit.ic_avg_psp_fit * scale_factor, 'r', label='nrmse=%f \namp (mV)=%f \nlatency (ms)=%f \nrise time (ms)=%f \ndecay tau=%f' % \
-                                            (fit.ic_NRMSE, \
+                                            (fit.ic_nrmse, \
                                             fit.ic_amp * scale_factor, \
                                             fit.ic_latency*1e-3, \
                                             fit.ic_rise_time, \
@@ -134,7 +134,7 @@ for fit, pair in data:
             time = np.arange(len(v_data)) * fit.vc_dt * 1e3 # converting to ms
             ln4 = ax3.plot(time, v_data*scale_factor, 'b', label='voltage clamp, n=%i' % len(fit.vc_pulse_ids))
             ln5 = ax3.plot(time, fit.vc_avg_psp_fit * scale_factor, 'r', label='nrmse=%f \namp (pA)=%f \nlatency (ms)=%f \nrise time (ms)=%f \ndecay tau=%f' % \
-                                            (fit.vc_NRMSE, \
+                                            (fit.vc_nrmse, \
                                             fit.vc_amp * scale_factor, \
                                             fit.vc_latency*1e-3, \
                                             fit.vc_rise_time, \
