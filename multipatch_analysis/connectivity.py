@@ -15,15 +15,25 @@ from .morphology import Morphology
 
 
 class ConnectivityAnalyzer(object):
-    def __init__(self, pair_groups):
-        self.pair_groups = pair_groups
+    class SignalHandler(pg.QtCore.QObject):
+        """Because we can't subclass from both QObject and QGraphicsRectItem at the same time
+        """
+        sigOutputChanged = pg.QtCore.Signal(object) #self
 
-    def measure(self):
+    def __init__(self):
+        self.results = None
+        self._signalHandler = ConnectivityAnalyzer.SignalHandler()
+        self.sigOutputChanged = self._signalHandler.sigOutputChanged
+
+    def invalidate_output(self):
+        self.results = None
+
+    def measure(self, pair_groups):
         """Given a list of cell pairs and a dict that groups cells together by class,
         return a structure that describes connectivity between cell classes.
         """    
         results = OrderedDict()
-        for key, class_pairs in self.pair_groups.items():
+        for key, class_pairs in pair_groups.items():
             pre_class, post_class = key
             
             probed_pairs = [p for p in class_pairs if pair_was_probed(p, pre_class.is_excitatory)]
@@ -37,33 +47,44 @@ class ConnectivityAnalyzer(object):
             results[(pre_class, post_class)] = {
                 'n_probed': n_probed,
                 'n_connected': n_connected,
-                'connection_probability': (conn_prob,) + conf_interval,
+                'connection_probability': conn_prob,
+                'confidence_interval': conf_interval,
                 'connected_pairs': connections_found,
                 'probed_pairs': probed_pairs,
+                'matrix_completeness': float('nan'),
+                'distance_distribution': float('nan'),
+                'gap_junctions': float('nan'),
+                'None': None
             }
         
         return results
 
-    def display(self, pre_class, post_class, result):
-        # Print results
-        print("{pre_class:>20s} -> {post_class:20s} {connections_found:>5s} / {connections_probed}".format(
-            pre_class=pre_class.name, 
-            post_class=post_class.name, 
-            connections_found=str(len(result['connected_pairs'])),
-            connections_probed=len(result['probed_pairs']),
-        ))
-
-        # Pretty matrix results
-        colormap = pg.ColorMap(
+    def output_fields(self):
+        cmap = pg.ColorMap(
             [0, 0.01, 0.03, 0.1, 0.3, 1.0],
             [(0,0,100), (80,0,80), (140,0,0), (255,100,0), (255,255,100), (255,255,255)],
         )
 
-        connectivity, lower_ci, upper_ci = result['connection_probability']
-        text = "%d/%d" % (result['n_connected'], result['n_probed'])
-        output = set_display(connectivity, text, colormap, upper_ci=upper_ci, lower_ci=lower_ci)
+        fields = {'color_by': [
+            'n_probed',
+            'n_connected',
+            'connection_probability',
+            'matrix_completeness',
+            'distance_distribution',
+            'gap_junctions'
+            ],
+            'show_confidence': [
+            'None',
+            'confidence_interval',
+            ],
+        }
 
-        return output
+        defaults = {'color_by': 'connection_probability', 
+            'text': '{n_connected}/{n_probed}', 
+            'show_confidence': 'confidence_interval', 
+            'colormap': cmap}
+
+        return fields, defaults
 
     def summary(self, results):
         total_connected = 0
@@ -76,27 +97,69 @@ class ConnectivityAnalyzer(object):
 
 
 class StrengthAnalyzer(object):
-    def __init__(self, pair_groups):
-        self.pair_groups = pair_groups
+    class SignalHandler(pg.QtCore.QObject):
+        """Because we can't subclass from both QObject and QGraphicsRectItem at the same time
+        """
+        sigOutputChanged = pg.QtCore.Signal(object) #self
 
-    def measure(self):
+    def __init__(self):
+        self.results = None
+        self._signalHandler = ConnectivityAnalyzer.SignalHandler()
+        self.sigOutputChanged = self._signalHandler.sigOutputChanged
+
+    def invalidate_output(self):
+        self.results = None
+
+    def measure(self, pair_groups):
         results = OrderedDict()
-        for key, class_pairs in self.pair_groups.items():
+        for key, class_pairs in pair_groups.items():
             pre_class, post_class = key
 
             connections = [p for p in class_pairs if p.synapse]
-            if len(connections) > 0:
-                connection_strength = [c.connection_strength for c in connections]
-                results[(pre_class, post_class)] = {
-                    'n_connections': len(connections),
-                    'ic_mean_amp': [cs.ic_amp_mean for cs in connection_strength],
-                    'ic_amp_stdev': [cs.ic_amp_stdev for cs in connection_strength],
-                }
-            else: 
-                results[(pre_class, post_class)] = {'n_connections': 0}
-
+            connection_strength = [c.connection_strength for c in connections] if len(connections) > 0 else float('nan')
+            ic_amps = filter(None, [cs.ic_amp_mean for cs in connection_strength]) if len(connections) > 0 else float('nan')
+            ic_latencies = filter(None, [cs.ic_latency_mean for cs in connection_strength]) if len(connections) > 0 else float('nan')
+            results[(pre_class, post_class)] = {
+                'n_connections': len(connections),
+                'ic_mean_amp': np.mean(ic_amps),
+                'ic_amp_stdev': [-np.std(ic_amps), np.std(ic_amps)],
+                'ic_mean_latency': np.mean(ic_latencies),
+                'ic_latency_stdev': [-np.std(ic_latencies), np.std(ic_latencies)],
+                'ic_mean_rise_time': float('nan'),
+                'ic_rise_time_stdev': float('nan'),
+                'ic_amp_cv': float('nan'),
+                'None': None,
+            }
 
         return results
+
+    def output_fields(self):
+        cmap = pg.ColorMap(
+            [0, 0.5, 1.0],
+            [(0, 0, 255), (255, 255, 255), (255, 0, 0)],
+        )
+
+        fields = {'color_by': [
+            'n_connections',
+            'ic_mean_amp',
+            'ic_mean_latency',
+            'ic_mean_rise_time',
+            'ic_amp_cv'
+            ],
+            'show_confidence': [
+            'None',
+            'ic_amp_stdev',
+            'ic_latency_stdev',
+            'ic_rise_time_stdev'
+            ],
+        }
+
+        defaults = {'color_by': 'ic_mean_amp', 
+            'text': '{n_connections}', 
+            'show_confidence': 'ic_amp_stdev', 
+            'colormap': cmap}
+
+        return fields, defaults
 
     def display(self, pre_class, post_class, result):
         # this needs to be scaled by the range of amplitudes

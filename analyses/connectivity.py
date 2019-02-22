@@ -44,7 +44,7 @@ class MainWindow(pg.QtGui.QWidget):
         self.trace_plot = TracePlot()
         self.plot_splitter.addWidget(self.scatter_plot)
         self.plot_splitter.addWidget(self.trace_plot)
-        self.h_splitter.setSizes([150, 300, 150])
+        self.h_splitter.setSizes([150, 300, 0])
 
 
 class SignalHandler(pg.QtCore.QObject):
@@ -53,7 +53,6 @@ class SignalHandler(pg.QtCore.QObject):
         sigOutputChanged = pg.QtCore.Signal(object) #self
 
 class ExperimentFilter(object):
-
     def __init__(self):  
         s = db.Session()
         self._signalHandler = SignalHandler()
@@ -117,49 +116,62 @@ class CellClassFilter(object):
         self.cell_groups = None
         self.cell_classes = None
 
-
-class Analysis(object):
-    def __init__(self):
-        self.analyzer = None
-        self._signalHandler = SignalHandler()
-        self.sigOutputChanged = self._signalHandler.sigOutputChanged
-        self.analyzers = {'Connectivity': ConnectivityAnalyzer, 'Strength': StrengthAnalyzer}
-        analyzer_list = [{'name': 'Analysis', 'type': 'list', 'values': self.analyzers.keys()}]
-        self.params = Parameter.create(name='Analyzers', type='group', children=analyzer_list)
-
-        self.params.sigTreeStateChanged.connect(self.invalidate_output)
-
-    def get_analyzer(self):
-        if self.analyzer is None:
-            analyzer_key = self.params.children()[0].value()
-            self.analyzer = self.analyzers[analyzer_key]
-        return self.analyzer
-
-    def invalidate_output(self):
-        self.analyzer = None
-
-
 class DisplayFilter(object):
     def __init__(self):
-        self.displays = None
+        self.output = None
         self._signalHandler = SignalHandler()
         self.sigOutputChanged = self._signalHandler.sigOutputChanged
-        self.params = Parameter.create(name='Display Options', type='group', children=[
-            {'name': 'Matrix Color Gradient', 'type': 'colormap', 'value': pg.ColorMap(
-            [0, 0.01, 0.03, 0.1, 0.3, 1.0],
-            [(0,0,100), (80,0,80), (140,0,0), (255,100,0), (255,255,100), (255,255,255)])},
-            {'name': 'Shade by CI', 'type': 'bool', 'value': True},
-            {'name': 'Periodic Table Style', 'type': 'bool', 'value': False},
-        ])
+        self.params = Parameter.create(name='Display Options', type='group')
 
         self.params.sigTreeStateChanged.connect(self.invalidate_output)
         
-        # def get_displays(self):
-        #     if self.displays is None:
-        #         self.disp
+    def set_display_fields(self, display_fields, defaults):
+        fields = [
+        {'name': 'Matrix Colormap', 'type': 'colormap', 'value': defaults['colormap']},
+        {'name': 'Color by:', 'type': 'list', 'values': display_fields['color_by'], 'value': defaults['color_by']},
+        {'name': 'Text format', 'type': 'str', 'value': defaults['text']},
+        {'name': 'Show Confidence', 'type': 'list', 'values': display_fields['show_confidence'], 'value': defaults['show_confidence']},
+        ]
+
+        return fields
+
+    def set_display(self, result):
+        colormap = self.params['Matrix Colormap']
+        show_confidence = self.params['Show Confidence']
+        color_by = self.params['Color by:']
+        metric = result[color_by]
+        text_format = self.params['Text format']
+
+        if result[show_confidence] is not None:
+            self.output = {'bordercolor': 0.6}
+            default_bgcolor = np.array([128., 128., 128.])
+        else:
+            self.output = {'bordercolor': 0.8}
+            default_bgcolor = np.array([220., 220., 220.])
+        
+        if np.isnan(metric):
+            self.output['bgcolor'] = tuple(default_bgcolor)
+            self.output['fgcolor'] = 0.6
+            self.output['text'] = ''
+        else:
+            # get color based on metric
+            color = colormap.map(metric)
+            
+            # desaturate low confidence cells
+            if result[show_confidence] is not None:
+                lower, upper = result[show_confidence]
+                confidence = (1.0 - (upper - lower)) ** 2
+                color = color * confidence + default_bgcolor * (1.0 - confidence)
+        
+            # invert text color for dark background
+            self.output['fgcolor'] = 'w' if sum(color[:3]) < 384 else 'k'
+            self.output['text'] = text_format.format(**result)
+            self.output['bgcolor'] = tuple(color)
+
+        return self.output    
 
     def invalidate_output(self):
-        self.displays = None
+        self.output = None
 
 
 class MatrixWidget(pg.GraphicsLayoutWidget):
@@ -202,29 +214,52 @@ class TracePlot(pg.GraphicsLayoutWidget):
 class MatrixAnalyzer(object):
     def __init__(self, session):
         self.session = session
+        self.analysis = None
+        self.analyzers = {'Select:': None, 'Connectivity': ConnectivityAnalyzer, 'Strength': StrengthAnalyzer}
+        analyzer_list = [{'name': 'Analysis', 'type': 'list', 'values': self.analyzers.keys(), 'value': 'Select:'}]
+        analyzer_params = Parameter.create(name='Analyzers', type='group', children=analyzer_list)
 
         self.experiment_filter = ExperimentFilter()
         self.cell_class_filter = CellClassFilter(cell_class_groups)
-        self.analysis = Analysis()
         self.display_filter = DisplayFilter()
         self.params = ptree.Parameter.create(name='params', type='group', children=[
             self.experiment_filter.params, 
-            self.cell_class_filter.params, 
-            self.analysis.params, 
-            self.display_filter.params
+            self.cell_class_filter.params,
         ])
+        self.params.addChild(analyzer_params)
+        self.params.addChild(self.display_filter.params)
 
         self.win = MainWindow()
         self.win.show()
-        self.win.resize(1500, 800)
+        self.win.resize(1200, 800)
         self.win.setWindowTitle('Matrix Analyzer')
         self.win.ptree.setParameters(self.params, showTop=False)
 
         self.win.update_button.clicked.connect(self.update_clicked)
         self.win.matrix_widget.sigClicked.connect(self.display_matrix_element_data)
         self.experiment_filter.sigOutputChanged.connect(self.cell_class_filter.invalidate_output)
-        self.cell_class_filter.sigOutputChanged.connect(self.analysis.invalidate_output)
+        self.params.child('Analyzers', 'Analysis').sigValueChanged.connect(self.analyzerChanged)
+
+    def analyzerChanged(self):
+        if self.analysis is not None:
+            self.params.child('Display Options').clearChildren()
+            self.analysis.sigOutputChanged.disconnect(self.display_filter.invalidate_output)
+            self.cell_class_filter.sigOutputChanged.disconnect(self.analysis.invalidate_output)
+
+        selected = self.params['Analyzers', 'Analysis']
+        available_analyzers = {
+            'Connectivity': ConnectivityAnalyzer,
+            'Strength': StrengthAnalyzer,
+        }
+        self.analysis = available_analyzers[selected]()
         self.analysis.sigOutputChanged.connect(self.display_filter.invalidate_output)
+        self.cell_class_filter.sigOutputChanged.connect(self.analysis.invalidate_output)
+
+        # update list of display fields
+        fields, defaults = self.analysis.output_fields()
+        display_params = self.display_filter.set_display_fields(fields, defaults)
+        self.params.child('Display Options').addChildren(display_params)
+        print ('Analysis changed!')
 
     def update_clicked(self):
         with pg.BusyCursor():
@@ -258,9 +293,8 @@ class MatrixAnalyzer(object):
         self.pair_groups = classify_pairs(self.pairs, cell_groups)
 
         # analyze matrix elements
-        analyzer = self.analysis.get_analyzer()
-        matrix_analysis = analyzer(self.pair_groups)
-        results = matrix_analysis.measure()
+        results = self.analysis.measure(self.pair_groups)
+    
 
         shape = (len(cell_groups),) * 2
         text = np.empty(shape, dtype=object)
@@ -273,7 +307,7 @@ class MatrixAnalyzer(object):
         self.matrix_map = {}
         for i,row in enumerate(cell_groups):
             for j,col in enumerate(cell_groups):
-                output = matrix_analysis.display(row, col, results[(row, col)])
+                output = self.display_filter.set_display(results[(row, col)])
                 self.matrix_map[i, j] = (row, col)
                 text[i, j] = output['text']
                 fgcolor[i, j] = output['fgcolor']
@@ -293,7 +327,6 @@ class MatrixAnalyzer(object):
         self.win.matrix_widget.set_matrix_data(text=text, fgcolor=fgcolor, bgcolor=bgcolor, border_color=bordercolor,
                     rows=rows, cols=rows, size=50, header_color='k')
         
-        matrix_analysis.summary(results)
 
 
 if __name__ == '__main__':
