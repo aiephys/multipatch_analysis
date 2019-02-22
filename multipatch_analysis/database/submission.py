@@ -294,9 +294,10 @@ class ExperimentDBSubmission(object):
             for rec in srec.recordings:
                 
                 # import all recordings
+                electrode_entry = elecs_by_ad_channel[rec.device_id]  # should probably just skip if this causes KeyError?
                 rec_entry = db.Recording(
                     sync_rec=srec_entry,
-                    electrode=elecs_by_ad_channel[rec.device_id],  # should probably just skip if this causes KeyError?
+                    electrode=electrode_entry,
                     start_time=rec.start_time,
                 )
                 session.add(rec_entry)
@@ -323,6 +324,8 @@ class ExperimentDBSubmission(object):
                 if tp is not None:
                     indices = tp.indices or [None, None]
                     tp_entry = db.TestPulse(
+                        electrode=electrode_entry,
+                        recording=rec_entry,
                         start_index=indices[0],
                         stop_index=indices[1],
                         baseline_current=tp.baseline_current,
@@ -438,7 +441,6 @@ class ExperimentDBSubmission(object):
                             recording=rec_entries[post_dev],
                             stim_pulse=all_pulse_entries[pre_dev][resp['pulse_n']],
                             pair=pair_entry,
-                            # baseline=base_entry,
                             start_time=post_tvals[resp['rec_start']],
                             data=resp['response'].resample(sample_rate=20000).data,
                             ex_qc_pass=resp['ex_qc_pass'],
@@ -483,9 +485,27 @@ class ExperimentDBSubmission(object):
             session.close()
 
     def remove_from_db(self):
-        session = db.Session()
+        prof = pg.debug.Profiler(disabled=True, delayed=False)
+        session = db.Session(readonly=False)
         ts = self.expt.timestamp
+        
+        # You can speed up delete by manually clearing out the largest tables, but you'd have to handle the cascades manually:
+        # ids = session.query(db.PulseResponse.id).join(db.Recording).join(db.SyncRec).join(db.Experiment).filter(db.Experiment.acq_timestamp==ts).subquery()
+        # n = session.query(db.PulseResponse).filter(db.PulseResponse.id.in_(ids)).delete(synchronize_session=False)
+        # prof("delete %d PRs" % n)
+        # session.commit()
+        # prof("commit")
+        # session.close()
+        # session = db.Session(readonly=False)
+        
+        # Another approach is to let the DB itself (instead of sqlalchemy) do the cascaded delete:
+        #  https://docs.sqlalchemy.org/en/latest/orm/collections.html#passive-deletes
+        #  ..but I was not able to get that working
+        
         expt_entry = db.experiment_from_timestamp(ts, session=session)
+        prof('ready')
         session.delete(expt_entry)
-        session.commit()         
+        prof("delete expt")
+        session.commit()    
+        prof("commit")     
         

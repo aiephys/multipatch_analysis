@@ -23,8 +23,8 @@ def submit_expt(expt_id, raise_exc=False):
         expt = Experiment(site_path=site_path)
         print("submit experiment: %0.3f" % expt_id, expt)
         
-        slice_dir = expt.slice_dir
-        sub = SliceSubmission(slice_dir)
+        slice_path = expt.slice_path
+        sub = SliceSubmission(slice_path)
         if not sub.submitted():
             sub.submit()
         

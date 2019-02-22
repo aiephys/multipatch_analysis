@@ -131,6 +131,9 @@ class Experiment(object):
             self.pipette_file,
             self.nwb_file,
             self.mosaic_file,
+            os.path.join(self.path, '.index'),
+            os.path.join(self.slice_path, '.index'),
+            os.path.join(self.expt_path, '.index'),
         ]
         mtime = 0
         for file in files:
@@ -816,7 +819,7 @@ class Experiment(object):
         return self.slice_info['__timestamp__']
 
     @property
-    def slice_dir(self):
+    def slice_path(self):
         return os.path.join(self.path, '..')
 
     @property

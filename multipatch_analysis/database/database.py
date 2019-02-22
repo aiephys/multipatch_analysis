@@ -153,6 +153,8 @@ table_schemas = {
     'test_pulse': [
         """A short, usually hyperpolarizing pulse used to test the resistance of pipette, cell access, or cell membrane.
         """,
+        ('electrode_id', 'electrode.id', 'ID of the electrode on which this test pulse was recorded.', {'index': True}), 
+        ('recording_id', 'recording.id', 'ID of the recording that contains this test pulse, if any.', {'index': True}),
         ('start_index', 'int'),
         ('stop_index', 'int'),
         ('baseline_current', 'float'),
@@ -202,7 +204,6 @@ table_schemas = {
         ('data', 'array', 'numpy array of response data sampled at '+_sample_rate_str, {'deferred': True}),
         ('ex_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for excitatory synapse probing'),
         ('in_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for inhibitory synapse probing'),
-        ('baseline_id', 'baseline.id'),
     ],
 }
 
@@ -312,11 +313,12 @@ def generate_mapping(table, schema, base=None):
         kwds = {} if len(column) < 4 else column[3]
         kwds['comment'] = None if len(column) < 3 else column[2]
         defer_col = kwds.pop('deferred', False)
+        ondelete = kwds.pop('ondelete', None)
 
         if coltype not in _coltypes:
             if not coltype.endswith('.id'):
                 raise ValueError("Unrecognized column type %s" % coltype)
-            props[colname] = Column(Integer, ForeignKey(coltype), **kwds)
+            props[colname] = Column(Integer, ForeignKey(coltype, ondelete=ondelete), **kwds)
         else:
             ctyp = _coltypes[coltype]
             props[colname] = Column(ctyp, **kwds)
@@ -429,16 +431,16 @@ def create_all_mappings():
     Slice.experiments = relationship("Experiment", order_by=Experiment.id, back_populates="slice")
     Experiment.slice = relationship("Slice", back_populates="experiments")
 
-    Experiment.sync_recs = relationship(SyncRec, order_by=SyncRec.id, back_populates="experiment", cascade='delete', single_parent=True)
+    Experiment.sync_recs = relationship(SyncRec, order_by=SyncRec.id, back_populates="experiment", cascade='save-update,merge,delete', single_parent=True)
     SyncRec.experiment = relationship(Experiment, back_populates='sync_recs')
 
-    Experiment.electrodes = relationship(Electrode, order_by=Electrode.id, back_populates="experiment", cascade="delete", single_parent=True)
+    Experiment.electrodes = relationship(Electrode, order_by=Electrode.id, back_populates="experiment", cascade='save-update,merge,delete', single_parent=True)
     Electrode.experiment = relationship(Experiment, back_populates="electrodes")
 
-    Electrode.cell = relationship(Cell, back_populates="electrode", cascade="delete", single_parent=True, uselist=False)
+    Electrode.cell = relationship(Cell, back_populates="electrode", cascade='save-update,merge,delete', single_parent=True, uselist=False)
     Cell.electrode = relationship(Electrode, back_populates="cell", single_parent=True)
 
-    Experiment.pair_list = relationship(Pair, back_populates="experiment", cascade="delete", single_parent=True)
+    Experiment.pair_list = relationship(Pair, back_populates="experiment", cascade='save-update,merge,delete', single_parent=True)
     Pair.experiment = relationship(Experiment, back_populates="pair_list")
 
     Pair.pre_cell = relationship(Cell, foreign_keys=[Pair.pre_cell_id])
@@ -447,36 +449,40 @@ def create_all_mappings():
     Pair.post_cell = relationship(Cell, foreign_keys=[Pair.post_cell_id])
     #Cell.post_pairs = relationship(Pair, back_populates="post_cell", single_parent=True, foreign_keys=[Pair.post_cell])
 
-    Electrode.recordings = relationship(Recording, back_populates="electrode", cascade="delete", single_parent=True)
+    Electrode.recordings = relationship(Recording, back_populates="electrode", cascade='save-update,merge,delete', single_parent=True)
     Recording.electrode = relationship(Electrode, back_populates="recordings")
 
-    SyncRec.recordings = relationship(Recording, order_by=Recording.id, back_populates="sync_rec", cascade="delete", single_parent=True)
+    SyncRec.recordings = relationship(Recording, order_by=Recording.id, back_populates="sync_rec", cascade='save-update,merge,delete', single_parent=True)
     Recording.sync_rec = relationship(SyncRec, back_populates="recordings")
 
-    Recording.patch_clamp_recording = relationship(PatchClampRecording, back_populates="recording", cascade="delete", single_parent=True, uselist=False)
+    Recording.patch_clamp_recording = relationship(PatchClampRecording, back_populates="recording", cascade='save-update,merge,delete', single_parent=True, uselist=False)
     PatchClampRecording.recording = relationship(Recording, back_populates="patch_clamp_recording", single_parent=True)
 
-    PatchClampRecording.multi_patch_probe = relationship(MultiPatchProbe, back_populates="patch_clamp_recording", cascade="delete", single_parent=True)
+    PatchClampRecording.multi_patch_probe = relationship(MultiPatchProbe, back_populates="patch_clamp_recording", cascade='save-update,merge,delete', single_parent=True)
     MultiPatchProbe.patch_clamp_recording = relationship(PatchClampRecording, back_populates="multi_patch_probe")
 
-    PatchClampRecording.nearest_test_pulse = relationship(TestPulse, cascade="delete", single_parent=True, foreign_keys=[PatchClampRecording.nearest_test_pulse_id])
+    Electrode.test_pulses = relationship(TestPulse, back_populates='electrode', cascade='save-update,merge,delete', single_parent=True)
+    TestPulse.electrode = relationship(Electrode, back_populates="test_pulses")
+    Recording.test_pulses = relationship(TestPulse, back_populates='recording', single_parent=True)
+    TestPulse.recording = relationship(Recording, back_populates="test_pulses")
+
+    PatchClampRecording.nearest_test_pulse = relationship(TestPulse, single_parent=True, foreign_keys=[PatchClampRecording.nearest_test_pulse_id])
     #TestPulse.patch_clamp_recording = relationship(PatchClampRecording)
 
-    Recording.stim_pulses = relationship(StimPulse, back_populates="recording", cascade="delete", single_parent=True)
+    Recording.stim_pulses = relationship(StimPulse, back_populates="recording", cascade='save-update,merge,delete', single_parent=True)
     StimPulse.recording = relationship(Recording, back_populates="stim_pulses")
 
     StimSpike.pulse = relationship(StimPulse, back_populates="spikes")
     StimPulse.spikes = relationship(StimSpike, back_populates="pulse", single_parent=True)
-    StimPulse.pulse_response = relationship(PulseResponse, back_populates="stim_pulse", cascade="delete", single_parent=True)
+    StimPulse.pulse_response = relationship(PulseResponse, back_populates="stim_pulse", cascade='save-update,merge,delete', single_parent=True)
     
-    Recording.baselines = relationship(Baseline, back_populates="recording", cascade="delete", single_parent=True)
+    Recording.baselines = relationship(Baseline, back_populates="recording", cascade='save-update,merge,delete', single_parent=True)
     Baseline.recording = relationship(Recording, back_populates="baselines")
 
     PulseResponse.recording = relationship(Recording)
     PulseResponse.stim_pulse = relationship(StimPulse)
     Pair.pulse_responses = relationship(PulseResponse, back_populates='pair', single_parent=True)
     PulseResponse.pair = relationship(Pair, back_populates='pulse_responses')
-    PulseResponse.baseline = relationship(Baseline)
 
 
 #-------------- initial DB access ----------------
