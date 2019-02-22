@@ -228,6 +228,8 @@ class VImagingAnalyzer(QtGui.QWidget):
         avg_x = []
         avg_y = []
 
+        noise_values = []
+
         for i in range(len(self.img_data)):
 
             img_data = self.img_arrays[i]
@@ -239,15 +241,19 @@ class VImagingAnalyzer(QtGui.QWidget):
             test = img_data[:, test_starti:test_stopi]
             test_mean = test.mean(axis=1)
             
-            roi1, roi2 = self.rois
+            roi1, roi2 = self.rois   # roi1 is signal, roi2 is background
             base_rgn1 = roi1.getArrayRegion(base_mean, self.img1, axes=(1, 2))
             base_rgn2 = roi2.getArrayRegion(base_mean, self.img1, axes=(1, 2))
             test_rgn1 = roi1.getArrayRegion(test_mean, self.img1, axes=(1, 2))
+            test_rgn2 = roi2.getArrayRegion(test_mean, self.img1, axes=(1, 2))
 
-            background = base_rgn2.mean(axis=1).mean(axis=1)
-            baseline = base_rgn1.mean(axis=1).mean(axis=1)
-            signal = test_rgn1.mean(axis=1).mean(axis=1)
-            dff = (signal - baseline) / (baseline - background)
+            # Use the temporal profile in roi2 in order to remove changes in LED brightness over time
+            # Then use the difference between baseline and test time regions to determine change in fluorescence
+            baseline1 = base_rgn1.mean(axis=1).mean(axis=1)
+            signal1 = test_rgn1.mean(axis=1).mean(axis=1)
+            baseline2 = base_rgn2.mean(axis=1).mean(axis=1)
+            signal2 = test_rgn2.mean(axis=1).mean(axis=1)
+            dff = ((signal1-signal2) - (baseline1-baseline2)) / (baseline1-baseline2)
 
             x = self.seqParams[0][1][i]
             xvals.extend([x] * len(dff))
