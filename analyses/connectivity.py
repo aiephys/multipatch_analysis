@@ -122,7 +122,7 @@ class DisplayFilter(object):
         self._signalHandler = SignalHandler()
         self.sigOutputChanged = self._signalHandler.sigOutputChanged
         self.params = Parameter.create(name='Display Options', type='group')
-
+    
         self.params.sigTreeStateChanged.connect(self.invalidate_output)
         
     def set_display_fields(self, display_fields, defaults):
@@ -168,7 +168,7 @@ class DisplayFilter(object):
             self.output['text'] = text_format.format(**result)
             self.output['bgcolor'] = tuple(color)
 
-        return self.output    
+        return self.output
 
     def invalidate_output(self):
         self.output = None
@@ -212,22 +212,27 @@ class TracePlot(pg.GraphicsLayoutWidget):
 
 
 class MatrixAnalyzer(object):
-    def __init__(self, session):
-        self.session = session
-        self.analysis = None
-        self.analyzers = {'Select:': None, 'Connectivity': ConnectivityAnalyzer, 'Strength': StrengthAnalyzer}
-        analyzer_list = [{'name': 'Analysis', 'type': 'list', 'values': self.analyzers.keys(), 'value': 'Select:'}]
-        analyzer_params = Parameter.create(name='Analyzers', type='group', children=analyzer_list)
-
+    def __init__(self, session, default_analyzer=None):
         self.experiment_filter = ExperimentFilter()
         self.cell_class_filter = CellClassFilter(cell_class_groups)
         self.display_filter = DisplayFilter()
+        self.default_analyzer = default_analyzer
+        self.session = session
         self.params = ptree.Parameter.create(name='params', type='group', children=[
             self.experiment_filter.params, 
             self.cell_class_filter.params,
+            self.display_filter.params
         ])
-        self.params.addChild(analyzer_params)
-        self.params.addChild(self.display_filter.params)
+
+        self.analyzers = {'Select:': None, 'Connectivity': ConnectivityAnalyzer, 'Strength': StrengthAnalyzer}
+        if default_analyzer is not None:
+            self.analysis = self.set_defaults()
+        else:
+            self.analysis = None
+        analyzer_list = [{'name': 'Analysis', 'type': 'list', 'values': self.analyzers.keys(), 'value': default_analyzer}]
+        analyzer_params = Parameter.create(name='Analyzers', type='group', children=analyzer_list)
+        self.params.insertChild(2, analyzer_params)
+
 
         self.win = MainWindow()
         self.win.show()
@@ -239,6 +244,16 @@ class MatrixAnalyzer(object):
         self.win.matrix_widget.sigClicked.connect(self.display_matrix_element_data)
         self.experiment_filter.sigOutputChanged.connect(self.cell_class_filter.invalidate_output)
         self.params.child('Analyzers', 'Analysis').sigValueChanged.connect(self.analyzerChanged)
+
+    def set_defaults(self):
+        analysis = self.analyzers[self.default_analyzer]()
+        fields, defaults = analysis.output_fields()
+        display_params = self.display_filter.set_display_fields(fields, defaults)
+        self.params.child('Display Options').addChildren(display_params)
+        self.experiment_filter.params.child('Projects').child('mouse V1 coarse matrix').setValue(True)
+        self.cell_class_filter.params.child('Mouse All Cre-types by layer').setValue(True)
+
+        return analysis
 
     def analyzerChanged(self):
         if self.analysis is not None:
@@ -377,4 +392,4 @@ if __name__ == '__main__':
     }
 
 
-    maz = MatrixAnalyzer(session=session)
+    maz = MatrixAnalyzer(session=session, default_analyzer='Connectivity')
