@@ -146,7 +146,7 @@ class ExperimentDBSubmission(object):
         except KeyError:
             return False, False
             
-        return True, mod_time < expt_entry.meta['db_timestamp'] - 10000
+        return True, mod_time > expt_entry.meta['db_timestamp']
 
     def check(self):
         warnings = []
