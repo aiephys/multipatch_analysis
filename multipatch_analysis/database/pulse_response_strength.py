@@ -1,4 +1,6 @@
+from sqlalchemy.orm import relationship
 from .database import TableGroup
+from .dataset import PulseResponse, Baseline
 
 
 class PulseResponseStrengthTableGroup(TableGroup):
@@ -35,11 +37,11 @@ class PulseResponseStrengthTableGroup(TableGroup):
         PulseResponseStrength = self['pulse_response_strength']
         BaselineResponseStrength = self['baseline_response_strength']
         
-        db.PulseResponse.pulse_response_strength = db.relationship(PulseResponseStrength, back_populates="pulse_response", cascade="delete", single_parent=True, uselist=False)
-        PulseResponseStrength.pulse_response = db.relationship(db.PulseResponse, back_populates="pulse_response_strength", single_parent=True)
+        PulseResponse.pulse_response_strength = relationship(PulseResponseStrength, back_populates="pulse_response", cascade="delete", single_parent=True, uselist=False)
+        PulseResponseStrength.pulse_response = relationship(PulseResponse, back_populates="pulse_response_strength", single_parent=True)
 
-        db.Baseline.baseline_response_strength = db.relationship(BaselineResponseStrength, back_populates="baseline", cascade="delete", single_parent=True, uselist=False)
-        BaselineResponseStrength.baseline = db.relationship(db.Baseline, back_populates="baseline_response_strength", single_parent=True)
+        Baseline.baseline_response_strength = relationship(BaselineResponseStrength, back_populates="baseline", cascade="delete", single_parent=True, uselist=False)
+        BaselineResponseStrength.baseline = relationship(Baseline, back_populates="baseline_response_strength", single_parent=True)
 
 
 pulse_response_strength_tables = PulseResponseStrengthTableGroup()

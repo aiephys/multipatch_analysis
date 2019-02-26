@@ -1,4 +1,6 @@
+from sqlalchemy.orm import relationship
 from .database import TableGroup
+from .experiment import Cell
 
 
 class MorphologyTableGroup(TableGroup):
@@ -17,8 +19,8 @@ class MorphologyTableGroup(TableGroup):
         
         Morphology = self['morphology']
         
-        db.Cell.morphology = db.relationship(Morphology, back_populates="cell", cascade="delete", single_parent=True, uselist=False)
-        Morphology.cell = db.relationship(db.Cell, back_populates="morphology", single_parent=True)
+        Cell.morphology = relationship(Morphology, back_populates="cell", cascade="delete", single_parent=True, uselist=False)
+        Morphology.cell = relationship(Cell, back_populates="morphology", single_parent=True)
 
 
 morphology_tables = MorphologyTableGroup()

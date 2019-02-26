@@ -1,5 +1,7 @@
+from sqlalchemy.orm import relationship
 from .pulse_response_strength import PulseResponseStrength, BaselineResponseStrength
 from .database import TableGroup
+from .experiment import Pair
 
 
 class ConnectionStrengthTableGroup(TableGroup):
@@ -97,8 +99,8 @@ class ConnectionStrengthTableGroup(TableGroup):
         
         ConnectionStrength = self['connection_strength']
         
-        db.Pair.connection_strength = db.relationship(ConnectionStrength, back_populates="pair", cascade="delete", single_parent=True, uselist=False)
-        ConnectionStrength.pair = db.relationship(db.Pair, back_populates="connection_strength", single_parent=True)
+        Pair.connection_strength = relationship(ConnectionStrength, back_populates="pair", cascade="delete", single_parent=True, uselist=False)
+        ConnectionStrength.pair = relationship(Pair, back_populates="connection_strength", single_parent=True)
 
 
 connection_strength_tables = ConnectionStrengthTableGroup()
