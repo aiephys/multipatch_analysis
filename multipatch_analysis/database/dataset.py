@@ -32,7 +32,7 @@ class DatasetTableGroup(TableGroup):
             ('baseline_current', 'float', 'Median steady-state current (recorded for VC or commanded for IC) during the recording'),
             ('baseline_rms_noise', 'float', 'RMS noise of the steady-state part of the recording'),
             ('nearest_test_pulse_id', 'test_pulse.id', 'ID of the test pulse that was recorded closest to this recording (and possibly embedded within the recording)'),
-            ('qc_pass', 'bool', 'Indicates whether this recording passes a minimal ephys QC'),
+            ('qc_pass', 'bool', 'Indicates whether this recording passes a minimal ephys QC', {'index': True}),
         ],
         'multi_patch_probe': [
             "Extra data for multipatch recordings intended to test synaptic dynamics.",
@@ -93,8 +93,8 @@ class DatasetTableGroup(TableGroup):
             ('pair_id', 'pair.id', 'The pre-post cell pair involved in this pulse response', {'index': True}),
             ('start_time', 'float', 'Starting time of this chunk of the recording in seconds, relative to the beginning of the recording'),
             ('data', 'array', 'numpy array of response data sampled at '+_sample_rate_str, {'deferred': True}),
-            ('ex_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for excitatory synapse probing'),
-            ('in_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for inhibitory synapse probing'),
+            ('ex_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for excitatory synapse probing', {'index': True}),
+            ('in_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for inhibitory synapse probing', {'index': True}),
         ],
     }
 

@@ -30,15 +30,15 @@ class ExperimentTableGroup(TableGroup):
             ('storage_path', 'str', 'Location of data within server or cache storage.'),
             ('ephys_file', 'str', 'Name of ephys NWB file relative to storage_path.'),
             ('rig_name', 'str', 'Identifier for the rig that generated these results.'),
-            ('project_name', 'str', 'Name of the project to which this experiment belongs.'),
+            ('project_name', 'str', 'Name of the project to which this experiment belongs.', {'index': True}),
             ('acq_timestamp', 'float', 'Creation timestamp for site data acquisition folder.', {'unique': True, 'index': True}),
             ('slice_id', 'slice.id', 'ID of the slice used for this experiment', {'index': True}),
             ('target_region', 'str', 'The intended brain region for this experiment'),
             ('internal', 'str', 'The name of the internal solution used in this experiment '
                                 '(or "mixed" if more than one solution was used). '
-                                'The solution should be described in the pycsf database.'),
+                                'The solution should be described in the pycsf database.', {'index': True}),
             ('acsf', 'str', 'The name of the ACSF solution used in this experiment. '
-                            'The solution should be described in the pycsf database.'),
+                            'The solution should be described in the pycsf database.', {'index': True}),
             ('target_temperature', 'float', 'The intended temperature of the experiment (but actual recording temperature is stored elsewhere)'),
             ('date', 'datetime', 'The date of this experiment'),
             ('lims_specimen_id', 'int', 'ID of LIMS "CellCluster" specimen.'),
@@ -63,9 +63,9 @@ class ExperimentTableGroup(TableGroup):
         'cell': [
             "Each row represents a single patched cell.",
             ('electrode_id', 'electrode.id', '', {'index': True}),
-            ('cre_type', 'str', 'Comma-separated list of cre drivers apparently expressed by this cell'),
-            ('target_layer', 'str', 'The intended cortical layer for this cell (used as a placeholder until the actual layer call is made)'),
-            ('is_excitatory', 'bool', 'True if the cell is determined to be excitatory by synaptic current, cre type, or morphology'),
+            ('cre_type', 'str', 'Comma-separated list of cre drivers apparently expressed by this cell', {'index': True}),
+            ('target_layer', 'str', 'The intended cortical layer for this cell (used as a placeholder until the actual layer call is made)', {'index': True}),
+            ('is_excitatory', 'bool', 'True if the cell is determined to be excitatory by synaptic current, cre type, or morphology', {'index': True}),
             ('synapse_sign', 'int', 'The sign of synaptic potentials produced by this cell: excitatory=+1, inhibitory=-1, mixed=0'),
             ('patch_start', 'float', 'Time at which this cell was first patched'),
             ('patch_stop', 'float', 'Time at which the electrode was detached from the cell'),
@@ -74,7 +74,7 @@ class ExperimentTableGroup(TableGroup):
             ('has_dye_fill', 'bool', 'Indicates whether the cell was filled with fluorescent dye during the experiment'),
             ('depth', 'float', 'Depth of the cell (in m) from the cut surface of the slice.'),
             ('position', 'object', '3D location of this cell in the arbitrary coordinate system of the experiment'),
-            ('ext_id', 'int', 'Cell ID (usually 1-8) referenced in external metadata records'),
+            ('ext_id', 'int', 'Cell ID (usually 1-8) referenced in external metadata records', {'index': True}),
         ],
         'pair': [
             "All possible putative synaptic connections. Each pair represents a pre- and postsynaptic cell that were recorded from simultaneously.",
@@ -84,9 +84,9 @@ class ExperimentTableGroup(TableGroup):
             ('synapse', 'bool', 'Whether the experimenter thinks there is a synapse', {'index': True}),
             ('electrical', 'bool', 'Whether the experimenter thinks there is a gap junction', {'index': True}),
             ('crosstalk_artifact', 'float', 'Amplitude of crosstalk artifact measured in current clamp'),
-            ('n_ex_test_spikes', 'int', 'Number of QC-passed spike-responses recorded for this pair at excitatory holding potential'),
-            ('n_in_test_spikes', 'int', 'Number of QC-passed spike-responses recorded for this pair at inhibitory holding potential'),
-            ('synapse_sign', 'int', 'Sign of synaptic current amplitude (+1 for excitatory, -1 for inhibitory'),
+            ('n_ex_test_spikes', 'int', 'Number of QC-passed spike-responses recorded for this pair at excitatory holding potential', {'index': True}),
+            ('n_in_test_spikes', 'int', 'Number of QC-passed spike-responses recorded for this pair at inhibitory holding potential', {'index': True}),
+            ('synapse_sign', 'int', 'Sign of synaptic current amplitude (+1 for excitatory, -1 for inhibitory', {'index': True}),
             ('distance', 'float', 'Distance between somas (in m)'),
         ],
     }

@@ -259,7 +259,7 @@ class ExperimentDBSubmission(object):
                     experiment=expt_entry,
                     pre_cell=pre_cell_entry,
                     post_cell=post_cell_entry,
-                    synapse=True,
+                    synapse=synapse,
                     electrical=electrical,
                     n_ex_test_spikes=0,  # will be counted later
                     n_in_test_spikes=0,
