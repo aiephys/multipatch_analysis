@@ -98,7 +98,7 @@ class ExperimentTableGroup(TableGroup):
         self.mappings['cell'] = Cell = _generate_mapping('cell')
         self.mappings['pair'] = Pair = _generate_mapping('pair', base=PairBase)
         
-        Slice.experiments = relationship("Experiment", order_by=Experiment.id, back_populates="slice")
+        Slice.experiments = relationship("Experiment", order_by=Experiment.id, back_populates="slice", cascade='save-update,merge,delete')
         Experiment.slice = relationship("Slice", back_populates="experiments")
 
         Experiment.electrodes = relationship(Electrode, order_by=Electrode.id, back_populates="experiment", cascade='save-update,merge,delete', single_parent=True)

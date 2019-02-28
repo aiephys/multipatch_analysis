@@ -217,8 +217,8 @@ def Session(readonly=True):
         # creating a new session, otherwise child processes will
         # inherit and muck with the same connections. See:
         # http://docs.sqlalchemy.org/en/rel_1_0/faq/connections.html#how-do-i-use-engines-connections-sessions-with-python-multiprocessing-or-os-fork
-        if engine_pid is not None:
-            print("Making new session for subprocess %d != %d" % (os.getpid(), engine_pid))
+        # if engine_pid is not None:
+        #     print("Making new session for subprocess %d != %d" % (os.getpid(), engine_pid))
         init_engine()
         _sessionmaker_ro = None
     
