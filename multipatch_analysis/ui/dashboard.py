@@ -268,7 +268,8 @@ class Dashboard(QtGui.QWidget):
             ('drawing tool', 'lims_drawing_tool_url'),
             ('cluster ID', 'cluster_id'),
             ('slice fixed', 'slice_fixed'),
-            ('LIMS status', 'lims_message')
+            ('LIMS status', 'lims_message'), 
+            ('Cell Map', 'map_message')
         ]
         for name,attr in print_fields:
             try:
@@ -604,6 +605,7 @@ class ExperimentMetadata(Experiment):
             rec['NAS'] = False if self.nas_path is None else (True if os.path.exists(self.nas_path) else "MISSING")
 
             self.lims_message = None
+            self.map_message = None
             org = self.organism
             if org is None:
                 description = ("no LIMS spec info", fail_color)
@@ -675,7 +677,18 @@ class ExperimentMetadata(Experiment):
                                 image_63x = self.biocytin_63x_files
                                 rec['63x'] = image_63x is not None
                                 cell_info = lims.cluster_cells(cell_cluster)
-                                mapped = len(cell_info) > 0 and all([ci['x_coord'] is not None  for ci in cell_info])
+                                x_coord = all([ci['x_coord'] is not None for ci in cell_info])
+                                x_coord_values = all([ci['x_coord'] > 0 for ci in cell_info])
+                                y_coord = all([ci['y_coord'] is not None  for ci in cell_info])
+                                y_coord_values = all([ci['y_coord'] > 0 for ci in cell_info])
+                                polygon = all([ci['polygon_id'] is not None  for ci in cell_info])
+                                mapped = len(cell_info) > 0 and x_coord is True and y_coord is True
+                                if mapped is True and x_coord_values is False and y_coord_values is False:
+                                    mapped = ('Incomplete', (255, 255, 102))
+                                    self.map_message = 'Cell positions contain 0-values, please re-map'
+                                if mapped is True and polygon is False:
+                                    mapped = ('Incomplete', (255, 255, 102))
+                                    self.map_message = 'Cell positions submitted to LIMS but polygons have not been drawn yet'
                                 rec['cell map'] = mapped
                                 
             else:
