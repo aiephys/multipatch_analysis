@@ -150,7 +150,6 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
 
         items = self.mosaic_editor.canvas.items
         image_20 = lims.specimen_20x_image(self.specimen_name, treatment='Biocytin')
-        image_20_id = os.path.split(image_20)[-1] 
 
         # Find item that marks cell positions
         markers = [i for i in items if isinstance(i, MarkersCanvasItem)]
@@ -160,12 +159,13 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         # Find the 20x image that was loaded in to the editor and make sure it's the right
         # one for this specimen
         image = None
-        for i in items:
-            try:
-                if os.path.split(i.opts['handle'].name())[-1] == image_20_id:
-                    image = i
-            except AttributeError:
-                pass
+        if image_20 is not None:
+            for i in items:
+                try:
+                    if os.path.split(i.opts['handle'].name())[-1] == os.path.split(image_20)[-1]:
+                        image = i
+                except AttributeError:
+                    pass
         # if image is None:
         #     raise Exception("Could not find 20x image loaded into mosaic editor.")
 
@@ -228,6 +228,23 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
                 'ephys_qc_result': ('pass' if pipette_log[cell_name]['got_data'] == True else 'fail'),                 
                 'start_time_sec': time.mktime(pipette_log[cell_name]['patch_start'].timetuple())
             })
+
+        # check that position values written to self.data are non-zero, if they are ask the user if it's ok to submit
+        x_pos = all([cell['coordinates_20x']['x'] for cell in self.data['cells']]) != 0
+        y_pos = all([cell['coordinates_20x']['y'] for cell in self.data['cells']]) != 0
+        if x_pos is False or y_pos is False:
+            ret = QtGui.QMessageBox.question(self, "Position Check", "x and/or y position values are 0.\n"
+                "Do you still want to submit?", QtGui.QMessageBox.Ok | QtGui.QMessageBox.Cancel)
+            # postionValueMsg = QMessageBox()
+            # postionValueMsg.setText('x and/or y position values are 0')
+            # positionValueMsg.setInformativeText('Do you still want to submit?')
+            # positionValueMsg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+
+            # answer = positionValueMsg.exec_()
+
+            if ret == QtGui.QMessageBox.Cancel:
+                raise Exception ('Submission Cancelled')
+
         
     def save_json_and_trigger(self):
         """
