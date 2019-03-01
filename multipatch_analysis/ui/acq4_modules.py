@@ -121,7 +121,6 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
                 shutil.copy2(aff_image_path, save_path)
                 self.base_dir.indexFile(aff_image_name)
         
-        self.image_20 = save_path
     
     @property
     def base_dir(self):
@@ -149,18 +148,21 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         Creates dictionary of cell locations and enables the save button
         """
 
-        items = self.mosaic_editor.canvas.items 
+        items = self.mosaic_editor.canvas.items
+        image_20 = lims.specimen_20x_image(self.specimen_name, treatment='Biocytin')
+        image_20_id = os.path.split(image_20)[-1] 
 
         # Find item that marks cell positions
         markers = [i for i in items if isinstance(i, MarkersCanvasItem)]
         if len(markers) != 1:
             raise Exception("Must have exactly 1 Markers item in the canvas.")
         
-        # Find the 20x image that was loaded in to the editor
+        # Find the 20x image that was loaded in to the editor and make sure it's the right
+        # one for this specimen
         image = None
         for i in items:
             try:
-                if i.opts['handle'].name() == self.image_20:
+                if os.path.split(i.opts['handle'].name())[-1] == image_20_id:
                     image = i
             except AttributeError:
                 pass
