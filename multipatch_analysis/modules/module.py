@@ -4,13 +4,18 @@ from collections import OrderedDict
 from pyqtgraph import toposort
 
 
+# TODO: for now, we define one "unit of work" as being the work done by one AnalysisModule for one whole experiment.
+# BUT: some higher-level modules will aggregate results from across many experiments, so we will need to rethink
+# the unit of work definition at that point.
+
 class AnalysisModule(object):
     """Analysis modules represent analysis tasks that can be run independently of other parts of the analysis
     pipeline. 
     
-    For any given experiment, a sequence of analysis tasks must be processed in order. Each of these requires a specific
+    For any given experiment, a sequence of analysis stages must be processed in order. Each of these requires a specific
     set of inputs to be present, and produces/stores some output. Inputs and outputs can be raw data files, database tables,
-    etc., although outputs are probably always written into a database.
+    etc., although outputs are probably always written into a database. Each AnalysisModule subclass represents a single stage
+    in the sequence of analyses that occur across a pipeline.
     
     From here, we should be able to:
     - Ask for which experiments this analysis has already been run (and when)
@@ -19,11 +24,26 @@ class AnalysisModule(object):
     - Remove / re-run analysis for any specific experiment
     - Remove / re-run analysis for all experiments (for example, after a code change affecting all analysis results)
     - Initialize storage for analysis results (create DB tables, empty folders, etc.)
+    
+    Note that AnalysisModule classes generally need not implement any actual _analysis_; rather, they are simply responsible for
+    data _management_ within the analysis pipeline. When an AnalysisModule is asked to update an analysis result, it may call out to
+    other packages to do the real work.
     """    
     
     name = None
     dependencies = []
 
+    @staticmethod
+    def all_modules():
+        subclasses = AnalysisModule.__subclasses__()
+        deps = {c:c.dependencies for c in subclasses}
+        return OrderedDict([(mod.name, mod) for mod in toposort(deps)])
+    
+    @classmethod
+    def dependent_modules(cls):
+        mods = cls.all_modules()
+        return [mod for mod in mods if cls in mod.dependencies]
+    
     @classmethod
     def update(cls, experiment_ids=None, limit=None, parallel=False, workers=None, raise_exceptions=False):
         """Update analysis results for this module.
@@ -46,12 +66,12 @@ class AnalysisModule(object):
         """
         if experiment_ids is None:
             finished, invalid, ready = cls.job_summary()
-        
+            experiment_ids = sorted(invalid + ready, reverse=True)
             if limit is not None:
                 np.random.shuffle(experiment_ids)
                 experiment_ids = experiment_ids[:limit]
 
-        jobs = [(expt_id, i, len(experiment_ids)) for i, expt_id in enumerate(experiment_ids)]
+        jobs = [(expt_id, (expt_id in invalid), i, len(experiment_ids)) for i, expt_id in enumerate(experiment_ids)]
 
         if parallel:
             pool = multiprocessing.Pool(processes=workers)
@@ -59,15 +79,15 @@ class AnalysisModule(object):
         else:
             for job in jobs:
                 cls._run_job(job, raise_exceptions=raise_exceptions)
-    
+
     @classmethod
     def _run_job(cls, job, raise_exceptions=False):
         """Entry point for running a single analysis job; may be invoked in a subprocess.
         """
-        experiment_id, job_index, n_jobs = job
+        experiment_id, invalid, job_index, n_jobs = job
         print("Processing %d/%d  %s") % (job_index, n_jobs, experiment_id)
         try:
-            cls.process_experiment(experiment_id)
+            cls.process_experiment(experiment_id, invalid)
         except Exception as exc:
             if raise_exceptions:
                 raise
@@ -78,13 +98,16 @@ class AnalysisModule(object):
             print("Finished %d/%d  %s") % (job_index, n_jobs, experiment_id)
     
     @classmethod
-    def process_experiment(cls, experiment_id):
+    def process_experiment(cls, experiment_id, invalid):
         """Process analysis for one experiment.
         
         Parameters
         ----------
         experiment_id :
             The ID of the experiment to be processed.
+        invalid : bool
+            If True, then previous (invalid) results already exist and
+            need to be either purged or updated.
         
         Must be reimplemented in subclasses.
         """
@@ -163,4 +186,3 @@ class AnalysisModule(object):
             finished[job] = max(dates)
 
         return finished
-
