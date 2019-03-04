@@ -33,6 +33,13 @@ class ExperimentMetadataSubmission(object):
         * warning if existing files are not mentioned in file list
         * warning if any metadata would be overwritten with a new value
         """
+
+        # Projects for which we do not require a LIMS specimen 
+        no_lims_specimen_projects = ["human_mFISH_pilot"]
+
+        # Projects for which we can skip dissection timing checks
+        no_dissection_time_projects = ["human_mFISH_pilot"]
+
         errors = []
         warnings = []
         
@@ -43,7 +50,17 @@ class ExperimentMetadataSubmission(object):
         expt_info = expt_dh.info()
         
         spec_name = slice_info['specimen_ID'].strip()
-        self.spec_info = lims.specimen_info(spec_name)
+
+        # slice project is specified
+        project = slice_info.get('project', '')
+        if project == '':
+            errors.append("Must specify slice.project")
+
+        if project in no_lims_specimen_projects:
+            # Some projects may use specimens that are not tracked in LIMS
+            self.spec_info = None
+        else:
+            self.spec_info = lims.specimen_info(spec_name)
 
         
         # Do all categorized files actually exist?
@@ -133,7 +150,9 @@ class ExperimentMetadataSubmission(object):
         # Slice time ok?
         site_date = datetime.fromtimestamp(site_info['__timestamp__'])
         tod = expt_info.get('time_of_dissection', '')
-        if tod == '':
+        if project in no_dissection_time_projects:
+            pass
+        elif tod == '':
             warnings.append("Time of dissection not specified")
         else:
             m = re.match(r'((20\d{2})-(\d{1,2})-(\d{1,2}) )?(\d{1,2}):(\d{1,2})', tod)
@@ -160,21 +179,17 @@ class ExperimentMetadataSubmission(object):
                     warnings.append("Time of dissection is more than 10 hours prior to experiment")
 
         # check specimen age
-        if self.spec_info['age'] is None:
+        if self.spec_info is not None and self.spec_info['age'] is None:
             warnings.append("Donor age is not set in LIMS.")
 
         # Check specimen death was today
-        if self.spec_info['date_of_birth'] is not None:
+        if self.spec_info is not None and self.spec_info['date_of_birth'] is not None:
             dod = self.spec_info['date_of_birth'].date() + timedelta(self.spec_info['age'])
             days_since_death = (site_date.date() - dod).days
             if days_since_death > 0:
                 warnings.append("Specimen was dissected before today, likely need to update LabTracks info in LIMS")
             if days_since_death < 0:
                 warnings.append("Specimen is from the future, likely need to update LabTracks info in LIMS")
-
-        # slice project is specified
-        if slice_info.get('project', '') == '':
-            errors.append("Must specify slice.project")
 
         # Sanity checks on pipette metadata:
         
@@ -198,15 +213,15 @@ class ExperimentMetadataSubmission(object):
             # Does the selected dye overlap with cre reporters?
 
         
-        # If slice was not fixed, don't attempt LIMS submission
-        try:
-            sid = lims.specimen_id_from_name(spec_name)
-        except ValueError as err:
-            errors.append(err.message)
-            sid = None
-
-        if slice_info['plate_well_ID'] != 'not fixed' and sid is not None:
-            self._check_lims(errors, warnings, spec_name, sid, site_info, slice_info)
+        if project not in no_lims_specimen_projects:
+            # If slice was not fixed, don't attempt LIMS submission
+            try:
+                sid = lims.specimen_id_from_name(spec_name)
+            except ValueError as err:
+                errors.append(err.message)
+                sid = None
+            if slice_info['plate_well_ID'] != 'not fixed' and sid is not None:
+                self._check_lims(errors, warnings, spec_name, sid, site_info, slice_info)
         
 
         # Attempt import of old-format metadata
@@ -310,11 +325,12 @@ class ExperimentMetadataSubmission(object):
             
         # Write LIMS info to top-level and slice directory handles.
         # This is just for convenience when browsing the raw data.
-        slice_info = self.spec_info.copy()
-        donor_keys = ['organism', 'age', 'date_of_birth', 'genotype', 'weight', 'sex']
-        donor_info = {k:slice_info.pop(k) for k in donor_keys}
-        expt_dh.setInfo(LIMS_donor_info=donor_info)
-        slice_dh.setInfo(LIMS_specimen_info=slice_info)
+        if self.spec_info is not None:
+            slice_info = self.spec_info.copy()
+            donor_keys = ['organism', 'age', 'date_of_birth', 'genotype', 'weight', 'sex']
+            donor_info = {k:slice_info.pop(k) for k in donor_keys}
+            expt_dh.setInfo(LIMS_donor_info=donor_info)
+            slice_dh.setInfo(LIMS_specimen_info=slice_info)
             
         # Write category labels for each image
         for file_info in self.files:

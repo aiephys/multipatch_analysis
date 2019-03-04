@@ -944,7 +944,7 @@ class PairView(pg.QtCore.QObject):
             print(f)
             print(cls.predict([f]))
         else:
-            print("ID: %s" % sec)
+            print("ID: %.3f" % sec)
         
 
 

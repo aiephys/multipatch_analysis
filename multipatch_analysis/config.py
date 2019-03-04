@@ -29,7 +29,7 @@ synphys_db_host: "postgresql://readonly:readonly@10.128.36.109"
 synphys_db: "synphys"
 # optional DB access with write privileges
 synphys_db_host_rw: null
-synphys_db_readonly_user = "readonly"
+synphys_db_readonly_user: "readonly"
 
 # path to synphys network storage
 synphys_data: "N:\\"
