@@ -285,49 +285,27 @@ def vacuum(tables=None):
                 conn.execute('vacuum analyze %s' % table)
 
 
+_default_session = None
 def default_session(fn):
+    """Decorator used to auto-fill `session` keyword arguments
+    with a global default Session instance.
+    
+    If the global session is used, then it will be rolled back after 
+    the decorated function returns (to prevent idle-in-transaction timeouts).
+    """
+    
     def wrap_with_session(*args, **kwds):
-        close = False
+        global _default_session
+        used_default_session = False
         if kwds.get('session', None) is None:
-            kwds['session'] = Session(readonly=True)
-            close = True
+            if _default_session is None:
+                _default_session = Session(readonly=True)
+            kwds['session'] = _default_session
+            used_default_session = True
         try:
             ret = fn(*args, **kwds)
             return ret
         finally:
-            if close:
-                kwds['session'].close()
+            if used_default_session:
+                _default_session.rollback()
     return wrap_with_session    
-
-
-@default_session
-def slice_from_timestamp(ts, session=None):
-    slices = session.query(Slice).filter(Slice.acq_timestamp==ts).all()
-    if len(slices) == 0:
-        raise KeyError("No slice found for timestamp %0.3f" % ts)
-    elif len(slices) > 1:
-        raise KeyError("Multiple slices found for timestamp %0.3f" % ts)
-    
-    return slices[0]
-
-
-@default_session
-def experiment_from_timestamp(ts, session=None):
-    expts = session.query(Experiment).filter(Experiment.acq_timestamp==ts).all()
-    if len(expts) == 0:
-        # For backward compatibility, check for timestamp truncated to 2 decimal places
-        for expt in session.query(Experiment).all():
-            if abs((expt.acq_timestamp - ts)) < 0.01:
-                return expt
-        
-        raise KeyError("No experiment found for timestamp %0.3f" % ts)
-    elif len(expts) > 1:
-        raise RuntimeError("Multiple experiments found for timestamp %0.3f" % ts)
-    
-    return expts[0]
-
-
-@default_session
-def list_experiments(session=None):
-    return session.query(Experiment).all()
-

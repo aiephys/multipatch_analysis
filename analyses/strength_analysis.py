@@ -564,10 +564,6 @@ def get_pair_classifier(**kwds):
     return pair_classifier
     
 
-def datetime_to_timestamp(d):
-    return time.mktime(d.timetuple()) + d.microsecond * 1e-6
-
-
 def prs_qc():
     """Convenience function for debugging QC: returns (recording, window) arguments
     used for pulse response QC

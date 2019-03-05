@@ -1,4 +1,4 @@
-from .database import *
+from .database import Session, aliased, default_session, reset_db, vacuum
 
 # Import table definitions from DB modules
 from .experiment import *
@@ -6,3 +6,36 @@ from .morphology import *
 from .dataset import *
 from .pulse_response_strength import *
 from .connection_strength import *
+
+
+@default_session
+def slice_from_timestamp(ts, session=None):
+    slices = session.query(Slice).filter(Slice.acq_timestamp==ts).all()
+    if len(slices) == 0:
+        raise KeyError("No slice found for timestamp %0.3f" % ts)
+    elif len(slices) > 1:
+        raise KeyError("Multiple slices found for timestamp %0.3f" % ts)
+    
+    return slices[0]
+
+
+@default_session
+def experiment_from_timestamp(ts, session=None):
+    expts = session.query(Experiment).filter(Experiment.acq_timestamp==ts).all()
+    if len(expts) == 0:
+        # For backward compatibility, check for timestamp truncated to 2 decimal places
+        for expt in session.query(Experiment).all():
+            if abs((expt.acq_timestamp - ts)) < 0.01:
+                return expt
+        
+        raise KeyError("No experiment found for timestamp %0.3f" % ts)
+    elif len(expts) > 1:
+        raise RuntimeError("Multiple experiments found for timestamp %0.3f" % ts)
+    
+    return expts[0]
+
+
+@default_session
+def list_experiments(session=None):
+    return session.query(Experiment).all()
+
