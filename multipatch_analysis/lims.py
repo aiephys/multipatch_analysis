@@ -508,9 +508,10 @@ def cluster_cells(cluster):
     if not isinstance(cluster, int):
         cluster = specimen_id_from_name(cluster)
     
-    q = """select child.id, child.name, child.x_coord, child.y_coord, child.external_specimen_name, child.ephys_qc_result
+    q = """select child.id, child.name, child.x_coord, child.y_coord, child.external_specimen_name, child.ephys_qc_result, biospecimen_polygons.polygon_id
     from specimens parent 
-    left join specimens child on child.parent_id=parent.id 
+    left join specimens child on child.parent_id=parent.id
+    left join biospecimen_polygons on biospecimen_polygons.biospecimen_id=child.id
     where parent.id=%d
     """ % cluster
 
