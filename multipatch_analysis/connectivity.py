@@ -39,7 +39,6 @@ class ConnectivityAnalyzer(object):
             probed_pairs = [p for p in class_pairs if pair_was_probed(p, pre_class.is_excitatory)]
             connections_found = [p for p in probed_pairs if p.synapse]
             gap_junctions = [p for p in probed_pairs if p.electrical]
-
             n_connected = len(connections_found)
             n_probed = len(probed_pairs)
             probed_progress = n_probed / 80.
@@ -55,43 +54,49 @@ class ConnectivityAnalyzer(object):
                 'n_probed': n_probed,
                 'n_connected': n_connected,
                 'connection_probability': conn_prob,
-                'confidence_interval': conf_interval,
+                'cp_confidence_interval': conf_interval,
                 'connected_pairs': connections_found,
                 'probed_pairs': probed_pairs,
                 'matrix_completeness': total_progress,
                 'distance_distribution': float('nan'),
                 'gap_junctions': gap_junctions,
+                'n_gap_junctions': len(gap_junctions),
                 'None': None
             }
         
         return self.results
 
     def output_fields(self):
-        cmap = pg.ColorMap(
-            [0, 0.01, 0.03, 0.1, 0.3, 1.0],
-            [(0,0,100, 255), (80,0,80, 255), (140,0,0, 255), (255,100,0, 255), (255,255,100, 255), (255,255,255, 255)],
-        )
 
         fields = {'color_by': [
             ('n_probed', {}),
             ('n_connected', {}),
-            ('connection_probability', {'mode': 'range'}),
-            ('matrix_completeness', {'mode': 'range'}),
+            ('connection_probability', {'mode': 'range', 'operation': 'Add', 'colormap': pg.ColorMap(
+            [0, 0.01, 0.03, 0.1, 0.3, 1.0],
+            [(0,0,100, 255), (80,0,80, 255), (140,0,0, 255), (255,100,0, 255), (255,255,100, 255), (255,255,255, 255)],
+            )}),
+            ('matrix_completeness', {'mode': 'range', 'colormap': pg.ColorMap(
+                [0, 0.25, 0.5, 0.75, 1.0],
+                [(0,0,100,255), (80,0,80,255), (140,0,0,255), (255,100,0,255), (255,255,100,255)],
+            )}),
             ('distance_distribution', {'mode': 'range'}),
-            ('gap_junctions', {'mode': 'range'}),
+            ('n_gap_junctions', {'mode': 'range', 'max': 15, 'colormap': pg.ColorMap(
+                [0, 1],
+                [(0,0,100,255), (255,0,0,255)]
+            )}),
             ],
             'show_confidence': [
             'None',
-            'confidence_interval',
+            'cp_confidence_interval',
             ],
         }
 
         defaults = {'color_by': 'connection_probability', 
             'text': '{n_connected}/{n_probed}', 
-            'show_confidence': 'confidence_interval', 
-            'colormap': cmap,
-            'min': 0,
-            'max': 1}
+            'show_confidence': 'cp_confidence_interval',} 
+            # 'colormap': cmap,
+            # 'min': 0,
+            # 'max': 1}
 
         return fields, defaults
 
@@ -101,6 +106,10 @@ class ConnectivityAnalyzer(object):
         print ("Connected Pairs:")
         for connection in connections:
             print ("\t %s" % (connection))
+        gap_junctions = self.results[(pre_class, post_class)]['gap_junctions']
+        print ("Gap Junctions:")
+        for gap in gap_junctions:
+            print ("\t %s" % (gap))
         probed_pairs = self.results[(pre_class, post_class)]['probed_pairs']
         print ("Probed Pairs:")
         for probed in probed_pairs:
@@ -146,6 +155,7 @@ class StrengthAnalyzer(object):
             self.results[(pre_class, post_class)] = {
                 'no_data': no_data,
                 'connected_pairs': connections,
+                'connection_strength': connection_strength,
                 'n_connections': len(connections),
                 'ic_mean_amp': np.mean(ic_amps),
                 'ic_amp_stdev': [-np.std(ic_amps), np.std(ic_amps)],
@@ -162,16 +172,18 @@ class StrengthAnalyzer(object):
         return self.results
 
     def output_fields(self):
-        cmap = pg.ColorMap(
-            [0, 0.5, 1.0],
-            [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
-        )
-
+       
         fields = {'color_by': [
             ('n_connections', {}),
-            ('ic_mean_amp', {'mode': 'range', 'units': 'V'}),
-            ('vc_mean_amp', {'mode': 'range', 'units': 'A'}),
-            ('ic_mean_latency', {'mode': 'range', 'units': 's'}),
+            ('ic_mean_amp', {'mode': 'range', 'units': 'V', 'min': -1e-3, 'max': 1e-3, 'colormap': pg.ColorMap(
+            [0, 0.5, 1.0],
+            [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
+        )}),
+            ('vc_mean_amp', {'mode': 'range', 'units': 'A', 'min': -50e-12, 'max': 50e-12, 'colormap': pg.ColorMap(
+            [0, 0.5, 1.0],
+            [(255, 0, 0, 255), (255, 255, 255, 255), (0, 0, 255, 255)],
+        )}),
+            ('ic_mean_latency', {'mode': 'range', 'units': 's', 'min': 1e-3, 'max': 10e-3}),
             ('ic_mean_rise_time', {'mode': 'range', 'units': 's'}),
             ('ic_amp_cv', {'mode': 'range'}),
             ],
@@ -186,19 +198,25 @@ class StrengthAnalyzer(object):
 
         defaults = {'color_by': 'ic_mean_amp', 
             'text': '{n_connections}', 
-            'show_confidence': 'ic_amp_stdev', 
-            'colormap': cmap,
-            'min': -1e-3,
-            'max': 1e-3}
+            'show_confidence': 'ic_amp_stdev',} 
+            # 'colormap': cmap,
+            # 'min': -1e-3,
+            # 'max': 1e-3}
 
         return fields, defaults
 
     def print_element_info(self, pre_class, post_class):
         connections = self.results[(pre_class, post_class)]['connected_pairs']
+        connection_strength = self.results[(pre_class, post_class)]['connection_strength']
         print ("Connection type: %s -> %s" % (pre_class, post_class))
         print ("Connected Pairs:")
         for connection in connections:
             print ("\t %s" % (connection))
+            cs = [c for c in connection_strength if c.pair_id == connection.id][0]
+            vc_amp = '%0.2f pA' % (cs.vc_amp_mean*1e12) if cs.vc_amp_mean is not None else 'No QC Data'
+            ic_amp = '%0.2f mV' % (cs.ic_amp_mean*1e3) if cs.ic_amp_mean is not None else 'No QC Data'
+            print ("\t\t Average VC amplitude: %s, %d pulses" % (vc_amp, cs.vc_n_samples))
+            print ("\t\t Average IC amplitude: %s, %d pulses" % (ic_amp, cs.ic_n_samples))
         
     def summary(self, results):
         print('')

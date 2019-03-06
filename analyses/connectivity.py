@@ -134,10 +134,6 @@ class DisplayFilter(object):
         self.colorMap.setFields(color_fields)
         field_names = self.colorMap.fieldNames()
         cmap = self.colorMap.addNew(defaults['color_by'])
-        cmap['Min'] = defaults['min']
-        cmap['Max'] = defaults['max']
-        cmap['Operation'] = 'Add'
-        cmap.setValue(defaults['colormap'])
 
         # create colormap legend
         # colors = cmap.value().color
@@ -159,9 +155,6 @@ class DisplayFilter(object):
     def element_display_output(self, result):
         colormap = self.colorMap
         show_confidence = self.params['Show Confidence']
-        #color_by = self.params['Color by:']
-        # color_by = colormap.name()
-        # metric = result[color_by]
         text_format = self.params['Text format']
 
         if result[show_confidence] is not None:
