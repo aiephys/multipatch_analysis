@@ -4,13 +4,13 @@ from collections import OrderedDict
 from pyqtgraph import toposort
 
 
-class AnalysisModule(object):
-    """Analysis modules represent analysis tasks that can be run independently of other parts of the analysis
+class PipelineModule(object):
+    """Pipeline modules represent analysis tasks that can be run independently of other parts of the analysis
     pipeline. 
     
     For any given experiment, a sequence of analysis stages must be processed in order. Each stage requires a specific
     set of inputs to be present, and produces/stores some output. Inputs and outputs can be raw data files, database tables,
-    etc., although outputs are probably always written into a database. Each AnalysisModule subclass represents a single stage
+    etc., although outputs are probably always written into a database. Each PipelineModule subclass represents a single stage
     in the sequence of analyses that occur across a pipeline.
     
     The work done by a single stage in the pipeline is divided up into jobs (units of work), where each stage may
@@ -19,8 +19,8 @@ class AnalysisModule(object):
     (multiple experiments per job), or even only have a single unit of work for the entire database, such as when aggregating 
     very high-level results.
     
-    Note that AnalysisModule classes generally need not implement any actual _analysis_; rather, they are simply responsible for
-    data _management_ within the analysis pipeline. When an AnalysisModule is asked to update an analysis result, it may call out to
+    Note that PipelineModule classes generally need not implement any actual _analysis_; rather, they are simply responsible for
+    data _management_ within the analysis pipeline. When an PipelineModule is asked to update an analysis result, it may call out to
     other packages to do the real work.
     
     From here, we should be able to:
@@ -38,7 +38,7 @@ class AnalysisModule(object):
 
     @staticmethod
     def all_modules():
-        subclasses = AnalysisModule.__subclasses__()
+        subclasses = PipelineModule.__subclasses__()
         deps = {c:c.dependencies for c in subclasses}
         return OrderedDict([(mod.name, mod) for mod in toposort(deps)])
     

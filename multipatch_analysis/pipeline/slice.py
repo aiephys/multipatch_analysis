@@ -4,13 +4,13 @@ from collections import OrderedDict
 from acq4.util.DataManager import getDirHandle
 from .. import database as db
 from ..database.slice import slice_tables
-from .analysis_module import AnalysisModule
+from .pipeline_module import PipelineModule
 from .. import config
 from .. import lims
 from ..util import datetime_to_timestamp
 
 
-class SliceAnalysisModule(AnalysisModule):
+class SlicePipelineModule(PipelineModule):
     """Imports per-slice metadata into DB.
     """
     name = 'slice'
