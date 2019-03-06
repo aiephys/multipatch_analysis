@@ -1,4 +1,5 @@
-from .module import AnalysisModule
+from .analysis_module import AnalysisModule
+from .slice import SliceAnalysisModule
 
 
 def all_modules():

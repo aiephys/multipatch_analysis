@@ -27,13 +27,4 @@ class SliceTableGroup(TableGroup):
 
 
 slice_tables = SliceTableGroup()
-
-
-def init_tables():
-    global Slice
-    slice_tables.create_tables()
-    Slice = slice_tables['slice']
-
-
-# create tables in database and add global variables for ORM classes
-init_tables()
+Slice = slice_tables['slice']

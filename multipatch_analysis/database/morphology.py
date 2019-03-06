@@ -24,13 +24,4 @@ class MorphologyTableGroup(TableGroup):
 
 
 morphology_tables = MorphologyTableGroup()
-
-
-def init_tables():
-    global Morphology
-    morphology_tables.create_tables()
-    Morphology = morphology_tables['morphology']
-
-
-# create tables in database and add global variables for ORM classes
-init_tables()
+Morphology = morphology_tables['morphology']

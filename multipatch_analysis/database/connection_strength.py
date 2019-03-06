@@ -104,14 +104,4 @@ class ConnectionStrengthTableGroup(TableGroup):
 
 
 connection_strength_tables = ConnectionStrengthTableGroup()
-
-
-def init_tables():
-    global ConnectionStrength
-    connection_strength_tables.create_tables()
-
-    ConnectionStrength = connection_strength_tables['connection_strength']
-
-
-# create tables in database and add global variables for ORM classes
-init_tables()
+ConnectionStrength = connection_strength_tables['connection_strength']

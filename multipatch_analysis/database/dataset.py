@@ -1,4 +1,4 @@
-from .database import TableGroup, _generate_mapping, _sample_rate_str
+from .database import TableGroup, _sample_rate_str
 from sqlalchemy.orm import relationship, deferred, sessionmaker, aliased
 from .experiment import Experiment, Electrode, Pair
 
@@ -151,22 +151,12 @@ class DatasetTableGroup(TableGroup):
 
 
 dataset_tables = DatasetTableGroup()
-
-
-def init_tables():
-    global SyncRec, Recording, PatchClampRecording, MultiPatchProbe, TestPulse, StimPulse, StimSpike, PulseResponse, Baseline
-    dataset_tables.create_tables()
-
-    SyncRec = dataset_tables['sync_rec']
-    Recording = dataset_tables['recording']
-    PatchClampRecording = dataset_tables['patch_clamp_recording']
-    MultiPatchProbe = dataset_tables['multi_patch_probe']
-    TestPulse = dataset_tables['test_pulse']
-    StimPulse = dataset_tables['stim_pulse']
-    StimSpike = dataset_tables['stim_spike']
-    PulseResponse = dataset_tables['pulse_response']
-    Baseline = dataset_tables['baseline']
-
-
-# create tables in database and add global variables for ORM classes
-init_tables()
+SyncRec = dataset_tables['sync_rec']
+Recording = dataset_tables['recording']
+PatchClampRecording = dataset_tables['patch_clamp_recording']
+MultiPatchProbe = dataset_tables['multi_patch_probe']
+TestPulse = dataset_tables['test_pulse']
+StimPulse = dataset_tables['stim_pulse']
+StimSpike = dataset_tables['stim_spike']
+PulseResponse = dataset_tables['pulse_response']
+Baseline = dataset_tables['baseline']

@@ -1,29 +1,12 @@
-from .database import TableGroup, _generate_mapping
+from .database import TableGroup, generate_mapping
 from sqlalchemy.orm import relationship, deferred, sessionmaker, aliased
-
+from .slice import Slice
 
 class ExperimentTableGroup(TableGroup):
     """Contains basic tables that are populated when initially importing an experiment: 
     slice, experiment, electrode, cell, pair.
     """
     schemas = {
-        'slice': [
-            "All brain slices on which an experiment was attempted.",
-            ('acq_timestamp', 'float', 'Creation timestamp for slice data acquisition folder.', {'unique': True}),
-            ('species', 'str', 'Human | mouse (from LIMS)'),
-            ('age', 'int', 'Specimen age (in days) at time of dissection (from LIMS)'),
-            ('sex', 'str', 'Specimen sex ("M", "F", or "unknown"; from LIMS)'),
-            ('weight', 'str', 'Specimen weight (from LIMS)'),
-            ('genotype', 'str', 'Specimen donor genotype (from LIMS)'),
-            ('orientation', 'str', 'Orientation of the slice plane (eg "sagittal"; from LIMS specimen name)'),
-            ('surface', 'str', 'The surface of the slice exposed during the experiment (eg "left"; from LIMS specimen name)'),
-            ('hemisphere', 'str', 'The brain hemisphere from which the slice originated. (from LIMS specimen name)'),
-            ('quality', 'int', 'Experimenter subjective slice quality assessment (0-5)'),
-            ('slice_time', 'datetime', 'Time when this specimen was sliced'),
-            ('slice_conditions', 'object', 'JSON containing solutions, perfusion, incubation time, etc.'),
-            ('lims_specimen_name', 'str', 'Name of LIMS "slice" specimen'),
-            ('storage_path', 'str', 'Location of data within server or cache storage'),
-        ],
         'experiment': [
             "A group of cells patched simultaneously in the same slice.",
             ('original_path', 'str', 'Original location of raw data on rig.'),
@@ -92,11 +75,10 @@ class ExperimentTableGroup(TableGroup):
     }
 
     def create_mappings(self):
-        self.mappings['slice'] = Slice = _generate_mapping('slice')
-        self.mappings['experiment'] = Experiment = _generate_mapping('experiment', base=ExperimentBase)
-        self.mappings['electrode'] = Electrode = _generate_mapping('electrode')
-        self.mappings['cell'] = Cell = _generate_mapping('cell')
-        self.mappings['pair'] = Pair = _generate_mapping('pair', base=PairBase)
+        self.mappings['experiment'] = Experiment = generate_mapping('experiment', self.schemas['experiment'], base=ExperimentBase)
+        self.mappings['electrode'] = Electrode = generate_mapping('electrode', self.schemas['electrode'])
+        self.mappings['cell'] = Cell = generate_mapping('cell', self.schemas['cell'])
+        self.mappings['pair'] = Pair = generate_mapping('pair', self.schemas['pair'], base=PairBase)
         
         Slice.experiments = relationship("Experiment", order_by=Experiment.id, back_populates="slice", cascade='save-update,merge,delete')
         Experiment.slice = relationship("Slice", back_populates="experiments")
@@ -116,10 +98,6 @@ class ExperimentTableGroup(TableGroup):
         Pair.post_cell = relationship(Cell, foreign_keys=[Pair.post_cell_id])
         #Cell.post_pairs = relationship(Pair, back_populates="post_cell", single_parent=True, foreign_keys=[Pair.post_cell])
         
-
-
-experiment_tables = ExperimentTableGroup()
-
 
 class ExperimentBase(object):
     def __getitem__(self, item):
@@ -184,16 +162,8 @@ class PairBase(object):
         return "<%s %0.3f %d %d>" % (self.__class__.__name__, self.experiment.acq_timestamp, self.pre_cell.ext_id, self.post_cell.ext_id)
 
 
-def init_tables():
-    global Slice, Experiment, Electrode, Cell, Pair
-    experiment_tables.create_tables()
-
-    Slice = experiment_tables['slice']
-    Experiment = experiment_tables['experiment']
-    Electrode = experiment_tables['electrode']
-    Cell = experiment_tables['cell']
-    Pair = experiment_tables['pair']
-
-
-# create tables in database and add global variables for ORM classes
-init_tables()
+experiment_tables = ExperimentTableGroup()
+Experiment = experiment_tables['experiment']
+Electrode = experiment_tables['electrode']
+Cell = experiment_tables['cell']
+Pair = experiment_tables['pair']

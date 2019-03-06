@@ -45,15 +45,5 @@ class PulseResponseStrengthTableGroup(TableGroup):
 
 
 pulse_response_strength_tables = PulseResponseStrengthTableGroup()
-
-
-def init_tables():
-    global PulseResponseStrength, BaselineResponseStrength
-    pulse_response_strength_tables.create_tables()
-
-    PulseResponseStrength = pulse_response_strength_tables['pulse_response_strength']
-    BaselineResponseStrength = pulse_response_strength_tables['baseline_response_strength']
-
-
-# create tables in database and add global variables for ORM classes
-init_tables()
+PulseResponseStrength = pulse_response_strength_tables['pulse_response_strength']
+BaselineResponseStrength = pulse_response_strength_tables['baseline_response_strength']

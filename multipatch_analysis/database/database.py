@@ -1,7 +1,7 @@
 """
 Accumulate all experiment data into a set of linked tables.
 """
-import os, io, time
+import os, sys, io, time
 from datetime import datetime
 import numpy as np
 
@@ -20,13 +20,14 @@ from sqlalchemy.sql.expression import func
 from .. import config
 
 # database version should be incremented whenever the schema has changed
-db_version = 11
+db_version = 12
 db_name = '{database}_{version}'.format(database=config.synphys_db, version=db_version)
-db_address_ro = '{host}/{database}'.format(host=config.synphys_db_host, database=db_name)
+app_name = 'mp_a:' + ' '.join(sys.argv[1:])
+db_address_ro = '{host}/{database}?application_name={appname}'.format(host=config.synphys_db_host, database=db_name, appname=app_name)
 if config.synphys_db_host_rw is None:
     db_address_rw = None
 else:
-    db_address_rw = '{host}/{database}'.format(host=config.synphys_db_host_rw, database=db_name)
+    db_address_rw = '{host}/{database}?application_name={appname}'.format(host=config.synphys_db_host_rw, database=db_name, appname=app_name)
 
 default_sample_rate = 20000
 
@@ -168,11 +169,6 @@ def generate_mapping(table, schema, base=None):
         return type(name, (base,ORMBase), props)
 
 
-def _generate_mapping(table, base=None):
-    return generate_mapping(table, table_schemas[table], base=base)
-
-
-
 
 #-------------- initial DB access ----------------
 engine_ro = None
@@ -233,14 +229,12 @@ def Session(readonly=True):
         return _sessionmaker_rw()
 
 
-create_all_mappings()
-
-
-
 def reset_db():
     """Drop the existing synphys database and initialize a new one.
     """
     global engine_rw
+    
+    dispose_engines()
     
     pg_engine = create_engine(config.synphys_db_host_rw + '/postgres')
     with pg_engine.begin() as conn:
@@ -267,7 +261,7 @@ def reset_db():
     # Create all tables
     global ORMBase
     ORMBase = declarative_base()
-    create_all_mappings()
+    # create_all_mappings()
     ORMBase.metadata.create_all(engine_rw)
 
 

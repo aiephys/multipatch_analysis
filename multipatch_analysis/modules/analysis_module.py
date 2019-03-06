@@ -67,7 +67,9 @@ class AnalysisModule(object):
             If False, then errors are logged and ignored.
             This is used mainly for debugging to allow traceback inspection.
         """
+        print("Updating pipeline stage: %s" % cls.name)
         if job_ids is None:
+            print("Searching for jobs to update..")
             run_job_ids, drop_job_ids = cls.updatable_jobs()                    
             if limit is not None:
                 np.random.shuffle(job_ids)
@@ -75,17 +77,21 @@ class AnalysisModule(object):
         else:
             run_job_ids = job_ids
             drop_job_ids = job_ids
+            
+        print("Found %d jobs to update." % len(run_job_ids))
 
         if len(drop_job_ids) > 0:
             print("Dropping %d invalid results.." % len(drop_job_ids))
             cls.drop_jobs(drop_job_ids)
 
-        run_jobs = [("process", expt_id, i, len(job_ids)) for i, expt_id in enumerate(job_ids)]
+        run_jobs = [(expt_id, i, len(job_ids)) for i, expt_id in enumerate(job_ids)]
 
         if parallel:
+            print("Processing all jobs (parallel)..")
             pool = multiprocessing.Pool(processes=workers)
             pool.map(cls._run_job, run_jobs)
         else:
+            print("Processing all jobs (serial)..")
             for job in run_jobs:
                 cls._run_job(job, raise_exceptions=raise_exceptions)
 
@@ -93,11 +99,11 @@ class AnalysisModule(object):
     def _run_job(cls, job, raise_exceptions=False):
         """Entry point for running a single analysis job; may be invoked in a subprocess.
         """
-        job_id, invalid, job_index, n_jobs = job
+        job_id, job_index, n_jobs = job
         print("Processing %d/%d  %s") % (job_index, n_jobs, job_id)
         try:
-            cls.process_job(job_id, invalid)
-        except Exception as exc:
+            cls.process_job(job_id)
+        except Exception:
             if raise_exceptions:
                 raise
             else:
@@ -107,18 +113,21 @@ class AnalysisModule(object):
             print("Finished %d/%d  %s") % (job_index, n_jobs, job_id)
     
     @classmethod
-    def process_job(cls, job_id, invalid):
+    def process_job(cls, job_id):
         """Process analysis for one job.
         
         Parameters
         ----------
         job_id :
             The ID of the job to be processed.
-        invalid : bool
-            If True, then previous (invalid) results already exist and
-            need to be either purged or updated.
         
         Must be reimplemented in subclasses.
+        """
+        raise NotImplementedError()
+
+    @classmethod
+    def initialize(cls):
+        """Create space (folders, tables, etc.) for this analyzer to store its results.
         """
         raise NotImplementedError()
         
@@ -202,8 +211,8 @@ class AnalysisModule(object):
         """
         run_job_ids = []
         drop_job_ids = []
-        ready = self.ready_jobs()
-        finished = self.finished_jobs()
+        ready = cls.ready_jobs()
+        finished = cls.finished_jobs()
         for job in ready:
             if job in finished:
                 if ready[job] > finished[job]:
