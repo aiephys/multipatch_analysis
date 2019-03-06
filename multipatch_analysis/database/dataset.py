@@ -3,6 +3,9 @@ from sqlalchemy.orm import relationship, deferred, sessionmaker, aliased
 from .experiment import Experiment, Electrode, Pair
 
 
+__all__ = ['dataset_tables', 'SyncRec', 'Recording', 'PatchClampRecording', 'MultiPatchProbe', 'TestPulse', 'StimPulse', 'StimSpike', 'PulseResponse', 'Baseline']
+
+
 class DatasetTableGroup(TableGroup):
     """Defines tables that hold data imported from a dataset, such as recordings, stimuli, pulse responses, etc.
     """

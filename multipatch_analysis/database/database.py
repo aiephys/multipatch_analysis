@@ -260,7 +260,7 @@ def reset_db():
     
     # Create all tables
     global ORMBase
-    ORMBase = declarative_base()
+    # ORMBase = declarative_base()
     # create_all_mappings()
     ORMBase.metadata.create_all(engine_rw)
 

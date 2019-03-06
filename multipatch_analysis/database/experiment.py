@@ -2,6 +2,10 @@ from .database import TableGroup, generate_mapping
 from sqlalchemy.orm import relationship, deferred, sessionmaker, aliased
 from .slice import Slice
 
+
+__all__ = ['experiment_tables', 'Experiment', 'Electrode', 'Cell', 'Pair']
+
+
 class ExperimentTableGroup(TableGroup):
     """Contains basic tables that are populated when initially importing an experiment: 
     slice, experiment, electrode, cell, pair.

@@ -3,6 +3,9 @@ from .database import TableGroup
 from .experiment import Cell
 
 
+__all__ = ['morphology_tables', 'Morphology']
+
+
 class MorphologyTableGroup(TableGroup):
     schemas = {
         'morphology': [

@@ -1,5 +1,7 @@
 from .database import TableGroup
 
+__all__ = ['slice_tables', 'Slice']
+
 
 class SliceTableGroup(TableGroup):
     """Contains table of per-slice information.

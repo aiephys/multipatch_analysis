@@ -1,6 +1,7 @@
 from .database import Session, aliased, default_session, reset_db, vacuum
 
 # Import table definitions from DB modules
+from .slice import *
 from .experiment import *
 from .morphology import *
 from .dataset import *

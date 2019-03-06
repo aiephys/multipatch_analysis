@@ -3,6 +3,9 @@ from .database import TableGroup
 from .dataset import PulseResponse, Baseline
 
 
+__all__ = ['pulse_response_strength_tables', 'PulseResponseStrength', 'BaselineResponseStrength']
+
+
 class PulseResponseStrengthTableGroup(TableGroup):
     """Measures pulse amplitudes for each pulse response and background chunk.
     """

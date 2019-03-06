@@ -84,7 +84,7 @@ class AnalysisModule(object):
             print("Dropping %d invalid results.." % len(drop_job_ids))
             cls.drop_jobs(drop_job_ids)
 
-        run_jobs = [(expt_id, i, len(job_ids)) for i, expt_id in enumerate(job_ids)]
+        run_jobs = [(expt_id, i, len(run_job_ids)) for i, expt_id in enumerate(run_job_ids)]
 
         if parallel:
             print("Processing all jobs (parallel)..")

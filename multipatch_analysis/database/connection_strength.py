@@ -4,6 +4,9 @@ from .database import TableGroup
 from .experiment import Pair
 
 
+__all__ = ['connection_strength_tables', 'ConnectionStrength']
+
+
 class ConnectionStrengthTableGroup(TableGroup):
     schemas = {
         'connection_strength': [
