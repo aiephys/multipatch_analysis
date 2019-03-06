@@ -32,46 +32,53 @@ class ConnectivityAnalyzer(object):
         """Given a list of cell pairs and a dict that groups cells together by class,
         return a structure that describes connectivity between cell classes.
         """    
-        results = OrderedDict()
+        self.results = OrderedDict()
         for key, class_pairs in pair_groups.items():
             pre_class, post_class = key
-            
+            no_data = False
             probed_pairs = [p for p in class_pairs if pair_was_probed(p, pre_class.is_excitatory)]
             connections_found = [p for p in probed_pairs if p.synapse]
+            gap_junctions = [p for p in probed_pairs if p.electrical]
 
             n_connected = len(connections_found)
             n_probed = len(probed_pairs)
+            probed_progress = n_probed / 80.
+            connected_progress = n_connected / 6.
+            total_progress = np.clip(np.where(probed_progress > connected_progress, probed_progress, connected_progress), 0, 1)
             conf_interval = connection_probability_ci(n_connected, n_probed)
             conn_prob = float('nan') if n_probed == 0 else n_connected / n_probed
+            if n_probed == 0:
+                no_data = True
 
-            results[(pre_class, post_class)] = {
+            self.results[(pre_class, post_class)] = {
+                'no_data': no_data,
                 'n_probed': n_probed,
                 'n_connected': n_connected,
                 'connection_probability': conn_prob,
                 'confidence_interval': conf_interval,
                 'connected_pairs': connections_found,
                 'probed_pairs': probed_pairs,
-                'matrix_completeness': float('nan'),
+                'matrix_completeness': total_progress,
                 'distance_distribution': float('nan'),
-                'gap_junctions': float('nan'),
+                'gap_junctions': gap_junctions,
                 'None': None
             }
         
-        return results
+        return self.results
 
     def output_fields(self):
         cmap = pg.ColorMap(
             [0, 0.01, 0.03, 0.1, 0.3, 1.0],
-            [(0,0,100), (80,0,80), (140,0,0), (255,100,0), (255,255,100), (255,255,255)],
+            [(0,0,100, 255), (80,0,80, 255), (140,0,0, 255), (255,100,0, 255), (255,255,100, 255), (255,255,255, 255)],
         )
 
         fields = {'color_by': [
-            'n_probed',
-            'n_connected',
-            'connection_probability',
-            'matrix_completeness',
-            'distance_distribution',
-            'gap_junctions'
+            ('n_probed', {}),
+            ('n_connected', {}),
+            ('connection_probability', {'mode': 'range'}),
+            ('matrix_completeness', {'mode': 'range'}),
+            ('distance_distribution', {'mode': 'range'}),
+            ('gap_junctions', {'mode': 'range'}),
             ],
             'show_confidence': [
             'None',
@@ -82,9 +89,22 @@ class ConnectivityAnalyzer(object):
         defaults = {'color_by': 'connection_probability', 
             'text': '{n_connected}/{n_probed}', 
             'show_confidence': 'confidence_interval', 
-            'colormap': cmap}
+            'colormap': cmap,
+            'min': 0,
+            'max': 1}
 
         return fields, defaults
+
+    def print_element_info(self, pre_class, post_class):
+        connections = self.results[(pre_class, post_class)]['connected_pairs']
+        print ("Connection type: %s -> %s" % (pre_class, post_class))
+        print ("Connected Pairs:")
+        for connection in connections:
+            print ("\t %s" % (connection))
+        probed_pairs = self.results[(pre_class, post_class)]['probed_pairs']
+        print ("Probed Pairs:")
+        for probed in probed_pairs:
+            print ("\t %s" % (probed))
 
     def summary(self, results):
         total_connected = 0
@@ -111,18 +131,26 @@ class StrengthAnalyzer(object):
         self.results = None
 
     def measure(self, pair_groups):
-        results = OrderedDict()
+        self.results = OrderedDict()
         for key, class_pairs in pair_groups.items():
             pre_class, post_class = key
-
+            no_data = False
             connections = [p for p in class_pairs if p.synapse]
+            if len(connections) == 0:
+                no_data = True
             connection_strength = [c.connection_strength for c in connections] if len(connections) > 0 else float('nan')
             ic_amps = filter(None, [cs.ic_amp_mean for cs in connection_strength]) if len(connections) > 0 else float('nan')
+            vc_amps = filter(None, [cs.vc_amp_mean for cs in connection_strength]) if len(connections) > 0 else float('nan')
             ic_latencies = filter(None, [cs.ic_latency_mean for cs in connection_strength]) if len(connections) > 0 else float('nan')
-            results[(pre_class, post_class)] = {
+            
+            self.results[(pre_class, post_class)] = {
+                'no_data': no_data,
+                'connected_pairs': connections,
                 'n_connections': len(connections),
                 'ic_mean_amp': np.mean(ic_amps),
                 'ic_amp_stdev': [-np.std(ic_amps), np.std(ic_amps)],
+                'vc_mean_amp': np.mean(vc_amps),
+                'vc_amp_stdev': [-np.std(vc_amps), np.std(vc_amps)],
                 'ic_mean_latency': np.mean(ic_latencies),
                 'ic_latency_stdev': [-np.std(ic_latencies), np.std(ic_latencies)],
                 'ic_mean_rise_time': float('nan'),
@@ -131,24 +159,26 @@ class StrengthAnalyzer(object):
                 'None': None,
             }
 
-        return results
+        return self.results
 
     def output_fields(self):
         cmap = pg.ColorMap(
             [0, 0.5, 1.0],
-            [(0, 0, 255), (255, 255, 255), (255, 0, 0)],
+            [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
         )
 
         fields = {'color_by': [
-            'n_connections',
-            'ic_mean_amp',
-            'ic_mean_latency',
-            'ic_mean_rise_time',
-            'ic_amp_cv'
+            ('n_connections', {}),
+            ('ic_mean_amp', {'mode': 'range', 'units': 'V'}),
+            ('vc_mean_amp', {'mode': 'range', 'units': 'A'}),
+            ('ic_mean_latency', {'mode': 'range', 'units': 's'}),
+            ('ic_mean_rise_time', {'mode': 'range', 'units': 's'}),
+            ('ic_amp_cv', {'mode': 'range'}),
             ],
             'show_confidence': [
             'None',
             'ic_amp_stdev',
+            'vc_amp_stdev',
             'ic_latency_stdev',
             'ic_rise_time_stdev'
             ],
@@ -157,29 +187,19 @@ class StrengthAnalyzer(object):
         defaults = {'color_by': 'ic_mean_amp', 
             'text': '{n_connections}', 
             'show_confidence': 'ic_amp_stdev', 
-            'colormap': cmap}
+            'colormap': cmap,
+            'min': -1e-3,
+            'max': 1e-3}
 
         return fields, defaults
 
-    def display(self, pre_class, post_class, result):
-        # this needs to be scaled by the range of amplitudes
-        colormap = pg.ColorMap(
-            [0, 0.5, 1.0],
-            [(0, 0, 255), (255, 255, 255), (255, 0, 0)],
-            )
-
-        n_connections = result['n_connections']
-        if n_connections > 0:
-            amps = filter(None, result['ic_mean_amp'])
-            grand_amp = np.mean(amps)
-            text = ("%.2f mV" % (grand_amp*1e3))
-            grand_stdev = np.std(amps)
-            output = set_display(grand_amp, text, colormap, upper_ci=grand_stdev, lower_ci=(-grand_stdev))
-        else:
-            output = set_display(float('nan'), '', colormap)
-
-        return output
-
+    def print_element_info(self, pre_class, post_class):
+        connections = self.results[(pre_class, post_class)]['connected_pairs']
+        print ("Connection type: %s -> %s" % (pre_class, post_class))
+        print ("Connected Pairs:")
+        for connection in connections:
+            print ("\t %s" % (connection))
+        
     def summary(self, results):
         print('')
 

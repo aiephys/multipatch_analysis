@@ -18,6 +18,7 @@ from multipatch_analysis.cell_class import CellClass, classify_cells, classify_p
 from multipatch_analysis.ui.graphics import MatrixItem
 from pyqtgraph import parametertree as ptree
 from pyqtgraph.parametertree import Parameter
+from pyqtgraph.widgets.ColorMapWidget import ColorMapParameter
 
 
 class MainWindow(pg.QtGui.QWidget):
@@ -121,41 +122,62 @@ class DisplayFilter(object):
         self.output = None
         self._signalHandler = SignalHandler()
         self.sigOutputChanged = self._signalHandler.sigOutputChanged
+        self.matrix_widget = MainWindow().matrix_widget
         self.params = Parameter.create(name='Display Options', type='group')
     
         self.params.sigTreeStateChanged.connect(self.invalidate_output)
         
     def set_display_fields(self, display_fields, defaults):
+        self.params.clearChildren()
+        self.colorMap = ColorMapParameter()
+        color_fields = display_fields['color_by']
+        self.colorMap.setFields(color_fields)
+        field_names = self.colorMap.fieldNames()
+        cmap = self.colorMap.addNew(defaults['color_by'])
+        cmap['Min'] = defaults['min']
+        cmap['Max'] = defaults['max']
+        cmap['Operation'] = 'Add'
+        cmap.setValue(defaults['colormap'])
+
+        # create colormap legend
+        # colors = cmap.value().color
+        # x = np.linspace(0, 1, len(colors))
+        # cmap2 = pg.ColorMap(x, colors)
+        # legend = pg.GradientLegend([25, 300], [-20, -30])
+        # legend.setGradient(cmap2.getGradient())
+        # legend.setLabels({'%d'%int(a*100):b for a,b in zip(cmap.value().pos, x)})
+        # self.matrix_widget.view_box.addItem(legend)
+
         fields = [
-        {'name': 'Matrix Colormap', 'type': 'colormap', 'value': defaults['colormap']},
-        {'name': 'Color by:', 'type': 'list', 'values': display_fields['color_by'], 'value': defaults['color_by']},
+        self.colorMap,
         {'name': 'Text format', 'type': 'str', 'value': defaults['text']},
         {'name': 'Show Confidence', 'type': 'list', 'values': display_fields['show_confidence'], 'value': defaults['show_confidence']},
         ]
 
-        return fields
+        self.params.addChildren(fields)
 
-    def set_display(self, result):
-        colormap = self.params['Matrix Colormap']
+    def element_display_output(self, result):
+        colormap = self.colorMap
         show_confidence = self.params['Show Confidence']
-        color_by = self.params['Color by:']
-        metric = result[color_by]
+        #color_by = self.params['Color by:']
+        # color_by = colormap.name()
+        # metric = result[color_by]
         text_format = self.params['Text format']
 
         if result[show_confidence] is not None:
             self.output = {'bordercolor': 0.6}
-            default_bgcolor = np.array([128., 128., 128.])
+            default_bgcolor = np.array([128., 128., 128., 255.])
         else:
             self.output = {'bordercolor': 0.8}
             default_bgcolor = np.array([220., 220., 220.])
         
-        if np.isnan(metric):
+        if result['no_data'] is True:
             self.output['bgcolor'] = tuple(default_bgcolor)
             self.output['fgcolor'] = 0.6
             self.output['text'] = ''
         else:
-            # get color based on metric
-            color = colormap.map(metric)
+            mappable_result = {k:v for k,v in result.items() if np.isscalar(v)}
+            color = colormap.map(mappable_result)[0]
             
             # desaturate low confidence cells
             if result[show_confidence] is not None:
@@ -218,6 +240,9 @@ class MatrixAnalyzer(object):
         self.display_filter = DisplayFilter()
         self.default_analyzer = default_analyzer
         self.session = session
+        self.results = None
+        self.cell_groups = None
+        self.cell_classes = None
         self.params = ptree.Parameter.create(name='params', type='group', children=[
             self.experiment_filter.params, 
             self.cell_class_filter.params,
@@ -236,7 +261,7 @@ class MatrixAnalyzer(object):
 
         self.win = MainWindow()
         self.win.show()
-        self.win.resize(1200, 800)
+        self.win.setGeometry(380, 130,1200, 800)
         self.win.setWindowTitle('Matrix Analyzer')
         self.win.ptree.setParameters(self.params, showTop=False)
 
@@ -244,20 +269,21 @@ class MatrixAnalyzer(object):
         self.win.matrix_widget.sigClicked.connect(self.display_matrix_element_data)
         self.experiment_filter.sigOutputChanged.connect(self.cell_class_filter.invalidate_output)
         self.params.child('Analyzers', 'Analysis').sigValueChanged.connect(self.analyzerChanged)
+        self.display_filter.sigOutputChanged.connect(self.update_matrix_display)
 
     def set_defaults(self):
-        analysis = self.analyzers[self.default_analyzer]()
-        fields, defaults = analysis.output_fields()
-        display_params = self.display_filter.set_display_fields(fields, defaults)
-        self.params.child('Display Options').addChildren(display_params)
+        self.analysis = self.analyzers[self.default_analyzer]()
+        fields, defaults = self.analysis.output_fields()
+        self.display_filter.set_display_fields(fields, defaults)
         self.experiment_filter.params.child('Projects').child('mouse V1 coarse matrix').setValue(True)
         self.cell_class_filter.params.child('Mouse All Cre-types by layer').setValue(True)
+        self.analysis.sigOutputChanged.connect(self.display_filter.invalidate_output)
+        self.cell_class_filter.sigOutputChanged.connect(self.analysis.invalidate_output)
 
-        return analysis
+        return self.analysis
 
     def analyzerChanged(self):
         if self.analysis is not None:
-            self.params.child('Display Options').clearChildren()
             self.analysis.sigOutputChanged.disconnect(self.display_filter.invalidate_output)
             self.cell_class_filter.sigOutputChanged.disconnect(self.analysis.invalidate_output)
 
@@ -272,46 +298,36 @@ class MatrixAnalyzer(object):
 
         # update list of display fields
         fields, defaults = self.analysis.output_fields()
-        display_params = self.display_filter.set_display_fields(fields, defaults)
-        self.params.child('Display Options').addChildren(display_params)
+        self.display_filter.set_display_fields(fields, defaults)
+
         print ('Analysis changed!')
 
     def update_clicked(self):
         with pg.BusyCursor():
-            self.update_matrix()
-
-    def element_connection_list(self, pre_class, post_class):
-        results = ConnectivityAnalyzer(self.pair_groups).measure()
-        connections = results[(pre_class, post_class)]['connected_pairs']
-        print ("Connection type: %s -> %s" % (pre_class, post_class))
-        print ("Connected Pairs:")
-        for connection in connections:
-            print ("\t %s" % (connection))
-        probed_pairs = results[(pre_class, post_class)]['probed_pairs']
-        print ("Probed Pairs:")
-        for probed in probed_pairs:
-            print ("\t %s" % (probed))
+            self.update_matrix_results()
+            self.update_matrix_display()
 
     def display_matrix_element_data(self, matrix_widget, event, row, col):
         pre_class, post_class = self.matrix_map[row, col]
-        self.element_connection_list(pre_class, post_class)
+        self.analysis.print_element_info(pre_class, post_class)
 
-    def update_matrix(self):
+    def update_matrix_results(self):
         # Select pairs (todo: age, acsf, internal, temp, etc.)
         self.pairs = self.experiment_filter.get_pair_list(self.session)
 
         # Group all cells by selected classes
-        cell_groups, cell_classes = self.cell_class_filter.get_cell_groups(self.pairs)
+        self.cell_groups, self.cell_classes = self.cell_class_filter.get_cell_groups(self.pairs)
         
 
         # Group pairs into (pre_class, post_class) groups
-        self.pair_groups = classify_pairs(self.pairs, cell_groups)
+        self.pair_groups = classify_pairs(self.pairs, self.cell_groups)
 
         # analyze matrix elements
-        results = self.analysis.measure(self.pair_groups)
-    
+        self.results = self.analysis.measure(self.pair_groups)
 
-        shape = (len(cell_groups),) * 2
+    def update_matrix_display(self):
+        
+        shape = (len(self.cell_groups),) * 2
         text = np.empty(shape, dtype=object)
         fgcolor = np.empty(shape, dtype=object)
         bgcolor = np.empty(shape, dtype=object)
@@ -320,9 +336,9 @@ class MatrixAnalyzer(object):
         # call display function on every matrix element
         
         self.matrix_map = {}
-        for i,row in enumerate(cell_groups):
-            for j,col in enumerate(cell_groups):
-                output = self.display_filter.set_display(results[(row, col)])
+        for i,row in enumerate(self.cell_groups):
+            for j,col in enumerate(self.cell_groups):
+                output = self.display_filter.element_display_output(self.results[(row, col)])
                 self.matrix_map[i, j] = (row, col)
                 text[i, j] = output['text']
                 fgcolor[i, j] = output['fgcolor']
@@ -332,7 +348,7 @@ class MatrixAnalyzer(object):
         # Force cell class descriptions down to tuples of 2 items
         # Kludgy, but works for now.
         rows = []
-        for cell_class in cell_classes:
+        for cell_class in self.cell_classes:
             tup = cell_class.as_tuple
             row = tup[:1]
             if len(tup) > 1:
