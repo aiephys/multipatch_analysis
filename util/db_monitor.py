@@ -6,13 +6,13 @@ from multipatch_analysis import config
 from sqlalchemy import create_engine
 
 
-engine = create_engine(config.synphys_db_host_rw + '/postgres')
+engine = create_engine(config.synphys_db_host_rw + '/postgres?application_name=db_monitor')
 
 
 
 def list_db_connections():
     with engine.begin() as conn:
-        result = conn.execute("select client_addr, client_port, datname, query, state, usename, application_name from pg_stat_activity;")
+        result = conn.execute("select client_addr, client_port, datname, query, state, usename, application_name, pid from pg_stat_activity;")
         connections = result.fetchall()
     return connections
 
@@ -44,11 +44,11 @@ def check():
             host = hostname(ip)
         name = known_addrs.get(ip, known_addrs.get(host, '???'))
         count = counts[ip]
-        print("{:8s}  {:3d}  {:15s}".format(name, count, ip))
+        print("{:8s}{:15s}".format(name, ip))
         
         for con in connects:
             if con[0] == ip:
-                print("        {:50s}    {:10s} {:s}   ".format(con.usename+'/'+con.datname+'/'+con.application_name, '['+con.state+']', con.query.replace('\n', ' ')[:100]))
+                print("        {:15s} {:15s} {:20s} {:6d} {:10s} {:s}   ".format(con.usename, con.datname, con.application_name[:13], con.pid, '['+con.state+']', con.query.replace('\n', ' ')[:100]))
     
     
 check()
