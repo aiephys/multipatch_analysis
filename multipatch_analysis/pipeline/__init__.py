@@ -1,5 +1,6 @@
 from .pipeline_module import PipelineModule
 from .slice import SlicePipelineModule
+from .experiment import ExperimentPipelineModule
 
 
 def all_modules():

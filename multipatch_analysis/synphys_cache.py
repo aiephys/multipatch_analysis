@@ -30,10 +30,10 @@ class SynPhysCache(object):
         return expts
 
     def list_nwbs(self):
-        return glob.glob(os.path.join(self.remote_path, '*', 'slice_*', 'site_*', '*.nwb'))
+        return glob.glob(os.path.join(self.remote_path, '15034*', 'slice_*', 'site_*', '*.nwb'))
     
     def list_pip_yamls(self):
-        return glob.glob(os.path.join(self.remote_path, '*', 'slice_*', 'site_*', 'pipettes.yml'))
+        return glob.glob(os.path.join(self.remote_path, '15034*', 'slice_*', 'site_*', 'pipettes.yml'))
 
     def get_cache(self, filename):
         if self.local_path is None:

@@ -234,4 +234,5 @@ class PipelineModule(object):
             if job not in ready and job not in drop_job_ids:
                 drop_job_ids.append(job)
         
+        print("%d jobs ready for processing, %d finished, %d need drop, %d need update" % (len(ready), len(finished), len(drop_job_ids), len(run_job_ids)))
         return run_job_ids, drop_job_ids
