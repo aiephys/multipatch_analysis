@@ -11,6 +11,7 @@ class SliceTableGroup(TableGroup):
             "All brain slices on which an experiment was attempted.",
             ('acq_timestamp', 'float', 'Creation timestamp for slice data acquisition folder.', {'unique': True}),
             ('species', 'str', 'Human | mouse (from LIMS)'),
+            ('date_of_birth', 'datetime', 'Date of birth for this specimen'),
             ('age', 'int', 'Specimen age (in days) at time of dissection (from LIMS)'),
             ('sex', 'str', 'Specimen sex ("M", "F", or "unknown"; from LIMS)'),
             ('weight', 'str', 'Specimen weight (from LIMS)'),

@@ -1,4 +1,4 @@
-import sys, multiprocessing
+import sys, time, multiprocessing
 import numpy as np
 from collections import OrderedDict
 from pyqtgraph import toposort
@@ -44,6 +44,8 @@ class PipelineModule(object):
     
     @classmethod
     def dependent_modules(cls):
+        """Return a list of other modules that depend on this module.
+        """
         mods = cls.all_modules()
         return [mod for mod in mods if cls in mod.dependencies]
     
@@ -101,6 +103,7 @@ class PipelineModule(object):
         """
         job_id, job_index, n_jobs = job
         print("Processing %d/%d  %s") % (job_index, n_jobs, job_id)
+        start = time.time()
         try:
             cls.process_job(job_id)
         except Exception:
@@ -110,7 +113,7 @@ class PipelineModule(object):
                 print("Error processing %d/%d  %s:") % (job_index, n_jobs, job_id)
                 sys.excepthook(*sys.exc_info())
         else:
-            print("Finished %d/%d  %s") % (job_index, n_jobs, job_id)
+            print("Finished %d/%d  %s  (%0.2g sec)") % (job_index, n_jobs, job_id, time.time()-start)
     
     @classmethod
     def process_job(cls, job_id):

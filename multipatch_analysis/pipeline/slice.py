@@ -3,7 +3,7 @@ from datetime import datetime
 from collections import OrderedDict
 from acq4.util.DataManager import getDirHandle
 from .. import database as db
-from ..database.slice import slice_tables
+from ..database import slice_tables
 from .pipeline_module import PipelineModule
 from .. import config
 from .. import lims
@@ -22,6 +22,7 @@ class SlicePipelineModule(PipelineModule):
         path = slices[job_id]
         dh = getDirHandle(path)
         info = dh.info()
+        parent_info = dh.parent().info()
         
         # pull some metadata from LIMS
         sid = info['specimen_ID'].strip()
@@ -34,20 +35,21 @@ class SlicePipelineModule(PipelineModule):
             quality = None
 
         # Interpret slice time
-        slice_time = info.get('slice time', None)
+        slice_time = parent_info.get('time_of_dissection', None)
         if slice_time is not None:
             m = re.match(r'((20\d\d)-(\d{1,2})-(\d{1,2}) )?(\d+):(\d+)', slice_time.strip())
             if m is not None:
                 _, year, mon, day, hh, mm = m.groups()
                 if year is None:
-                    date = datetime.fromtimestamp(dh.parent().info('__timestamp__'))
-                    slice_time = datetime(date.year, date.month, date.day, hh, mm)
+                    date = datetime.fromtimestamp(dh.parent().info()['__timestamp__'])
+                    slice_time = datetime(date.year, date.month, date.day, int(hh), int(mm))
                 else:
-                    slice_time = datetime(year, mon, day, hh, mm)
+                    slice_time = datetime(int(year), int(mon), int(day), int(hh), int(mm))
 
         fields = {
             'acq_timestamp': info['__timestamp__'],
             'species': limsdata['organism'],
+            'date_of_birth': limsdata['date_of_birth'],
             'age': limsdata['age'],
             'sex': limsdata['sex'],
             'genotype': limsdata['genotype'],
@@ -68,6 +70,9 @@ class SlicePipelineModule(PipelineModule):
         try:
             session.add(sl)
             session.commit()
+        except:
+            session.rollback()
+            raise
         finally:
             session.close()
 
@@ -75,7 +80,7 @@ class SlicePipelineModule(PipelineModule):
     def initialize(cls):
         """Create space (folders, tables, etc.) for this analyzer to store its results.
         """
-        raise slice_tables.create_tables()
+        slice_tables.create_tables()
         
     @classmethod
     def drop_jobs(cls, job_ids):
@@ -111,13 +116,14 @@ class SlicePipelineModule(PipelineModule):
 
     @classmethod
     def ready_jobs(self):
+        """Return an ordered dict of all jobs that are ready to be processed (all dependencies are present)
+        and the dates that dependencies were created.
+        """
         slices = all_slices()
-        print("found %d slices" % len(slices))
         ready = OrderedDict()
         for ts, path in slices.items():
             age = os.stat(os.path.join(path, '.index')).st_mtime
             ready[ts] = age
-        print("collected timestamps")
         return ready
 
 
@@ -132,7 +138,7 @@ def all_slices():
     if _all_slices is not None:
         return _all_slices
     
-    slice_dirs = sorted(glob.glob(os.path.join(config.synphys_data, '15234*', 'slice_*')))
+    slice_dirs = sorted(glob.glob(os.path.join(config.synphys_data, '15034*', 'slice_*')))
     _all_slices = OrderedDict()
     for path in slice_dirs:
         dh = getDirHandle(path)
