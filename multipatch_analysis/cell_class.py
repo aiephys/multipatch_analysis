@@ -18,6 +18,7 @@ class CellClass(object):
     --------
     
         pv_class = CellClass(cre_type='pvalb')
+        inhibitory_class = CellClass(cre_type=('pvalb', 'sst', 'vip'))
         l23_pyr_class = CellClass(pyramidal=True, target_layer='2/3')
     """
     def __init__(self, **criteria):
@@ -49,7 +50,7 @@ class CellClass(object):
 
         cre_type = self.criteria.get('cre_type')
         if cre_type is not None:
-            name.append(cre_type)
+            name.append(str(cre_type))
         
         return tuple(name)
 
@@ -64,14 +65,20 @@ class CellClass(object):
 
     def __contains__(self, cell):
         morpho = cell.morphology
+        objs = [cell, morpho]
         for k, v in self.criteria.items():
-            if hasattr(cell, k):
-                if getattr(cell, k) != v:
-                    return False
-            elif hasattr(morpho, k):
-                if getattr(morpho, k) != v:
-                    return False
-            else:
+            found_attr = False
+            for obj in objs:
+                if hasattr(obj, k):
+                    found_attr = True
+                    if isinstance(v, tuple):
+                        if getattr(obj, k) not in v:
+                            return False
+                    else:
+                        if getattr(obj, k) != v:
+                            return False
+                    break
+            if not found_attr:
                 raise Exception('Cannot use "%s" for cell typing; attribute not found on cell or cell.morphology' % k)
         return True
 
