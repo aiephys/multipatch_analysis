@@ -71,19 +71,24 @@ class ConnectivityAnalyzer(object):
         fields = {'color_by': [
             ('n_probed', {}),
             ('n_connected', {}),
-            ('connection_probability', {'mode': 'range', 'operation': 'Add', 'colormap': pg.ColorMap(
-            [0, 0.01, 0.03, 0.1, 0.3, 1.0],
-            [(0,0,100, 255), (80,0,80, 255), (140,0,0, 255), (255,100,0, 255), (255,255,100, 255), (255,255,255, 255)],
-            )}),
-            ('matrix_completeness', {'mode': 'range', 'colormap': pg.ColorMap(
-                [0, 0.25, 0.5, 0.75, 1.0],
-                [(0,0,100,255), (80,0,80,255), (140,0,0,255), (255,100,0,255), (255,255,100,255)],
-            )}),
+            ('connection_probability', {'mode': 'range', 'defaults': {
+                'Operation': 'Add', 
+                'colormap': pg.ColorMap(
+                [0, 0.01, 0.03, 0.1, 0.3, 1.0],
+                [(0,0,100, 255), (80,0,80, 255), (140,0,0, 255), (255,100,0, 255), (255,255,100, 255), (255,255,255, 255)],
+            )}}),
+            ('matrix_completeness', {'mode': 'range', 'defaults': {
+                'colormap': pg.ColorMap(
+                    [0, 0.25, 0.5, 0.75, 1.0],
+                    [(0,0,100,255), (80,0,80,255), (140,0,0,255), (255,100,0,255), (255,255,100,255)],
+            )}}),
             ('distance_distribution', {'mode': 'range'}),
-            ('n_gap_junctions', {'mode': 'range', 'max': 15, 'colormap': pg.ColorMap(
-                [0, 1],
-                [(0,0,100,255), (255,0,0,255)]
-            )}),
+            ('n_gap_junctions', {'mode': 'range', 'defaults': {
+                'Max': 15, 
+                'colormap': pg.ColorMap(
+                    [0, 1],
+                    [(0,0,100,255), (255,0,0,255)]
+            )}}),
             ],
             'show_confidence': [
             'None',
