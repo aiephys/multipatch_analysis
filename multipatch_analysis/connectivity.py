@@ -180,15 +180,24 @@ class StrengthAnalyzer(object):
        
         fields = {'color_by': [
             ('n_connections', {}),
-            ('ic_mean_amp', {'mode': 'range', 'units': 'V', 'min': -1e-3, 'max': 1e-3, 'colormap': pg.ColorMap(
-            [0, 0.5, 1.0],
-            [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
-        )}),
-            ('vc_mean_amp', {'mode': 'range', 'units': 'A', 'min': -50e-12, 'max': 50e-12, 'colormap': pg.ColorMap(
-            [0, 0.5, 1.0],
-            [(255, 0, 0, 255), (255, 255, 255, 255), (0, 0, 255, 255)],
-        )}),
-            ('ic_mean_latency', {'mode': 'range', 'units': 's', 'min': 1e-3, 'max': 10e-3}),
+            ('ic_mean_amp', {'mode': 'range', 'units': 'V', 'defaults': {
+                'Min': -1e-3, 
+                'Max': 1e-3, 
+                'colormap': pg.ColorMap(
+                [0, 0.5, 1.0],
+                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
+            )}}),
+            ('vc_mean_amp', {'mode': 'range', 'units': 'A', 'defaults': {
+                'Min': -50e-12, 
+                'Max': 50e-12, 
+                'colormap': pg.ColorMap(
+                [0, 0.5, 1.0],
+                [(255, 0, 0, 255), (255, 255, 255, 255), (0, 0, 255, 255)],
+            )}}),
+            ('ic_mean_latency', {'mode': 'range', 'units': 's', 'defaults': {
+                'Min': 1e-3, 
+                'Max': 6e-3
+            }}),
             ('ic_mean_rise_time', {'mode': 'range', 'units': 's'}),
             ('ic_amp_cv', {'mode': 'range'}),
             ],
