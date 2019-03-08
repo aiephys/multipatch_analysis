@@ -26,8 +26,7 @@ class DatasetPipelineModule(DatabasePipelineModule):
     table_group = dataset_tables
     
     @classmethod
-    def process_job(cls, job_id):
-        session = db.Session(readonly=False)
+    def create_db_entries(cls, job_id, session):
         
         # Load experiment from DB
         expt_entry = db.experiment_from_timestamp(job_id, session=session)
@@ -230,50 +229,58 @@ class DatasetPipelineModule(DatabasePipelineModule):
                         in_qc_pass=in_qc_pass,
                     )
                     session.add(base_entry)
-
-
-        expt_entry.meta = expt_entry.meta.copy()  # required by sqlalchemy to flag as modified
-        expt_entry.meta[cls.name+'_finished'] = time.time()
-
-        try:
-            session.commit()
-        except:
-            session.rollback()
-            raise
-        finally:
-            session.close()
-
-    @classmethod
-    def drop_jobs(cls, job_ids):
-        """Remove all results previously stored for a list of job IDs.
-        """
-        session = db.Session(readonly=False)
-        results = session.query(db.SyncRec, db.Experiment).join(db.Experiment).filter(db.Experiment.acq_timestamp.in_(job_ids))
-        for rec in results:
-            srec, expt = rec
-            session.delete(srec)
-            expt.meta = expt.meta.copy()  # required by sqlalchemy to flag as modified
-            del expt.meta[cls.name+'_finished']
-        session.commit()
         
     @classmethod
-    def finished_jobs(cls):
-        """Return an ordered dict of job IDs that have been processed by this module and
-        the dates when they were processed.
-
-        Note that some results returned may be obsolete if dependencies have changed.
-        """
-        session = db.Session()
-        expts = session.query(db.Experiment.acq_timestamp, db.Experiment.meta).all()
-        session.rollback()
+    def job_query(cls, job_ids, session):
+        """Return a query that returns records associated with a list of job IDs.
         
-        finished = OrderedDict()
-        for rec in expts:
-            ts = rec.meta.get(cls.name+'_finished')
-            if ts is None:
-                continue
-            finished[rec.acq_timestamp] = ts
-        return finished
+        This method is used by drop_jobs to delete records for specific job IDs.
+        """
+        # only need to return from syncrec table; other tables will be dropped automatically.
+        return session.query(db.SyncRec).filter(db.SyncRec.experiment_id==db.Experiment.id).filter(db.Experiment.acq_timestamp.in_(job_ids))
+
+    @classmethod
+    def dependent_job_ids(cls, module, job_ids):
+        """Return a list of all finished job IDs in this module that depend on 
+        specific jobs from another module.
+        """
+        if module not in cls.dependencies:
+            raise ValueError("%s does not depend on module %s" % (cls, module))
+        
+        # dataset uses same IDs as experiment
+        return job_ids
+
+    # @classmethod
+    # def drop_jobs(cls, job_ids):
+    #     """Remove all results previously stored for a list of job IDs.
+    #     """
+    #     session = db.Session(readonly=False)
+    #     results = session.query(db.SyncRec, db.Experiment).join(db.Experiment).filter(db.Experiment.acq_timestamp.in_(job_ids))
+    #     for rec in results:
+    #         srec, expt = rec
+    #         session.delete(srec)
+    #         expt.meta = expt.meta.copy()  # required by sqlalchemy to flag as modified
+    #         del expt.meta[cls.name+'_finished']
+    #     session.commit()
+        
+    # @classmethod
+    # def finished_jobs(cls):
+    #     """Return an ordered dict of job IDs that have been processed by this module and
+    #     the dates when they were processed.
+
+    #     Note that some results returned may be obsolete if dependencies have changed.
+    #     """
+    #     session = db.Session()
+    #     expts = session.query(db.Experiment.acq_timestamp, db.Experiment.meta).all()
+    #     session.rollback()
+        
+    #     finished = OrderedDict()
+    #     for rec in expts:
+    #         ts = rec.meta.get(cls.name+'_finished')
+    #         if ts is None:
+    #             continue
+    #         finished[rec.acq_timestamp] = ts
+    #     return finished
 
     @classmethod
     def ready_jobs(self):

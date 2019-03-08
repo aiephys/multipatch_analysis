@@ -22,27 +22,12 @@ class ExperimentPipelineModule(DatabasePipelineModule):
     
     
     @classmethod
-    def process_job(cls, job_id):
-        # slices = all_slices()
-        # path = slices[job_id]
-        # dh = getDirHandle(path)
-        # info = dh.info()
-        
-
-        # sl = db.Slice(**fields)
-        # # sl.meta = {'db_timestamp': time.time()}
+    def create_db_entries(cls, job_id, session):
         cache = synphys_cache.get_cache()
         all_expts = cache.list_experiments()
         site_path = all_expts[job_id]
         expt = Experiment(site_path=site_path)
-        
-        session = db.Session(readonly=False)
-        # try:
-        #     session.add(sl)
-        #     session.commit()
-        # finally:
-        #     session.close()
-        
+                
         # look up slice record in DB
         ts = expt.slice_timestamp
         slice_entry = db.slice_from_timestamp(ts, session=session)
@@ -125,38 +110,28 @@ class ExperimentPipelineModule(DatabasePipelineModule):
 
                 pre_id = pre_cell_entry.electrode.device_id
                 post_id = post_cell_entry.electrode.device_id
-
-        expt_entry.meta = {'experiment_finished': time.time()}
-
-        try:
-            session.commit()
-        except:
-            session.rollback()
-            raise
-        finally:
-            session.close()
-
-    @classmethod
-    def drop_jobs(cls, job_ids):
-        """Remove all results previously stored for a list of job IDs.
-        """
-        session = db.Session(readonly=False)
-        expts = session.query(db.Experiment).filter(db.Experiment.acq_timestamp.in_(job_ids))
-        for exp in expts:
-            session.delete(exp)
-        session.commit()
         
     @classmethod
-    def finished_jobs(cls):
-        """Return an ordered dict of job IDs that have been processed by this module and
-        the dates when they were processed.
-
-        Note that some results returned may be obsolete if dependencies have changed.
+    def job_query(cls, job_ids, session):
+        """Return a query that returns records associated with a list of job IDs.
+        
+        This method is used by drop_jobs to delete records for specific job IDs.
         """
+        # only need to return from experiment table; other tables will be dropped automatically.
+        return session.query(db.Experiment).filter(db.Experiment.acq_timestamp.in_(job_ids))
+
+    @classmethod
+    def dependent_job_ids(cls, module, job_ids):
+        """Return a list of all finished job IDs in this module that depend on 
+        specific jobs from another module.
+        """
+        if module not in cls.dependencies:
+            raise ValueError("%s does not depend on module %s" % (cls, module))
+        
         session = db.Session()
-        expts = session.query(db.Experiment.acq_timestamp, db.Experiment.time_created).all()
+        dep_ids = session.query(db.Experiment.acq_timestamp).join(db.Slice).filter(db.Slice.acq_timestamp.in_(job_ids)).all()
         session.rollback()
-        return OrderedDict([(uid, datetime_to_timestamp(date)) for uid, date in expts])
+        return [rec.acq_timestamp for rec in dep_ids]
 
     @classmethod
     def ready_jobs(self):

@@ -1,3 +1,4 @@
+from collections import OrderedDict
 from .database import TableGroup, _sample_rate_str
 from sqlalchemy.orm import relationship, deferred, sessionmaker, aliased
 from .experiment import Experiment, Electrode, Pair
@@ -9,23 +10,23 @@ __all__ = ['dataset_tables', 'SyncRec', 'Recording', 'PatchClampRecording', 'Mul
 class DatasetTableGroup(TableGroup):
     """Defines tables that hold data imported from a dataset, such as recordings, stimuli, pulse responses, etc.
     """
-    schemas = {
-        'sync_rec': [
+    schemas = OrderedDict([
+        ('sync_rec', [
             """A synchronous recording represents a "sweep" -- multiple recordings that were made simultaneously
             on different electrodes.""",
             ('experiment_id', 'experiment.id', '', {'index': True}),
             ('ext_id', 'object', 'External ID of the SyncRecording'),
             ('temperature', 'float', 'Bath temperature during this recording'),
-        ],
-        'recording': [
+        ]),
+        ('recording', [
             """A recording represents a single contiguous sweep recorded from a single electrode. 
             """,
             ('sync_rec_id', 'sync_rec.id', 'References the synchronous recording to which this recording belongs.', {'index': True}),
             ('electrode_id', 'electrode.id', 'Identifies the electrode that generated this recording', {'index': True}),
             ('start_time', 'datetime', 'The clock time at the start of this recording'),
             ('sample_rate', 'int', 'Sample rate for this recording'),
-        ],
-        'patch_clamp_recording': [
+        ]),
+        ('patch_clamp_recording', [
             "Extra data for recordings made with a patch clamp amplifier",
             ('recording_id', 'recording.id', '', {'index': True, 'unique': True}),
             ('clamp_mode', 'str', 'The mode used by the patch clamp amplifier: "ic" or "vc"', {'index': True}),
@@ -36,15 +37,15 @@ class DatasetTableGroup(TableGroup):
             ('baseline_rms_noise', 'float', 'RMS noise of the steady-state part of the recording'),
             ('nearest_test_pulse_id', 'test_pulse.id', 'ID of the test pulse that was recorded closest to this recording (and possibly embedded within the recording)'),
             ('qc_pass', 'bool', 'Indicates whether this recording passes a minimal ephys QC', {'index': True}),
-        ],
-        'multi_patch_probe': [
+        ]),
+        ('multi_patch_probe', [
             "Extra data for multipatch recordings intended to test synaptic dynamics.",
             ('patch_clamp_recording_id', 'patch_clamp_recording.id', '', {'index': True, 'unique': True}),
             ('induction_frequency', 'float', 'The induction frequency (Hz) of presynaptic pulses', {'index': True}),
             ('recovery_delay', 'float', 'The recovery delay (s) inserted between presynaptic pulses', {'index': True}),
             ('n_spikes_evoked', 'int', 'The number of presynaptic spikes evoked'),
-        ],
-        'test_pulse': [
+        ]),
+        ('test_pulse', [
             """A short, usually hyperpolarizing pulse used to test the resistance of pipette, cell access, or cell membrane.
             """,
             ('electrode_id', 'electrode.id', 'ID of the electrode on which this test pulse was recorded.', {'index': True}), 
@@ -57,8 +58,8 @@ class DatasetTableGroup(TableGroup):
             ('input_resistance', 'float'),
             ('capacitance', 'float'),
             ('time_constant', 'float'),
-        ],
-        'stim_pulse': [
+        ]),
+        ('stim_pulse', [
             "A pulse stimulus intended to evoke an action potential",
             ('recording_id', 'recording.id', '', {'index': True}),
             ('pulse_number', 'int', 'The ordinal position of this pulse within a train of pulses.', {'index': True}),
@@ -70,8 +71,8 @@ class DatasetTableGroup(TableGroup):
             # ('first_spike', 'stim_spike.id', 'The ID of the first spike evoked by this pulse'),
             ('data', 'array', 'Numpy array of presynaptic recording sampled at '+_sample_rate_str, {'deferred': True}),
             ('data_start_time', 'float', "Starting time of the data chunk, relative to the beginning of the recording"),
-        ],
-        'stim_spike': [
+        ]),
+        ('stim_spike', [
             "An action potential evoked by a stimulus pulse",
             ('stim_pulse_id', 'stim_pulse.id', '', {'index': True}),
             ('peak_time', 'float', "The time of the peak of the spike, relative to the beginning of the recording."),
@@ -79,8 +80,8 @@ class DatasetTableGroup(TableGroup):
             ('peak_val', 'float', 'Absolute value of the spike peak'),
             ('max_dvdt_time', 'float', "The time of the max dv/dt of the spike, relative to the beginning of the recording."),
             ('max_dvdt', 'float', 'Maximum slope of the presynaptic spike'),
-        ],
-        'baseline': [
+        ]),
+        ('baseline', [
             "A snippet of baseline data, matched to a postsynaptic recording",
             ('recording_id', 'recording.id', 'The recording from which this baseline snippet was extracted.', {'index': True}),
             ('start_time', 'float', "Starting time of this chunk of the recording in seconds, relative to the beginning of the recording"),
@@ -88,8 +89,8 @@ class DatasetTableGroup(TableGroup):
             ('mode', 'float', 'most common value in the baseline snippet'),
             ('ex_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for excitatory synapse probing'),
             ('in_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for inhibitory synapse probing'),
-        ],
-        'pulse_response': [
+        ]),
+        ('pulse_response', [
             "A chunk of postsynaptic recording taken during a presynaptic pulse stimulus",
             ('recording_id', 'recording.id', 'The full recording from which this pulse was extracted', {'index': True}),
             ('stim_pulse_id', 'stim_pulse.id', 'The presynaptic pulse', {'index': True}),
@@ -98,8 +99,8 @@ class DatasetTableGroup(TableGroup):
             ('data', 'array', 'numpy array of response data sampled at '+_sample_rate_str, {'deferred': True}),
             ('ex_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for excitatory synapse probing', {'index': True}),
             ('in_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for inhibitory synapse probing', {'index': True}),
-        ],
-    }
+        ]),
+    ])
 
     def create_mappings(self):
         TableGroup.create_mappings(self)

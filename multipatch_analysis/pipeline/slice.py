@@ -7,7 +7,7 @@ from ..database import slice_tables
 from .pipeline_module import DatabasePipelineModule
 from .. import config
 from .. import lims
-from ..util import datetime_to_timestamp
+from ..util import datetime_to_timestamp, timestamp_to_datetime
 
 
 class SlicePipelineModule(DatabasePipelineModule):
@@ -18,7 +18,7 @@ class SlicePipelineModule(DatabasePipelineModule):
     table_group = slice_tables
     
     @classmethod
-    def process_job(cls, job_id):
+    def create_db_entries(cls, job_id, session):
         slices = all_slices()
         path = slices[job_id]
         dh = getDirHandle(path)
@@ -65,39 +65,11 @@ class SlicePipelineModule(DatabasePipelineModule):
         }
 
         sl = db.Slice(**fields)
-        # sl.meta = {'db_timestamp': time.time()}
-        
-        session = db.Session(readonly=False)
-        try:
-            session.add(sl)
-            session.commit()
-        except:
-            session.rollback()
-            raise
-        finally:
-            session.close()
+        session.add(sl)
 
     @classmethod
-    def drop_jobs(cls, job_ids):
-        """Remove all results previously stored for a list of job IDs.
-        """
-        session = db.Session(readonly=False)
-        slices = session.query(db.Slice).filter(db.Slice.acq_timestamp.in_(job_ids))
-        for sl in slices:
-            session.delete(sl)
-        session.commit()
-
-    @classmethod
-    def finished_jobs(cls):
-        """Return an ordered dict of job IDs that have been processed by this module and
-        the dates when they were processed.
-
-        Note that some results returned may be obsolete if dependencies have changed.
-        """
-        session = db.Session()
-        slices = session.query(db.Slice.acq_timestamp, db.Slice.time_created).all()
-        session.rollback()
-        return OrderedDict([(uid, datetime_to_timestamp(date)) for uid, date in slices])
+    def job_query(cls, job_ids, session):
+        return session.query(db.Slice).filter(db.Slice.acq_timestamp.in_(job_ids))
 
     @classmethod
     def ready_jobs(self):
@@ -108,7 +80,7 @@ class SlicePipelineModule(DatabasePipelineModule):
         ready = OrderedDict()
         for ts, path in slices.items():
             age = os.stat(os.path.join(path, '.index')).st_mtime
-            ready[ts] = age
+            ready[ts] = timestamp_to_datetime(age)
         return ready
 
 

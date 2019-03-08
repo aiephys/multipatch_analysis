@@ -3,6 +3,7 @@ Accumulate all experiment data into a set of linked tables.
 """
 import os, sys, io, time
 from datetime import datetime
+from collections import OrderedDict
 import numpy as np
 
 import sqlalchemy
@@ -73,9 +74,6 @@ class TableGroup(object):
             return
 
         create_tables([self[k].__table__ for k in self.schemas])
-
-
-
 
 
 #----------- define ORM classes -------------
@@ -160,8 +158,8 @@ def generate_mapping(table, schema, base=None):
         if defer_col:
             props[colname] = deferred(props[colname])
 
-    props['time_created'] = Column(DateTime, default=func.now())
-    props['time_modified'] = Column(DateTime, onupdate=func.current_timestamp())
+    # props['time_created'] = Column(DateTime, default=func.now())
+    # props['time_modified'] = Column(DateTime, onupdate=func.current_timestamp())
     props['meta'] = Column(JSONB)
 
     if base is None:

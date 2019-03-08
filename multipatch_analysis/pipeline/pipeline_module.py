@@ -1,7 +1,9 @@
-import sys, time, multiprocessing
+import sys, time, multiprocessing, traceback
+from datetime import datetime
 import numpy as np
 from collections import OrderedDict
 from pyqtgraph import toposort
+from .. import database as db
 
 
 class PipelineModule(object):
@@ -118,7 +120,7 @@ class PipelineModule(object):
         """Entry point for running a single analysis job; may be invoked in a subprocess.
         """
         job_id, job_index, n_jobs = job
-        print("Processing %d/%d  %s") % (job_index, n_jobs, job_id)
+        print("Processing %d/%d  %0.3f") % (job_index, n_jobs, job_id)
         start = time.time()
         try:
             cls.process_job(job_id)
@@ -126,10 +128,10 @@ class PipelineModule(object):
             if raise_exceptions:
                 raise
             else:
-                print("Error processing %d/%d  %s:") % (job_index, n_jobs, job_id)
+                print("Error processing %d/%d  %0.3f:") % (job_index, n_jobs, job_id)
                 sys.excepthook(*sys.exc_info())
         else:
-            print("Finished %d/%d  %s  (%0.2g sec)") % (job_index, n_jobs, job_id, time.time()-start)
+            print("Finished %d/%d  %0.3f  (%0.2g sec)") % (job_index, n_jobs, job_id, time.time()-start)
     
     @classmethod
     def process_job(cls, job_id):
@@ -170,39 +172,6 @@ class PipelineModule(object):
         Note that some results returned may be obsolete if dependencies have changed.
         """
         raise NotImplementedError()
-
-    # @classmethod
-    # def job_summary(cls):
-    #     """Return information about jobs that have (not) been processed.
-        
-    #     Returns
-    #     -------
-    #     finished : list
-    #         List of job IDs that have finished, valid results
-    #     invalid : list
-    #         List of job IDs that have finished, invalid results
-    #     ready : list
-    #         List of job IDs that have no result but are ready to be processed
-    #     """
-    #     my_finished = cls.finished_jobs()
-    #     dep_finished = cls.ready_jobs()
-        
-    #     finished = []
-    #     invalid = []
-    #     ready = []
-        
-    #     all_jobs = sorted(list(set(list(my_finished.keys()) + list(dep_finished.keys()))))
-        
-    #     for job in all_jobs:
-    #         if job in my_finished:
-    #             if job not in dep_finished or dep_finished[job] > my_finished[job]:
-    #                 invalid.append(job)
-    #             else:
-    #                 finished.append(job)
-    #         else:
-    #             ready.append(job)
-                
-    #     return finished, invalid, ready
 
     @classmethod
     def ready_jobs(cls):
@@ -257,8 +226,56 @@ class PipelineModule(object):
 
 class DatabasePipelineModule(PipelineModule):
     """PipelineModule that implements default behaviors for interacting with database.
+    
+    * Manages adding / removing entries from pipeline table to indicate job status
+    * Default implementations for dropping records 
     """
     table_group = None
+
+    @classmethod
+    def create_db_entries(cls, job_id, session):
+        """Generate DB entries for *job_id* and add them to *session*.
+        """
+        raise NotImplementedError()
+        
+    @classmethod
+    def job_query(cls, job_ids, session):
+        """Return a query that returns records associated with a list of job IDs.
+        
+        This method is used by drop_jobs to delete records for specific job IDs.
+        """
+        raise NotImplementedError()
+
+    @classmethod
+    def dependent_job_ids(cls, module, job_ids):
+        """Return a list of all finished job IDs in this module that depend on 
+        specific jobs from another module.
+        """
+        raise NotImplementedError()
+
+    @classmethod
+    def process_job(cls, job_id):
+        session = db.Session(readonly=False)
+        # drop old pipeline job record
+        session.query(db.Pipeline).filter(db.Pipeline.job_id==job_id).filter(db.Pipeline.module_name==cls.name).delete()
+        session.commit()
+        
+        try:
+            errors = cls.create_db_entries(job_id, session)
+            job_result = db.Pipeline(module_name=cls.name, job_id=job_id, success=True, error=errors, finish_time=datetime.now())
+            session.add(job_result)
+
+            session.commit()
+        except Exception:
+            session.rollback()
+            
+            err = traceback.format_exception(*sys.exc_info())
+            job_result = db.Pipeline(module_name=cls.name, job_id=job_id, success=False, error=err, finish_time=datetime.now())
+            session.add(job_result)
+            session.commit()
+            raise
+        finally:
+            session.close()
 
     @classmethod
     def initialize(cls):
@@ -272,9 +289,47 @@ class DatabasePipelineModule(PipelineModule):
         """
         for dep in reversed(cls.all_dependent_modules()):
             dep.drop_all(reinitialize=False)
+            
+        # drop tables and pipeline job records
         cls.table_group.drop_tables()
+        session = db.Session(readonly=False)
+        session.query(db.Pipeline).filter(db.Pipeline.module_name==cls.name).delete()
+        session.commit()
+
         if reinitialize:
             cls.initialize()        
             for dep in cls.dependent_modules():
                 dep.initialize()
     
+    @classmethod
+    def drop_jobs(cls, job_ids, session=None):
+        """Remove all results previously stored for a list of job IDs.
+        
+        The associated results of dependent modules are also removed.
+        """
+        if session is None:
+            session = db.Session(readonly=False)
+        
+        for dep in reversed(cls.dependent_modules()):
+            dep_jobs = dep.dependent_job_ids(cls, job_ids)
+            dep.drop_jobs(dep_jobs, session=session)
+        
+        jobs = cls.job_query(job_ids, session).all()
+        for job in jobs:
+            session.delete(job)
+        session.query(db.Pipeline).filter(db.Pipeline.module_name==cls.name).filter(db.Pipeline.job_id.in_(job_ids)).delete(synchronize_session=False)
+        session.commit()
+        
+        print("Dropped %d jobs from %s module" % (len(jobs), cls.name))
+    
+    @classmethod
+    def finished_jobs(cls):
+        """Return an ordered dict of job IDs that have been processed by this module and
+        the dates when they were processed.
+
+        Note that some results returned may be obsolete if dependencies have changed.
+        """
+        session = db.Session()
+        slices = session.query(db.Pipeline.job_id, db.Pipeline.finish_time).filter(db.Pipeline.module_name==cls.name).filter(db.Pipeline.success==True).all()
+        session.rollback()
+        return OrderedDict([(uid, date) for uid, date in slices])

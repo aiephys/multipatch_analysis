@@ -24,6 +24,7 @@ from .pipette_metadata import PipetteMetadata
 from .genotypes import Genotype
 from .synphys_cache import SynPhysCache
 from . import yaml_local, config
+from .util import timestamp_to_datetime
 
 
 class Experiment(object):
@@ -141,7 +142,7 @@ class Experiment(object):
                 continue
             mtime = max(mtime, os.stat(file).st_mtime)
         
-        return mtime
+        return timestamp_to_datetime(mtime)
 
     @property
     def connections(self):
