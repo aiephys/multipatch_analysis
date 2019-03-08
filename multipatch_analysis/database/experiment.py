@@ -1,3 +1,4 @@
+from collections import OrderedDict
 from .database import TableGroup, generate_mapping
 from sqlalchemy.orm import relationship, deferred, sessionmaker, aliased
 from .slice import Slice
@@ -10,8 +11,8 @@ class ExperimentTableGroup(TableGroup):
     """Contains basic tables that are populated when initially importing an experiment: 
     slice, experiment, electrode, cell, pair.
     """
-    schemas = {
-        'experiment': [
+    schemas = OrderedDict([
+        ('experiment', [
             "A group of cells patched simultaneously in the same slice.",
             ('original_path', 'str', 'Original location of raw data on rig.'),
             ('storage_path', 'str', 'Location of data within server or cache storage.'),
@@ -29,8 +30,8 @@ class ExperimentTableGroup(TableGroup):
             ('target_temperature', 'float', 'The intended temperature of the experiment (but actual recording temperature is stored elsewhere)'),
             ('date', 'datetime', 'The date of this experiment'),
             ('lims_specimen_id', 'int', 'ID of LIMS "CellCluster" specimen.'),
-        ],
-        'electrode': [
+        ]),
+        ('electrode', [
             "Each electrode records a patch attempt, whether or not it resulted in a "
             "successful cell recording.",
             ('experiment_id', 'experiment.id', '', {'index': True}),
@@ -46,8 +47,8 @@ class ExperimentTableGroup(TableGroup):
             ('final_current', 'float'),
             ('notes', 'str'),
             ('ext_id', 'int', 'Electrode ID (usually 1-8) referenced in external metadata records'),
-        ],
-        'cell': [
+        ]),
+        ('cell', [
             "Each row represents a single patched cell.",
             ('electrode_id', 'electrode.id', '', {'index': True}),
             ('cre_type', 'str', 'Comma-separated list of cre drivers apparently expressed by this cell', {'index': True}),
@@ -62,8 +63,8 @@ class ExperimentTableGroup(TableGroup):
             ('depth', 'float', 'Depth of the cell (in m) from the cut surface of the slice.'),
             ('position', 'object', '3D location of this cell in the arbitrary coordinate system of the experiment'),
             ('ext_id', 'int', 'Cell ID (usually 1-8) referenced in external metadata records', {'index': True}),
-        ],
-        'pair': [
+        ]),
+        ('pair', [
             "All possible putative synaptic connections. Each pair represents a pre- and postsynaptic cell that were recorded from simultaneously.",
             ('experiment_id', 'experiment.id', '', {'index': True}),
             ('pre_cell_id', 'cell.id', 'ID of the presynaptic cell', {'index': True}),
@@ -75,8 +76,8 @@ class ExperimentTableGroup(TableGroup):
             ('n_in_test_spikes', 'int', 'Number of QC-passed spike-responses recorded for this pair at inhibitory holding potential', {'index': True}),
             ('synapse_sign', 'int', 'Sign of synaptic current amplitude (+1 for excitatory, -1 for inhibitory', {'index': True}),
             ('distance', 'float', 'Distance between somas (in m)'),
-        ],
-    }
+        ]),
+    ])
 
     def create_mappings(self):
         self.mappings['experiment'] = Experiment = generate_mapping('experiment', self.schemas['experiment'], base=ExperimentBase)

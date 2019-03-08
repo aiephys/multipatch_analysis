@@ -39,6 +39,8 @@ class TableGroup(object):
     """Class used to manage a group of tables that act as a single unit--tables in a group
     are always created and deleted together.
     """
+    # subclasses define here an ordered dictionary describing table schemas
+    # tables must be listed in order of foreign key dependency
     schemas = {}
     
     def __init__(self):
@@ -54,20 +56,23 @@ class TableGroup(object):
 
     def drop_tables(self):
         global engine_rw
+        drops = []
         for k in self.schemas:
             if k in engine_rw.table_names():
-                self[k].__table__.drop(bind=engine_rw)
+                drops.append(k)                
+        engine_rw.execute('drop table %s cascade' % (','.join(drops)))
 
     def create_tables(self):
         global engine_rw, engine_ro
+        
+        # if we do not have write access, just verify that the tables exist
         if engine_rw is None:
             for k in self.schemas:
                 if k not in engine_ro.table_names():
                     raise Exception("Table %s not found in database %s" % (k, db_address_ro))
             return
-        for k in self.schemas:
-            if k not in engine_rw.table_names():
-                self[k].__table__.create(bind=engine_rw)
+
+        create_tables([self[k].__table__ for k in self.schemas])
 
 
 
@@ -258,11 +263,18 @@ def reset_db():
             # should only be needed if there are already tables present
             #conn.execute('GRANT SELECT ON ALL TABLES IN SCHEMA public TO %s;' % ro_user)
     
+    create_tables()
+
+
+def create_tables(tables=None):
+    """Create tables in the database.
+    
+    A list of *tables* may be optionally specified (see sqlalchemy.schema.MetaData.create_all) to 
+    create a subset of known tables.
+    """
     # Create all tables
-    global ORMBase
-    # ORMBase = declarative_base()
-    # create_all_mappings()
-    ORMBase.metadata.create_all(engine_rw)
+    global ORMBase, engine_rw
+    ORMBase.metadata.create_all(bind=engine_rw, tables=tables)
 
 
 def vacuum(tables=None):
