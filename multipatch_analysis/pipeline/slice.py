@@ -79,8 +79,12 @@ class SlicePipelineModule(DatabasePipelineModule):
         slices = all_slices()
         ready = OrderedDict()
         for ts, path in slices.items():
-            age = os.stat(os.path.join(path, '.index')).st_mtime
-            ready[ts] = timestamp_to_datetime(age)
+            mtime = os.stat(os.path.join(path, '.index')).st_mtime
+            # test file updates:
+            # import random
+            # if random.random() > 0.8:
+            #     mtime *= 2
+            ready[ts] = timestamp_to_datetime(mtime)
         return ready
 
 

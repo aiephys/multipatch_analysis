@@ -90,12 +90,12 @@ class Experiment(object):
             self.nwb_file
 
             # read cell positions from mosaic files
-            try:
-                self.load_cell_positions()
-            except Exception as exc:
-                # sys.excepthook(*sys.exc_info())
-                print("Warning: Could not load cell positions for %s (%s)" % (self, str(exc)))
-
+            if self.mosaic_file is not None:
+                try:
+                    self.load_cell_positions()
+                except Exception as exc:
+                    # sys.excepthook(*sys.exc_info())
+                    print("Warning: Could not load cell positions for %s (%s)" % (self, str(exc)))
 
     @staticmethod
     def _id_from_entry(entry):

@@ -109,6 +109,8 @@ class PipelineModule(object):
         if parallel:
             print("Processing all jobs (parallel)..")
             pool = multiprocessing.Pool(processes=workers)
+            # would like to just call cls._run_job, but we can't pass a method to Pool.map()
+            # instead we wrap this with the run_job_parallel function defined below.
             parallel_jobs = [(cls, job) for job in run_jobs]
             pool.map(run_job_parallel, parallel_jobs)
         else:
@@ -207,7 +209,7 @@ class PipelineModule(object):
                 if ready[job] > finished[job]:
                     # result is invalid
                     run_job_ids.append(job)
-                    drop_job_ids
+                    drop_job_ids.append(job)
                 else:
                     # result is valid
                     pass  
