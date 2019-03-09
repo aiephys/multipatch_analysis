@@ -109,7 +109,8 @@ class PipelineModule(object):
         if parallel:
             print("Processing all jobs (parallel)..")
             pool = multiprocessing.Pool(processes=workers)
-            pool.map(cls._run_job, run_jobs)
+            parallel_jobs = [(cls, job) for job in run_jobs]
+            pool.map(run_job_parallel, parallel_jobs)
         else:
             print("Processing all jobs (serial)..")
             for job in run_jobs:
@@ -222,6 +223,11 @@ class PipelineModule(object):
         print("%d jobs ready for processing, %d finished, %d need drop, %d need update" % (len(ready), len(finished), len(drop_job_ids), len(run_job_ids)))
         return run_job_ids, drop_job_ids
 
+
+def run_job_parallel(job):
+    # multiprocessing Pool.map doesn't work on methods; must be a plain function
+    cls, job = job
+    cls._run_job(job)
 
 
 class DatabasePipelineModule(PipelineModule):

@@ -6,7 +6,7 @@ from acq4.util.DataManager import getDirHandle
 from .. import config, synphys_cache
 from .. import lims
 from .. import qc
-from ..util import datetime_to_timestamp
+from ..util import timestamp_to_datetime
 from ..experiment import Experiment
 from .. import database as db
 from ..database import dataset_tables
@@ -250,50 +250,28 @@ class DatasetPipelineModule(DatabasePipelineModule):
         # dataset uses same IDs as experiment
         return job_ids
 
-    # @classmethod
-    # def drop_jobs(cls, job_ids):
-    #     """Remove all results previously stored for a list of job IDs.
-    #     """
-    #     session = db.Session(readonly=False)
-    #     results = session.query(db.SyncRec, db.Experiment).join(db.Experiment).filter(db.Experiment.acq_timestamp.in_(job_ids))
-    #     for rec in results:
-    #         srec, expt = rec
-    #         session.delete(srec)
-    #         expt.meta = expt.meta.copy()  # required by sqlalchemy to flag as modified
-    #         del expt.meta[cls.name+'_finished']
-    #     session.commit()
-        
-    # @classmethod
-    # def finished_jobs(cls):
-    #     """Return an ordered dict of job IDs that have been processed by this module and
-    #     the dates when they were processed.
-
-    #     Note that some results returned may be obsolete if dependencies have changed.
-    #     """
-    #     session = db.Session()
-    #     expts = session.query(db.Experiment.acq_timestamp, db.Experiment.meta).all()
-    #     session.rollback()
-        
-    #     finished = OrderedDict()
-    #     for rec in expts:
-    #         ts = rec.meta.get(cls.name+'_finished')
-    #         if ts is None:
-    #             continue
-    #         finished[rec.acq_timestamp] = ts
-    #     return finished
-
     @classmethod
     def ready_jobs(self):
         """Return an ordered dict of all jobs that are ready to be processed (all dependencies are present)
         and the dates that dependencies were created.
         """
+        # All experiments and their creation times in the DB
+        expts = ExperimentPipelineModule.finished_jobs()
+        
+        # Look up nwb file locations for all experiments
         session = db.Session()
-        expts = session.query(db.Experiment.acq_timestamp, db.Experiment.time_created, db.Experiment.storage_path, db.Experiment.ephys_file).filter(db.Experiment.ephys_file != None).all()
+        expt_recs = session.query(db.Experiment.acq_timestamp, db.Experiment.storage_path, db.Experiment.ephys_file).filter(db.Experiment.ephys_file != None).all()
+        expt_paths = {rec.acq_timestamp: rec for rec in expt_recs}
         session.rollback()
         
+        # Return the greater of NWB mod time and experiment DB record mtime
         ready = OrderedDict()
-        for rec in expts:
+        for expt_id, expt_mtime in expts.items():
+            if expt_id not in expt_paths:
+                # no NWB file; ignore
+                continue
+            rec = expt_paths[expt_id]
             ephys_file = os.path.join(config.synphys_data, rec.storage_path, rec.ephys_file)
-            mtime = os.stat(ephys_file).st_mtime
-            ready[rec.acq_timestamp] = max(mtime, datetime_to_timestamp(rec.time_created))
+            nwb_mtime = timestamp_to_datetime(os.stat(ephys_file).st_mtime)
+            ready[rec.acq_timestamp] = max(expt_mtime, nwb_mtime)
         return ready
