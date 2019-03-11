@@ -15,90 +15,21 @@ from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.baseline import float_mode
 
 from .connection_detection import fit_psp
-from .database import database as db
-
-
-@db.default_session
-def update_connection_strength(limit=0, expts=None, parallel=True, workers=6, raise_exceptions=False, session=None):
-    """Update connection strength table for all experiments
-    """
-    if expts is None:
-        expts_ready = session.query(db.Experiment.acq_timestamp).join(db.SyncRec).join(db.Recording).join(db.PulseResponse).join(PulseResponseStrength).distinct().all()
-        expts_done = session.query(db.Experiment.acq_timestamp).join(db.Pair).join(ConnectionStrength).distinct().all()
-
-        print("Skipping %d already complete experiments" % (len(expts_done)))
-        experiments = [e for e in expts_ready if e not in set(expts_done)]
-
-        if limit > 0:
-            np.random.shuffle(experiments)
-            experiments = experiments[:limit]
-
-        jobs = [(record.acq_timestamp, index, len(experiments)) for index, record in enumerate(experiments)]
-    else:
-        jobs = [(expt, i, len(expts)) for i, expt in enumerate(expts)]
-
-    if parallel:
-        pool = multiprocessing.Pool(processes=workers)
-        pool.map(compute_connection_strength, jobs)
-    else:
-        for job in jobs:
-            compute_connection_strength(job, raise_exceptions=raise_exceptions)
-
-
-def compute_connection_strength(job_info, raise_exceptions=False):
-    session = db.Session(readonly=False)
-    
-    try:
-        expt_id, index, n_jobs = job_info
-        print("Analyzing connection strength (expt_id=%f): %d/%d" % (expt_id, index, n_jobs))
-
-        expt = db.experiment_from_timestamp(expt_id, session=session)
-
-        for pair in expt.pair_list:
-            # Query all pulse amplitude records for each clamp mode
-            amps = {}
-            for clamp_mode in ('ic', 'vc'):
-                clamp_mode_fg = get_amps(session, pair, clamp_mode=clamp_mode, get_data=True)
-                clamp_mode_bg = get_baseline_amps(session, pair, amps=clamp_mode_fg, clamp_mode=clamp_mode, get_data=False)
-                amps[clamp_mode, 'fg'] = clamp_mode_fg
-                amps[clamp_mode, 'bg'] = clamp_mode_bg
-            
-            if all([len(a) == 0 for a in amps]):
-                # nothing to analyze here.
-                continue
-
-            # Generate summary results for this pair
-            results = analyze_pair_connectivity(amps)
-
-            # Write new record to DB
-            conn = ConnectionStrength(pair_id=pair.id, **results)
-            session.add(conn)
-
-        expt.meta = expt.meta.copy()  # required by sqlalchemy to flag as modified
-        expt.meta['connection_strength_timestamp'] = time.time()
-
-        session.commit()
-    except:
-        session.rollback()
-        print("Error in experiment: %f" % expt_id)
-        if raise_exceptions:
-            raise
-        else:
-            sys.excepthook(*sys.exc_info())
+from . import database as db
 
 
 def get_amps(session, pair, clamp_mode='ic', get_data=False):
     """Select records from pulse_response_strength table
     """
     cols = [
-        PulseResponseStrength.id,
-        PulseResponseStrength.pos_amp,
-        PulseResponseStrength.neg_amp,
-        PulseResponseStrength.pos_dec_amp,
-        PulseResponseStrength.neg_dec_amp,
-        PulseResponseStrength.pos_dec_latency,
-        PulseResponseStrength.neg_dec_latency,
-        PulseResponseStrength.crosstalk,
+        db.PulseResponseStrength.id,
+        db.PulseResponseStrength.pos_amp,
+        db.PulseResponseStrength.neg_amp,
+        db.PulseResponseStrength.pos_dec_amp,
+        db.PulseResponseStrength.neg_dec_amp,
+        db.PulseResponseStrength.pos_dec_latency,
+        db.PulseResponseStrength.neg_dec_latency,
+        db.PulseResponseStrength.crosstalk,
         db.PulseResponse.ex_qc_pass,
         db.PulseResponse.in_qc_pass,
         db.PatchClampRecording.clamp_mode,
@@ -142,14 +73,14 @@ def get_baseline_amps(session, pair, clamp_mode='ic', amps=None, get_data=True):
     sweeps as the responses.
     """
     cols = [
-        BaselineResponseStrength.id,
-        BaselineResponseStrength.pos_amp,
-        BaselineResponseStrength.neg_amp,
-        BaselineResponseStrength.pos_dec_amp,
-        BaselineResponseStrength.neg_dec_amp,
-        BaselineResponseStrength.pos_dec_latency,
-        BaselineResponseStrength.neg_dec_latency,
-        BaselineResponseStrength.crosstalk,
+        db.BaselineResponseStrength.id,
+        db.BaselineResponseStrength.pos_amp,
+        db.BaselineResponseStrength.neg_amp,
+        db.BaselineResponseStrength.pos_dec_amp,
+        db.BaselineResponseStrength.neg_dec_amp,
+        db.BaselineResponseStrength.pos_dec_latency,
+        db.BaselineResponseStrength.neg_dec_latency,
+        db.BaselineResponseStrength.crosstalk,
         db.Baseline.ex_qc_pass,
         db.Baseline.in_qc_pass,
         db.PatchClampRecording.clamp_mode,

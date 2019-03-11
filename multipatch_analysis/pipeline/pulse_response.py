@@ -3,8 +3,6 @@ from __future__ import print_function, division
 
 import os
 import pyqtgraph as pg
-from collections import OrderedDict
-from ..util import timestamp_to_datetime
 from .. import database as db
 from .. import config
 from .pipeline_module import DatabasePipelineModule

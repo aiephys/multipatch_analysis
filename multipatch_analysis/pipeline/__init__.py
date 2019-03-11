@@ -4,6 +4,7 @@ from .experiment import ExperimentPipelineModule
 from .dataset import DatasetPipelineModule
 from .morphology import MorphologyPipelineModule
 from .pulse_response import PulseResponsePipelineModule
+from .connection_strength import ConnectionStrengthPipelineModule
 
 
 def all_modules():
