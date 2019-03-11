@@ -92,8 +92,9 @@ class PipelineModule(object):
             print("Searching for jobs to update..")
             run_job_ids, drop_job_ids = cls.updatable_jobs()                    
             if limit is not None:
-                np.random.shuffle(job_ids)
-                job_ids = job_ids[:limit]
+                np.random.shuffle(run_job_ids)
+                run_job_ids = run_job_ids[:limit]
+                drop_job_ids = [jid for jid in drop_job_ids if jid in run_job_ids]
         else:
             run_job_ids = job_ids
             drop_job_ids = job_ids
@@ -137,7 +138,7 @@ class PipelineModule(object):
                 print("Error processing %s %d/%d  %0.3f:") % (cls.name, job_index, n_jobs, job_id)
                 sys.excepthook(*sys.exc_info())
         else:
-            print("Finished %s %d/%d  %0.3f  (%0.2g sec)") % (cls.name, job_index, n_jobs, job_id, time.time()-start)
+            print("Finished %s %d/%d  %0.3f  (%0.2f sec)") % (cls.name, job_index, n_jobs, job_id, time.time()-start)
     
     @classmethod
     def process_job(cls, job_id):

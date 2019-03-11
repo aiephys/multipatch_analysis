@@ -28,14 +28,10 @@ from neuroanalysis.event_detection import exp_deconvolve
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.fitting import Psp
 
-from multipatch_analysis.database import database as db
+from multipatch_analysis import database as db
 from multipatch_analysis.ui.multipatch_nwb_viewer import MultipatchNwbViewer
-from multipatch_analysis.pulse_response_strength import (
-    PulseResponseStrength, BaselineResponseStrength, response_query,
-    baseline_query, analyze_response_strength, pulse_response_strength_tables,
-)
-from multipatch_analysis.connection_strength import ConnectionStrength, get_amps, get_baseline_amps
-import multipatch_analysis.morphology  # just to initialize ORM
+from multipatch_analysis.pulse_response_strength import response_query, baseline_query, analyze_response_strength
+from multipatch_analysis.connection_strength import get_amps, get_baseline_amps
 from multipatch_analysis import constants
 
 
@@ -242,7 +238,7 @@ class ResponseStrengthAnalyzer(object):
         self.plot_prd_ids(ids, 'fg', trace_list=self.clicked_fg_traces, pen='y')
 
         global selected_response
-        selected_response = self.session.query(PulseResponseStrength).filter(PulseResponseStrength.id==ids[0]).first()
+        selected_response = self.session.query(db.PulseResponseStrength).filter(db.PulseResponseStrength.id==ids[0]).first()
         prs_qc()
 
     def bg_scatter_clicked(self, sp, points):
@@ -253,7 +249,7 @@ class ResponseStrengthAnalyzer(object):
         self.plot_prd_ids(ids, 'bg', trace_list=self.clicked_bg_traces, pen='y')
 
         global selected_response
-        selected_response = self.session.query(BaselineResponseStrength).filter(BaselineResponseStrength.id==ids[0]).first()
+        selected_response = self.session.query(db.BaselineResponseStrength).filter(db.BaselineResponseStrength.id==ids[0]).first()
         prs_qc()
 
     def load_conn(self, pair):
@@ -402,15 +398,15 @@ class ResponseStrengthAnalyzer(object):
         ids = list(map(int, ids))
         if source == 'fg':
             q = response_query(self.session)
-            q = q.join(PulseResponseStrength)
-            q = q.filter(PulseResponseStrength.id.in_(ids))
+            q = q.join(db.PulseResponseStrength)
+            q = q.filter(db.PulseResponseStrength.id.in_(ids))
             q = q.add_column(db.PulseResponse.start_time)
             traces = self.selected_fg_traces
             plot = self.fg_trace_plot
         else:
             q = baseline_query(self.session)
-            q = q.join(BaselineResponseStrength)
-            q = q.filter(BaselineResponseStrength.id.in_(ids))
+            q = q.join(db.BaselineResponseStrength)
+            q = q.filter(db.BaselineResponseStrength.id.in_(ids))
             q = q.add_column(db.Baseline.start_time)
             traces = self.selected_bg_traces
             plot = self.bg_trace_plot
@@ -421,7 +417,7 @@ class ResponseStrengthAnalyzer(object):
 
     def plot_prd_ids(self, ids, source, pen=None, trace_list=None, avg=False):
         """Plot raw or decolvolved PulseResponse data, given IDs of records in
-        a PulseResponseStrength table.
+        a db.PulseResponseStrength table.
         """
         with pg.BusyCursor():
             recs = self.get_pulse_recs(ids, source)
@@ -570,7 +566,7 @@ def prs_qc():
     """
     global selected_response
     sr = selected_response
-    if isinstance(sr, PulseResponseStrength):
+    if isinstance(sr, db.PulseResponseStrength):
         resp = sr.pulse_response
     else:
         resp = sr.baseline

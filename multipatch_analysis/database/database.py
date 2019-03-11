@@ -26,7 +26,7 @@ from .. import config
 # database version should be incremented whenever the schema has changed
 db_version = 12
 db_name = '{database}_{version}'.format(database=config.synphys_db, version=db_version)
-app_name = 'mp_a:' + ' '.join(sys.argv[1:])
+app_name = 'mp_a:' + ' '.join(sys.argv)
 db_address_ro = '{host}/{database}?application_name={appname}'.format(host=config.synphys_db_host, database=db_name, appname=app_name)
 if config.synphys_db_host_rw is None:
     db_address_rw = None

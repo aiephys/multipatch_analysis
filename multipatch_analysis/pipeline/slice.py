@@ -1,4 +1,4 @@
-import os, glob, re
+import os, glob, re, pickle, time
 from datetime import datetime
 from collections import OrderedDict
 from acq4.util.DataManager import getDirHandle
@@ -98,12 +98,24 @@ def all_slices():
     global _all_slices
     if _all_slices is not None:
         return _all_slices
+        
+    # Speed things up by caching this list with a 4 hour timeout
+    cachefile = os.path.join(config.cache_path, 'all_slices.pkl')
+    if os.path.exists(cachefile):
+        age = time.time() - os.stat(cachefile).mtime
+        if age < 4 * 3600:
+            print("Loaded slice timestamps from cache (%0.1f hours old)" % age)
+            return pickle.load(open(cachefile, 'r'))
     
-    slice_dirs = sorted(glob.glob(os.path.join(config.synphys_data, '15034*', 'slice_*')))
+    slice_dirs = sorted(glob.glob(os.path.join(config.synphys_data, '*', 'slice_*')))
     _all_slices = OrderedDict()
     for path in slice_dirs:
         dh = getDirHandle(path)
-        ts = dh.info()['__timestamp__']
+        ts = dh.info().get('__timestamp__')
+        if ts is None:
+            print("MISSING TIMESTAMP: %s" % path)
+            continue
         _all_slices[ts] = path
         
+    pickle.dump(_all_slices, open(cachefile, 'w'))
     return _all_slices
