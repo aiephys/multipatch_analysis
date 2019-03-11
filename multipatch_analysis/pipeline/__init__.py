@@ -3,6 +3,7 @@ from .slice import SlicePipelineModule
 from .experiment import ExperimentPipelineModule
 from .dataset import DatasetPipelineModule
 from .morphology import MorphologyPipelineModule
+from .pulse_response import PulseResponsePipelineModule
 
 
 def all_modules():

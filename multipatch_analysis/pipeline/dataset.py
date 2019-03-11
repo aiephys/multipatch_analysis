@@ -240,17 +240,6 @@ class DatasetPipelineModule(DatabasePipelineModule):
         return session.query(db.SyncRec).filter(db.SyncRec.experiment_id==db.Experiment.id).filter(db.Experiment.acq_timestamp.in_(job_ids))
 
     @classmethod
-    def dependent_job_ids(cls, module, job_ids):
-        """Return a list of all finished job IDs in this module that depend on 
-        specific jobs from another module.
-        """
-        if module not in cls.dependencies:
-            raise ValueError("%s does not depend on module %s" % (cls, module))
-        
-        # dataset uses same IDs as experiment
-        return job_ids
-
-    @classmethod
     def ready_jobs(self):
         """Return an ordered dict of all jobs that are ready to be processed (all dependencies are present)
         and the dates that dependencies were created.

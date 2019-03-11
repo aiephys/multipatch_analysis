@@ -262,7 +262,12 @@ class DatabasePipelineModule(PipelineModule):
         """Return a list of all finished job IDs in this module that depend on 
         specific jobs from another module.
         """
-        raise NotImplementedError()
+        if module not in cls.dependencies:
+            raise ValueError("%s does not depend on module %s" % (cls, module))
+        
+        # In most cases, modules use the same IDs as the modules that they depend on.
+        # (usually this is the experiment ID)
+        return job_ids
 
     @classmethod
     def process_job(cls, job_id):
@@ -344,3 +349,25 @@ class DatabasePipelineModule(PipelineModule):
         slices = session.query(db.Pipeline.job_id, db.Pipeline.finish_time).filter(db.Pipeline.module_name==cls.name).filter(db.Pipeline.success==True).all()
         session.rollback()
         return OrderedDict([(uid, date) for uid, date in slices])
+
+    @classmethod
+    def ready_jobs(cls):
+        """Return an ordered dict of all jobs that are ready to be processed (all dependencies are present)
+        and the dates that dependencies were created.
+        """
+        # default implpementation collects IDs of finished jobs from upstream modules.
+        job_times = OrderedDict()
+        for i,mod in enumerate(cls.dependencies):
+            jobs = mod.finished_jobs()
+            for job_id,ts in jobs.items():
+                job_times.setdefault(job_id, [None]*len(cls.dependencies))
+                job_times[job_id][i] = ts
+            
+        ready = OrderedDict()
+        for job_id, times in job_times.items():
+            if None in times:
+                continue
+            ready[job_id] = max(times)
+            
+        return ready
+

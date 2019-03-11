@@ -15,7 +15,7 @@ from neuroanalysis import filter
 from neuroanalysis.event_detection import exp_deconvolve
 from neuroanalysis.baseline import float_mode
 
-from .database import database as db
+from . import database as db
 
 
 def measure_peak(trace, sign, spike_time, pulse_times, spike_delay=1e-3, response_window=4e-3):
@@ -78,108 +78,6 @@ def remove_crosstalk_artifacts(data, pulse_times):
     # If window is too shortm then it becomes seneitive to sample noise.
     # If window is too long, then it becomes sensitive to slower signals (like the AP following pulse onset)
     return filter.remove_artifacts(data, edges, window=100e-6)
-
-
-@db.default_session
-def update_strength(limit=0, expts=None, parallel=True, workers=6, raise_exceptions=False, session=None):
-    """Update pulse response strength tables for all experiments
-    """
-    if expts is None:
-        experiments = session.query(db.Experiment.acq_timestamp).all()
-        expts_done = session.query(db.Experiment.acq_timestamp).join(db.SyncRec).join(db.Recording).join(db.Baseline).join(BaselineResponseStrength).distinct().all()
-        print("Skipping %d already complete experiments" % (len(expts_done)))
-        experiments = [e for e in experiments if e not in set(expts_done)]
-
-        if limit > 0:
-            np.random.shuffle(experiments)
-            experiments = experiments[:limit]
-
-        jobs = [(record.acq_timestamp, index, len(experiments)) for index, record in enumerate(experiments)]
-    else:
-        jobs = [(expt, i, len(expts)) for i, expt in enumerate(expts)]
-
-    if parallel:
-        pool = multiprocessing.Pool(processes=workers)
-        pool.map(compute_strength, jobs)
-    else:
-        for job in jobs:
-            compute_strength(job, raise_exceptions=raise_exceptions)
-
-
-def compute_strength(job_info, raise_exceptions=False):
-    """Fill pulse_response_strength and baseline_response_strength tables for all pulse responses in the given experiment.
-    """
-    session = db.Session(readonly=False)
-    
-    try:
-        expt_id, index, n_jobs = job_info
-        print("Analyzing pulse response strength (expt_id=%f): %d/%d" % (expt_id, index, n_jobs))
-        _compute_strength('pulse_response', expt_id, session=session)
-        _compute_strength('baseline', expt_id, session=session)
-
-        expt = db.experiment_from_timestamp(expt_id, session=session)
-        expt.meta = expt.meta.copy()  # required by sqlalchemy to flag as modified
-        expt.meta['pulse_response_strength_timestamp'] = time.time()
-
-        session.commit()
-    except:
-        session.rollback()
-        print("Error in experiment: %f" % expt_id)
-        if raise_exceptions:
-            raise
-        else:
-            sys.excepthook(*sys.exc_info())
-    
-
-@db.default_session
-def _compute_strength(source, expt_id, session=None):
-    """Compute per-pulse-response strength metrics
-    """
-    if source == 'baseline':
-        q = baseline_query(session)
-    elif source == 'pulse_response':
-        q = response_query(session)
-    else:
-        raise ValueError("Invalid source %s" % source)
-
-    # select just data for the selected experiment
-    q = q.join(db.SyncRec).join(db.Experiment).filter(db.Experiment.acq_timestamp==expt_id)
-
-    prof = pg.debug.Profiler(delayed=False)
-    
-    recs = q.all()
-    prof('fetch')
-        
-    new_recs = []
-
-    for rec in recs:
-        result = analyze_response_strength(rec, source)
-        new_rec = {'%s_id'%source: rec.response_id}
-        # copy a subset of results over to new record
-        for k in ['pos_amp', 'neg_amp', 'pos_dec_amp', 'neg_dec_amp', 'pos_dec_latency', 'neg_dec_latency', 'crosstalk']:
-            new_rec[k] = result[k]
-        new_recs.append(new_rec)
-    
-    prof('process')
-
-    # Bulk insert is not safe with parallel processes
-    # if source == 'pulse_response':
-    #     session.bulk_insert_mappings(PulseResponseStrength, new_recs)
-    # else:
-    #     session.bulk_insert_mappings(BaselineResponseStrength, new_recs)
-    if source == 'pulse_response':
-        for rec in new_recs:
-            prs = PulseResponseStrength(**rec)
-            session.add(prs)
-    else:
-        for rec in new_recs:
-            brs = BaselineResponseStrength(**rec)
-            session.add(brs)
-
-    prof('insert')
-    new_recs = []
-
-    return "succeeded"
 
 
 def response_query(session):

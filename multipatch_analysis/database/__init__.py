@@ -1,4 +1,4 @@
-from .database import Session, aliased, default_session, reset_db, vacuum, dispose_engines
+from .database import Session, aliased, default_session, reset_db, vacuum, dispose_engines, default_sample_rate
 
 # Import table definitions from DB modules
 from .pipeline import *
