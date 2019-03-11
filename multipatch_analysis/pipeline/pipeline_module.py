@@ -92,7 +92,10 @@ class PipelineModule(object):
             print("Searching for jobs to update..")
             run_job_ids, drop_job_ids = cls.updatable_jobs()                    
             if limit is not None:
-                np.random.shuffle(run_job_ids)
+                # pick a random subset to import; this is just meant to ensure we get a variety
+                # of data when testing the import system.
+                rng = np.random.RandomState(0)
+                rng.shuffle(run_job_ids)
                 run_job_ids = run_job_ids[:limit]
                 drop_job_ids = [jid for jid in drop_job_ids if jid in run_job_ids]
         else:

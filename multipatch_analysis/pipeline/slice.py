@@ -102,9 +102,9 @@ def all_slices():
     # Speed things up by caching this list with a 4 hour timeout
     cachefile = os.path.join(config.cache_path, 'all_slices.pkl')
     if os.path.exists(cachefile):
-        age = time.time() - os.stat(cachefile).mtime
+        age = time.time() - os.stat(cachefile).st_mtime
         if age < 4 * 3600:
-            print("Loaded slice timestamps from cache (%0.1f hours old)" % age)
+            print("Loaded slice timestamps from cache (%0.1f hours old)" % (age/3600.))
             return pickle.load(open(cachefile, 'r'))
     
     slice_dirs = sorted(glob.glob(os.path.join(config.synphys_data, '*', 'slice_*')))
