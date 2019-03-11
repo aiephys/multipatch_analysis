@@ -8,14 +8,14 @@ if __name__ == '__main__':
     all_modules = all_modules()
     
     parser = argparse.ArgumentParser(description="Process analysis pipeline jobs")
-    parser.add_argument('modules', type=str, nargs='+', help="The name of the analysis module(s) to run: %s" % list(all_modules.keys()))
+    parser.add_argument('modules', type=str, nargs='+', help="The name of the analysis module(s) to run: %s" % ', '.join(list(all_modules.keys())))
     parser.add_argument('--rebuild', action='store_true', default=False, help="Remove and rebuild tables for this analysis")
     parser.add_argument('--workers', type=int, default=None, help="Set the number of concurrent processes during update")
     parser.add_argument('--local', action='store_true', default=False, help="Disable concurrent processing to make debugging easier")
     parser.add_argument('--raise-exc', action='store_true', default=False, help="Disable catching exceptions encountered during processing", dest='raise_exc')
     parser.add_argument('--limit', type=int, default=None, help="Limit the number of experiments to process")
-    parser.add_argument('--uids', type=lambda s: [float(x) for x in s.split(',')], default=None, help="Select specific IDs to analyze", )
-    parser.add_argument('--drop', action='store_true', default=False, help="Drop analysis results for selected UIDs (do not run updates)", )
+    parser.add_argument('--uids', type=lambda s: [float(x) for x in s.split(',')], default=None, help="Select specific IDs to analyze (or drop)", )
+    parser.add_argument('--drop', action='store_true', default=False, help="Drop selected analysis results (do not run updates)", )
     
     args = parser.parse_args(sys.argv[1:])
     
@@ -48,7 +48,10 @@ if __name__ == '__main__':
 
     if args.drop:
         for module in modules:
-            module.drop_jobs(job_ids=args.uids)
+            if args.uids is None:
+                module.drop_all()
+            else:
+                module.drop_jobs(job_ids=args.uids)
     else:
         for module in modules:
             print("=============================================")

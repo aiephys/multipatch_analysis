@@ -107,6 +107,9 @@ class PipelineModule(object):
         run_jobs = [(expt_id, i, len(run_job_ids)) for i, expt_id in enumerate(run_job_ids)]
 
         if parallel:
+            # kill DB connections before forking multiple processes
+            db.dispose_engines()
+            
             print("Processing all jobs (parallel)..")
             pool = multiprocessing.Pool(processes=workers)
             # would like to just call cls._run_job, but we can't pass a method to Pool.map()

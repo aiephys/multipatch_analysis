@@ -1,6 +1,9 @@
 """
-Accumulate all experiment data into a set of linked tables.
+Low-level relational database / sqlalchemy interaction.
+
+The actual schemas for database tables are implemented in other files in this subpackage.
 """
+
 import os, sys, io, time
 from datetime import datetime
 from collections import OrderedDict
@@ -60,7 +63,9 @@ class TableGroup(object):
         drops = []
         for k in self.schemas:
             if k in engine_rw.table_names():
-                drops.append(k)                
+                drops.append(k)
+        if len(drops) == 0:
+            return
         engine_rw.execute('drop table %s cascade' % (','.join(drops)))
 
     def create_tables(self):
@@ -211,7 +216,7 @@ def Session(readonly=True):
     open after each request.
     """
     global _sessionmaker_ro, _sessionmaker_rw, engine_ro, engine_rw, engine_pid
-    if os.getpid() != engine_pid:
+    if engine_ro is None or os.getpid() != engine_pid:
         # In forked processes, we need to re-initialize the engine before
         # creating a new session, otherwise child processes will
         # inherit and muck with the same connections. See:
