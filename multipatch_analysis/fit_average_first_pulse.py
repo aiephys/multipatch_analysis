@@ -2,105 +2,14 @@
 avg_first_pulse_fit table.
 """
 
-from neuroanalysis.data import Trace, TraceList
-from multipatch_analysis.database import database as db
-import multipatch_analysis.connection_strength as cs 
-from multipatch_analysis.database.database import TableGroup
-import matplotlib.pyplot as plt
 import numpy as np
-import time
+from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.fitting import fit_psp
-import datetime
-import os
+from . import database as db
 
-commiting = False  # specifies whether to commit results
+
 time_before_spike = 10.e-3 #time in seconds before spike to start trace waveforms
 
-class FirstPulseFitTableGroup(TableGroup):
-    """Fits first pulse for each individual sweeps.
-    """
-    schemas = {
-        'avg_first_pulse_fit': [
-             """Contains results of psp_fit on spike aligned, average first pulse PSP for each
-            connection that passed qc in current clamp. During the fit the latency is forced
-            to be the value +/-.5 ms found via fitting all of the pulses (available in the 
-            connection_strength.ic_fit_xoffset). The heavily weighted section (meant to 
-            place more importance of the wave form during the rise time) is shifted to 
-            begin at the latency. Created via fit_average_first_pulse.py. 
-            All units in SI.""",
-            ('pair_id', 'pair.id', 'The ID of the entry in the pair table to which these results apply', {'index': True}),
-
-            # current clamp
-            ('ic_amp', 'float', 'fit amplitude of current clamp average first pulses'),
-            ('ic_latency', 'float', 'fit time elapsed since the time of presynaptic spike (max dv/dt) of current clamp data'),
-            ('ic_rise_time', 'float', 'fit rise time of psp of current clamp data'),
-            ('ic_decay_tau', 'float', 'fit decay of psp of current clamp data'),
-            ('ic_avg_psp_data', 'array', 'array of the data voltage waveform used in fitting; starts 10 ms before pre-synaptic spike'),
-            ('ic_avg_psp_fit', 'array', 'fit array of the best fit voltage waveform starting 10 ms before pre-synaptic spike'),
-            ('ic_dt', 'float', 'time step of *avg_psp* array from current clamp data'),
-            ('ic_pulse_ids', 'object', 'data base pulse ids included in the current clamp fit'),
-            ('ic_nrmse', 'float', 'error of fit of current clamp fit'),
-            ('ic_measured_baseline', 'float', 'average voltage measured between 10 and 1 ms before a spike'),
-            ('ic_measured_amp', 'float', 'voltage amplitude within a window of 0.5 ms after spike initiation (max dv/dt) until end of array specified in the pulse_response table'),
-            ('ic_weight', 'array', 'weighting used during fitting of current clamp data'),
-
-            # voltage clamp
-            ('vc_amp', 'float', 'fit amplitude of voltage clamp average first pulses'),
-            ('vc_latency', 'float', 'fit time elapsed since the time of presynaptic spike (max dv/dt) of voltage clamp data'),
-            ('vc_rise_time', 'float', 'fit rise time of psp measured in voltage clamp'),
-            ('vc_decay_tau', 'float', 'fit decay of psp measured in voltage clamp'),
-            ('vc_avg_psp_data', 'array', 'array of the data current waveform used in fitting; starts 10 ms before pre-synaptic spike'),            
-            ('vc_avg_psp_fit', 'array', 'fit array of the best fit current waveform starting 10 ms before pre-synaptic spike'),
-            ('vc_dt', 'float', 'time step of *avg_psp* array from voltage clamp data'),
-            ('vc_pulse_ids', 'object', 'data base pulse ids included in the voltage clamp fit'),
-            ('vc_nrmse', 'float', 'error of fit of voltage clamp fit'),
-            ('vc_measured_baseline', 'float', 'average current measured between 10 and 1 ms before a spike'),
-            ('vc_measured_amp', 'float', 'current amplitude within a window of 0.5 ms after spike initiation (max dv/dt) until end of array specified in the pulse_response table'),
-            ('vc_weight', 'array', 'weighting used during fitting of voltage clamp data')]
-    }
-
-    def create_mappings(self):
-        TableGroup.create_mappings(self)
-
-        AvgFirstPulseFit = self['avg_first_pulse_fit']
-        db.Pair.avg_first_pulse_fit = db.relationship(AvgFirstPulseFit, back_populates="pair", cascade="delete",
-                                                      single_parent=True, uselist=False)
-        AvgFirstPulseFit.pair = db.relationship(db.Pair, back_populates="avg_first_pulse_fit", single_parent=True)
-
-first_pulse_fit_tables = FirstPulseFitTableGroup()
-
-def init_tables():
-
-    global AvgFirstPulseFit
-    first_pulse_fit_tables.create_tables()
-    AvgFirstPulseFit = first_pulse_fit_tables['avg_first_pulse_fit']
-
-# create tables in database and add global variables for ORM classes
-init_tables()
-
-def update_DB(limit=None, expts=None, parallel=True, workers=6, raise_exceptions=False, session=None):
-    """
-    """
-    session=db.Session()
-    if expts is None:
-        experiments = session.query(db.Experiment.acq_timestamp).all()
-        expts_done=session.query(db.Experiment.acq_timestamp).join(db.Pair).join(AvgFirstPulseFit).all()
-        print("Skipping %d already complete experiments" % (len(expts_done)))
-        experiments = [e for e in experiments if e not in set(expts_done)]
-
-        if limit > 0:
-            np.random.shuffle(experiments)
-            experiments = experiments[:limit]
-
-        jobs = [(record.acq_timestamp, index, len(experiments)) for index, record in enumerate(experiments)]
-    else:
-        jobs = [(expt, i, len(expts)) for i, expt in enumerate(expts)]
-    # if parallel:
-    #     pool = multiprocessing.Pool(processes=workers)
-    #     pool.map(pair, pairs)
-    # else:
-    for job in jobs:
-        compute_fit(job, raise_exceptions=raise_exceptions)
 
 def measure_amp(v_array, baseline_index_window, psp_amp_index_window):
     '''measures the max of a trace within a window of the predicted psp.
@@ -134,6 +43,7 @@ def measure_amp(v_array, baseline_index_window, psp_amp_index_window):
     relative_amp=bsub[np.where(abs(bsub)==max(abs(bsub)))[0][0]] 
 
     return relative_amp, baseline
+
 
 def extract_first_pulse_info_from_Pair_object(pair, desired_clamp='ic'):
     """Extract first pulse responses and relevant information 
@@ -174,7 +84,7 @@ def extract_first_pulse_info_from_Pair_object(pair, desired_clamp='ic'):
     pulse_ids = []
     stim_freqs = []
     if len(pair.pulse_responses)==0:
-        print ("\t\tSKIPPING: pair_id, no pulse responses in pair table" % (pair.id))
+        print ("\t\tSKIPPING: pair_id %s, no pulse responses in pair table" % (pair.id))
         return [], [], [], []
     for pr in pair.pulse_responses:
         stim_pulse = pr.stim_pulse
@@ -260,6 +170,7 @@ def get_average_pulse_response(pair, desired_clamp='ic'):
 
     return pulse_responses, pulse_ids, psp_amps_measured, freq, avg_psp, measured_relative_amp, measured_baseline 
 
+
 def fit_trace(waveform, excitation, clamp_mode='ic', weight=None, latency=None, latency_jitter=None):
     """
     Input
@@ -344,184 +255,105 @@ def fit_trace(waveform, excitation, clamp_mode='ic', weight=None, latency=None, 
         scale_factor = 1.e12
         ylabel='current (pA)'        
 
-    if False:
-        plt.figure(figsize=(14,10))
-        ax1=plt.subplot(1,1,1)
-        ln1=ax1.plot(waveform.time_values*1.e3, waveform.data*scale_factor, 'b', label='data')
-        if clamp_mode == 'ic':
-            ln2=ax1.plot(waveform.time_values*1.e3, fit.best_fit*scale_factor, 'r', label='nrmse=%f \namp (mV)=%f \nlatency (ms)=%f \nrise time (ms)=%f \ndecay tau=%f' % \
-                                            (fit.nrmse(), \
-                                            fit.best_values['amp']*scale_factor, \
-                                            (fit.best_values['xoffset']-time_before_spike)*1e3, \
-                                            fit.best_values['rise_time']*1e3, \
-                                            fit.best_values['decay_tau']))
-        elif clamp_mode == 'vc': 
-            ln2=ax1.plot(waveform.time_values*1.e3, fit.best_fit*scale_factor, 'r', label='nrmse=%f \namp (pA)=%f \nlatency (ms)=%f \nrise time (ms)=%f \ndecay tau=%f' % \
-                                            (fit.nrmse(), \
-                                            fit.best_values['amp']*scale_factor, \
-                                            (fit.best_values['xoffset']-time_before_spike)*1e3, \
-                                            fit.best_values['rise_time']*1e3, \
-                                            fit.best_values['decay_tau']))
-        ax2=ax1.twinx()
-        ln3=ax2.plot(waveform.time_values*1.e3, weight, 'k', label='weight')
-        ax1.set_ylabel(ylabel)
-        ax2.set_ylabel('weight')
-        ax1.set_xlabel('time (ms): spike happens at 10 ms')
-
-        lines_plot= ln1+ln2+ln3
-        label_plot = [l.get_label() for l in lines_plot]
-        ax1.legend(lines_plot, label_plot)
-        plt.show()
-
     return fit
 
 
-def compute_fit(job_info, raise_exceptions=False):
+def fit_first_pulses(pair, pre_cell_id, post_cell_id):
+    # get response latency from average of all pulse responses
+    xoffset = pair.connection_strength.ic_fit_xoffset
+
+    # excitatory or inhibitory?
+    excitation = pair.connection_strength.synapse_type
+
+    # -----------fit current clamp data---------------------        
+    # get pulses
+    (pulse_responses_i, pulse_ids_i, psp_amps_measured_i, freq, avg_psp_i, 
+        measured_relative_amp_i, measured_baseline_i) = get_average_pulse_response(pair, desired_clamp='ic')
+
+    if pulse_responses_i:
+        # weight and fit the trace
+        weight_i = np.ones(len(avg_psp_i.data)) * 10.  #set everything to ten initially
+        weight_i[int((time_before_spike-3e-3) / avg_psp_i.dt):int(time_before_spike / avg_psp_i.dt)] = 0.   #area around stim artifact note that since this is spike aligned there will be some blur in where the cross talk is
+        weight_i[int((time_before_spike+.0001+xoffset) / avg_psp_i.dt):int((time_before_spike+.0001+xoffset+4e-3) / avg_psp_i.dt)] = 30.  #area around steep PSP rise 
+        avg_fit_i = fit_trace(avg_psp_i, excitation=excitation, weight=weight_i, latency=xoffset, latency_jitter=.5e-3)
+        latency_i = avg_fit_i.best_values['xoffset'] - time_before_spike
+        amp_i = avg_fit_i.best_values['amp']
+        rise_time_i = avg_fit_i.best_values['rise_time']
+        decay_tau_i = avg_fit_i.best_values['decay_tau']
+        avg_data_waveform_i = avg_psp_i.data
+        avg_fit_waveform_i = avg_fit_i.best_fit
+        dt_i = avg_psp_i.dt
+        nrmse_i = avg_fit_i.nrmse()
+    else:
+        print('\tskipping: no suitable first pulses found in current clamp')
+        weight_i = np.array([0])
+        latency_i = None
+        amp_i = None
+        rise_time_i = None
+        decay_tau_i = None
+        avg_data_waveform_i = np.array([0])
+        avg_fit_waveform_i = np.array([0])
+        dt_i = None
+        nrmse_i = None
+    # --------------fit voltage clamp data---------------------        
+    # get pulses
+    (pulse_responses_v, pulse_ids_v, psp_amps_measured_v, freq_v, avg_psp_v,  
+        measured_relative_amp_v, measured_baseline_v) = get_average_pulse_response(pair, desired_clamp='vc')
+
+    if pulse_responses_v:
+        # weight and fit the trace    
+        weight_v = np.ones(len(avg_psp_v.data))*10.  #set everything to ten initially
+        weight_v[int((time_before_spike+.0001+xoffset)/avg_psp_v.dt):int((time_before_spike+.0001+xoffset+4e-3)/avg_psp_v.dt)] = 30.  #area around steep PSP rise 
+        avg_fit_v = fit_trace(avg_psp_v, excitation=excitation, clamp_mode = 'vc', weight=weight_v, latency=xoffset, latency_jitter=.5e-3)
+        latency_v = avg_fit_v.best_values['xoffset'] - time_before_spike
+        amp_v = avg_fit_v.best_values['amp']
+        rise_time_v = avg_fit_v.best_values['rise_time']
+        decay_tau_v = avg_fit_v.best_values['decay_tau']
+        avg_data_waveform_v = avg_psp_v.data
+        avg_fit_waveform_v = avg_fit_v.best_fit
+        dt_v = avg_psp_v.dt
+        nrmse_v = avg_fit_v.nrmse()
+
+    else:
+        print('\tskipping: no suitable first pulses found in voltage clamp')
+        weight_v = np.array([0])
+        latency_v = None
+        amp_v = None
+        rise_time_v = None
+        decay_tau_v = None
+        avg_data_waveform_v = np.array([0])
+        avg_fit_waveform_v = np.array([0])
+        dt_v = None
+        nrmse_v = None
+    #------------ done with fitting section ------------------------------
+
+    # dictionary for ease of translation into the output table
+    out_dict = {
+        'ic_amp': amp_i,
+        'ic_latency': latency_i,
+        'ic_rise_time': rise_time_i,
+        'ic_decay_tau': decay_tau_i,
+        'ic_avg_psp_data': avg_data_waveform_i,
+        'ic_avg_psp_fit': avg_fit_waveform_i,
+        'ic_dt': dt_i,
+        'ic_pulse_ids': pulse_ids_i,
+        'ic_nrmse': nrmse_i,
+        'ic_measured_baseline': measured_baseline_i,
+        'ic_measured_amp': measured_relative_amp_i,
+        'ic_weight': weight_i,
+
+        'vc_amp': amp_v,
+        'vc_latency': latency_v,
+        'vc_rise_time': rise_time_v,
+        'vc_decay_tau': decay_tau_v,
+        'vc_avg_psp_data':avg_data_waveform_v,
+        'vc_avg_psp_fit': avg_fit_waveform_v,
+        'vc_dt': dt_v,
+        'vc_pulse_ids': pulse_ids_v,
+        'vc_nrmse': nrmse_v,
+        'vc_measured_baseline': measured_baseline_v,
+        'vc_measured_amp': measured_relative_amp_v,
+        'vc_weight': weight_v
+    } 
     
-    session = db.Session(readonly=False) #create session
-
-    expt_id, index, n_jobs = job_info
-    print("QUERYING (expt_id=%f): %d/%d" % (expt_id, index, n_jobs))
-
-    #do query
-    pre_cell = db.aliased(db.Cell)
-    post_cell = db.aliased(db.Cell)
-    expt_stuff = session.query(db.Pair, db.Experiment.acq_timestamp, pre_cell.ext_id, post_cell.ext_id,pre_cell.cre_type, post_cell.cre_type)\
-                        .join(db.Experiment)\
-                        .join(pre_cell, db.Pair.pre_cell_id==pre_cell.id)\
-                        .join(post_cell, db.Pair.post_cell_id==post_cell.id).filter(db.Experiment.acq_timestamp==expt_id).all()
-    # make sure query returned something
-    if len(expt_stuff) <= 0:
-        print('No pairs found for expt_id=%f', expt_id)
-        return
-
-    processed_count = 0 #index for keeping track of how many cells pairs in experiemnt have been analyzed
-    for ii, (pair, uid, pre_cell_id, post_cell_id, pre_cell_cre, post_cell_cre) in enumerate(expt_stuff):
-
-        print ("Number %i of %i experiment pairs: %0.3f, cell ids:%s %s" % (ii, len(expt_stuff), uid, pre_cell_id, post_cell_id))
-        
-        # grab syapse from the table
-        try:
-            excitation=pair.connection_strength.synapse_type
-        except:
-            print('\tskipping: no pair.connection_strength.synapse_type')
-            continue
-
-        if not pair.connection_strength.ic_fit_xoffset:
-            print('\tskipping: no latency to do forced latency fitting')
-            continue
-        xoffset=pair.connection_strength.ic_fit_xoffset
-
-        # -----------fit current clamp data---------------------        
-        # get pulses
-        (pulse_responses_i, pulse_ids_i, psp_amps_measured_i, freq, avg_psp_i, 
-            measured_relative_amp_i, measured_baseline_i) = get_average_pulse_response(pair, desired_clamp='ic')
-
-        if pulse_responses_i:
-            # weight and fit the trace
-            weight_i = np.ones(len(avg_psp_i.data))*10.  #set everything to ten initially
-            weight_i[int((time_before_spike-3e-3)/avg_psp_i.dt):int(time_before_spike/avg_psp_i.dt)] = 0.   #area around stim artifact note that since this is spike aligned there will be some blur in where the cross talk is
-            weight_i[int((time_before_spike+.0001+xoffset)/avg_psp_i.dt):int((time_before_spike+.0001+xoffset+4e-3)/avg_psp_i.dt)] = 30.  #area around steep PSP rise 
-            avg_fit_i = fit_trace(avg_psp_i, excitation=excitation, weight=weight_i, latency=xoffset, latency_jitter=.5e-3)
-            latency_i = avg_fit_i.best_values['xoffset']-time_before_spike
-            amp_i = avg_fit_i.best_values['amp']
-            rise_time_i = avg_fit_i.best_values['rise_time']
-            decay_tau_i = avg_fit_i.best_values['decay_tau']
-            avg_data_waveform_i = avg_psp_i.data
-            avg_fit_waveform_i = avg_fit_i.best_fit
-            dt_i = avg_psp_i.dt
-            nrmse_i = avg_fit_i.nrmse()
-        else:
-            print('\tskipping: no suitable first pulses found in current clamp')
-            weight_i = np.array([0])
-            latency_i = None
-            amp_i = None
-            rise_time_i = None
-            decay_tau_i = None
-            avg_data_waveform_i = np.array([0])
-            avg_fit_waveform_i = np.array([0])
-            dt_i = None
-            nrmse_i = None
-        # --------------fit voltage clamp data---------------------        
-        # get pulses
-        (pulse_responses_v, pulse_ids_v, psp_amps_measured_v, freq_v, avg_psp_v,  
-            measured_relative_amp_v, measured_baseline_v) = get_average_pulse_response(pair, desired_clamp='vc')
-
-        if pulse_responses_v:
-            # weight and fit the trace    
-            weight_v = np.ones(len(avg_psp_v.data))*10.  #set everything to ten initially
-            weight_v[int((time_before_spike+.0001+xoffset)/avg_psp_v.dt):int((time_before_spike+.0001+xoffset+4e-3)/avg_psp_v.dt)] = 30.  #area around steep PSP rise 
-            avg_fit_v = fit_trace(avg_psp_v, excitation=excitation, clamp_mode = 'vc', weight=weight_v, latency=xoffset, latency_jitter=.5e-3)
-            latency_v = avg_fit_v.best_values['xoffset']-time_before_spike
-            amp_v = avg_fit_v.best_values['amp']
-            rise_time_v = avg_fit_v.best_values['rise_time']
-            decay_tau_v = avg_fit_v.best_values['decay_tau']
-            avg_data_waveform_v = avg_psp_v.data
-            avg_fit_waveform_v = avg_fit_v.best_fit
-            dt_v = avg_psp_v.dt
-            nrmse_v = avg_fit_v.nrmse()
-
-        else:
-            print('\tskipping: no suitable first pulses found in voltage clamp')
-            weight_v = np.array([0])
-            latency_v = None
-            amp_v = None
-            rise_time_v = None
-            decay_tau_v = None
-            avg_data_waveform_v = np.array([0])
-            avg_fit_waveform_v = np.array([0])
-            dt_v = None
-            nrmse_v = None
-        #------------ done with fitting section ------------------------------
-
-        # dictionary for ease of translation into the output table
-        out_dict={
-             'ic_amp': amp_i,
-             'ic_latency': latency_i,
-             'ic_rise_time': rise_time_i,
-             'ic_decay_tau': decay_tau_i,
-             'ic_avg_psp_data': avg_data_waveform_i,
-             'ic_avg_psp_fit': avg_fit_waveform_i,
-             'ic_dt': dt_i,
-             'ic_pulse_ids': pulse_ids_i,
-             'ic_nrmse': nrmse_i,
-             'ic_measured_baseline': measured_baseline_i,
-             'ic_measured_amp': measured_relative_amp_i,
-             'ic_weight': weight_i,
-
-             'vc_amp': amp_v,
-             'vc_latency': latency_v,
-             'vc_rise_time': rise_time_v,
-             'vc_decay_tau': decay_tau_v,
-             'vc_avg_psp_data':avg_data_waveform_v,
-             'vc_avg_psp_fit': avg_fit_waveform_v,
-             'vc_dt': dt_v,
-             'vc_pulse_ids': pulse_ids_v,
-             'vc_nrmse': nrmse_v,
-             'vc_measured_baseline': measured_baseline_v,
-             'vc_measured_amp': measured_relative_amp_v,
-             'vc_weight': weight_v
-             } 
-        # map to pair table and commit
-        afpf=AvgFirstPulseFit(pair=pair, **out_dict)
-        if commiting is True:
-            session.add(afpf)
-            session.commit()
-            
-            # TODO: I guess I need to query expt before I do this...
-            # expt.meta = expt.meta.copy()  # required by sqlalchemy to flag as modified
-            # expt.meta['avg_first_pulse_fit_timestamp'] = time.time()
-
-        print("COMMITED %i pairs from expt_id=%f: %d/%d" % (processed_count, expt_id, index, n_jobs))
-#---------------------------------------------------------------------------------------        
-        processed_count=processed_count+1
-        print('processed', processed_count+1)
-
-
-if __name__=='__main__':
-
-#    first_pulse_fit_tables.drop_tables() #note this will drop all the tables here!
-    init_tables()
-#    update_DB(limit=None, expts=[1533768797.736], parallel=False, workers=6, raise_exceptions=False, session=None)
-
-    update_DB(limit=None, expts=None, parallel=False, workers=6, raise_exceptions=False, session=None)
+    return out_dict

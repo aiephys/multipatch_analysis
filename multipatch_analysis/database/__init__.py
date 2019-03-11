@@ -8,6 +8,7 @@ from .morphology import *
 from .dataset import *
 from .pulse_response_strength import *
 from .connection_strength import *
+from .first_pulse_fit import *
 
 
 @default_session

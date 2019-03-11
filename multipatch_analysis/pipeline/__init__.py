@@ -5,6 +5,7 @@ from .dataset import DatasetPipelineModule
 from .morphology import MorphologyPipelineModule
 from .pulse_response import PulseResponsePipelineModule
 from .connection_strength import ConnectionStrengthPipelineModule
+from .first_pulse_fit import FirstPulseFitPipelineModule
 
 
 def all_modules():
