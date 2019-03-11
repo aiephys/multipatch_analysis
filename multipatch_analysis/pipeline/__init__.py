@@ -2,6 +2,7 @@ from .pipeline_module import PipelineModule
 from .slice import SlicePipelineModule
 from .experiment import ExperimentPipelineModule
 from .dataset import DatasetPipelineModule
+from .morphology import MorphologyPipelineModule
 
 
 def all_modules():

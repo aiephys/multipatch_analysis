@@ -126,7 +126,7 @@ class PipelineModule(object):
         """Entry point for running a single analysis job; may be invoked in a subprocess.
         """
         job_id, job_index, n_jobs = job
-        print("Processing %d/%d  %0.3f") % (job_index, n_jobs, job_id)
+        print("Processing %s %d/%d  %0.3f") % (cls.name, job_index, n_jobs, job_id)
         start = time.time()
         try:
             cls.process_job(job_id)
@@ -134,10 +134,10 @@ class PipelineModule(object):
             if raise_exceptions:
                 raise
             else:
-                print("Error processing %d/%d  %0.3f:") % (job_index, n_jobs, job_id)
+                print("Error processing %s %d/%d  %0.3f:") % (cls.name, job_index, n_jobs, job_id)
                 sys.excepthook(*sys.exc_info())
         else:
-            print("Finished %d/%d  %0.3f  (%0.2g sec)") % (job_index, n_jobs, job_id, time.time()-start)
+            print("Finished %s %d/%d  %0.3f  (%0.2g sec)") % (cls.name, job_index, n_jobs, job_id, time.time()-start)
     
     @classmethod
     def process_job(cls, job_id):
