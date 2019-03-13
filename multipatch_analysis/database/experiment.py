@@ -49,8 +49,9 @@ class ExperimentTableGroup(TableGroup):
             ('ext_id', 'int', 'Electrode ID (usually 1-8) referenced in external metadata records'),
         ]),
         ('cell', [
-            "Each row represents a single patched cell.",
-            ('electrode_id', 'electrode.id', '', {'index': True}),
+            "Each row represents a single cell in the experiment.",
+            ('experiment_id', 'experiment.id', '', {'index': True}),
+            ('electrode_id', 'electrode.id', 'ID of the electrode used to patch this cell, if any.', {'index': True}),
             ('cre_type', 'str', 'Comma-separated list of cre drivers apparently expressed by this cell', {'index': True}),
             ('target_layer', 'str', 'The intended cortical layer for this cell (used as a placeholder until the actual layer call is made)', {'index': True}),
             ('is_excitatory', 'bool', 'True if the cell is determined to be excitatory by synaptic current, cre type, or morphology', {'index': True}),
@@ -90,6 +91,9 @@ class ExperimentTableGroup(TableGroup):
 
         Experiment.electrodes = relationship(Electrode, order_by=Electrode.id, back_populates="experiment", cascade='save-update,merge,delete', single_parent=True)
         Electrode.experiment = relationship(Experiment, back_populates="electrodes")
+
+        Experiment.cells = relationship(Cell, order_by=Cell.ext_id, back_populates="experiment", cascade='save-update,merge,delete', single_parent=True)
+        Cell.experiment = relationship(Experiment, back_populates="cells")
 
         Electrode.cell = relationship(Cell, back_populates="electrode", cascade='save-update,merge,delete', single_parent=True, uselist=False)
         Cell.electrode = relationship(Electrode, back_populates="cell", single_parent=True)

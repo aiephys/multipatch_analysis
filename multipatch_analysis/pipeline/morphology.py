@@ -56,7 +56,7 @@ class MorphologyPipelineModule(DatabasePipelineModule):
         
         This method is used by drop_jobs to delete records for specific job IDs.
         """
-        return session.query(db.Morphology).filter(db.Morphology.experiment_id==db.Experiment.id).filter(db.Experiment.acq_timestamp.in_(job_ids))
+        return session.query(db.Morphology).filter(db.Morphology.cell_id==db.Cell.id).filter(db.Cell.experiment_id==db.Experiment.id).filter(db.Experiment.acq_timestamp.in_(job_ids))
 
     @classmethod
     def ready_jobs(self):

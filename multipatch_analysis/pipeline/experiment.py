@@ -27,7 +27,7 @@ class ExperimentPipelineModule(DatabasePipelineModule):
         all_expts = cache.list_experiments()
         site_path = all_expts[job_id]
         expt = Experiment(site_path=site_path)
-                
+        
         # look up slice record in DB
         ts = expt.slice_timestamp
         slice_entry = db.slice_from_timestamp(ts, session=session)
@@ -65,6 +65,7 @@ class ExperimentPipelineModule(DatabasePipelineModule):
             if elec.cell is not None:
                 cell = elec.cell
                 cell_entry = db.Cell(
+                    experiment=expt_entry,
                     electrode=elec_entry,
                     ext_id=cell.cell_id,
                     cre_type=cell.cre_type,
