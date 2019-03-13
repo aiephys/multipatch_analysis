@@ -37,6 +37,7 @@ class PipelineModule(object):
     
     name = None
     dependencies = []
+    maxtasksperchild = None
 
     @staticmethod
     def all_modules():
@@ -115,11 +116,11 @@ class PipelineModule(object):
             db.dispose_engines()
             
             print("Processing all jobs (parallel)..")
-            pool = multiprocessing.Pool(processes=workers)
+            pool = multiprocessing.Pool(processes=workers, maxtasksperchild=cls.maxtasksperchild)
             # would like to just call cls._run_job, but we can't pass a method to Pool.map()
             # instead we wrap this with the run_job_parallel function defined below.
             parallel_jobs = [(cls, job) for job in run_jobs]
-            pool.map(run_job_parallel, parallel_jobs)
+            pool.map(run_job_parallel, parallel_jobs, chunksize=cls.maxtasksperchild)  # note: maxtasksperchild is broken unless we also force chunksize
         else:
             print("Processing all jobs (serial)..")
             for job in run_jobs:

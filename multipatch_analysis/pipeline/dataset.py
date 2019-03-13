@@ -24,6 +24,10 @@ class DatasetPipelineModule(DatabasePipelineModule):
     name = 'dataset'
     dependencies = [ExperimentPipelineModule]
     table_group = dataset_tables
+
+    # datasets are large and NWB access leaks memory
+    # when running parallel, each child process may run only one job before being killed
+    maxtasksperchild = 1  
     
     @classmethod
     def create_db_entries(cls, job_id, session):
