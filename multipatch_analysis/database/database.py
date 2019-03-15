@@ -197,6 +197,10 @@ engine_ro = None
 engine_rw = None
 engine_pid = None  # pid of process that created this engine. 
 def init_engines():
+    """Initialize ro and rw (if possible) database engines.
+    
+    If any engines are currently defined, they will be disposed first.
+    """
     global engine_ro, engine_rw, engine_pid
     dispose_engines()
     
@@ -225,6 +229,8 @@ def dispose_engines():
 
 
 def get_engines():
+    """Return ro and rw (if possible) database engines.
+    """
     global engine_ro, engine_rw, engine_pid
     if os.getpid() != engine_pid:
         # In forked processes, we need to re-initialize the engine before
@@ -288,7 +294,7 @@ def reset_db():
         conn.execute('create database %s' % db_name)
 
     # reconnect to DB
-    init_engine()
+    init_engines()
 
     # Grant readonly permissions
     ro_user = config.synphys_db_readonly_user
