@@ -245,9 +245,9 @@ class ExperimentList(object):
 
     def __getitem__(self, item):
         if isinstance(item, float):
-            item = "%0.2f" % item
+            item = "%0.3f" % item
         if isinstance(item, str):
-            item = "%0.2f" % float(item) # force correct formatting
+            item = "%0.3f" % float(item) # force correct formatting
             try:
                 return self._expts_by_uid[item]
             except KeyError:

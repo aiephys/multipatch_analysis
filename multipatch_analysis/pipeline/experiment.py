@@ -113,13 +113,13 @@ class ExperimentPipelineModule(DatabasePipelineModule):
                 post_id = post_cell_entry.electrode.device_id
         
     @classmethod
-    def job_query(cls, job_ids, session):
-        """Return a query that returns records associated with a list of job IDs.
+    def job_records(cls, job_ids, session):
+        """Return a list of records associated with a list of job IDs.
         
         This method is used by drop_jobs to delete records for specific job IDs.
         """
         # only need to return from experiment table; other tables will be dropped automatically.
-        return session.query(db.Experiment).filter(db.Experiment.acq_timestamp.in_(job_ids))
+        return session.query(db.Experiment).filter(db.Experiment.acq_timestamp.in_(job_ids)).all()
 
     @classmethod
     def dependent_job_ids(cls, module, job_ids):

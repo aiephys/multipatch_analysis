@@ -92,8 +92,8 @@ class ExperimentTableGroup(TableGroup):
         Experiment.electrodes = relationship(Electrode, order_by=Electrode.id, back_populates="experiment", cascade='save-update,merge,delete', single_parent=True)
         Electrode.experiment = relationship(Experiment, back_populates="electrodes")
 
-        Experiment.cells = relationship(Cell, order_by=Cell.ext_id, back_populates="experiment", cascade='save-update,merge,delete', single_parent=True)
-        Cell.experiment = relationship(Experiment, back_populates="cells")
+        Experiment.cell_list = relationship(Cell, order_by=Cell.ext_id, back_populates="experiment", cascade='save-update,merge,delete', single_parent=True)
+        Cell.experiment = relationship(Experiment, back_populates="cell_list")
 
         Electrode.cell = relationship(Cell, back_populates="electrode", cascade='save-update,merge,delete', single_parent=True, uselist=False)
         Cell.electrode = relationship(Electrode, back_populates="cell", single_parent=True)

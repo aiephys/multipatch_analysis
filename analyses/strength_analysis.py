@@ -88,8 +88,6 @@ class ExperimentBrowser(pg.TreeWidget):
 
 
 
-
-
 class ResponseStrengthPlots(pg.dockarea.DockArea):
     def __init__(self, session):
         pg.dockarea.DockArea.__init__(self)
@@ -919,15 +917,10 @@ class PairView(pg.QtCore.QObject):
             self.rs_plots.load_conn(pair)
 
         sec = sel.expt.acq_timestamp
-        src = sel.expt.source_experiment
+
         print("======================================")
-        if src.entry is not None:
-            src.entry.print_tree()
-        else:
-            print(open(src.source_id[0], 'rb').read())
-        print("------------------------------")
-        print("Original path:", src)
         print("Server path:", sel.expt.original_path)
+        print("Server path:", sel.expt.storage_path)
         if hasattr(sel, 'pair'):
             print("ID: %.3f  %d->%d" % (sec, pair.pre_cell.ext_id, pair.post_cell.ext_id))
             conn = pair.connection_strength

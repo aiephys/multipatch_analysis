@@ -27,8 +27,8 @@ class FirstPulseFitPipelineModule(DatabasePipelineModule):
             session.add(afpf)
         
     @classmethod
-    def job_query(cls, job_ids, session):
-        """Return a query that returns records associated with a list of job IDs.
+    def job_records(cls, job_ids, session):
+        """Return a list of records associated with a list of job IDs.
         
         This method is used by drop_jobs to delete records for specific job IDs.
         """
@@ -36,4 +36,4 @@ class FirstPulseFitPipelineModule(DatabasePipelineModule):
         q = q.filter(db.AvgFirstPulseFit.pair_id==db.Pair.id)
         q = q.filter(db.Pair.experiment_id==db.Experiment.id)
         q = q.filter(db.Experiment.acq_timestamp.in_(job_ids))
-        return q
+        return q.all()

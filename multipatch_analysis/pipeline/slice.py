@@ -68,8 +68,10 @@ class SlicePipelineModule(DatabasePipelineModule):
         session.add(sl)
 
     @classmethod
-    def job_query(cls, job_ids, session):
-        return session.query(db.Slice).filter(db.Slice.acq_timestamp.in_(job_ids))
+    def job_records(cls, job_ids, session):
+        """Return a list of records associated with a list of job IDs.
+        """
+        return session.query(db.Slice).filter(db.Slice.acq_timestamp.in_(job_ids)).all()
 
     @classmethod
     def ready_jobs(self):

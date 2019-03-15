@@ -35,7 +35,11 @@ class DatasetPipelineModule(DatabasePipelineModule):
         # Load experiment from DB
         expt_entry = db.experiment_from_timestamp(job_id, session=session)
         elecs_by_ad_channel = {elec.device_id:elec for elec in expt_entry.electrodes}
-        pairs_by_device_id = expt_entry.pairs
+        pairs_by_device_id = {}
+        for pair in expt_entry.pairs.values():
+            pre_dev_id = pair.pre_cell.electrode.device_id
+            post_dev_id = pair.post_cell.electrode.device_id
+            pairs_by_device_id[(pre_dev_id, post_dev_id)] = pair
         
         # load NWB file
         path = os.path.join(config.synphys_data, expt_entry.storage_path)
@@ -235,13 +239,13 @@ class DatasetPipelineModule(DatabasePipelineModule):
                     session.add(base_entry)
         
     @classmethod
-    def job_query(cls, job_ids, session):
-        """Return a query that returns records associated with a list of job IDs.
+    def job_records(cls, job_ids, session):
+        """Return a list of records associated with a list of job IDs.
         
         This method is used by drop_jobs to delete records for specific job IDs.
         """
         # only need to return from syncrec table; other tables will be dropped automatically.
-        return session.query(db.SyncRec).filter(db.SyncRec.experiment_id==db.Experiment.id).filter(db.Experiment.acq_timestamp.in_(job_ids))
+        return session.query(db.SyncRec).filter(db.SyncRec.experiment_id==db.Experiment.id).filter(db.Experiment.acq_timestamp.in_(job_ids)).all()
 
     @classmethod
     def ready_jobs(self):

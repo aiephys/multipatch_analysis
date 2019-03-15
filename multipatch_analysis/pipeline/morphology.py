@@ -51,12 +51,12 @@ class MorphologyPipelineModule(DatabasePipelineModule):
             session.add(morphology)
         
     @classmethod
-    def job_query(cls, job_ids, session):
-        """Return a query that returns records associated with a list of job IDs.
+    def job_records(cls, job_ids, session):
+        """Return a list of records associated with a list of job IDs.
         
         This method is used by drop_jobs to delete records for specific job IDs.
         """
-        return session.query(db.Morphology).filter(db.Morphology.cell_id==db.Cell.id).filter(db.Cell.experiment_id==db.Experiment.id).filter(db.Experiment.acq_timestamp.in_(job_ids))
+        return session.query(db.Morphology).filter(db.Morphology.cell_id==db.Cell.id).filter(db.Cell.experiment_id==db.Experiment.id).filter(db.Experiment.acq_timestamp.in_(job_ids)).all()
 
     @classmethod
     def ready_jobs(self):

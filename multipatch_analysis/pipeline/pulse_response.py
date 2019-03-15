@@ -23,8 +23,8 @@ class PulseResponsePipelineModule(DatabasePipelineModule):
         _compute_strength('baseline', expt_id, session)
         
     @classmethod
-    def job_query(cls, job_ids, session):
-        """Return a query that returns records associated with a list of job IDs.
+    def job_records(cls, job_ids, session):
+        """Return a list of records associated with a list of job IDs.
         
         This method is used by drop_jobs to delete records for specific job IDs.
         """
@@ -33,7 +33,17 @@ class PulseResponsePipelineModule(DatabasePipelineModule):
         q = q.filter(db.PulseResponse.pair_id==db.Pair.id)
         q = q.filter(db.Pair.experiment_id==db.Experiment.id)
         q = q.filter(db.Experiment.acq_timestamp.in_(job_ids))
-        return q
+        prs = q.all()
+        
+        q = session.query(db.BaselineResponseStrength)
+        q = q.filter(db.BaselineResponseStrength.baseline_id==db.Baseline.id)
+        q = q.filter(db.Baseline.recording_id==db.Recording.id)
+        q = q.filter(db.Recording.sync_rec_id==db.SyncRec.id)
+        q = q.filter(db.SyncRec.experiment_id==db.Experiment.id)
+        q = q.filter(db.Experiment.acq_timestamp.in_(job_ids))
+        brs = q.all()
+        
+        return prs+brs
 
 
 def _compute_strength(source, expt_id, session):
@@ -64,6 +74,7 @@ def _compute_strength(source, expt_id, session):
             new_rec[k] = result[k]
         new_recs.append(new_rec)
     
+    print("New records:", len(new_recs))
     prof('process')
 
     # Bulk insert is not safe with parallel processes

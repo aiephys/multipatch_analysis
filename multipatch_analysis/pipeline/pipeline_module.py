@@ -131,7 +131,7 @@ class PipelineModule(object):
         """Entry point for running a single analysis job; may be invoked in a subprocess.
         """
         job_id, job_index, n_jobs = job
-        print("Processing %s %d/%d  %0.3f") % (cls.name, job_index, n_jobs, job_id)
+        print("Processing %s %d/%d  %0.3f") % (cls.name, job_index+1, n_jobs, job_id)
         start = time.time()
         try:
             cls.process_job(job_id)
@@ -139,10 +139,10 @@ class PipelineModule(object):
             if raise_exceptions:
                 raise
             else:
-                print("Error processing %s %d/%d  %0.3f:") % (cls.name, job_index, n_jobs, job_id)
+                print("Error processing %s %d/%d  %0.3f:") % (cls.name, job_index+1, n_jobs, job_id)
                 sys.excepthook(*sys.exc_info())
         else:
-            print("Finished %s %d/%d  %0.3f  (%0.2f sec)") % (cls.name, job_index, n_jobs, job_id, time.time()-start)
+            print("Finished %s %d/%d  %0.3f  (%0.2f sec)") % (cls.name, job_index+1, n_jobs, job_id, time.time()-start)
     
     @classmethod
     def process_job(cls, job_id):
@@ -255,8 +255,8 @@ class DatabasePipelineModule(PipelineModule):
         raise NotImplementedError()
         
     @classmethod
-    def job_query(cls, job_ids, session):
-        """Return a query that returns records associated with a list of job IDs.
+    def job_records(cls, job_ids, session):
+        """Return a list of records associated with a list of job IDs.
         
         This method is used by drop_jobs to delete records for specific job IDs.
         """
@@ -335,13 +335,13 @@ class DatabasePipelineModule(PipelineModule):
             dep_jobs = dep.dependent_job_ids(cls, job_ids)
             dep.drop_jobs(dep_jobs, session=session)
         
-        jobs = cls.job_query(job_ids, session).all()
-        for job in jobs:
-            session.delete(job)
+        records = cls.job_records(job_ids, session)
+        for rec in records:
+            session.delete(rec)
         session.query(db.Pipeline).filter(db.Pipeline.module_name==cls.name).filter(db.Pipeline.job_id.in_(job_ids)).delete(synchronize_session=False)
         session.commit()
         
-        print("Dropped %d jobs from %s module" % (len(jobs), cls.name))
+        print("Dropped %d records from %s module" % (len(records), cls.name))
     
     @classmethod
     def finished_jobs(cls):
