@@ -187,9 +187,14 @@ def init_engine():
     global engine_ro, engine_rw, engine_pid
     dispose_engines()
     
-    engine_ro = create_engine(db_address_ro, pool_size=10, max_overflow=40, isolation_level='AUTOCOMMIT')
+    if db_address_ro.startswith('postgres'):
+        opts = {'pool_size': 10, 'max_overflow': 40}
+    else:
+        opts = {}
+    
+    engine_ro = create_engine(db_address_ro, isolation_level='AUTOCOMMIT', **opts)
     if db_address_rw is not None:
-        engine_rw = create_engine(db_address_rw, pool_size=10, max_overflow=40)
+        engine_rw = create_engine(db_address_rw, **opts)
     engine_pid = os.getpid()
 
 
