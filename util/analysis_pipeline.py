@@ -1,8 +1,9 @@
 from __future__ import print_function
-import argparse, sys
+import argparse, sys, os
 import pyqtgraph as pg 
 from multipatch_analysis.pipeline import all_modules
 import multipatch_analysis.database as db
+from multipatch_analysis import config
 
 
 if __name__ == '__main__':
@@ -17,8 +18,13 @@ if __name__ == '__main__':
     parser.add_argument('--limit', type=int, default=None, help="Limit the number of experiments to process")
     parser.add_argument('--uids', type=lambda s: [float(x) for x in s.split(',')], default=None, help="Select specific IDs to analyze (or drop)", )
     parser.add_argument('--drop', action='store_true', default=False, help="Drop selected analysis results (do not run updates)", )
+    parser.add_argument('--bake', action='store_true', default=False, help="Bake an sqlite file after the pipeline update completes", )
+    
     
     args = parser.parse_args(sys.argv[1:])
+
+    if args.local:
+        pg.dbg()
     
     if 'all' in args.modules:
         modules = list(all_modules.values())
@@ -26,8 +32,15 @@ if __name__ == '__main__':
         modules = []
         for mod in args.modules:
             try:
-                modules.append(all_modules[mod])
-            except KeyError:
+                if mod.startswith(':'):
+                    i = all_modules.keys().index(mod[1:])
+                    modules.extend(all_modules.values()[:i])
+                elif mod.endswith(':'):
+                    i = all_modules.keys().index(mod[:-1])
+                    modules.extend(all_modules.values()[i:])
+                else:
+                    modules.append(all_modules[mod])
+            except (KeyError, ValueError):
                 print('Unknown analysis module "%s"; options are: %s' % (mod, list(all_modules.keys())))
                 sys.exit(-1)
 
@@ -38,8 +51,15 @@ if __name__ == '__main__':
         mod_names = ', '.join([module.name for module in modules])
         args.rebuild = raw_input("Rebuild modules: %s? " % mod_names) == 'y'
 
-    if args.local:
-        pg.dbg()
+    if args.bake and os.path.exists(config.synphys_db_sqlite):
+        msg = "sqlite database file %s already exists; ok to overwrite? " % config.synphys_db_sqlite
+        ans = raw_input(msg)
+        if ans == 'y':
+            print("  Ok, you asked for it..")
+            os.remove(config.synphys_db_sqlite)
+        else:
+            print("  Phooey.")
+            args.bake = False
 
     if args.rebuild:
         for module in modules:
@@ -71,3 +91,7 @@ if __name__ == '__main__':
         print("\n================== Update Report ===========================")
         for module, result in report:
             print("{name:20s}  dropped: {n_dropped:6d}  updated: {n_updated:6d}  errors: {n_errors:6d}".format(name=module.name, **result))
+
+    if args.bake:
+        print("\n================== Bake Sqlite ===========================")
+        db.bake_sqlite(config.synphys_db_sqlite)

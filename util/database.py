@@ -40,34 +40,5 @@ if args.bake:
             print("  Phooey.")
             sys.exit(0)
         
-    sqlite_addr = "sqlite:///%s" % config.synphys_db_sqlite
-    sqlite_engine = db.database.create_engine(sqlite_addr)
-    db.database.create_tables(engine=sqlite_engine)
-    
-    read_session = db.Session()
-    write_session = db.database.sessionmaker(bind=sqlite_engine)()
-    for mod in all_modules().values():
-        table_group = mod.table_group
-        for table in table_group.schemas:
-            print("Querying %s.." % table)
-            
-            # recs = read_session.query(table_group[table]).all()
-            # print("   pulled %d records, writing.." % len(recs))
-            # for i,rec in enumerate(recs):
-            #     write_session.merge(rec)
-            #     print("%d/%d\r" % (i, len(recs)), end="")
-            #     sys.stdout.flush()
-            
-            recs = read_session.execute("select * from %s" % table)
-            nrecs = recs.rowcount
-            for i,rec in enumerate(recs):
-                write_session.execute(table_group[table].__table__.insert(rec))
-                print("%d/%d\r" % (i, nrecs), end="")
-                sys.stdout.flush()
-                
-            print("   committing..")
-            write_session.commit()
-    
-    print("All finished!")
-            
+    db.bake_sqlite(config.synphys_db_sqlite)            
             

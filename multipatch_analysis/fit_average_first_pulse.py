@@ -73,10 +73,10 @@ def extract_first_pulse_info_from_Pair_object(pair, desired_clamp='ic'):
     """
 
     if pair.connection_strength is None:
-        print ("\t\tSKIPPING: pair_id %s, is not yielding pair.connection_strength" % pair.id)
+        # print ("\t\tSKIPPING: pair_id %s, is not yielding pair.connection_strength" % pair.id)
         return [], [], [], []
     if pair.connection_strength.synapse_type is None:
-        print ("\t\tSKIPPING: pair_id %s, is not yielding pair.connection_strength.synapse_type" % pair.id)
+        # print ("\t\tSKIPPING: pair_id %s, is not yielding pair.connection_strength.synapse_type" % pair.id)
         return [], [], [], []
     synapse_type = pair.connection_strength.synapse_type
     pulse_responses = []
@@ -84,7 +84,7 @@ def extract_first_pulse_info_from_Pair_object(pair, desired_clamp='ic'):
     pulse_ids = []
     stim_freqs = []
     if len(pair.pulse_responses)==0:
-        print ("\t\tSKIPPING: pair_id %s, no pulse responses in pair table" % (pair.id))
+        # print ("\t\tSKIPPING: pair_id %s, no pulse responses in pair table" % (pair.id))
         return [], [], [], []
     for pr in pair.pulse_responses:
         stim_pulse = pr.stim_pulse
@@ -285,7 +285,7 @@ def fit_first_pulses(pair, pre_cell_id, post_cell_id):
         dt_i = avg_psp_i.dt
         nrmse_i = avg_fit_i.nrmse()
     else:
-        print('\tskipping: no suitable first pulses found in current clamp')
+        # print('\tskipping: no suitable first pulses found in current clamp')
         weight_i = np.array([0])
         latency_i = None
         amp_i = None
@@ -315,7 +315,7 @@ def fit_first_pulses(pair, pre_cell_id, post_cell_id):
         nrmse_v = avg_fit_v.nrmse()
 
     else:
-        print('\tskipping: no suitable first pulses found in voltage clamp')
+        # print('\tskipping: no suitable first pulses found in voltage clamp')
         weight_v = np.array([0])
         latency_v = None
         amp_v = None

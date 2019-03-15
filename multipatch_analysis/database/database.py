@@ -3,6 +3,7 @@ Low-level relational database / sqlalchemy interaction.
 
 The actual schemas for database tables are implemented in other files in this subpackage.
 """
+from __future__ import division, print_function
 
 import os, sys, io, time, json
 from datetime import datetime
@@ -367,9 +368,40 @@ def default_session(fn):
     return wrap_with_session    
 
 
-def dump_to_sqlite():
-    sqlite_addr = "sqlite:///%s" % config.synphys_db_sqlite
+def bake_sqlite(sqlite_file):
+    """Dump a copy of the database to an sqlite file.
+    """
+    from ..pipeline import all_modules
+    sqlite_addr = "sqlite:///%s" % sqlite_file
     sqlite_engine = create_engine(sqlite_addr)
-    reset_db(engine=sqlite_engine)
+    create_tables(engine=sqlite_engine)
     
-    
+    read_session = Session()
+    write_session = sessionmaker(bind=sqlite_engine)()
+    for mod in all_modules().values():
+        table_group = mod.table_group
+        for table in table_group.schemas:
+            print("Querying %s.." % table)
+            
+            # ORM approach, a bit slower:
+            # recs = read_session.query(table_group[table]).all()
+            # print("   pulled %d records, writing.." % len(recs))
+            # for i,rec in enumerate(recs):
+            #     write_session.merge(rec)
+            #     print("%d/%d\r" % (i, len(recs)), end="")
+            #     sys.stdout.flush()
+            
+            q = read_session.query(*table_group[table].__table__.c)
+            nrecs = q.count()
+            for i,rec in enumerate(q):
+                write_session.execute(table_group[table].__table__.insert(rec))
+                print("%d/%d\r" % (i, nrecs), end="")
+                sys.stdout.flush()
+                
+            print("   committing..")
+            write_session.commit()
+
+    print("Optimizing database..")    
+    write_session.execute("analyze")
+    write_session.commit()
+    print("All finished!")
