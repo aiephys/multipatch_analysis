@@ -27,11 +27,16 @@ from .. import config
 db_version = 12
 db_name = '{database}_{version}'.format(database=config.synphys_db, version=db_version)
 app_name = ('mp_a:' + ' '.join(sys.argv))[:60]
-db_address_ro = '{host}/{database}?application_name={appname}'.format(host=config.synphys_db_host, database=db_name, appname=app_name)
+
+extra = ""
+if config.synphys_db_host.startswith('postgres'):
+    extra = "/{database}?application_name={appname}".format(database=db_name, appname=app_name)
+
+db_address_ro = '{host}{extra}'.format(host=config.synphys_db_host, extra=extra)
 if config.synphys_db_host_rw is None:
     db_address_rw = None
 else:
-    db_address_rw = '{host}/{database}?application_name={appname}'.format(host=config.synphys_db_host_rw, database=db_name, appname=app_name)
+    db_address_rw = '{host}{extra}'.format(host=config.synphys_db_host_rw, extra=extra)
 
 
 default_sample_rate = 20000
@@ -205,13 +210,15 @@ def init_engines():
     dispose_engines()
     
     if db_address_ro.startswith('postgres'):
-        opts = {'pool_size': 10, 'max_overflow': 40}
+        opts_ro = {'pool_size': 10, 'max_overflow': 40, 'isolation_level': 'AUTOCOMMIT'}
+        opts_rw = {'pool_size': 10, 'max_overflow': 40}
     else:
-        opts = {}
+        opts_ro = {}
+        opts_rw = {}
     
-    engine_ro = create_engine(db_address_ro, isolation_level='AUTOCOMMIT', **opts)
+    engine_ro = create_engine(db_address_ro, **opts_ro)
     if db_address_rw is not None:
-        engine_rw = create_engine(db_address_rw, **opts)
+        engine_rw = create_engine(db_address_rw, **opts_rw)
     engine_pid = os.getpid()
 
 

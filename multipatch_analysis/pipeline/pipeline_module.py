@@ -120,15 +120,20 @@ class PipelineModule(object):
             # would like to just call cls._run_job, but we can't pass a method to Pool.map()
             # instead we wrap this with the run_job_parallel function defined below.
             parallel_jobs = [(cls, job) for job in run_jobs]
-            job_results = pool.map(run_job_parallel, parallel_jobs, chunksize=cls.maxtasksperchild)  # note: maxtasksperchild is broken unless we also force chunksize
+            job_results = {}
+            chunksize = cls.maxtasksperchild or 1
+            for result in pool.imap(run_job_parallel, parallel_jobs, chunksize=chunksize):  # note: maxtasksperchild is broken unless we also force chunksize
+                job_results[result['job_id']] = result['error']
+                print("Finished %d/%d  (%0.1f%%)" % (len(job_results), len(run_jobs), 100*len(job_results)/len(run_jobs)))
+                
         else:
             print("Processing all jobs (serial)..")
-            job_results = []
+            job_results = {}
             for job in run_jobs:
                 result = cls._run_job(job, raise_exceptions=raise_exceptions)
-                job_results.append(result)
+                job_results[result['job_id']] = result['error']
                 
-        errors = {job[0]:result for job,result in zip(run_jobs, job_results) if result is not None}
+        errors = {job:result for job,result in job_results.items() if result is not None}
         return {'n_dropped': len(drop_job_ids), 'n_updated': len(run_job_ids), 'n_errors': len(errors), 'errors': errors}
 
     @classmethod
@@ -146,10 +151,10 @@ class PipelineModule(object):
             else:
                 print("Error processing %s %d/%d  %0.3f:") % (cls.name, job_index+1, n_jobs, job_id)
                 sys.excepthook(*sys.exc_info())
-                return str(exc)
+                return {'job_id': job_id, 'error': str(exc)}
         else:
             print("Finished %s %d/%d  %0.3f  (%0.2f sec)") % (cls.name, job_index+1, n_jobs, job_id, time.time()-start)
-            return None
+            return {'job_id': job_id, 'error': None}
     
     @classmethod
     def process_job(cls, job_id):

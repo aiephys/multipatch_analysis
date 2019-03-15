@@ -64,8 +64,8 @@ if __name__ == '__main__':
         print("\n================== Error Report ===========================")
         for module, result in report:
             print("------ %s : %d errors -------" % (module.name, result['n_errors']))
-            for job, err in result['errors'].keys():
-                print("%0.3f : %s" % (job, err))
+            for job, err in result['errors'].items():
+                print("    %0.3f : %s" % (job, err))
         
             
         print("\n================== Update Report ===========================")
