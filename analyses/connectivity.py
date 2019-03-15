@@ -9,10 +9,8 @@ from __future__ import print_function, division
 from collections import OrderedDict
 import numpy as np
 import pyqtgraph as pg
-from multipatch_analysis.database import database as db
+from multipatch_analysis import database as db
 from multipatch_analysis.connectivity import query_pairs, ConnectivityAnalyzer, StrengthAnalyzer
-from multipatch_analysis.connection_strength import ConnectionStrength, get_amps, get_baseline_amps
-from multipatch_analysis.morphology import Morphology
 from multipatch_analysis import constants
 from multipatch_analysis.cell_class import CellClass, classify_cells, classify_pairs
 from multipatch_analysis.ui.graphics import MatrixItem

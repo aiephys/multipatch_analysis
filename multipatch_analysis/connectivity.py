@@ -9,9 +9,7 @@ from collections import OrderedDict
 import numpy as np
 import pyqtgraph as pg
 from statsmodels.stats.proportion import proportion_confint
-from .database import database as db
-from .connection_strength import ConnectionStrength
-from .morphology import Morphology
+from . import database as db
 
 
 class ConnectivityAnalyzer(object):
@@ -259,7 +257,7 @@ def query_pairs(project_name=None, acsf=None, age=None, species=None, distance=N
     )
     pairs = pairs.join(pre_cell, pre_cell.id==db.Pair.pre_cell_id).join(post_cell, post_cell.id==db.Pair.post_cell_id)
     pairs = pairs.join(db.Experiment).join(db.Slice)
-    pairs = pairs.join(ConnectionStrength)
+    pairs = pairs.join(db.ConnectionStrength)
     
     if project_name is not None:
         if isinstance(project_name, str):

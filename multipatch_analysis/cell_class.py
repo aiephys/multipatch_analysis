@@ -2,8 +2,7 @@
 from __future__ import print_function, division
 
 from collections import OrderedDict
-from .database import database as db
-from .morphology import Morphology
+from . import database as db
 from . import constants
 
 
@@ -147,7 +146,7 @@ def classify_cells(cell_classes, cells=None, pairs=None, session=None):
         assert session is None, "session and pairs arguments are mutually exclusive"
         cells = set([p.pre_cell for p in pairs] + [p.post_cell for p in pairs])
     if cells is None:
-        cells = session.query(db.Cell, db.Cell.cre_type, db.Cell.target_layer, Morphology.pyramidal).join(Morphology)
+        cells = session.query(db.Cell, db.Cell.cre_type, db.Cell.target_layer, db.Morphology.pyramidal).join(db.Morphology)
     cell_groups = OrderedDict([(cell_class, set()) for cell_class in cell_classes])
     for cell in cells:
         for cell_class in cell_classes:
