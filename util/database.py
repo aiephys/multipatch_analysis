@@ -1,3 +1,5 @@
+from __future__ import division, print_function
+
 import os, sys, user, argparse
 from multipatch_analysis import database as db
 from multipatch_analysis.config import synphys_db
@@ -48,12 +50,23 @@ if args.bake:
         table_group = mod.table_group
         for table in table_group.schemas:
             print("Querying %s.." % table)
-            recs = read_session.query(table_group[table]).all()
-            print("   pulled %d records, writing.." % len(recs))
-            for rec in recs:
-                write_session.merge(rec, load=False)
+            
+            # recs = read_session.query(table_group[table]).all()
+            # print("   pulled %d records, writing.." % len(recs))
+            # for i,rec in enumerate(recs):
+            #     write_session.merge(rec)
+            #     print("%d/%d\r" % (i, len(recs)), end="")
+            #     sys.stdout.flush()
+            
+            recs = read_session.execute("select * from %s" % table)
+            nrecs = recs.rowcount
+            for i,rec in enumerate(recs):
+                write_session.execute(table_group[table].__table__.insert(rec))
+                print("%d/%d\r" % (i, nrecs), end="")
+                sys.stdout.flush()
+                
+            print("   committing..")
             write_session.commit()
-            print("   done with %s." % table)
     
     print("All finished!")
             

@@ -1,7 +1,9 @@
+import os
 from collections import OrderedDict
 from .database import TableGroup, generate_mapping
 from sqlalchemy.orm import relationship, deferred, sessionmaker, aliased
 from .slice import Slice
+from .. import config
 
 
 __all__ = ['experiment_tables', 'Experiment', 'Electrode', 'Cell', 'Pair']
