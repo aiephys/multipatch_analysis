@@ -10,6 +10,7 @@ import os, yaml
 
 synphys_db_host = None
 synphys_db_host_rw = None
+synphys_db_sqlite = "synphys.sqlite"
 synphys_db = "synphys"
 synphys_db_readonly_user = "readonly"
 synphys_data = None
@@ -27,6 +28,7 @@ template = r"""
 # synphys database
 synphys_db_host: "postgresql://readonly:readonly@10.128.36.109"
 synphys_db: "synphys"
+synphys_db_sqlite: "synphys.sqlite"
 # optional DB access with write privileges
 synphys_db_host_rw: null
 synphys_db_readonly_user: "readonly"

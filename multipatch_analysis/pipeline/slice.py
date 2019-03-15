@@ -119,5 +119,12 @@ def all_slices():
             continue
         _all_slices[ts] = path
         
-    pickle.dump(_all_slices, open(cachefile, 'w'))
+    try:
+        tmpfile = cachefile+'.tmp'
+        pickle.dump(_all_slices, open(tmpfile, 'w'))
+        os.rename(tmpfile, cachefile)
+    except:
+        if os.path.exists(tmpfile):
+            os.remove(tmpfile)
+    
     return _all_slices

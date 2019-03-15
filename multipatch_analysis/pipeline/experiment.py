@@ -141,14 +141,23 @@ class ExperimentPipelineModule(DatabasePipelineModule):
         """
         finished_slices = SlicePipelineModule.finished_jobs()
         
-        cache = synphys_cache.get_cache()
-        all_expts = cache.list_experiments()
+        # cache = synphys_cache.get_cache()
+        # all_expts = cache.list_experiments()
+        
+        session = db.Session()
+        slices = session.query(db.Slice.storage_path).all()
+        
+        ymls = []
+        for rec in slices:
+            path = rec[0]
+            ymls.extend(glob.glob(os.path.join(config.synphys_data, path, 'site_*', 'pipettes.yml')))
         
         n_errors = 0
         ready = OrderedDict()
-        for ts, path in all_expts.items():
+        for yml_path in ymls:
+            site_path = os.path.dirname(yml_path)
             try:
-                expt = Experiment(site_path=path)
+                expt = Experiment(site_path=site_path, verify=False)
             except Exception:
                 n_errors += 1
                 continue
@@ -157,7 +166,7 @@ class ExperimentPipelineModule(DatabasePipelineModule):
             slice_mtime = finished_slices.get(slice_ts, None)
             if slice_mtime is None:
                 continue
-            ready[ts] = max(raw_data_mtime, slice_mtime)
+            ready[expt.timestamp] = max(raw_data_mtime, slice_mtime)
         
-        print("Found %d experiments; %d are able to be processed, %d were skipped due to errors." % (len(all_expts), len(ready), n_errors))
+        print("Found %d experiments; %d are able to be processed, %d were skipped due to errors." % (len(ymls), len(ready), n_errors))
         return ready

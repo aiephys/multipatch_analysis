@@ -4,7 +4,7 @@ Low-level relational database / sqlalchemy interaction.
 The actual schemas for database tables are implemented in other files in this subpackage.
 """
 
-import os, sys, io, time
+import os, sys, io, time, json
 from datetime import datetime
 from collections import OrderedDict
 import numpy as np
@@ -105,6 +105,18 @@ class NDArray(TypeDecorator):
         return np.load(buf, allow_pickle=False)
 
 
+class JSONObject(TypeDecorator):
+    """For marshalling objects in/out of json-encoded text.
+    """
+    impl = String
+    
+    def process_bind_param(self, value, dialect):
+        return json.dumps(value)
+        
+    def process_result_value(self, value, dialect):
+        return json.loads(value)
+
+
 class FloatType(TypeDecorator):
     """For marshalling float types (including numpy).
     """
@@ -128,7 +140,8 @@ _coltypes = {
     'date': Date,
     'datetime': DateTime,
     'array': NDArray,
-    'object': JSONB,
+#    'object': JSONB,  # provides support for postges jsonb, but conflicts with sqlite
+    'object': JSONObject,
 }
 
 
@@ -166,7 +179,7 @@ def generate_mapping(table, schema, base=None):
 
     # props['time_created'] = Column(DateTime, default=func.now())
     # props['time_modified'] = Column(DateTime, onupdate=func.current_timestamp())
-    props['meta'] = Column(JSONB)
+    props['meta'] = Column(_coltypes['object'])
 
     if base is None:
         return type(name, (ORMBase,), props)
@@ -183,7 +196,7 @@ def generate_mapping(table, schema, base=None):
 engine_ro = None
 engine_rw = None
 engine_pid = None  # pid of process that created this engine. 
-def init_engine():
+def init_engines():
     global engine_ro, engine_rw, engine_pid
     dispose_engines()
     
@@ -199,16 +212,36 @@ def init_engine():
 
 
 def dispose_engines():
-    global engine_ro, engine_rw, engine_pid
+    global engine_ro, engine_rw, engine_pid, _sessionmaker_ro, _sessionmaker_rw
     if engine_ro is not None:
         engine_ro.dispose()
         engine_ro = None
+        _sessionmaker_ro = None
     if engine_rw is not None:
         engine_rw.dispose()
         engine_rw = None
+        _sessionmaker_rw = None
     engine_pid = None    
 
-init_engine()
+
+def get_engines():
+    global engine_ro, engine_rw, engine_pid
+    if os.getpid() != engine_pid:
+        # In forked processes, we need to re-initialize the engine before
+        # creating a new session, otherwise child processes will
+        # inherit and muck with the same connections. See:
+        # http://docs.sqlalchemy.org/en/rel_1_0/faq/connections.html#how-do-i-use-engines-connections-sessions-with-python-multiprocessing-or-os-fork
+        # if engine_pid is not None:
+        #     print("Making new session for subprocess %d != %d" % (os.getpid(), engine_pid))
+        dispose_engines()
+    
+    if engine_ro is None:
+        init_engines()
+    
+    return engine_ro, engine_rw
+    
+
+init_engines()
 
 
 _sessionmaker_ro = None
@@ -222,24 +255,17 @@ def Session(readonly=True):
     open after each request.
     """
     global _sessionmaker_ro, _sessionmaker_rw, engine_ro, engine_rw, engine_pid
-    if engine_ro is None or os.getpid() != engine_pid:
-        # In forked processes, we need to re-initialize the engine before
-        # creating a new session, otherwise child processes will
-        # inherit and muck with the same connections. See:
-        # http://docs.sqlalchemy.org/en/rel_1_0/faq/connections.html#how-do-i-use-engines-connections-sessions-with-python-multiprocessing-or-os-fork
-        # if engine_pid is not None:
-        #     print("Making new session for subprocess %d != %d" % (os.getpid(), engine_pid))
-        init_engine()
-        _sessionmaker_ro = None
-    
-    if _sessionmaker_ro is None:
-        _sessionmaker_ro = sessionmaker(bind=engine_ro)
-    if _sessionmaker_rw is None and engine_rw is not None:    
-        _sessionmaker_rw = sessionmaker(bind=engine_rw)
-        
+    engine_ro, engine_rw = get_engines()
+            
     if readonly:
+        if _sessionmaker_ro is None:
+            _sessionmaker_ro = sessionmaker(bind=engine_ro)
         return _sessionmaker_ro()
     else:
+        if engine_rw is None:
+            raise RuntimeError("Cannot start read-write DB session; no write access engine is defined (see config.synphys_db_host_rw)")
+        if _sessionmaker_rw is None:
+            _sessionmaker_rw = sessionmaker(bind=engine_rw)
         return _sessionmaker_rw()
 
 
@@ -275,7 +301,7 @@ def reset_db():
     create_tables()
 
 
-def create_tables(tables=None):
+def create_tables(tables=None, engine=None):
     """Create tables in the database.
     
     A list of *tables* may be optionally specified (see sqlalchemy.schema.MetaData.create_all) to 
@@ -283,14 +309,16 @@ def create_tables(tables=None):
     """
     # Create all tables
     global ORMBase, engine_rw
-    ORMBase.metadata.create_all(bind=engine_rw, tables=tables)
+    if engine is None:
+        engine = engine_rw
+    ORMBase.metadata.create_all(bind=engine, tables=tables)
 
 
 def vacuum(tables=None):
     """Cleans up database and analyzes table statistics in order to improve query planning.
     Should be run after any significant changes to the database.
     """
-    global engine_rw
+    engine_ro, engine_rw = get_engines()
     with engine_rw.begin() as conn:
         conn.connection.set_isolation_level(0)
         if tables is None:
@@ -324,3 +352,11 @@ def default_session(fn):
             if used_default_session:
                 _default_session.rollback()
     return wrap_with_session    
+
+
+def dump_to_sqlite():
+    sqlite_addr = "sqlite:///%s" % config.synphys_db_sqlite
+    sqlite_engine = create_engine(sqlite_addr)
+    reset_db(engine=sqlite_engine)
+    
+    

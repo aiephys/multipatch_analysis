@@ -2,6 +2,7 @@ from __future__ import print_function
 import argparse, sys
 import pyqtgraph as pg 
 from multipatch_analysis.pipeline import all_modules
+import multipatch_analysis.database as db
 
 
 if __name__ == '__main__':
@@ -53,6 +54,20 @@ if __name__ == '__main__':
             else:
                 module.drop_jobs(job_ids=args.uids)
     else:
+        report = []
         for module in modules:
             print("=============================================")
-            module.update(job_ids=args.uids, limit=args.limit, parallel=not args.local, workers=args.workers, raise_exceptions=args.raise_exc)
+            result = module.update(job_ids=args.uids, limit=args.limit, parallel=not args.local, workers=args.workers, raise_exceptions=args.raise_exc)
+            report.append((module, result))
+            db.vacuum()
+
+        print("\n================== Error Report ===========================")
+        for module, result in report:
+            print("------ %s : %d errors -------" % (module.name, result['n_errors']))
+            for job, err in result['errors'].keys():
+                print("%0.3f : %s" % (job, err))
+        
+            
+        print("\n================== Update Report ===========================")
+        for module, result in report:
+            print("{name:20s}  dropped: {n_dropped:6d}  updated: {n_updated:6d}  errors: {n_errors:6d}".format(name=module.name, **result))

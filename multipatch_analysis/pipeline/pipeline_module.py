@@ -91,7 +91,7 @@ class PipelineModule(object):
         print("Updating pipeline stage: %s" % cls.name)
         if job_ids is None:
             print("Searching for jobs to update..")
-            run_job_ids, drop_job_ids = cls.updatable_jobs()                    
+            run_job_ids, drop_job_ids = cls.updatable_jobs()
             if limit is not None:
                 # pick a random subset to import; this is just meant to ensure we get a variety
                 # of data when testing the import system.
@@ -120,11 +120,16 @@ class PipelineModule(object):
             # would like to just call cls._run_job, but we can't pass a method to Pool.map()
             # instead we wrap this with the run_job_parallel function defined below.
             parallel_jobs = [(cls, job) for job in run_jobs]
-            pool.map(run_job_parallel, parallel_jobs, chunksize=cls.maxtasksperchild)  # note: maxtasksperchild is broken unless we also force chunksize
+            job_results = pool.map(run_job_parallel, parallel_jobs, chunksize=cls.maxtasksperchild)  # note: maxtasksperchild is broken unless we also force chunksize
         else:
             print("Processing all jobs (serial)..")
+            job_results = []
             for job in run_jobs:
-                cls._run_job(job, raise_exceptions=raise_exceptions)
+                result = cls._run_job(job, raise_exceptions=raise_exceptions)
+                job_results.append(result)
+                
+        errors = {job[0]:result for job,result in zip(run_jobs, job_results) if result is not None}
+        return {'n_dropped': len(drop_job_ids), 'n_updated': len(run_job_ids), 'n_errors': len(errors), 'errors': errors}
 
     @classmethod
     def _run_job(cls, job, raise_exceptions=False):
@@ -135,14 +140,16 @@ class PipelineModule(object):
         start = time.time()
         try:
             cls.process_job(job_id)
-        except Exception:
+        except Exception as exc:
             if raise_exceptions:
                 raise
             else:
                 print("Error processing %s %d/%d  %0.3f:") % (cls.name, job_index+1, n_jobs, job_id)
                 sys.excepthook(*sys.exc_info())
+                return str(exc)
         else:
             print("Finished %s %d/%d  %0.3f  (%0.2f sec)") % (cls.name, job_index+1, n_jobs, job_id, time.time()-start)
+            return None
     
     @classmethod
     def process_job(cls, job_id):
@@ -237,7 +244,7 @@ class PipelineModule(object):
 def run_job_parallel(job):
     # multiprocessing Pool.map doesn't work on methods; must be a plain function
     cls, job = job
-    cls._run_job(job)
+    return cls._run_job(job)
 
 
 class DatabasePipelineModule(PipelineModule):

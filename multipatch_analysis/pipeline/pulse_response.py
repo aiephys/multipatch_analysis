@@ -74,7 +74,6 @@ def _compute_strength(source, expt_id, session):
             new_rec[k] = result[k]
         new_recs.append(new_rec)
     
-    print("New records:", len(new_recs))
     prof('process')
 
     # Bulk insert is not safe with parallel processes
