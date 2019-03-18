@@ -382,6 +382,7 @@ def bake_sqlite(sqlite_file):
     
     read_session = Session()
     write_session = sessionmaker(bind=sqlite_engine)()
+    last_size = 0
     for mod in all_modules().values():
         table_group = mod.table_group
         for table_name in table_group.schemas:
@@ -399,6 +400,11 @@ def bake_sqlite(sqlite_file):
             print("   committing %d rows..                    " % i)
             write_session.commit()
             read_session.rollback()
+            
+            size = os.stat(sqlite_file).st_size
+            diff = size - last_size
+            last_size = size
+            print("   sqlite file size:  %0.2fGB  (+%0.2fGB for this table)" % (size*1e-9, diff*1e-9))
 
     print("Optimizing database..")    
     write_session.execute("analyze")
@@ -407,7 +413,9 @@ def bake_sqlite(sqlite_file):
 
 
 class TableReadThread(threading.Thread):
-    """Read every record (all columns) from a table in a background thread.
+    """Iterator that yields records (all columns) from a table.
+    
+    Records are queried chunkwise and queued in a background thread to enable more efficient streaming.
     """
     def __init__(self, table, chunksize=1000):
         threading.Thread.__init__(self)
@@ -429,6 +437,8 @@ class TableReadThread(threading.Thread):
             records = query.all()
             self.queue.put(records)
         self.queue.put(None)
+        session.rollback()
+        session.close()
     
     def __iter__(self):
         while True:
