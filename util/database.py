@@ -10,8 +10,13 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--reset-db', action='store_true', default=False, help="Drop all tables in the database.", dest='reset_db')
 parser.add_argument('--vacuum', action='store_true', default=False, help="Ask the database to clean/optimize itself.")
 parser.add_argument('--bake', action='store_true', default=False, help="Bake current database into an sqlite file.")
+parser.add_argument('--dbg', action='store_true', default=False, help="Start debugging console.")
 
 args = parser.parse_args(sys.argv[1:])
+
+if args.dbg:
+    import pyqtgraph as pg
+    pg.dbg()
 
 if args.reset_db:
     ans = raw_input('Reset database "%s"? ' % db.db_name)

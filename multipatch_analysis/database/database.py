@@ -5,10 +5,14 @@ The actual schemas for database tables are implemented in other files in this su
 """
 from __future__ import division, print_function
 
-import os, sys, io, time, json
+import os, sys, io, time, json, threading
 from datetime import datetime
 from collections import OrderedDict
 import numpy as np
+try:
+    import queue
+except ImportError:
+    import Queue as queue
 
 import sqlalchemy
 from distutils.version import LooseVersion
@@ -380,28 +384,57 @@ def bake_sqlite(sqlite_file):
     write_session = sessionmaker(bind=sqlite_engine)()
     for mod in all_modules().values():
         table_group = mod.table_group
-        for table in table_group.schemas:
-            print("Querying %s.." % table)
+        for table_name in table_group.schemas:
+            print("Baking %s.." % table_name)
+            table = table_group[table_name]
             
-            # ORM approach, a bit slower:
-            # recs = read_session.query(table_group[table]).all()
-            # print("   pulled %d records, writing.." % len(recs))
-            # for i,rec in enumerate(recs):
-            #     write_session.merge(rec)
-            #     print("%d/%d\r" % (i, len(recs)), end="")
-            #     sys.stdout.flush()
-            
-            q = read_session.query(*table_group[table].__table__.c)
-            nrecs = q.count()
-            for i,rec in enumerate(q):
-                write_session.execute(table_group[table].__table__.insert(rec))
-                print("%d/%d\r" % (i, nrecs), end="")
-                sys.stdout.flush()
+            # read from table in background thread, write to sqlite in main thread.
+            reader = TableReadThread(table)
+            for i,rec in enumerate(reader):
+                write_session.execute(table.__table__.insert(rec))
+                if i%200 == 0:
+                    print("%d/%d   %0.2f%%\r" % (i, reader.max_id, (100.0*(i+1.0)/reader.max_id)), end="")
+                    sys.stdout.flush()
                 
-            print("   committing..")
+            print("   committing %d rows..                    " % i)
             write_session.commit()
+            read_session.rollback()
 
     print("Optimizing database..")    
     write_session.execute("analyze")
     write_session.commit()
     print("All finished!")
+
+
+class TableReadThread(threading.Thread):
+    """Read every record (all columns) from a table in a background thread.
+    """
+    def __init__(self, table, chunksize=1000):
+        threading.Thread.__init__(self)
+        self.daemon = True
+        
+        self.table = table
+        self.chunksize = chunksize
+        self.queue = queue.Queue(maxsize=5)
+        self.max_id = Session().query(func.max(table.id)).all()[0][0]        
+        self.start()
+        
+    def run(self):
+        session = Session()
+        table = self.table
+        chunksize = self.chunksize
+        all_columns = table.__table__.c
+        for i in range(0, self.max_id, chunksize):
+            query = session.query(*all_columns).filter((table.id >= i) & (table.id < i+chunksize))
+            records = query.all()
+            self.queue.put(records)
+        self.queue.put(None)
+    
+    def __iter__(self):
+        while True:
+            recs = self.queue.get()
+            if recs is None:
+                break
+            for rec in recs:
+                yield rec
+    

@@ -1,3 +1,4 @@
+from __future__ import division, print_function
 import sys, time, multiprocessing, traceback
 from datetime import datetime
 import numpy as np
