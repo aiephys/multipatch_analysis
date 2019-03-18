@@ -115,6 +115,9 @@ REPORTER_LINES = {                # dependencies             products
     'Snap25-LSL-F2A-GFP':         [(['cre'],                  ['EGFP'])],
     'Ai193-hyg-440167':           [(['cre'],                  ['EGFP']),
                                    (['flp'],                  ['tdTomato'])],
+    'Ai193(TICL-EGFP-ICF-tdT)-hyg': [
+                                   (['cre'],                  ['EGFP']),
+                                   (['flp'],                  ['tdTomato'])],
 }
 
 

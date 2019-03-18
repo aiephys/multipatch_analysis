@@ -44,11 +44,11 @@ def check():
             host = hostname(ip)
         name = known_addrs.get(ip, known_addrs.get(host, '???'))
         count = counts[ip]
-        print("{:8s}{:15s}".format(name, ip))
+        print("{:10s}{:15s}".format(name, ip))
         
         for con in connects:
             if con[0] == ip:
-                print("        {:15s} {:15s} {:20s} {:6d} {:10s} {:s}   ".format(con.usename, con.datname, con.application_name[:13], con.pid, '['+con.state+']', con.query.replace('\n', ' ')[:100]))
+                print("          {:15s} {:15s} {:30s} {:6d} {:10s} {:s}   ".format(con.usename, con.datname, con.application_name[:30], con.pid, '['+con.state+']', con.query.replace('\n', ' ')[:100]))
     
-    
+
 check()
