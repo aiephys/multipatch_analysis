@@ -32,12 +32,8 @@ if __name__ == '__main__':
         delay()
 
     stages = OrderedDict([
-        ('sync',                    ('python util/sync_rigs_to_server.py', 'sync raw data')),
-        ('import',                  ('python util/import_to_database.py', 'import to DB')),
-        ('morphology',              ('python util/update_morphology.py', 'update morphology')),
-        ('pulse_response_strength', ('python util/analyze_pulse_response_strength.py', 'pulse response strength')),
-        ('connection_strength',     ('python util/analyze_connection_strength.py', 'connection strength')),
-        ('vacuum',                  ('python util/database.py --vacuum', 'vacuum')),
+        ('sync',                    ('python util/sync_rigs_to_server.py', 'sync raw data to server')),
+        ('pipeline',                ('python util/analysis_pipeline.py all', 'run analysis pipeline')),
     ])
 
     skip = [] if args.skip == '' else args.skip.split(',')
