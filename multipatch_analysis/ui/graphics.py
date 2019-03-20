@@ -79,6 +79,21 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
             br = br.united(self.mapRectFromItem(item, item.boundingRect()))
         self._bounding_rect = br
 
+        font_size = size / 2
+        for i in ('Presynaptic', 'Postsynaptic'):
+            html = '<span style="font-size: %dpx; font-weight: bold">%s</span>' % (font_size, i)
+            item = pg.QtGui.QGraphicsTextItem("", parent=self)
+            item.setHtml(html)
+            if i == 'Presynaptic':
+                item.rotate(-90)
+                x = self.boundingRect().left() - item.boundingRect().height()
+                y = (self.boundingRect().bottom() - item.boundingRect().width()) / 1.5
+            elif i == 'Postsynaptic':
+                x = (self.boundingRect().right() - item.boundingRect().width()) / 2
+                y = self.boundingRect().top() - item.boundingRect().height()
+
+            item.setPos(x, y)
+
     def element_clicked(self, rect, event):
         self.sigClicked.emit(self, event, rect.row, rect.col)  
 
