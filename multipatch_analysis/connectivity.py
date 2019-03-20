@@ -9,8 +9,12 @@ from collections import OrderedDict
 import numpy as np
 import pyqtgraph as pg
 from statsmodels.stats.proportion import proportion_confint
-from . import database as db
+import multipatch_analysis.database as db
 
+thermal_colormap = pg.ColorMap(
+                    [0, 0.3333, 0.6666, 1],
+                    [(255, 255, 255, 255), (255, 220, 0, 255), (185, 0, 0, 255), (0, 0, 0, 255)],
+            )
 
 class ConnectivityAnalyzer(object):
     class SignalHandler(pg.QtCore.QObject):
@@ -38,12 +42,14 @@ class ConnectivityAnalyzer(object):
             connections_found = [p for p in probed_pairs if p.synapse]
             gap_junctions = [p for p in probed_pairs if p.electrical]
             n_connected = len(connections_found)
+            n_gap_junctions = len(gap_junctions)
             n_probed = len(probed_pairs)
             probed_progress = n_probed / 80.
             connected_progress = n_connected / 6.
             total_progress = np.clip(np.where(probed_progress > connected_progress, probed_progress, connected_progress), 0, 1)
             conf_interval = connection_probability_ci(n_connected, n_probed)
             conn_prob = float('nan') if n_probed == 0 else n_connected / n_probed
+            gap_prob = float('nan') if n_probed == 0 else n_gap_junctions / n_probed
             if n_probed == 0:
                 no_data = True
 
@@ -58,7 +64,8 @@ class ConnectivityAnalyzer(object):
                 'matrix_completeness': total_progress,
                 'distance_distribution': float('nan'),
                 'gap_junctions': gap_junctions,
-                'n_gap_junctions': len(gap_junctions),
+                'n_gap_junctions': n_gap_junctions,
+                'gap_junction_probability': gap_prob,
                 'None': None
             }
         
@@ -81,11 +88,10 @@ class ConnectivityAnalyzer(object):
                     [(0,0,100,255), (80,0,80,255), (140,0,0,255), (255,100,0,255), (255,255,100,255)],
             )}}),
             ('distance_distribution', {'mode': 'range'}),
-            ('n_gap_junctions', {'mode': 'range', 'defaults': {
-                'Max': 15, 
+            ('gap_junction_probability', {'mode': 'range', 'defaults': {
                 'colormap': pg.ColorMap(
-                    [0, 1],
-                    [(0,0,100,255), (255,0,0,255)]
+                   [0, 0.01, 0.03, 0.1, 0.3, 1.0],
+                    [(0,0,100, 255), (80,0,80, 255), (140,0,0, 255), (255,100,0, 255), (255,255,100, 255), (255,255,255, 255)],
             )}}),
             ],
             'show_confidence': [
@@ -96,10 +102,9 @@ class ConnectivityAnalyzer(object):
 
         defaults = {'color_by': 'connection_probability', 
             'text': '{n_connected}/{n_probed}', 
-            'show_confidence': 'cp_confidence_interval',} 
-            # 'colormap': cmap,
-            # 'min': 0,
-            # 'max': 1}
+            'show_confidence': 'cp_confidence_interval', 
+            'log': True,
+        }
 
         return fields, defaults
 
@@ -151,24 +156,36 @@ class StrengthAnalyzer(object):
             if len(connections) == 0:
                 no_data = True
             connection_strength = [c.connection_strength for c in connections] if len(connections) > 0 else float('nan')
-            ic_amps = filter(None, [cs.ic_amp_mean for cs in connection_strength]) if len(connections) > 0 else float('nan')
-            vc_amps = filter(None, [cs.vc_amp_mean for cs in connection_strength]) if len(connections) > 0 else float('nan')
-            ic_latencies = filter(None, [cs.ic_latency_mean for cs in connection_strength]) if len(connections) > 0 else float('nan')
-            
+            ic_amps = filter(None, [cs.ic_fit_amp for cs in connection_strength]) if len(connections) > 0 else float('nan')
+            vc_amps = filter(None, [cs.vc_fit_amp for cs in connection_strength]) if len(connections) > 0 else float('nan')
+            ic_xoffset = filter(None, [cs.ic_fit_xoffset for cs in connection_strength]) if len(connections) > 0 else float('nan')
+            vc_xoffset = filter(None, [cs.vc_fit_xoffset for cs in connection_strength]) if len(connections) > 0 else float('nan')
+            ic_rise = filter(None, [cs.ic_fit_rise_time for cs in connection_strength]) if len(connections) > 0 else float('nan')
+            vc_rise = filter(None, [cs.vc_fit_rise_time for cs in connection_strength]) if len(connections) > 0 else float('nan')
+            ic_decay = filter(None, [cs.ic_fit_decay_tau for cs in connection_strength]) if len(connections) > 0 else float('nan')
+            vc_decay = filter(None, [cs.vc_fit_decay_tau for cs in connection_strength]) if len(connections) > 0 else float('nan')
+
             self.results[(pre_class, post_class)] = {
                 'no_data': no_data,
                 'connected_pairs': connections,
                 'connection_strength': connection_strength,
                 'n_connections': len(connections),
-                'ic_mean_amp': np.mean(ic_amps),
+                'ic_fit_amp': np.mean(ic_amps),
+                'ic_fit_xoffset': np.mean(ic_xoffset),
+                'ic_fit_rise_time': np.mean(ic_rise),
+                'ic_fit_decay_tau': np.mean(ic_decay),
+                'vc_fit_amp': np.mean(vc_amps),
+                'vc_fit_xoffset': np.mean(vc_xoffset),
+                'vc_fit_rise_time': np.mean(vc_rise),
+                'vc_fit_decay_tau': np.mean(vc_decay),
                 'ic_amp_stdev': [-np.std(ic_amps), np.std(ic_amps)],
-                'vc_mean_amp': np.mean(vc_amps),
+                'ic_xoffset_stdev': [-np.std(ic_xoffset), np.std(ic_xoffset)],
+                'ic_rise_time_stdev': [-np.std(ic_rise), np.std(ic_rise)],
+                'ic_decay_tau_stdev': [-np.std(ic_decay), np.std(ic_decay)],
                 'vc_amp_stdev': [-np.std(vc_amps), np.std(vc_amps)],
-                'ic_mean_latency': np.mean(ic_latencies),
-                'ic_latency_stdev': [-np.std(ic_latencies), np.std(ic_latencies)],
-                'ic_mean_rise_time': float('nan'),
-                'ic_rise_time_stdev': float('nan'),
-                'ic_amp_cv': float('nan'),
+                'vc_xoffset_stdev': [-np.std(vc_xoffset), np.std(vc_xoffset)],
+                'vc_rise_time_stdev': [-np.std(vc_rise), np.std(vc_rise)],
+                'vc_decay_tau_stdev': [-np.std(vc_decay), np.std(vc_decay)],
                 'None': None,
             }
 
@@ -178,26 +195,48 @@ class StrengthAnalyzer(object):
        
         fields = {'color_by': [
             ('n_connections', {}),
-            ('ic_mean_amp', {'mode': 'range', 'units': 'V', 'defaults': {
+            ('ic_fit_amp', {'mode': 'range', 'units': 'V', 'defaults': {
                 'Min': -1e-3, 
                 'Max': 1e-3, 
                 'colormap': pg.ColorMap(
                 [0, 0.5, 1.0],
                 [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
             )}}),
-            ('vc_mean_amp', {'mode': 'range', 'units': 'A', 'defaults': {
-                'Min': -50e-12, 
-                'Max': 50e-12, 
+            ('vc_fit_amp', {'mode': 'range', 'units': 'A', 'defaults': {
+                'Min': -20e-12, 
+                'Max': 20e-12, 
                 'colormap': pg.ColorMap(
                 [0, 0.5, 1.0],
                 [(255, 0, 0, 255), (255, 255, 255, 255), (0, 0, 255, 255)],
             )}}),
-            ('ic_mean_latency', {'mode': 'range', 'units': 's', 'defaults': {
-                'Min': 1e-3, 
-                'Max': 6e-3
+            ('ic_fit_xoffset', {'mode': 'range', 'units': 's', 'defaults': {
+                'Min': 0.5e-3, 
+                'Max': 4e-3,
+                'colormap': thermal_colormap,
             }}),
-            ('ic_mean_rise_time', {'mode': 'range', 'units': 's'}),
-            ('ic_amp_cv', {'mode': 'range'}),
+            ('vc_fit_xoffset', {'mode': 'range', 'units': 's', 'defaults': {
+                'Min': 0.5e-3, 
+                'Max': 4e-3,
+                'colormap': thermal_colormap,
+            }}),
+            ('ic_fit_rise_time', {'mode': 'range', 'units': 's', 'defaults': {
+                'Min': 1e-3, 
+                'Max': 10e-3,
+                'colormap': thermal_colormap,
+            }}),
+            ('vc_fit_rise_time', {'mode': 'range', 'units': 's', 'defaults': {
+                'Min': 0.5e-3, 
+                'Max': 5e-3,
+                'colormap': thermal_colormap,
+            }}),
+            ('ic_fit_decay_tau', {'mode': 'range', 'units': 's', 'defaults': {
+                'Max': 500e-3,
+                'colormap': thermal_colormap,
+            }}),
+            ('vc_fit_decay_tau', {'mode': 'range', 'units': 's', 'defaults': {
+                'Max': 20e-3,
+                'colormap': thermal_colormap,
+            }}),
             ],
             'show_confidence': [
             'None',
@@ -208,12 +247,11 @@ class StrengthAnalyzer(object):
             ],
         }
 
-        defaults = {'color_by': 'ic_mean_amp', 
+        defaults = {'color_by': 'ic_fit_amp', 
             'text': '{n_connections}', 
-            'show_confidence': 'ic_amp_stdev',} 
-            # 'colormap': cmap,
-            # 'min': -1e-3,
-            # 'max': 1e-3}
+            'show_confidence': 'ic_amp_stdev',
+            'log': False,
+        }
 
         return fields, defaults
 
@@ -232,6 +270,117 @@ class StrengthAnalyzer(object):
         
     def summary(self, results):
         print('')
+
+class DynamicsAnalyzer(object):
+    class SignalHandler(pg.QtCore.QObject):
+        """Because we can't subclass from both QObject and QGraphicsRectItem at the same time
+        """
+        sigOutputChanged = pg.QtCore.Signal(object) #self
+
+    def __init__(self):
+        self.results = None
+        self._signalHandler = ConnectivityAnalyzer.SignalHandler()
+        self.sigOutputChanged = self._signalHandler.sigOutputChanged
+
+    def invalidate_output(self):
+        self.results = None
+
+    def measure(self, pair_groups):
+        self.results = OrderedDict()
+        for key, class_pairs in pair_groups.items():
+            pre_class, post_class = key
+            no_data = False
+            connections = [p for p in class_pairs if p.synapse]
+            if len(connections) == 0:
+                no_data = True
+
+            lp_range = [6, 7, 8]
+            prs_qc = {}
+            if len(connections) > 0:
+                prs_array = np.zeros([12, len(connections)])
+                prs_array[:] = np.nan
+                for c, connection in enumerate(connections):
+                    prs = connection.pulse_responses
+                    sign = connection.connection_strength.synapse_type
+                    for pr in prs:
+                        ind_freq = pr.stim_pulse.recording.patch_clamp_recording.multi_patch_probe[0].induction_frequency
+                        if ind_freq not in prs_qc.keys():
+                            prs_qc[ind_freq] = prs_array
+                        if sign == 'ex':
+                            qc_pass = pr.ex_qc_pass
+                            pr_dec_amp = pr.pulse_response_strength.pos_dec_amp
+                        elif sign == 'in':
+                            qc_pass = pr.in_qc_pass
+                            pr_dec_amp = pr.pulse_response_strength.neg_dec_amp
+                        else:
+                            qc_pass = False
+                        if qc_pass is True:
+                            pulse_number = pr.stim_pulse.pulse_number - 1
+                            prs_qc[ind_freq][pulse_number, c] = pr_dec_amp
+
+            if 50 in prs_qc.keys():
+                ind_50 = np.nanmean(prs_qc[50][lp_range], axis=0) / prs_qc[50][0,:]
+                ppr_50 = prs_qc[50][1,:] / prs_qc[50][0,:]
+            else:
+                ind_50 = float('nan')
+                ppr_50 = float('nan')
+
+            self.results[(pre_class, post_class)] = {
+            'no_data': no_data,
+            '50Hz_induction_ratio': np.nanmean(ind_50),
+            '50Hz_paired_pulse_ratio': np.nanmean(ppr_50),
+            'None': None,
+            }
+
+        return self.results
+
+    def output_fields(self):
+       
+        fields = {'color_by': [
+            ('50Hz_induction_ratio', {'mode': 'range', 'defaults': {
+                'Min': 0, 
+                'Max': 1, 
+                'colormap': pg.ColorMap(
+                [0, 0.5, 1.0],
+                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
+            )}}),
+            ('50Hz_paired_pulse_ratio', {'mode': 'range', 'defaults': {
+                'Min': 0, 
+                'Max': 1, 
+                'colormap': pg.ColorMap(
+                [0, 0.5, 1.0],
+                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
+            )}}),
+            ],
+            'show_confidence': [
+            'None',
+            ]}
+
+        defaults = {'color_by': '50Hz_induction_ratio', 
+            'text': '', 
+            'show_confidence': 'None',
+            'log': False,
+        }
+
+        return fields, defaults
+
+    def print_element_info(self, pre_class, post_class):
+        print ('')
+
+    def summary(self, results):
+        print('')
+
+def results_scatter(results, field_name, field, plt):
+    vals = [result[field_name] for result in results.values() if np.isfinite(result[field_name])]
+    y, x = np.histogram(vals, bins=np.linspace(min(vals), max(vals), 10))
+    plt.plot(x, y, stepMode=True, fillLevel=0, brush=(255,255,255,150))
+    units = field.get('units', '')
+    plt.setLabels(left='Count', bottom=(field_name, units))
+
+def add_element_to_scatter(results, pre_class, post_class, field_name):
+    val = results[(pre_class, post_class)][field_name]
+    line = pg.InfiniteLine(val, pen={'color':'g', 'width': 2}, movable=False)
+    return line
 
 def connection_probability_ci(n_connected, n_probed):
     # make sure we are consistent about how we measure connectivity confidence intervals
@@ -300,36 +449,3 @@ def pair_was_probed(pair, excitatory):
     # the pair "probed" for connection. Decreasing this value will decrease the number
     # of experiments included, but increase sensitivity for weaker connections
     return getattr(pair, qc_field) > 10
-
-def set_display(metric, text, colormap, upper_ci=None, lower_ci=None):
-    if upper_ci is not None and lower_ci is not None:
-        show_confidence = True
-    else:
-        show_confidence = False
-
-    if show_confidence:
-        output = {'bordercolor': 0.6}
-        default_bgcolor = np.array([128., 128., 128.])
-    else:
-        output = {'bordercolor': 0.8}
-        default_bgcolor = np.array([220., 220., 220.])
-    
-    if np.isnan(metric):
-        output['bgcolor'] = tuple(default_bgcolor)
-        output['fgcolor'] = 0.6
-        output['text'] = ''
-    else:
-        # get color based on metric
-        color = colormap.map(metric)
-        
-        # desaturate low confidence cells
-        if show_confidence:
-            confidence = (1.0 - (upper_ci - lower_ci)) ** 2
-            color = color * confidence + default_bgcolor * (1.0 - confidence)
-    
-        # invert text color for dark background
-        output['fgcolor'] = 'w' if sum(color[:3]) < 384 else 'k'
-        output['text'] = text
-        output['bgcolor'] = tuple(color)
-
-    return output
