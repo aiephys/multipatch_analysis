@@ -263,8 +263,8 @@ class DatasetPipelineModule(DatabasePipelineModule):
         
         # Return the greater of NWB mod time and experiment DB record mtime
         ready = OrderedDict()
-        for expt_id, expt_mtime in expts.items():
-            if expt_id not in expt_paths:
+        for expt_id, (expt_mtime, expt_success) in expts.items():
+            if expt_id not in expt_paths or expt_success is False:
                 # no NWB file; ignore
                 continue
             rec = expt_paths[expt_id]

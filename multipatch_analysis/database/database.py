@@ -326,11 +326,10 @@ def create_tables(tables=None, engine=None):
     create a subset of known tables.
     """
     # Create all tables
-    global ORMBase, engine_rw
+    global ORMBase
     if engine is None:
-        engine = engine_rw
-    ORMBase.metadata.create_all(bind=engine, tables=tables)
-
+        _, engine_rw = get_engines()
+    ORMBase.metadata.create_all(bind=engine_rw, tables=tables)
 
 def vacuum(tables=None):
     """Cleans up database and analyzes table statistics in order to improve query planning.

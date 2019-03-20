@@ -1,4 +1,5 @@
-import os, glob, re, time
+from __future__ import division, print_function
+import os, sys, glob, re, time
 import numpy as np
 from datetime import datetime
 from collections import OrderedDict
@@ -154,7 +155,9 @@ class ExperimentPipelineModule(DatabasePipelineModule):
         
         n_errors = 0
         ready = OrderedDict()
-        for yml_path in ymls:
+        for i,yml_path in enumerate(ymls):
+            print("  checking experiment %d/%d\r" % (i, len(ymls)), end='')
+            sys.stdout.flush()
             site_path = os.path.dirname(yml_path)
             try:
                 expt = Experiment(site_path=site_path, verify=False)
@@ -163,8 +166,8 @@ class ExperimentPipelineModule(DatabasePipelineModule):
                 continue
             raw_data_mtime = expt.last_modification_time
             slice_ts = expt.slice_timestamp
-            slice_mtime = finished_slices.get(slice_ts, None)
-            if slice_mtime is None:
+            slice_mtime, slice_success = finished_slices.get(slice_ts, None)
+            if slice_mtime is None or slice_success is False:
                 continue
             ready[expt.timestamp] = max(raw_data_mtime, slice_mtime)
         

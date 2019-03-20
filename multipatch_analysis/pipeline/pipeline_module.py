@@ -70,13 +70,15 @@ class PipelineModule(object):
         return [mod for mod in PipelineModule.all_modules().values() if mod in deps]
     
     @classmethod
-    def update(cls, job_ids=None, limit=None, parallel=False, workers=None, raise_exceptions=False):
+    def update(cls, job_ids=None, retry_errors=False, limit=None, parallel=False, workers=None, raise_exceptions=False):
         """Update analysis results for this module.
         
         Parameters
         ----------
         job_ids : list | None
             List of job IDs to be updated, or None to update all jobs.
+        retry_errors : bool
+            If True, jobs that previously failed will be attempted again.
         parallel : bool
             If True, run jobs in parallel threads or subprocesses.
         workers : int or None
@@ -90,9 +92,15 @@ class PipelineModule(object):
             This is used mainly for debugging to allow traceback inspection.
         """
         print("Updating pipeline stage: %s" % cls.name)
+        n_retry = 0
         if job_ids is None:
             print("Searching for jobs to update..")
-            run_job_ids, drop_job_ids = cls.updatable_jobs()
+            drop_job_ids, run_job_ids, error_job_ids = cls.updatable_jobs()
+            
+            if retry_errors:
+                run_job_ids += error_job_ids
+                n_retry = len(error_job_ids)
+            
             if limit is not None:
                 # pick a random subset to import; this is just meant to ensure we get a variety
                 # of data when testing the import system.
@@ -106,9 +114,13 @@ class PipelineModule(object):
             
         print("Found %d jobs to update." % len(run_job_ids))
 
+        # drop invalid records first
         if len(drop_job_ids) > 0:
-            print("Dropping %d invalid results.." % len(drop_job_ids))
+            print("Dropping %d invalid results (will not update).." % len(drop_job_ids))
             cls.drop_jobs(drop_job_ids)
+        if len(run_job_ids) > 0:
+            print("Dropping %d invalid results (will update).." % len(run_job_ids))
+            cls.drop_jobs(run_job_ids)
 
         run_jobs = [(expt_id, i, len(run_job_ids)) for i, expt_id in enumerate(run_job_ids)]
 
@@ -135,7 +147,7 @@ class PipelineModule(object):
                 job_results[result['job_id']] = result['error']
                 
         errors = {job:result for job,result in job_results.items() if result is not None}
-        return {'n_dropped': len(drop_job_ids), 'n_updated': len(run_job_ids), 'n_errors': len(errors), 'errors': errors}
+        return {'n_dropped': len(drop_job_ids), 'n_updated': len(run_job_ids), 'n_errors': len(errors), 'errors': errors, 'n_retry': n_retry}
 
     @classmethod
     def _run_job(cls, job, raise_exceptions=False):
@@ -190,8 +202,8 @@ class PipelineModule(object):
 
     @classmethod
     def finished_jobs(cls):
-        """Return an ordered dict of job IDs that have been processed by this module and
-        the dates when they were processed.
+        """Return an ordered dict of job IDs that have been successfully processed by this module,
+        the dates when they were processed, and whether each job succeeded:  {job_id: (date, success)}
 
         Note that some results returned may be obsolete if dependencies have changed.
         """
@@ -202,38 +214,54 @@ class PipelineModule(object):
         """Return an ordered dict of all jobs that are ready to be processed (all dependencies are present)
         and the dates that dependencies were created.
         """
-        jobs = OrderedDict()
-        for i,dep in enumerate(cls.dependencies):
-            dep_finished = dep.finished_jobs()
-            for k,v in dep_finished.items():
-                jobs.setdefault(k, []).append(v)
-        
-        finished = OrderedDict()
-        for job, dates in jobs.items():
-            if len(dates) < len(cls.dependencies):
-                # not all dependencies are finished yet
+        # default implpementation collects IDs of finished jobs from upstream modules.
+        job_times = OrderedDict()
+        for i,mod in enumerate(cls.dependencies):
+            jobs = mod.finished_jobs()
+            for job_id,(ts,success) in jobs.items():
+                if success is False:
+                    continue
+                job_times.setdefault(job_id, [None]*len(cls.dependencies))
+                job_times[job_id][i] = ts
+            
+        ready = OrderedDict()
+        for job_id, times in job_times.items():
+            if None in times:
                 continue
-            finished[job] = max(dates)
-
-        return finished
+            ready[job_id] = max(times)
+            
+        return ready
 
     @classmethod
     def updatable_jobs(cls):
         """Return lists of jobs that should be updated and/or should have their results dropped.
+        
+        Returns
+        -------
+        drop_job_ids : list
+            Jobs that need to be dropped because their output is invalid and they are not ready to be updated again
+        run_job_ids : list
+            Jobs that need to be updated AND are ready to be updated
+        error_job_ids : list
+            Jobs that previously failed to update due to an error
         """
         run_job_ids = []
         drop_job_ids = []
+        error_job_ids = []
         ready = cls.ready_jobs()
         finished = cls.finished_jobs()
         for job in ready:
             if job in finished:
-                if ready[job] > finished[job]:
+                date, success = finished[job]
+                if ready[job] > date:
                     # result is invalid
                     run_job_ids.append(job)
-                    drop_job_ids.append(job)
                 else:
-                    # result is valid
-                    pass  
+                    if success is False:
+                        error_job_ids.append(job)
+                    else:
+                        # result is valid
+                        pass  
             else:
                 # no current result
                 run_job_ids.append(job)
@@ -243,8 +271,8 @@ class PipelineModule(object):
             if job not in ready and job not in drop_job_ids:
                 drop_job_ids.append(job)
         
-        print("%d jobs ready for processing, %d finished, %d need drop, %d need update" % (len(ready), len(finished), len(drop_job_ids), len(run_job_ids)))
-        return run_job_ids, drop_job_ids
+        print("%d jobs ready for processing, %d finished, %d need drop, %d need update, %d previous errors" % (len(ready), len(finished), len(drop_job_ids), len(run_job_ids), len(error_job_ids)))
+        return drop_job_ids, run_job_ids, error_job_ids
 
 
 def run_job_parallel(job):
@@ -336,7 +364,7 @@ class DatabasePipelineModule(PipelineModule):
                 dep.initialize()
     
     @classmethod
-    def drop_jobs(cls, job_ids, session=None):
+    def drop_jobs(cls, job_ids, session=None, skip=None):
         """Remove all results previously stored for a list of job IDs.
         
         The associated results of dependent modules are also removed.
@@ -344,48 +372,38 @@ class DatabasePipelineModule(PipelineModule):
         if session is None:
             session = db.Session(readonly=False)
         
+        if skip is None:
+            skip = []
+        
         for dep in reversed(cls.dependent_modules()):
+            if dep in skip:
+                continue            
             dep_jobs = dep.dependent_job_ids(cls, job_ids)
-            dep.drop_jobs(dep_jobs, session=session)
+            dep.drop_jobs(dep_jobs, session=session, skip=skip)
         
+        print("Dropping %d jobs from %s module.." % (len(job_ids), cls.name))
         records = cls.job_records(job_ids, session)
-        for rec in records:
-            session.delete(rec)
-        session.query(db.Pipeline).filter(db.Pipeline.module_name==cls.name).filter(db.Pipeline.job_id.in_(job_ids)).delete(synchronize_session=False)
-        session.commit()
+        if len(records) == 0:
+            print("   (no records to remove for these job IDs)")
+        else:
+            for i,rec in enumerate(records):
+                session.delete(rec)
+                print("   record %d/%d\r" % (i, len(records)), end='')
+                sys.stdout.flush()
+            session.query(db.Pipeline).filter(db.Pipeline.module_name==cls.name).filter(db.Pipeline.job_id.in_(job_ids)).delete(synchronize_session=False)
+            print("   dropped %d records; committing.." % len(records))
+            session.commit()
         
-        print("Dropped %d records from %s module" % (len(records), cls.name))
+        skip.append(cls)  # only process each module once
     
     @classmethod
     def finished_jobs(cls):
-        """Return an ordered dict of job IDs that have been processed by this module and
-        the dates when they were processed.
+        """Return an ordered dict of job IDs that have been successfully processed by this module,
+        the dates when they were processed, and whether each job succeeded:  {job_id: (date, success)}
 
         Note that some results returned may be obsolete if dependencies have changed.
         """
         session = db.Session()
-        slices = session.query(db.Pipeline.job_id, db.Pipeline.finish_time).filter(db.Pipeline.module_name==cls.name).filter(db.Pipeline.success==True).all()
+        jobs = session.query(db.Pipeline.job_id, db.Pipeline.finish_time, db.Pipeline.success).filter(db.Pipeline.module_name==cls.name).all()
         session.rollback()
-        return OrderedDict([(uid, date) for uid, date in slices])
-
-    @classmethod
-    def ready_jobs(cls):
-        """Return an ordered dict of all jobs that are ready to be processed (all dependencies are present)
-        and the dates that dependencies were created.
-        """
-        # default implpementation collects IDs of finished jobs from upstream modules.
-        job_times = OrderedDict()
-        for i,mod in enumerate(cls.dependencies):
-            jobs = mod.finished_jobs()
-            for job_id,ts in jobs.items():
-                job_times.setdefault(job_id, [None]*len(cls.dependencies))
-                job_times[job_id][i] = ts
-            
-        ready = OrderedDict()
-        for job_id, times in job_times.items():
-            if None in times:
-                continue
-            ready[job_id] = max(times)
-            
-        return ready
-
+        return OrderedDict([(uid, (date, success)) for uid, date, success in jobs])
