@@ -18,6 +18,7 @@ if __name__ == '__main__':
     parser.add_argument('--limit', type=int, default=None, help="Limit the number of experiments to process")
     parser.add_argument('--uids', type=lambda s: [float(x) for x in s.split(',')], default=None, help="Select specific IDs to analyze (or drop)", )
     parser.add_argument('--drop', action='store_true', default=False, help="Drop selected analysis results (do not run updates)", )
+    parser.add_argument('--vacuum', action='store_true', default=False, help="Run VACUUM ANALYZE on the database to optimize its query planner", )
     parser.add_argument('--bake', action='store_true', default=False, help="Bake an sqlite file after the pipeline update completes", )
     
     
@@ -79,9 +80,11 @@ if __name__ == '__main__':
             print("=============================================")
             result = module.update(job_ids=args.uids, limit=args.limit, parallel=not args.local, workers=args.workers, raise_exceptions=args.raise_exc)
             report.append((module, result))
-        print("Starting vacuum..")
-        db.vacuum()
-        print("   ..finished vacuum.")
+            
+        if args.vacuum:
+            print("Starting vacuum..")
+            db.vacuum()
+            print("   ..finished vacuum.")
 
         print("\n================== Error Report ===========================")
         for module, result in report:
@@ -92,7 +95,7 @@ if __name__ == '__main__':
             
         print("\n================== Update Report ===========================")
         for module, result in report:
-            print("{name:20s}  dropped: {n_dropped:6d}  updated: {n_updated:6d}  errors: {n_errors:6d}".format(name=module.name, **result))
+            print("{name:20s}  dropped: {n_dropped:6d}  updated: {n_updated:6d} ({n_retry:6d} retry)  errors: {n_errors:6d}".format(name=module.name, **result))
 
     if args.bake:
         print("\n================== Bake Sqlite ===========================")
