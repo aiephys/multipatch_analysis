@@ -16,7 +16,7 @@ import pyqtgraph as pg
 import pyqtgraph.configfile
 
 from . import lims
-from .constants import ALL_CRE_TYPES, ALL_LABELS, FLUOROPHORES, LAYERS
+from .constants import ALL_CRE_TYPES, ALL_LABELS, FLUOROPHORES, LAYERS, INJECTIONS
 from .cell import Cell
 from .electrode import Electrode
 from .data import MultiPatchExperiment
@@ -931,6 +931,18 @@ class Experiment(object):
         return self._lims_record
 
     @property
+    def injections(self):
+        """Return a genotype string for any viral injections or other probes added in this experiment.
+        """
+        info = self.expt_info
+        inj = info.get('injections')
+        if inj in (None, ''):
+            return None
+        if inj not in INJECTIONS:
+            raise KeyError("Injection %r is unknown in constants.INJECTIONS" % inj)
+        return INJECTIONS[inj]        
+
+    @property
     def genotype(self):
         """The genotype of this specimen.
         """
@@ -938,6 +950,11 @@ class Experiment(object):
             gt_name = self.lims_record['genotype']
             if gt_name is None:
                 return None
+                
+            inj = self.injections
+            if inj is not None:
+                gt_name += ';' + inj
+                
             self._genotype = Genotype(gt_name)
         return self._genotype
 

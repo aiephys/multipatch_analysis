@@ -25,3 +25,9 @@ LAYERS = ['1', '2', '2/3', '3', '4', '5', '5a', '5b', '6']
 ACSF_RECIPES = ["2mM Ca & Mg", "1.3mM Ca & 1mM Mg"]
 INTERNAL_RECIPES = ["Standard K-Gluc", "PatchSeq", "K-Gluc -EGTA", "K-Gluc 1uM EGTA", "ACSF"]
 INTERNAL_DYES = ['Cascade Blue', 'AF488', 'no dye']
+
+
+INJECTIONS = {
+    'RO Fam84b-FlpO': 'Fam84b-FlpO',
+    'pan-GABA': '',
+}

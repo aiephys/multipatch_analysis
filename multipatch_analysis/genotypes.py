@@ -66,6 +66,7 @@ DRIVER_LINES = {                  # dependencies     products
     'Slc17a6-IRES2-FlpO':         [(['slc17a6'],      ['flp'])],
     'Slc17a8-iCre':               [(['slc17a8'],      ['cre'])],
     'Ctgf-T2A-dgCre':             [(['ctgf'],         ['cre'])],
+    'Fam84b-FlpO':                [(['fam84b'],       ['flp'])],
 }
 
 
