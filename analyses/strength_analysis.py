@@ -30,62 +30,10 @@ from neuroanalysis.fitting import Psp
 
 from multipatch_analysis import database as db
 from multipatch_analysis.ui.multipatch_nwb_viewer import MultipatchNwbViewer
+from multipatch_analysis.ui.experiment_browser import ExperimentBrowser
 from multipatch_analysis.pulse_response_strength import response_query, baseline_query, analyze_response_strength
 from multipatch_analysis.connection_strength import get_amps, get_baseline_amps
 from multipatch_analysis import constants
-
-
-class ExperimentBrowser(pg.TreeWidget):
-    def __init__(self):
-        pg.TreeWidget.__init__(self)
-        self.setColumnCount(7)
-        self.setHeaderLabels(['date', 'timestamp', 'rig', 'organism', 'region', 'genotype', 'acsf'])
-        self.setDragDropMode(self.NoDragDrop)
-        self.populate()
-        self._last_expanded = None
-        
-    def populate(self):
-        self.items_by_pair_id = {}
-        
-        self.session = db.Session()
-        db_expts = db.list_experiments(session=self.session)
-        db_expts.sort(key=lambda e: e.acq_timestamp)
-        for expt in db_expts:
-            date = expt.acq_timestamp
-            date_str = datetime.fromtimestamp(date).strftime('%Y-%m-%d')
-            slice = expt.slice
-            expt_item = pg.TreeWidgetItem(map(str, [date_str, '%0.3f'%expt.acq_timestamp, expt.rig_name, slice.species, expt.target_region, slice.genotype, expt.acsf]))
-            expt_item.expt = expt
-            self.addTopLevelItem(expt_item)
-
-            for pair in expt.pair_list:
-                if pair.n_ex_test_spikes == 0 and pair.n_in_test_spikes == 0:
-                    continue
-                cells = '%d => %d' % (pair.pre_cell.ext_id, pair.post_cell.ext_id)
-                conn = {True:"syn", False:"-", None:"?"}[pair.synapse]
-                types = 'L%s %s => L%s %s' % (pair.pre_cell.target_layer or "?", pair.pre_cell.cre_type, pair.post_cell.target_layer or "?", pair.post_cell.cre_type)
-                pair_item = pg.TreeWidgetItem([cells, conn, types])
-                expt_item.addChild(pair_item)
-                pair_item.pair = pair
-                pair_item.expt = expt
-                self.items_by_pair_id[pair.id] = pair_item
-                
-    def select_pair(self, pair_id):
-        """Select a specific pair from the list
-        """
-        if self._last_expanded is not None:
-            self._last_expanded.setExpanded(False)
-        item = self.items_by_pair_id[pair_id]
-        self.clearSelection()
-        item.setSelected(True)
-        parent = item.parent()
-        if not parent.isExpanded():
-            parent.setExpanded(True)
-            self._last_expanded = parent
-        else:
-            self._last_expanded = None
-        self.scrollToItem(item)
-
 
 
 class ResponseStrengthPlots(pg.dockarea.DockArea):
@@ -446,17 +394,14 @@ class ResponseStrengthAnalyzer(object):
                     continue
 
                 s = {'fg': 'pulse_response', 'bg': 'baseline'}[source]
-                result = analyze_response_strength(rec, source=s, lpf=self.lpf_check.isChecked(), 
-                                                   remove_artifacts=self.ar_check.isChecked(), bsub=self.bsub_check.isChecked())
-
-                if self.deconv_check.isChecked():
-                    trace = result['dec_trace']
-                else:
-                    trace = result['raw_trace']
-                    if self.bsub_check.isChecked():
-                        trace = trace - np.median(trace.time_slice(0, 9e-3).data)
-                    if self.lpf_check.isChecked():
-                        trace = filter.bessel_filter(trace, 500)
+                filter_opts = dict(
+                    deconvolve=self.deconv_check.isChecked(),
+                    lpf=self.lpf_check.isChecked(),
+                    remove_artifacts=self.ar_check.isChecked(),
+                    bsub=self.bsub_check.isChecked(),
+                )
+                result = analyze_response_strength(rec, source=s, **filter_opts)
+                trace = result['dec_trace']
                 
                 spike_values.append(trace.value_at([result['spike_time']])[0])
                 if self.align_check.isChecked():
@@ -468,7 +413,7 @@ class ResponseStrengthAnalyzer(object):
                 traces.append(trace)
                 trace_list.append(plot.plot(trace.time_values, trace.data, pen=pen))
 
-            if avg:
+            if avg and len(traces) > 0:
                 mean = TraceList(traces).mean()
                 trace_list.append(plot.plot(mean.time_values, mean.data, pen='g'))
                 trace_list[-1].setZValue(10)
@@ -1042,22 +987,25 @@ if __name__ == '__main__':
     import user
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--seed', type=int, default=0, help="Seed used to randomize classifier inputs")
+    parser.add_argument('--seed', type=int, default=0, help="Seed used to randomize classifier inputs")    
+    parser.add_argument('--pairview', default=False, action='store_true', help="Only display experiment browser ui")
     args = parser.parse_args(sys.argv[1:])
 
     pg.dbg()
 
+    # add window for analyzing selected pairs
+    pair_view = PairView()
+
+    if args.pairview:
+        sys.exit(0)
+    
     # Load records on all pairs and train a classifier to predict connections
     classifier = get_pair_classifier(seed=None if args.seed < 0 else args.seed)
     recs = query_all_pairs(classifier)
 
     # show all records in scatter plot
     spw = PairScatterPlot(recs)
-
-    # add another window for analyzing selected pairs
-    pair_view = PairView()
     spw.pair_clicked.connect(pair_view.select_pair)
-
 
     # Print a little report about synapses that may have been misclassified
     session = db.Session()

@@ -49,8 +49,11 @@ def measure_sum(trace, sign, baseline=(0e-3, 9e-3), response=(12e-3, 17e-3)):
     return peak - baseline
 
         
-def deconv_filter(trace, pulse_times, tau=15e-3, lowpass=1000., lpf=True, remove_artifacts=False, bsub=True):
-    dec = exp_deconvolve(trace, tau)
+def deconv_filter(trace, pulse_times, tau=15e-3, lowpass=24000., lpf=True, remove_artifacts=False, bsub=True):
+    if tau is not None:
+        dec = exp_deconvolve(trace, tau)
+    else:
+        dec = trace
 
     if remove_artifacts:
         # after deconvolution, the pulse causes two sharp artifacts; these
@@ -61,7 +64,7 @@ def deconv_filter(trace, pulse_times, tau=15e-3, lowpass=1000., lpf=True, remove
 
     if bsub:
         baseline = np.median(cleaned.time_slice(cleaned.t0+5e-3, cleaned.t0+10e-3).data)
-        b_subbed = cleaned-baseline
+        b_subbed = cleaned - baseline
     else:
         b_subbed = cleaned
 
@@ -124,7 +127,7 @@ def baseline_query(session):
     return q
 
 
-def analyze_response_strength(rec, source, remove_artifacts=False, lpf=True, bsub=True, lowpass=1000):
+def analyze_response_strength(rec, source, remove_artifacts=False, deconvolve=True, lpf=True, bsub=True, lowpass=1000):
     """Perform a standardized strength analysis on a record selected by response_query or baseline_query.
 
     1. Determine timing of presynaptic stimulus pulse edges and spike
@@ -171,7 +174,10 @@ def analyze_response_strength(rec, source, remove_artifacts=False, lpf=True, bsu
     results['neg_amp'], _ = measure_peak(data, '-', spike_time, pulse_times)
 
     # Deconvolution / artifact removal / filtering
-    tau = 15e-3 if rec.clamp_mode == 'ic' else 5e-3
+    if deconvolve:
+        tau = 15e-3 if rec.clamp_mode == 'ic' else 5e-3
+    else:
+        tau = None
     dec_data = deconv_filter(data, pulse_times, tau=tau, lpf=lpf, remove_artifacts=remove_artifacts, bsub=bsub, lowpass=lowpass)
     results['dec_trace'] = dec_data
 
