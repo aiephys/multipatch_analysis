@@ -79,7 +79,9 @@ if __name__ == '__main__':
             print("=============================================")
             result = module.update(job_ids=args.uids, limit=args.limit, parallel=not args.local, workers=args.workers, raise_exceptions=args.raise_exc)
             report.append((module, result))
-            db.vacuum()
+        print("Starting vacuum..")
+        db.vacuum()
+        print("   ..finished vacuum.")
 
         print("\n================== Error Report ===========================")
         for module, result in report:
