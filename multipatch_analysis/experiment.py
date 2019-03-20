@@ -31,7 +31,7 @@ class Experiment(object):
     def __init__(self, site_path=None, entry=None, yml_file=None, verify=True):
         self.entry = entry
         self.source_id = (None, None)
-        self.electrodes = None
+        self._electrodes = None
         self._cells = None
         self._connections = None
         self._gaps = None
@@ -42,7 +42,7 @@ class Experiment(object):
         self._slice_info = None
         self._expt_info = None
         self._lims_record = None
-        self._site_path = None
+        self._site_path = site_path
         self._probed = None
         self._sweep_summary = None
         self._mosaic_file = None
@@ -54,22 +54,26 @@ class Experiment(object):
         self._labels = None
         self._target_layers = None
         self._rig_name = None
+        self._loaded = False
+        self._yml_file = yml_file
         
         if site_path is not None:
-            yml_file = os.path.join(site_path, 'pipettes.yml')
-        
-        if entry is not None:
-            self._load_old_format(entry)
+            self._yml_file = os.path.join(site_path, 'pipettes.yml')
         elif yml_file is not None:
-            self._load_yml(yml_file)
-            
+            self._site_path = os.path.dirname(yml_file)
 
         if verify:
             self.verify()
 
+    def _load(self):
+        if not self._loaded:
+            self._load_yml(yml_file)
+            self._loaded = True
+
     def verify(self):
         """Perform some basic checks to ensure this experiment was acquired correctly.
         """
+        self._load()
         # make sure all cells have information for all labels
         for cell in self.cells.values():
             for label in self.labels:
@@ -108,7 +112,7 @@ class Experiment(object):
         This returns the site timestamp formatted to 2 decimal places, which is
         very likely to be unique for any site.
         """
-        return '%0.2f' % (self.site_info['__timestamp__'])
+        return '%0.3f' % (self.site_info['__timestamp__'])
     
     @property
     def timestamp(self):
@@ -162,6 +166,7 @@ class Experiment(object):
     def connection_calls(self):
         """Manually curated list of synaptic connections seen in this experiment, without applying any QC.
         """
+        self._load()
         return None if self._connections is None else self._connections[:]
 
     @property
@@ -182,6 +187,7 @@ class Experiment(object):
     def gap_calls(self):
         """Manually curated list of electrical connections seen in this experiment, without applying any QC.
         """
+        self._load()
         return None if self._gaps is None else self._gaps[:]
 
     @property
@@ -273,7 +279,13 @@ class Experiment(object):
         return stim
 
     @property
+    def electrodes(self):
+        self._load()
+        return self._electrodes
+
+    @property
     def cells(self):
+        self._load()
         if self._cells is None:
             if self.electrodes is None:
                 return None
@@ -286,8 +298,7 @@ class Experiment(object):
         Sets several properties: source_id, _site_path, electrodes, _connections, _gaps
         """
         self.source_id = (yml_file, None)
-        self._site_path = os.path.dirname(yml_file)
-        self.electrodes = OrderedDict()
+        self._electrodes = OrderedDict()
         
         pips = PipetteMetadata(os.path.dirname(yml_file))
         self._pipettes_yml = pips
@@ -295,7 +306,7 @@ class Experiment(object):
         genotype = self.genotype
         for pip_id, pip_meta in pips.pipettes.items():
             elec = Electrode(pip_id, start_time=pip_meta['patch_start'], stop_time=pip_meta['patch_stop'], device_id=pip_meta['ad_channel'], patch_status=pip_meta['pipette_status'])
-            self.electrodes[pip_id] = elec
+            self._electrodes[pip_id] = elec
 
             if pip_meta['got_data'] is False and pip_meta['pipette_status'] not in ['Low seal', 'GOhm seal', 'Not recorded']:
                 continue
@@ -460,13 +471,13 @@ class Experiment(object):
         except Exception as exc:
             Exception("Error parsing experiment: %s\n%s" % (self, exc.args[0]))
 
-        self.electrodes = OrderedDict()
+        self._electrodes = OrderedDict()
         for i in range(1,9):
             # Ideally, this is the only place we would bake in this assumption:
             ad_channel = i - 1
 
             elec = Electrode(i, None, None, ad_channel)
-            self.electrodes[i] = elec
+            self._electrodes[i] = elec
             elec.cell = Cell(self, i, elec)
     
         have_connections = False
