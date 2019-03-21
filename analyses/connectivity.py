@@ -63,9 +63,12 @@ class ExperimentFilter(object):
         project_list = [{'name': str(record[0]), 'type': 'bool'} for record in projects]
         acsf = s.query(db.Experiment.acsf).distinct().all()
         acsf_list = [{'name': str(record[0]), 'type': 'bool'} for record in acsf]
+        internal = s.query(db.Experiment.internal).distinct().all()
+        internal_list = [{'name': str(record[0]), 'type': 'bool'} for record in internal]
         self.params = Parameter.create(name='Data Filters', type='group', children=[
             {'name': 'Projects', 'type': 'group', 'children':project_list},
-            {'name': 'ACSF', 'type': 'group', 'children':acsf_list},
+            {'name': 'ACSF', 'type': 'group', 'children':acsf_list, 'expanded': False},
+            {'name': 'Interal', 'type': 'group', 'children': internal_list, 'expanded': False},
         ])
         self.params.sigTreeStateChanged.connect(self.invalidate_output)
 
