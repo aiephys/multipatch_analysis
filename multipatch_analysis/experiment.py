@@ -67,7 +67,7 @@ class Experiment(object):
 
     def _load(self):
         if not self._loaded:
-            self._load_yml(yml_file)
+            self._load_yml(self._yml_file)
             self._loaded = True
 
     def verify(self):
@@ -166,7 +166,8 @@ class Experiment(object):
     def connection_calls(self):
         """Manually curated list of synaptic connections seen in this experiment, without applying any QC.
         """
-        self._load()
+        if self._connections is None:
+            self._load()
         return None if self._connections is None else self._connections[:]
 
     @property
@@ -187,7 +188,8 @@ class Experiment(object):
     def gap_calls(self):
         """Manually curated list of electrical connections seen in this experiment, without applying any QC.
         """
-        self._load()
+        if self._gaps is None:
+            self._load()
         return None if self._gaps is None else self._gaps[:]
 
     @property
@@ -280,12 +282,12 @@ class Experiment(object):
 
     @property
     def electrodes(self):
-        self._load()
+        if self._electrodes is None:
+            self._load()
         return self._electrodes
 
     @property
     def cells(self):
-        self._load()
         if self._cells is None:
             if self.electrodes is None:
                 return None
