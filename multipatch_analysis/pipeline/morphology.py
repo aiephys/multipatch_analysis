@@ -74,7 +74,9 @@ class MorphologyPipelineModule(DatabasePipelineModule):
         
         # Return the greater of NWB mod time and experiment DB record mtime
         ready = OrderedDict()
-        for expt_id, expt_mtime in expts.items():
+        for expt_id, (expt_mtime, success) in expts.items():
+            if success is not True:
+                continue
             rec = expt_paths[expt_id]
             pip_file = os.path.join(config.synphys_data, rec.storage_path, 'pipettes.yml')
             pip_mtime = timestamp_to_datetime(os.stat(pip_file).st_mtime)
