@@ -658,13 +658,15 @@ class ExperimentMetadata(Experiment):
                     rec['DB'] = self.in_database
 
                     cell_cluster = self.lims_cell_cluster_id
-                    if cell_cluster is not None:
-                        in_lims = cell_cluster is not None
-                        self.lims_message = self.lims_submissions
-                    else:
+                    lims_ignore_path = os.path.join(self.archive_path, '.mpe_ignore')
+                    if os.path.isdir(lims_ignore_path):
                         lims_ignore_file = os.path.join(self.archive_path, '.mpe_ignore')
                         in_lims = "FAILED"
-                        self.lims_message = open(lims_ignore_file, 'r').read() 
+                        self.lims_message = open(lims_ignore_file, 'r').read()
+                    else:
+                        in_lims = cell_cluster is not None
+                        self.lims_message = self.lims_submissions
+ 
                     rec['LIMS'] = in_lims
 
                     if in_lims is True and slice_fixed is True and image_20x is not None:
