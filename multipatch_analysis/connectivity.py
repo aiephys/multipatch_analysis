@@ -386,7 +386,7 @@ def connection_probability_ci(n_connected, n_probed):
     # make sure we are consistent about how we measure connectivity confidence intervals
     return proportion_confint(n_connected, n_probed, method='beta')
 
-def query_pairs(project_name=None, acsf=None, age=None, species=None, distance=None, session=None):
+def query_pairs(project_name=None, acsf=None, age=None, species=None, distance=None, session=None, internal=None):
     """Generate a query for selecting pairs from the database.
 
     Parameters
@@ -434,6 +434,12 @@ def query_pairs(project_name=None, acsf=None, age=None, species=None, distance=N
 
     if species is not None:
         pairs = pairs.filter(db.Slice.species==species)
+
+    if internal is not None:
+        if isinstance(internal, str):
+            pairs = pairs.filter(db.Experiment.internal==internal)
+        else:
+            pairs = pairs.filter(db.Experiment.internal.in_(internal))
 
     # calcium
     # age

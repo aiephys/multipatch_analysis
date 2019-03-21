@@ -87,7 +87,7 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
             if i == 'Presynaptic':
                 item.rotate(-90)
                 x = self.boundingRect().left() - item.boundingRect().height()
-                y = (self.boundingRect().bottom() - item.boundingRect().width()) / 1.5
+                y = item.boundingRect().width() + ((self.boundingRect().bottom() - item.boundingRect().width()) / 2)
             elif i == 'Postsynaptic':
                 x = (self.boundingRect().right() - item.boundingRect().width()) / 2
                 y = self.boundingRect().top() - item.boundingRect().height()
