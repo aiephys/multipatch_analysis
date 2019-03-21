@@ -12,6 +12,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Process analysis pipeline jobs")
     parser.add_argument('modules', type=str, nargs='+', help="The name of the analysis module(s) to run: %s" % ', '.join(list(all_modules.keys())))
     parser.add_argument('--rebuild', action='store_true', default=False, help="Remove and rebuild tables for this analysis")
+    parser.add_argument('--retry', action='store_true', default=False, help="Retry processing jobs that previously failed")
     parser.add_argument('--workers', type=int, default=None, help="Set the number of concurrent processes during update")
     parser.add_argument('--local', action='store_true', default=False, help="Disable concurrent processing to make debugging easier")
     parser.add_argument('--raise-exc', action='store_true', default=False, help="Disable catching exceptions encountered during processing", dest='raise_exc')
@@ -78,7 +79,7 @@ if __name__ == '__main__':
         report = []
         for module in modules:
             print("=============================================")
-            result = module.update(job_ids=args.uids, limit=args.limit, parallel=not args.local, workers=args.workers, raise_exceptions=args.raise_exc)
+            result = module.update(job_ids=args.uids, retry_errors=args.retry, limit=args.limit, parallel=not args.local, workers=args.workers, raise_exceptions=args.raise_exc)
             report.append((module, result))
             
         if args.vacuum:
