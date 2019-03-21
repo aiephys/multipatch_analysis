@@ -68,7 +68,7 @@ class ExperimentFilter(object):
         self.params = Parameter.create(name='Data Filters', type='group', children=[
             {'name': 'Projects', 'type': 'group', 'children':project_list},
             {'name': 'ACSF', 'type': 'group', 'children':acsf_list, 'expanded': False},
-            {'name': 'Interal', 'type': 'group', 'children': internal_list, 'expanded': False},
+            {'name': 'Internal', 'type': 'group', 'children': internal_list, 'expanded': False},
         ])
         self.params.sigTreeStateChanged.connect(self.invalidate_output)
 
@@ -81,7 +81,9 @@ class ExperimentFilter(object):
             project_names = project_names if len(project_names) > 0 else None 
             acsf_recipes = [child.name() for child in self.params.child('ACSF').children() if child.value() is True]
             acsf_recipes = acsf_recipes if len(acsf_recipes) > 0 else None 
-            self.pairs = query_pairs(project_name=project_names, acsf=acsf_recipes, session=session).all()
+            internal_recipes = [child.name() for child in self.params.child('Internal').children() if child.value() is True]
+            internal_recipes = internal_recipes if len(internal_recipes) > 0 else None 
+            self.pairs = query_pairs(project_name=project_names, acsf=acsf_recipes, session=session, internal=internal_recipes).all()
         return self.pairs
 
     def invalidate_output(self):
@@ -376,13 +378,13 @@ class MatrixAnalyzer(object):
         # attempt to fix so it doesn't break in mp_a\ui\graphics.py
         # at line 90. 
         rows = []
-        for cell_class in self.cell_classes:
+        for i,cell_class in enumerate(self.cell_classes):
             tup = cell_class.as_tuple
             row = tup[:1]
             if len(tup) > 1:
                 row = row + (' '.join(tup[1:]),)
             else:
-                row = (' '.join(''),) + row
+                row = (' '*i,) + row
             # if len(tup) > 1:
             #     row = tup
             # elif len(tup) == 1:
@@ -413,8 +415,8 @@ if __name__ == '__main__':
     session = db.Session()
     
     # Define cell classes
-    cell_class_groups = {
-        'Mouse All Cre-types by layer': [
+    cell_class_groups = OrderedDict([
+        ('Mouse All Cre-types by layer', [
             # {'cre_type': 'unknown', 'pyramidal': True, 'target_layer': '2/3'},
             {'cre_type': 'unknown', 'target_layer': '2/3'},
             # {'pyramidal': True, 'target_layer': '2/3'},
@@ -436,24 +438,24 @@ if __name__ == '__main__':
             {'cre_type': 'pvalb', 'target_layer': '6'},
             {'cre_type': 'sst', 'target_layer': '6'},
             {'cre_type': 'vip', 'target_layer': '6'},
-        ],
+        ]),
 
-        'Mouse Excitatory Cre-types': [
+        ('Mouse Inhibitory Cre-types',[
+            {'cre_type': 'pvalb'},
+            {'cre_type': 'sst'},
+            {'cre_type': 'vip'},
+        ]),
+ 
+        ('Mouse Excitatory Cre-types', [
             # {'pyramidal': True, 'target_layer': '2/3'},
             {'cre_type': 'unknown', 'target_layer': '2/3'},
             {'cre_type': 'nr5a1', 'target_layer': '4'},
             {'cre_type': 'sim1', 'target_layer': '5'},
             {'cre_type': 'tlx3', 'target_layer': '5'},
             {'cre_type': 'ntsr1', 'target_layer': '6'},
-        ],
+        ]),
 
-        'Mouse Inhibitory Cre-types':[
-            {'cre_type': 'pvalb'},
-            {'cre_type': 'sst'},
-            {'cre_type': 'vip'},
-        ],
-
-        'Mouse E-I Cre-types by layer':[
+        ('Mouse E-I Cre-types by layer',[
             # {'pyramidal': True, 'target_layer': '2/3'},
             {'cre_type': 'unknown', 'target_layer': '2/3'},
             {'cre_type': ('pvalb', 'sst', 'vip'), 'target_layer': '2/3'},
@@ -464,9 +466,9 @@ if __name__ == '__main__':
             {'cre_type': ('pvalb', 'sst', 'vip'), 'target_layer': '5'},
             {'cre_type': 'ntsr1', 'target_layer': '6'},
             {'cre_type': ('pvalb', 'sst', 'vip'), 'target_layer': '6'},     
-        ],
+        ]),
 
-        'Pyramidal / Nonpyramidal by layer': [
+        ('Pyramidal / Nonpyramidal by layer', [
             {'pyramidal': True, 'target_layer': '2'},
             {'pyramidal': False, 'target_layer': '2'},
             {'pyramidal': True, 'target_layer': '3'},
@@ -477,16 +479,24 @@ if __name__ == '__main__':
             {'pyramidal': False, 'target_layer': '5'},
             {'pyramidal': True, 'target_layer': '6'},
             {'pyramidal': False, 'target_layer': '6'},
-        ],
+        ]),
 
-        'Pyramidal by layer': [
+        ('Pyramidal by layer', [
             {'pyramidal': True, 'target_layer': '2'}, 
             {'pyramidal': True, 'target_layer': '3'},
             {'pyramidal': True, 'target_layer': '4'},
             {'pyramidal': True, 'target_layer': '5'},
             {'pyramidal': True, 'target_layer': '6'},
-        ],
-    }
+        ]),
+
+        ('All cells by layer', [
+            {'target_layer': '2'},
+            {'target_layer': '3'},
+            {'target_layer': '4'},
+            {'target_layer': '5'},
+            {'target_layer': '6'},
+        ]),
+    ])
 
 
     maz = MatrixAnalyzer(session=session, default_analyzer='Connectivity')
