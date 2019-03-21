@@ -67,6 +67,7 @@ DRIVER_LINES = {                  # dependencies     products
     'Slc17a8-iCre':               [(['slc17a8'],      ['cre'])],
     'Ctgf-T2A-dgCre':             [(['ctgf'],         ['cre'])],
     'Fam84b-FlpO':                [(['fam84b'],       ['flp'])],
+    'rAAV-mDlx-GFP':              [(['mDlx'],         ['GFP'])],
 }
 
 
@@ -119,6 +120,8 @@ REPORTER_LINES = {                # dependencies             products
     'Ai193(TICL-EGFP-ICF-tdT)-hyg': [
                                    (['cre'],                  ['EGFP']),
                                    (['flp'],                  ['tdTomato'])],
+    'pAAV-Ef1a-fDIO-EGFP':        [(['flp'],                  ['EGFP'])],
+    'pAAV-Ef1a-cDIO-dTomato':     [(['cre'],                  ['tdTomato'])],
 }
 
 
