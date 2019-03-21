@@ -149,11 +149,7 @@ class ExperimentBase(object):
 
         if not hasattr(self, '_data'):
             from ..data import MultiPatchExperiment
-            try:
-                self._data = MultiPatchExperiment(self.nwb_cache_file)
-            except IOError:
-                os.remove(self.nwb_cache_file)
-                self._data = MultiPatchExperiment(self.nwb_cache_file)
+            self._data = MultiPatchExperiment(self.nwb_cache_file)
         return self._data
 
     @property
