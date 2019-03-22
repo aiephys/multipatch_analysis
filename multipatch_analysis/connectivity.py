@@ -73,7 +73,7 @@ class ConnectivityAnalyzer(object):
 
     def output_fields(self):
 
-        fields = {'color_by': [
+        self.fields = {'color_by': [
             ('n_probed', {}),
             ('n_connected', {}),
             ('connection_probability', {'mode': 'range', 'defaults': {
@@ -106,9 +106,9 @@ class ConnectivityAnalyzer(object):
             'log': True,
         }
 
-        return fields, defaults
+        return self.fields, defaults
 
-    def print_element_info(self, pre_class, post_class):
+    def print_element_info(self, pre_class, post_class, metric):
         connections = self.results[(pre_class, post_class)]['connected_pairs']
         print ("Connection type: %s -> %s" % (pre_class, post_class))
         print ("Connected Pairs:")
@@ -123,14 +123,24 @@ class ConnectivityAnalyzer(object):
         for probed in probed_pairs:
             print ("\t %s" % (probed))
 
-    def summary(self, results):
-        total_connected = 0
-        total_probed = 0
-        for connectivity in results.values():
-            total_connected += connectivity['n_connected']
-            total_probed += connectivity['n_probed']
+    def summary(self, results, metric):
+        if metric =='connection_probability':
+            total_connected = 0
+            total_probed = 0
+            for connectivity in results.values():
+                total_connected += connectivity['n_connected']
+                total_probed += connectivity['n_probed']
 
-        print ("Total connected / probed\t %d / %d" % (total_connected, total_probed))
+            print ("Total connected / probed\t %d / %d" % (total_connected, total_probed))
+
+        if metric == 'matrix_completeness':
+            total_progress = 0
+            for connectivity in results.values():
+                total_progress += connectivity['matrix_completeness']
+            n_elements = len([element for element in results.values() if element['no_data'] is False])
+
+            print ("Total progress\t %0.1f%%, %d elements" % (100*total_progress/n_elements, n_elements))
+
 
 
 class StrengthAnalyzer(object):
@@ -193,7 +203,7 @@ class StrengthAnalyzer(object):
 
     def output_fields(self):
        
-        fields = {'color_by': [
+        self.fields = {'color_by': [
             ('n_connections', {}),
             ('ic_fit_amp', {'mode': 'range', 'units': 'V', 'defaults': {
                 'Min': -1e-3, 
@@ -253,22 +263,28 @@ class StrengthAnalyzer(object):
             'log': False,
         }
 
-        return fields, defaults
+        return self.fields, defaults
 
-    def print_element_info(self, pre_class, post_class):
-        connections = self.results[(pre_class, post_class)]['connected_pairs']
-        connection_strength = self.results[(pre_class, post_class)]['connection_strength']
-        print ("Connection type: %s -> %s" % (pre_class, post_class))
-        print ("Connected Pairs:")
-        for connection in connections:
-            print ("\t %s" % (connection))
-            cs = [c for c in connection_strength if c.pair_id == connection.id][0]
-            vc_amp = '%0.2f pA' % (cs.vc_amp_mean*1e12) if cs.vc_amp_mean is not None else 'No QC Data'
-            ic_amp = '%0.2f mV' % (cs.ic_amp_mean*1e3) if cs.ic_amp_mean is not None else 'No QC Data'
-            print ("\t\t Average VC amplitude: %s, %d pulses" % (vc_amp, cs.vc_n_samples))
-            print ("\t\t Average IC amplitude: %s, %d pulses" % (ic_amp, cs.ic_n_samples))
+    def print_element_info(self, pre_class, post_class, metric=None):
+        if metric is not None:
+            units = [field[1]['units'] for field in self.fields['color_by'] if field[0] == metric][0] 
+            connections = self.results[(pre_class, post_class)]['connected_pairs']
+            connection_strength = self.results[(pre_class, post_class)]['connection_strength']
+            result = self.results[(pre_class, post_class)][metric]
+            print ("Connection type: %s -> %s" % (pre_class, post_class))    
+            print ("\t Grand Average %s = %s" % (metric, pg.siFormat(result, suffix=units)))
+            print ("Connected Pairs:")
+            for connection in connections:
+                print ("\t %s" % (connection))
+                cs = [c for c in connection_strength if c.pair_id == connection.id][0]
+                value = getattr(cs, metric)
+                pulses = getattr(cs, metric.split('_')[0] + '_n_samples')
+                if value is not None:
+                    print ("\t\t Average %s: %s, %d pulses" % (metric, pg.siFormat(value, suffix=units), pulses))
+                else:
+                    print("\t\t No QC Data")
         
-    def summary(self, results):
+    def summary(self, results, metric):
         print('')
 
 class DynamicsAnalyzer(object):
@@ -336,7 +352,7 @@ class DynamicsAnalyzer(object):
 
     def output_fields(self):
        
-        fields = {'color_by': [
+        self.fields = {'color_by': [
             ('50Hz_induction_ratio', {'mode': 'range', 'defaults': {
                 'Min': 0, 
                 'Max': 1, 
@@ -362,12 +378,12 @@ class DynamicsAnalyzer(object):
             'log': False,
         }
 
-        return fields, defaults
+        return self.fields, defaults
 
     def print_element_info(self, pre_class, post_class):
         print ('')
 
-    def summary(self, results):
+    def summary(self, results, metric):
         print('')
 
 def results_scatter(results, field_name, field, plt):
