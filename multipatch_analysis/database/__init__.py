@@ -1,4 +1,4 @@
-from .database import Session, aliased, default_session, reset_db, vacuum, dispose_engines, default_sample_rate, db_name, bake_sqlite
+from .database import Session, aliased, default_session, get_default_session, reset_db, vacuum, dispose_engines, default_sample_rate, db_name, bake_sqlite
 
 # Import table definitions from DB modules
 from .pipeline import *
@@ -41,4 +41,13 @@ def experiment_from_timestamp(ts, session=None):
 @default_session
 def list_experiments(session=None):
     return session.query(Experiment).all()
+
+
+def query(*args, **kwds):
+    return get_default_session().query(*args, **kwds)
+
+
+def rollback():
+    get_default_session().rollback()
+
 

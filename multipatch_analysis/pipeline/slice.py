@@ -5,8 +5,7 @@ from acq4.util.DataManager import getDirHandle
 from .. import database as db
 from ..database import slice_tables
 from .pipeline_module import DatabasePipelineModule
-from .. import config
-from .. import lims
+from .. import config, lims, constants
 from ..util import datetime_to_timestamp, timestamp_to_datetime
 
 
@@ -47,13 +46,23 @@ class SlicePipelineModule(DatabasePipelineModule):
                 else:
                     slice_time = datetime(int(year), int(mon), int(day), int(hh), int(mm))
 
+        # construct full genotype string 
+        genotype = limsdata['genotype']
+        for info in (parent_info, info):
+            inj = info.get('injections')
+            if inj in (None, ''):
+                continue
+            if inj not in constants.INJECTIONS:
+                raise KeyError("Injection %r is unknown in constants.INJECTIONS" % inj)
+            genotype = genotype + ';' + constants.INJECTIONS[inj]
+
         fields = {
             'acq_timestamp': info['__timestamp__'],
             'species': limsdata['organism'],
             'date_of_birth': limsdata['date_of_birth'],
             'age': limsdata['age'],
             'sex': limsdata['sex'],
-            'genotype': limsdata['genotype'],
+            'genotype': genotype,
             'orientation': limsdata['plane_of_section'],
             'surface': limsdata['exposed_surface'],
             'hemisphere': limsdata['hemisphere'],

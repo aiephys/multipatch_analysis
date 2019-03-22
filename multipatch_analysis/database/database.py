@@ -355,20 +355,24 @@ def default_session(fn):
     """
     
     def wrap_with_session(*args, **kwds):
-        global _default_session
         used_default_session = False
         if kwds.get('session', None) is None:
-            if _default_session is None:
-                _default_session = Session(readonly=True)
-            kwds['session'] = _default_session
+            kwds['session'] = get_default_session()
             used_default_session = True
         try:
             ret = fn(*args, **kwds)
             return ret
         finally:
             if used_default_session:
-                _default_session.rollback()
+                get_default_session().rollback()
     return wrap_with_session    
+
+
+def get_default_session():
+    global _default_session
+    if _default_session is None:
+        _default_session = Session(readonly=True)
+    return _default_session
 
 
 def bake_sqlite(sqlite_file):

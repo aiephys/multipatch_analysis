@@ -132,7 +132,7 @@ class DatasetTableGroup(TableGroup):
 
         Electrode.test_pulses = relationship(TestPulse, back_populates='electrode', cascade='save-update,merge,delete', single_parent=True)
         TestPulse.electrode = relationship(Electrode, back_populates="test_pulses")
-        Recording.test_pulses = relationship(TestPulse, back_populates='recording', single_parent=True)
+        Recording.test_pulses = relationship(TestPulse, back_populates='recording', cascade='save-update,merge,delete', single_parent=True)
         TestPulse.recording = relationship(Recording, back_populates="test_pulses")
 
         PatchClampRecording.nearest_test_pulse = relationship(TestPulse, single_parent=True, foreign_keys=[PatchClampRecording.nearest_test_pulse_id])

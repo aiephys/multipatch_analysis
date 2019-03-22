@@ -48,7 +48,15 @@ def check():
         
         for con in connects:
             if con[0] == ip:
-                print("          {:15s} {:15s} {:30s} {:6d} {:10s} {:s}   ".format(con.usename, con.datname, con.application_name[:30], con.pid, '['+con.state+']', con.query.replace('\n', ' ')[:100]))
+                app = con.application_name
+                for pkg in ['acq4', 'multipatch_analysis']:
+                    a,b,c = app.partition(pkg)
+                    if b == '':
+                        continue
+                    else:
+                        app = c
+                        break
+                print("          {:15s} {:15s} {:45s} {:6d} {:10s} {:s}   ".format(con.usename, con.datname, app[:45], con.pid, '['+con.state+']', con.query.replace('\n', ' ')[:120]))
     
 
 check()
