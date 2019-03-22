@@ -12,13 +12,13 @@ class FirstPulseFitTableGroup(TableGroup):
     """
     schemas = {
         'avg_first_pulse_fit': [
-             """Contains results of psp_fit on spike aligned, average first pulse PSP for each
+            {'comment': """Contains results of psp_fit on spike aligned, average first pulse PSP for each
             connection that passed qc in current clamp. During the fit the latency is forced
             to be the value +/-.5 ms found via fitting all of the pulses (available in the 
             connection_strength.ic_fit_xoffset). The heavily weighted section (meant to 
             place more importance of the wave form during the rise time) is shifted to 
             begin at the latency. Created via fit_average_first_pulse.py. 
-            All units in SI.""",
+            All units in SI."""},
             ('pair_id', 'pair.id', 'The ID of the entry in the pair table to which these results apply', {'index': True}),
 
             # current clamp

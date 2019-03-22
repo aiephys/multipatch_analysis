@@ -11,7 +11,7 @@ class PulseResponseStrengthTableGroup(TableGroup):
     """
     schemas = {
         'pulse_response_strength': [
-            "Measurements of membrane potential or current deflection following each evoked presynaptic spike.",
+            {'comment': "Measurements of membrane potential or current deflection following each evoked presynaptic spike."},
             ('pulse_response_id', 'pulse_response.id', '', {'index': True, 'unique': True}),
             ('pos_amp', 'float', 'max-median offset from baseline to pulse response window'),
             ('neg_amp', 'float', 'min-median offset from baseline to pulse response window'),
@@ -22,7 +22,7 @@ class PulseResponseStrengthTableGroup(TableGroup):
             ('crosstalk', 'float', 'trace difference immediately before and after onset of presynaptic stimulus pulse'),
         ],
         'baseline_response_strength' : [
-            "Measurements of membrane potential or current deflection in the absence of presynaptic spikes (provides a measurement of background noise to compare to pulse_response_strength).",
+            {'comment': "Measurements of membrane potential or current deflection in the absence of presynaptic spikes (provides a measurement of background noise to compare to pulse_response_strength)."},
             ('baseline_id', 'baseline.id', '', {'index': True, 'unique': True}),
             ('pos_amp', 'float', 'max-median offset from baseline to pulse response window'),
             ('neg_amp', 'float', 'min-median offset from baseline to pulse response window'),

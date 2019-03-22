@@ -9,8 +9,8 @@ __all__ = ['morphology_tables', 'Morphology']
 class MorphologyTableGroup(TableGroup):
     schemas = {
         'morphology': [
-            """Describes morphological properties of cells.
-            """,
+            {'comment': """Describes morphological properties of cells.
+            """},
             ('cell_id', 'cell.id', 'The ID of the cell described by each record', {'index': True, 'unique': True}),
             ('pyramidal', 'bool', 'Whether the experimenter labeled this cell as pyramidal', {'index': True}),
             # TODO: import more features from LIMS

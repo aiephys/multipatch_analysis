@@ -155,14 +155,13 @@ _coltypes = {
 }
 
 
-def generate_mapping(table, schema, base=None):
+def generate_mapping(table, schema):
     """Generate an ORM mapping class from an entry in table_schemas.
     """
     name = table.capitalize()
-    table_args = {}
-    if isinstance(schema[0], str):
-        table_args['comment'] = schema[0]
-        schema = schema[1:]
+    table_args = schema[0]
+    base = table_args.pop('base', None)
+    schema = schema[1:]
     
     props = {
         '__tablename__': table,

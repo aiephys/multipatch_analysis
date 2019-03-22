@@ -5,3 +5,4 @@ config.yml
 .idea
 cache
 *.egg-info
+.ipynb_checkpoints

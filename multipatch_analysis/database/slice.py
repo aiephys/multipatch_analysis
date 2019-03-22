@@ -8,7 +8,7 @@ class SliceTableGroup(TableGroup):
     """
     schemas = {
         'slice': [
-            "All brain slices on which an experiment was attempted.",
+            {'comment': "All brain slices on which an experiment was attempted."},
             ('acq_timestamp', 'float', 'Creation timestamp for slice data acquisition folder.', {'unique': True}),
             ('species', 'str', 'Human | mouse (from LIMS)'),
             ('date_of_birth', 'datetime', 'Date of birth for this specimen'),
