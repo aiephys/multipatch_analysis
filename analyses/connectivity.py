@@ -330,7 +330,7 @@ class MatrixAnalyzer(object):
 
     def display_matrix_element_data(self, matrix_widget, event, row, col):
         pre_class, post_class = self.matrix_map[row, col]
-        self.analysis.print_element_info(pre_class, post_class)
+        self.analysis.print_element_info(pre_class, post_class, self.field_name)
         if self.scatter_plot is not None:
             if self.line is not None:
                 self.scatter_plot.removeItem(self.line)
@@ -403,7 +403,7 @@ class MatrixAnalyzer(object):
         results_scatter(self.results, self.field_name, field, self.scatter_plot)
 
 
-        self.analysis.summary(self.results)
+        self.analysis.summary(self.results, self.field_name)
         
 
 
@@ -417,9 +417,7 @@ if __name__ == '__main__':
     # Define cell classes
     cell_class_groups = OrderedDict([
         ('Mouse All Cre-types by layer', [
-            # {'cre_type': 'unknown', 'pyramidal': True, 'target_layer': '2/3'},
             {'cre_type': 'unknown', 'target_layer': '2/3'},
-            # {'pyramidal': True, 'target_layer': '2/3'},
             #{'pyramidal': True, 'target_layer': '2/3'},
             {'cre_type': 'pvalb', 'target_layer': '2/3'},
             {'cre_type': 'sst', 'target_layer': '2/3'},
@@ -434,6 +432,36 @@ if __name__ == '__main__':
             {'cre_type': 'pvalb', 'target_layer': '5'},
             {'cre_type': 'sst', 'target_layer': '5'},
             {'cre_type': 'vip', 'target_layer': '5'},
+            {'cre_type': 'ntsr1', 'target_layer': '6'},
+            {'cre_type': 'pvalb', 'target_layer': '6'},
+            {'cre_type': 'sst', 'target_layer': '6'},
+            {'cre_type': 'vip', 'target_layer': '6'},
+        ]),
+
+        ('Mouse Layer 2/3', [
+            {'cre_type': 'unknown', 'target_layer': '2/3'},
+            #{'pyramidal': True, 'target_layer': '2/3'},
+            {'cre_type': 'pvalb', 'target_layer': '2/3'},
+            {'cre_type': 'sst', 'target_layer': '2/3'},
+            {'cre_type': 'vip', 'target_layer': '2/3'},
+        ]),
+        
+        ('Mouse Layer 4', [
+            {'cre_type': 'nr5a1', 'target_layer': '4'},
+            {'cre_type': 'pvalb', 'target_layer': '4'},
+            {'cre_type': 'sst', 'target_layer': '4'},
+            {'cre_type': 'vip', 'target_layer': '4'},
+        ]),
+
+        ('Mouse Layer 5', [
+            {'cre_type': 'sim1', 'target_layer': '5'},
+            {'cre_type': 'tlx3', 'target_layer': '5'},
+            {'cre_type': 'pvalb', 'target_layer': '5'},
+            {'cre_type': 'sst', 'target_layer': '5'},
+            {'cre_type': 'vip', 'target_layer': '5'},
+        ]),
+
+        ('Mouse Layer 6', [
             {'cre_type': 'ntsr1', 'target_layer': '6'},
             {'cre_type': 'pvalb', 'target_layer': '6'},
             {'cre_type': 'sst', 'target_layer': '6'},
