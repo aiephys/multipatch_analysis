@@ -1,7 +1,7 @@
 from .genotypes import FLUOROPHORES
 
-INHIBITORY_CRE_TYPES = ['sst', 'pvalb', 'vip', 'ndnf', 'chat', 'htr3a', 'nos1', 'chrna2']
-EXCITATORY_CRE_TYPES = ['tlx3', 'sim1', 'rorb', 'ntsr1', 'rbp4', 'ctgf', 'glt25d2', 'slc17a8', 'cux2', 'nr5a1']
+INHIBITORY_CRE_TYPES = ['sst', 'pvalb', 'vip', 'ndnf', 'chat', 'htr3a', 'nos1', 'chrna2', 'mDlx']
+EXCITATORY_CRE_TYPES = ['tlx3', 'sim1', 'fam84b', 'rorb', 'ntsr1', 'rbp4', 'ctgf', 'glt25d2', 'slc17a8', 'cux2', 'nr5a1']
 ALL_CRE_TYPES = INHIBITORY_CRE_TYPES + EXCITATORY_CRE_TYPES + ['unknown']
 
 DRIVER_LAYERS = {
