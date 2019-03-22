@@ -56,7 +56,11 @@ def check():
                     else:
                         app = c
                         break
-                print("          {:15s} {:15s} {:45s} {:6d} {:10s} {:s}   ".format(con.usename, con.datname, app[:45], con.pid, '['+con.state+']', con.query.replace('\n', ' ')[:120]))
+                        
+                state = '[%s]' % con.state
+                query = con.query.replace('\n', ' ')[:120]
+                
+                print("          {:15s} {:15s} {:45s} {:6d} {:10s} {:s}   ".format(con.usename, con.datname, app[:45], con.pid, state, query))
     
 
 check()
