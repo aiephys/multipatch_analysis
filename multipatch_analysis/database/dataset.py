@@ -10,9 +10,9 @@ __all__ = ['dataset_tables', 'SyncRec', 'Recording', 'PatchClampRecording', 'Mul
 
 class PulseResponseBase(object):
     @property
-    def post_timeseries(self):
+    def post_tseries(self):
         data = self.data
-        return Trace(data, sample_rate=default_sample_rate)
+        return Trace(data, sample_rate=default_sample_rate, t0=self.start_time)
 
 
 class DatasetTableGroup(TableGroup):
