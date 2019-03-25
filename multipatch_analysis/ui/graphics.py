@@ -99,7 +99,7 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
 
 
     def _make_header(self, labels, side):
-        padding = 10
+        padding = 5
         if isinstance(labels[0], tuple):
             # draw groups first
             grp_labels, labels = zip(*labels)
@@ -121,21 +121,36 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
             self._make_header_groups(grps, side, width)
             padding = 3
 
-    def _make_header_text(self, txt, i, side, padding=10, font_size=None):
+    def _make_header_text(self, txt, rowcol, side, padding=5, font_size=None):
         size = self.cell_size
         if font_size is None:
             font_size = size / 3.
-        align = {'top': 'left', 'left': 'right'}[side]
-        html = '<span style="font-size: %dpx; text-align: %s; line-height: 70%%">%s</span>' % (font_size, align, str(txt).replace('\n', '<br>'))
+        small_font_size = font_size * 0.7
+        align = pg.QtCore.Qt.AlignLeft if side == 'top' else pg.QtCore.Qt.AlignRight
+        lines = str(txt).split('\n')
+        html = '<div style="line-height: 70%%">'
+        for i,line in enumerate(lines):
+            fs = font_size if i == 0 else small_font_size
+            if i > 0:
+                html += '<br>'
+            html += '<span style="font-size: %dpx;">%s</span>' % (fs, line)
+        html += '</div>'
         item = pg.QtGui.QGraphicsTextItem("", parent=self)
         item.setHtml(html)
+        item.setTextWidth(item.boundingRect().width())
+
+        doc = item.document()
+        opts = doc.defaultTextOption()
+        opts.setAlignment(align)
+        doc.setDefaultTextOption(opts)
+
         if side == 'top':
             item.rotate(-90)
         br = item.mapRectToParent(item.boundingRect())
         if side == 'top':
-            item.setPos(i * size + size/2 - br.center().x(), -br.bottom() - padding)
+            item.setPos(rowcol * size + size/2 - br.center().x(), -br.bottom() - padding)
         elif side == 'left':
-            item.setPos(-br.right() - padding, i * size + size/2. - br.center().y())
+            item.setPos(-br.right() - padding, rowcol * size + size/2. - br.center().y())
         else:
             raise ValueError("side must be top or left")
         item.setDefaultTextColor(pg.mkColor(self.header_color))

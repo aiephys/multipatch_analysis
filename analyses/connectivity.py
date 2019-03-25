@@ -454,8 +454,8 @@ if __name__ == '__main__':
         ]),
 
         ('Mouse Layer 5', [
-            {'cre_type': 'sim1', 'target_layer': '5'},
-            {'cre_type': 'tlx3', 'target_layer': '5'},
+            {'cre_type': ('sim1', 'fam84b'), 'target_layer': '5', 'display_names': ('L5', 'PT\nsim1, fam84b')},
+            {'cre_type': 'tlx3', 'target_layer': '5', 'display_names': ('L5', 'IT\ntlx3')},
             {'cre_type': 'pvalb', 'target_layer': '5'},
             {'cre_type': 'sst', 'target_layer': '5'},
             {'cre_type': 'vip', 'target_layer': '5'},
@@ -486,14 +486,14 @@ if __name__ == '__main__':
         ('Mouse E-I Cre-types by layer',[
             # {'pyramidal': True, 'target_layer': '2/3'},
             {'cre_type': 'unknown', 'target_layer': '2/3'},
-            {'cre_type': ('pvalb', 'sst', 'vip'), 'target_layer': '2/3'},
+            {'cre_type': ('pvalb', 'sst', 'vip'), 'target_layer': '2/3', 'display_names': ('L2/3', 'Inhibitory\npvalb, sst, vip')},
             {'cre_type': 'nr5a1', 'target_layer': '4'},
-            {'cre_type': ('pvalb', 'sst', 'vip'), 'target_layer': '4'},
+            {'cre_type': ('pvalb', 'sst', 'vip'), 'target_layer': '4', 'display_names': ('L4', 'Inhibitory\npvalb, sst, vip')},
             {'cre_type': 'sim1', 'target_layer': '5'},
             {'cre_type': 'tlx3', 'target_layer': '5'},
-            {'cre_type': ('pvalb', 'sst', 'vip'), 'target_layer': '5'},
+            {'cre_type': ('pvalb', 'sst', 'vip'), 'target_layer': '5', 'display_names': ('L5', 'Inhibitory\npvalb, sst, vip')},
             {'cre_type': 'ntsr1', 'target_layer': '6'},
-            {'cre_type': ('pvalb', 'sst', 'vip'), 'target_layer': '6'},     
+            {'cre_type': ('pvalb', 'sst', 'vip'), 'target_layer': '6', 'display_names': ('L6', 'Inhibitory\npvalb, sst, vip')},     
         ]),
 
         ('Pyramidal / Nonpyramidal by layer', [
