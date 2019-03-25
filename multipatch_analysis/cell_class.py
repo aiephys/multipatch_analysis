@@ -20,8 +20,9 @@ class CellClass(object):
         inhibitory_class = CellClass(cre_type=('pvalb', 'sst', 'vip'))
         l23_pyr_class = CellClass(pyramidal=True, target_layer='2/3')
     """
-    def __init__(self, **criteria):
+    def __init__(self, display_names=None, **criteria):
         self.criteria = criteria
+        self.display_names = display_names
 
     @property
     def name(self):
@@ -38,6 +39,9 @@ class CellClass(object):
         Order of elements in the tuple is (target_layer, pyramidal, cre_type), but
         elements are only present if they were specified as criteria for the cell class.
         """
+        if self.display_names is not None:
+            return self.display_names
+            
         name = []
 
         target_layer = self.criteria.get('target_layer')
