@@ -19,53 +19,59 @@ class StimResponseList(object):
         self.srs = srs
         self._plot_items = []
         self._post_tseries = {}
+        self._pre_tseries = {}
         
     def clear_plots(self):
         for item in self._plot_items:
             item.scene().removeItem(item)
         self._plot_items = []
 
-    def post_tseries(self, bsub=True, align='stim', bsub_window=(-3e-3, 0)):
-        """Return a TraceList of postsynaptic TSeries, optionally baseline-subtracted and time-aligned.
+    def get_tseries(self, series, bsub=True, align='stim', bsub_window=(-3e-3, 0)):
+        """Return a TraceList of timeseries, optionally baseline-subtracted and time-aligned.
+        
+        Parameters
+        ----------
+        series : str
+            "stim", "pre", or "post"
         """
-        key = (bsub, align, bsub_window)
-        if key not in self._post_tseries:
-            tseries = []
-            for i,sr in enumerate(self.srs[:10]):
-                ts = sr.post_tseries
-                if bsub:
-                    bstart = sr.stim_pulse.onset_time + bsub_window[0]
-                    bstop = sr.stim_pulse.onset_time + bsub_window[1]
-                    baseline = np.median(ts.time_slice(bstart, bstop).data)
-                    ts = ts - baseline
-                if align is not None:
-                    if align == 'stim':
-                        t_align = sr.stim_pulse.onset_time 
-                    elif align == 'spike':
-                        t_align = sr.stim_pulse.stim_spike.max_dvdt_time
-                    else:
-                        raise ValueError("invalid time alignment mode %r" % align)
-                    ts = ts.copy(t0=ts.t0-t_align)
-                tseries.append(ts)
-            self._post_tseries[key] = TraceList(tseries)
-        return self._post_tseries[key]
+        assert series in ('stim', 'pre', 'post'), "series must be one of 'stim', 'pre', or 'post'"
+        tseries = []
+        for i,sr in enumerate(self.srs[:10]):
+            ts = getattr(sr, series + '_tseries')
+            if bsub:
+                bstart = sr.stim_pulse.onset_time + bsub_window[0]
+                bstop = sr.stim_pulse.onset_time + bsub_window[1]
+                baseline = np.median(ts.time_slice(bstart, bstop).data)
+                ts = ts - baseline
+            if align is not None:
+                if align == 'stim':
+                    t_align = sr.stim_pulse.onset_time 
+                elif align == 'spike':
+                    t_align = sr.stim_pulse.stim_spike.max_dvdt_time
+                else:
+                    raise ValueError("invalid time alignment mode %r" % align)
+                ts = ts.copy(t0=ts.t0-t_align)
+            tseries.append(ts)
+        return TraceList(tseries)
 
     def plot_stimulus(self, plt):
-        pass
+        stim_ts = self.get_tseries('post')
+        self._plot_ts(stim_ts, plt)
     
     def plot_presynaptic(self, plt):
-        pass
+        pre_ts = self.get_tseries('pre')
+        self._plot_ts(pre_ts, plt)
 
     def plot_postsynaptic(self, plt):
-        post_ts = self.post_tseries()
-        for ts in post_ts:
+        post_ts = self.get_tseries('post')
+        
+    def _plot_ts(self, ts_list, plt):        
+        for ts in ts_list:
             item = plt.plot(ts.time_values, ts.data)
             self._plot_items.append(item)
-        avg = post_ts.mean()
+        avg = ts_list.mean()
         item = plt.plot(avg.time_values, avg.data, pen='g', shadowPen={'color':'k', 'width':2})
         self._plot_items.append(item)
-        
-            
 
 
 class CrosstalkAnalyzer(object):
