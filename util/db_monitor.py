@@ -22,7 +22,10 @@ def hostname(ip):
     global _known_hostnames
     if ip in _known_hostnames:
         return _known_hostnames[ip]
-    host = subprocess.check_output(['host', ip]).partition('pointer ')[2].rstrip('.\n')
+    try:
+        host = subprocess.check_output(['host', ip]).partition('pointer ')[2].rstrip('.\n')
+    except subprocess.CalledProcessError:
+        host = "hostname not found"
     _known_hostnames[ip] = host
     return host
 

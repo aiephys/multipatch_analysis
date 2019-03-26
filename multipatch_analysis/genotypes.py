@@ -68,6 +68,7 @@ DRIVER_LINES = {                  # dependencies     products
     'Ctgf-T2A-dgCre':             [(['ctgf'],         ['cre'])],
     'Fam84b-FlpO':                [(['fam84b'],       ['flp'])],
     'rAAV-mDlx-GFP':              [(['mDlx'],         ['GFP'])],
+    'rAAV-Dlx2.0-SYFP2':          [(['mDlx'],         ['YFP'])],
 }
 
 
@@ -131,6 +132,7 @@ FLUOROPHORES = {
     'EGFP': 'green',
     'AF488': 'green',
     'Cascade Blue': 'blue',
+    'YFP': 'yellow',
     'EYFP': 'yellow',
     'ZsGreen': 'green',
     'GCamp6f': 'green',
