@@ -7,6 +7,7 @@ from .experiment import *
 from .morphology import *
 from .dataset import *
 from .pulse_response_strength import *
+from .dynamics import *
 from .connection_strength import *
 from .first_pulse_fit import *
 
