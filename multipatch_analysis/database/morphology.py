@@ -1,30 +1,16 @@
 from sqlalchemy.orm import relationship
-from .database import TableGroup
+from .database import TableGroup, make_table, Column, Integer, Boolean, ForeignKey
 from .experiment import Cell
 
 
 __all__ = ['morphology_tables', 'Morphology']
 
+Morphology = make_table(name='morphology', comment="Describes morphological properties of cells.", columns=[
+    ('cell_id', 'cell.id', 'The ID of the cell described by each record', {'index': True, 'unique': True}),
+    ('pyramidal', 'bool', 'Whether the experimenter labeled this cell as pyramidal', {'index': True}),
+])
 
-class MorphologyTableGroup(TableGroup):
-    schemas = {
-        'morphology': [
-            {'comment': """Describes morphological properties of cells.
-            """},
-            ('cell_id', 'cell.id', 'The ID of the cell described by each record', {'index': True, 'unique': True}),
-            ('pyramidal', 'bool', 'Whether the experimenter labeled this cell as pyramidal', {'index': True}),
-            # TODO: import more features from LIMS
-        ],
-    }
+Cell.morphology = relationship(Morphology, back_populates="cell", cascade="delete", single_parent=True, uselist=False)
+Morphology.cell = relationship(Cell, back_populates="morphology", single_parent=True)
 
-    def create_mappings(self):
-        TableGroup.create_mappings(self)
-        
-        Morphology = self['morphology']
-        
-        Cell.morphology = relationship(Morphology, back_populates="cell", cascade="delete", single_parent=True, uselist=False)
-        Morphology.cell = relationship(Cell, back_populates="morphology", single_parent=True)
-
-
-morphology_tables = MorphologyTableGroup()
-Morphology = morphology_tables['morphology']
+morphology_tables = TableGroup([Morphology])

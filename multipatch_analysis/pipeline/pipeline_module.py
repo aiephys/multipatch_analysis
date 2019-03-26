@@ -117,6 +117,7 @@ class PipelineModule(object):
         # drop invalid records first
         if len(drop_job_ids) > 0:
             print("Dropping %d invalid results (will not update).." % len(drop_job_ids))
+            print(drop_job_ids)
             cls.drop_jobs(drop_job_ids)
         if len(run_job_ids) > 0:
             print("Dropping %d invalid results (will update).." % len(run_job_ids))
