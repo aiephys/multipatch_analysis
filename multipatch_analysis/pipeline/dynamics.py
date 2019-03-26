@@ -43,7 +43,7 @@ class DynamicsPipelineModule(DatabasePipelineModule):
                 sign = pair.connection_strength.synapse_type
                 qc = sign+'_qc_pass'
                 # make sure all 12 pulses pass qc before moving on
-                qc_check = [getattr(r.Pulse_response, qc) for r in results]
+                qc_check = [getattr(r.pulse_response, qc) for r in results]
                 if all(qc_check) is False:
                     continue
                 amp_field = 'pos_dec_amp' if sign == 'ex' else 'neg_dec_amp'
