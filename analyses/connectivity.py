@@ -258,6 +258,7 @@ class MatrixAnalyzer(object):
         self.win.setWindowTitle('Matrix Analyzer')
         self.scatter_plot = None
         self.line = None
+        self.scatter = None
 
         self.experiment_filter = ExperimentFilter()
         self.cell_class_filter = CellClassFilter(cell_class_groups)
@@ -330,12 +331,17 @@ class MatrixAnalyzer(object):
 
     def display_matrix_element_data(self, matrix_widget, event, row, col):
         pre_class, post_class = self.matrix_map[row, col]
-        self.analysis.print_element_info(pre_class, post_class, self.field_name)
+        values = self.analysis.print_element_info(pre_class, post_class, self.field_name)
         if self.scatter_plot is not None:
             if self.line is not None:
                 self.scatter_plot.removeItem(self.line)
-            self.line = add_element_to_scatter(self.results, pre_class, post_class, self.field_name)
+            if self.scatter is not None:
+                self.scatter_plot.removeItem(self.scatter)
+            self.line, self.scatter = add_element_to_scatter(self.results, pre_class, post_class, self.field_name, values=values)
             self.scatter_plot.addItem(self.line)
+            if self.scatter is not None:
+                self.scatter_plot.addItem(self.scatter)
+
 
     def update_matrix_results(self):
         # Select pairs (todo: age, acsf, internal, temp, etc.)

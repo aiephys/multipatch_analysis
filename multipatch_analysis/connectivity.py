@@ -274,6 +274,7 @@ class StrengthAnalyzer(object):
             print ("Connection type: %s -> %s" % (pre_class, post_class))    
             print ("\t Grand Average %s = %s" % (metric, pg.siFormat(result, suffix=units)))
             print ("Connected Pairs:")
+            values = []
             for connection in connections:
                 print ("\t %s" % (connection))
                 cs = [c for c in connection_strength if c.pair_id == connection.id][0]
@@ -281,8 +282,11 @@ class StrengthAnalyzer(object):
                 pulses = getattr(cs, metric.split('_')[0] + '_n_samples')
                 if value is not None:
                     print ("\t\t Average %s: %s, %d pulses" % (metric, pg.siFormat(value, suffix=units), pulses))
+                    values.append(value)
                 else:
                     print("\t\t No QC Data")
+
+            return values
         
     def summary(self, results, metric):
         print('')
@@ -309,79 +313,78 @@ class DynamicsAnalyzer(object):
             connections = [p for p in class_pairs if p.synapse]
             if len(connections) == 0:
                 no_data = True
-
-            lp_range = [6, 7, 8]
-            prs_qc = {}
-            if len(connections) > 0:
-                prs_array = np.zeros([12, len(connections)])
-                prs_array[:] = np.nan
-                for c, connection in enumerate(connections):
-                    prs = connection.pulse_responses
-                    sign = connection.connection_strength.synapse_type
-                    for pr in prs:
-                        ind_freq = pr.stim_pulse.recording.patch_clamp_recording.multi_patch_probe[0].induction_frequency
-                        if ind_freq not in prs_qc.keys():
-                            prs_qc[ind_freq] = prs_array
-                        if sign == 'ex':
-                            qc_pass = pr.ex_qc_pass
-                            pr_dec_amp = pr.pulse_response_strength.pos_dec_amp
-                        elif sign == 'in':
-                            qc_pass = pr.in_qc_pass
-                            pr_dec_amp = pr.pulse_response_strength.neg_dec_amp
-                        else:
-                            qc_pass = False
-                        if qc_pass is True:
-                            pulse_number = pr.stim_pulse.pulse_number - 1
-                            prs_qc[ind_freq][pulse_number, c] = pr_dec_amp
-
-            if 50 in prs_qc.keys():
-                ind_50 = np.nanmean(prs_qc[50][lp_range], axis=0) / prs_qc[50][0,:]
-                ppr_50 = prs_qc[50][1,:] / prs_qc[50][0,:]
-            else:
-                ind_50 = float('nan')
-                ppr_50 = float('nan')
+            ind_50 = []
+            ppr_50 = []    
+            dynamics = [c.dynamics for c in connections] if len(connections) > 0 else float('nan')
+            for connection in connections:
+                d = connection.dynamics
+                ind_50.append(d.pulse_ratio_8_1_50Hz if d is not None else float('nan'))
+                ppr_50.append(d.pulse_ratio_2_1_50Hz if d is not None else float('nan'))
 
             self.results[(pre_class, post_class)] = {
             'no_data': no_data,
-            '50Hz_induction_ratio': np.nanmean(ind_50),
-            '50Hz_paired_pulse_ratio': np.nanmean(ppr_50),
+            'connected_pairs': connections,
+            'n_connections': len(connections),
+            'dynamics': dynamics,
+            'pulse_ratio_8_1_50Hz': np.nanmean(ind_50),
+            'pulse_ratio_2_1_50Hz': np.nanmean(ppr_50),
+            'pulse_ratio_8_1_50Hz_stdev': [-np.nanstd(ind_50), np.nanstd(ind_50)],
+            'pulse_ratio_2_1_50Hz_stdev': [-np.nanstd(ppr_50), np.nanstd(ppr_50)],
             'None': None,
             }
-
+        
         return self.results
 
     def output_fields(self):
        
         self.fields = {'color_by': [
-            ('50Hz_induction_ratio', {'mode': 'range', 'defaults': {
+            ('pulse_ratio_8_1_50Hz', {'mode': 'range', 'defaults': {
                 'Min': 0, 
-                'Max': 1, 
+                'Max': 2, 
                 'colormap': pg.ColorMap(
                 [0, 0.5, 1.0],
                 [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
             )}}),
-            ('50Hz_paired_pulse_ratio', {'mode': 'range', 'defaults': {
+            ('pulse_ratio_2_1_50Hz', {'mode': 'range', 'defaults': {
                 'Min': 0, 
-                'Max': 1, 
+                'Max': 2, 
                 'colormap': pg.ColorMap(
                 [0, 0.5, 1.0],
                 [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
             )}}),
             ],
             'show_confidence': [
+            'pulse_ratio_8_1_50Hz_stdev',
+            'pulse_ratio_2_1_50Hz_stdev',
             'None',
             ]}
 
-        defaults = {'color_by': '50Hz_induction_ratio', 
-            'text': '', 
+        defaults = {'color_by': 'pulse_ratio_8_1_50Hz', 
+            'text': '{n_connections}', 
             'show_confidence': 'None',
             'log': False,
         }
 
         return self.fields, defaults
 
-    def print_element_info(self, pre_class, post_class):
-        print ('')
+    def print_element_info(self, pre_class, post_class, metric=None):
+        if metric is not None:
+            connections = self.results[(pre_class, post_class)]['connected_pairs']
+            result = self.results[(pre_class, post_class)][metric]
+            print ("Connection type: %s -> %s" % (pre_class, post_class))    
+            print ("\t Grand Average %s = %s" % (metric, result))
+            print ("Connected Pairs:")
+            values = []
+            for connection in connections:
+                print ("\t %s" % (connection))
+                d = connection.dynamics
+                if d is not None:
+                    value = getattr(d, metric)
+                    values.append(value)
+                    print ("\t\t Average %s: %s" % (metric, value))
+                else:
+                    print("\t\t No QC Data")
+        return values
 
     def summary(self, results, metric):
         print('')
@@ -393,10 +396,15 @@ def results_scatter(results, field_name, field, plt):
     units = field.get('units', '')
     plt.setLabels(left='Count', bottom=(field_name, units))
 
-def add_element_to_scatter(results, pre_class, post_class, field_name):
+def add_element_to_scatter(results, pre_class, post_class, field_name, values=None):
     val = results[(pre_class, post_class)][field_name]
     line = pg.InfiniteLine(val, pen={'color':'g', 'width': 2}, movable=False)
-    return line
+    scatter = None
+    if values is not None:
+        y_values = pg.pseudoScatter(np.asarray(values, dtype=float) + 1., spacing=0.1)
+        scatter = pg.ScatterPlotItem()
+        scatter.setData(values, y_values + 1., symbol='o', brush=(0, 255, 0, 150), pen='w', size=15)
+    return line, scatter
 
 def connection_probability_ci(n_connected, n_probed):
     # make sure we are consistent about how we measure connectivity confidence intervals
