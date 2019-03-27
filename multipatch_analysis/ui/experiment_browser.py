@@ -22,8 +22,11 @@ class ExperimentBrowser(pg.TreeWidget):
         self.items_by_pair_id = {}
         
         self.session = db.Session()
+        
         if experiments is None:
             experiments = db.list_experiments(session=self.session)
+            # preload all cells,pairs so they are not queried individually later on
+            pairs = self.session.query(db.Pair, db.Experiment, db.Cell, db.Slice).join(db.Experiment, db.Pair.experiment_id==db.Experiment.id).join(db.Cell, db.Cell.id==db.Pair.pre_cell_id).join(db.Slice).all()
         
         experiments.sort(key=lambda e: e.acq_timestamp)
         for expt in experiments:
@@ -45,6 +48,8 @@ class ExperimentBrowser(pg.TreeWidget):
                 pair_item.pair = pair
                 pair_item.expt = expt
                 self.items_by_pair_id[pair.id] = pair_item
+                
+        self.verticalScrollBar().setValue(self.verticalScrollBar().maximum())
                 
     def select_pair(self, pair_id):
         """Select a specific pair from the list

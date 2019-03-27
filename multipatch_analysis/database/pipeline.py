@@ -1,22 +1,19 @@
 from collections import OrderedDict
-from .database import TableGroup
+from .database import make_table, TableGroup
 
 __all__ = ['pipeline_tables', 'Pipeline']
 
 
-class PipelineTableGroup(TableGroup):
-    """Tables used for storing metadata about pipeline job status.
-    """
-    schemas = OrderedDict([
-        ('pipeline', [
-            {'comment': "Stores information about which pipeline analysis jobs were run, when, and whether there was an error."},
-            ('module_name', 'str', 'The name of the pipeline module that generated this result', {'index': True}),
-            ('job_id', 'float', 'Unique value identifying the job that was processed', {'index': True}),
-            ('finish_time', 'datetime', 'The date/time when this job completed processing'),
-            ('success', 'bool', 'Whether the job completed successfully', {'index': True}),
-            ('error', 'str', 'Error or warning messages generated during job processing'),
-        ]),
-    ])
+Pipeline = make_table(
+    name='pipeline',
+    comment="Stores information about which pipeline analysis jobs were run, when, and whether there was an error.",
+    columns=[
+        ('module_name', 'str', 'The name of the pipeline module that generated this result', {'index': True}),
+        ('job_id', 'float', 'Unique value identifying the job that was processed', {'index': True}),
+        ('finish_time', 'datetime', 'The date/time when this job completed processing'),
+        ('success', 'bool', 'Whether the job completed successfully', {'index': True}),
+        ('error', 'str', 'Error or warning messages generated during job processing'),
+    ]
+)
 
-pipeline_tables = PipelineTableGroup()
-Pipeline = pipeline_tables['pipeline']
+pipeline_tables = TableGroup([Pipeline])

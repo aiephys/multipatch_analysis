@@ -58,9 +58,12 @@ class TableGroup(object):
     # tables must be listed in order of foreign key dependency
     schemas = {}
     
-    def __init__(self):
-        self.mappings = {}
-        self.create_mappings()
+    def __init__(self, tables=None):
+        if tables is None:
+            self.mappings = {}
+            self.create_mappings()
+        else:
+            self.mappings = OrderedDict([(t.__table__.name,t) for t in tables])
 
     def __getitem__(self, item):
         return self.mappings[item]
@@ -155,20 +158,16 @@ _coltypes = {
 }
 
 
-def generate_mapping(table, schema):
+def make_table(name, columns, base=None, **table_args):
     """Generate an ORM mapping class from an entry in table_schemas.
     """
-    name = table.capitalize()
-    table_args = schema[0]
-    base = table_args.pop('base', None)
-    schema = schema[1:]
-    
     props = {
-        '__tablename__': table,
+        '__tablename__': name,
         '__table_args__': table_args,
         'id': Column(Integer, primary_key=True),
     }
-    for column in schema:
+
+    for column in columns:
         colname, coltype = column[:2]
         kwds = {} if len(column) < 4 else column[3]
         kwds['comment'] = None if len(column) < 3 else column[2]

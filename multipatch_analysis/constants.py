@@ -30,5 +30,5 @@ INTERNAL_DYES = ['Cascade Blue', 'AF488', 'no dye']
 INJECTIONS = {
     'RO Fam84b-FlpO': 'Fam84b-FlpO',
     'RO tdTomato+GFP': 'pAAV-Ef1a-fDIO-EGFP;pAAV-Ef1a-cDIO-dTomato',
-    'pan-GABA': 'rAAV-mDlx-GFP',
+    'pan-GABA': 'rAAV-Dlx2.0-SYFP2',
 }
