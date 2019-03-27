@@ -53,29 +53,17 @@ _sample_rate_str = '%dkHz' % (default_sample_rate // 1000)
 class TableGroup(object):
     """Class used to manage a group of tables that act as a single unit--tables in a group
     are always created and deleted together.
-    """
-    # subclasses define here an ordered dictionary describing table schemas
-    # tables must be listed in order of foreign key dependency
-    schemas = {}
-    
-    def __init__(self, tables=None):
-        if tables is None:
-            self.mappings = {}
-            self.create_mappings()
-        else:
-            self.mappings = OrderedDict([(t.__table__.name,t) for t in tables])
+    """    
+    def __init__(self, tables):
+        self.tables = OrderedDict([(t.__table__.name,t) for t in tables])
 
     def __getitem__(self, item):
-        return self.mappings[item]
-
-    def create_mappings(self):
-        for k,schema in self.schemas.items():
-            self.mappings[k] = generate_mapping(k, schema)
+        return self.tables[item]
 
     def drop_tables(self):
         global engine_rw
         drops = []
-        for k in self.schemas:
+        for k in self.tables:
             if k in engine_rw.table_names():
                 drops.append(k)
         if len(drops) == 0:
@@ -87,12 +75,12 @@ class TableGroup(object):
         
         # if we do not have write access, just verify that the tables exist
         if engine_rw is None:
-            for k in self.schemas:
+            for k in self.tables:
                 if k not in engine_ro.table_names():
                     raise Exception("Table %s not found in database %s" % (k, db_address_ro))
             return
 
-        create_tables([self[k].__table__ for k in self.schemas])
+        create_tables(tables=[self[k].__table__ for k in self.tables])
 
 
 #----------- define ORM classes -------------
