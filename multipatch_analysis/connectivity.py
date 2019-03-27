@@ -402,7 +402,7 @@ def add_element_to_scatter(results, pre_class, post_class, field_name, values=No
     line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
     scatter = None
     if values is not None:
-        y_values = pg.pseudoScatter(np.asarray(values, dtype=float) + 1., spacing=0.5)
+        y_values = pg.pseudoScatter(np.asarray(values, dtype=float) + 1., spacing=0.3)
         scatter = pg.ScatterPlotItem()
         scatter.setData(values, y_values + 1., symbol='o', brush=(color + (150,)), pen='w', size=12)
     return line, scatter
