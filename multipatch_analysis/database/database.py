@@ -22,7 +22,7 @@ if LooseVersion(sqlalchemy.__version__) < '1.2':
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, Float, Date, DateTime, LargeBinary, ForeignKey, or_, and_
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import relationship, deferred, sessionmaker, aliased
+from sqlalchemy.orm import relationship, deferred, sessionmaker, aliased, reconstructor
 from sqlalchemy.types import TypeDecorator
 from sqlalchemy.sql.expression import func
 
@@ -53,29 +53,17 @@ _sample_rate_str = '%dkHz' % (default_sample_rate // 1000)
 class TableGroup(object):
     """Class used to manage a group of tables that act as a single unit--tables in a group
     are always created and deleted together.
-    """
-    # subclasses define here an ordered dictionary describing table schemas
-    # tables must be listed in order of foreign key dependency
-    schemas = {}
-    
-    def __init__(self, tables=None):
-        if tables is None:
-            self.mappings = {}
-            self.create_mappings()
-        else:
-            self.mappings = OrderedDict([(t.__table__.name,t) for t in tables])
+    """    
+    def __init__(self, tables):
+        self.tables = OrderedDict([(t.__table__.name,t) for t in tables])
 
     def __getitem__(self, item):
-        return self.mappings[item]
-
-    def create_mappings(self):
-        for k,schema in self.schemas.items():
-            self.mappings[k] = generate_mapping(k, schema)
+        return self.tables[item]
 
     def drop_tables(self):
         global engine_rw
         drops = []
-        for k in self.schemas:
+        for k in self.tables:
             if k in engine_rw.table_names():
                 drops.append(k)
         if len(drops) == 0:
@@ -87,17 +75,15 @@ class TableGroup(object):
         
         # if we do not have write access, just verify that the tables exist
         if engine_rw is None:
-            for k in self.schemas:
+            for k in self.tables:
                 if k not in engine_ro.table_names():
                     raise Exception("Table %s not found in database %s" % (k, db_address_ro))
             return
 
-        create_tables([self[k].__table__ for k in self.schemas])
+        create_tables(tables=[self[k].__table__ for k in self.tables])
 
 
 #----------- define ORM classes -------------
-
-ORMBase = declarative_base()
 
 class NDArray(TypeDecorator):
     """For marshalling arrays in/out of binary DB fields.
@@ -145,7 +131,7 @@ class FloatType(TypeDecorator):
         #return np.load(buf, allow_pickle=False)
 
 
-_coltypes = {
+column_data_types = {
     'int': Integer,
     'float': FloatType,
     'bool': Boolean,
@@ -158,8 +144,28 @@ _coltypes = {
 }
 
 
+ORMBase = declarative_base()
+
 def make_table(name, columns, base=None, **table_args):
-    """Generate an ORM mapping class from an entry in table_schemas.
+    """Generate an ORM mapping class from a simplified schema format.
+
+    Columns named 'id' (int) and 'meta' (object) are added automatically.
+
+    Parameters
+    ----------
+    name : str
+        Name of the table, used to set __tablename__ in the new class
+    base : class or None
+        Base class on which to build the new table class
+    table_args : keyword arguments
+        Extra keyword arguments are used to set __table_args__ in the new class
+    columns : list of tuple
+        List of column specifications. Each column is given as a tuple:
+        ``(col_name, data_type, comment, {options})``. Where *col_name* and *comment* 
+        are strings, *data_type* is a key in the column_data_types global, and
+        *options* is a dict providing extra initialization arguments to the sqlalchemy
+        Column (for example: 'index', 'unique'). Optionally, *data_type* may be a 'tablename.id'
+        string indicating that this column is a foreign key referencing another table.
     """
     props = {
         '__tablename__': name,
@@ -174,12 +180,12 @@ def make_table(name, columns, base=None, **table_args):
         defer_col = kwds.pop('deferred', False)
         ondelete = kwds.pop('ondelete', None)
 
-        if coltype not in _coltypes:
+        if coltype not in column_data_types:
             if not coltype.endswith('.id'):
                 raise ValueError("Unrecognized column type %s" % coltype)
             props[colname] = Column(Integer, ForeignKey(coltype, ondelete=ondelete), **kwds)
         else:
-            ctyp = _coltypes[coltype]
+            ctyp = column_data_types[coltype]
             props[colname] = Column(ctyp, **kwds)
 
         if defer_col:
@@ -187,15 +193,17 @@ def make_table(name, columns, base=None, **table_args):
 
     # props['time_created'] = Column(DateTime, default=func.now())
     # props['time_modified'] = Column(DateTime, onupdate=func.current_timestamp())
-    props['meta'] = Column(_coltypes['object'])
+    props['meta'] = Column(column_data_types['object'])
 
     if base is None:
         return type(name, (ORMBase,), props)
     else:
-        def init(self, *args, **kwds):
+        # need to jump through a hoop to allow __init__ on table classes;
+        # see: https://docs.sqlalchemy.org/en/latest/orm/constructors.html
+        @reconstructor
+        def _init_on_load(self, *args, **kwds):
             base.__init__(self)
-            ORMBase.__init__(self, *args, **kwds)
-        props['__init__'] = init  # doesn't work?
+        props['_init_on_load'] = _init_on_load
         return type(name, (base,ORMBase), props)
 
 
@@ -386,7 +394,7 @@ def bake_sqlite(sqlite_file):
     last_size = 0
     for mod in all_modules().values():
         table_group = mod.table_group
-        for table_name in table_group.schemas:
+        for table_name in table_group.tables:
             print("Baking %s.." % table_name)
             table = table_group[table_name]
             

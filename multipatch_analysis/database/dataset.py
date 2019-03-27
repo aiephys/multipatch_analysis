@@ -9,50 +9,6 @@ from .experiment import Experiment, Electrode, Pair
 __all__ = ['dataset_tables', 'SyncRec', 'Recording', 'PatchClampRecording', 'MultiPatchProbe', 'TestPulse', 'StimPulse', 'StimSpike', 'PulseResponse', 'Baseline']
 
 
-class PulseResponseBase(object):
-    def __init__(self):
-        print(self)
-        self._post_tseries = None
-    
-    @property
-    def post_tseries(self):
-        if self._post_tseries is None:
-            self._post_tseries = Trace(self.data, sample_rate=default_sample_rate, t0=self.start_time)
-        return self._post_tseries
-
-    @property
-    def pre_tseries(self):
-        return self.stim_pulse.recorded_tseries
-
-    @property
-    def stim_tseries(self):
-        return self.stim_pulse.stimulus_tseries
-    
-
-class StimPulseBase(object):
-    def __init__(self):
-        self._rec_tseries = None
-        self._stim_tseries = None
-    
-    @property
-    def recorded_tseries(self):
-        if self._rec_tseries is None:
-            self._rec_tseries = Trace(self.data, sample_rate=default_sample_rate, t0=self.data_start_time)
-        return self._rec_tseries
-
-    @property
-    def stimulus_tseries(self):
-        # can we work Stimulus objects into here, rather than generating manually??
-        if self._stim_tseries is None:
-            rec_ts = self.recorded_tseries  # todo: avoid loading full data for this step
-            data = np.zeros(shape=rec_ts.shape)
-            pstart = rec_ts.index_at(self.onset_time)
-            pstop = rec_ts.index_at(self.onset_time + self.duration)
-            data[pstart:pstop] = self.amplitude            
-            self._stim_tseries = rec_ts.copy(data=data)
-        return self._stim_tseries
-        
-
 SyncRec = make_table(
     name='sync_rec',
     comment="A synchronous recording represents a \"sweep\" -- multiple recordings that were made simultaneously on different electrodes.",
@@ -118,6 +74,30 @@ TestPulse = make_table(
     ]
 )
 
+class StimPulseBase(object):
+    def __init__(self):
+        self._rec_tseries = None
+        self._stim_tseries = None
+    
+    @property
+    def recorded_tseries(self):
+        if self._rec_tseries is None:
+            self._rec_tseries = Trace(self.data, sample_rate=default_sample_rate, t0=self.data_start_time)
+        return self._rec_tseries
+
+    @property
+    def stimulus_tseries(self):
+        # can we work Stimulus objects into here, rather than generating manually??
+        if self._stim_tseries is None:
+            rec_ts = self.recorded_tseries  # todo: avoid loading full data for this step
+            data = np.zeros(shape=rec_ts.shape)
+            pstart = rec_ts.index_at(self.onset_time)
+            pstop = rec_ts.index_at(self.onset_time + self.duration)
+            data[pstart:pstop] = self.amplitude            
+            self._stim_tseries = rec_ts.copy(data=data)
+        return self._stim_tseries
+
+   
 StimPulse = make_table(
     name='stim_pulse',
     base=StimPulseBase,
@@ -135,7 +115,8 @@ StimPulse = make_table(
         ('data_start_time', 'float', "Starting time of the data chunk, relative to the beginning of the recording"),
     ]
 )
-    
+
+
 StimSpike = make_table(
     name='stim_spike',
     comment= "An action potential evoked by a stimulus pulse",
@@ -149,18 +130,24 @@ StimSpike = make_table(
     ]
 )
 
-Baseline = make_table(
-    name='baseline',
-    comment="A snippet of baseline data, matched to a postsynaptic recording",
-    columns=[
-        ('recording_id', 'recording.id', 'The recording from which this baseline snippet was extracted.', {'index': True}),
-        ('start_time', 'float', "Starting time of this chunk of the recording in seconds, relative to the beginning of the recording"),
-        ('data', 'array', 'numpy array of baseline data sampled at '+_sample_rate_str, {'deferred': True}),
-        ('mode', 'float', 'most common value in the baseline snippet'),
-        ('ex_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for excitatory synapse probing'),
-        ('in_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for inhibitory synapse probing'),
-    ]
-)
+
+class PulseResponseBase(object):
+    def __init__(self):
+        self._post_tseries = None
+    
+    @property
+    def post_tseries(self):
+        if self._post_tseries is None:
+            self._post_tseries = Trace(self.data, sample_rate=default_sample_rate, t0=self.start_time)
+        return self._post_tseries
+
+    @property
+    def pre_tseries(self):
+        return self.stim_pulse.recorded_tseries
+
+    @property
+    def stim_tseries(self):
+        return self.stim_pulse.stimulus_tseries
 
 PulseResponse = make_table(
     name='pulse_response',
@@ -176,6 +163,21 @@ PulseResponse = make_table(
         ('in_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for inhibitory synapse probing', {'index': True}),
     ]
 )
+
+
+Baseline = make_table(
+    name='baseline',
+    comment="A snippet of baseline data, matched to a postsynaptic recording",
+    columns=[
+        ('recording_id', 'recording.id', 'The recording from which this baseline snippet was extracted.', {'index': True}),
+        ('start_time', 'float', "Starting time of this chunk of the recording in seconds, relative to the beginning of the recording"),
+        ('data', 'array', 'numpy array of baseline data sampled at '+_sample_rate_str, {'deferred': True}),
+        ('mode', 'float', 'most common value in the baseline snippet'),
+        ('ex_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for excitatory synapse probing'),
+        ('in_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for inhibitory synapse probing'),
+    ]
+)
+
 
 # Set up relationships
 Experiment.sync_recs = relationship(SyncRec, order_by=SyncRec.id, back_populates="experiment", cascade='save-update,merge,delete', single_parent=True)

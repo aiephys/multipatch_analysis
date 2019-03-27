@@ -65,15 +65,19 @@ if __name__ == '__main__':
 
     if args.rebuild:
         for module in modules:
-            module.drop_all()
+            print("Dropping module %s" % module.name)
+            module.drop_all(reinitialize=False)
         for module in modules:
+            print("Initializing module %s" % module.name)
             module.initialize()
 
     if args.drop:
         for module in modules:
             if args.uids is None:
-                module.drop_all()
+                print("Dropping and reinitializing module %s" % module.name)
+                module.drop_all(reinitialize=True)
             else:
+                print("Dropping %d jobs in module %s" % (len(args.uids), module.name))
                 module.drop_jobs(job_ids=args.uids)
     else:
         report = []
