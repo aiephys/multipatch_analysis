@@ -76,6 +76,7 @@ class ConnectivityAnalyzer(object):
         self.fields = {'color_by': [
             ('n_probed', {}),
             ('n_connected', {}),
+            ('n_gap_junctions', {}),
             ('connection_probability', {'mode': 'range', 'defaults': {
                 'Operation': 'Add', 
                 'colormap': pg.ColorMap(
@@ -184,6 +185,7 @@ class StrengthAnalyzer(object):
                 'ic_fit_xoffset': np.mean(ic_xoffset),
                 'ic_fit_rise_time': np.mean(ic_rise),
                 'ic_fit_decay_tau': np.mean(ic_decay),
+                'ic_amp_cv': np.std(ic_amps)/np.mean(ic_amps),
                 'vc_fit_amp': np.mean(vc_amps),
                 'vc_fit_xoffset': np.mean(vc_xoffset),
                 'vc_fit_rise_time': np.mean(vc_rise),
@@ -247,6 +249,9 @@ class StrengthAnalyzer(object):
                 'Max': 20e-3,
                 'colormap': thermal_colormap,
             }}),
+            ('ic_amp_cv', {'mode': 'range', 'defaults': {
+                'colormap': thermal_colormap,
+            }}),
             ],
             'show_confidence': [
             'None',
@@ -267,7 +272,7 @@ class StrengthAnalyzer(object):
 
     def print_element_info(self, pre_class, post_class, metric=None):
         if metric is not None:
-            units = [field[1]['units'] for field in self.fields['color_by'] if field[0] == metric][0] 
+            units = [field[1].get('units', '') for field in self.fields['color_by'] if field[0] == metric][0] 
             connections = self.results[(pre_class, post_class)]['connected_pairs']
             connection_strength = self.results[(pre_class, post_class)]['connection_strength']
             result = self.results[(pre_class, post_class)][metric]
@@ -313,23 +318,28 @@ class DynamicsAnalyzer(object):
             connections = [p for p in class_pairs if p.synapse]
             if len(connections) == 0:
                 no_data = True
-            ind_50 = []
-            ppr_50 = []    
+            pr_8_1_50 = []
+            pr_2_1_50 = [] 
+            pr_5_1_50 = []   
             dynamics = [c.dynamics for c in connections] if len(connections) > 0 else float('nan')
             for connection in connections:
                 d = connection.dynamics
-                ind_50.append(d.pulse_ratio_8_1_50Hz if d is not None else float('nan'))
-                ppr_50.append(d.pulse_ratio_2_1_50Hz if d is not None else float('nan'))
+                pr_8_1_50.append(d.pulse_ratio_8_1_50Hz if d is not None else float('nan'))
+                pr_2_1_50.append(d.pulse_ratio_2_1_50Hz if d is not None else float('nan'))
+                pr_5_1_50.append(d.pulse_ratio_5_1_50Hz if d is not None else float('nan'))
+
 
             self.results[(pre_class, post_class)] = {
             'no_data': no_data,
             'connected_pairs': connections,
             'n_connections': len(connections),
             'dynamics': dynamics,
-            'pulse_ratio_8_1_50Hz': np.nanmean(ind_50),
-            'pulse_ratio_2_1_50Hz': np.nanmean(ppr_50),
-            'pulse_ratio_8_1_50Hz_stdev': [-np.nanstd(ind_50), np.nanstd(ind_50)],
-            'pulse_ratio_2_1_50Hz_stdev': [-np.nanstd(ppr_50), np.nanstd(ppr_50)],
+            'pulse_ratio_8_1_50Hz': np.nanmean(pr_8_1_50),
+            'pulse_ratio_2_1_50Hz': np.nanmean(pr_2_1_50),
+            'pulse_ratio_5_1_50Hz': np.nanmean(pr_5_1_50),
+            'pulse_ratio_8_1_50Hz_stdev': [-np.nanstd(pr_8_1_50), np.nanstd(pr_8_1_50)],
+            'pulse_ratio_2_1_50Hz_stdev': [-np.nanstd(pr_2_1_50), np.nanstd(pr_2_1_50)],
+            'pulse_ratio_5_1_50Hz_stdev': [-np.nanstd(pr_5_1_50), np.nanstd(pr_5_1_50)],
             'None': None,
             }
         
@@ -352,10 +362,18 @@ class DynamicsAnalyzer(object):
                 [0, 0.5, 1.0],
                 [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
             )}}),
+            ('pulse_ratio_5_1_50Hz', {'mode': 'range', 'defaults': {
+                'Min': 0, 
+                'Max': 2, 
+                'colormap': pg.ColorMap(
+                [0, 0.5, 1.0],
+                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
+            )}}),
             ],
             'show_confidence': [
             'pulse_ratio_8_1_50Hz_stdev',
             'pulse_ratio_2_1_50Hz_stdev',
+            'pulse_ratio_5_1_50Hz_stdev',
             'None',
             ]}
 
@@ -396,14 +414,14 @@ def results_scatter(results, field_name, field, plt):
     units = field.get('units', '')
     plt.setLabels(left='Count', bottom=(field_name, units))
 
-def add_element_to_scatter(results, pre_class, post_class, field_name, values=None):
+def add_element_to_scatter(results, pre_class, post_class, field_name, values=None, color='g'):
     val = results[(pre_class, post_class)][field_name]
-    line = pg.InfiniteLine(val, pen={'color':'g', 'width': 2}, movable=False)
+    line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
     scatter = None
     if values is not None:
-        y_values = pg.pseudoScatter(np.asarray(values, dtype=float) + 1., spacing=0.1)
+        y_values = pg.pseudoScatter(np.asarray(values, dtype=float) + 1., spacing=0.3)
         scatter = pg.ScatterPlotItem()
-        scatter.setData(values, y_values + 1., symbol='o', brush=(0, 255, 0, 150), pen='w', size=15)
+        scatter.setData(values, y_values + 1., symbol='o', brush=(color + (150,)), pen='w', size=12)
     return line, scatter
 
 def connection_probability_ci(n_connected, n_probed):
