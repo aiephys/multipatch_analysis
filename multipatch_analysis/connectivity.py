@@ -76,6 +76,7 @@ class ConnectivityAnalyzer(object):
         self.fields = {'color_by': [
             ('n_probed', {}),
             ('n_connected', {}),
+            ('n_gap_junctions', {}),
             ('connection_probability', {'mode': 'range', 'defaults': {
                 'Operation': 'Add', 
                 'colormap': pg.ColorMap(
@@ -396,14 +397,14 @@ def results_scatter(results, field_name, field, plt):
     units = field.get('units', '')
     plt.setLabels(left='Count', bottom=(field_name, units))
 
-def add_element_to_scatter(results, pre_class, post_class, field_name, values=None):
+def add_element_to_scatter(results, pre_class, post_class, field_name, values=None, color='g'):
     val = results[(pre_class, post_class)][field_name]
-    line = pg.InfiniteLine(val, pen={'color':'g', 'width': 2}, movable=False)
+    line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
     scatter = None
     if values is not None:
-        y_values = pg.pseudoScatter(np.asarray(values, dtype=float) + 1., spacing=0.1)
+        y_values = pg.pseudoScatter(np.asarray(values, dtype=float) + 1., spacing=0.5)
         scatter = pg.ScatterPlotItem()
-        scatter.setData(values, y_values + 1., symbol='o', brush=(0, 255, 0, 150), pen='w', size=15)
+        scatter.setData(values, y_values + 1., symbol='o', brush=(color + (150,)), pen='w', size=12)
     return line, scatter
 
 def connection_probability_ci(n_connected, n_probed):
