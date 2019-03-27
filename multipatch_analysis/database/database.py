@@ -22,7 +22,7 @@ if LooseVersion(sqlalchemy.__version__) < '1.2':
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, Float, Date, DateTime, LargeBinary, ForeignKey, or_, and_
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import relationship, deferred, sessionmaker, aliased
+from sqlalchemy.orm import relationship, deferred, sessionmaker, aliased, reconstructor
 from sqlalchemy.types import TypeDecorator
 from sqlalchemy.sql.expression import func
 
@@ -97,8 +97,6 @@ class TableGroup(object):
 
 #----------- define ORM classes -------------
 
-ORMBase = declarative_base()
-
 class NDArray(TypeDecorator):
     """For marshalling arrays in/out of binary DB fields.
     """
@@ -158,6 +156,8 @@ _coltypes = {
 }
 
 
+ORMBase = declarative_base()
+
 def make_table(name, columns, base=None, **table_args):
     """Generate an ORM mapping class from an entry in table_schemas.
     """
@@ -192,10 +192,12 @@ def make_table(name, columns, base=None, **table_args):
     if base is None:
         return type(name, (ORMBase,), props)
     else:
-        def init(self, *args, **kwds):
+        # need to jump through a hoop to allow __init__ on table classes;
+        # see: https://docs.sqlalchemy.org/en/latest/orm/constructors.html
+        @reconstructor
+        def _init_on_load(self, *args, **kwds):
             base.__init__(self)
-            ORMBase.__init__(self, *args, **kwds)
-        props['__init__'] = init  # doesn't work?
+        props['_init_on_load'] = _init_on_load
         return type(name, (base,ORMBase), props)
 
 
