@@ -53,9 +53,10 @@ class DynamicsPipelineModule(DatabasePipelineModule):
                     pulse_amps[pulse_number].append(getattr(result.Pulse_response_strength, amp_field))
             if any(pulse_amps):
                 pulse_ratio_8_1_50Hz = np.mean(pulse_amps[8]) / np.mean(pulse_amps[1])
-                pulse_ratio_2_1_50Hz = np.mean(pulse_amps[2]) / np.mean(pulse_amps[1])    
+                pulse_ratio_2_1_50Hz = np.mean(pulse_amps[2]) / np.mean(pulse_amps[1])
+                pulse_ratio_5_1_50Hz = np.mean(pulse_amps[5]) / np.mean(pulse_amps[1])    
                 # Write new record to DB
-                dynamics = db.Dynamics(pair_id=pair.id, pulse_ratio_2_1_50Hz=pulse_ratio_2_1_50Hz, pulse_ratio_8_1_50Hz=pulse_ratio_8_1_50Hz)
+                dynamics = db.Dynamics(pair_id=pair.id, pulse_ratio_2_1_50Hz=pulse_ratio_2_1_50Hz, pulse_ratio_8_1_50Hz=pulse_ratio_8_1_50Hz, pulse_ratio_5_1_50Hz=pulse_ratio_5_1_50Hz)
                 session.add(dynamics)
         
     @classmethod
