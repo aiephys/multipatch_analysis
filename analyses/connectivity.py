@@ -415,7 +415,9 @@ class MatrixAnalyzer(object):
 
 if __name__ == '__main__':
 
+    import sys
     import pyqtgraph as pg
+    app = pg.mkQApp()
     pg.dbg()
 
     session = db.Session()
@@ -534,3 +536,6 @@ if __name__ == '__main__':
 
 
     maz = MatrixAnalyzer(session=session, default_analyzer='Connectivity')
+
+    if sys.flags.interactive == 0:
+        app.exec_()

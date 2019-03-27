@@ -55,7 +55,7 @@ class StimResponseList(object):
         return TraceList(tseries)
 
     def plot_stimulus(self, plt):
-        stim_ts = self.get_tseries('post')
+        stim_ts = self.get_tseries('stim')
         self._plot_ts(stim_ts, plt)
     
     def plot_presynaptic(self, plt):
@@ -64,6 +64,7 @@ class StimResponseList(object):
 
     def plot_postsynaptic(self, plt):
         post_ts = self.get_tseries('post')
+        self._plot_ts(post_ts, plt)
         
     def _plot_ts(self, ts_list, plt):        
         for ts in ts_list:
@@ -125,13 +126,15 @@ class CrosstalkAnalyzer(object):
             self.response_list.plot_postsynaptic(self.plt3)
 
         
-        
-        
 
 if __name__ == '__main__':
-    pg.mkQApp()
+    import sys
+    app = pg.mkQApp()
     pg.dbg()
     
     cta = CrosstalkAnalyzer()
     win = cta.show()
     win.resize(1400, 1000)
+    
+    if sys.flags.interactive == 0:
+        app.exec_()
