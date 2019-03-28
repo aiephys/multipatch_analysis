@@ -18,12 +18,6 @@ class StimResponseList(object):
     """
     def __init__(self, srs):
         self.srs = srs
-        self._plot_items = []
-        
-    def clear_plots(self):
-        for item, plt in self._plot_items:
-            plt.removeItem(item)
-        self._plot_items = []
 
     def get_tseries(self, series, bsub=True, align='stim', bsub_window=(-3e-3, 0)):
         """Return a TraceList of timeseries, optionally baseline-subtracted and time-aligned.
@@ -55,26 +49,6 @@ class StimResponseList(object):
             tseries.append(ts)
         return TraceList(tseries)
 
-    def plot_stimulus(self, plt, **kwds):
-        stim_ts = self.get_tseries('stim', **kwds)
-        self._plot_ts(stim_ts, plt)
-    
-    def plot_presynaptic(self, plt, **kwds):
-        pre_ts = self.get_tseries('pre', **kwds)
-        self._plot_ts(pre_ts, plt)
-
-    def plot_postsynaptic(self, plt, **kwds):
-        post_ts = self.get_tseries('post', **kwds)
-        self._plot_ts(post_ts, plt)
-        
-    def _plot_ts(self, ts_list, plt):        
-        for ts in ts_list:
-            item = plt.plot(ts.time_values, ts.data, pen=(255, 255, 255, 80), antialias=True)
-            self._plot_items.append((item, plt))
-        avg = ts_list.mean()
-        item = plt.plot(avg.time_values, avg.data, pen={'color':'g', 'width':2}, shadowPen={'color':'k', 'width':3}, antialias=True)
-        self._plot_items.append((item, plt))
-
     def __iter__(self):
         for sr in self.srs:
             yield sr
@@ -86,6 +60,9 @@ class StimResponseList(object):
         else:
             return item
 
+    def __len__(self):
+        return len(self.srs)
+
 
 class CrosstalkAnalyzer(object):
     """User interface for exploring crosstalk removal methods
@@ -95,24 +72,32 @@ class CrosstalkAnalyzer(object):
             expt_browser = ExperimentBrowser()
         self.expt_browser = expt_browser
         expt_browser.itemSelectionChanged.connect(self.expt_selection_changed)
-        self.session = db.Session()        
+        self.session = db.Session()
+        self.pair = None
         self.response_list = None
         self.corrected_response_list = None
+        self._plot_items = []
 
         self.params = pg.parametertree.Parameter(name="crosstalk removal", type="group", children=[
-            dict(name='limit', type='int', value=20),
+            dict(name='data', type='group', children=[
+                dict(name='pre mode', type='list', values=['ic', 'vc']),
+                dict(name='post mode', type='list', values=['ic', 'vc']),
+                dict(name='limit', type='int', value=100),
+            ]),
             dict(name='correction', type='group', children=[
                 dict(name='remove stim', type='bool', value=True),
+                dict(name='stim shift', type='int', value=0),
                 dict(name='stim scale', type='float', value=30e3, dec=True, step=0.5),
                 dict(name='stim lowpass', type='float', value=7e3, dec=True, step=0.5, suffix='Hz', siPrefix=True),
                 dict(name='remove spike', type='bool', value=False),
-                dict(name='spike scale', type='float', value=0.5, dec=True, step=0.5),
+                dict(name='spike scale', type='float', value=0.001, dec=True, step=0.5),
                 dict(name='spike lowpass', type='float', value=10e3, dec=True, step=0.5, suffix='Hz', siPrefix=True),
                 dict(name='remove spike dv/dt', type='bool', value=True),
                 dict(name='spike dv/dt scale', type='float', value=0.03, dec=True, step=0.5),
                 dict(name='spike dv/dt lowpass', type='float', value=550., dec=True, step=0.5, suffix='Hz', siPrefix=True),
             ]),
             dict(name='display', type='group', children=[
+                dict(name='limit', type='int', value=20),
                 dict(name='plot spike aligned', type='bool', value=False),
                 dict(name='plot dv/dt', type='bool', value=False),
                 dict(name='plot lowpass', type='float', value=10e3, dec=True, step=0.5, suffix='Hz', siPrefix=True),
@@ -120,6 +105,7 @@ class CrosstalkAnalyzer(object):
         ])
         self.ptree = pg.parametertree.ParameterTree()
         self.ptree.setParameters(self.params)
+        self.params.child('data').sigTreeStateChanged.connect(self.data_filter_changed)
         self.params.child('correction').sigTreeStateChanged.connect(self.update_analysis)
         self.params.child('display').sigTreeStateChanged.connect(self.update_display)
 
@@ -153,31 +139,86 @@ class CrosstalkAnalyzer(object):
     def select_pair(self, pair_id):
         self.expt_browser.select_pair(pair_id)
 
-    def load_pair(self, pair):
-        with pg.BusyCursor():
-            # preload pulse response data
-            db.query(db.PulseResponse.data).filter(db.PulseResponse.pair_id==pair.id).all()
+    def load_pair(self, pair=None):
+        pair = pair or self.pair
+        if pair is None:
+            return
             
-            self.response_list = StimResponseList(pair.pulse_responses)
+        limit = self.params['data', 'limit']
+        with pg.BusyCursor():
+            
+            pre_prec = db.aliased(db.PatchClampRecording)
+            post_prec = db.aliased(db.PatchClampRecording)
+            q = db.query(db.PulseResponse).join(db.StimPulse).join(db.Pair)
+            q = q.join(pre_prec, db.PulseResponse.recording_id==pre_prec.recording_id)
+            q = q.join(post_prec, db.StimPulse.recording_id==post_prec.recording_id)
+            q = q.filter(db.Pair.id==pair.id)
+            q = q.filter(pre_prec.clamp_mode==self.params['data', 'pre mode'])
+            q = q.filter(post_prec.clamp_mode==self.params['data', 'post mode'])
+            prs = q.limit(limit).all()
+            
+            # preload pulse response data
+            ids = [pr.id for pr in prs]
+            db.query(db.PulseResponse.data).filter(db.PulseResponse.id.in_(ids)).all()
+            
+            self.response_list = StimResponseList(prs)
             self.update_analysis()
 
+    def data_filter_changed(self):
+        self.load_pair()
+
     def update_analysis(self):
-        if self.corrected_response_list is not None:
-            self.corrected_response_list.clear_plots()
-        
-        limit = self.params['limit']
-        selected_responses = self.response_list[:limit] if limit > 0 else self.response_list
-        self.corrected_response_list = StimResponseList([self.process_response(sr) for sr in selected_responses])
-        self.update_display()
+        with pg.BusyCursor():
+            selected_responses = self.response_list
+            self.corrected_response_list = StimResponseList([self.process_response(sr) for sr in selected_responses])
+            self.update_display()
+
+    def clear_plots(self):
+        for item, plt in self._plot_items:
+            plt.removeItem(item)
+        self._plot_items = []
 
     def update_display(self):
-        kwds = {
-            'align': 'pre' if self.params['display', 'plot spike aligned'] else 'stim',
-        } 
-        self.corrected_response_list.clear_plots()
-        self.corrected_response_list.plot_stimulus(self.plt1, **kwds)
-        self.corrected_response_list.plot_presynaptic(self.plt2, **kwds)
-        self.corrected_response_list.plot_postsynaptic(self.plt3, **kwds)
+        with pg.BusyCursor():
+            align = 'pre' if self.params['display', 'plot spike aligned'] else 'stim'
+            
+            self.clear_plots()
+
+            rl = self.corrected_response_list
+            if len(rl) == 0:
+                return
+            
+            stim_ts = rl.get_tseries('stim', align=align)
+            self._plot_ts(stim_ts, self.plt1)
+        
+            pre_ts = rl.get_tseries('pre', align=align)
+            self._plot_ts(pre_ts, self.plt2)
+
+            post_ts = rl.get_tseries('post', align=align)
+            dvdt = self.params['display', 'plot dv/dt']
+            lowpass = self.params['display', 'plot lowpass']
+            self._plot_ts(post_ts, self.plt3, dvdt=dvdt, lowpass=lowpass)
+
+    def display_filter(self, ts, dvdt, lowpass):
+        if dvdt is True:
+            ts = ts.copy(data=np.diff(ts.data))
+        if lowpass is not None:
+            try:
+                ts = filter.bessel_filter(ts, lowpass, bidir=True)
+            except ValueError:
+                pass
+        return ts
+        
+    def _plot_ts(self, ts_list, plt, dvdt=False, lowpass=None):
+        limit = self.params['display', 'limit']
+        for ts in ts_list[:limit]:
+            ts = self.display_filter(ts, dvdt, lowpass)
+            item = plt.plot(ts.time_values, ts.data, pen=(255, 255, 255, 80), antialias=True)
+            self._plot_items.append((item, plt))
+        avg = ts_list.mean()
+        avg = self.display_filter(avg, dvdt, lowpass)
+        item = plt.plot(avg.time_values, avg.data, pen={'color':'g', 'width':2}, shadowPen={'color':'k', 'width':3}, antialias=True)
+        self._plot_items.append((item, plt))
 
     def process_response(self, sr):
         stim = sr.stim_tseries
@@ -188,6 +229,7 @@ class CrosstalkAnalyzer(object):
             pulse_start = sr.stim_pulse.onset_time
             pulse_stop = pulse_start + sr.stim_pulse.duration
             stim_correction = post.copy(data=np.zeros(len(post)))
+            stim_correction.t0 = stim_correction.t0 + stim_correction.dt * self.params['correction', 'stim shift']
             stim_correction.time_slice(pulse_start, pulse_stop).data[:] = self.params['correction', 'stim scale'] * sr.stim_pulse.amplitude
             stim_correction = filter.bessel_filter(stim_correction, self.params['correction', 'stim lowpass'], bidir=False)
             post = post - stim_correction.data
