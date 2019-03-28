@@ -114,6 +114,8 @@ class CrosstalkAnalyzer(object):
             ]),
             dict(name='display', type='group', children=[
                 dict(name='plot spike aligned', type='bool', value=False),
+                dict(name='plot dv/dt', type='bool', value=False),
+                dict(name='plot lowpass', type='float', value=10e3, dec=True, step=0.5, suffix='Hz', siPrefix=True),
             ])
         ])
         self.ptree = pg.parametertree.ParameterTree()
