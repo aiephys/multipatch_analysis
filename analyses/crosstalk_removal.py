@@ -47,6 +47,7 @@ class StimResponseList(object):
                     raise NotImplementedError()
                 else:
                     raise ValueError("invalid time alignment mode %r" % align)
+                t_align = t_align or 0
                 ts = ts.copy(t0=ts.t0-t_align)
             tseries.append(ts)
         return TraceList(tseries)
@@ -96,7 +97,7 @@ class CrosstalkAnalyzer(object):
                 dict(name='charging', type='bool', value=True, children=[
                     dict(name='auto', type='action'),
                     dict(name='capacitance', type='float', value=10e-12, suffix='F', dec=True, step=0.5, siPrefix=True),
-                    dict(name='resistance', type='float', value=10e-6, suffix=u'Ω', dec=True, step=0.5, siPrefix=True),
+                    dict(name='resistance', type='float', value=10e6, suffix=u'Ω', dec=True, step=0.5, siPrefix=True),
                     dict(name='scale', type='float', value=30e3, dec=True, step=0.5),
                     dict(name='lowpass', type='float', value=7e3, dec=True, step=0.5, suffix='Hz', siPrefix=True),
                 ]),
@@ -105,6 +106,7 @@ class CrosstalkAnalyzer(object):
                     dict(name='lowpass', type='float', value=10e3, dec=True, step=0.5, suffix='Hz', siPrefix=True),
                 ]),
                 dict(name='spike dv/dt', type='bool', value=True, children=[
+                    dict(name='plot only', type='bool', value=False),
                     dict(name='scale', type='float', value=0.03, dec=True, step=0.5),
                     dict(name='lowpass', type='float', value=550., dec=True, step=0.5, suffix='Hz', siPrefix=True),
                 ]),
@@ -234,7 +236,7 @@ class CrosstalkAnalyzer(object):
         item = plt.plot(avg.time_values, avg.data, pen={'color':'g', 'width':2}, shadowPen={'color':'k', 'width':3}, antialias=True)
         self._plot_items.append((item, plt))
 
-    def process_response(self, sr):
+    def process_response(self, sr, plt=None):
         stim = sr.stim_tseries
         pre = sr.pre_tseries
         post = sr.post_tseries.copy()
