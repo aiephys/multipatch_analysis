@@ -259,6 +259,9 @@ class MatrixAnalyzer(object):
         self.scatter_plot = None
         self.line = None
         self.scatter = None
+        self.element = None
+        self.selected = 0
+        self.colors = [(0, 255, 0), (255, 0, 0), (240, 240, 0), (0, 0, 255), (170, 0, 127), (0, 230, 230)]
 
         self.experiment_filter = ExperimentFilter()
         self.cell_class_filter = CellClassFilter(cell_class_groups)
@@ -333,15 +336,29 @@ class MatrixAnalyzer(object):
         pre_class, post_class = self.matrix_map[row, col]
         values = self.analysis.print_element_info(pre_class, post_class, self.field_name)
         if self.scatter_plot is not None:
-            if self.line is not None:
-                self.scatter_plot.removeItem(self.line)
-            if self.scatter is not None:
-                self.scatter_plot.removeItem(self.scatter)
-            self.line, self.scatter = add_element_to_scatter(self.results, pre_class, post_class, self.field_name, values=values)
-            self.scatter_plot.addItem(self.line)
-            if self.scatter is not None:
-                self.scatter_plot.addItem(self.scatter)
+            if int(event.modifiers() & pg.QtCore.Qt.ControlModifier)>0:
+                self.selected += 1
+                if self.selected >= len(self.colors):
+                    self.selected = 0
+                self.display_element_output(row, col, values)
+            else:
+                self.display_element_reset() 
+                self.display_element_output(row, col, values)
 
+    def display_element_output(self, row, col, values):
+        color = self.colors[self.selected]
+        self.element = self.win.matrix_widget.matrix.cells[row][col]
+        self.element.setPen(pg.mkPen({'color': color, 'width': 5}))
+        pre_class, post_class = self.matrix_map[row, col]
+        self.line, self.scatter = add_element_to_scatter(self.results, pre_class, post_class, self.field_name, values=values, color=color)
+        self.scatter_plot.addItem(self.line)
+        if self.scatter is not None:
+            self.scatter_plot.addItem(self.scatter)
+
+    def display_element_reset(self):
+        self.selected = 0
+        [self.scatter_plot.removeItem(item) for item in self.scatter_plot.items[1:]]
+        self.update_matrix_display()
 
     def update_matrix_results(self):
         # Select pairs (todo: age, acsf, internal, temp, etc.)
