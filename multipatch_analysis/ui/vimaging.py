@@ -3,6 +3,7 @@ from acq4.pyqtgraph.Qt import QtGui, QtCore
 import acq4.pyqtgraph as pg
 import numpy as np
 import scipy.ndimage as ndimage
+import scipy.stats as stats
 
 
 class VImagingAnalyzer(QtGui.QSplitter):
@@ -296,6 +297,9 @@ class VImagingAnalyzer(QtGui.QSplitter):
         else:
             self.plt3.plot(xvals, yvals, symbol='o', pen=None, symbolBrush=brushes, symbolPen=None)
             self.plt3.plot(avg_x, avg_y, pen='w', antialias=True)
+            
+            lin = stats.linregress(avg_x, avg_y)
+            self.plt3.setTitle("slope: %0.2g" % lin[0])
     
     def measure_dff(self, img_data, img_t, time_indices):
         base_starti, base_stopi, test_starti, test_stopi = time_indices
