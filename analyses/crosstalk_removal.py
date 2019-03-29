@@ -1,7 +1,9 @@
+# coding: utf8
 """
 Question: can we digitally remove pipette electrical / capacitive crosstalk somehow?
 
 """
+from __future__ import division, print_function
 import numpy as np
 import pyqtgraph as pg
 
@@ -85,16 +87,27 @@ class CrosstalkAnalyzer(object):
                 dict(name='limit', type='int', value=100),
             ]),
             dict(name='correction', type='group', children=[
-                dict(name='remove stim', type='bool', value=True),
-                dict(name='stim shift', type='int', value=0),
-                dict(name='stim scale', type='float', value=30e3, dec=True, step=0.5),
-                dict(name='stim lowpass', type='float', value=7e3, dec=True, step=0.5, suffix='Hz', siPrefix=True),
-                dict(name='remove spike', type='bool', value=False),
-                dict(name='spike scale', type='float', value=0.001, dec=True, step=0.5),
-                dict(name='spike lowpass', type='float', value=10e3, dec=True, step=0.5, suffix='Hz', siPrefix=True),
-                dict(name='remove spike dv/dt', type='bool', value=True),
-                dict(name='spike dv/dt scale', type='float', value=0.03, dec=True, step=0.5),
-                dict(name='spike dv/dt lowpass', type='float', value=550., dec=True, step=0.5, suffix='Hz', siPrefix=True),
+                dict(name='stimulus', type='bool', value=True, children=[
+                    dict(name='auto', type='action'),
+                    dict(name='shift', type='int', value=0),
+                    dict(name='scale', type='float', value=30e3, dec=True, step=0.5),
+                    dict(name='lowpass', type='float', value=7e3, dec=True, step=0.5, suffix='Hz', siPrefix=True),
+                ]),
+                dict(name='charging', type='bool', value=True, children=[
+                    dict(name='auto', type='action'),
+                    dict(name='capacitance', type='float', value=10e-12, suffix='F', dec=True, step=0.5, siPrefix=True),
+                    dict(name='resistance', type='float', value=10e-6, suffix=u'Ω', dec=True, step=0.5, siPrefix=True),
+                    dict(name='scale', type='float', value=30e3, dec=True, step=0.5),
+                    dict(name='lowpass', type='float', value=7e3, dec=True, step=0.5, suffix='Hz', siPrefix=True),
+                ]),
+                dict(name='spike', type='bool', value=False, children=[
+                    dict(name='scale', type='float', value=0.001, dec=True, step=0.5),
+                    dict(name='lowpass', type='float', value=10e3, dec=True, step=0.5, suffix='Hz', siPrefix=True),
+                ]),
+                dict(name='spike dv/dt', type='bool', value=True, children=[
+                    dict(name='scale', type='float', value=0.03, dec=True, step=0.5),
+                    dict(name='lowpass', type='float', value=550., dec=True, step=0.5, suffix='Hz', siPrefix=True),
+                ]),
             ]),
             dict(name='display', type='group', children=[
                 dict(name='limit', type='int', value=20),
@@ -108,6 +121,7 @@ class CrosstalkAnalyzer(object):
         self.params.child('data').sigTreeStateChanged.connect(self.data_filter_changed)
         self.params.child('correction').sigTreeStateChanged.connect(self.update_analysis)
         self.params.child('display').sigTreeStateChanged.connect(self.update_display)
+        self.params.child('correction', 'stimulus', 'auto').sigActivated.connect(self.auto_stim_clicked)
 
         self.pw = pg.GraphicsLayoutWidget()
         
@@ -225,33 +239,54 @@ class CrosstalkAnalyzer(object):
         pre = sr.pre_tseries
         post = sr.post_tseries.copy()
 
-        if self.params['correction', 'remove stim']:
+        if self.params['correction', 'stimulus']:
             pulse_start = sr.stim_pulse.onset_time
             pulse_stop = pulse_start + sr.stim_pulse.duration
             stim_correction = post.copy(data=np.zeros(len(post)))
-            stim_correction.t0 = stim_correction.t0 + stim_correction.dt * self.params['correction', 'stim shift']
-            stim_correction.time_slice(pulse_start, pulse_stop).data[:] = self.params['correction', 'stim scale'] * sr.stim_pulse.amplitude
-            stim_correction = filter.bessel_filter(stim_correction, self.params['correction', 'stim lowpass'], bidir=False)
+            stim_correction.t0 = stim_correction.t0 + stim_correction.dt * self.params['correction', 'stimulus', 'shift']
+            stim_correction.time_slice(pulse_start, pulse_stop).data[:] = self.params['correction', 'stimulus', 'scale'] * sr.stim_pulse.amplitude
+            stim_correction = filter.bessel_filter(stim_correction, self.params['correction', 'stimulus', 'lowpass'], bidir=False)
             post = post - stim_correction.data
 
-        if self.params['correction', 'remove spike']:
-            spike = pre.copy(data=pre.data * self.params['correction', 'spike scale'])
-            spike_correction = filter.bessel_filter(spike, self.params['correction', 'spike lowpass'], bidir=False)
+        if self.params['correction', 'charging']:
+            tau = self.params['correction', 'charging', 'capacitance'] * self.params['correction', 'charging', 'resistance']
+            scale = self.params['correction', 'charging', 'scale']
+            pulse_start = sr.stim_pulse.onset_time
+            pulse_stop = pulse_start + sr.stim_pulse.duration
+            charging_correction = post.copy(data=np.zeros(len(post)))
+
+            during_pulse = charging_correction.time_slice(pulse_start, pulse_stop)
+            t = during_pulse.time_values - during_pulse.t0
+            during_pulse.data[:] = scale * sr.stim_pulse.amplitude * (1.0 - np.exp(-t / tau))
+
+            after_pulse = charging_correction.time_slice(pulse_stop, None)
+            t = after_pulse.time_values - after_pulse.t0
+            after_pulse.data[:] = during_pulse.data[-1] * np.exp(-t / tau)
+
+            charging_correction = filter.bessel_filter(charging_correction, self.params['correction', 'charging', 'lowpass'], bidir=False)
+            post = post - charging_correction.data
+
+        if self.params['correction', 'spike']:
+            spike = pre.copy(data=pre.data * self.params['correction', 'spike', 'scale'])
+            spike_correction = filter.bessel_filter(spike, self.params['correction', 'spike', 'lowpass'], bidir=False)
             start = max(spike.t0, post.t0)
             stop = min(spike.t_end, post.t_end)
 
             post = post.time_slice(start, stop) - spike_correction.time_slice(start, stop).data
 
-        if self.params['correction', 'remove spike dv/dt']:
-            spike_diff = np.diff(pre.data) * self.params['correction', 'spike dv/dt scale']
+        if self.params['correction', 'spike dv/dt']:
+            spike_diff = np.diff(pre.data) * self.params['correction', 'spike dv/dt', 'scale']
             spike = pre.copy(data=spike_diff)
-            spike_correction = filter.bessel_filter(spike, self.params['correction', 'spike dv/dt lowpass'], bidir=False)
+            spike_correction = filter.bessel_filter(spike, self.params['correction', 'spike dv/dt', 'lowpass'], bidir=False)
             start = max(spike.t0, post.t0)
             stop = min(spike.t_end, post.t_end)
 
             post = post.time_slice(start, stop) - spike_correction.time_slice(start, stop).data
 
         return data.PulseResponse(stim_pulse=sr.stim_pulse, post_tseries=post)
+
+    def auto_stim_clicked(self):
+        print("hi")
 
         
 
