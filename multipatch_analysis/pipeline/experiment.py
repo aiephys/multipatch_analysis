@@ -161,12 +161,12 @@ class ExperimentPipelineModule(DatabasePipelineModule):
             site_path = os.path.dirname(yml_path)
             try:
                 expt = Experiment(site_path=site_path, verify=False)
+                raw_data_mtime = expt.last_modification_time
+                slice_ts = expt.slice_timestamp
+                slice_mtime, slice_success = finished_slices.get(slice_ts, None)
             except Exception:
                 n_errors += 1
                 continue
-            raw_data_mtime = expt.last_modification_time
-            slice_ts = expt.slice_timestamp
-            slice_mtime, slice_success = finished_slices.get(slice_ts, None)
             if slice_mtime is None or slice_success is False:
                 continue
             ready[expt.timestamp] = max(raw_data_mtime, slice_mtime)
