@@ -10,6 +10,10 @@ import numpy as np
 import pyqtgraph as pg
 from statsmodels.stats.proportion import proportion_confint
 import multipatch_analysis.database as db
+from first_pulse_deconvolved_amps import get_deconvolved_first_pulse_amps
+from neuroanalysis.data import Trace, TraceList
+from neuroanalysis.baseline import float_mode
+
 
 thermal_colormap = pg.ColorMap(
                     [0, 0.3333, 0.6666, 1],
@@ -124,6 +128,32 @@ class ConnectivityAnalyzer(object):
         for probed in probed_pairs:
             print ("\t %s" % (probed))
 
+    def plot_element_data(self, pre_class, post_class, field_name, data=None, color='g', trace_plt=None):
+        val = self.results[(pre_class, post_class)][field_name]
+        line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
+        scatter = None
+        baseline_window = int(db.default_sample_rate * 5e-3)
+        if data is not None:
+            values = []
+            traces = []
+            for pair in data:
+                cs = pair.connection_strength
+                values.append(getattr(cs, field_name))
+                trace = cs.ic_average_response if field_name.startswith('ic') else cs.vc_average_response
+                baseline = float_mode(trace[0:baseline_window])
+                trace = Trace(data=(trace-baseline), sample_rate=db.default_sample_rate)
+                trace_plt.plot(trace.time_values, trace.data)
+                traces.append(trace)
+            y_values = pg.pseudoScatter(np.asarray(values, dtype=float) + 1., spacing=0.3)
+            scatter = pg.ScatterPlotItem(symbol='o', brush=(color + (150,)), pen='w', size=12)
+            scatter.setData(values, y_values + 1.)
+            grand_trace = TraceList(traces).mean()
+            trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3})
+            units = 'V' if field_name.startswith('ic') else 'A'
+            trace_plt.setXRange(0, 20e-3)
+            trace_plt.setLabels(left=('', units), bottom=('Time from stimulus', 's'))
+        return line, scatter
+
     def summary(self, results, metric):
         if metric =='connection_probability':
             total_connected = 0
@@ -175,17 +205,28 @@ class StrengthAnalyzer(object):
             vc_rise = filter(None, [cs.vc_fit_rise_time for cs in connection_strength]) if len(connections) > 0 else float('nan')
             ic_decay = filter(None, [cs.ic_fit_decay_tau for cs in connection_strength]) if len(connections) > 0 else float('nan')
             vc_decay = filter(None, [cs.vc_fit_decay_tau for cs in connection_strength]) if len(connections) > 0 else float('nan')
+            # cv = []
+            # if len(connections) > 0:
+            #     for connection in connections:
+            #         fpda = get_deconvolved_first_pulse_amps(connection)
+            #         if fpda is not None:
+            #             cv.append(np.std(fpda)/np.mean(fpda))
+            #         else:
+            #             cv.append(float('nan'))
+            # else:
+            #     cv = float('nan')
 
             self.results[(pre_class, post_class)] = {
                 'no_data': no_data,
                 'connected_pairs': connections,
                 'connection_strength': connection_strength,
                 'n_connections': len(connections),
+                # 'cv_array': cv,
                 'ic_fit_amp': np.mean(ic_amps),
                 'ic_fit_xoffset': np.mean(ic_xoffset),
                 'ic_fit_rise_time': np.mean(ic_rise),
                 'ic_fit_decay_tau': np.mean(ic_decay),
-                'ic_amp_cv': np.std(ic_amps)/np.mean(ic_amps),
+                # 'ic_amp_cv': np.nanmedian(cv),
                 'vc_fit_amp': np.mean(vc_amps),
                 'vc_fit_xoffset': np.mean(vc_xoffset),
                 'vc_fit_rise_time': np.mean(vc_rise),
@@ -249,9 +290,13 @@ class StrengthAnalyzer(object):
                 'Max': 20e-3,
                 'colormap': thermal_colormap,
             }}),
-            ('ic_amp_cv', {'mode': 'range', 'defaults': {
-                'colormap': thermal_colormap,
-            }}),
+            # ('ic_amp_cv', {'mode': 'range', 'defaults': {
+            #     'Min': -6,
+            #     'Max': 6,
+            #     'colormap': pg.ColorMap(
+            #     [0, 0.5, 1.0],
+            #     [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
+            # )}}),
             ],
             'show_confidence': [
             'None',
@@ -270,29 +315,59 @@ class StrengthAnalyzer(object):
 
         return self.fields, defaults
 
-    def print_element_info(self, pre_class, post_class, metric=None):
-        if metric is not None:
-            units = [field[1].get('units', '') for field in self.fields['color_by'] if field[0] == metric][0] 
-            connections = self.results[(pre_class, post_class)]['connected_pairs']
-            connection_strength = self.results[(pre_class, post_class)]['connection_strength']
-            result = self.results[(pre_class, post_class)][metric]
+    def print_element_info(self, pre_class, post_class, field_name=None):
+        if field_name is not None:
+            units = [field[1].get('units', '') for field in self.fields['color_by'] if field[0] == field_name][0] 
+            pairs = self.results[(pre_class, post_class)]['connected_pairs']
+            result = self.results[(pre_class, post_class)][field_name]
             print ("Connection type: %s -> %s" % (pre_class, post_class))    
-            print ("\t Grand Average %s = %s" % (metric, pg.siFormat(result, suffix=units)))
+            print ("\t Grand Average %s = %s" % (field_name, pg.siFormat(result, suffix=units)))
             print ("Connected Pairs:")
-            values = []
-            for connection in connections:
-                print ("\t %s" % (connection))
-                cs = [c for c in connection_strength if c.pair_id == connection.id][0]
-                value = getattr(cs, metric)
-                pulses = getattr(cs, metric.split('_')[0] + '_n_samples')
+            data = []
+            for p, pair in enumerate(pairs):
+                print ("\t %s" % (pair))
+                # if metric == 'ic_amp_cv':
+                #     value = self.results[(pre_class, post_class)]['cv_array'][c]
+                #     pulses = 0
+                # else:
+                cs = pair.connection_strength
+                value = getattr(cs, field_name)
+                pulses = getattr(cs, field_name.split('_')[0] + '_n_samples')
                 if value is not None:
-                    print ("\t\t Average %s: %s, %d pulses" % (metric, pg.siFormat(value, suffix=units), pulses))
-                    values.append(value)
+                    print ("\t\t Average %s: %s, %d pulses" % (field_name, pg.siFormat(value, suffix=units), pulses))
+                    data.append(pair)
                 else:
                     print("\t\t No QC Data")
 
-            return values
-        
+            return data
+
+    def plot_element_data(self, pre_class, post_class, field_name, data=None, color='g', trace_plt=None):
+        val = self.results[(pre_class, post_class)][field_name]
+        line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
+        scatter = None
+        baseline_window = int(db.default_sample_rate * 5e-3)
+        if data is not None:
+            values = []
+            traces = []
+            for pair in data:
+                cs = pair.connection_strength
+                values.append(getattr(cs, field_name))
+                trace = cs.ic_average_response if field_name.startswith('ic') else cs.vc_average_response
+                baseline = float_mode(trace[0:baseline_window])
+                trace = Trace(data=(trace-baseline), sample_rate=db.default_sample_rate)
+                trace_plt.plot(trace.time_values, trace.data)
+                traces.append(trace)
+            y_values = pg.pseudoScatter(np.asarray(values, dtype=float) + 1., spacing=0.3)
+            scatter = pg.ScatterPlotItem(symbol='o', brush=(color + (150,)), pen='w', size=12)
+            scatter.setData(values, y_values + 1.)
+            grand_trace = TraceList(traces).mean()
+            trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3})
+            units = 'V' if field_name.startswith('ic') else 'A'
+            trace_plt.setXRange(0, 20e-3)
+            trace_plt.setLabels(left=('', units), bottom=('Time from stimulus', 's'))
+        return line, scatter
+
+
     def summary(self, results, metric):
         print('')
 
@@ -385,24 +460,52 @@ class DynamicsAnalyzer(object):
 
         return self.fields, defaults
 
-    def print_element_info(self, pre_class, post_class, metric=None):
-        if metric is not None:
-            connections = self.results[(pre_class, post_class)]['connected_pairs']
-            result = self.results[(pre_class, post_class)][metric]
+    def print_element_info(self, pre_class, post_class, field_name=None):
+        if field_name is not None:
+            pairs = self.results[(pre_class, post_class)]['connected_pairs']
+            result = self.results[(pre_class, post_class)][field_name]
             print ("Connection type: %s -> %s" % (pre_class, post_class))    
-            print ("\t Grand Average %s = %s" % (metric, result))
+            print ("\t Grand Average %s = %s" % (field_name, result))
             print ("Connected Pairs:")
-            values = []
-            for connection in connections:
-                print ("\t %s" % (connection))
-                d = connection.dynamics
+            data = []
+            for pair in pairs:
+                print ("\t %s" % (pair))
+                d = pair.dynamics
                 if d is not None:
-                    value = getattr(d, metric)
-                    values.append(value)
-                    print ("\t\t Average %s: %s" % (metric, value))
+                    value = getattr(d, field_name)
+                    data.append(pair)
+                    print ("\t\t Average %s: %s" % (field_name, value))
                 else:
                     print("\t\t No QC Data")
-        return values
+        return data
+
+    def plot_element_data(self, pre_class, post_class, field_name, data=None, color='g', trace_plt=None):
+        val = self.results[(pre_class, post_class)][field_name]
+        line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
+        scatter = None
+        baseline_window = int(db.default_sample_rate * 5e-3)
+        if data is not None:
+            values = []
+            traces = []
+            for pair in data:
+                d = pair.dynamics
+                values.append(getattr(d, field_name))
+                if trace_plt is not None:
+                    trace = cs.ic_average_response if field_name.startswith('ic') else cs.vc_average_response
+                    baseline = float_mode(trace[0:baseline_window])
+                    trace = Trace(data=(trace-baseline), sample_rate=db.default_sample_rate)
+                    trace_plt.plot(trace.time_values, trace.data)
+                    traces.append(trace)
+            y_values = pg.pseudoScatter(np.asarray(values, dtype=float) + 1., spacing=0.3)
+            scatter = pg.ScatterPlotItem(symbol='o', brush=(color + (150,)), pen='w', size=12)
+            scatter.setData(values, y_values + 1.)
+            if trace_plt is not None:
+                grand_trace = TraceList(traces).mean()
+                trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3})
+                units = 'V' if field_name.startswith('ic') else 'A'
+                trace_plt.setXRange(0, 20e-3)
+                trace_plt.setLabels(left=('', units), bottom=('Time from stimulus', 's'))
+        return line, scatter
 
     def summary(self, results, metric):
         print('')
@@ -414,15 +517,15 @@ def results_scatter(results, field_name, field, plt):
     units = field.get('units', '')
     plt.setLabels(left='Count', bottom=(field_name, units))
 
-def add_element_to_scatter(results, pre_class, post_class, field_name, values=None, color='g'):
-    val = results[(pre_class, post_class)][field_name]
-    line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
-    scatter = None
-    if values is not None:
-        y_values = pg.pseudoScatter(np.asarray(values, dtype=float) + 1., spacing=0.3)
-        scatter = pg.ScatterPlotItem()
-        scatter.setData(values, y_values + 1., symbol='o', brush=(color + (150,)), pen='w', size=12)
-    return line, scatter
+# def add_element_to_scatter(results, pre_class, post_class, field_name, values=None, color='g'):
+#     val = results[(pre_class, post_class)][field_name]
+#     line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
+#     scatter = None
+#     if values is not None:
+#         y_values = pg.pseudoScatter(np.asarray(values, dtype=float) + 1., spacing=0.3)
+#         scatter = pg.ScatterPlotItem(symbol='o', brush=(color + (150,)), pen='w', size=12)
+#         scatter.setData(values, y_values + 1.)
+#     return line, scatter
 
 def connection_probability_ci(n_connected, n_probed):
     # make sure we are consistent about how we measure connectivity confidence intervals
