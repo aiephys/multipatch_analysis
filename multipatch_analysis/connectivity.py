@@ -182,11 +182,13 @@ class StrengthAnalyzer(object):
 
     def __init__(self):
         self.results = None
+        self.pair_items = {}
         self._signalHandler = ConnectivityAnalyzer.SignalHandler()
         self.sigOutputChanged = self._signalHandler.sigOutputChanged
 
     def invalidate_output(self):
         self.results = None
+        self.pair_items = {}
 
     def measure(self, pair_groups):
         self.results = OrderedDict()
@@ -196,15 +198,28 @@ class StrengthAnalyzer(object):
             connections = [p for p in class_pairs if p.synapse]
             if len(connections) == 0:
                 no_data = True
+            # All pulses
             connection_strength = [c.connection_strength for c in connections] if len(connections) > 0 else float('nan')
-            ic_amps = filter(None, [cs.ic_fit_amp for cs in connection_strength]) if len(connections) > 0 else float('nan')
-            vc_amps = filter(None, [cs.vc_fit_amp for cs in connection_strength]) if len(connections) > 0 else float('nan')
-            ic_xoffset = filter(None, [cs.ic_fit_xoffset for cs in connection_strength]) if len(connections) > 0 else float('nan')
-            vc_xoffset = filter(None, [cs.vc_fit_xoffset for cs in connection_strength]) if len(connections) > 0 else float('nan')
-            ic_rise = filter(None, [cs.ic_fit_rise_time for cs in connection_strength]) if len(connections) > 0 else float('nan')
-            vc_rise = filter(None, [cs.vc_fit_rise_time for cs in connection_strength]) if len(connections) > 0 else float('nan')
-            ic_decay = filter(None, [cs.ic_fit_decay_tau for cs in connection_strength]) if len(connections) > 0 else float('nan')
-            vc_decay = filter(None, [cs.vc_fit_decay_tau for cs in connection_strength]) if len(connections) > 0 else float('nan')
+            ic_amps_all = filter(None, [cs.ic_fit_amp for cs in connection_strength]) if len(connections) > 0 else float('nan')
+            vc_amps_all = filter(None, [cs.vc_fit_amp for cs in connection_strength]) if len(connections) > 0 else float('nan')
+            ic_xoffset_all = filter(None, [cs.ic_fit_xoffset for cs in connection_strength]) if len(connections) > 0 else float('nan')
+            vc_xoffset_all = filter(None, [cs.vc_fit_xoffset for cs in connection_strength]) if len(connections) > 0 else float('nan')
+            ic_rise_all = filter(None, [cs.ic_fit_rise_time for cs in connection_strength]) if len(connections) > 0 else float('nan')
+            vc_rise_all = filter(None, [cs.vc_fit_rise_time for cs in connection_strength]) if len(connections) > 0 else float('nan')
+            ic_decay_all = filter(None, [cs.ic_fit_decay_tau for cs in connection_strength]) if len(connections) > 0 else float('nan')
+            vc_decay_all = filter(None, [cs.vc_fit_decay_tau for cs in connection_strength]) if len(connections) > 0 else float('nan')
+            
+            #First pulses
+            first_pulse_fit = filter(None, [c.avg_first_pulse_fit for c in connections]) if len(connections) > 0 else float('nan')
+            ic_amps_first = filter(None, [fpf.ic_amp for fpf in first_pulse_fit]) if len(connections) > 0 else float('nan')
+            vc_amps_first = filter(None, [fpf.vc_amp for fpf in first_pulse_fit]) if len(connections) > 0 else float('nan')
+            ic_latency_first = filter(None, [fpf.ic_latency for fpf in first_pulse_fit]) if len(connections) > 0 else float('nan')
+            vc_latency_first = filter(None, [fpf.vc_latency for fpf in first_pulse_fit]) if len(connections) > 0 else float('nan')
+            ic_rise_first = filter(None, [fpf.ic_rise_time for fpf in first_pulse_fit]) if len(connections) > 0 else float('nan')
+            vc_rise_first = filter(None, [fpf.vc_rise_time for fpf in first_pulse_fit]) if len(connections) > 0 else float('nan')
+            ic_decay_first = filter(None, [fpf.ic_decay_tau for fpf in first_pulse_fit]) if len(connections) > 0 else float('nan')
+            vc_decay_first = filter(None, [fpf.vc_decay_tau for fpf in first_pulse_fit]) if len(connections) > 0 else float('nan')
+
             # cv = []
             # if len(connections) > 0:
             #     for connection in connections:
@@ -219,26 +234,44 @@ class StrengthAnalyzer(object):
             self.results[(pre_class, post_class)] = {
                 'no_data': no_data,
                 'connected_pairs': connections,
-                'connection_strength': connection_strength,
                 'n_connections': len(connections),
                 # 'cv_array': cv,
-                'ic_fit_amp': np.mean(ic_amps),
-                'ic_fit_xoffset': np.mean(ic_xoffset),
-                'ic_fit_rise_time': np.mean(ic_rise),
-                'ic_fit_decay_tau': np.mean(ic_decay),
+                ## all pulses
+                'ic_fit_amp_all': np.mean(ic_amps_all),
+                'ic_fit_xoffset_all': np.mean(ic_xoffset_all),
+                'ic_fit_rise_time_all': np.mean(ic_rise_all),
+                'ic_fit_decay_tau_all': np.mean(ic_decay_all),
                 # 'ic_amp_cv': np.nanmedian(cv),
-                'vc_fit_amp': np.mean(vc_amps),
-                'vc_fit_xoffset': np.mean(vc_xoffset),
-                'vc_fit_rise_time': np.mean(vc_rise),
-                'vc_fit_decay_tau': np.mean(vc_decay),
-                'ic_amp_stdev': [-np.std(ic_amps), np.std(ic_amps)],
-                'ic_xoffset_stdev': [-np.std(ic_xoffset), np.std(ic_xoffset)],
-                'ic_rise_time_stdev': [-np.std(ic_rise), np.std(ic_rise)],
-                'ic_decay_tau_stdev': [-np.std(ic_decay), np.std(ic_decay)],
-                'vc_amp_stdev': [-np.std(vc_amps), np.std(vc_amps)],
-                'vc_xoffset_stdev': [-np.std(vc_xoffset), np.std(vc_xoffset)],
-                'vc_rise_time_stdev': [-np.std(vc_rise), np.std(vc_rise)],
-                'vc_decay_tau_stdev': [-np.std(vc_decay), np.std(vc_decay)],
+                'vc_fit_amp_all': np.mean(vc_amps_all),
+                'vc_fit_xoffset_all': np.mean(vc_xoffset_all),
+                'vc_fit_rise_time_all': np.mean(vc_rise_all),
+                'vc_fit_decay_tau_all': np.mean(vc_decay_all),
+                'ic_amp_stdev_all': [-np.std(ic_amps_all), np.std(ic_amps_all)],
+                'ic_xoffset_stdev_all': [-np.std(ic_xoffset_all), np.std(ic_xoffset_all)],
+                'ic_rise_time_stdev_all': [-np.std(ic_rise_all), np.std(ic_rise_all)],
+                'ic_decay_tau_stdev_all': [-np.std(ic_decay_all), np.std(ic_decay_all)],
+                'vc_amp_stdev_all': [-np.std(vc_amps_all), np.std(vc_amps_all)],
+                'vc_xoffset_stdev_all': [-np.std(vc_xoffset_all), np.std(vc_xoffset_all)],
+                'vc_rise_time_stdev_all': [-np.std(vc_rise_all), np.std(vc_rise_all)],
+                'vc_decay_tau_stdev_all': [-np.std(vc_decay_all), np.std(vc_decay_all)],
+                ## First pulse
+                'ic_amp_first_pulse': np.nanmean(ic_amps_first),
+                'ic_latency_first_pulse': np.nanmean(ic_latency_first),
+                'ic_rise_time_first_pulse': np.nanmean(ic_rise_first),
+                'ic_decau_tau_first_pulse': np.nanmean(ic_decay_first),
+                'vc_amp_first_pulse': np.nanmean(vc_amps_first),
+                'vc_latency_first_pulse': np.nanmean(vc_latency_first),
+                'vc_rise_time_first_pulse': np.nanmean(vc_rise_first),
+                'vc_decau_tau_first_pulse': np.nanmean(vc_decay_first),
+                'ic_amp_stdev_first': [-np.std(ic_amps_first), np.std(ic_amps_first)],
+                'ic_latency_stdev_first': [-np.std(ic_latency_first), np.std(ic_latency_first)],
+                'ic_rise_time_stdev_first': [-np.std(ic_rise_first), np.std(ic_rise_first)],
+                'ic_decay_rau_stdev_first': [-np.std(ic_decay_first), np.std(ic_decay_first)],
+                'vc_amp_stdev_first': [-np.std(vc_amps_first), np.std(vc_amps_first)],
+                'vc_latency_stdev_first': [-np.std(vc_latency_first), np.std(vc_latency_first)],
+                'vc_rise_time_stdev_first': [-np.std(vc_rise_first), np.std(vc_rise_first)],
+                'vc_decay_tau_stdev_first': [-np.std(vc_decay_first), np.std(vc_decay_first)],
+
                 'None': None,
             }
 
@@ -248,48 +281,93 @@ class StrengthAnalyzer(object):
        
         self.fields = {'color_by': [
             ('n_connections', {}),
-            ('ic_fit_amp', {'mode': 'range', 'units': 'V', 'defaults': {
+            # all pulses
+            ('ic_fit_amp_all', {'mode': 'range', 'units': 'V', 'defaults': {
                 'Min': -1e-3, 
                 'Max': 1e-3, 
                 'colormap': pg.ColorMap(
                 [0, 0.5, 1.0],
                 [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
             )}}),
-            ('vc_fit_amp', {'mode': 'range', 'units': 'A', 'defaults': {
+            ('vc_fit_amp_all', {'mode': 'range', 'units': 'A', 'defaults': {
                 'Min': -20e-12, 
                 'Max': 20e-12, 
                 'colormap': pg.ColorMap(
                 [0, 0.5, 1.0],
                 [(255, 0, 0, 255), (255, 255, 255, 255), (0, 0, 255, 255)],
             )}}),
-            ('ic_fit_xoffset', {'mode': 'range', 'units': 's', 'defaults': {
+            ('ic_fit_xoffset_all', {'mode': 'range', 'units': 's', 'defaults': {
                 'Min': 0.5e-3, 
                 'Max': 4e-3,
                 'colormap': thermal_colormap,
             }}),
-            ('vc_fit_xoffset', {'mode': 'range', 'units': 's', 'defaults': {
+            ('vc_fit_xoffset_all', {'mode': 'range', 'units': 's', 'defaults': {
                 'Min': 0.5e-3, 
                 'Max': 4e-3,
                 'colormap': thermal_colormap,
             }}),
-            ('ic_fit_rise_time', {'mode': 'range', 'units': 's', 'defaults': {
+            ('ic_fit_rise_time_all', {'mode': 'range', 'units': 's', 'defaults': {
                 'Min': 1e-3, 
                 'Max': 10e-3,
                 'colormap': thermal_colormap,
             }}),
-            ('vc_fit_rise_time', {'mode': 'range', 'units': 's', 'defaults': {
+            ('vc_fit_rise_time_all', {'mode': 'range', 'units': 's', 'defaults': {
                 'Min': 0.5e-3, 
                 'Max': 5e-3,
                 'colormap': thermal_colormap,
             }}),
-            ('ic_fit_decay_tau', {'mode': 'range', 'units': 's', 'defaults': {
+            ('ic_fit_decay_tau_all', {'mode': 'range', 'units': 's', 'defaults': {
                 'Max': 500e-3,
                 'colormap': thermal_colormap,
             }}),
-            ('vc_fit_decay_tau', {'mode': 'range', 'units': 's', 'defaults': {
+            ('vc_fit_decay_tau_all', {'mode': 'range', 'units': 's', 'defaults': {
                 'Max': 20e-3,
                 'colormap': thermal_colormap,
             }}),
+            ## first pulse
+            ('ic_amp_first_pulse', {'mode': 'range', 'units': 'V', 'defaults': {
+                'Min': -1e-3, 
+                'Max': 1e-3, 
+                'colormap': pg.ColorMap(
+                [0, 0.5, 1.0],
+                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
+            )}}),
+            ('vc_amp_first_pulse', {'mode': 'range', 'units': 'A', 'defaults': {
+                'Min': -20e-12, 
+                'Max': 20e-12, 
+                'colormap': pg.ColorMap(
+                [0, 0.5, 1.0],
+                [(255, 0, 0, 255), (255, 255, 255, 255), (0, 0, 255, 255)],
+            )}}),
+            ('ic_latency_first_pulse', {'mode': 'range', 'units': 's', 'defaults': {
+                'Min': 0.5e-3, 
+                'Max': 4e-3,
+                'colormap': thermal_colormap,
+            }}),
+            ('vc_latency_first_pulse', {'mode': 'range', 'units': 's', 'defaults': {
+                'Min': 0.5e-3, 
+                'Max': 4e-3,
+                'colormap': thermal_colormap,
+            }}),
+            ('ic_rise_time_first_pulse', {'mode': 'range', 'units': 's', 'defaults': {
+                'Min': 1e-3, 
+                'Max': 10e-3,
+                'colormap': thermal_colormap,
+            }}),
+            ('vc_rise_time_first_pulse', {'mode': 'range', 'units': 's', 'defaults': {
+                'Min': 0.5e-3, 
+                'Max': 5e-3,
+                'colormap': thermal_colormap,
+            }}),
+            ('ic_decay_tau_first_pulse', {'mode': 'range', 'units': 's', 'defaults': {
+                'Max': 500e-3,
+                'colormap': thermal_colormap,
+            }}),
+            ('vc_decay_tau_first_pulse', {'mode': 'range', 'units': 's', 'defaults': {
+                'Max': 20e-3,
+                'colormap': thermal_colormap,
+            }}),
+
             # ('ic_amp_cv', {'mode': 'range', 'defaults': {
             #     'Min': -6,
             #     'Max': 6,
@@ -300,16 +378,28 @@ class StrengthAnalyzer(object):
             ],
             'show_confidence': [
             'None',
-            'ic_amp_stdev',
-            'vc_amp_stdev',
-            'ic_latency_stdev',
-            'ic_rise_time_stdev'
+            'ic_amp_stdev_all',
+            'vc_amp_stdev_all',
+            'ic_xoffset_stdev_all',
+            'vc_xoffset_stdev_all',
+            'ic_rise_time_stdev_all',
+            'vc_rise_time_stdev_all',
+            'ic_decay_tau_stdev_all',
+            'vc_decay_tau_stdev_all',
+            'ic_amp_stdev_first',
+            'vc_amp_stdev_first',
+            'ic_latency_stdev_first',
+            'vc_latency_stdev_first',
+            'ic_rise_time_stdev_first',
+            'vc_rise_time_stdev_first',
+            'ic_decay_tau_stdev_first',
+            'vc_decay_tau_stdev_first',
             ],
         }
 
-        defaults = {'color_by': 'ic_fit_amp', 
+        defaults = {'color_by': 'ic_fit_amp_all', 
             'text': '{n_connections}', 
-            'show_confidence': 'ic_amp_stdev',
+            'show_confidence': 'ic_amp_stdev_all',
             'log': False,
         }
 
@@ -317,6 +407,7 @@ class StrengthAnalyzer(object):
 
     def print_element_info(self, pre_class, post_class, field_name=None):
         if field_name is not None:
+            fn = field_name.split('_all')[0] if field_name.endswith('all') else field_name.split('_first_pulse')[0]
             units = [field[1].get('units', '') for field in self.fields['color_by'] if field[0] == field_name][0] 
             pairs = self.results[(pre_class, post_class)]['connected_pairs']
             result = self.results[(pre_class, post_class)][field_name]
@@ -330,9 +421,18 @@ class StrengthAnalyzer(object):
                 #     value = self.results[(pre_class, post_class)]['cv_array'][c]
                 #     pulses = 0
                 # else:
-                cs = pair.connection_strength
-                value = getattr(cs, field_name)
-                pulses = getattr(cs, field_name.split('_')[0] + '_n_samples')
+                if field_name.endswith('all'):
+                    cs = pair.connection_strength
+                    value = getattr(cs, fn)
+                    pulses = getattr(cs, fn.split('_')[0] + '_n_samples')
+                elif field_name.endswith('first_pulse'):
+                    fpf = pair.avg_first_pulse_fit
+                    if fpf is not None:
+                        value = getattr(fpf, fn)
+                        pulses = len(fpf.ic_pulse_ids) if field_name.startswith('ic') else len(fpf.vc_pulse_ids)
+                    else:
+                        value = None
+                        pulses = 0
                 if value is not None:
                     print ("\t\t Average %s: %s, %d pulses" % (field_name, pg.siFormat(value, suffix=units), pulses))
                     data.append(pair)
@@ -342,6 +442,7 @@ class StrengthAnalyzer(object):
             return data
 
     def plot_element_data(self, pre_class, post_class, field_name, data=None, color='g', trace_plt=None):
+        fn = field_name.split('_all')[0] if field_name.endswith('all') else field_name.split('_first_pulse')[0]
         val = self.results[(pre_class, post_class)][field_name]
         line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
         scatter = None
@@ -349,17 +450,32 @@ class StrengthAnalyzer(object):
         if data is not None:
             values = []
             traces = []
+            point_data = []
             for pair in data:
-                cs = pair.connection_strength
-                values.append(getattr(cs, field_name))
-                trace = cs.ic_average_response if field_name.startswith('ic') else cs.vc_average_response
+                if field_name.endswith('all'):
+                    cs = pair.connection_strength
+                    values.append(getattr(cs, fn))
+                    trace = cs.ic_average_response if field_name.startswith('ic') else cs.vc_average_response
+                elif field_name.endswith('first_pulse'):
+                    fpf = pair.avg_first_pulse_fit
+                    values.append(getattr(fpf, fn))
+                    trace = fpf.ic_avg_psp_data if field_name.startswith('ic') else fpf.vc_avg_psp_data
                 baseline = float_mode(trace[0:baseline_window])
                 trace = Trace(data=(trace-baseline), sample_rate=db.default_sample_rate)
-                trace_plt.plot(trace.time_values, trace.data)
+                trace_item = trace_plt.plot(trace.time_values, trace.data)
+                point_data.append(pair)
+                trace_item.pair = pair
+                trace_item.curve.setClickable(True)
+                trace_item.sigClicked.connect(self.trace_plot_clicked)
                 traces.append(trace)
+                self.pair_items[pair.id] = [trace_item]
             y_values = pg.pseudoScatter(np.asarray(values, dtype=float) + 1., spacing=0.3)
             scatter = pg.ScatterPlotItem(symbol='o', brush=(color + (150,)), pen='w', size=12)
-            scatter.setData(values, y_values + 1.)
+            scatter.setData(values, y_values + 1., data=point_data)
+            for point in scatter.points():
+                pair_id = point.data().id
+                self.pair_items[pair_id].append(point)
+            scatter.sigClicked.connect(self.scatter_plot_clicked)
             grand_trace = TraceList(traces).mean()
             trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3})
             units = 'V' if field_name.startswith('ic') else 'A'
@@ -367,6 +483,20 @@ class StrengthAnalyzer(object):
             trace_plt.setLabels(left=('', units), bottom=('Time from stimulus', 's'))
         return line, scatter
 
+    def scatter_plot_clicked(self, scatterplt, points):
+        pair = points[0].data()
+        self.select_pair(pair)
+
+    def trace_plot_clicked(self, trace):
+        pair = trace.pair
+        self.select_pair(pair)
+
+    def select_pair(self, pair):
+        trace, point = self.pair_items[pair.id]
+        point.setBrush(pg.mkBrush('y'))
+        point.setSize(15)
+        trace.setPen('y', width=2)
+        print('Clicked:' '%s' % pair)
 
     def summary(self, results, metric):
         print('')
@@ -516,16 +646,6 @@ def results_scatter(results, field_name, field, plt):
     plt.plot(x, y, stepMode=True, fillLevel=0, brush=(255,255,255,150))
     units = field.get('units', '')
     plt.setLabels(left='Count', bottom=(field_name, units))
-
-# def add_element_to_scatter(results, pre_class, post_class, field_name, values=None, color='g'):
-#     val = results[(pre_class, post_class)][field_name]
-#     line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
-#     scatter = None
-#     if values is not None:
-#         y_values = pg.pseudoScatter(np.asarray(values, dtype=float) + 1., spacing=0.3)
-#         scatter = pg.ScatterPlotItem(symbol='o', brush=(color + (150,)), pen='w', size=12)
-#         scatter.setData(values, y_values + 1.)
-#     return line, scatter
 
 def connection_probability_ci(n_connected, n_probed):
     # make sure we are consistent about how we measure connectivity confidence intervals
