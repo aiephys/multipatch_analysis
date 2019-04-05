@@ -38,7 +38,7 @@ def specimen_info(specimen_name=None, specimen_id=None):
     """
     
     # Query all interesting information about this specimen from LIMS
-    query = """
+    q = """
         select 
             organisms.name as organism, 
             ages.days as age,
@@ -66,14 +66,14 @@ def specimen_info(specimen_name=None, specimen_id=None):
     """
     if specimen_name is not None:
         sid = specimen_name.strip()
-        query += "where specimens.name='%s';" % sid
+        q += "where specimens.name='%s';" % sid
     elif specimen_id is not None:
         sid = specimen_id
-        query += "where specimens.id='%d';" % sid
+        q += "where specimens.id='%d';" % sid
     else:
         raise ValueError("Must specify specimen name or ID")
         
-    r = query(query)
+    r = query(q)
     if len(r) != 1:
         raise Exception("LIMS lookup for specimen '%s' returned %d results (expected 1)" % (sid, len(r)))
     rec = r[0]
