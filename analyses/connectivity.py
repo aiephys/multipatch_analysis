@@ -10,7 +10,7 @@ from collections import OrderedDict
 import numpy as np
 import pyqtgraph as pg
 import multipatch_analysis.database as db
-from multipatch_analysis.connectivity import query_pairs, ConnectivityAnalyzer, StrengthAnalyzer, DynamicsAnalyzer, results_scatter, add_element_to_scatter
+from multipatch_analysis.connectivity import query_pairs, ConnectivityAnalyzer, StrengthAnalyzer, DynamicsAnalyzer, results_scatter #, add_element_to_scatter
 from multipatch_analysis import constants
 from multipatch_analysis.cell_class import CellClass, classify_cells, classify_pairs
 from multipatch_analysis.ui.graphics import MatrixItem
@@ -41,7 +41,7 @@ class MainWindow(pg.QtGui.QWidget):
         self.h_splitter.addWidget(self.plot_splitter)
         self.scatter_plot = ScatterPlot()
         self.trace_plot = TracePlot()
-        self.trace_plot.setVisible(False)
+        # self.trace_plot.setVisible(False)
         self.plot_splitter.addWidget(self.scatter_plot)
         self.plot_splitter.addWidget(self.trace_plot)
         self.h_splitter.setSizes([150, 300, 200])
@@ -254,14 +254,16 @@ class MatrixAnalyzer(object):
     def __init__(self, session, default_analyzer=None):
         self.win = MainWindow()
         self.win.show()
-        self.win.setGeometry(380, 130,1300, 1000)
+        self.win.setGeometry(280, 130,1500, 900)
         self.win.setWindowTitle('Matrix Analyzer')
         self.scatter_plot = None
         self.line = None
         self.scatter = None
+        self.trace_plot = None
+        self.trace_plot_list = []
         self.element = None
         self.selected = 0
-        self.colors = [(0, 255, 0), (255, 0, 0), (240, 240, 0), (0, 0, 255), (170, 0, 127), (0, 230, 230)]
+        self.colors = [(0, 255, 0), (255, 0, 0), (0, 0, 255), (254, 169, 0), (170, 0, 127), (0, 230, 230)]
 
         self.experiment_filter = ExperimentFilter()
         self.cell_class_filter = CellClassFilter(cell_class_groups)
@@ -324,6 +326,7 @@ class MatrixAnalyzer(object):
         # update list of display fields
         fields, defaults = self.analysis.output_fields()
         self.display_filter.set_display_fields(fields, defaults)
+        
 
         print ('Analysis changed!')
 
@@ -331,34 +334,47 @@ class MatrixAnalyzer(object):
         with pg.BusyCursor():
             self.update_matrix_results()
             self.update_matrix_display()
+            self.display_element_reset()
 
     def display_matrix_element_data(self, matrix_widget, event, row, col):
         pre_class, post_class = self.matrix_map[row, col]
-        values = self.analysis.print_element_info(pre_class, post_class, self.field_name)
+        data = self.analysis.print_element_info(pre_class, post_class, self.field_name)
         if self.scatter_plot is not None:
             if int(event.modifiers() & pg.QtCore.Qt.ControlModifier)>0:
                 self.selected += 1
                 if self.selected >= len(self.colors):
                     self.selected = 0
-                self.display_element_output(row, col, values)
+                self.display_element_output(row, col, data, trace_plot_list=self.trace_plot_list)
             else:
                 self.display_element_reset() 
-                self.display_element_output(row, col, values)
+                self.display_element_output(row, col, data)
 
-    def display_element_output(self, row, col, values):
+    def display_element_output(self, row, col, data, trace_plot_list=None):
         color = self.colors[self.selected]
         self.element = self.win.matrix_widget.matrix.cells[row][col]
         self.element.setPen(pg.mkPen({'color': color, 'width': 5}))
         pre_class, post_class = self.matrix_map[row, col]
-        self.line, self.scatter = add_element_to_scatter(self.results, pre_class, post_class, self.field_name, values=values, color=color)
+        if self.params['Analyzers', 'Analysis'] == 'Strength & Kinetics':
+            self.trace_plot = self.win.trace_plot.addPlot()
+            self.trace_plot_list.append(self.trace_plot)
+        self.line, self.scatter = self.analysis.plot_element_data(pre_class, post_class, self.field_name, data=data, color=color, trace_plt=self.trace_plot)
+        if len(self.trace_plot_list) > 1:
+            first_plot = self.trace_plot_list[0]
+            for plot in self.trace_plot_list[1:]:
+                plot.setYLink(first_plot)
         self.scatter_plot.addItem(self.line)
         if self.scatter is not None:
             self.scatter_plot.addItem(self.scatter)
 
     def display_element_reset(self):
         self.selected = 0
-        [self.scatter_plot.removeItem(item) for item in self.scatter_plot.items[1:]]
+        if self.scatter_plot is not None:
+            [self.scatter_plot.removeItem(item) for item in self.scatter_plot.items[1:]]
+        if self.trace_plot is not None:
+           self.win.trace_plot.clear()
+           self.trace_plot = None
         self.update_matrix_display()
+        self.trace_plot_list = []
 
     def update_matrix_results(self):
         # Select pairs (todo: age, acsf, internal, temp, etc.)
