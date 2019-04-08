@@ -10,7 +10,7 @@ import numpy as np
 import pyqtgraph as pg
 from statsmodels.stats.proportion import proportion_confint
 import multipatch_analysis.database as db
-from first_pulse_deconvolved_amps import get_deconvolved_first_pulse_amps
+# from first_pulse_deconvolved_amps import get_deconvolved_first_pulse_amps
 from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.baseline import float_mode
 
