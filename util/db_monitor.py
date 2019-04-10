@@ -106,4 +106,4 @@ if __name__ == '__main__':
         sp.reset()
         check()
         sp.clear_to_bottom()        
-        time.sleep(5)
+        time.sleep(1.0)

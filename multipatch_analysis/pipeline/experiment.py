@@ -156,7 +156,7 @@ class ExperimentPipelineModule(DatabasePipelineModule):
         n_errors = 0
         ready = OrderedDict()
         for i,yml_path in enumerate(ymls):
-            print("  checking experiment %d/%d\r" % (i, len(ymls)), end='')
+            print("  checking experiment %d/%d          \r" % (i, len(ymls)), end='')
             sys.stdout.flush()
             site_path = os.path.dirname(yml_path)
             try:
