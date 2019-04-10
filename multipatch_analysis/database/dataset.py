@@ -75,7 +75,7 @@ TestPulse = make_table(
 )
 
 class StimPulseBase(object):
-    def __init__(self):
+    def _init_on_load(self):
         self._rec_tseries = None
         self._stim_tseries = None
     
@@ -132,7 +132,7 @@ StimSpike = make_table(
 
 
 class PulseResponseBase(object):
-    def __init__(self):
+    def _init_on_load(self):
         self._post_tseries = None
     
     @property

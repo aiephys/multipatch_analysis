@@ -200,10 +200,11 @@ def make_table(name, columns, base=None, **table_args):
     else:
         # need to jump through a hoop to allow __init__ on table classes;
         # see: https://docs.sqlalchemy.org/en/latest/orm/constructors.html
-        @reconstructor
-        def _init_on_load(self, *args, **kwds):
-            base.__init__(self)
-        props['_init_on_load'] = _init_on_load
+        if hasattr(base, '_init_on_load'):
+            @reconstructor
+            def _init_on_load(self, *args, **kwds):
+                base._init_on_load(self)
+            props['_init_on_load'] = _init_on_load
         return type(name, (base,ORMBase), props)
 
 
