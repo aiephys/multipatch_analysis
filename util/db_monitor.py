@@ -2,8 +2,20 @@
 """
 from __future__ import print_function, division
 import os, sys, subprocess, re
+from datetime import tzinfo, timedelta, datetime
 from multipatch_analysis import config
 from sqlalchemy import create_engine
+
+# https://stackoverflow.com/questions/796008/cant-subtract-offset-naive-and-offset-aware-datetimes
+class UTC(tzinfo):
+  def utcoffset(self, dt):
+    return timedelta(0)
+  def tzname(self, dt):
+    return "UTC"
+  def dst(self, dt):
+    return timedelta(0)
+
+utc = UTC()
 
 
 engine = create_engine(config.synphys_db_host_rw + '/postgres?application_name=db_monitor')
@@ -12,7 +24,7 @@ conn = engine.connect()
 
 def list_db_connections():
     tr = conn.begin()
-    query = conn.execute("select client_addr, client_port, datname, query, state, usename, application_name, pid from pg_stat_activity;")
+    query = conn.execute("select client_addr, client_port, datname, query, state, usename, application_name, pid, state_change from pg_stat_activity;")
     result = query.fetchall()
     tr.rollback()
     return result
@@ -61,10 +73,17 @@ def check():
                         app = c
                         break
                         
-                state = '[%s]' % con.state
-                query = con.query.replace('\n', ' ')[:120]
+                last_change = con.state_change
+                if last_change is None:
+                    state = '[%s]' % con.state
+                else:
+                    now = datetime.now(utc)
+                    age = (now - last_change).total_seconds() / 3600.
+                    state = '[%s %0.1fhr]' % (con.state, age)
                 
-                print("          {:15s} {:15s} {:45s} {:6d} {:10s} {:s}   ".format(con.usename, con.datname, app[:45], con.pid, state, query))
+                query = con.query.replace('\n', ' ')[:110]
+                
+                print("          {:15s} {:15s} {:45s} {:6d} {:16s} {:s}   ".format(con.usename, con.datname, app[:45], con.pid, state, query))
     
 
 class ScreenPrint(object):
