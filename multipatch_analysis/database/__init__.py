@@ -10,6 +10,7 @@ from .pulse_response_strength import *
 from .dynamics import *
 from .connection_strength import *
 from .first_pulse_fit import *
+from .gap_junction import *
 
 
 @default_session
