@@ -123,7 +123,7 @@ class ResponseStrengthAnalyzer(object):
         self.field_combo.currentIndexChanged.connect(self.update_scatter_plots)
 
         self.deconv_check = QtGui.QCheckBox('deconvolve')
-        self.deconv_check.setChecked(True)
+        self.deconv_check.setChecked(False)
         self.ctrl_layout.addWidget(self.deconv_check, 1, 0)
         self.deconv_check.toggled.connect(self.replot_all)
 
@@ -133,12 +133,12 @@ class ResponseStrengthAnalyzer(object):
         self.bsub_check.toggled.connect(self.replot_all)
 
         self.lpf_check = QtGui.QCheckBox('lpf')
-        self.lpf_check.setChecked(True)
+        self.lpf_check.setChecked(False)
         self.ctrl_layout.addWidget(self.lpf_check, 1, 2)
         self.lpf_check.toggled.connect(self.replot_all)
 
         self.ar_check = QtGui.QCheckBox('crosstalk')
-        self.ar_check.setChecked(True)
+        self.ar_check.setChecked(False)
         self.ctrl_layout.addWidget(self.ar_check, 1, 3)
         self.ar_check.toggled.connect(self.replot_all)
 
@@ -589,6 +589,8 @@ class PairClassifier(object):
 
         # Random seed used when shuffling training/test inputs
         self.seed = seed
+        
+        self.scaler = None
 
     def fit(self, recs):
         ids = recs['id']
@@ -692,9 +694,12 @@ class PairClassifier(object):
         result = np.empty(len(features), dtype=[('prediction', float), ('confidence', float)])
         result[:] = np.nan
 
+        if self.scaler is None:
+            return result
+
         # mask out inf/nan records
         mask = np.all(np.isfinite(features), axis=1)
-
+           
         # scale masked records
         norm_features = self.scaler.transform(features[mask])
 
@@ -997,6 +1002,8 @@ if __name__ == '__main__':
     pair_view = PairView()
 
     if args.pairview:
+        if sys.flags.interactive == 0:
+            pg.mkQApp().exec_()
         sys.exit(0)
     
     # Load records on all pairs and train a classifier to predict connections
