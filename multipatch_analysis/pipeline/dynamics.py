@@ -12,13 +12,14 @@ from ..util import timestamp_to_datetime
 from .. import database as db
 from .pipeline_module import DatabasePipelineModule
 from .pulse_response import PulseResponsePipelineModule
+from .connection_strength import ConnectionStrengthPipelineModule
 
 
 class DynamicsPipelineModule(DatabasePipelineModule):
     """Generates dynamics analysis for each pair
     """
     name = 'dynamics'
-    dependencies = [PulseResponsePipelineModule]
+    dependencies = [PulseResponsePipelineModule, ConnectionStrengthPipelineModule]
     table_group = db.dynamics_tables
     
     @classmethod
