@@ -14,6 +14,7 @@ synphys_db_sqlite = "synphys.sqlite"
 synphys_db = "synphys"
 synphys_db_readonly_user = "readonly"
 synphys_data = None
+lims_address = None
 cache_path = "cache"
 grow_cache = False
 rig_name = None

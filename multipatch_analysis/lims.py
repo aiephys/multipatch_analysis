@@ -1,12 +1,26 @@
 from __future__ import print_function
 import os, re, json
+from . import config
 
 
+_lims_engine = None
+def lims_engine():
+    global _lims_engine
+    if _lims_engine is None:
+        from sqlalchemy import create_engine
+        from sqlalchemy.pool import NullPool
+        _lims_engine = create_engine(config.lims_address, poolclass=NullPool)
+    return _lims_engine
 
-def query(*args):
-    # burying this dependency
-    from allensdk_internal.core import lims_utilities as lims
-    return lims.query(*args)
+
+def query(query_str):
+    conn = lims_engine().connect()
+    try:
+        result = conn.execute(query_str).fetchall()
+    finally:
+        conn.close()
+    return result
+
 
 
 def specimen_info(specimen_name=None, specimen_id=None):
@@ -76,7 +90,7 @@ def specimen_info(specimen_name=None, specimen_id=None):
     r = query(q)
     if len(r) != 1:
         raise Exception("LIMS lookup for specimen '%s' returned %d results (expected 1)" % (sid, len(r)))
-    rec = r[0]
+    rec = dict(r[0])
     
     # convert thickness to unscaled
     rec['thickness'] = rec['thickness'] * 1e-6
