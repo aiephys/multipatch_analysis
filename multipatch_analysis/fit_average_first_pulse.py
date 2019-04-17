@@ -258,7 +258,7 @@ def fit_trace(waveform, excitation, clamp_mode='ic', weight=None, latency=None, 
     return fit
 
 
-def fit_first_pulses(pair):
+def fit_average_first_pulses(pair):
     # get response latency from average of all pulse responses
     message = None #initialize error message 
     xoffset = pair.connection_strength.ic_fit_xoffset
@@ -327,9 +327,9 @@ def fit_first_pulses(pair):
         avg_fit_waveform_v = np.array([0])
         dt_v = None
         nrmse_v = None
-    #------------ done with fitting section ------------------------------
+    #------------ done with fitting section -----------
 
-    # dictionary for ease of translation into the output table
+    # dictionary for ease of translation into the outpu table
     out_dict = {
         'ic_amp': amp_i,
         'ic_latency': latency_i,
@@ -356,6 +356,111 @@ def fit_first_pulses(pair):
         'vc_measured_baseline': measured_baseline_v,
         'vc_measured_amp': measured_relative_amp_v,
         'vc_weight': weight_v,
+        'error': message
+    } 
+    
+    return out_dict
+
+def fit_single_first_pulse(pr, pair):
+    #TODO:!!!!!NEED TO MAKE SURE THE PULSE DATA ARE ALIGNED TO DVDT!!!!
+    #TODO: HAS THE APPROPRIATE QC HAPPENED?
+    message = None #initialize error message for downstream processing 
+    # excitatory or inhibitory?
+    excitation = pair.connection_strength.synapse_type
+
+    # get response latency from average first pulse table
+    if pulse.clamp_mode == 'vc':
+        weight_i = np.array([0])
+        latency_i = None
+        amp_i = None
+        rise_time_i = None
+        decay_tau_i = None
+        avg_data_waveform_i = np.array([0])
+        avg_fit_waveform_i = np.array([0])
+        dt_i = None
+        nrmse_i = None
+        if pair.avg_first_pulse_fit.vc_latency:
+            data_trace = Trace(data=pr.data, 
+                t0= pr.response_start_time - pr.spike_time + time_before_spike, 
+                sample_rate=db.default_sample_rate).time_slice(start=0, stop=None)
+            xoffset = pair.avg_first_pulse_fit.vc_latency
+            # weight and fit the trace    
+            weight_v = np.ones(len(data_trace.data))*10.  #set everything to ten initially
+            weight_v[int((time_before_spike+.0001+xoffset)/data_trace.dt):int((time_before_spike+.0001+xoffset+4e-3)/data_trace.dt)] = 30.  #area around steep PSP rise 
+            fit_v = fit_trace(data_trace, excitation=excitation, clamp_mode = 'vc', weight=weight_v, latency=xoffset, latency_jitter=.5e-3)
+            latency_v = fit_v.best_values['xoffset'] - time_before_spike
+            amp_v = fit_v.best_values['amp']
+            rise_time_v = fit_v.best_values['rise_time']
+            decay_tau_v = fit_v.best_values['decay_tau']
+            data_waveform_v = data_trace.data
+            fit_waveform_v = fit_v.best_fit
+            dt_v = data_trace.dt
+            nrmse_v = fit_v.nrmse()
+
+        else:
+            return {'error': 'no vc_latency available from avg_first_pulse_fit table'} #no row will be made in the table because the error message is not none               
+
+    elif pulse.clamp_mode == 'ic':
+        # set voltage to none since this is current clamp
+        weight_v = np.array([0])
+        latency_v = None
+        amp_v = None
+        rise_time_v = None
+        decay_tau_v = None
+        avg_data_waveform_v = np.array([0])
+        avg_fit_waveform_v = np.array([0])
+        dt_v = None
+        nrmse_v = None
+        if pair.avg_first_pulse_fit.ic_latency:
+            data_trace = Trace(data=pr.data, 
+                t0= pr.response_start_time - pr.spike_time + time_before_spike, 
+                sample_rate=db.default_sample_rate).time_slice(start=0, stop=None)  #TODO: annoys me that this is repetitive in vc code above.
+            xoffset = pair.avg_first_pulse_fit.ic_latency
+            # weight and fit the trace
+            weight_i = np.ones(len(data_trace.data)) * 10.  #set everything to ten initially
+            weight_i[int((time_before_spike-3e-3) / data_trace.dt):int(time_before_spike / data_trace.dt)] = 0.   #area around stim artifact note that since this is spike aligned there will be some blur in where the cross talk is
+            weight_i[int((time_before_spike+.0001+xoffset) / data_trace.dt):int((time_before_spike+.0001+xoffset+4e-3) / data_trace.dt)] = 30.  #area around steep PSP rise 
+            fit_i = fit_trace(data_trace, excitation=excitation, weight=weight_i, latency=xoffset, latency_jitter=.5e-3)
+            latency_i = fit_i.best_values['xoffset'] - time_before_spike
+            amp_i = fit_i.best_values['amp']
+            rise_time_i = fit_i.best_values['rise_time']
+            decay_tau_i = fit_i.best_values['decay_tau']
+            data_waveform_i = data_trace.data
+            fit_waveform_i = fit_i.best_fit
+            dt_i = data_trace.dt
+            nrmse_i = fit_i.nrmse()
+
+        else:
+            return {'error': 'no ic_latency available from avg_first_pulse_fit table'} #no row will be made in the table because the error message is not none
+
+    else:
+        raise Exception('There is no clamp mode associated with this pulse')
+
+    #------------ done with fitting section ------------------------------
+
+    # dictionary for ease of translation into the output table
+    out_dict = {
+        'ic_amp': amp_i,
+        'ic_latency': latency_i,
+        'ic_rise_time': rise_time_i,
+        'ic_decay_tau': decay_tau_i,
+        'ic_psp_data': avg_data_waveform_i,
+        'ic_psp_fit': avg_fit_waveform_i,
+        'ic_dt': dt_i,
+        'ic_nrmse': nrmse_i,
+        'ic_measured_baseline': measured_baseline_i,
+        'ic_measured_amp': measured_relative_amp_i,
+
+        'vc_amp': amp_v,
+        'vc_latency': latency_v,
+        'vc_rise_time': rise_time_v,
+        'vc_decay_tau': decay_tau_v,
+        'vc_psp_data':data_waveform_v,
+        'vc_psp_fit': fit_waveform_v,
+        'vc_dt': dt_v,
+        'vc_nrmse': nrmse_v,
+        'vc_measured_baseline': measured_baseline_v,
+        'vc_measured_amp': measured_relative_amp_v,
         'error': message
     } 
     

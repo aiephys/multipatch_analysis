@@ -1,6 +1,7 @@
 from sqlalchemy.orm import relationship
 from .database import make_table, TableGroup
 from .experiment import Pair
+from .dataset import PulseResponse
 
 
 __all__ = ['first_pulse_fit_tables', 'AvgFirstPulseFit', 'SingleFirstPulseFit']
@@ -62,19 +63,21 @@ SingleFirstPulseFit = make_table(
 
         # current clamp
         ('ic_amp', 'float', 'fit amplitude of current clamp first pulses'),
+        ('ic_latency', 'float', 'fit time elapsed since the time of presynaptic spike (max dv/dt) of current clamp data'),
         ('ic_rise_time', 'float', 'fit rise time of psp of current clamp data'),
         ('ic_decay_tau', 'float', 'fit decay of psp of current clamp data'),
-        ('ic_avg_psp_data', 'array', 'array of the data voltage waveform used in fitting; starts 10 ms before pre-synaptic spike'),
-        ('ic_avg_psp_fit', 'array', 'fit array of the best fit voltage waveform starting 10 ms before pre-synaptic spike'),
+        ('ic_psp_data', 'array', 'array of the data voltage waveform used in fitting; starts 10 ms before pre-synaptic spike'),
+        ('ic_psp_fit', 'array', 'fit array of the best fit voltage waveform starting 10 ms before pre-synaptic spike'),
         ('ic_dt', 'float', 'time step of *avg_psp* array from current clamp data'),
         ('ic_nrmse', 'float', 'error of fit of current clamp fit'),
 
         # voltage clamp
         ('vc_amp', 'float', 'fit amplitude of voltage clamp first pulses'),
+        ('vc_latency', 'float', 'fit time elapsed since the time of presynaptic spike (max dv/dt) of voltage clamp data'),
         ('vc_rise_time', 'float', 'fit rise time of psp measured in voltage clamp'),
         ('vc_decay_tau', 'float', 'fit decay of psp measured in voltage clamp'),
-        ('vc_avg_psp_data', 'array', 'array of the data current waveform used in fitting; starts 10 ms before pre-synaptic spike'),            
-        ('vc_avg_psp_fit', 'array', 'fit array of the best fit current waveform starting 10 ms before pre-synaptic spike'),
+        ('vc_psp_data', 'array', 'array of the data current waveform used in fitting; starts 10 ms before pre-synaptic spike'),            
+        ('vc_psp_fit', 'array', 'fit array of the best fit current waveform starting 10 ms before pre-synaptic spike'),
         ('vc_dt', 'float', 'time step of *avg_psp* array from voltage clamp data'),
         ('vc_nrmse', 'float', 'error of fit of voltage clamp fit'),
     ]
