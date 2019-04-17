@@ -34,7 +34,10 @@ class DynamicsPipelineModule(DatabasePipelineModule):
             pulse_amps = {}
             for rec in recs:
                 q = session.query(db.PulseResponseStrength, db.PulseResponse, db.StimPulse.pulse_number, db.MultiPatchProbe.induction_frequency)
-                q = q.join(db.PulseResponse).join(db.StimPulse).join(db.PatchClampRecording, db.PatchClampRecording.recording_id==db.PulseResponse.recording_id).join(db.MultiPatchProbe)
+                q = q.join(db.PulseResponse, db.PulseResponseStrength.pulse_response)
+                q = q.join(db.StimPulse, db.PulseResponse.stim_pulse)
+                q = q.join(db.PatchClampRecording, db.PatchClampRecording.recording_id==db.PulseResponse.recording_id)
+                q = q.join(db.MultiPatchProbe)
                 q = q.filter(db.PulseResponse.pair_id==pair.id).filter(db.PatchClampRecording.clamp_mode=='ic').filter(db.PulseResponse.recording_id==rec.id)
                 results = q.all()
                 if len(results) == 0:
