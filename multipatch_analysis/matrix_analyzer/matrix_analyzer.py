@@ -12,56 +12,31 @@ from collections import OrderedDict
 import numpy as np
 import pyqtgraph as pg
 import multipatch_analysis.database as db
+import pandas as pd
 import re
-from multipatch_analysis.connectivity import query_pairs, ConnectivityAnalyzer, StrengthAnalyzer, DynamicsAnalyzer, results_scatter, get_all_output_fields
+from analyzers import query_pairs, ConnectivityAnalyzer, StrengthAnalyzer, DynamicsAnalyzer, get_all_output_fields
 from multipatch_analysis import constants
 from multipatch_analysis.cell_class import CellClass, classify_cells, classify_pairs
-from multipatch_analysis.ui.graphics import MatrixItem
+from matrix_display import MatrixTab, MatrixDisplay
+from scatter_plot_display import ScatterPlotTab
 from pyqtgraph import parametertree as ptree
 from pyqtgraph.parametertree import Parameter
-from pyqtgraph.widgets.ColorMapWidget import ColorMapParameter
 from pyqtgraph.widgets.DataFilterWidget import DataFilterParameter
-
-
-class MainWindow(pg.QtGui.QWidget):
-    def __init__(self):
-        pg.QtGui.QWidget.__init__(self)
-        self.layout = pg.QtGui.QGridLayout()
-        self.setLayout(self.layout)
-        self.h_splitter = pg.QtGui.QSplitter()
-        self.h_splitter.setOrientation(pg.QtCore.Qt.Horizontal)
-        self.layout.addWidget(self.h_splitter, 0, 0)
-        self.control_panel_splitter = pg.QtGui.QSplitter()
-        self.control_panel_splitter.setOrientation(pg.QtCore.Qt.Vertical)
-        self.h_splitter.addWidget(self.control_panel_splitter)
-        self.update_button = pg.QtGui.QPushButton("Update Matrix")
-        self.control_panel_splitter.addWidget(self.update_button)
-        self.ptree = ptree.ParameterTree(showHeader=False)
-        self.control_panel_splitter.addWidget(self.ptree)
-        # self.dsp = DataScatterPlot()
-        # header = pg.QtGui.QLabel()
-        # header.setText('<span style="font-weight: bold">Scatter Plot Display</span>')
-        # self.control_panel_splitter.addWidget(header)
-        # self.control_panel_splitter.addWidget(self.dsp.spw.ctrlPanel)
-        # self.control_panel_splitter.setSizes([10, 300, 5, 200])
-
-        self.matrix_widget = MatrixWidget()
-        self.h_splitter.addWidget(self.matrix_widget)
-        self.plot_splitter = pg.QtGui.QSplitter()
-        self.plot_splitter.setOrientation(pg.QtCore.Qt.Vertical)
-        self.h_splitter.addWidget(self.plot_splitter)
-        self.scatter_plot = ScatterPlot()
-        self.trace_plot = TracePlot()
-        # self.trace_plot.setVisible(False)
-        self.plot_splitter.addWidget(self.scatter_plot)
-        self.plot_splitter.addWidget(self.trace_plot)
-        self.h_splitter.setSizes([150, 300, 200])
-
 
 class SignalHandler(pg.QtCore.QObject):
         """Because we can't subclass from both QObject and QGraphicsRectItem at the same time
         """
         sigOutputChanged = pg.QtCore.Signal(object) #self
+
+class Tabs(pg.QtGui.QTabWidget):
+    def __init__(self, parent=None):
+        pg.QtGui.QTabWidget.__init__(self)
+
+        self.matrix_tab = MatrixTab()
+        self.addTab(self.matrix_tab, 'Matrix')
+        self.scatter_tab = ScatterPlotTab()
+        self.addTab(self.scatter_tab, 'Scatter Plots')
+
 
 class ExperimentFilter(object):
     def __init__(self):  
@@ -132,179 +107,28 @@ class CellClassFilter(object):
         self.cell_groups = None
         self.cell_classes = None
 
-class MatrixDisplayFilter(object):
-    def __init__(self, view_box, data_fields, confidence_fields):
-        self.output = None
-        self._signalHandler = SignalHandler()
-        self.sigOutputChanged = self._signalHandler.sigOutputChanged
-        self.view_box = view_box
-        self.legend = None
-        self.colorMap = ColorMapParameter()
-
-        self.colorMap.setFields(data_fields)
-
-        self.params = Parameter.create(name='Matrix Display', type='group', children=[
-            self.colorMap,
-            {'name': 'Text format', 'type': 'str'},
-            {'name': 'Show Confidence', 'type': 'list', 'values': confidence_fields},
-            {'name': 'log_scale', 'type': 'bool'},
-        ])
-    
-        self.params.sigTreeStateChanged.connect(self.invalidate_output)
-        
-
-    def colormap_legend(self):
-        if self.legend is not None:
-            self.view_box.removeItem(self.legend)
-        cmap_item = [cmap for cmap in self.colorMap.children() if cmap['Enabled'] is True][0]
-        log_scale = self.params.child('log_scale').value()
-        colors = cmap_item.value().color
-        x_min = cmap_item['Min']
-        x_max = cmap_item['Max']
-        x = np.linspace(x_min, x_max, len(colors))
-        name = cmap_item.name()
-        # units = self.colorMap.fields[name].get('units', None)
-        scale, prefix = pg.siScale(x_min)
-        # if units is not None:
-        #     units = scale + units
-        # else:
-        #     units = ''
-        self.legend = pg.GradientLegend([25, 300], [-20, -30])
-        if log_scale is True:
-            cmap2 = pg.ColorMap(x, colors)
-            self.legend.setGradient(cmap2.getGradient())
-            self.legend.setLabels({'%0.02f' % (a*scale):b for a,b in zip(cmap_item.value().pos, x)})
-        else:
-            self.legend.setGradient(cmap_item.value().getGradient())
-            self.legend.setLabels({'%0.02f' % (a*scale):b for a,b in zip(x, cmap_item.value().pos)})
-        self.view_box.addItem(self.legend)
-
-    def element_display_output(self, result):
-        colormap = self.colorMap
-        show_confidence = self.params['Show Confidence']
-        text_format = self.params['Text format']
-
-        if result[show_confidence] is not None:
-            self.output = {'bordercolor': 0.6}
-            default_bgcolor = np.array([128., 128., 128., 255.])
-        else:
-            self.output = {'bordercolor': 0.8}
-            default_bgcolor = np.array([220., 220., 220.])
-        
-        if result['no_data'] is True:
-            self.output['bgcolor'] = tuple(default_bgcolor)
-            self.output['fgcolor'] = 0.6
-            self.output['text'] = ''
-        else:
-            mappable_result = {k:v for k,v in result.items() if np.isscalar(v)}
-            color = colormap.map(mappable_result)[0]
-            
-            # desaturate low confidence cells
-            if result[show_confidence] is not None:
-                lower, upper = result[show_confidence]
-                confidence = (1.0 - (upper - lower)) ** 2
-                color = color * confidence + default_bgcolor * (1.0 - confidence)
-        
-            # invert text color for dark background
-            self.output['fgcolor'] = 'w' if sum(color[:3]) < 384 else 'k'
-            self.output['text'] = text_format.format(**result)
-            self.output['bgcolor'] = tuple(color)
-
-        return self.output
-
-
-    def invalidate_output(self):
-        self.output = None
-
-# class DataScatterPlot(object):
-#     def __init__(self):
-#         self.output = None
-#         self._signalHandler = SignalHandler()
-#         self.sigOutputChanged = self._signalHandler.sigOutputChanged
-#         self.spw = pg.ScatterPlotWidget()
-
-#     def set_fields(self, data_fields):
-#         self.spw.setFields(data_fields)
-
-#     def set_plot_data(self, data):
-#         self.spw.setData(data)
-        
-#     def invalidate_output(self):
-#         self.output = None
-
-class MatrixWidget(pg.GraphicsLayoutWidget):
-    sigClicked = pg.QtCore.Signal(object, object, object, object) # self, matrix_item, row, col
-    def __init__(self):
-        pg.GraphicsLayoutWidget.__init__(self)
-        self.setRenderHints(self.renderHints() | pg.QtGui.QPainter.Antialiasing)
-        v = self.addViewBox()
-        v.setBackgroundColor('w')
-        v.setAspectLocked()
-        v.invertY()
-        self.view_box = v
-        self.matrix = None
-
-    def set_matrix_data(self, text, fgcolor, bgcolor, border_color, rows, cols, size=50, header_color='k'):
-        if self.matrix is not None:
-            self.view_box.removeItem(self.matrix)
-
-        self.matrix = MatrixItem(text=text, fgcolor=fgcolor, bgcolor=bgcolor, border_color=border_color,
-                    rows=rows, cols=rows, size=50, header_color='k')
-        self.matrix.sigClicked.connect(self.matrix_element_clicked)
-        self.view_box.addItem(self.matrix)
-
-    def matrix_element_clicked(self, matrix_item, event, row, col):
-        self.sigClicked.emit(self, event, row, col) 
-
-
-class ScatterPlot(pg.GraphicsLayoutWidget):
-    def __init__(self):
-        pg.GraphicsLayoutWidget.__init__(self)
-        self.setRenderHints(self.renderHints() | pg.QtGui.QPainter.Antialiasing)
-
-
-class TracePlot(pg.GraphicsLayoutWidget):
-    def __init__(self):
-        pg.GraphicsLayoutWidget.__init__(self)
-        self.setRenderHints(self.renderHints() | pg.QtGui.QPainter.Antialiasing)
-
-
 class MatrixAnalyzer(object):
+    sigClicked = pg.QtCore.Signal(object, object, object, object, object) # self, matrix_item, row, col
     def __init__(self, session, default_preset=None):
-        self.win = MainWindow()
-        self.win.show()
-        self.win.setGeometry(280, 130,1500, 900)
-        self.win.setWindowTitle('Matrix Analyzer')
+        self.tabs = Tabs()
+        self.tabs.setGeometry(280, 130, 1500, 900)
+        self.tabs.setWindowTitle('MatrixAnalyzer')
+        self.tabs.show()
+        self.matrix_tab = self.tabs.matrix_tab
+        self.scatter_tab = self.tabs.scatter_tab
+        self.element_scatter = self.scatter_tab.element_scatter
+        self.pair_scatter = self.scatter_tab.pair_scatter
         self.analyzers = [ConnectivityAnalyzer(), StrengthAnalyzer(), DynamicsAnalyzer()]
         self.active_analyzers = []
-        self.scatter_plot = None
-        self.line = None
-        self.scatter = None
-        self.trace_plot = None
-        self.trace_plot_list = []
-        self.element = None
-        self.selected = 0
-        self.colors = [(0, 255, 0), (255, 0, 0), (0, 0, 255), (254, 169, 0), (170, 0, 127), (0, 230, 230)]
-
-        self.output_fields, self.confidence_fields = get_all_output_fields(self.analyzers)
-        # self.data_scatter_plot = self.win.dsp
-        # self.data_scatter_plot.set_fields(self.output_fields)
-        # self.spw = self.data_scatter_plot.spw
-        self.experiment_filter = ExperimentFilter()
-        self.cell_class_filter = CellClassFilter(cell_class_groups)
-        self.matrix_display_filter = MatrixDisplayFilter(self.win.matrix_widget.view_box, self.output_fields, self.confidence_fields)
-        self.visualizers = [self.matrix_display_filter]
-        self.default_preset = default_preset
-        self.session = session
-        self.results = {}
-        self.cell_groups = None
-        self.cell_classes = None
-        self.params = ptree.Parameter.create(name='params', type='group', children=[
-            self.experiment_filter.params, 
-            self.cell_class_filter.params,
-            self.matrix_display_filter.params,
-        ])
-        self.win.ptree.setParameters(self.params, showTop=False)
+        self.mode = 'mean'
+        # self.scatter_plot = None
+        # self.line = None
+        # self.scatter = None
+        # self.trace_plot = None
+        # self.trace_plot_list = []
+        # self.element = None
+        # self.selected = 0
+        # self.colors = [(0, 255, 0), (255, 0, 0), (0, 0, 255), (254, 169, 0), (170, 0, 127), (0, 230, 230)]
 
         self.field_map = {}
         for analyzer in self.analyzers:
@@ -315,16 +139,37 @@ class MatrixAnalyzer(object):
                     continue
                 self.field_map[field] = analyzer
 
+        self.output_fields, self.confidence_fields = get_all_output_fields(self.analyzers)
+        self.experiment_filter = ExperimentFilter()
+        self.cell_class_filter = CellClassFilter(cell_class_groups)
+        self.matrix_display = MatrixDisplay(self.matrix_tab, self.output_fields, self.confidence_fields, self.field_map, mode=self.mode)
+        self.matrix_display_filter = self.matrix_display.matrix_display_filter
+        self.element_scatter.set_fields(self.output_fields)
+        pair_fields, _ = get_all_output_fields(self.analyzers[1:])
+        self.pair_scatter.set_fields(pair_fields)
+        self.visualizers = [self.matrix_display_filter, self.element_scatter, self.pair_scatter]
+
+        self.default_preset = default_preset
+        self.session = session
+        self.results = {}
+        self.cell_groups = None
+        self.cell_classes = None
+        self.params = ptree.Parameter.create(name='params', type='group', children=[
+            self.experiment_filter.params, 
+            self.cell_class_filter.params,
+            self.matrix_display_filter.params,
+        ])
+        self.matrix_tab.ptree.setParameters(self.params, showTop=False)
+
         self.presets = self.analyzer_presets()
         preset_list = [p['name'] for p in self.presets]
         preset_params = Parameter.create(name='Analyzer Presets', type='list', values=preset_list)
         self.params.insertChild(0, preset_params)
         
-        self.win.update_button.clicked.connect(self.update_clicked)
-        self.win.matrix_widget.sigClicked.connect(self.display_matrix_element_data)
+        self.matrix_tab.update_button.clicked.connect(self.update_clicked)
+        # self.matrix_tab.matrix_widget.sigClicked.connect(self.matrix_display.display_matrix_element_data)
         self.experiment_filter.sigOutputChanged.connect(self.cell_class_filter.invalidate_output)
         self.params.child('Analyzer Presets').sigValueChanged.connect(self.presetChanged)
-        # self.matrix_display_filter.sigOutputChanged.connect(self.analyzers_needed) 
 
         # connect up analyzers
         for analyzer in self.analyzers:
@@ -362,8 +207,8 @@ class MatrixAnalyzer(object):
                     'Mouse Layer 2/3': True,
                 },
                 'Matrix Display': {
-                    'color_by': 'ic_fit_amp_all',
-                    'Text format': '{ic_fit_amp_all.mV}',
+                    'color_by': 'pulse_ratio_8_1_50Hz',
+                    'Text format': '{pulse_ratio_8_1_50Hz:0.2f}',
                     'Show Confidence': 'None',
                     'log_scale': False,
             },
@@ -407,7 +252,7 @@ class MatrixAnalyzer(object):
                             self.params.child(filt).child(field_name).setValue(value)
 
     def analyzers_needed(self):
-        
+        ## got through all of the visualizers
         data_needed = set()
         for metric in self.matrix_display_filter.colorMap.children():
             data_needed.add(metric.name())
@@ -415,37 +260,18 @@ class MatrixAnalyzer(object):
         for metric in text_fields:
             if ':' in metric:
                 data_needed.add(metric.split(':')[0])
+            elif '.' in metric:
+                data_needed.add(metric.split('.')[0])
             else:
                 data_needed.add(metric)
         data_needed.add(self.matrix_display_filter.params['Show Confidence'])
         
-        # for metric in self.spw.selectedItems():
-        #     data_needed.add(str(metric.txt()))
 
         
         analyzers = set([self.field_map.get(field, None) for field in data_needed])
         self.active_analyzers = [analyzer for analyzer in analyzers if analyzer is not None]
 
         self.data_needed = data_needed
-
-        # analyzer_set = set()
-        # output_fields, _ = get_all_output_fields(available_analyzers)
-        # output_fields = [field[0] for field in output_fields]
-        # for data_field in data_needed:
-        #     if data_field in output_fields:
-        #         analyzer_set.add(analyzer)
-
-        # remove_analyzers = list(set(self.active_analyzers) - analyzer_set)
-        # for analyzer in remove_analyzers:
-        #     # analyzer.sigOutputChanged.disconnect(self.matrix_display_filter.invalidate_output)
-        #     # self.cell_class_filter.sigOutputChanged.disconnect(analyzer.invalidate_output)
-        #     self.active_analyzers.remove(analyzer)
-
-        # add_analyzers = list(analyzer_set - set(self.active_analyzers))
-        # for analyzer in add_analyzers:
-        #     analyzer.sigOutputChanged.connect(self.matrix_display_filter.invalidate_output)
-        #     self.cell_class_filter.sigOutputChanged.connect(analyzer.invalidate_output)
-        #     self.active_analyzers.append(analyzer)
 
         print ('Active analyzers:')
         print (self.active_analyzers)
@@ -455,51 +281,14 @@ class MatrixAnalyzer(object):
     def update_clicked(self):
         with pg.BusyCursor():
             self.analyzers_needed()
-            self.update_matrix_results()
-            self.update_matrix_display()
-            self.display_element_reset()
+            self.update_results()
+            self.matrix_display.update_matrix_display(self.results, self.cell_classes, self.cell_groups)
+            # self.element_scatter.set_data(self.element_results)
+            # self.pair_scatter.set_data(self.pair_results)
+            if self.matrix_tab.matrix_widget.matrix is not None:
+                self.matrix_display.display_element_reset()
 
-    def display_matrix_element_data(self, matrix_widget, event, row, col):
-        pre_class, post_class = self.matrix_map[row, col]
-        analyzer = self.field_map[self.field_name]
-        data = analyzer.print_element_info(pre_class, post_class, self.field_name)
-        if self.scatter_plot is not None:
-            if int(event.modifiers() & pg.QtCore.Qt.ControlModifier)>0:
-                self.selected += 1
-                if self.selected >= len(self.colors):
-                    self.selected = 0
-                self.display_element_output(row, col, data, analyzer, trace_plot_list=self.trace_plot_list)
-            else:
-                self.display_element_reset() 
-                self.display_element_output(row, col, data, analyzer)
-
-    def display_element_output(self, row, col, data, analyzer, trace_plot_list=None):
-        color = self.colors[self.selected]
-        self.element = self.win.matrix_widget.matrix.cells[row][col]
-        self.element.setPen(pg.mkPen({'color': color, 'width': 5}))
-        pre_class, post_class = self.matrix_map[row, col]
-        self.trace_plot = self.win.trace_plot.addPlot()
-        self.trace_plot_list.append(self.trace_plot)
-        self.line, self.scatter = analyzer.plot_element_data(pre_class, post_class, self.field_name, data=data, color=color, trace_plt=self.trace_plot)
-        if len(self.trace_plot_list) > 1:
-            first_plot = self.trace_plot_list[0]
-            for plot in self.trace_plot_list[1:]:
-                plot.setYLink(first_plot)
-        self.scatter_plot.addItem(self.line)
-        if self.scatter is not None:
-            self.scatter_plot.addItem(self.scatter)
-
-    def display_element_reset(self):
-        self.selected = 0
-        if self.scatter_plot is not None:
-            [self.scatter_plot.removeItem(item) for item in self.scatter_plot.items[1:]]
-        if self.trace_plot is not None:
-           self.win.trace_plot.clear()
-           self.trace_plot = None
-        self.update_matrix_display()
-        self.trace_plot_list = []
-
-    def update_matrix_results(self):
+    def update_results(self):
         # Select pairs (todo: age, acsf, internal, temp, etc.)
         self.pairs = self.experiment_filter.get_pair_list(self.session)
 
@@ -512,74 +301,16 @@ class MatrixAnalyzer(object):
 
         # analyze matrix elements
         for i, analysis in enumerate(self.active_analyzers):
-            results = analysis.measure(self.pair_groups)
+            results = (analysis.measure(self.pair_groups))
             if i == 0:
                 self.results = results
             else:
-                for pair_group, data in results.items():
-                    self.results[pair_group].update(data)
-        for pair_group, data in self.results.items():
-            no_data = any([data.get('conn_no_data', None), data.get('strength_no_data', None), data.get('dynamics_no_data', None)])
-            self.results[pair_group]['no_data'] = no_data
-
-        # set data in scatter plot widget
-
-    def update_matrix_display(self):
-        
-        shape = (len(self.cell_groups),) * 2
-        text = np.empty(shape, dtype=object)
-        fgcolor = np.empty(shape, dtype=object)
-        bgcolor = np.empty(shape, dtype=object)
-        bordercolor = np.empty(shape, dtype=object)
-        self.matrix_display_filter.colormap_legend()
-
-        # call display function on every matrix element
-        
-        self.matrix_map = {}
-        for i,row in enumerate(self.cell_groups):
-            for j,col in enumerate(self.cell_groups):
-                output = self.matrix_display_filter.element_display_output(self.results[(row, col)])
-                self.matrix_map[i, j] = (row, col)
-                text[i, j] = output['text']
-                fgcolor[i, j] = output['fgcolor']
-                bgcolor[i, j] = output['bgcolor']
-                bordercolor[i, j] = output['bordercolor']
-                
-        # Force cell class descriptions down to tuples of 2 items
-        # Kludgy, but works for now.
-        # update 3/8/19: Doesn't work for CellClasses of 1 item,
-        # attempt to fix so it doesn't break in mp_a\ui\graphics.py
-        # at line 90. 
-        rows = []
-        for i,cell_class in enumerate(self.cell_classes):
-            tup = cell_class.as_tuple
-            row = tup[:1]
-            if len(tup) > 1:
-                row = row + (' '.join(tup[1:]),)
-            else:
-                row = (' '*i,) + row
-            # if len(tup) > 1:
-            #     row = tup
-            # elif len(tup) == 1:
-            #     row = list(tup)
-            rows.append(row)
-
-        self.win.matrix_widget.set_matrix_data(text=text, fgcolor=fgcolor, bgcolor=bgcolor, border_color=bordercolor,
-                    rows=rows, cols=rows, size=50, header_color='k')
-
-        # plot hist or scatter of data in side panel, if there are multiple colormaps take the first enabled one
-        color_map_fields = self.matrix_display_filter.colorMap.children()
-        if len(color_map_fields) > 1:
-            self.field_name = [field.name() for field in color_map_fields if field['Enabled'] is True][0]
-        else:
-            self.field_name = color_map_fields[0].name()
-        field = self.matrix_display_filter.colorMap.fields[self.field_name]
-        if self.scatter_plot is not None:
-            self.win.scatter_plot.removeItem(self.scatter_plot)
-        self.scatter_plot = self.win.scatter_plot.addPlot()
-        results_scatter(self.results, self.field_name, field, self.scatter_plot)
-
-        # self.analysis.summary(self.results, self.field_name)
+                merge_results = pd.concat([self.results, results])
+                self.results = merge_results[~merge_results.index.duplicated(keep='first')]
+        no_data = OrderedDict()
+        for pair_group in self.pair_groups.keys():
+            no_data[pair_group] = any([self.results[pair_group].get('conn_no_data'), self.results[pair_group].get('strength_no_data'), self.results[pair_group].get('dynamics_no_data')])
+        self.results = self.results.append(pd.DataFrame(no_data, index=['no_data']))
         
 
 
@@ -660,6 +391,11 @@ if __name__ == '__main__':
             {'cre_type': 'sim1', 'target_layer': '5'},
             {'cre_type': 'tlx3', 'target_layer': '5'},
             {'cre_type': 'ntsr1', 'target_layer': '6'},
+        ]),
+
+        ('Mouse E-I Cre-types', [
+            {'cre_type': ('unknown', 'nr5a1', 'tlx3', 'sim1', 'ntsr1'), 'display_names': ('', 'Excitatory\nunknown, nr5a1,\ntlx3, sim1, ntsr1')},
+            {'cre_type': ('pvalb', 'sst', 'vip'), 'display_names': ('', 'Inhibitory\npvalb, sst, vip')},
         ]),
 
         ('Mouse E-I Cre-types by layer',[

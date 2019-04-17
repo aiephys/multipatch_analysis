@@ -10,9 +10,10 @@ from __future__ import print_function, division
 from collections import OrderedDict
 import numpy as np
 import pyqtgraph as pg
+import pandas as pd
 from statsmodels.stats.proportion import proportion_confint
 import multipatch_analysis.database as db
-from first_pulse_deconvolved_amps import get_deconvolved_first_pulse_amps
+# from first_pulse_deconvolved_amps import get_deconvolved_first_pulse_amps
 from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.baseline import float_mode
 
@@ -100,7 +101,9 @@ class ConnectivityAnalyzer(object):
         """Given a list of cell pairs and a dict that groups cells together by class,
         return a structure that describes connectivity between cell classes.
         """    
-        self.results = OrderedDict()
+        results = OrderedDict()
+        # self.pair_results = None
+
         for key, class_pairs in pair_groups.items():
             pre_class, post_class = key
             no_data = False
@@ -119,7 +122,8 @@ class ConnectivityAnalyzer(object):
             if n_probed == 0:
                 no_data = True
 
-            self.results[(pre_class, post_class)] = {
+                
+            results[(pre_class, post_class)] = {
                 'conn_no_data': no_data,
                 'n_probed': n_probed,
                 'n_connected': n_connected,
@@ -134,6 +138,8 @@ class ConnectivityAnalyzer(object):
                 'None': None
             }
         
+        self.results = pd.DataFrame(results)
+
         return self.results
 
     def output_fields(self):
@@ -160,25 +166,26 @@ class ConnectivityAnalyzer(object):
         else:
             return connections
 
-    def plot_element_data(self, pre_class, post_class, field_name, data=None, color='g', trace_plt=None):
-        val = self.results[(pre_class, post_class)][field_name]
+    def plot_element_data(self, pre_class, post_class, field_name, color='g', trace_plt=None):
+        element = self.results.loc[[field_name, 'connected_pairs'], (pre_class, post_class)]
+        val = np.nanmean(element[field_name])
         line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
         scatter = None
         baseline_window = int(db.default_sample_rate * 5e-3)
-        if data is not None:
-            traces = []
-            for pair in data:
-                cs = pair.connection_strength
-                trace = cs.ic_average_response
-                if trace is not None:
-                    x_offset = cs.ic_fit_xoffset
-                    trace = format_trace(trace, baseline_window, x_offset, align='psp')
-                    trace_plt.plot(trace.time_values, trace.data)
-                    traces.append(trace)
-            grand_trace = TraceList(traces).mean()
-            trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3})
-            trace_plt.setXRange(0, 20e-3)
-            trace_plt.setLabels(left=('', 'V'), bottom=('Time from stimulus', 's'))
+        traces = []
+        point_data = []
+        for pair in element['connected_pairs']:
+            cs = pair.connection_strength
+            trace = cs.ic_average_response
+            if trace is not None:
+                x_offset = cs.ic_fit_xoffset
+                trace = format_trace(trace, baseline_window, x_offset, align='psp')
+                trace_plt.plot(trace.time_values, trace.data)
+                traces.append(trace)
+        grand_trace = TraceList(traces).mean()
+        trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3})
+        trace_plt.setXRange(0, 20e-3)
+        trace_plt.setLabels(left=('', 'V'), bottom=('Time from stimulus', 's'))
         return line, scatter
 
     def summary(self, results, metric):
@@ -335,7 +342,8 @@ class StrengthAnalyzer(object):
         self.pair_items = {}
 
     def measure(self, pair_groups):
-        self.results = OrderedDict()
+        results = OrderedDict()
+        
         for key, class_pairs in pair_groups.items():
             pre_class, post_class = key
             no_data = False
@@ -375,21 +383,21 @@ class StrengthAnalyzer(object):
             # else:
             #     cv = float('nan')
 
-            self.results[(pre_class, post_class)] = {
+            results[(pre_class, post_class)] = {
                 'strength_no_data': no_data,
                 'connected_pairs': connections,
                 'n_connected': len(connections),
                 # 'cv_array': cv,
                 ## all pulses
-                'ic_fit_amp_all': FormattableNumber(np.mean(ic_amps_all)),
-                'ic_fit_xoffset_all': FormattableNumber(np.mean(ic_xoffset_all)),
-                'ic_fit_rise_time_all': FormattableNumber(np.mean(ic_rise_all)),
-                'ic_fit_decay_tau_all': FormattableNumber(np.mean(ic_decay_all)),
+                'ic_fit_amp_all': ic_amps_all,
+                'ic_fit_xoffset_all': ic_xoffset_all,
+                'ic_fit_rise_time_all': ic_rise_all,
+                'ic_fit_decay_tau_all': ic_decay_all,
                 # 'ic_amp_cv': np.nanmedian(cv),
-                'vc_fit_amp_all': FormattableNumber(np.mean(vc_amps_all)),
-                'vc_fit_xoffset_all': FormattableNumber(np.mean(vc_xoffset_all)),
-                'vc_fit_rise_time_all': FormattableNumber(np.mean(vc_rise_all)),
-                'vc_fit_decay_tau_all': FormattableNumber(np.mean(vc_decay_all)),
+                'vc_fit_amp_all': vc_amps_all,
+                'vc_fit_xoffset_all': vc_xoffset_all,
+                'vc_fit_rise_time_all': vc_rise_all,
+                'vc_fit_decay_tau_all': vc_decay_all,
                 'ic_amp_stdev_all': [-np.std(ic_amps_all), np.std(ic_amps_all)],
                 'ic_xoffset_stdev_all': [-np.std(ic_xoffset_all), np.std(ic_xoffset_all)],
                 'ic_rise_time_stdev_all': [-np.std(ic_rise_all), np.std(ic_rise_all)],
@@ -399,14 +407,14 @@ class StrengthAnalyzer(object):
                 'vc_rise_time_stdev_all': [-np.std(vc_rise_all), np.std(vc_rise_all)],
                 'vc_decay_tau_stdev_all': [-np.std(vc_decay_all), np.std(vc_decay_all)],
                 ## First pulse
-                'ic_amp_first_pulse': FormattableNumber(np.nanmean(ic_amps_first)),
-                'ic_latency_first_pulse': FormattableNumber(np.nanmean(ic_latency_first)),
-                'ic_rise_time_first_pulse': FormattableNumber(np.nanmean(ic_rise_first)),
-                'ic_decau_tau_first_pulse': FormattableNumber(np.nanmean(ic_decay_first)),
-                'vc_amp_first_pulse': FormattableNumber(np.nanmean(vc_amps_first)),
-                'vc_latency_first_pulse': FormattableNumber(np.nanmean(vc_latency_first)),
-                'vc_rise_time_first_pulse': FormattableNumber(np.nanmean(vc_rise_first)),
-                'vc_decau_tau_first_pulse': FormattableNumber(np.nanmean(vc_decay_first)),
+                'ic_amp_first_pulse': ic_amps_first,
+                'ic_latency_first_pulse': ic_latency_first,
+                'ic_rise_time_first_pulse': ic_rise_first,
+                'ic_decau_tau_first_pulse': ic_decay_first,
+                'vc_amp_first_pulse': vc_amps_first,
+                'vc_latency_first_pulse': vc_latency_first,
+                'vc_rise_time_first_pulse': vc_rise_first,
+                'vc_decau_tau_first_pulse': vc_decay_first,
                 'ic_amp_stdev_first': [-np.std(ic_amps_first), np.std(ic_amps_first)],
                 'ic_latency_stdev_first': [-np.std(ic_latency_first), np.std(ic_latency_first)],
                 'ic_rise_time_stdev_first': [-np.std(ic_rise_first), np.std(ic_rise_first)],
@@ -419,6 +427,8 @@ class StrengthAnalyzer(object):
                 'None': None,
             }
 
+        self.results = pd.DataFrame(results)
+
         return self.results
 
     def output_fields(self):
@@ -429,79 +439,63 @@ class StrengthAnalyzer(object):
         if field_name is not None:
             fn = field_name.split('_all')[0] if field_name.endswith('all') else field_name.split('_first_pulse')[0]
             units = [field[1].get('units', '') for field in self.fields['color_by'] if field[0] == field_name][0] 
-            pairs = self.results[(pre_class, post_class)]['connected_pairs']
-            result = self.results[(pre_class, post_class)][field_name]
+            element = self.results.loc[[field_name, 'connected_pairs'], (pre_class, post_class)]
             print ("Connection type: %s -> %s" % (pre_class, post_class))    
-            print ("\t Grand Average %s = %s" % (field_name, pg.siFormat(result, suffix=units)))
+            print ("\t Grand Average %s = %s" % (field_name, pg.siFormat(np.nanmean(element.loc[field_name]), suffix=units)))
             print ("Connected Pairs:")
-            data = []
-            for p, pair in enumerate(pairs):
+            for value, pair in zip(element[field_name], element['connected_pairs']):
                 print ("\t %s" % (pair))
-                # if metric == 'ic_amp_cv':
-                #     value = self.results[(pre_class, post_class)]['cv_array'][c]
-                #     pulses = 0
-                # else:
-                if field_name.endswith('all'):
-                    cs = pair.connection_strength
-                    value = getattr(cs, fn)
-                    pulses = getattr(cs, fn.split('_')[0] + '_n_samples')
-                elif field_name.endswith('first_pulse'):
-                    fpf = pair.avg_first_pulse_fit
-                    if fpf is not None:
-                        value = getattr(fpf, fn)
-                        pulses = len(fpf.ic_pulse_ids) if field_name.startswith('ic') else len(fpf.vc_pulse_ids)
-                    else:
-                        value = None
-                        pulses = 0
-                if value is not None:
-                    print ("\t\t Average %s: %s, %d pulses" % (field_name, pg.siFormat(value, suffix=units), pulses))
-                    data.append(pair)
-                else:
+                if np.isnan(value):
                     print("\t\t No QC Data")
+                else:
+                    print ("\t\t Average %s: %s" % (field_name, pg.siFormat(value, suffix=units)))
 
-            return data
-
-    def plot_element_data(self, pre_class, post_class, field_name, data=None, color='g', trace_plt=None):
+    def plot_element_data(self, pre_class, post_class, field_name, color='g', trace_plt=None):
         fn = field_name.split('_all')[0] if field_name.endswith('all') else field_name.split('_first_pulse')[0]
-        val = self.results[(pre_class, post_class)][field_name]
+        element = self.results.loc[[field_name, 'connected_pairs'], (pre_class, post_class)]
+        val = np.nanmean(element[field_name])
         line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
         scatter = None
         baseline_window = int(db.default_sample_rate * 5e-3)
-        if data is not None:
-            values = []
-            traces = []
-            point_data = []
-            for pair in data:
-                if field_name.endswith('all'):
-                    cs = pair.connection_strength
-                    values.append(getattr(cs, fn))
-                    trace = cs.ic_average_response if field_name.startswith('ic') else cs.vc_average_response
-                    x_offset = cs.ic_fit_xoffset if field_name.startswith('ic') else cs.vc_fit_xoffset
-                elif field_name.endswith('first_pulse'):
-                    fpf = pair.avg_first_pulse_fit
-                    values.append(getattr(fpf, fn))
-                    trace = fpf.ic_avg_psp_data if field_name.startswith('ic') else fpf.vc_avg_psp_data
-                    x_offset = fpf.ic_latency if field_name.startswith('ic') else fpf.vc_latency
-                trace = format_trace(trace, baseline_window, x_offset, align='psp')
-                trace_item = trace_plt.plot(trace.time_values, trace.data)
-                point_data.append(pair)
-                trace_item.pair = pair
-                trace_item.curve.setClickable(True)
-                trace_item.sigClicked.connect(self.trace_plot_clicked)
-                traces.append(trace)
-                self.pair_items[pair.id] = [trace_item]
-            y_values = pg.pseudoScatter(np.asarray(values, dtype=float) + 1., spacing=0.3)
-            scatter = pg.ScatterPlotItem(symbol='o', brush=(color + (150,)), pen='w', size=12)
-            scatter.setData(values, y_values + 1., data=point_data)
-            for point in scatter.points():
-                pair_id = point.data().id
-                self.pair_items[pair_id].append(point)
-            scatter.sigClicked.connect(self.scatter_plot_clicked)
-            grand_trace = TraceList(traces).mean()
-            trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3})
-            units = 'V' if field_name.startswith('ic') else 'A'
-            trace_plt.setXRange(0, 20e-3)
-            trace_plt.setLabels(left=('', units), bottom=('Time from stimulus', 's'))
+        values = []
+        traces = []
+        point_data = []
+        for value, pair in zip(element[field_name], element['connected_pairs']):
+            if np.isnan(value):
+                continue
+            if field_name.endswith('all'):
+                cs = pair.connection_strength
+                trace = cs.ic_average_response if field_name.startswith('ic') else cs.vc_average_response
+                x_offset = cs.ic_fit_xoffset if field_name.startswith('ic') else cs.vc_fit_xoffset
+            elif field_name.endswith('first_pulse'):
+                fpf = pair.avg_first_pulse_fit
+                if fpf is None:
+                    continue
+                trace = fpf.ic_avg_psp_data if field_name.startswith('ic') else fpf.vc_avg_psp_data
+                x_offset = fpf.ic_latency if field_name.startswith('ic') else fpf.vc_latency
+            if trace is None:
+                continue
+            values.append(value)
+            trace = format_trace(trace, baseline_window, x_offset, align='psp')
+            trace_item = trace_plt.plot(trace.time_values, trace.data)
+            point_data.append(pair)
+            trace_item.pair = pair
+            trace_item.curve.setClickable(True)
+            trace_item.sigClicked.connect(self.trace_plot_clicked)
+            traces.append(trace)
+            self.pair_items[pair.id] = [trace_item]
+        y_values = pg.pseudoScatter(np.asarray(values, dtype=float) + 10., spacing=1)
+        scatter = pg.ScatterPlotItem(symbol='o', brush=(color + (150,)), pen='w', size=12)
+        scatter.setData(values, y_values + 1., data=point_data)
+        for point in scatter.points():
+            pair_id = point.data().id
+            self.pair_items[pair_id].append(point)
+        scatter.sigClicked.connect(self.scatter_plot_clicked)
+        grand_trace = TraceList(traces).mean()
+        trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3})
+        units = 'V' if field_name.startswith('ic') else 'A'
+        trace_plt.setXRange(0, 20e-3)
+        trace_plt.setLabels(left=('', units), bottom=('Time from stimulus', 's'))
         return line, scatter
 
     def scatter_plot_clicked(self, scatterplt, points):
@@ -567,7 +561,7 @@ class DynamicsAnalyzer(object):
         self.results = None
 
     def measure(self, pair_groups):
-        self.results = OrderedDict()
+        results = OrderedDict()
         for key, class_pairs in pair_groups.items():
             pre_class, post_class = key
             no_data = False
@@ -585,20 +579,21 @@ class DynamicsAnalyzer(object):
                 pr_5_1_50.append(d.pulse_ratio_5_1_50Hz if d is not None else float('nan'))
 
 
-            self.results[(pre_class, post_class)] = {
+            results[(pre_class, post_class)] = {
             'dynamics_no_data': no_data,
             'connected_pairs': connections,
             'n_connected': len(connections),
             'dynamics': dynamics,
-            'pulse_ratio_8_1_50Hz': np.nanmean(pr_8_1_50),
-            'pulse_ratio_2_1_50Hz': np.nanmean(pr_2_1_50),
-            'pulse_ratio_5_1_50Hz': np.nanmean(pr_5_1_50),
+            'pulse_ratio_8_1_50Hz': pr_8_1_50,
+            'pulse_ratio_2_1_50Hz': pr_2_1_50,
+            'pulse_ratio_5_1_50Hz': pr_5_1_50,
             'pulse_ratio_8_1_50Hz_stdev': [-np.nanstd(pr_8_1_50), np.nanstd(pr_8_1_50)],
             'pulse_ratio_2_1_50Hz_stdev': [-np.nanstd(pr_2_1_50), np.nanstd(pr_2_1_50)],
             'pulse_ratio_5_1_50Hz_stdev': [-np.nanstd(pr_5_1_50), np.nanstd(pr_5_1_50)],
             'None': None,
             }
         
+        self.results = pd.DataFrame(results)
         return self.results
 
     def output_fields(self):
@@ -607,41 +602,39 @@ class DynamicsAnalyzer(object):
 
     def print_element_info(self, pre_class, post_class, field_name=None):
         if field_name is not None:
-            pairs = self.results[(pre_class, post_class)]['connected_pairs']
-            result = self.results[(pre_class, post_class)][field_name]
+            element = self.results.loc[[field_name, 'connected_pairs'], (pre_class, post_class)]
             print ("Connection type: %s -> %s" % (pre_class, post_class))    
-            print ("\t Grand Average %s = %s" % (field_name, result))
+            print ("\t Grand Average %s = %s" % (field_name, np.mean(element[field_name])))
             print ("Connected Pairs:")
-            data = []
-            for pair in pairs:
+            for value, pair in zip(element[field_name], element['connected_pairs']):
                 print ("\t %s" % (pair))
-                d = pair.dynamics
-                if d is not None:
-                    value = getattr(d, field_name)
-                    data.append(pair)
-                    print ("\t\t Average %s: %s" % (field_name, value))
-                else:
+                if np.isnan(value):
                     print("\t\t No QC Data")
-        return data
+                else:
+                    print ("\t\t Average %s: %0.2f" % (field_name, value))
 
-    def plot_element_data(self, pre_class, post_class, field_name, data=None, color='g', trace_plt=None):
-        val = self.results[(pre_class, post_class)][field_name]
+    def plot_element_data(self, pre_class, post_class, field_name, color='g', trace_plt=None):
+        trace_plt = None
+        element = self.results.loc[[field_name, 'connected_pairs'], (pre_class, post_class)]
+        val = np.nanmean(element[field_name])
         line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
         scatter = None
         baseline_window = int(db.default_sample_rate * 5e-3)
-        if data is not None:
-            values = []
+        values = []
+        traces = []
+        point_data = []
+        for value, pair in zip(element[field_name], element['connected_pairs']):
+            if np.isnan(value):
+                continue
             traces = []
-            for pair in data:
-                d = pair.dynamics
-                values.append(getattr(d, field_name))
-                if trace_plt is not None:
-                    trace = cs.ic_average_response if field_name.startswith('ic') else cs.vc_average_response
-                    x_offset = cs.ic_fit_latency if field_name.startswith('ic') else cs.vc_fit_latency
-                    trace = format_trace(trace, baseline_window, x_offset, align='psp')
-                    trace_plt.plot(trace.time_values, trace.data)
-                    traces.append(trace)
-            y_values = pg.pseudoScatter(np.asarray(values, dtype=float) + 1., spacing=0.3)
+            if trace_plt is not None:
+                trace = cs.ic_average_response if field_name.startswith('ic') else cs.vc_average_response
+                x_offset = cs.ic_fit_latency if field_name.startswith('ic') else cs.vc_fit_latency
+                trace = format_trace(trace, baseline_window, x_offset, align='psp')
+                trace_plt.plot(trace.time_values, trace.data)
+                traces.append(trace)
+            values.append(value)
+            y_values = pg.pseudoScatter(np.asarray(values, dtype=float) + 10., spacing=1)
             scatter = pg.ScatterPlotItem(symbol='o', brush=(color + (150,)), pen='w', size=12)
             scatter.setData(values, y_values + 1.)
             if trace_plt is not None:
