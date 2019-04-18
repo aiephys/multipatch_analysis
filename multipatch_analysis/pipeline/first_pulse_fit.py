@@ -14,7 +14,7 @@ import sys
 class AverageFirstPulseFitPipelineModule(DatabasePipelineModule):
     """Analyze synaptic connection strength for all pairs per experiment
     """
-    name = 'average_first_pulse_fit'
+    name = 'avg_first_pulse_fit'
     dependencies = [ConnectionStrengthPipelineModule]
     table_group = db.first_pulse_fit_tables
     
