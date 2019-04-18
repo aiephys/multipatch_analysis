@@ -2,7 +2,8 @@ import multipatch_analysis.database as db
 import multipatch_analysis.connection_strength as cs 
 from multipatch_analysis.database.database import TableGroup
 import pandas
-#import multipatch_analysis.fit_average_first_pulse as afpf
+import multipatch_analysis.fit_average_first_pulse as afpf
+import matplotlib.pyplot as plt
 
 
 def join_pulse_response_to_expt(query):
@@ -22,7 +23,7 @@ def join_pulse_response_to_expt(query):
 
     return query, pre_rec, post_rec
 
-def get_data(session, pair):
+def get_single_pulse_data(session, pair):
     """Select records from pulse_response_strength table
     This is a version grabbed from cs.get_amps altered to get
     additional info.  Note that if cs.get_baseline_amps is also
@@ -81,13 +82,14 @@ expt = db.experiment_from_timestamp(uid, session=session)
 pair = expt.pairs[(pre_cell_id, post_cell_id)]
 
 # get pulse ids from connection strength
-pulse_responses = get_data(session, pair)
+pulse_responses = get_single_pulse_data(session, pair)
 for pr in pulse_responses:
-    data_trace = Trace(data=pr.data, 
-        t0= pr.response_start_time - pr.spike_time + time_before_spike, 
-        sample_rate=db.default_sample_rate).time_slice(start=0, stop=None) 
-
-    afpf.fit_single_first_pulse(pr, pair)
+    out = afpf.fit_single_first_pulse(pr, pair)
+    if pr.clamp_mode == 'vc':
+        plt.plot(out['vc_psp_data'], 'b')
+        plt.plot(out['vc_psp_fit'], 'r')
+        plt.show()
+    
 
 # # get pulse ids from pulse_responses table
 # pulse_stim_response_ids=[]

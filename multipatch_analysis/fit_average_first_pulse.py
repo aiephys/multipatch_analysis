@@ -362,21 +362,22 @@ def fit_average_first_pulses(pair):
     return out_dict
 
 def fit_single_first_pulse(pr, pair):
-    #TODO:!!!!!NEED TO MAKE SURE THE PULSE DATA ARE ALIGNED TO DVDT!!!!
     #TODO: HAS THE APPROPRIATE QC HAPPENED?
     message = None #initialize error message for downstream processing 
     # excitatory or inhibitory?
     excitation = pair.connection_strength.synapse_type
+    if not excitation:
+        raise Exception('there is no synapse_type in connection_strength')
 
     # get response latency from average first pulse table
-    if pulse.clamp_mode == 'vc':
+    if pr.clamp_mode == 'vc':
         weight_i = np.array([0])
         latency_i = None
         amp_i = None
         rise_time_i = None
         decay_tau_i = None
-        avg_data_waveform_i = np.array([0])
-        avg_fit_waveform_i = np.array([0])
+        data_waveform_i = np.array([0])
+        fit_waveform_i = np.array([0])
         dt_i = None
         nrmse_i = None
         if pair.avg_first_pulse_fit.vc_latency:
@@ -400,15 +401,15 @@ def fit_single_first_pulse(pr, pair):
         else:
             return {'error': 'no vc_latency available from avg_first_pulse_fit table'} #no row will be made in the table because the error message is not none               
 
-    elif pulse.clamp_mode == 'ic':
+    elif pr.clamp_mode == 'ic':
         # set voltage to none since this is current clamp
         weight_v = np.array([0])
         latency_v = None
         amp_v = None
         rise_time_v = None
         decay_tau_v = None
-        avg_data_waveform_v = np.array([0])
-        avg_fit_waveform_v = np.array([0])
+        data_waveform_v = np.array([0])
+        fit_waveform_v = np.array([0])
         dt_v = None
         nrmse_v = None
         if pair.avg_first_pulse_fit.ic_latency:
@@ -444,12 +445,10 @@ def fit_single_first_pulse(pr, pair):
         'ic_latency': latency_i,
         'ic_rise_time': rise_time_i,
         'ic_decay_tau': decay_tau_i,
-        'ic_psp_data': avg_data_waveform_i,
-        'ic_psp_fit': avg_fit_waveform_i,
+        'ic_psp_data': data_waveform_i,
+        'ic_psp_fit': fit_waveform_i,
         'ic_dt': dt_i,
         'ic_nrmse': nrmse_i,
-        'ic_measured_baseline': measured_baseline_i,
-        'ic_measured_amp': measured_relative_amp_i,
 
         'vc_amp': amp_v,
         'vc_latency': latency_v,
@@ -459,8 +458,7 @@ def fit_single_first_pulse(pr, pair):
         'vc_psp_fit': fit_waveform_v,
         'vc_dt': dt_v,
         'vc_nrmse': nrmse_v,
-        'vc_measured_baseline': measured_baseline_v,
-        'vc_measured_amp': measured_relative_amp_v,
+
         'error': message
     } 
     
