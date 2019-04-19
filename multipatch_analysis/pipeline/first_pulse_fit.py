@@ -150,7 +150,7 @@ class SingleFirstPulseFitPipelineModule(DatabasePipelineModule):
                         errors += "(%d->%d) %s\n\n" % (pre_cell_id, post_cell_id, result['error'])
                     else:
                         result.pop('error')
-                        afpf = db.SingleFirstPulseFit(pair=pair, **result)
+                        afpf = db.SingleFirstPulseFit(pulse_response_id=pr.id, **result)
                         session.add(afpf)
                 except:
                     # unhandled exception occurred; we consider this an unsuccessful run

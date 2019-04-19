@@ -369,7 +369,18 @@ def fit_single_first_pulse(pr, pair):
     if not excitation:
         raise Exception('there is no synapse_type in connection_strength')
 
+    if excitation == 'in':
+        if not pr.in_qc_pass:
+            return {'error': 'this pulse does not pass inhibitory qc'}    
+    if excitation == 'ex':
+        if not pr.ex_qc_pass:
+            return {'error': 'this pulse does not pass excitatory qc'}
+
     # get response latency from average first pulse table
+    if not pair.avg_first_pulse_fit:
+        return {'error': 'no entry in avg_first_pulse_fit table for this pair'}
+        
+
     if pr.clamp_mode == 'vc':
         weight_i = np.array([0])
         latency_i = None

@@ -72,9 +72,10 @@ def get_single_pulse_data(session, pair):
     # return recs
 
 
-uid=1527020350.517
-pre_cell_id=6
-post_cell_id=7
+#uid=1527020350.517
+uid=1483748888.290
+pre_cell_id=3
+post_cell_id=1
 
 # query a pair
 session = db.Session()
@@ -84,6 +85,10 @@ pair = expt.pairs[(pre_cell_id, post_cell_id)]
 # get pulse ids from connection strength
 pulse_responses = get_single_pulse_data(session, pair)
 for pr in pulse_responses:
+    if pr.id != 317966:
+        continue 
+        
+    print('pulse response id', pr.id)
     out = afpf.fit_single_first_pulse(pr, pair)
     if pr.clamp_mode == 'vc':
         plt.plot(out['vc_psp_data'], 'b')
