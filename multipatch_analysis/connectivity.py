@@ -529,9 +529,9 @@ class DynamicsAnalyzer(object):
             dynamics = [c.dynamics for c in connections] if len(connections) > 0 else float('nan')
             for connection in connections:
                 d = connection.dynamics
-                pr_8_1_50.append(d.pulse_ratio_8_1_50Hz if d is not None else float('nan'))
-                pr_2_1_50.append(d.pulse_ratio_2_1_50Hz if d is not None else float('nan'))
-                pr_5_1_50.append(d.pulse_ratio_5_1_50Hz if d is not None else float('nan'))
+                pr_8_1_50.append(d.pulse_ratio_8_1_50hz if d is not None else float('nan'))
+                pr_2_1_50.append(d.pulse_ratio_2_1_50hz if d is not None else float('nan'))
+                pr_5_1_50.append(d.pulse_ratio_5_1_50hz if d is not None else float('nan'))
 
 
             self.results[(pre_class, post_class)] = {
