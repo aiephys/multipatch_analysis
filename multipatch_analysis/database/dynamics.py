@@ -11,9 +11,9 @@ Dynamics = make_table(
     comment="Describes short term dynamics of synaptic connections.",
     columns=[
         ('pair_id', 'pair.id', 'The ID of the cell pair described by each record', {'index': True, 'unique': True}),
-        ('pulse_ratio_8_1_50Hz', 'float', '8:1 pulse ratio for 50Hz induction', {'index': True}),
-        ('pulse_ratio_2_1_50Hz', 'float', '2:1 pulse ratio for 50Hz induction', {'index': True}),
-        ('pulse_ratio_5_1_50Hz', 'float', '5:1 pulse ratio for 50Hz induction', {'index': True}),
+        ('pulse_ratio_8_1_50hz', 'float', '8:1 pulse ratio for 50Hz induction', {'index': True}),
+        ('pulse_ratio_2_1_50hz', 'float', '2:1 pulse ratio for 50Hz induction', {'index': True}),
+        ('pulse_ratio_5_1_50hz', 'float', '5:1 pulse ratio for 50Hz induction', {'index': True}),
     ]
 )
 

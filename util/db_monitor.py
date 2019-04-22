@@ -119,10 +119,13 @@ class ScreenPrint(object):
 if __name__ == '__main__':
     import time
     
-    sp = ScreenPrint()
-    
-    while True:
-        sp.reset()
+    monitor = '--one' not in sys.argv
+    if monitor:
+        sp = ScreenPrint()
+        while True:
+            sp.reset()
+            check()
+            sp.clear_to_bottom()        
+            time.sleep(1.0)
+    else:
         check()
-        sp.clear_to_bottom()        
-        time.sleep(1.0)
