@@ -539,12 +539,12 @@ class DynamicsAnalyzer(object):
             'connected_pairs': connections,
             'n_connections': len(connections),
             'dynamics': dynamics,
-            'pulse_ratio_8_1_50Hz': np.nanmean(pr_8_1_50),
-            'pulse_ratio_2_1_50Hz': np.nanmean(pr_2_1_50),
-            'pulse_ratio_5_1_50Hz': np.nanmean(pr_5_1_50),
-            'pulse_ratio_8_1_50Hz_stdev': [-np.nanstd(pr_8_1_50), np.nanstd(pr_8_1_50)],
-            'pulse_ratio_2_1_50Hz_stdev': [-np.nanstd(pr_2_1_50), np.nanstd(pr_2_1_50)],
-            'pulse_ratio_5_1_50Hz_stdev': [-np.nanstd(pr_5_1_50), np.nanstd(pr_5_1_50)],
+            'pulse_ratio_8_1_50hz': np.nanmean(pr_8_1_50),
+            'pulse_ratio_2_1_50hz': np.nanmean(pr_2_1_50),
+            'pulse_ratio_5_1_50hz': np.nanmean(pr_5_1_50),
+            'pulse_ratio_8_1_50hz_stdev': [-np.nanstd(pr_8_1_50), np.nanstd(pr_8_1_50)],
+            'pulse_ratio_2_1_50hz_stdev': [-np.nanstd(pr_2_1_50), np.nanstd(pr_2_1_50)],
+            'pulse_ratio_5_1_50hz_stdev': [-np.nanstd(pr_5_1_50), np.nanstd(pr_5_1_50)],
             'None': None,
             }
         
@@ -553,21 +553,21 @@ class DynamicsAnalyzer(object):
     def output_fields(self):
        
         self.fields = {'color_by': [
-            ('pulse_ratio_8_1_50Hz', {'mode': 'range', 'defaults': {
+            ('pulse_ratio_8_1_50hz', {'mode': 'range', 'defaults': {
                 'Min': 0, 
                 'Max': 2, 
                 'colormap': pg.ColorMap(
                 [0, 0.5, 1.0],
                 [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
             )}}),
-            ('pulse_ratio_2_1_50Hz', {'mode': 'range', 'defaults': {
+            ('pulse_ratio_2_1_50hz', {'mode': 'range', 'defaults': {
                 'Min': 0, 
                 'Max': 2, 
                 'colormap': pg.ColorMap(
                 [0, 0.5, 1.0],
                 [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
             )}}),
-            ('pulse_ratio_5_1_50Hz', {'mode': 'range', 'defaults': {
+            ('pulse_ratio_5_1_50hz', {'mode': 'range', 'defaults': {
                 'Min': 0, 
                 'Max': 2, 
                 'colormap': pg.ColorMap(
@@ -576,13 +576,13 @@ class DynamicsAnalyzer(object):
             )}}),
             ],
             'show_confidence': [
-            'pulse_ratio_8_1_50Hz_stdev',
-            'pulse_ratio_2_1_50Hz_stdev',
-            'pulse_ratio_5_1_50Hz_stdev',
+            'pulse_ratio_8_1_50hz_stdev',
+            'pulse_ratio_2_1_50hz_stdev',
+            'pulse_ratio_5_1_50hz_stdev',
             'None',
             ]}
 
-        defaults = {'color_by': 'pulse_ratio_8_1_50Hz', 
+        defaults = {'color_by': 'pulse_ratio_8_1_50hz', 
             'text': '{n_connections}', 
             'show_confidence': 'None',
             'log': False,
