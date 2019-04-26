@@ -219,7 +219,7 @@ class ConnectivityAnalyzer(object):
     def plot_element_data(self, pre_class, post_class, field_name, color='g', trace_plt=None):
         element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class))
         element = element.rename(columns={'conn_no_data': 'no_data'}) 
-        summary = element.agg(self.summary_stat) 
+        summary = element.agg(ConnectivityAnalyzer().summary_stat)  
         val = summary[field_name]['metric_summary']
         line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
         scatter = None
