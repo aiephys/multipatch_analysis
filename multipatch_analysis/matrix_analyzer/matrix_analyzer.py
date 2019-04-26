@@ -148,8 +148,8 @@ class MatrixAnalyzer(object):
         self.matrix_display = MatrixDisplay(self.matrix_tab, self.output_fields, self.field_map)
         self.matrix_display_filter = self.matrix_display.matrix_display_filter
         self.element_scatter.set_fields(self.output_fields, self.field_map)
-        # pair_fields = [f for f in self.output_fields if f[0] not in ['connection_probability', 'gap_junction_probability', 'matrix_completeness']]
-        pair_fields = get_all_output_fields(self.analyzers[1:])
+        pair_fields = [f for f in self.output_fields if f[0] not in ['connection_probability', 'gap_junction_probability', 'matrix_completeness']]
+        # pair_fields = get_all_output_fields(self.analyzers[1:])
         self.pair_scatter.set_fields(pair_fields, self.field_map)
         self.visualizers = [self.matrix_display_filter, self.element_scatter, self.pair_scatter]
 
@@ -204,12 +204,12 @@ class MatrixAnalyzer(object):
                     'mouse V1 coarse matrix': True,
                 }},
                 'Cell Classes': {
-                    'Mouse Excitatory Cre-types': True,
+                    'Mouse Layer 2/3': True,
                 },
                 'Matrix Display': {
-                    'color_by': 'ic_fit_amp_all',
-                    'Text format': '{ic_fit_amp_all.mV}',
-                    'Show Confidence': 'None',
+                    'color_by': 'connection_probability',
+                    'Text format': '{connected}/{probed}',
+                    'Show Confidence': 'connection_probability'
                     'log_scale': False,
             },
             }},
