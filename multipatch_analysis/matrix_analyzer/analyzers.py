@@ -86,8 +86,10 @@ class ConnectivityAnalyzer(object):
             ('gap_junction', {}),
             ('distance', {'mode': 'range', 'units': 'm', 'defaults': {
                 'Max': 200e-6,
-                'colormap': thermal_colormap,
-            }}),
+                'colormap': pg.ColorMap(
+                    [0, 0.25, 0.5, 0.75, 1.0],
+                    [(0,0,100,255), (80,0,80,255), (140,0,0,255), (255,100,0,255), (255,255,100,255)],
+            )}}),
             ('connection_probability', {'mode': 'range', 'defaults': {
                 'Operation': 'Add', 
                 'colormap': pg.ColorMap(

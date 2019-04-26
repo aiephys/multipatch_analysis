@@ -209,7 +209,7 @@ class MatrixAnalyzer(object):
                 'Matrix Display': {
                     'color_by': 'connection_probability',
                     'Text format': '{connected}/{probed}',
-                    'Show Confidence': 'connection_probability'
+                    'Show Confidence': 'connection_probability',
                     'log_scale': False,
             },
             }},
