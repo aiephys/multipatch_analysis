@@ -50,7 +50,7 @@ class MatrixTab(pg.QtGui.QWidget):
         self.h_splitter.setSizes([150, 300, 200])
 
 class MatrixDisplayFilter(object):
-    def __init__(self, view_box, data_fields, confidence_fields):
+    def __init__(self, view_box, data_fields):
         self.output = None
         self._signalHandler = SignalHandler()
         self.sigOutputChanged = self._signalHandler.sigOutputChanged
@@ -58,7 +58,7 @@ class MatrixDisplayFilter(object):
         self.legend = None
         self.colorMap = ColorMapParameter()
         self.data_fields = data_fields
-        self.confidence_fields = confidence_fields
+        # self.confidence_fields = confidence_fields
         self.field_names = [field[0] for field in self.data_fields]
 
         self.colorMap.setFields(self.data_fields)
@@ -66,12 +66,48 @@ class MatrixDisplayFilter(object):
         self.params = Parameter.create(name='Matrix Display', type='group', children=[
             self.colorMap,
             {'name': 'Text format', 'type': 'str'},
-            {'name': 'Show Confidence', 'type': 'list', 'values': self.confidence_fields},
+            {'name': 'Show Confidence', 'type': 'list', 'values': [field[0] for field in self.data_fields]},
             {'name': 'log_scale', 'type': 'bool'},
         ])
     
         self.params.sigTreeStateChanged.connect(self.invalidate_output)
 
+    def element_display_output(self, result):
+        colormap = self.colorMap
+        show_confidence = self.params['Show Confidence']
+        text_format = self.params['Text format']
+        
+
+        if show_confidence != 'None':
+            self.output = {'bordercolor': 0.6}
+            default_bgcolor = np.array([128., 128., 128., 255.])
+        else:
+            self.output = {'bordercolor': 0.8}
+            default_bgcolor = np.array([220., 220., 220.])
+        
+        if result['no_data'] is True:
+            self.output['bgcolor'] = tuple(default_bgcolor)
+            self.output['fgcolor'] = 0.6
+            self.output['text'] = ''
+        else:
+            result_vals = result.loc[:, 'metric_summary']
+            mappable_result = {k:v for k,v in result_vals.iteritems() if np.isscalar(v)}
+
+            color = colormap.map(mappable_result)[0]
+        
+            # desaturate low confidence cells
+            if show_confidence is not 'None':
+                lower, upper = result[show_confidence, 'metric_conf']
+                confidence = (1.0 - (upper - lower)) ** 2
+                color = color * confidence + default_bgcolor * (1.0 - confidence)
+            # invert text color for dark background
+            self.output['fgcolor'] = 'w' if sum(color[:3]) < 384 else 'k'
+            text_result = {k:FormattableNumber(v) if isinstance(v, float) else v for k, v in result_vals.iteritems()}
+            self.output['text'] = text_format.format(**text_result)
+            self.output['bgcolor'] = tuple(color)
+
+        return self.output
+    
     def colormap_legend(self):
         if self.legend is not None:
             self.view_box.removeItem(self.legend)
@@ -97,53 +133,6 @@ class MatrixDisplayFilter(object):
             self.legend.setGradient(cmap_item.value().getGradient())
             self.legend.setLabels({'%0.02f' % (a*scale):b for a,b in zip(x, cmap_item.value().pos)})
         self.view_box.addItem(self.legend)
-
-    def element_display_output(self, result, mode='mean'):
-        colormap = self.colorMap
-        show_confidence = self.params['Show Confidence']
-        text_format = self.params['Text format']
-        
-
-        if result[show_confidence] is not None:
-            self.output = {'bordercolor': 0.6}
-            default_bgcolor = np.array([128., 128., 128., 255.])
-        else:
-            self.output = {'bordercolor': 0.8}
-            default_bgcolor = np.array([220., 220., 220.])
-        
-        if result['no_data'] is True:
-            self.output['bgcolor'] = tuple(default_bgcolor)
-            self.output['fgcolor'] = 0.6
-            self.output['text'] = ''
-        else:
-            # mappable_result = {k:v for k,v in result.iteritems() if np.isscalar(v)}
-            mappable_result = {}
-            for k, v in result.iteritems():
-                # d_type = np.array(v).dtype
-                if np.isscalar(v):
-                    mappable_result[k] = v
-                elif isinstance(v, list) and k in self.field_names:
-                    if mode=='mean':
-                        mappable_result[k] = FormattableNumber(np.nanmean(v))
-                else:
-                    mappable_result[k] = np.nan
-
-            color = colormap.map(mappable_result)[0]
-        
-            # desaturate low confidence cells
-            if result[show_confidence] is not None:
-                lower, upper = result[show_confidence]
-                confidence = (1.0 - (upper - lower)) ** 2
-                color = color * confidence + default_bgcolor * (1.0 - confidence)
-            # invert text color for dark background
-            self.output['fgcolor'] = 'w' if sum(color[:3]) < 384 else 'k'
-            r2 = result.copy()
-            r2.update(pd.Series(mappable_result))
-            self.output['text'] = text_format.format(**r2)
-            self.output['bgcolor'] = tuple(color)
-
-        return self.output
-
 
     def invalidate_output(self):
         self.output = None
@@ -187,12 +176,11 @@ class MatrixTracePlot(pg.GraphicsLayoutWidget):
 
 class MatrixDisplay(object):
     sigClicked = pg.QtCore.Signal(object, object, object, object, object) # self, matrix_item, event, row, col
-    def __init__(self, window, output_fields, confidence_fields, field_map, mode='mean'):
+    def __init__(self, window, output_fields, field_map):
         self.matrix_tab = window
         self.matrix_widget = self.matrix_tab.matrix_widget
-        self.matrix_display_filter = MatrixDisplayFilter(self.matrix_widget.view_box, output_fields, confidence_fields)
+        self.matrix_display_filter = MatrixDisplayFilter(self.matrix_widget.view_box, output_fields)
         self.field_map = field_map
-        self.mode = mode
         self.matrix_map = {}
         self.hist_plot = None
         self.line = None
@@ -206,7 +194,7 @@ class MatrixDisplay(object):
         self.matrix_widget.sigClicked.connect(self.display_matrix_element_data)
 
     def display_matrix_element_data(self, matrix_item, event, row, col):
-        pre_class, post_class = self.matrix_map[row, col]
+        pre_class, post_class = [k for k, v in self.matrix_map.items() if v==[row, col]][0]
         analyzer = self.field_map[self.field_name]
         analyzer.print_element_info(pre_class, post_class, self.field_name)
         if self.hist_plot is not None:
@@ -214,16 +202,16 @@ class MatrixDisplay(object):
                 self.selected += 1
                 if self.selected >= len(self.colors):
                     self.selected = 0
-                self.display_element_output(row, col, analyzer, trace_plot_list=self.trace_plot_list)
+                self.display_element_data(row, col, analyzer, trace_plot_list=self.trace_plot_list)
             else:
                 self.display_element_reset() 
-                self.display_element_output(row, col, analyzer)
+                self.display_element_data(row, col, analyzer)
 
-    def display_element_output(self, row, col, analyzer, trace_plot_list=None):
+    def display_element_data(self, row, col, analyzer, trace_plot_list=None):
         color = self.colors[self.selected]
         self.element = self.matrix_widget.matrix.cells[row][col]
         self.element.setPen(pg.mkPen({'color': color, 'width': 5}))
-        pre_class, post_class = self.matrix_map[row, col]
+        pre_class, post_class = [k for k, v in self.matrix_map.items() if v==[row, col]][0] 
         self.trace_plot = self.matrix_tab.trace_plot.addPlot()
         self.trace_plot_list.append(self.trace_plot)
         self.line, self.scatter = analyzer.plot_element_data(pre_class, post_class, self.field_name, color=color, trace_plt=self.trace_plot)
@@ -251,8 +239,10 @@ class MatrixDisplay(object):
             for cell in cells:
                 cell.setPen(pg.mkPen({'color': bordercolor, 'width': 1}))
 
-    def update_matrix_display(self, results, cell_classes, cell_groups):
-        
+    def update_matrix_display(self, results, group_results, cell_classes, cell_groups, field_map):
+        self.results = results
+        self.group_results = group_results
+
         shape = (len(cell_groups),) * 2
         text = np.empty(shape, dtype=object)
         fgcolor = np.empty(shape, dtype=object)
@@ -262,15 +252,16 @@ class MatrixDisplay(object):
 
         # call display function on every matrix element
         
-        for i,row in enumerate(cell_groups):
-            for j,col in enumerate(cell_groups):
-                # output = self.matrix_display_filter.element_display_output(results[(row, col)])
-                output = self.matrix_display_filter.element_display_output(results[(row, col)], mode=self.mode)
-                self.matrix_map[i, j] = (row, col)
-                text[i, j] = output['text']
-                fgcolor[i, j] = output['fgcolor']
-                bgcolor[i, j] = output['bgcolor']
-                bordercolor[i, j] = output['bordercolor']
+        for i, pre in enumerate(cell_classes):
+            for j, post in enumerate(cell_classes):
+                self.matrix_map[pre, post] = [i, j]
+        for group, result in self.group_results.iterrows():
+            i, j = self.matrix_map[group]
+            output = self.matrix_display_filter.element_display_output(result)
+            text[i, j] = output['text']
+            fgcolor[i, j] = output['fgcolor']
+            bgcolor[i, j] = output['bgcolor']
+            bordercolor[i, j] = output['bordercolor']
                 
         # Force cell class descriptions down to tuples of 2 items
         # Kludgy, but works for now.
@@ -305,21 +296,13 @@ class MatrixDisplay(object):
         if self.hist_plot is not None:
             self.matrix_tab.scatter_plot.removeItem(self.hist_plot)
         self.hist_plot = self.matrix_tab.scatter_plot.addPlot()
-        vals = results.loc[self.field_name, :]
-        vals = seriesToArray(vals)
+        if field_map[self.field_name].name == 'connectivity':
+            vals = group_results[self.field_name]['metric_summary']
+        else:
+            vals = results[results[self.field_name].notnull()][self.field_name]
         y, x = np.histogram(vals, bins=np.linspace(min(vals), max(vals), 10))
         self.hist_plot.plot(x, y, stepMode=True, fillLevel=0, brush=(255,255,255,150))
         units = field.get('units', '')
         self.hist_plot.setLabels(left='Count', bottom=(self.field_name, units))
 
         # self.analysis.summary(self.results, self.field_name)
-
-def seriesToArray(series):
-    ## convert pandas series to array
-    s = series[series.notnull()]
-    s_list = s.to_list()
-    s_array = [y for x in s_list if isinstance(x, list) for y in x]
-    if len(s_array) == 0:
-        return s
-    s_array = [val for val in s_array if ~np.isnan(val)]
-    return s_array

@@ -24,7 +24,7 @@ thermal_colormap = pg.ColorMap(
             )
 
 class FormattableNumber(float):
-
+    
     @property
     def si_format(self):
         return pg.siFormat(self)
@@ -32,26 +32,38 @@ class FormattableNumber(float):
     # all of the below formats assume that the number is entered with no scaling and in the form (scale)(unit)
     @property
     def mV(self):
-        value = self*1e3
-        formatted_value = ("%0.2f mV" % value)
+        if np.isnan(self):
+            formatted_value = ''
+        else:
+            value = self*1e3
+            formatted_value = ("%0.2f mV" % value)
         return formatted_value
 
     @property
     def uV(self):
-        value = self*1e6
-        formatted_value = (u"%0.f μV" % value)
+        if np.isnan(self):
+            formatted_value = ''
+        else:
+            value = self*1e6
+            formatted_value = (u"%0.f μV" % value)
         return formatted_value
 
     @property
     def pA(self):
-        value = self*1e12
-        formatted_value = ("%0.2f pA" % value)
+        if np.isnan(self):
+            formatted_value = ''
+        else:
+            value = self*1e12
+            formatted_value = ("%0.2f pA" % value)
         return formatted_value
 
     @property
     def ms(self):
-        value = self*1e3
-        formatted_value = ("%0.2f ms" % value)
+        if np.isnan(self):
+            formatted_value = ''
+        else:
+            value = self*1e3
+            formatted_value = ("%0.2f ms" % value)
         return formatted_value
 
 
@@ -62,14 +74,16 @@ class ConnectivityAnalyzer(object):
         sigOutputChanged = pg.QtCore.Signal(object) #self
 
     def __init__(self):
+        self.name = 'connectivity'
         self.results = None
         self._signalHandler = ConnectivityAnalyzer.SignalHandler()
         self.sigOutputChanged = self._signalHandler.sigOutputChanged
 
-        self.fields = {'color_by': [
-            ('n_probed', {}),
-            ('n_connected', {}),
-            ('n_gap_junctions', {}),
+        self.fields = [
+            ('None', {}),
+            ('probed', {}),
+            ('connected', {}),
+            ('gap_junction', {}),
             ('connection_probability', {'mode': 'range', 'defaults': {
                 'Operation': 'Add', 
                 'colormap': pg.ColorMap(
@@ -81,64 +95,88 @@ class ConnectivityAnalyzer(object):
                     [0, 0.25, 0.5, 0.75, 1.0],
                     [(0,0,100,255), (80,0,80,255), (140,0,0,255), (255,100,0,255), (255,255,100,255)],
             )}}),
-            ('distance_distribution', {'mode': 'range'}),
             ('gap_junction_probability', {'mode': 'range', 'defaults': {
                 'colormap': pg.ColorMap(
                    [0, 0.01, 0.03, 0.1, 0.3, 1.0],
                     [(0,0,100, 255), (80,0,80, 255), (140,0,0, 255), (255,100,0, 255), (255,255,100, 255), (255,255,255, 255)],
             )}}),
-            ],
-            'show_confidence': [
-            'None',
-            'cp_confidence_interval',
-            ],
+            ]
+
+        self.summary_stat = {
+            'no_data': lambda x: any(x),
+            'probed': [self.metric_summary, self.metric_conf],
+            'connected': [self.metric_summary, self.metric_conf],
+            'gap_junction': [self.metric_summary, self.metric_conf],
+            'connection_probability': [self.metric_summary, self.metric_conf],
+            'gap_junction_probability': [self.metric_summary, self.metric_conf],
+            'matrix_completeness': [self.metric_summary, self.metric_conf],
+            
         }
 
+    def metric_summary(self, x): 
+        if x.name in ['connected', 'probed', 'gap_junction']:
+            return sum(filter(None, x))
+        else:
+            p = x.apply(pd.Series)
+            p1 = p.apply(sum)
+            connected = float(p1[0])
+            probed = float(p1[1])
+
+            if x.name == 'matrix_completeness':
+                probed_progress = probed/80
+                connected_progress = connected/6
+                return np.clip(np.where(probed_progress > connected_progress, probed_progress, connected_progress), 0, 1)
+            elif x.name.endswith('probability'):
+                return connected/probed       
+
+    def metric_conf(self, x):
+        if x.name.endswith('probability'):
+            p = x.apply(pd.Series)
+            p1 = p.apply(sum)
+            connected = float(p1[0])
+            probed = float(p1[1])
+            return connection_probability_ci(connected, probed)
+        else:
+            return float('nan')
+    
     def invalidate_output(self):
         self.results = None
 
     def measure(self, pair_groups):
         """Given a list of cell pairs and a dict that groups cells together by class,
-        return a structure that describes connectivity between cell classes.
+        return a structure that describes connectivity of each cell pair.
         """    
         results = OrderedDict()
         # self.pair_results = None
 
         for key, class_pairs in pair_groups.items():
             pre_class, post_class = key
-            no_data = False
-            probed_pairs = [p for p in class_pairs if pair_was_probed(p, pre_class.is_excitatory)]
-            connections_found = [p for p in probed_pairs if p.synapse]
-            gap_junctions = [p for p in probed_pairs if p.electrical]
-            n_connected = len(connections_found)
-            n_gap_junctions = len(gap_junctions)
-            n_probed = len(probed_pairs)
-            probed_progress = n_probed / 80.
-            connected_progress = n_connected / 6.
-            total_progress = np.clip(np.where(probed_progress > connected_progress, probed_progress, connected_progress), 0, 1)
-            conf_interval = connection_probability_ci(n_connected, n_probed)
-            conn_prob = float('nan') if n_probed == 0 else n_connected / n_probed
-            gap_prob = float('nan') if n_probed == 0 else n_gap_junctions / n_probed
-            if n_probed == 0:
-                no_data = True
 
+            for pair in class_pairs:
+                no_data = False
+                probed = pair_was_probed(pair, pre_class.is_excitatory)
+                if probed is False:
+                    no_data = True
+
+                connected = pair.synapse if probed is True else False
+                gap = pair.electrical if probed is True else False
                 
-            results[(pre_class, post_class)] = {
+
+                results[pair] = {
                 'conn_no_data': no_data,
-                'n_probed': n_probed,
-                'n_connected': n_connected,
-                'connection_probability': conn_prob,
-                'cp_confidence_interval': conf_interval,
-                'connected_pairs': connections_found,
-                'probed_pairs': probed_pairs,
-                'matrix_completeness': total_progress,
-                'gap_junctions': gap_junctions,
-                'n_gap_junctions': n_gap_junctions,
-                'gap_junction_probability': gap_prob,
-                'None': None
-            }
-        
-        self.results = pd.DataFrame(results)
+                'pre_class': pre_class,
+                'post_class': post_class,
+                'probed': probed,
+                'connected': connected,
+                'gap_junction': gap,
+                'connection_probability': [int(connected) if connected is not None else 0, int(probed) if probed is not None else 0],
+                'gap_junction_probability': [int(gap) if gap is not None else 0, int(probed) if probed is not None else 0],
+                'matrix_completeness': [int(connected) if connected is not None else 0, int(probed) if probed is not None else 0],
+                
+                }
+
+
+        self.results = pd.DataFrame.from_dict(results, orient='index')
 
         return self.results
 
@@ -146,35 +184,33 @@ class ConnectivityAnalyzer(object):
 
         return self.fields
 
-    def print_element_info(self, pre_class, post_class, metric):
-        connections = self.results[(pre_class, post_class)]['connected_pairs']
+    def print_element_info(self, pre_class, post_class, field_name):
+        element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class)) 
+        connections = element[element['connected'] == True].index.tolist()
         print ("Connection type: %s -> %s" % (pre_class, post_class))
         print ("Connected Pairs:")
         for connection in connections:
             print ("\t %s" % (connection))
-        gap_junctions = self.results[(pre_class, post_class)]['gap_junctions']
+        gap_junctions = element[element['gap_junction'] == True].index.tolist()
         print ("Gap Junctions:")
         for gap in gap_junctions:
             print ("\t %s" % (gap))
-        probed_pairs = self.results[(pre_class, post_class)]['probed_pairs']
+        probed_pairs = element[element['probed'] == True].index.tolist()
         print ("Probed Pairs:")
         for probed in probed_pairs:
             print ("\t %s" % (probed))
 
-        if 'gap_junction' in metric:
-            return gap_junctions
-        else:
-            return connections
-
     def plot_element_data(self, pre_class, post_class, field_name, color='g', trace_plt=None):
-        element = self.results.loc[[field_name, 'connected_pairs'], (pre_class, post_class)]
-        val = np.nanmean(element[field_name])
+        element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class))
+        summary = element.agg(self.summary_stat) 
+        val = summary[field_name]['metric_summary']
         line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
         scatter = None
         baseline_window = int(db.default_sample_rate * 5e-3)
         traces = []
         point_data = []
-        for pair in element['connected_pairs']:
+        connections = element[element['connected'] == True].index.tolist()
+        for pair in connections:
             cs = pair.connection_strength
             trace = cs.ic_average_response
             if trace is not None:
@@ -215,12 +251,34 @@ class StrengthAnalyzer(object):
         sigOutputChanged = pg.QtCore.Signal(object) #self
 
     def __init__(self):
+        self.name = 'strength'
         self.results = None
         self.pair_items = {}
         self._signalHandler = ConnectivityAnalyzer.SignalHandler()
         self.sigOutputChanged = self._signalHandler.sigOutputChanged
 
-        self.fields = {'color_by': [
+        self.summary_stat = {
+        'ic_fit_amp_all': [self.metric_summary, self.metric_conf],
+        'ic_fit_xoffset_all': [self.metric_summary, self.metric_conf],
+        'ic_fit_rise_time_all': [self.metric_summary, self.metric_conf],
+        'ic_fit_decay_tau_all': [self.metric_summary, self.metric_conf],
+        'vc_fit_amp_all': [self.metric_summary, self.metric_conf],
+        'vc_fit_xoffset_all': [self.metric_summary, self.metric_conf],
+        'vc_fit_rise_time_all': [self.metric_summary, self.metric_conf],
+        'vc_fit_decay_tau_all': [self.metric_summary, self.metric_conf],
+        'ic_amp_first_pulse': [self.metric_summary, self.metric_conf],
+        'ic_latency_first_pulse': [self.metric_summary, self.metric_conf],
+        'ic_rise_time_first_pulse': [self.metric_summary, self.metric_conf],
+        'ic_decay_tau_first_pulse': [self.metric_summary, self.metric_conf],
+        'vc_amp_first_pulse': [self.metric_summary, self.metric_conf],
+        'vc_latency_first_pulse': [self.metric_summary, self.metric_conf],
+        'vc_rise_time_first_pulse': [self.metric_summary, self.metric_conf],
+        'vc_decay_tau_first_pulse': [self.metric_summary, self.metric_conf],
+        'no_data': lambda x: any(x),
+        }
+
+        self.fields = [
+            ('None',{}),
             # all pulses
             ('ic_fit_amp_all', {'mode': 'range', 'units': 'V', 'defaults': {
                 'Min': -1e-3, 
@@ -307,127 +365,55 @@ class StrengthAnalyzer(object):
                 'Max': 20e-3,
                 'colormap': thermal_colormap,
             }}),
-
-            # ('ic_amp_cv', {'mode': 'range', 'defaults': {
-            #     'Min': -6,
-            #     'Max': 6,
-            #     'colormap': pg.ColorMap(
-            #     [0, 0.5, 1.0],
-            #     [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
-            # )}}),
-            ],
-            'show_confidence': [
-            'None',
-            'ic_amp_stdev_all',
-            'vc_amp_stdev_all',
-            'ic_xoffset_stdev_all',
-            'vc_xoffset_stdev_all',
-            'ic_rise_time_stdev_all',
-            'vc_rise_time_stdev_all',
-            'ic_decay_tau_stdev_all',
-            'vc_decay_tau_stdev_all',
-            'ic_amp_stdev_first',
-            'vc_amp_stdev_first',
-            'ic_latency_stdev_first',
-            'vc_latency_stdev_first',
-            'ic_rise_time_stdev_first',
-            'vc_rise_time_stdev_first',
-            'ic_decay_tau_stdev_first',
-            'vc_decay_tau_stdev_first',
-            ],
-        }
+        ]
+        
 
     def invalidate_output(self):
         self.results = None
         self.pair_items = {}
 
     def measure(self, pair_groups):
+        """Given a list of cell pairs and a dict that groups cells together by class,
+        return a structure that describes strength and kinetics of each cell pair.
+        """  
         results = OrderedDict()
         
         for key, class_pairs in pair_groups.items():
             pre_class, post_class = key
-            no_data = False
-            connections = [p for p in class_pairs if p.synapse]
-            if len(connections) == 0:
-                no_data = True
-            # All pulses
-            connection_strength = [c.connection_strength for c in connections] if len(connections) > 0 else float('nan')
-            ic_amps_all = filter(None, [cs.ic_fit_amp for cs in connection_strength]) if len(connections) > 0 else float('nan')
-            vc_amps_all = filter(None, [cs.vc_fit_amp for cs in connection_strength]) if len(connections) > 0 else float('nan')
-            ic_xoffset_all = filter(None, [cs.ic_fit_xoffset for cs in connection_strength]) if len(connections) > 0 else float('nan')
-            vc_xoffset_all = filter(None, [cs.vc_fit_xoffset for cs in connection_strength]) if len(connections) > 0 else float('nan')
-            ic_rise_all = filter(None, [cs.ic_fit_rise_time for cs in connection_strength]) if len(connections) > 0 else float('nan')
-            vc_rise_all = filter(None, [cs.vc_fit_rise_time for cs in connection_strength]) if len(connections) > 0 else float('nan')
-            ic_decay_all = filter(None, [cs.ic_fit_decay_tau for cs in connection_strength]) if len(connections) > 0 else float('nan')
-            vc_decay_all = filter(None, [cs.vc_fit_decay_tau for cs in connection_strength]) if len(connections) > 0 else float('nan')
-            
-            #First pulses
-            first_pulse_fit = filter(None, [c.avg_first_pulse_fit for c in connections]) if len(connections) > 0 else float('nan')
-            ic_amps_first = filter(None, [fpf.ic_amp for fpf in first_pulse_fit]) if len(connections) > 0 else float('nan')
-            vc_amps_first = filter(None, [fpf.vc_amp for fpf in first_pulse_fit]) if len(connections) > 0 else float('nan')
-            ic_latency_first = filter(None, [fpf.ic_latency for fpf in first_pulse_fit]) if len(connections) > 0 else float('nan')
-            vc_latency_first = filter(None, [fpf.vc_latency for fpf in first_pulse_fit]) if len(connections) > 0 else float('nan')
-            ic_rise_first = filter(None, [fpf.ic_rise_time for fpf in first_pulse_fit]) if len(connections) > 0 else float('nan')
-            vc_rise_first = filter(None, [fpf.vc_rise_time for fpf in first_pulse_fit]) if len(connections) > 0 else float('nan')
-            ic_decay_first = filter(None, [fpf.ic_decay_tau for fpf in first_pulse_fit]) if len(connections) > 0 else float('nan')
-            vc_decay_first = filter(None, [fpf.vc_decay_tau for fpf in first_pulse_fit]) if len(connections) > 0 else float('nan')
 
-            # cv = []
-            # if len(connections) > 0:
-            #     for connection in connections:
-            #         fpda = get_deconvolved_first_pulse_amps(connection)
-            #         if fpda is not None:
-            #             cv.append(np.std(fpda)/np.mean(fpda))
-            #         else:
-            #             cv.append(float('nan'))
-            # else:
-            #     cv = float('nan')
+            for pair in class_pairs:
+                if pair.synapse is False:
+                    no_data = True
+                    cs = None
+                    fpf = None
+                elif pair.synapse is True:
+                    no_data = False
+                    cs = pair.connection_strength
+                    fpf = pair.avg_first_pulse_fit
 
-            results[(pre_class, post_class)] = {
+                results[pair] = {
                 'strength_no_data': no_data,
-                'connected_pairs': connections,
-                'n_connected': len(connections),
-                # 'cv_array': cv,
-                ## all pulses
-                'ic_fit_amp_all': ic_amps_all,
-                'ic_fit_xoffset_all': ic_xoffset_all,
-                'ic_fit_rise_time_all': ic_rise_all,
-                'ic_fit_decay_tau_all': ic_decay_all,
-                # 'ic_amp_cv': np.nanmedian(cv),
-                'vc_fit_amp_all': vc_amps_all,
-                'vc_fit_xoffset_all': vc_xoffset_all,
-                'vc_fit_rise_time_all': vc_rise_all,
-                'vc_fit_decay_tau_all': vc_decay_all,
-                'ic_amp_stdev_all': [-np.std(ic_amps_all), np.std(ic_amps_all)],
-                'ic_xoffset_stdev_all': [-np.std(ic_xoffset_all), np.std(ic_xoffset_all)],
-                'ic_rise_time_stdev_all': [-np.std(ic_rise_all), np.std(ic_rise_all)],
-                'ic_decay_tau_stdev_all': [-np.std(ic_decay_all), np.std(ic_decay_all)],
-                'vc_amp_stdev_all': [-np.std(vc_amps_all), np.std(vc_amps_all)],
-                'vc_xoffset_stdev_all': [-np.std(vc_xoffset_all), np.std(vc_xoffset_all)],
-                'vc_rise_time_stdev_all': [-np.std(vc_rise_all), np.std(vc_rise_all)],
-                'vc_decay_tau_stdev_all': [-np.std(vc_decay_all), np.std(vc_decay_all)],
-                ## First pulse
-                'ic_amp_first_pulse': ic_amps_first,
-                'ic_latency_first_pulse': ic_latency_first,
-                'ic_rise_time_first_pulse': ic_rise_first,
-                'ic_decau_tau_first_pulse': ic_decay_first,
-                'vc_amp_first_pulse': vc_amps_first,
-                'vc_latency_first_pulse': vc_latency_first,
-                'vc_rise_time_first_pulse': vc_rise_first,
-                'vc_decau_tau_first_pulse': vc_decay_first,
-                'ic_amp_stdev_first': [-np.std(ic_amps_first), np.std(ic_amps_first)],
-                'ic_latency_stdev_first': [-np.std(ic_latency_first), np.std(ic_latency_first)],
-                'ic_rise_time_stdev_first': [-np.std(ic_rise_first), np.std(ic_rise_first)],
-                'ic_decay_rau_stdev_first': [-np.std(ic_decay_first), np.std(ic_decay_first)],
-                'vc_amp_stdev_first': [-np.std(vc_amps_first), np.std(vc_amps_first)],
-                'vc_latency_stdev_first': [-np.std(vc_latency_first), np.std(vc_latency_first)],
-                'vc_rise_time_stdev_first': [-np.std(vc_rise_first), np.std(vc_rise_first)],
-                'vc_decay_tau_stdev_first': [-np.std(vc_decay_first), np.std(vc_decay_first)],
+                'pre_class': pre_class,
+                'post_class': post_class,
+                'ic_fit_amp_all': cs.ic_fit_amp if cs is not None else float('nan'),
+                'ic_fit_xoffset_all': cs.ic_fit_xoffset if cs is not None else float('nan'),
+                'ic_fit_rise_time_all': cs.ic_fit_rise_time if cs is not None else float('nan'),
+                'ic_fit_decay_tau_all': cs.ic_fit_decay_tau if cs is not None else float('nan'),
+                'vc_fit_amp_all': cs.vc_fit_amp if cs is not None else float('nan'),
+                'vc_fit_xoffset_all': cs.vc_fit_xoffset if cs is not None else float('nan'),
+                'vc_fit_rise_time_all': cs.vc_fit_rise_time if cs is not None else float('nan'),
+                'vc_fit_decay_tau_all': cs.vc_fit_decay_tau if cs is not None else float('nan'),
+                'ic_amp_first_pulse': fpf.ic_amp if fpf is not None else float('nan'),
+                'ic_latency_first_pulse': fpf.ic_latency if fpf is not None else float('nan'),
+                'ic_rise_time_first_pulse': fpf.ic_rise_time if fpf is not None else float('nan'),
+                'ic_decay_tau_first_pulse': fpf.ic_decay_tau if fpf is not None else float('nan'),
+                'vc_amp_first_pulse': fpf.vc_amp if fpf is not None else float('nan'),
+                'vc_latency_first_pulse': fpf.vc_latency if fpf is not None else float('nan'),
+                'vc_rise_time_first_pulse': fpf.vc_rise_time if fpf is not None else float('nan'),
+                'vc_decay_tau_first_pulse': fpf.vc_decay_tau if fpf is not None else float('nan'),
+                }
 
-                'None': None,
-            }
-
-        self.results = pd.DataFrame(results)
+        self.results = pd.DataFrame.from_dict(results, orient='index')
 
         return self.results
 
@@ -435,15 +421,23 @@ class StrengthAnalyzer(object):
 
         return self.fields
 
+    def metric_summary(self, x):
+        return np.nanmean(x)
+
+    def metric_conf(self, x):
+        return [-np.nanstd(x), np.nanstd(x)]
+
     def print_element_info(self, pre_class, post_class, field_name=None):
         if field_name is not None:
             fn = field_name.split('_all')[0] if field_name.endswith('all') else field_name.split('_first_pulse')[0]
-            units = [field[1].get('units', '') for field in self.fields['color_by'] if field[0] == field_name][0] 
-            element = self.results.loc[[field_name, 'connected_pairs'], (pre_class, post_class)]
+            units = [field[1].get('units', '') for field in self.fields if field[0] == field_name][0] 
+            element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class)) 
             print ("Connection type: %s -> %s" % (pre_class, post_class))    
-            print ("\t Grand Average %s = %s" % (field_name, pg.siFormat(np.nanmean(element.loc[field_name]), suffix=units)))
+            print ("\t Grand Average %s = %s" % (field_name, pg.siFormat(element[field_name].mean(), suffix=units)))
             print ("Connected Pairs:")
-            for value, pair in zip(element[field_name], element['connected_pairs']):
+            for pair, value in element[field_name].iteritems():
+                if pair.synapse is not True:
+                    continue
                 print ("\t %s" % (pair))
                 if np.isnan(value):
                     print("\t\t No QC Data")
@@ -452,15 +446,17 @@ class StrengthAnalyzer(object):
 
     def plot_element_data(self, pre_class, post_class, field_name, color='g', trace_plt=None):
         fn = field_name.split('_all')[0] if field_name.endswith('all') else field_name.split('_first_pulse')[0]
-        element = self.results.loc[[field_name, 'connected_pairs'], (pre_class, post_class)]
-        val = np.nanmean(element[field_name])
+        element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class))
+        val = element[field_name].mean()
         line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
         scatter = None
         baseline_window = int(db.default_sample_rate * 5e-3)
         values = []
         traces = []
         point_data = []
-        for value, pair in zip(element[field_name], element['connected_pairs']):
+        for pair, value in element[field_name].iteritems():
+            if pair.synapse is not True:
+                continue
             if np.isnan(value):
                 continue
             if field_name.endswith('all'):
@@ -484,9 +480,9 @@ class StrengthAnalyzer(object):
             trace_item.sigClicked.connect(self.trace_plot_clicked)
             traces.append(trace)
             self.pair_items[pair.id] = [trace_item]
-        y_values = pg.pseudoScatter(np.asarray(values, dtype=float) + 10., spacing=1)
+        y_values = pg.pseudoScatter(np.asarray(values, dtype=float), spacing=1)
         scatter = pg.ScatterPlotItem(symbol='o', brush=(color + (150,)), pen='w', size=12)
-        scatter.setData(values, y_values + 1., data=point_data)
+        scatter.setData(values, y_values + 10., data=point_data)
         for point in scatter.points():
             pair_id = point.data().id
             self.pair_items[pair_id].append(point)
@@ -523,77 +519,79 @@ class DynamicsAnalyzer(object):
         sigOutputChanged = pg.QtCore.Signal(object) #self
 
     def __init__(self):
+        self.name = 'dynamics'
         self.results = None
         self._signalHandler = ConnectivityAnalyzer.SignalHandler()
         self.sigOutputChanged = self._signalHandler.sigOutputChanged
 
-        self.fields = {'color_by': [
-            ('pulse_ratio_8_1_50Hz', {'mode': 'range', 'defaults': {
+        self.summary_stat = {
+            'pulse_ratio_8_1_50hz': [self.metric_summary, self.metric_conf],
+            'pulse_ratio_2_1_50hz': [self.metric_summary, self.metric_conf],
+            'pulse_ratio_5_1_50hz': [self.metric_summary, self.metric_conf],
+        }
+        
+        self.fields = [
+            ('None', {}),
+            ('pulse_ratio_8_1_50hz', {'mode': 'range', 'defaults': {
                 'Min': 0, 
                 'Max': 2, 
                 'colormap': pg.ColorMap(
                 [0, 0.5, 1.0],
                 [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
             )}}),
-            ('pulse_ratio_2_1_50Hz', {'mode': 'range', 'defaults': {
+            ('pulse_ratio_2_1_50hz', {'mode': 'range', 'defaults': {
                 'Min': 0, 
                 'Max': 2, 
                 'colormap': pg.ColorMap(
                 [0, 0.5, 1.0],
                 [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
             )}}),
-            ('pulse_ratio_5_1_50Hz', {'mode': 'range', 'defaults': {
+            ('pulse_ratio_5_1_50hz', {'mode': 'range', 'defaults': {
                 'Min': 0, 
                 'Max': 2, 
                 'colormap': pg.ColorMap(
                 [0, 0.5, 1.0],
                 [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
             )}}),
-            ],
-            'show_confidence': [
-            'pulse_ratio_8_1_50Hz_stdev',
-            'pulse_ratio_2_1_50Hz_stdev',
-            'pulse_ratio_5_1_50Hz_stdev',
-            'None',
-            ]}
+            ]
 
     def invalidate_output(self):
         self.results = None
 
+    def metric_summary(self, x):
+        return np.nanmean(x)
+
+    def metric_conf(self, x):
+        return [-np.nanstd(x), np.nanstd(x)]
+
     def measure(self, pair_groups):
+        """Given a list of cell pairs and a dict that groups cells together by class,
+        return a structure that describes dynamics of each cell pair.
+        """  
         results = OrderedDict()
         for key, class_pairs in pair_groups.items():
             pre_class, post_class = key
-            no_data = False
-            connections = [p for p in class_pairs if p.synapse]
-            if len(connections) == 0:
-                no_data = True
-            pr_8_1_50 = []
-            pr_2_1_50 = [] 
-            pr_5_1_50 = []   
-            dynamics = [c.dynamics for c in connections] if len(connections) > 0 else float('nan')
-            for connection in connections:
-                d = connection.dynamics
-                pr_8_1_50.append(d.pulse_ratio_8_1_50Hz if d is not None else float('nan'))
-                pr_2_1_50.append(d.pulse_ratio_2_1_50Hz if d is not None else float('nan'))
-                pr_5_1_50.append(d.pulse_ratio_5_1_50Hz if d is not None else float('nan'))
+            
+            for pair in class_pairs:
+                if pair.synapse is False:
+                    no_data = True
+                    dynamics = None
+                elif pair.synapse is True:
+                    no_data = False
+                    dynamics = pair.dynamics
 
+                results[pair] = {
+                'dynamics_no_data': no_data,
+                'pre_class': pre_class,
+                'post_class': post_class,
+                'pulse_ratio_8_1_50hz': dynamics.pulse_ratio_8_1_50hz if dynamics is not None else float('nan'),
+                'pulse_ratio_2_1_50hz': dynamics.pulse_ratio_2_1_50hz if dynamics is not None else float('nan'),
+                'pulse_ratio_5_1_50hz': dynamics.pulse_ratio_5_1_50hz if dynamics is not None else float('nan'),
+                }
 
-            results[(pre_class, post_class)] = {
-            'dynamics_no_data': no_data,
-            'connected_pairs': connections,
-            'n_connected': len(connections),
-            'dynamics': dynamics,
-            'pulse_ratio_8_1_50Hz': pr_8_1_50,
-            'pulse_ratio_2_1_50Hz': pr_2_1_50,
-            'pulse_ratio_5_1_50Hz': pr_5_1_50,
-            'pulse_ratio_8_1_50Hz_stdev': [-np.nanstd(pr_8_1_50), np.nanstd(pr_8_1_50)],
-            'pulse_ratio_2_1_50Hz_stdev': [-np.nanstd(pr_2_1_50), np.nanstd(pr_2_1_50)],
-            'pulse_ratio_5_1_50Hz_stdev': [-np.nanstd(pr_5_1_50), np.nanstd(pr_5_1_50)],
-            'None': None,
-            }
         
-        self.results = pd.DataFrame(results)
+        self.results = pd.DataFrame.fromt_dict(results, orient='index')
+        
         return self.results
 
     def output_fields(self):
@@ -602,11 +600,11 @@ class DynamicsAnalyzer(object):
 
     def print_element_info(self, pre_class, post_class, field_name=None):
         if field_name is not None:
-            element = self.results.loc[[field_name, 'connected_pairs'], (pre_class, post_class)]
+            element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class))
             print ("Connection type: %s -> %s" % (pre_class, post_class))    
-            print ("\t Grand Average %s = %s" % (field_name, np.mean(element[field_name])))
+            print ("\t Grand Average %s = %s" % (field_name, element[field_name].mean()))
             print ("Connected Pairs:")
-            for value, pair in zip(element[field_name], element['connected_pairs']):
+            for pair, value in element[field_name].iteritems():
                 print ("\t %s" % (pair))
                 if np.isnan(value):
                     print("\t\t No QC Data")
@@ -615,15 +613,15 @@ class DynamicsAnalyzer(object):
 
     def plot_element_data(self, pre_class, post_class, field_name, color='g', trace_plt=None):
         trace_plt = None
-        element = self.results.loc[[field_name, 'connected_pairs'], (pre_class, post_class)]
-        val = np.nanmean(element[field_name])
+        element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class))
+        val = element[field_name].mean()
         line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
         scatter = None
         baseline_window = int(db.default_sample_rate * 5e-3)
         values = []
         traces = []
         point_data = []
-        for value, pair in zip(element[field_name], element['connected_pairs']):
+        for pair, value in element[field_name].iteritems():
             if np.isnan(value):
                 continue
             traces = []
@@ -648,6 +646,7 @@ class DynamicsAnalyzer(object):
     def summary(self, results, metric):
         print('')
 
+
 def format_trace(trace, baseline_win, x_offset, align='spike'):
     # align can be to the pre-synaptic spike (default) or the onset of the PSP ('psp')
     baseline = float_mode(trace[0:baseline_win])
@@ -658,12 +657,12 @@ def format_trace(trace, baseline_win, x_offset, align='spike'):
 
 def get_all_output_fields(analyzer_list):
     data_fields = []
-    confidence_fields = []
+    # confidence_fields = []
     for analyzer in analyzer_list:
-        data_fields.extend(analyzer.output_fields()['color_by'])
-        confidence_fields.extend(analyzer.output_fields()['show_confidence'])
+        data_fields.extend(analyzer.output_fields())
+        # confidence_fields.extend(analyzer.output_fields()['show_confidence'])
 
-    return data_fields, confidence_fields
+    return data_fields
 
 def results_scatter(results, field_name, field, plt):
     vals = [result[field_name] for result in results.values() if np.isfinite(result[field_name])]

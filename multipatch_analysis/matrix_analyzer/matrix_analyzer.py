@@ -116,8 +116,7 @@ class MatrixAnalyzer(object):
         self.tabs.show()
         self.matrix_tab = self.tabs.matrix_tab
         self.scatter_tab = self.tabs.scatter_tab
-        self.element_scatter = self.scatter_tab.element_scatter
-        self.pair_scatter = self.scatter_tab.pair_scatter
+        
         self.analyzers = [ConnectivityAnalyzer(), StrengthAnalyzer(), DynamicsAnalyzer()]
         self.active_analyzers = []
         self.mode = 'mean'
@@ -132,21 +131,25 @@ class MatrixAnalyzer(object):
 
         self.field_map = {}
         for analyzer in self.analyzers:
-            for field in analyzer.output_fields()['color_by']:
-                self.field_map[field[0]] = analyzer
-            for field in analyzer.output_fields()['show_confidence']:
-                if field == 'None':
+            for field in analyzer.output_fields():
+                if field[0] == 'None':
                     continue
-                self.field_map[field] = analyzer
+                self.field_map[field[0]] = analyzer
+            # for field in analyzer.output_fields()['show_confidence']:
+            #     if field == 'None':
+            #         continue
+                # self.field_map[field] = analyzer
 
-        self.output_fields, self.confidence_fields = get_all_output_fields(self.analyzers)
+        self.output_fields = get_all_output_fields(self.analyzers)
+        self.element_scatter = self.scatter_tab.element_scatter
+        self.pair_scatter = self.scatter_tab.pair_scatter
         self.experiment_filter = ExperimentFilter()
         self.cell_class_filter = CellClassFilter(cell_class_groups)
-        self.matrix_display = MatrixDisplay(self.matrix_tab, self.output_fields, self.confidence_fields, self.field_map, mode=self.mode)
+        self.matrix_display = MatrixDisplay(self.matrix_tab, self.output_fields, self.field_map)
         self.matrix_display_filter = self.matrix_display.matrix_display_filter
-        self.element_scatter.set_fields(self.output_fields)
-        pair_fields, _ = get_all_output_fields(self.analyzers[1:])
-        self.pair_scatter.set_fields(pair_fields)
+        self.element_scatter.set_fields(self.output_fields, self.field_map)
+        pair_fields = get_all_output_fields(self.analyzers[1:])
+        self.pair_scatter.set_fields(pair_fields, self.field_map)
         self.visualizers = [self.matrix_display_filter, self.element_scatter, self.pair_scatter]
 
         self.default_preset = default_preset
@@ -190,13 +193,10 @@ class MatrixAnalyzer(object):
             },
             'Matrix Display': {
                 'color_by': 'connection_probability',
-                'Text format': '{n_connected}/{n_probed}',
-                'Show Confidence': 'cp_confidence_interval',
+                'Text format': '{connected}/{probed}',
+                'Show Confidence': 'connection_probability',
                 'log_scale': True,
             },
-            # 'Scatter Plot': [
-            #     'connection_probability',
-            # ]
             }},
             {'name': 'testing', 'filters': {
                 'Data Filters': {
@@ -207,9 +207,9 @@ class MatrixAnalyzer(object):
                     'Mouse Layer 2/3': True,
                 },
                 'Matrix Display': {
-                    'color_by': 'pulse_ratio_8_1_50Hz',
-                    'Text format': '{pulse_ratio_8_1_50Hz:0.2f}',
-                    'Show Confidence': 'None',
+                    'color_by': 'connection_probability',
+                    'Text format': '{connected}/{probed}',
+                    'Show Confidence': 'connection_probability',
                     'log_scale': False,
             },
             }},
@@ -239,17 +239,16 @@ class MatrixAnalyzer(object):
         if selected != 'None':
             selected_preset = [preset for preset in self.presets if preset['name'] == selected][0] 
             for filt, field in selected_preset['filters'].items():
-                if filt == 'Scatter Plot':
-                    self.spw.setSelectedFields(*field)
-                else:
-                    for field_name, value in field.items():
-                        if isinstance(value, dict):
-                            for subfield_name, v2 in value.items():
-                                self.params.child(filt).child(field_name).child(subfield_name).setValue(v2)
-                        elif field_name == 'color_by':
-                            self.matrix_display_filter.colorMap.addNew(value)
-                        else:
-                            self.params.child(filt).child(field_name).setValue(value)
+                for field_name, value in field.items():
+                    if isinstance(value, dict):
+                        for subfield_name, v2 in value.items():
+                            self.params.child(filt).child(field_name).child(subfield_name).setValue(v2)
+                    elif field_name == 'color_by':
+                        self.matrix_display_filter.colorMap.addNew(value)
+                    elif isinstance(value, tuple):
+                        self.params.child(filt).child(field_name).setValue(value[0])
+                    else:
+                        self.params.child(filt).child(field_name).setValue(value)
 
     def analyzers_needed(self):
         ## got through all of the visualizers
@@ -282,9 +281,9 @@ class MatrixAnalyzer(object):
         with pg.BusyCursor():
             self.analyzers_needed()
             self.update_results()
-            self.matrix_display.update_matrix_display(self.results, self.cell_classes, self.cell_groups)
-            # self.element_scatter.set_data(self.element_results)
-            # self.pair_scatter.set_data(self.pair_results)
+            self.matrix_display.update_matrix_display(self.results, self.group_results, self.cell_classes, self.cell_groups, self.field_map)
+            self.element_scatter.set_data(self.results)
+            self.pair_scatter.set_data(self.results)
             if self.matrix_tab.matrix_widget.matrix is not None:
                 self.matrix_display.display_element_reset()
 
@@ -301,16 +300,25 @@ class MatrixAnalyzer(object):
 
         # analyze matrix elements
         for i, analysis in enumerate(self.active_analyzers):
-            results = (analysis.measure(self.pair_groups))
+            results = analysis.measure(self.pair_groups)
+            summary_stat = analysis.summary_stat
             if i == 0:
                 self.results = results
+                self.summary_stat = summary_stat
             else:
                 merge_results = pd.concat([self.results, results])
                 self.results = merge_results[~merge_results.index.duplicated(keep='first')]
         no_data = OrderedDict()
-        for pair_group in self.pair_groups.keys():
-            no_data[pair_group] = any([self.results[pair_group].get('conn_no_data'), self.results[pair_group].get('strength_no_data'), self.results[pair_group].get('dynamics_no_data')])
-        self.results = self.results.append(pd.DataFrame(no_data, index=['no_data']))
+        # for pair_group in self.pair_groups.keys():
+        #     no_data[pair_group] = any([self.results[pair_group].get('conn_no_data'), self.results[pair_group].get('strength_no_data'), self.results[pair_group].get('dynamics_no_data')])
+        # self.results = self.results.append(pd.DataFrame(no_data, index=['no_data']))
+        for class_pairs in self.pair_groups.values():
+            for pair in class_pairs:
+                no_data[pair] = any([self.results.loc[pair].get('conn_no_data'), self.results.loc[pair].get('strength_no_data')])
+        no_data_df = pd.DataFrame.from_dict(no_data, orient='index', columns=['no_data'])
+        self.results['no_data'] = no_data_df['no_data']
+
+        self.group_results = results.groupby(['pre_class', 'post_class']).agg(summary_stat)
         
 
 
