@@ -148,13 +148,13 @@ class MatrixAnalyzer(object):
         self.matrix_display = MatrixDisplay(self.matrix_tab, self.output_fields, self.field_map)
         self.matrix_display_filter = self.matrix_display.matrix_display_filter
         self.element_scatter.set_fields(self.output_fields, self.field_map)
+        # pair_fields = [f for f in self.output_fields if f[0] not in ['connection_probability', 'gap_junction_probability', 'matrix_completeness']]
         pair_fields = get_all_output_fields(self.analyzers[1:])
         self.pair_scatter.set_fields(pair_fields, self.field_map)
         self.visualizers = [self.matrix_display_filter, self.element_scatter, self.pair_scatter]
 
         self.default_preset = default_preset
         self.session = session
-        self.results = {}
         self.cell_groups = None
         self.cell_classes = None
         self.params = ptree.Parameter.create(name='params', type='group', children=[
@@ -204,12 +204,12 @@ class MatrixAnalyzer(object):
                     'mouse V1 coarse matrix': True,
                 }},
                 'Cell Classes': {
-                    'Mouse Layer 2/3': True,
+                    'Mouse Excitatory Cre-types': True,
                 },
                 'Matrix Display': {
-                    'color_by': 'connection_probability',
-                    'Text format': '{connected}/{probed}',
-                    'Show Confidence': 'connection_probability',
+                    'color_by': 'ic_fit_amp_all',
+                    'Text format': '{ic_fit_amp_all.mV}',
+                    'Show Confidence': 'None',
                     'log_scale': False,
             },
             }},
@@ -251,7 +251,7 @@ class MatrixAnalyzer(object):
                         self.params.child(filt).child(field_name).setValue(value)
 
     def analyzers_needed(self):
-        ## got through all of the visualizers
+        ## go through all of the visualizers
         data_needed = set()
         for metric in self.matrix_display_filter.colorMap.children():
             data_needed.add(metric.name())
@@ -264,8 +264,10 @@ class MatrixAnalyzer(object):
             else:
                 data_needed.add(metric)
         data_needed.add(self.matrix_display_filter.params['Show Confidence'])
-        
-
+        for metric in self.element_scatter.fieldList.selectedItems():
+            data_needed.add(str(metric.text()))
+        for metric in self.pair_scatter.fieldList.selectedItems():
+            data_needed.add(str(metric.text()))
         
         analyzers = set([self.field_map.get(field, None) for field in data_needed])
         self.active_analyzers = [analyzer for analyzer in analyzers if analyzer is not None]
@@ -282,7 +284,7 @@ class MatrixAnalyzer(object):
             self.analyzers_needed()
             self.update_results()
             self.matrix_display.update_matrix_display(self.results, self.group_results, self.cell_classes, self.cell_groups, self.field_map)
-            self.element_scatter.set_data(self.results)
+            self.element_scatter.set_data(self.group_results)
             self.pair_scatter.set_data(self.results)
             if self.matrix_tab.matrix_widget.matrix is not None:
                 self.matrix_display.display_element_reset()
@@ -299,26 +301,24 @@ class MatrixAnalyzer(object):
         self.pair_groups = classify_pairs(self.pairs, self.cell_groups)
 
         # analyze matrix elements
-        for i, analysis in enumerate(self.active_analyzers):
+        for a, analysis in enumerate(self.active_analyzers):
             results = analysis.measure(self.pair_groups)
             summary_stat = analysis.summary_stat
-            if i == 0:
+            if a == 0:
                 self.results = results
                 self.summary_stat = summary_stat
             else:
-                merge_results = pd.concat([self.results, results])
-                self.results = merge_results[~merge_results.index.duplicated(keep='first')]
+                self.summary_stat.update(summary_stat)
+                merge_results = pd.concat([self.results, results], axis=1)
+                self.results = merge_results.loc[:, ~merge_results.columns.duplicated(keep='first')]
         no_data = OrderedDict()
-        # for pair_group in self.pair_groups.keys():
-        #     no_data[pair_group] = any([self.results[pair_group].get('conn_no_data'), self.results[pair_group].get('strength_no_data'), self.results[pair_group].get('dynamics_no_data')])
-        # self.results = self.results.append(pd.DataFrame(no_data, index=['no_data']))
         for class_pairs in self.pair_groups.values():
             for pair in class_pairs:
-                no_data[pair] = any([self.results.loc[pair].get('conn_no_data'), self.results.loc[pair].get('strength_no_data')])
+                no_data[pair] = all([self.results.loc[pair].get('conn_no_data'), self.results.loc[pair].get('strength_no_data'), self.results.loc[pair].get('dynamics_no_data')])
         no_data_df = pd.DataFrame.from_dict(no_data, orient='index', columns=['no_data'])
-        self.results['no_data'] = no_data_df['no_data']
+        self.results = self.results.join(no_data_df)
 
-        self.group_results = results.groupby(['pre_class', 'post_class']).agg(summary_stat)
+        self.group_results = self.results.groupby(['pre_class', 'post_class']).agg(self.summary_stat)
         
 
 

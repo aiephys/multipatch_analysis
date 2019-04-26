@@ -84,6 +84,10 @@ class ConnectivityAnalyzer(object):
             ('probed', {}),
             ('connected', {}),
             ('gap_junction', {}),
+            ('distance', {'mode': 'range', 'units': 'm', 'defaults': {
+                'Max': 200e-6,
+                'colormap': thermal_colormap,
+            }}),
             ('connection_probability', {'mode': 'range', 'defaults': {
                 'Operation': 'Add', 
                 'colormap': pg.ColorMap(
@@ -103,17 +107,22 @@ class ConnectivityAnalyzer(object):
             ]
 
         self.summary_stat = {
-            'no_data': lambda x: any(x),
-            'probed': [self.metric_summary, self.metric_conf],
-            'connected': [self.metric_summary, self.metric_conf],
+            'no_data': self.metric_summary,
+            'probed': self.metric_summary,
+            'connected': self.metric_summary,
             'gap_junction': [self.metric_summary, self.metric_conf],
             'connection_probability': [self.metric_summary, self.metric_conf],
             'gap_junction_probability': [self.metric_summary, self.metric_conf],
             'matrix_completeness': [self.metric_summary, self.metric_conf],
+            'distance': [self.metric_summary, self.metric_conf],
             
         }
 
     def metric_summary(self, x): 
+        if x.name == 'no_data':
+            return all(x)
+        if x.name == 'distance':
+            return np.nanmean(x)
         if x.name in ['connected', 'probed', 'gap_junction']:
             return sum(filter(None, x))
         else:
@@ -127,7 +136,10 @@ class ConnectivityAnalyzer(object):
                 connected_progress = connected/6
                 return np.clip(np.where(probed_progress > connected_progress, probed_progress, connected_progress), 0, 1)
             elif x.name.endswith('probability'):
-                return connected/probed       
+                if probed == 0.:
+                    return float('nan')
+                else:
+                    return connected/probed       
 
     def metric_conf(self, x):
         if x.name.endswith('probability'):
@@ -136,6 +148,8 @@ class ConnectivityAnalyzer(object):
             connected = float(p1[0])
             probed = float(p1[1])
             return connection_probability_ci(connected, probed)
+        if x.name == 'distance':
+            return [-np.nanstd(x), np.nanstd(x)]
         else:
             return float('nan')
     
@@ -151,7 +165,6 @@ class ConnectivityAnalyzer(object):
 
         for key, class_pairs in pair_groups.items():
             pre_class, post_class = key
-
             for pair in class_pairs:
                 no_data = False
                 probed = pair_was_probed(pair, pre_class.is_excitatory)
@@ -160,6 +173,7 @@ class ConnectivityAnalyzer(object):
 
                 connected = pair.synapse if probed is True else False
                 gap = pair.electrical if probed is True else False
+                distance = pair.distance if probed is True else float('nan')
                 
 
                 results[pair] = {
@@ -169,12 +183,12 @@ class ConnectivityAnalyzer(object):
                 'probed': probed,
                 'connected': connected,
                 'gap_junction': gap,
+                'distance': distance,
                 'connection_probability': [int(connected) if connected is not None else 0, int(probed) if probed is not None else 0],
                 'gap_junction_probability': [int(gap) if gap is not None else 0, int(probed) if probed is not None else 0],
                 'matrix_completeness': [int(connected) if connected is not None else 0, int(probed) if probed is not None else 0],
                 
                 }
-
 
         self.results = pd.DataFrame.from_dict(results, orient='index')
 
@@ -202,6 +216,7 @@ class ConnectivityAnalyzer(object):
 
     def plot_element_data(self, pre_class, post_class, field_name, color='g', trace_plt=None):
         element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class))
+        element = element.rename(columns={'conn_no_data': 'no_data'}) 
         summary = element.agg(self.summary_stat) 
         val = summary[field_name]['metric_summary']
         line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
@@ -274,7 +289,7 @@ class StrengthAnalyzer(object):
         'vc_latency_first_pulse': [self.metric_summary, self.metric_conf],
         'vc_rise_time_first_pulse': [self.metric_summary, self.metric_conf],
         'vc_decay_tau_first_pulse': [self.metric_summary, self.metric_conf],
-        'no_data': lambda x: any(x),
+        'no_data': self.metric_summary,
         }
 
         self.fields = [
@@ -382,7 +397,7 @@ class StrengthAnalyzer(object):
             pre_class, post_class = key
 
             for pair in class_pairs:
-                if pair.synapse is False:
+                if pair.synapse is not True:
                     no_data = True
                     cs = None
                     fpf = None
@@ -422,7 +437,10 @@ class StrengthAnalyzer(object):
         return self.fields
 
     def metric_summary(self, x):
-        return np.nanmean(x)
+        if x.name == 'no_data':
+            return all(x)
+        else:
+            return np.nanmean(x)
 
     def metric_conf(self, x):
         return [-np.nanstd(x), np.nanstd(x)]
@@ -525,6 +543,7 @@ class DynamicsAnalyzer(object):
         self.sigOutputChanged = self._signalHandler.sigOutputChanged
 
         self.summary_stat = {
+            'no_data': self.metric_summary,
             'pulse_ratio_8_1_50hz': [self.metric_summary, self.metric_conf],
             'pulse_ratio_2_1_50hz': [self.metric_summary, self.metric_conf],
             'pulse_ratio_5_1_50hz': [self.metric_summary, self.metric_conf],
@@ -559,7 +578,10 @@ class DynamicsAnalyzer(object):
         self.results = None
 
     def metric_summary(self, x):
-        return np.nanmean(x)
+        if x.name == 'no_data':
+            return all(x)
+        else:
+            return np.nanmean(x)
 
     def metric_conf(self, x):
         return [-np.nanstd(x), np.nanstd(x)]
@@ -590,7 +612,7 @@ class DynamicsAnalyzer(object):
                 }
 
         
-        self.results = pd.DataFrame.fromt_dict(results, orient='index')
+        self.results = pd.DataFrame.from_dict(results, orient='index')
         
         return self.results
 

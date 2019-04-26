@@ -32,21 +32,14 @@ class ElementScatterPlot(pg.ScatterPlotWidget):
         self.ctrlPanel.insertWidget(0, header)
 
     def set_fields(self,fields, field_map):
-        self.fields = fields
+        self.fields = [f for f in fields if f != ('None', {})]
         self.field_map = field_map
         self.setFields(self.fields)
 
     def set_data(self, data):
-        field_names = self.fields.keys()
-        # fm = {k:v.name for k, v in self.field_map.items()}
-        # fm_df = pd.DataFrame.from_dict(fm, orient='index').loc[field_names]
-        # fm_df.columns = ['analyzer']
-        # field_data = data.join(fm_df, how='inner')
-        # field_data.drop(columns=['analyzer'], inplace=True)
-        field_data = data.reindex(field_names)
-        summary_data = field_data.applymap(lambda x: result_mean(x))
-        rec_data = summary_data.transpose().to_records()
-        names = ('pre_class', 'post_class') + tuple([str(name) for name in rec_data.dtype.names[2:]])
+        field_data = data.xs('metric_summary', axis='columns', level=1, drop_level=True)
+        rec_data = field_data.to_records()
+        names = tuple([str(name) for name in rec_data.dtype.names]) # for some reason the unicode throws off
         rec_data.dtype.names = names
 
         self.setData(rec_data)
@@ -63,15 +56,13 @@ class PairScatterPlot(pg.ScatterPlotWidget):
         self.ctrlPanel.insertWidget(0, header)
 
     def set_fields(self, fields, field_map):
-        self.fields = fields
+        self.fields = [f for f in fields if f != ('None', {})]
         self.field_map = field_map
-        self.setFields(fields)
+        self.setFields(self.fields)
 
     def set_data(self, data):
-        field_names = self.fields.keys()
-        field_data = data.reindex(field_names)
-        rec_data = field_data.transpose().to_records()
-        names = ('pre_class', 'post_class') + tuple([str(name) for name in rec_data.dtype.names[2:]])
+        rec_data = data.to_records()
+        names = tuple([str(name) for name in rec_data.dtype.names]) # for some reason the unicode throws off
         rec_data.dtype.names = names
 
         self.setData(rec_data)

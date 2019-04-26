@@ -72,39 +72,37 @@ class MatrixDisplayFilter(object):
     
         self.params.sigTreeStateChanged.connect(self.invalidate_output)
 
-    def element_display_output(self, result):
+    def element_display_output(self, result, default_bgcolor):
         colormap = self.colorMap
         show_confidence = self.params['Show Confidence']
         text_format = self.params['Text format']
-        
+        self.output = {}
 
+        # if show_confidence != 'None':
+        #     default_bgcolor = np.array([128., 128., 128., 255.])
+        # else:
+        #     default_bgcolor = np.array([220., 220., 220.])
+        
+        # if result['no_data'] is False:
+        #     self.output['bgcolor'] = tuple(default_bgcolor)
+        #     self.output['fgcolor'] = 0.6
+        #     self.output['text'] = ''
+        # else:
+        result_vals = result.loc[:, 'metric_summary']
+        mappable_result = {k:v for k,v in result_vals.iteritems() if np.isscalar(v)}
+
+        color = colormap.map(mappable_result)[0]
+    
+        # desaturate low confidence cells
         if show_confidence != 'None':
-            self.output = {'bordercolor': 0.6}
-            default_bgcolor = np.array([128., 128., 128., 255.])
-        else:
-            self.output = {'bordercolor': 0.8}
-            default_bgcolor = np.array([220., 220., 220.])
-        
-        if result['no_data'] is True:
-            self.output['bgcolor'] = tuple(default_bgcolor)
-            self.output['fgcolor'] = 0.6
-            self.output['text'] = ''
-        else:
-            result_vals = result.loc[:, 'metric_summary']
-            mappable_result = {k:v for k,v in result_vals.iteritems() if np.isscalar(v)}
-
-            color = colormap.map(mappable_result)[0]
-        
-            # desaturate low confidence cells
-            if show_confidence is not 'None':
-                lower, upper = result[show_confidence, 'metric_conf']
-                confidence = (1.0 - (upper - lower)) ** 2
-                color = color * confidence + default_bgcolor * (1.0 - confidence)
-            # invert text color for dark background
-            self.output['fgcolor'] = 'w' if sum(color[:3]) < 384 else 'k'
-            text_result = {k:FormattableNumber(v) if isinstance(v, float) else v for k, v in result_vals.iteritems()}
-            self.output['text'] = text_format.format(**text_result)
-            self.output['bgcolor'] = tuple(color)
+            lower, upper = result[show_confidence, 'metric_conf']
+            confidence = (1.0 - (upper - lower)) ** 2
+            color = color * confidence + default_bgcolor * (1.0 - confidence)
+        # invert text color for dark background
+        self.output['fgcolor'] = 'w' if sum(color[:3]) < 384 else 'k'
+        text_result = {k:FormattableNumber(v) if isinstance(v, float) else v for k, v in result_vals.iteritems()}
+        self.output['text'] = text_format.format(**text_result)
+        self.output['bgcolor'] = tuple(color)
 
         return self.output
     
@@ -181,7 +179,6 @@ class MatrixDisplay(object):
         self.matrix_widget = self.matrix_tab.matrix_widget
         self.matrix_display_filter = MatrixDisplayFilter(self.matrix_widget.view_box, output_fields)
         self.field_map = field_map
-        self.matrix_map = {}
         self.hist_plot = None
         self.line = None
         self.scatter = None
@@ -242,26 +239,40 @@ class MatrixDisplay(object):
     def update_matrix_display(self, results, group_results, cell_classes, cell_groups, field_map):
         self.results = results
         self.group_results = group_results
+        self.matrix_map = {}
+        show_confidence = self.matrix_display_filter.params['Show Confidence']
 
         shape = (len(cell_groups),) * 2
         text = np.empty(shape, dtype=object)
+        text.fill(u'')
         fgcolor = np.empty(shape, dtype=object)
+        fgcolor.fill(0.6)
         bgcolor = np.empty(shape, dtype=object)
+        if show_confidence != 'None':
+            default_bordercolor = 0.6
+            default_bgcolor = np.array([128., 128., 128., 255.])
+        else:
+            default_bordercolor = 0.8
+            default_bgcolor = np.array([220., 220., 220.])
+        bgcolor.fill(tuple(default_bgcolor))
         bordercolor = np.empty(shape, dtype=object)
+        bordercolor.fill(default_bordercolor)
         self.matrix_display_filter.colormap_legend()
 
         # call display function on every matrix element
         
         for i, pre in enumerate(cell_classes):
             for j, post in enumerate(cell_classes):
-                self.matrix_map[pre, post] = [i, j]
+                self.matrix_map[(pre, post)] = [i, j]
         for group, result in self.group_results.iterrows():
             i, j = self.matrix_map[group]
-            output = self.matrix_display_filter.element_display_output(result)
-            text[i, j] = output['text']
-            fgcolor[i, j] = output['fgcolor']
-            bgcolor[i, j] = output['bgcolor']
-            bordercolor[i, j] = output['bordercolor']
+                # result = self.group_results.xs((pre.name,post.name), axis='rows') 
+            if result['no_data']['metric_summary'] is False:
+                output = self.matrix_display_filter.element_display_output(result, default_bgcolor)
+                text[i, j] = output['text']
+                fgcolor[i, j] = output['fgcolor']
+                bgcolor[i, j] = output['bgcolor']
+                # bordercolor[i, j] = output['bordercolor']
                 
         # Force cell class descriptions down to tuples of 2 items
         # Kludgy, but works for now.
@@ -297,7 +308,7 @@ class MatrixDisplay(object):
             self.matrix_tab.scatter_plot.removeItem(self.hist_plot)
         self.hist_plot = self.matrix_tab.scatter_plot.addPlot()
         if field_map[self.field_name].name == 'connectivity':
-            vals = group_results[self.field_name]['metric_summary']
+            vals = group_results[group_results[self.field_name]['metric_summary'].notnull()][self.field_name]['metric_summary'] 
         else:
             vals = results[results[self.field_name].notnull()][self.field_name]
         y, x = np.histogram(vals, bins=np.linspace(min(vals), max(vals), 10))

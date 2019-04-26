@@ -69,8 +69,8 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
                 self.cells[-1].append(rect)
 
                 txt = pg.QtGui.QGraphicsTextItem(text[i][j], parent=self)
-                txt.setTextWidth(rect.boundingRect().width())
                 br = txt.boundingRect()
+                txt.setTextWidth(br.width())
                 txt.setPos(x + size/2 - br.center().x(), y + size/2 - br.center().y())
                 txt.setDefaultTextColor(pg.mkColor(fgcolor[i][j]))
                 self.cell_labels[-1].append(txt)
