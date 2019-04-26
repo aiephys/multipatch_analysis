@@ -123,7 +123,7 @@ class ResponseStrengthAnalyzer(object):
         self.field_combo.currentIndexChanged.connect(self.update_scatter_plots)
 
         self.deconv_check = QtGui.QCheckBox('deconvolve')
-        self.deconv_check.setChecked(True)
+        self.deconv_check.setChecked(False)
         self.ctrl_layout.addWidget(self.deconv_check, 1, 0)
         self.deconv_check.toggled.connect(self.replot_all)
 
@@ -133,12 +133,12 @@ class ResponseStrengthAnalyzer(object):
         self.bsub_check.toggled.connect(self.replot_all)
 
         self.lpf_check = QtGui.QCheckBox('lpf')
-        self.lpf_check.setChecked(True)
+        self.lpf_check.setChecked(False)
         self.ctrl_layout.addWidget(self.lpf_check, 1, 2)
         self.lpf_check.toggled.connect(self.replot_all)
 
         self.ar_check = QtGui.QCheckBox('crosstalk')
-        self.ar_check.setChecked(True)
+        self.ar_check.setChecked(False)
         self.ctrl_layout.addWidget(self.ar_check, 1, 3)
         self.ar_check.toggled.connect(self.replot_all)
 
@@ -181,7 +181,7 @@ class ResponseStrengthAnalyzer(object):
         """
         ids = [p.data()['id'] for p in points]
         self._clicked_fg_ids = ids
-        self.plot_prd_ids(ids, 'fg', trace_list=self.clicked_fg_traces, pen='y')
+        self.plot_prd_ids(ids, 'fg', trace_list=self.clicked_fg_traces, pen='y', qc_filter=False)
 
         global selected_response
         selected_response = self.session.query(db.PulseResponseStrength).filter(db.PulseResponseStrength.id==ids[0]).first()
@@ -192,7 +192,7 @@ class ResponseStrengthAnalyzer(object):
         """
         ids = [p.data()['id'] for p in points]
         self._clicked_bg_ids = ids
-        self.plot_prd_ids(ids, 'bg', trace_list=self.clicked_bg_traces, pen='y')
+        self.plot_prd_ids(ids, 'bg', trace_list=self.clicked_bg_traces, pen='y', qc_filter=False)
 
         global selected_response
         selected_response = self.session.query(db.BaselineResponseStrength).filter(db.BaselineResponseStrength.id==ids[0]).first()
@@ -224,8 +224,8 @@ class ResponseStrengthAnalyzer(object):
             qc_field = 'in_qc_pass' if self.analysis[1] == 'ic' else 'ex_qc_pass'
         fg_x = fg_data[data_field]
         bg_x = bg_data[data_field]
-        fg_qc = fg_data[qc_field].copy()
-        bg_qc = bg_data[qc_field].copy()
+        fg_qc = fg_data[qc_field] == True
+        bg_qc = bg_data[qc_field] == True
 
         # record data for later use
         self.fg_x = fg_x
@@ -361,7 +361,7 @@ class ResponseStrengthAnalyzer(object):
         recs = q.all()
         return recs
 
-    def plot_prd_ids(self, ids, source, pen=None, trace_list=None, avg=False):
+    def plot_prd_ids(self, ids, source, pen=None, trace_list=None, avg=False, qc_filter=True):
         """Plot raw or decolvolved PulseResponse data, given IDs of records in
         a db.PulseResponseStrength table.
         """
@@ -390,7 +390,7 @@ class ResponseStrengthAnalyzer(object):
             spike_values = []
             for rec in recs:
                 # Filter by QC unless we selected just a single record
-                if len(recs) > 0 and getattr(rec, self.qc_field) is False:
+                if qc_filter is True and getattr(rec, self.qc_field) is False:
                     continue
 
                 s = {'fg': 'pulse_response', 'bg': 'baseline'}[source]
@@ -589,6 +589,8 @@ class PairClassifier(object):
 
         # Random seed used when shuffling training/test inputs
         self.seed = seed
+        
+        self.scaler = None
 
     def fit(self, recs):
         ids = recs['id']
@@ -692,9 +694,12 @@ class PairClassifier(object):
         result = np.empty(len(features), dtype=[('prediction', float), ('confidence', float)])
         result[:] = np.nan
 
+        if self.scaler is None:
+            return result
+
         # mask out inf/nan records
         mask = np.all(np.isfinite(features), axis=1)
-
+           
         # scale masked records
         norm_features = self.scaler.transform(features[mask])
 
@@ -997,6 +1002,8 @@ if __name__ == '__main__':
     pair_view = PairView()
 
     if args.pairview:
+        if sys.flags.interactive == 0:
+            pg.mkQApp().exec_()
         sys.exit(0)
     
     # Load records on all pairs and train a classifier to predict connections

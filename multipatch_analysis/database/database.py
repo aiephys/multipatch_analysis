@@ -5,7 +5,7 @@ The actual schemas for database tables are implemented in other files in this su
 """
 from __future__ import division, print_function
 
-import os, sys, io, time, json, threading
+import os, sys, io, time, json, threading, gc
 from datetime import datetime
 from collections import OrderedDict
 import numpy as np
@@ -200,10 +200,11 @@ def make_table(name, columns, base=None, **table_args):
     else:
         # need to jump through a hoop to allow __init__ on table classes;
         # see: https://docs.sqlalchemy.org/en/latest/orm/constructors.html
-        @reconstructor
-        def _init_on_load(self, *args, **kwds):
-            base.__init__(self)
-        props['_init_on_load'] = _init_on_load
+        if hasattr(base, '_init_on_load'):
+            @reconstructor
+            def _init_on_load(self, *args, **kwds):
+                base._init_on_load(self)
+            props['_init_on_load'] = _init_on_load
         return type(name, (base,ORMBase), props)
 
 
@@ -243,6 +244,12 @@ def dispose_engines():
         engine_rw.dispose()
         engine_rw = None
         _sessionmaker_rw = None
+        
+    # collect now or else we might try to collect engine-related garbage in forked processes,
+    # which can lead to "OperationalError: server closed the connection unexpectedly"
+    # Note: if this turns out to be flaky as well, we can just disable connection pooling.
+    gc.collect()
+    
     engine_pid = None    
 
 
@@ -254,9 +261,9 @@ def get_engines():
         # In forked processes, we need to re-initialize the engine before
         # creating a new session, otherwise child processes will
         # inherit and muck with the same connections. See:
-        # http://docs.sqlalchemy.org/en/rel_1_0/faq/connections.html#how-do-i-use-engines-connections-sessions-with-python-multiprocessing-or-os-fork
-        # if engine_pid is not None:
-        #     print("Making new session for subprocess %d != %d" % (os.getpid(), engine_pid))
+        # https://docs.sqlalchemy.org/en/latest/faq/connections.html#how-do-i-use-engines-connections-sessions-with-python-multiprocessing-or-os-fork
+        if engine_pid is not None:
+            print("Making new session for subprocess %d != %d" % (os.getpid(), engine_pid))
         dispose_engines()
     
     if engine_ro is None:

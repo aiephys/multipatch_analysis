@@ -58,6 +58,7 @@ class Dashboard(QtGui.QWidget):
             ('lims_slice_name', object),
             ('item', object),
             ('error', object),
+            ('db_errors', object),
         ]
 
         # maps field name : index (column number)
@@ -281,8 +282,14 @@ class Dashboard(QtGui.QWidget):
                 break
         err = rec['error']
         if err is not None:
-            msg.append("Error checking experiment:")
+            msg.append("--------------------------------\nError checking experiment:")
             msg.extend([line.rstrip() for line in traceback.format_exception(*err)])
+
+        db_errors = rec['db_errors']
+        if isinstance(db_errors, dict) and len(db_errors) > 0:
+            msg.append("--------------------------------\nErrors in DB pipeline:")
+            for module, err in db_errors.items():
+                msg.append("--- %s ---\n%s\n" % (module, err))
 
         msg = '\n'.join(msg)
         print(msg)
@@ -655,7 +662,16 @@ class ExperimentMetadata(Experiment):
                 rec['connections'] = connections
                 if rec['data'] is True:
                     rec['site.mosaic'] = self.mosaic_file is not None
-                    rec['DB'] = self.in_database
+                    has_run, expt_success, all_success, errors = self.db_status
+                    if not has_run:
+                        rec['DB'] = ("MISSING", (255, 255, 100))
+                    elif not expt_success:
+                        rec['DB'] = ("ERROR", fail_color)
+                    elif not all_success:
+                        rec['DB'] = ("ERROR", (255, 255, 100))
+                    else:
+                        rec['DB'] = True
+                    rec['db_errors'] = errors
 
                     cell_cluster = self.lims_cell_cluster_id
                     lims_ignore_path = os.path.join(self.archive_path, '.mpe_ignore')
@@ -818,11 +834,16 @@ class ExperimentMetadata(Experiment):
         return self._rig_name
 
     @property
-    def in_database(self):
+    def db_status(self):
         session = database.Session()
-        expts = session.query(database.Experiment.id).filter(database.Experiment.acq_timestamp==self.timestamp).all()
+        jobs = session.query(database.Pipeline).filter(database.Pipeline.job_id==self.timestamp).all()
         session.close()
-        return len(expts) == 1
+        has_run = len(jobs) > 0
+        success = {j.module_name:j.success for j in jobs}
+        errors = {j.module_name:j.error for j in jobs}
+        expt_success = success.get('experiment', False)
+        all_success = all(success.values())
+        return has_run, expt_success, all_success, errors
 
     @property
     def lims_submissions(self):

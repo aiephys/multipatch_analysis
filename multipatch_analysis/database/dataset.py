@@ -75,7 +75,7 @@ TestPulse = make_table(
 )
 
 class StimPulseBase(object):
-    def __init__(self):
+    def _init_on_load(self):
         self._rec_tseries = None
         self._stim_tseries = None
     
@@ -132,7 +132,7 @@ StimSpike = make_table(
 
 
 class PulseResponseBase(object):
-    def __init__(self):
+    def _init_on_load(self):
         self._post_tseries = None
     
     @property
@@ -206,8 +206,8 @@ PatchClampRecording.nearest_test_pulse = relationship(TestPulse, single_parent=T
 Recording.stim_pulses = relationship(StimPulse, back_populates="recording", cascade='save-update,merge,delete', single_parent=True)
 StimPulse.recording = relationship(Recording, back_populates="stim_pulses")
 
-StimSpike.pulse = relationship(StimPulse, back_populates="spikes")
-StimPulse.spikes = relationship(StimSpike, back_populates="pulse", single_parent=True)
+StimSpike.stim_pulse = relationship(StimPulse, back_populates="spikes")
+StimPulse.spikes = relationship(StimSpike, back_populates="stim_pulse", single_parent=True)
 StimPulse.pulse_response = relationship(PulseResponse, back_populates="stim_pulse", cascade='save-update,merge,delete', single_parent=True)
 
 Recording.baselines = relationship(Baseline, back_populates="recording", cascade='save-update,merge,delete', single_parent=True)

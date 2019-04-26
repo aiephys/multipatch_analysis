@@ -332,7 +332,7 @@ class DatabasePipelineModule(PipelineModule):
         except Exception:
             session.rollback()
             
-            err = traceback.format_exception(*sys.exc_info())
+            err = ''.join(traceback.format_exception(*sys.exc_info()))
             job_result = db.Pipeline(module_name=cls.name, job_id=job_id, success=False, error=err, finish_time=datetime.now())
             session.add(job_result)
             session.commit()

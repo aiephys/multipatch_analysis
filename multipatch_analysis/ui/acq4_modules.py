@@ -321,9 +321,7 @@ class VoltageImagingAnalysisModule(Module):
         self.ui.show()
         
         self.load_from_dm_btn = QtGui.QPushButton("load from data manager")
-        self.load_from_dm_btn.setParent(self.ui)
-        self.load_from_dm_btn.resize(160, 30)
-        self.load_from_dm_btn.show()
+        self.ui.layout.addWidget(self.load_from_dm_btn, self.ui.layout.rowCount(), 0)
         self.load_from_dm_btn.clicked.connect(self.load_from_dm_clicked)
         
     def load_from_dm_clicked(self):

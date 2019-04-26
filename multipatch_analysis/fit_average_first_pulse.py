@@ -258,10 +258,12 @@ def fit_trace(waveform, excitation, clamp_mode='ic', weight=None, latency=None, 
     return fit
 
 
-def fit_first_pulses(pair, pre_cell_id, post_cell_id):
+def fit_first_pulses(pair):
     # get response latency from average of all pulse responses
+    message = None #initialize error message 
     xoffset = pair.connection_strength.ic_fit_xoffset
-
+    if not xoffset:
+        return {'error': 'no ic_fit_offset from connection_strength'}
     # excitatory or inhibitory?
     excitation = pair.connection_strength.synapse_type
 
@@ -285,7 +287,7 @@ def fit_first_pulses(pair, pre_cell_id, post_cell_id):
         dt_i = avg_psp_i.dt
         nrmse_i = avg_fit_i.nrmse()
     else:
-        # print('\tskipping: no suitable first pulses found in current clamp')
+        message = 'no suitable first pulses found in current clamp'
         weight_i = np.array([0])
         latency_i = None
         amp_i = None
@@ -315,7 +317,7 @@ def fit_first_pulses(pair, pre_cell_id, post_cell_id):
         nrmse_v = avg_fit_v.nrmse()
 
     else:
-        # print('\tskipping: no suitable first pulses found in voltage clamp')
+        message = 'no suitable first pulses found in voltage clamp'
         weight_v = np.array([0])
         latency_v = None
         amp_v = None
@@ -353,7 +355,8 @@ def fit_first_pulses(pair, pre_cell_id, post_cell_id):
         'vc_nrmse': nrmse_v,
         'vc_measured_baseline': measured_baseline_v,
         'vc_measured_amp': measured_relative_amp_v,
-        'vc_weight': weight_v
+        'vc_weight': weight_v,
+        'error': message
     } 
     
     return out_dict

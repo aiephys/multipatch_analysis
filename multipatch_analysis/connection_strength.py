@@ -43,7 +43,7 @@ def get_amps(session, pair, clamp_mode='ic', get_data=False):
         cols.append(db.PulseResponse.data)
 
     q = session.query(*cols)
-    q = q.join(db.PulseResponse)
+    q = q.join(db.PulseResponse, db.PulseResponseStrength.pulse_response)
     
     q, pre_rec, post_rec = join_pulse_response_to_expt(q)
     q = q.join(db.StimSpike)
@@ -93,7 +93,11 @@ def get_baseline_amps(session, pair, clamp_mode='ic', amps=None, get_data=True):
         cols.append(db.Baseline.data)
         
     q = session.query(*cols)
-    q = q.join(db.Baseline).join(db.Recording).join(db.PatchClampRecording).join(db.SyncRec).join(db.Experiment)
+    q = q.join(db.Baseline, db.BaselineResponseStrength.baseline)
+    q = q.join(db.Recording)
+    q = q.join(db.PatchClampRecording)
+    q = q.join(db.SyncRec)
+    q = q.join(db.Experiment)
     
     filters = [
         (db.Recording.electrode==pair.post_cell.electrode,),

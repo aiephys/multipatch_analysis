@@ -12,13 +12,14 @@ from ..util import timestamp_to_datetime
 from .. import database as db
 from .pipeline_module import DatabasePipelineModule
 from .pulse_response import PulseResponsePipelineModule
+from .connection_strength import ConnectionStrengthPipelineModule
 
 
 class DynamicsPipelineModule(DatabasePipelineModule):
     """Generates dynamics analysis for each pair
     """
     name = 'dynamics'
-    dependencies = [PulseResponsePipelineModule]
+    dependencies = [PulseResponsePipelineModule, ConnectionStrengthPipelineModule]
     table_group = db.dynamics_tables
     
     @classmethod
@@ -33,7 +34,10 @@ class DynamicsPipelineModule(DatabasePipelineModule):
             pulse_amps = {}
             for rec in recs:
                 q = session.query(db.PulseResponseStrength, db.PulseResponse, db.StimPulse.pulse_number, db.MultiPatchProbe.induction_frequency)
-                q = q.join(db.PulseResponse).join(db.StimPulse).join(db.PatchClampRecording, db.PatchClampRecording.recording_id==db.PulseResponse.recording_id).join(db.MultiPatchProbe)
+                q = q.join(db.PulseResponse, db.PulseResponseStrength.pulse_response)
+                q = q.join(db.StimPulse, db.PulseResponse.stim_pulse)
+                q = q.join(db.PatchClampRecording, db.PatchClampRecording.recording_id==db.PulseResponse.recording_id)
+                q = q.join(db.MultiPatchProbe)
                 q = q.filter(db.PulseResponse.pair_id==pair.id).filter(db.PatchClampRecording.clamp_mode=='ic').filter(db.PulseResponse.recording_id==rec.id)
                 results = q.all()
                 if len(results) == 0:
@@ -52,11 +56,11 @@ class DynamicsPipelineModule(DatabasePipelineModule):
                     pulse_amps.setdefault(pulse_number, [])
                     pulse_amps[pulse_number].append(getattr(result.pulse_response_strength, amp_field))
             if any(pulse_amps):
-                pulse_ratio_8_1_50Hz = np.mean(pulse_amps[8]) / np.mean(pulse_amps[1])
-                pulse_ratio_2_1_50Hz = np.mean(pulse_amps[2]) / np.mean(pulse_amps[1])
-                pulse_ratio_5_1_50Hz = np.mean(pulse_amps[5]) / np.mean(pulse_amps[1])    
+                pulse_ratio_8_1_50hz = np.mean(pulse_amps[8]) / np.mean(pulse_amps[1])
+                pulse_ratio_2_1_50hz = np.mean(pulse_amps[2]) / np.mean(pulse_amps[1])
+                pulse_ratio_5_1_50hz = np.mean(pulse_amps[5]) / np.mean(pulse_amps[1])    
                 # Write new record to DB
-                dynamics = db.Dynamics(pair_id=pair.id, pulse_ratio_2_1_50Hz=pulse_ratio_2_1_50Hz, pulse_ratio_8_1_50Hz=pulse_ratio_8_1_50Hz, pulse_ratio_5_1_50Hz=pulse_ratio_5_1_50Hz)
+                dynamics = db.Dynamics(pair_id=pair.id, pulse_ratio_2_1_50hz=pulse_ratio_2_1_50hz, pulse_ratio_8_1_50hz=pulse_ratio_8_1_50hz, pulse_ratio_5_1_50hz=pulse_ratio_5_1_50hz)
                 session.add(dynamics)
         
     @classmethod

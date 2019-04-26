@@ -1,5 +1,5 @@
 from __future__ import print_function
-import argparse, sys, os
+import argparse, sys, os, logging
 import pyqtgraph as pg 
 from multipatch_analysis.pipeline import all_modules
 import multipatch_analysis.database as db
@@ -7,6 +7,8 @@ from multipatch_analysis import config
 
 
 if __name__ == '__main__':
+    logging.basicConfig()
+    
     all_modules = all_modules()
     
     parser = argparse.ArgumentParser(description="Process analysis pipeline jobs")

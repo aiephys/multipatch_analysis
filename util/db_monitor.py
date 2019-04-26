@@ -1,20 +1,33 @@
 """Simple tool for displaying DB connections, used for debugging performance issues
 """
-
+from __future__ import print_function, division
 import os, sys, subprocess, re
+from datetime import tzinfo, timedelta, datetime
 from multipatch_analysis import config
 from sqlalchemy import create_engine
 
+# https://stackoverflow.com/questions/796008/cant-subtract-offset-naive-and-offset-aware-datetimes
+class UTC(tzinfo):
+  def utcoffset(self, dt):
+    return timedelta(0)
+  def tzname(self, dt):
+    return "UTC"
+  def dst(self, dt):
+    return timedelta(0)
+
+utc = UTC()
+
 
 engine = create_engine(config.synphys_db_host_rw + '/postgres?application_name=db_monitor')
-
+conn = engine.connect()
 
 
 def list_db_connections():
-    with engine.begin() as conn:
-        result = conn.execute("select client_addr, client_port, datname, query, state, usename, application_name, pid from pg_stat_activity;")
-        connections = result.fetchall()
-    return connections
+    tr = conn.begin()
+    query = conn.execute("select client_addr, client_port, datname, query, state, usename, application_name, pid, state_change from pg_stat_activity;")
+    result = query.fetchall()
+    tr.rollback()
+    return result
 
 
 _known_hostnames = {}
@@ -60,10 +73,59 @@ def check():
                         app = c
                         break
                         
-                state = '[%s]' % con.state
-                query = con.query.replace('\n', ' ')[:120]
+                last_change = con.state_change
+                if last_change is None:
+                    state = '[%s]' % con.state
+                else:
+                    now = datetime.now(utc)
+                    age = (now - last_change).total_seconds() / 3600.
+                    state = '[%s %0.1fhr]' % (con.state, age)
                 
-                print("          {:15s} {:15s} {:45s} {:6d} {:10s} {:s}   ".format(con.usename, con.datname, app[:45], con.pid, state, query))
+                query = con.query.replace('\n', ' ')[:110]
+                
+                print("          {:15s} {:15s} {:45s} {:6d} {:16s} {:s}   ".format(con.usename, con.datname, app[:45], con.pid, state, query))
     
 
-check()
+class ScreenPrint(object):
+    """Simple interface for printing full-screen text
+    """
+    def __init__(self):
+        global print
+        self._print = print
+        print = self.print_line
+        
+        self.current_row = 0
+        self.rows = 100
+        self.columns = 100
+
+    def reset(self):
+        self.current_row = 0
+        self._print("\033[0;0f")
+        self.rows, self.columns = list(map(int, os.popen('stty size', 'r').read().split()))
+
+    def print_line(self, msg):
+        while len(msg) > self.columns:
+            line, msg = msg[:self.columns], msg[self.columns:]
+            self._print(line)
+            self.current_row += 1
+        self._print(("{:%ds}" % self.columns).format(msg))
+        self.current_row += 1
+        
+    def clear_to_bottom(self):
+        for i in range(self.current_row, self.rows-1):
+            self.print_line("")
+
+
+if __name__ == '__main__':
+    import time
+    
+    monitor = '--one' not in sys.argv
+    if monitor:
+        sp = ScreenPrint()
+        while True:
+            sp.reset()
+            check()
+            sp.clear_to_bottom()        
+            time.sleep(1.0)
+    else:
+        check()
