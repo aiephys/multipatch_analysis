@@ -76,6 +76,7 @@ class ConnectivityAnalyzer(object):
     def __init__(self):
         self.name = 'connectivity'
         self.results = None
+        self.group_results = None
         self._signalHandler = ConnectivityAnalyzer.SignalHandler()
         self.sigOutputChanged = self._signalHandler.sigOutputChanged
 
@@ -88,7 +89,7 @@ class ConnectivityAnalyzer(object):
                 'Max': 200e-6,
                 'colormap': pg.ColorMap(
                     [0, 0.25, 0.5, 0.75, 1.0],
-                    [(0,0,100,255), (80,0,80,255), (140,0,0,255), (255,100,0,255), (255,255,100,255)],
+                    [(255,255,100,255), (255,100,0,255), (0,0,100,255), (140,0,0,255), (80,0,80,255)],
             )}}),
             ('connection_probability', {'mode': 'range', 'defaults': {
                 'Operation': 'Add', 
@@ -109,7 +110,7 @@ class ConnectivityAnalyzer(object):
             ]
 
         self.summary_stat = {
-            'no_data': self.metric_summary,
+            'conn_no_data': self.metric_summary,
             'probed': self.metric_summary,
             'connected': self.metric_summary,
             'gap_junction': [self.metric_summary, self.metric_conf],
@@ -121,7 +122,7 @@ class ConnectivityAnalyzer(object):
         }
 
     def metric_summary(self, x): 
-        if x.name == 'no_data':
+        if x.name == 'conn_no_data':
             return all(x)
         if x.name == 'distance':
             return np.nanmean(x)
@@ -162,8 +163,10 @@ class ConnectivityAnalyzer(object):
         """Given a list of cell pairs and a dict that groups cells together by class,
         return a structure that describes connectivity of each cell pair.
         """    
+        if self.results is not None:
+            return self.results
+
         results = OrderedDict()
-        # self.pair_results = None
 
         for key, class_pairs in pair_groups.items():
             pre_class, post_class = key
@@ -196,30 +199,39 @@ class ConnectivityAnalyzer(object):
 
         return self.results
 
+    def group_result(self):
+        if self.group_results is not None:
+            return self.group_results
+
+        self.group_results = self.results.groupby(['pre_class', 'post_class']).agg(self.summary_stat)
+        return self.group_results
+
     def output_fields(self):
 
         return self.fields
 
     def print_element_info(self, pre_class, post_class, field_name):
-        element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class)) 
-        connections = element[element['connected'] == True].index.tolist()
-        print ("Connection type: %s -> %s" % (pre_class, post_class))
-        print ("Connected Pairs:")
-        for connection in connections:
-            print ("\t %s" % (connection))
-        gap_junctions = element[element['gap_junction'] == True].index.tolist()
-        print ("Gap Junctions:")
-        for gap in gap_junctions:
-            print ("\t %s" % (gap))
-        probed_pairs = element[element['probed'] == True].index.tolist()
-        print ("Probed Pairs:")
-        for probed in probed_pairs:
-            print ("\t %s" % (probed))
+        try:
+            element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class))
+            connections = element[element['connected'] == True].index.tolist()
+            print ("Connection type: %s -> %s" % (pre_class, post_class))
+            print ("Connected Pairs:")
+            for connection in connections:
+                print ("\t %s" % (connection))
+            gap_junctions = element[element['gap_junction'] == True].index.tolist()
+            print ("Gap Junctions:")
+            for gap in gap_junctions:
+                print ("\t %s" % (gap))
+            probed_pairs = element[element['probed'] == True].index.tolist()
+            print ("Probed Pairs:")
+            for probed in probed_pairs:
+                print ("\t %s" % (probed))
+        except KeyError:
+            print ('%s->%s has no data, please select another element' % (pre_class, post_class)) 
 
     def plot_element_data(self, pre_class, post_class, field_name, color='g', trace_plt=None):
         element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class))
-        element = element.rename(columns={'conn_no_data': 'no_data'}) 
-        summary = element.agg(ConnectivityAnalyzer().summary_stat)  
+        summary = element.agg(self.summary_stat)  
         val = summary[field_name]['metric_summary']
         line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
         scatter = None
@@ -270,6 +282,7 @@ class StrengthAnalyzer(object):
     def __init__(self):
         self.name = 'strength'
         self.results = None
+        self.group_results = None
         self.pair_items = {}
         self._signalHandler = ConnectivityAnalyzer.SignalHandler()
         self.sigOutputChanged = self._signalHandler.sigOutputChanged
@@ -291,7 +304,7 @@ class StrengthAnalyzer(object):
         'vc_latency_first_pulse': [self.metric_summary, self.metric_conf],
         'vc_rise_time_first_pulse': [self.metric_summary, self.metric_conf],
         'vc_decay_tau_first_pulse': [self.metric_summary, self.metric_conf],
-        'no_data': self.metric_summary,
+        'strength_no_data': self.metric_summary,
         }
 
         self.fields = [
@@ -387,12 +400,16 @@ class StrengthAnalyzer(object):
 
     def invalidate_output(self):
         self.results = None
+        self.group_results = None
         self.pair_items = {}
 
     def measure(self, pair_groups):
         """Given a list of cell pairs and a dict that groups cells together by class,
         return a structure that describes strength and kinetics of each cell pair.
         """  
+        if self.results is not None:
+            return self.results
+
         results = OrderedDict()
         
         for key, class_pairs in pair_groups.items():
@@ -434,12 +451,19 @@ class StrengthAnalyzer(object):
 
         return self.results
 
+    def group_result(self):
+        if self.group_results is not None:
+            return self.group_results
+
+        self.group_results = self.results.groupby(['pre_class', 'post_class']).agg(self.summary_stat)
+        return self.group_results
+
     def output_fields(self):
 
         return self.fields
 
     def metric_summary(self, x):
-        if x.name == 'no_data':
+        if x.name == 'strength_no_data':
             return all(x)
         else:
             return np.nanmean(x)
@@ -541,11 +565,12 @@ class DynamicsAnalyzer(object):
     def __init__(self):
         self.name = 'dynamics'
         self.results = None
+        self.group_results = None
         self._signalHandler = ConnectivityAnalyzer.SignalHandler()
         self.sigOutputChanged = self._signalHandler.sigOutputChanged
 
         self.summary_stat = {
-            'no_data': self.metric_summary,
+            'dynamics_no_data': self.metric_summary,
             'pulse_ratio_8_1_50hz': [self.metric_summary, self.metric_conf],
             'pulse_ratio_2_1_50hz': [self.metric_summary, self.metric_conf],
             'pulse_ratio_5_1_50hz': [self.metric_summary, self.metric_conf],
@@ -578,9 +603,10 @@ class DynamicsAnalyzer(object):
 
     def invalidate_output(self):
         self.results = None
+        self.group_results = None
 
     def metric_summary(self, x):
-        if x.name == 'no_data':
+        if x.name == 'dynamics_no_data':
             return all(x)
         else:
             return np.nanmean(x)
@@ -592,6 +618,9 @@ class DynamicsAnalyzer(object):
         """Given a list of cell pairs and a dict that groups cells together by class,
         return a structure that describes dynamics of each cell pair.
         """  
+        if self.results is not None:
+            return self.results
+
         results = OrderedDict()
         for key, class_pairs in pair_groups.items():
             pre_class, post_class = key
@@ -617,6 +646,13 @@ class DynamicsAnalyzer(object):
         self.results = pd.DataFrame.from_dict(results, orient='index')
         
         return self.results
+
+    def group_result(self):
+        if self.group_results is not None:
+            return self.group_results
+
+        self.group_results = self.results.groupby(['pre_class', 'post_class']).agg(self.summary_stat)
+        return self.group_results
 
     def output_fields(self):
        
@@ -656,9 +692,9 @@ class DynamicsAnalyzer(object):
                 trace_plt.plot(trace.time_values, trace.data)
                 traces.append(trace)
             values.append(value)
-            y_values = pg.pseudoScatter(np.asarray(values, dtype=float) + 10., spacing=1)
+            y_values = pg.pseudoScatter(np.asarray(values, dtype=float), spacing=1)
             scatter = pg.ScatterPlotItem(symbol='o', brush=(color + (150,)), pen='w', size=12)
-            scatter.setData(values, y_values + 1.)
+            scatter.setData(values, y_values + 10.)
             if trace_plt is not None:
                 grand_trace = TraceList(traces).mean()
                 trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3})

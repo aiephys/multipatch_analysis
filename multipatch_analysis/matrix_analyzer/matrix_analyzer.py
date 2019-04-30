@@ -14,6 +14,7 @@ import pyqtgraph as pg
 import multipatch_analysis.database as db
 import pandas as pd
 import re
+import cProfile
 from analyzers import query_pairs, ConnectivityAnalyzer, StrengthAnalyzer, DynamicsAnalyzer, get_all_output_fields
 from multipatch_analysis import constants
 from multipatch_analysis.cell_class import CellClass, classify_cells, classify_pairs
@@ -110,6 +111,7 @@ class CellClassFilter(object):
 class MatrixAnalyzer(object):
     sigClicked = pg.QtCore.Signal(object, object, object, object, object) # self, matrix_item, row, col
     def __init__(self, session, default_preset=None):
+        
         self.tabs = Tabs()
         self.tabs.setGeometry(280, 130, 1500, 900)
         self.tabs.setWindowTitle('MatrixAnalyzer')
@@ -170,7 +172,7 @@ class MatrixAnalyzer(object):
         self.params.insertChild(0, preset_params)
         
         self.matrix_tab.update_button.clicked.connect(self.update_clicked)
-        # self.matrix_tab.matrix_widget.sigClicked.connect(self.matrix_display.display_matrix_element_data)
+        
         self.experiment_filter.sigOutputChanged.connect(self.cell_class_filter.invalidate_output)
         self.params.child('Analyzer Presets').sigValueChanged.connect(self.presetChanged)
 
@@ -266,8 +268,16 @@ class MatrixAnalyzer(object):
         data_needed.add(self.matrix_display_filter.params['Show Confidence'])
         for metric in self.element_scatter.fieldList.selectedItems():
             data_needed.add(str(metric.text()))
+        for metric in self.element_scatter.filter.children():
+            data_needed.add(metric.name())
+        for metric in self.element_scatter.colorMap.children():
+            data_needed.add(metric.name())
         for metric in self.pair_scatter.fieldList.selectedItems():
             data_needed.add(str(metric.text()))
+        for metric in self.pair_scatter.filter.children():
+            data_needed.add(metric.name())
+        for metric in self.pair_scatter.colorMap.children():
+            data_needed.add(metric.name())
         
         analyzers = set([self.field_map.get(field, None) for field in data_needed])
         self.active_analyzers = [analyzer for analyzer in analyzers if analyzer is not None]
@@ -280,6 +290,8 @@ class MatrixAnalyzer(object):
         return self.active_analyzers
 
     def update_clicked(self):
+        p = cProfile.Profile()
+        p.enable()
         with pg.BusyCursor():
             self.analyzers_needed()
             self.update_results()
@@ -288,9 +300,11 @@ class MatrixAnalyzer(object):
             self.pair_scatter.set_data(self.results)
             if self.matrix_tab.matrix_widget.matrix is not None:
                 self.matrix_display.display_element_reset()
+        p.disable()
+        # p.print_stats(sort='cumulative')
 
     def update_results(self):
-        # Select pairs (todo: age, acsf, internal, temp, etc.)
+        # Select pairs 
         self.pairs = self.experiment_filter.get_pair_list(self.session)
 
         # Group all cells by selected classes
@@ -303,22 +317,15 @@ class MatrixAnalyzer(object):
         # analyze matrix elements
         for a, analysis in enumerate(self.active_analyzers):
             results = analysis.measure(self.pair_groups)
-            summary_stat = analysis.summary_stat
+            group_results = analysis.group_result()
             if a == 0:
                 self.results = results
-                self.summary_stat = summary_stat
+                self.group_results = group_results
             else:
-                self.summary_stat.update(summary_stat)
                 merge_results = pd.concat([self.results, results], axis=1)
                 self.results = merge_results.loc[:, ~merge_results.columns.duplicated(keep='first')]
-        no_data = OrderedDict()
-        for class_pairs in self.pair_groups.values():
-            for pair in class_pairs:
-                no_data[pair] = all([self.results.loc[pair].get('conn_no_data'), self.results.loc[pair].get('strength_no_data'), self.results.loc[pair].get('dynamics_no_data')])
-        no_data_df = pd.DataFrame.from_dict(no_data, orient='index', columns=['no_data'])
-        self.results = self.results.join(no_data_df)
-
-        self.group_results = self.results.groupby(['pre_class', 'post_class']).agg(self.summary_stat)
+                merge_group_results = pd.concat([self.group_results, group_results], axis=1)
+                self.group_results = merge_group_results.loc[:, ~merge_group_results.columns.duplicated(keep='first')]
         
 
 
@@ -326,6 +333,7 @@ if __name__ == '__main__':
 
     import sys
     import pyqtgraph as pg
+    
     app = pg.mkQApp()
     pg.dbg()
 

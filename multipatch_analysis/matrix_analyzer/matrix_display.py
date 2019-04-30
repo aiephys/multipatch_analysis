@@ -224,7 +224,7 @@ class MatrixDisplay(object):
     def display_element_reset(self):
         self.selected = 0
         if self.hist_plot is not None:
-            [self.hist_plot.removeItem(item) for item in self.hist_plot.items[1:]]
+            [self.hist_plot.removeItem(item) for item in self.hist_plot.items[2:]]
         if self.trace_plot is not None:
            self.matrix_tab.trace_plot.clear()
            self.trace_plot = None
@@ -267,7 +267,8 @@ class MatrixDisplay(object):
         for group, result in self.group_results.iterrows():
             i, j = self.matrix_map[group]
                 # result = self.group_results.xs((pre.name,post.name), axis='rows') 
-            if result['no_data']['metric_summary'] is False:
+            no_data = all([result.get('conn_no_data',{}).get('metric_summary', True), result.get('strength_no_data',{}).get('metric_summary', True), result.get('dynamics_no_data',{}).get('metric_summary', True)])
+            if no_data is False:
                 output = self.matrix_display_filter.element_display_output(result, default_bgcolor)
                 text[i, j] = output['text']
                 fgcolor[i, j] = output['fgcolor']
@@ -311,8 +312,20 @@ class MatrixDisplay(object):
             vals = group_results[group_results[self.field_name]['metric_summary'].notnull()][self.field_name]['metric_summary'] 
         else:
             vals = results[results[self.field_name].notnull()][self.field_name]
-        y, x = np.histogram(vals, bins=np.linspace(min(vals), max(vals), 10))
+        neg = vals[vals < 0].min()
+        pos = vals[vals > 0].max()
+        if pos is np.nan or neg is np.nan:
+            bins = np.linspace(vals.min(), vals.max(), 10)
+        else:
+            span = pos - neg
+            pos_bins = int(round(10*(pos/span)))
+            neg_bins = 10 - pos_bins
+            bins = np.linspace(vals.min(), 0, neg_bins)
+            bins = sorted(set(np.append(bins, np.linspace(0, vals.max(), pos_bins), axis=0)))
+        y, x = np.histogram(vals, bins=bins)
         self.hist_plot.plot(x, y, stepMode=True, fillLevel=0, brush=(255,255,255,150))
+        line = pg.InfiniteLine(0, pen={'color': 'w', 'width': 1, 'style': pg.QtCore.Qt.DotLine}, movable=False)
+        self.hist_plot.addItem(line)
         units = field.get('units', '')
         self.hist_plot.setLabels(left='Count', bottom=(self.field_name, units))
 
