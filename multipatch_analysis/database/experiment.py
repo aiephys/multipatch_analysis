@@ -134,7 +134,7 @@ Cell = make_table(
         ('has_dye_fill', 'bool', 'Indicates whether the cell was filled with fluorescent dye during the experiment'),
         ('depth', 'float', 'Depth of the cell (in m) from the cut surface of the slice.'),
         ('position', 'object', '3D location of this cell in the arbitrary coordinate system of the experiment'),
-        ('ext_id', 'int', 'Cell ID (usually 1-8) referenced in external metadata records', {'index': True}),
+        ('ext_id', 'str', 'Cell ID (usually 1-8) referenced in external metadata records', {'index': True}),
     ]
 )
 
