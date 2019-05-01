@@ -20,6 +20,7 @@ from multipatch_analysis import constants
 from multipatch_analysis.cell_class import CellClass, classify_cells, classify_pairs
 from matrix_display import MatrixTab, MatrixDisplay
 from scatter_plot_display import ScatterPlotTab
+from distance_plot_display import DistancePlotTab
 from pyqtgraph import parametertree as ptree
 from pyqtgraph.parametertree import Parameter
 from pyqtgraph.widgets.DataFilterWidget import DataFilterParameter
@@ -37,6 +38,8 @@ class Tabs(pg.QtGui.QTabWidget):
         self.addTab(self.matrix_tab, 'Matrix')
         self.scatter_tab = ScatterPlotTab()
         self.addTab(self.scatter_tab, 'Scatter Plots')
+        self.distance_tab = DistancePlotTab()
+        self.addTab(self.distance_tab, 'Distance Plots')
 
 
 class ExperimentFilter(object):
@@ -118,6 +121,7 @@ class MatrixAnalyzer(object):
         self.tabs.show()
         self.matrix_tab = self.tabs.matrix_tab
         self.scatter_tab = self.tabs.scatter_tab
+        self.distance_tab = self.tabs.distance_tab
         
         self.analyzers = [ConnectivityAnalyzer(), StrengthAnalyzer(), DynamicsAnalyzer()]
         self.active_analyzers = []
