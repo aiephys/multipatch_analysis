@@ -574,6 +574,11 @@ class DynamicsAnalyzer(object):
             'pulse_ratio_8_1_50hz': [self.metric_summary, self.metric_conf],
             'pulse_ratio_2_1_50hz': [self.metric_summary, self.metric_conf],
             'pulse_ratio_5_1_50hz': [self.metric_summary, self.metric_conf],
+            'pulse_ratio_9_1_50hz': [self.metric_summary, self.metric_conf],
+            'pulse_ratio_8_1_10hz': [self.metric_summary, self.metric_conf],
+            'pulse_ratio_8_1_20hz': [self.metric_summary, self.metric_conf],
+            'pulse_ratio_8_1_100hz': [self.metric_summary, self.metric_conf],
+            'pulse_ratio_8_1_200hz': [self.metric_summary, self.metric_conf],
         }
         
         self.fields = [
@@ -593,6 +598,41 @@ class DynamicsAnalyzer(object):
                 [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
             )}}),
             ('pulse_ratio_5_1_50hz', {'mode': 'range', 'defaults': {
+                'Min': 0, 
+                'Max': 2, 
+                'colormap': pg.ColorMap(
+                [0, 0.5, 1.0],
+                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
+            )}}),
+            ('pulse_ratio_9_1_50hz', {'mode': 'range', 'defaults': {
+                'Min': 0, 
+                'Max': 2, 
+                'colormap': pg.ColorMap(
+                [0, 0.5, 1.0],
+                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
+            )}}),
+            ('pulse_ratio_8_1_10hz', {'mode': 'range', 'defaults': {
+                'Min': 0, 
+                'Max': 2, 
+                'colormap': pg.ColorMap(
+                [0, 0.5, 1.0],
+                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
+            )}}),
+            ('pulse_ratio_8_1_20hz', {'mode': 'range', 'defaults': {
+                'Min': 0, 
+                'Max': 2, 
+                'colormap': pg.ColorMap(
+                [0, 0.5, 1.0],
+                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
+            )}}),
+            ('pulse_ratio_8_1_100hz', {'mode': 'range', 'defaults': {
+                'Min': 0, 
+                'Max': 2, 
+                'colormap': pg.ColorMap(
+                [0, 0.5, 1.0],
+                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
+            )}}),
+            ('pulse_ratio_8_1_200hz', {'mode': 'range', 'defaults': {
                 'Min': 0, 
                 'Max': 2, 
                 'colormap': pg.ColorMap(
@@ -640,6 +680,11 @@ class DynamicsAnalyzer(object):
                 'pulse_ratio_8_1_50hz': dynamics.pulse_ratio_8_1_50hz if dynamics is not None else float('nan'),
                 'pulse_ratio_2_1_50hz': dynamics.pulse_ratio_2_1_50hz if dynamics is not None else float('nan'),
                 'pulse_ratio_5_1_50hz': dynamics.pulse_ratio_5_1_50hz if dynamics is not None else float('nan'),
+                'pulse_ratio_9_1_50hz': dynamics.pulse_ratio_9_1_50hz if dynamics is not None else float('nan'),
+                'pulse_ratio_8_1_10hz': dynamics.pulse_ratio_8_1_10hz if dynamics is not None else float('nan'),
+                'pulse_ratio_8_1_20hz': dynamics.pulse_ratio_8_1_20hz if dynamics is not None else float('nan'),
+                'pulse_ratio_8_1_100hz': dynamics.pulse_ratio_8_1_100hz if dynamics is not None else float('nan'),
+                'pulse_ratio_8_1_200hz': dynamics.pulse_ratio_8_1_200hz if dynamics is not None else float('nan'),
                 }
 
         

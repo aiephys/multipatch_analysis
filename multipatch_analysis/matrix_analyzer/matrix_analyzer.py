@@ -13,8 +13,7 @@ import numpy as np
 import pyqtgraph as pg
 import multipatch_analysis.database as db
 import pandas as pd
-import re
-import cProfile
+import re, cProfile
 from analyzers import query_pairs, ConnectivityAnalyzer, StrengthAnalyzer, DynamicsAnalyzer, get_all_output_fields
 from multipatch_analysis import constants
 from multipatch_analysis.cell_class import CellClass, classify_cells, classify_pairs
@@ -210,12 +209,12 @@ class MatrixAnalyzer(object):
                     'mouse V1 coarse matrix': True,
                 }},
                 'Cell Classes': {
-                    'Mouse Layer 2/3': True,
+                    'Mouse All Cre-types by layer': True,
                 },
                 'Matrix Display': {
-                    'color_by': 'connection_probability',
-                    'Text format': '{connected}/{probed}',
-                    'Show Confidence': 'connection_probability',
+                    'color_by': 'pulse_ratio_8_1_50hz',
+                    'Text format': '{pulse_ratio_8_1_50hz:0.3f}/{connected}',
+                    'Show Confidence': 'None',
                     'log_scale': False,
             },
             }},
