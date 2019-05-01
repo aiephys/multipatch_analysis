@@ -26,8 +26,11 @@ class SlicePipelineModule(DatabasePipelineModule):
         parent_info = dh.parent().info()
         
         # pull some metadata from LIMS
-        sid = info['specimen_ID'].strip()
-        limsdata = lims.specimen_info(sid)
+        sid = info.get('specimen_ID', '').strip()
+        if len(sid) > 0:
+            limsdata = lims.specimen_info(sid)
+        else:
+            limsdata = {}
 
         quality = info.get('slice quality', None)
         try:
@@ -61,14 +64,14 @@ class SlicePipelineModule(DatabasePipelineModule):
 
         fields = {
             'acq_timestamp': info['__timestamp__'],
-            'species': limsdata['organism'],
-            'date_of_birth': limsdata['date_of_birth'],
-            'age': limsdata['age'],
-            'sex': limsdata['sex'],
+            'species': limsdata.get('organism'),
+            'date_of_birth': limsdata.get('date_of_birth'),
+            'age': limsdata.get('age'),
+            'sex': limsdata.get('sex'),
             'genotype': genotype,
-            'orientation': limsdata['plane_of_section'],
-            'surface': limsdata['exposed_surface'],
-            'hemisphere': limsdata['hemisphere'],
+            'orientation': limsdata.get('plane_of_section'),
+            'surface': limsdata.get('exposed_surface'),
+            'hemisphere': limsdata.get('hemisphere'),
             'quality': quality,
             'slice_time': slice_time,
             'slice_conditions': {},
