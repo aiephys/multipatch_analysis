@@ -24,31 +24,19 @@ class SignalHandler(pg.QtCore.QObject):
         """
         sigOutputChanged = pg.QtCore.Signal(object) #self
 
-class MatrixTab(pg.QtGui.QWidget):
+
+class HistogramTab(pg.QtGui.QWidget):
     def __init__(self):
         pg.QtGui.QWidget.__init__(self)
         self.layout = pg.QtGui.QGridLayout()
         self.setLayout(self.layout)
-        self.h_splitter = pg.QtGui.QSplitter()
-        self.h_splitter.setOrientation(pg.QtCore.Qt.Horizontal)
-        self.layout.addWidget(self.h_splitter, 0, 0)
-        self.control_panel_splitter = pg.QtGui.QSplitter()
-        self.control_panel_splitter.setOrientation(pg.QtCore.Qt.Vertical)
-        self.h_splitter.addWidget(self.control_panel_splitter)
-        self.update_button = pg.QtGui.QPushButton("Update Results")
-        self.control_panel_splitter.addWidget(self.update_button)
-        self.ptree = ptree.ParameterTree(showHeader=False)
-        self.control_panel_splitter.addWidget(self.ptree)
-        self.matrix_widget = MatrixWidget()
-        self.h_splitter.addWidget(self.matrix_widget)
-        self.plot_splitter = pg.QtGui.QSplitter()
-        self.plot_splitter.setOrientation(pg.QtCore.Qt.Vertical)
-        self.h_splitter.addWidget(self.plot_splitter)
+        self.v_splitter = pg.QtGui.QSplitter()
+        self.v_splitter.setOrientation(pg.QtCore.Qt.Vertical)
+        self.layout.addWidget(self.v_splitter)
         self.scatter_plot = MatrixScatterPlot()
         self.trace_plot = MatrixTracePlot()
-        self.plot_splitter.addWidget(self.scatter_plot)
-        self.plot_splitter.addWidget(self.trace_plot)
-        self.h_splitter.setSizes([150, 300, 200])
+        self.v_splitter.addWidget(self.scatter_plot)
+        self.v_splitter.addWidget(self.trace_plot)
 
 class MatrixDisplayFilter(object):
     def __init__(self, view_box, data_fields):
@@ -176,9 +164,10 @@ class MatrixTracePlot(pg.GraphicsLayoutWidget):
 class MatrixDisplay(object):
     sigClicked = pg.QtCore.Signal(object, object, object, object, object) # self, matrix_item, event, row, col
     def __init__(self, window, output_fields, field_map):
-        self.matrix_tab = window
-        self.matrix_widget = self.matrix_tab.matrix_widget
+        self.main_window = window
+        self.matrix_widget = self.main_window.matrix_widget
         self.matrix_display_filter = MatrixDisplayFilter(self.matrix_widget.view_box, output_fields)
+        self.hist_tab = self.main_window.tabs.hist_tab
         self.field_map = field_map
         self.hist_plot = None
         self.line = None
@@ -210,7 +199,7 @@ class MatrixDisplay(object):
         self.element = self.matrix_widget.matrix.cells[row][col]
         self.element.setPen(pg.mkPen({'color': color, 'width': 5}))
         pre_class, post_class = [k for k, v in self.matrix_map.items() if v==[row, col]][0] 
-        self.trace_plot = self.matrix_tab.trace_plot.addPlot()
+        self.trace_plot = self.hist_tab.trace_plot.addPlot()
         self.trace_plot_list.append(self.trace_plot)
         self.line, self.scatter = analyzer.plot_element_data(pre_class, post_class, self.field_name, color=color, trace_plt=self.trace_plot)
         if len(self.trace_plot_list) > 1:
@@ -227,13 +216,13 @@ class MatrixDisplay(object):
         if self.hist_plot is not None:
             [self.hist_plot.removeItem(item) for item in self.hist_plot.items[2:]]
         if self.trace_plot is not None:
-           self.matrix_tab.trace_plot.clear()
+           self.hist_tab.trace_plot.clear()
            self.trace_plot = None
         self.trace_plot_list = []
 
         show_confidence = self.matrix_display_filter.params['Show Confidence']
         bordercolor = 0.6 if show_confidence is None else 0.8
-        for cells in self.matrix_tab.matrix_widget.matrix.cells:
+        for cells in self.main_window.matrix_widget.matrix.cells:
             for cell in cells:
                 cell.setPen(pg.mkPen({'color': bordercolor, 'width': 1}))
 
@@ -294,7 +283,7 @@ class MatrixDisplay(object):
             #     row = list(tup)
             rows.append(row)
 
-        self.matrix_tab.matrix_widget.set_matrix_data(text=text, fgcolor=fgcolor, bgcolor=bgcolor, border_color=bordercolor,
+        self.main_window.matrix_widget.set_matrix_data(text=text, fgcolor=fgcolor, bgcolor=bgcolor, border_color=bordercolor,
                     rows=rows, cols=rows, size=50, header_color='k')
 
 
@@ -306,8 +295,8 @@ class MatrixDisplay(object):
             self.field_name = color_map_fields[0].name()
         field = self.matrix_display_filter.colorMap.fields[self.field_name]
         if self.hist_plot is not None:
-            self.matrix_tab.scatter_plot.removeItem(self.hist_plot)
-        self.hist_plot = self.matrix_tab.scatter_plot.addPlot()
+            self.hist_tab.scatter_plot.removeItem(self.hist_plot)
+        self.hist_plot = self.hist_tab.scatter_plot.addPlot()
         if field_map[self.field_name].name == 'connectivity':
             vals = group_results[group_results[self.field_name]['metric_summary'].notnull()][self.field_name]['metric_summary'] 
         else:

@@ -16,15 +16,8 @@ class DistancePlotTab(pg.QtGui.QWidget):
         pg.QtGui.QWidget.__init__(self)
         self.layout = pg.QtGui.QGridLayout()
         self.setLayout(self.layout)
-        self.h_splitter = pg.QtGui.QSplitter()
-        self.h_splitter.setOrientation(pg.QtCore.Qt.Horizontal)
-        self.layout.addWidget(self.h_splitter)
-        self.distance_filter = DistanceFilter()
-        self.ptree = ptree.ParameterTree(showHeader=False)
-        self.ptree.setParameters(self.distance_filter.cmap)
-        self.h_splitter.addWidget(self.ptree)
         self.distance_plot = DistancePlot()
-        self.h_splitter.addWidget(self.distance_plot.grid)
+        self.layout.addWidget(self.distance_plot.grid)
 
 
 class DistancePlot(object):
@@ -38,18 +31,4 @@ class DistancePlot(object):
         self.plots[0].addLegend()
         self.grid.show()
         self.plots[0].setLabels(bottom=('distance', 'm'), left='connection probability')     
-
-class DistanceFilter(object):
-    def __init__(self):
-        self.cmap = ColorMapParameter()
-        
-    def set_fields(self, pre_classes, post_classes):
-        self.pre_class_list = pre_classes
-        self.post_class_list = post_classes
-        self.fields = [
-            ('pre_class', {'mode': 'enum', 'values': self.pre_class_list}),
-            ('post_class', {'mode': 'enum', 'values': self.post_class_list}),
-        ]
-
-        self.cmap.setFields(fields)
 
