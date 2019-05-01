@@ -835,9 +835,7 @@ class ExperimentMetadata(Experiment):
 
     @property
     def db_status(self):
-        session = database.Session()
-        jobs = session.query(database.Pipeline).filter(database.Pipeline.job_id==self.timestamp).all()
-        session.close()
+        jobs = database.query(database.Pipeline).filter(database.Pipeline.job_id==self.timestamp).all()
         has_run = len(jobs) > 0
         success = {j.module_name:j.success for j in jobs}
         errors = {j.module_name:j.error for j in jobs}
