@@ -12,6 +12,7 @@ from __future__ import print_function, division
 import numpy as np
 import pyqtgraph as pg
 import pandas as pd
+from collections import OrderedDict
 from analyzers import results_scatter, FormattableNumber
 from multipatch_analysis.ui.graphics import MatrixItem
 from pyqtgraph import parametertree as ptree
@@ -239,7 +240,7 @@ class MatrixDisplay(object):
     def update_matrix_display(self, results, group_results, cell_classes, cell_groups, field_map):
         self.results = results
         self.group_results = group_results
-        self.matrix_map = {}
+        self.matrix_map = OrderedDict()
         show_confidence = self.matrix_display_filter.params['Show Confidence']
 
         shape = (len(cell_groups),) * 2
@@ -250,10 +251,11 @@ class MatrixDisplay(object):
         bgcolor = np.empty(shape, dtype=object)
         if show_confidence != 'None':
             default_bordercolor = 0.6
-            default_bgcolor = np.array([128., 128., 128., 255.])
+            # default_bgcolor = np.array([128., 128., 128., 255.])
         else:
             default_bordercolor = 0.8
-            default_bgcolor = np.array([220., 220., 220.])
+            # default_bgcolor = np.array([220., 220., 220.])
+        default_bgcolor = np.array([128., 128., 128., 255.])
         bgcolor.fill(tuple(default_bgcolor))
         bordercolor = np.empty(shape, dtype=object)
         bordercolor.fill(default_bordercolor)
@@ -266,14 +268,12 @@ class MatrixDisplay(object):
                 self.matrix_map[(pre, post)] = [i, j]
         for group, result in self.group_results.iterrows():
             i, j = self.matrix_map[group]
-                # result = self.group_results.xs((pre.name,post.name), axis='rows') 
             no_data = all([result.get('conn_no_data',{}).get('metric_summary', True), result.get('strength_no_data',{}).get('metric_summary', True), result.get('dynamics_no_data',{}).get('metric_summary', True)])
             if no_data is False:
                 output = self.matrix_display_filter.element_display_output(result, default_bgcolor)
                 text[i, j] = output['text']
                 fgcolor[i, j] = output['fgcolor']
                 bgcolor[i, j] = output['bgcolor']
-                # bordercolor[i, j] = output['bordercolor']
                 
         # Force cell class descriptions down to tuples of 2 items
         # Kludgy, but works for now.
