@@ -150,11 +150,8 @@ class MatrixDisplay(object):
         self.main_window = window
         self.matrix_widget = self.main_window.matrix_widget
         self.matrix_display_filter = MatrixDisplayFilter(self.matrix_widget.view_box, output_fields)
-        # self.hist_tab = self.main_window.tabs.hist_tab
         self.field_map = field_map
         self.element = None
-
-        # self.matrix_widget.sigClicked.connect(self.display_matrix_element_data)
 
     def get_element_classes(self, row, col):
         pre_class, post_class = [k for k, v in self.matrix_map.items() if v==[row, col]][0]
@@ -168,23 +165,6 @@ class MatrixDisplay(object):
         self.element = self.matrix_widget.matrix.cells[row[0]][col[0]]
         self.element.setPen(pg.mkPen({'color': color, 'width': 5}))
 
-    # def display_element_data(self, row, col, analyzer, trace_plot_list=None):
-    #     color = self.colors[self.selected]
-    #     self.element = self.matrix_widget.matrix.cells[row][col]
-    #     self.element.setPen(pg.mkPen({'color': color, 'width': 5}))
-    #     pre_class, post_class = [k for k, v in self.matrix_map.items() if v==[row, col]][0] 
-    #     self.trace_plot = self.hist_tab.trace_plot.addPlot()
-    #     self.trace_plot_list.append(self.trace_plot)
-    #     self.line, self.scatter = analyzer.plot_element_data(pre_class, post_class, self.field_name, color=color, trace_plt=self.trace_plot)
-    #     if len(self.trace_plot_list) > 1:
-    #         first_plot = self.trace_plot_list[0]
-    #         for plot in self.trace_plot_list[1:]:
-    #             plot.setYLink(first_plot)
-    #             plot.setXLink(first_plot)
-    #     self.hist_plot.addItem(self.line)
-    #     if self.scatter is not None:
-    #         self.hist_plot.addItem(self.scatter)
-
     def element_color_reset(self):
         show_confidence = self.matrix_display_filter.params['Show Confidence']
         bordercolor = 0.6 if show_confidence is None else 0.8
@@ -192,25 +172,10 @@ class MatrixDisplay(object):
             for cell in cells:
                 cell.setPen(pg.mkPen({'color': bordercolor, 'width': 1}))
 
-    # def display_element_reset(self):
-    #     self.selected = 0
-    #     if self.hist_plot is not None:
-    #         [self.hist_plot.removeItem(item) for item in self.hist_plot.items[2:]]
-    #     if self.trace_plot is not None:
-    #        self.hist_tab.trace_plot.clear()
-    #        self.trace_plot = None
-    #     self.trace_plot_list = []
-
-    #     show_confidence = self.matrix_display_filter.params['Show Confidence']
-    #     bordercolor = 0.6 if show_confidence is None else 0.8
-    #     for cells in self.main_window.matrix_widget.matrix.cells:
-    #         for cell in cells:
-    #             cell.setPen(pg.mkPen({'color': bordercolor, 'width': 1}))
-
     def update_matrix_display(self, results, group_results, cell_classes, cell_groups, field_map):
         self.results = results
         self.group_results = group_results
-        self.matrix_map = OrderedDict()
+        self.matrix_map = {}
         show_confidence = self.matrix_display_filter.params['Show Confidence']
 
         shape = (len(cell_groups),) * 2

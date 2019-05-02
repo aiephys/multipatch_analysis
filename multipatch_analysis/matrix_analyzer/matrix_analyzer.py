@@ -131,6 +131,7 @@ class CellClassFilter(object):
     def invalidate_output(self):
         self.cell_groups = None
         self.cell_classes = None
+        self.sigOutputChanged.emit(self)
 
 class MatrixAnalyzer(object):
     sigClicked = pg.QtCore.Signal(object, object, object, object, object) # self, matrix_item, row, col

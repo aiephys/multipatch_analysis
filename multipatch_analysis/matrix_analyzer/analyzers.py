@@ -158,6 +158,7 @@ class ConnectivityAnalyzer(object):
     
     def invalidate_output(self):
         self.results = None
+        self.group_results = None
 
     def measure(self, pair_groups):
         """Given a list of cell pairs and a dict that groups cells together by class,
@@ -479,14 +480,18 @@ class StrengthAnalyzer(object):
             print ("Connection type: %s -> %s" % (pre_class, post_class))    
             print ("\t Grand Average %s = %s" % (field_name, pg.siFormat(element[field_name].mean(), suffix=units)))
             print ("Connected Pairs:")
+            no_qc_data = []
             for pair, value in element[field_name].iteritems():
                 if pair.synapse is not True:
                     continue
-                print ("\t %s" % (pair))
                 if np.isnan(value):
-                    print("\t\t No QC Data")
+                    no_qc_data.append(pair)
                 else:
+                    print ("\t %s" % (pair))
                     print ("\t\t Average %s: %s" % (field_name, pg.siFormat(value, suffix=units)))
+            print("\t No QC Data:")
+            for pair in no_qc_data:
+                print ("\t\t %s" % (pair))
 
     def plot_element_data(self, pre_class, post_class, field_name, color='g', trace_plt=None):
         fn = field_name.split('_all')[0] if field_name.endswith('all') else field_name.split('_first_pulse')[0]
@@ -721,11 +726,11 @@ class DynamicsAnalyzer(object):
                 'pulse_ratio_2_1_50hz': dynamics.pulse_ratio_2_1_50hz if dynamics is not None else float('nan'),
                 'pulse_ratio_5_1_50hz': dynamics.pulse_ratio_5_1_50hz if dynamics is not None else float('nan'),
                 'pulse_ratio_9_1_125ms': dynamics.pulse_ratio_9_1_125ms if dynamics is not None else float('nan'),
-                'pulse_ratio_9_1_250ms': dynamics.pulse_ratio_9_1_125ms if dynamics is not None else float('nan'),
-                'pulse_ratio_9_1_500ms': dynamics.pulse_ratio_9_1_125ms if dynamics is not None else float('nan'),
-                'pulse_ratio_9_1_1000ms': dynamics.pulse_ratio_9_1_125ms if dynamics is not None else float('nan'),
-                'pulse_ratio_9_1_2000ms': dynamics.pulse_ratio_9_1_125ms if dynamics is not None else float('nan'),
-                'pulse_ratio_9_1_4000ms': dynamics.pulse_ratio_9_1_125ms if dynamics is not None else float('nan'),
+                'pulse_ratio_9_1_250ms': dynamics.pulse_ratio_9_1_250ms if dynamics is not None else float('nan'),
+                'pulse_ratio_9_1_500ms': dynamics.pulse_ratio_9_1_500ms if dynamics is not None else float('nan'),
+                'pulse_ratio_9_1_1000ms': dynamics.pulse_ratio_9_1_1000ms if dynamics is not None else float('nan'),
+                'pulse_ratio_9_1_2000ms': dynamics.pulse_ratio_9_1_2000ms if dynamics is not None else float('nan'),
+                'pulse_ratio_9_1_4000ms': dynamics.pulse_ratio_9_1_4000ms if dynamics is not None else float('nan'),
                 'pulse_ratio_8_1_10hz': dynamics.pulse_ratio_8_1_10hz if dynamics is not None else float('nan'),
                 'pulse_ratio_8_1_20hz': dynamics.pulse_ratio_8_1_20hz if dynamics is not None else float('nan'),
                 'pulse_ratio_8_1_100hz': dynamics.pulse_ratio_8_1_100hz if dynamics is not None else float('nan'),
@@ -754,12 +759,18 @@ class DynamicsAnalyzer(object):
             print ("Connection type: %s -> %s" % (pre_class, post_class))    
             print ("\t Grand Average %s = %s" % (field_name, element[field_name].mean()))
             print ("Connected Pairs:")
+            no_qc_data = []
             for pair, value in element[field_name].iteritems():
-                print ("\t %s" % (pair))
+                if pair.synapse is not True:
+                    continue
                 if np.isnan(value):
-                    print("\t\t No QC Data")
+                    no_qc_data.append(pair)
                 else:
+                    print ("\t %s" % (pair))
                     print ("\t\t Average %s: %0.2f" % (field_name, value))
+            print("\t No QC Data:")
+            for pair in no_qc_data:
+                print ("\t\t %s" % (pair))
 
     def plot_element_data(self, pre_class, post_class, field_name, color='g', trace_plt=None):
         trace_plt = None
