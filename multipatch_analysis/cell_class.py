@@ -99,7 +99,7 @@ class CellClass(object):
         if isinstance(a, str):
             return a == self.name
         else:
-            return object.__eq__(self, a)
+            return object.__eq__(self)  # should raise NotImplemented
 
     def __repr__(self):
         return "<CellClass %s>" % self.name

@@ -359,7 +359,14 @@ class Experiment(object):
             if self.lims_record['organism'] == 'mouse':
                 if genotype is None:
                     raise Exception("Mouse specimen has no genotype: %s\n  (from %r)" % (self.specimen_name, self))
-                for driver,positive in genotype.predict_driver_expression(colors).items():
+
+                if dye is None:
+                    starting_factors = None
+                else:
+                    genotype.model.add_rule([dye], [dye_color])
+                    starting_factors = [dye]
+                
+                for driver,positive in genotype.predict_driver_expression(colors, starting_factors).items():
                     cell.labels[driver] = positive
 
             # load old QC keys

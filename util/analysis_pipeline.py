@@ -53,10 +53,12 @@ if __name__ == '__main__':
     
     if args.rebuild:
         mod_names = ', '.join([module.name for module in modules])
-        args.rebuild = raw_input("Rebuild modules: %s? " % mod_names) == 'y'
+        if raw_input("Rebuild modules: %s? (y/n) " % mod_names) != 'y':
+            print("  Nuts.")
+            sys.exit(-1)
 
     if args.bake and os.path.exists(config.synphys_db_sqlite):
-        msg = "sqlite database file %s already exists; ok to overwrite? " % config.synphys_db_sqlite
+        msg = "sqlite database file %s already exists; ok to overwrite? (y/n) " % config.synphys_db_sqlite
         ans = raw_input(msg)
         if ans == 'y':
             print("  Ok, you asked for it..")

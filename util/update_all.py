@@ -34,6 +34,7 @@ if __name__ == '__main__':
     stages = OrderedDict([
         ('sync',                    ('python util/sync_rigs_to_server.py', 'sync raw data to server')),
         ('pipeline',                ('python util/analysis_pipeline.py all', 'run analysis pipeline')),
+        ('vacuum',                  ('python util/database.py --vacuum', 'vacuum database')),
     ])
 
     skip = [] if args.skip == '' else args.skip.split(',')
