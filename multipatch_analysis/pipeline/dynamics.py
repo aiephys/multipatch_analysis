@@ -49,7 +49,8 @@ class DynamicsPipelineModule(DatabasePipelineModule):
                     rec_delay_rounded = None
                 else:
                     rec_delay_rounded = min(delays, key=lambda x:abs(x-rec_delay*1000))
-                    delay_dist = abs(rec_delay_rounded - rec_delay)
+                    delay_dist = abs(rec_delay_rounded - rec_delay*1000)
+                    pulse_amps.setdefault(rec_delay_rounded, {})
                     if delay_dist > 5:
                         rec_delay_rounded = None
                 pulse_amps.setdefault(ind_freq, {})
@@ -63,8 +64,8 @@ class DynamicsPipelineModule(DatabasePipelineModule):
                 for result in results:
                     pulse_number = result.pulse_number
                     if ind_freq == 50 and rec_delay_rounded is not None:
-                        pulse_amps[rec_delay].setdefault(pulse_number, [])
-                        pulse_amps[rec_delay][pulse_number].append(getattr(result.pulse_response_strength, amp_field))
+                        pulse_amps[rec_delay_rounded].setdefault(pulse_number, [])
+                        pulse_amps[rec_delay_rounded][pulse_number].append(getattr(result.pulse_response_strength, amp_field))
                     pulse_amps[ind_freq].setdefault(pulse_number, [])
                     pulse_amps[ind_freq][pulse_number].append(getattr(result.pulse_response_strength, amp_field))
             if any(pulse_amps):
