@@ -17,8 +17,10 @@ import re, cProfile
 from analyzers import query_pairs, ConnectivityAnalyzer, StrengthAnalyzer, DynamicsAnalyzer, get_all_output_fields
 from multipatch_analysis import constants
 from multipatch_analysis.cell_class import CellClass, classify_cells, classify_pairs
-from matrix_display import MatrixTab, MatrixDisplay
+from matrix_display import MatrixDisplay, MatrixWidget
 from scatter_plot_display import ScatterPlotTab
+from distance_plot_display import DistancePlotTab
+from histogram_trace_display import HistogramTab
 from pyqtgraph import parametertree as ptree
 from pyqtgraph.parametertree import Parameter
 from pyqtgraph.widgets.DataFilterWidget import DataFilterParameter
@@ -28,14 +30,37 @@ class SignalHandler(pg.QtCore.QObject):
         """
         sigOutputChanged = pg.QtCore.Signal(object) #self
 
+class MainWindow(pg.QtGui.QWidget):
+    def __init__(self):
+        pg.QtGui.QWidget.__init__(self)
+        self.layout = pg.QtGui.QGridLayout()
+        self.setLayout(self.layout)
+        self.h_splitter = pg.QtGui.QSplitter()
+        self.h_splitter.setOrientation(pg.QtCore.Qt.Horizontal)
+        self.layout.addWidget(self.h_splitter, 0, 0)
+        self.control_panel_splitter = pg.QtGui.QSplitter()
+        self.control_panel_splitter.setOrientation(pg.QtCore.Qt.Vertical)
+        self.h_splitter.addWidget(self.control_panel_splitter)
+        self.update_button = pg.QtGui.QPushButton("Update Results")
+        self.control_panel_splitter.addWidget(self.update_button)
+        self.ptree = ptree.ParameterTree(showHeader=False)
+        self.control_panel_splitter.addWidget(self.ptree)
+        self.matrix_widget = MatrixWidget()
+        self.h_splitter.addWidget(self.matrix_widget)
+        self.tabs = Tabs()
+        self.h_splitter.addWidget(self.tabs)
+        self.h_splitter.setSizes([300, 600, 400])        
+
 class Tabs(pg.QtGui.QTabWidget):
     def __init__(self, parent=None):
         pg.QtGui.QTabWidget.__init__(self)
 
-        self.matrix_tab = MatrixTab()
-        self.addTab(self.matrix_tab, 'Matrix')
+        self.hist_tab = HistogramTab()
+        self.addTab(self.hist_tab, 'Histogram and Traces')
         self.scatter_tab = ScatterPlotTab()
         self.addTab(self.scatter_tab, 'Scatter Plots')
+        self.distance_tab = DistancePlotTab()
+        self.addTab(self.distance_tab, 'Distance Plots')
 
 
 class ExperimentFilter(object):
@@ -106,29 +131,28 @@ class CellClassFilter(object):
     def invalidate_output(self):
         self.cell_groups = None
         self.cell_classes = None
+        self.sigOutputChanged.emit(self)
 
 class MatrixAnalyzer(object):
     sigClicked = pg.QtCore.Signal(object, object, object, object, object) # self, matrix_item, row, col
     def __init__(self, session, default_preset=None):
         
-        self.tabs = Tabs()
-        self.tabs.setGeometry(280, 130, 1500, 900)
-        self.tabs.setWindowTitle('MatrixAnalyzer')
-        self.tabs.show()
-        self.matrix_tab = self.tabs.matrix_tab
+        self.main_window = MainWindow()
+        self.main_window.setGeometry(280, 130, 1500, 900)
+        self.main_window.setWindowTitle('MatrixAnalyzer')
+        self.main_window.show()
+        self.tabs = self.main_window.tabs
+        self.hist_tab = self.tabs.hist_tab
         self.scatter_tab = self.tabs.scatter_tab
+        self.distance_tab = self.tabs.distance_tab
+        self.distance_plot = self.distance_tab.distance_plot
+        self.hist_plot = self.hist_tab.hist
+        self.trace_panel = self.hist_tab.trace_plot
+        self.selected = 0
+        self.colors = [(0, 255, 0), (255, 0, 0), (0, 0, 255), (254, 169, 0), (170, 0, 127), (0, 230, 230)]
         
         self.analyzers = [ConnectivityAnalyzer(), StrengthAnalyzer(), DynamicsAnalyzer()]
         self.active_analyzers = []
-        self.mode = 'mean'
-        # self.scatter_plot = None
-        # self.line = None
-        # self.scatter = None
-        # self.trace_plot = None
-        # self.trace_plot_list = []
-        # self.element = None
-        # self.selected = 0
-        # self.colors = [(0, 255, 0), (255, 0, 0), (0, 0, 255), (254, 169, 0), (170, 0, 127), (0, 230, 230)]
 
         self.field_map = {}
         for analyzer in self.analyzers:
@@ -136,23 +160,18 @@ class MatrixAnalyzer(object):
                 if field[0] == 'None':
                     continue
                 self.field_map[field[0]] = analyzer
-            # for field in analyzer.output_fields()['show_confidence']:
-            #     if field == 'None':
-            #         continue
-                # self.field_map[field] = analyzer
 
         self.output_fields = get_all_output_fields(self.analyzers)
         self.element_scatter = self.scatter_tab.element_scatter
         self.pair_scatter = self.scatter_tab.pair_scatter
         self.experiment_filter = ExperimentFilter()
         self.cell_class_filter = CellClassFilter(cell_class_groups)
-        self.matrix_display = MatrixDisplay(self.matrix_tab, self.output_fields, self.field_map)
+        self.matrix_display = MatrixDisplay(self.main_window, self.output_fields, self.field_map)
         self.matrix_display_filter = self.matrix_display.matrix_display_filter
         self.element_scatter.set_fields(self.output_fields, self.field_map)
         pair_fields = [f for f in self.output_fields if f[0] not in ['connection_probability', 'gap_junction_probability', 'matrix_completeness']]
-        # pair_fields = get_all_output_fields(self.analyzers[1:])
         self.pair_scatter.set_fields(pair_fields, self.field_map)
-        self.visualizers = [self.matrix_display_filter, self.element_scatter, self.pair_scatter]
+        self.visualizers = [self.matrix_display_filter, self.hist_plot, self.element_scatter, self.pair_scatter, self.distance_plot]
 
         self.default_preset = default_preset
         self.session = session
@@ -163,14 +182,15 @@ class MatrixAnalyzer(object):
             self.cell_class_filter.params,
             self.matrix_display_filter.params,
         ])
-        self.matrix_tab.ptree.setParameters(self.params, showTop=False)
+        self.main_window.ptree.setParameters(self.params, showTop=False)
 
         self.presets = self.analyzer_presets()
         preset_list = [p['name'] for p in self.presets]
         preset_params = Parameter.create(name='Analyzer Presets', type='list', values=preset_list)
         self.params.insertChild(0, preset_params)
         
-        self.matrix_tab.update_button.clicked.connect(self.update_clicked)
+        self.main_window.update_button.clicked.connect(self.update_clicked)
+        self.matrix_display.matrix_widget.sigClicked.connect(self.display_matrix_element_data)
         
         self.experiment_filter.sigOutputChanged.connect(self.cell_class_filter.invalidate_output)
         self.params.child('Analyzer Presets').sigValueChanged.connect(self.presetChanged)
@@ -205,11 +225,11 @@ class MatrixAnalyzer(object):
                     'mouse V1 coarse matrix': True,
                 }},
                 'Cell Classes': {
-                    'Mouse All Cre-types by layer': True,
+                    'Mouse Layer 2/3': True,
                 },
                 'Matrix Display': {
-                    'color_by': 'pulse_ratio_8_1_50hz',
-                    'Text format': '{pulse_ratio_8_1_50hz:0.3f}/{connected}',
+                    'color_by': 'ic_fit_amp_all',
+                    'Text format': '{ic_fit_amp_all.mV}',
                     'Show Confidence': 'None',
                     'log_scale': False,
             },
@@ -253,7 +273,7 @@ class MatrixAnalyzer(object):
 
     def analyzers_needed(self):
         ## go through all of the visualizers
-        data_needed = set()
+        data_needed = set(['connected', 'distance'])
         for metric in self.matrix_display_filter.colorMap.children():
             data_needed.add(metric.name())
         text_fields = re.findall('\{(.*?)\}', self.matrix_display_filter.params['Text format'])
@@ -288,6 +308,39 @@ class MatrixAnalyzer(object):
 
         return self.active_analyzers
 
+    def display_matrix_element_data(self, matrix_item, event, row, col):
+        field_name = self.matrix_display.matrix_display_filter.get_colormap_field()
+        pre_class, post_class = [k for k, v in self.matrix_display.matrix_map.items() if v==[row, col]][0]
+        try:
+            element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class))
+            analyzer = self.field_map[field_name]
+            analyzer.print_element_info(pre_class, post_class, element, field_name)
+            # from here row and col are tuples (row, pre_class) and (col, post_class) respectively
+            row = (row, pre_class)
+            col = (col, post_class)
+            if int(event.modifiers() & pg.QtCore.Qt.ControlModifier)>0:
+                self.selected += 1
+                if self.selected >= len(self.colors):
+                    self.selected = 0
+                color = self.colors[self.selected]
+                self.matrix_display.color_element(row, col, color)
+                self.hist_plot.plot_element_data(element, analyzer, color, self.trace_panel)
+                self.distance_plot.element_distance(element, color)
+            else:
+                self.display_matrix_element_reset() 
+                color = self.colors[self.selected]
+                self.matrix_display.color_element(row, col, color)
+                self.hist_plot.plot_element_data(element, analyzer, color, self.trace_panel)
+                self.distance_plot.element_distance(element, color)
+        except KeyError:
+            print ('%s->%s has no data, please select another element' % (pre_class, post_class))
+
+    def display_matrix_element_reset(self):
+        self.selected = 0
+        self.hist_plot.plot_element_reset()
+        self.matrix_display.element_color_reset()
+        self.distance_plot.element_distance_reset(self.results, color=(128, 128, 128), name='All Connections')
+
     def update_clicked(self):
         p = cProfile.Profile()
         p.enable()
@@ -295,10 +348,12 @@ class MatrixAnalyzer(object):
             self.analyzers_needed()
             self.update_results()
             self.matrix_display.update_matrix_display(self.results, self.group_results, self.cell_classes, self.cell_groups, self.field_map)
+            self.hist_plot.matrix_histogram(self.results, self.group_results, self.matrix_display.matrix_display_filter.colorMap, self.field_map)
             self.element_scatter.set_data(self.group_results)
             self.pair_scatter.set_data(self.results)
-            if self.matrix_tab.matrix_widget.matrix is not None:
-                self.matrix_display.display_element_reset()
+            self.dist_plot = self.distance_plot.plot_distance(self.results, color=(128, 128, 128), name='All Connections')
+            if self.main_window.matrix_widget.matrix is not None:
+                self.display_matrix_element_reset()
         p.disable()
         # p.print_stats(sort='cumulative')
 

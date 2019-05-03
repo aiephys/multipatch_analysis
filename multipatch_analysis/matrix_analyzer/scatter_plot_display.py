@@ -14,13 +14,13 @@ class ScatterPlotTab(pg.QtGui.QWidget):
         pg.QtGui.QWidget.__init__(self)
         self.layout = pg.QtGui.QGridLayout()
         self.setLayout(self.layout)
-        self.h_splitter = pg.QtGui.QSplitter()
-        self.h_splitter.setOrientation(pg.QtCore.Qt.Horizontal)
-        self.layout.addWidget(self.h_splitter)
+        self.v_splitter = pg.QtGui.QSplitter()
+        self.v_splitter.setOrientation(pg.QtCore.Qt.Vertical)
+        self.layout.addWidget(self.v_splitter)
         self.element_scatter = ElementScatterPlot()
         self.pair_scatter = PairScatterPlot()
-        self.h_splitter.addWidget(self.element_scatter)
-        self.h_splitter.addWidget(self.pair_scatter)
+        self.v_splitter.addWidget(self.element_scatter)
+        self.v_splitter.addWidget(self.pair_scatter)
 
 class ElementScatterPlot(pg.ScatterPlotWidget):
     def __init__(self):

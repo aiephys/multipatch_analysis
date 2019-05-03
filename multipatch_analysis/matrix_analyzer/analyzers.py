@@ -158,6 +158,7 @@ class ConnectivityAnalyzer(object):
     
     def invalidate_output(self):
         self.results = None
+        self.group_results = None
 
     def measure(self, pair_groups):
         """Given a list of cell pairs and a dict that groups cells together by class,
@@ -210,27 +211,22 @@ class ConnectivityAnalyzer(object):
 
         return self.fields
 
-    def print_element_info(self, pre_class, post_class, field_name):
-        try:
-            element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class))
-            connections = element[element['connected'] == True].index.tolist()
-            print ("Connection type: %s -> %s" % (pre_class, post_class))
-            print ("Connected Pairs:")
-            for connection in connections:
-                print ("\t %s" % (connection))
-            gap_junctions = element[element['gap_junction'] == True].index.tolist()
-            print ("Gap Junctions:")
-            for gap in gap_junctions:
-                print ("\t %s" % (gap))
-            probed_pairs = element[element['probed'] == True].index.tolist()
-            print ("Probed Pairs:")
-            for probed in probed_pairs:
-                print ("\t %s" % (probed))
-        except KeyError:
-            print ('%s->%s has no data, please select another element' % (pre_class, post_class)) 
-
-    def plot_element_data(self, pre_class, post_class, field_name, color='g', trace_plt=None):
-        element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class))
+    def print_element_info(self, pre_class, post_class, element, field_name):
+        connections = element[element['connected'] == True].index.tolist()
+        print ("Connection type: %s -> %s" % (pre_class, post_class))
+        print ("Connected Pairs:")
+        for connection in connections:
+            print ("\t %s" % (connection))
+        gap_junctions = element[element['gap_junction'] == True].index.tolist()
+        print ("Gap Junctions:")
+        for gap in gap_junctions:
+            print ("\t %s" % (gap))
+        probed_pairs = element[element['probed'] == True].index.tolist()
+        print ("Probed Pairs:")
+        for probed in probed_pairs:
+            print ("\t %s" % (probed))
+        
+    def plot_element_data(self, pre_class, post_class, element, field_name, color='g', trace_plt=None):
         summary = element.agg(self.summary_stat)  
         val = summary[field_name]['metric_summary']
         line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
@@ -248,7 +244,8 @@ class ConnectivityAnalyzer(object):
                 trace_plt.plot(trace.time_values, trace.data)
                 traces.append(trace)
         grand_trace = TraceList(traces).mean()
-        trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3})
+        name = ('%s->%s, n=%d' % (pre_class, post_class, len(traces)))
+        trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3}, name=name)
         trace_plt.setXRange(0, 20e-3)
         trace_plt.setLabels(left=('', 'V'), bottom=('Time from stimulus', 's'))
         return line, scatter
@@ -471,26 +468,28 @@ class StrengthAnalyzer(object):
     def metric_conf(self, x):
         return [-np.nanstd(x), np.nanstd(x)]
 
-    def print_element_info(self, pre_class, post_class, field_name=None):
+    def print_element_info(self, pre_class, post_class, element, field_name=None):
         if field_name is not None:
             fn = field_name.split('_all')[0] if field_name.endswith('all') else field_name.split('_first_pulse')[0]
             units = [field[1].get('units', '') for field in self.fields if field[0] == field_name][0] 
-            element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class)) 
             print ("Connection type: %s -> %s" % (pre_class, post_class))    
             print ("\t Grand Average %s = %s" % (field_name, pg.siFormat(element[field_name].mean(), suffix=units)))
             print ("Connected Pairs:")
+            no_qc_data = []
             for pair, value in element[field_name].iteritems():
                 if pair.synapse is not True:
                     continue
-                print ("\t %s" % (pair))
                 if np.isnan(value):
-                    print("\t\t No QC Data")
+                    no_qc_data.append(pair)
                 else:
+                    print ("\t %s" % (pair))
                     print ("\t\t Average %s: %s" % (field_name, pg.siFormat(value, suffix=units)))
+            print("\t No QC Data:")
+            for pair in no_qc_data:
+                print ("\t\t %s" % (pair))
 
-    def plot_element_data(self, pre_class, post_class, field_name, color='g', trace_plt=None):
+    def plot_element_data(self, pre_class, post_class, element, field_name, color='g', trace_plt=None):
         fn = field_name.split('_all')[0] if field_name.endswith('all') else field_name.split('_first_pulse')[0]
-        element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class))
         val = element[field_name].mean()
         line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
         scatter = None
@@ -532,7 +531,8 @@ class StrengthAnalyzer(object):
             self.pair_items[pair_id].append(point)
         scatter.sigClicked.connect(self.scatter_plot_clicked)
         grand_trace = TraceList(traces).mean()
-        trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3})
+        name = ('%s->%s, n=%d' % (pre_class, post_class, len(traces)))
+        trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3}, name=name)
         units = 'V' if field_name.startswith('ic') else 'A'
         trace_plt.setXRange(0, 20e-3)
         trace_plt.setLabels(left=('', units), bottom=('Time from stimulus', 's'))
@@ -574,7 +574,12 @@ class DynamicsAnalyzer(object):
             'pulse_ratio_8_1_50hz': [self.metric_summary, self.metric_conf],
             'pulse_ratio_2_1_50hz': [self.metric_summary, self.metric_conf],
             'pulse_ratio_5_1_50hz': [self.metric_summary, self.metric_conf],
-            'pulse_ratio_9_1_50hz': [self.metric_summary, self.metric_conf],
+            'pulse_ratio_9_1_125ms': [self.metric_summary, self.metric_conf],
+            'pulse_ratio_9_1_250ms': [self.metric_summary, self.metric_conf],
+            'pulse_ratio_9_1_500ms': [self.metric_summary, self.metric_conf],
+            'pulse_ratio_9_1_1000ms': [self.metric_summary, self.metric_conf],
+            'pulse_ratio_9_1_2000ms': [self.metric_summary, self.metric_conf],
+            'pulse_ratio_9_1_4000ms': [self.metric_summary, self.metric_conf],
             'pulse_ratio_8_1_10hz': [self.metric_summary, self.metric_conf],
             'pulse_ratio_8_1_20hz': [self.metric_summary, self.metric_conf],
             'pulse_ratio_8_1_100hz': [self.metric_summary, self.metric_conf],
@@ -604,13 +609,6 @@ class DynamicsAnalyzer(object):
                 [0, 0.5, 1.0],
                 [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
             )}}),
-            ('pulse_ratio_9_1_50hz', {'mode': 'range', 'defaults': {
-                'Min': 0, 
-                'Max': 2, 
-                'colormap': pg.ColorMap(
-                [0, 0.5, 1.0],
-                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
-            )}}),
             ('pulse_ratio_8_1_10hz', {'mode': 'range', 'defaults': {
                 'Min': 0, 
                 'Max': 2, 
@@ -633,6 +631,48 @@ class DynamicsAnalyzer(object):
                 [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
             )}}),
             ('pulse_ratio_8_1_200hz', {'mode': 'range', 'defaults': {
+                'Min': 0, 
+                'Max': 2, 
+                'colormap': pg.ColorMap(
+                [0, 0.5, 1.0],
+                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
+            )}}),
+             ('pulse_ratio_9_1_125ms', {'mode': 'range', 'defaults': {
+                'Min': 0, 
+                'Max': 2, 
+                'colormap': pg.ColorMap(
+                [0, 0.5, 1.0],
+                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
+            )}}),
+             ('pulse_ratio_9_1_250ms', {'mode': 'range', 'defaults': {
+                'Min': 0, 
+                'Max': 2, 
+                'colormap': pg.ColorMap(
+                [0, 0.5, 1.0],
+                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
+            )}}),
+             ('pulse_ratio_9_1_500ms', {'mode': 'range', 'defaults': {
+                'Min': 0, 
+                'Max': 2, 
+                'colormap': pg.ColorMap(
+                [0, 0.5, 1.0],
+                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
+            )}}),
+             ('pulse_ratio_9_1_1000ms', {'mode': 'range', 'defaults': {
+                'Min': 0, 
+                'Max': 2, 
+                'colormap': pg.ColorMap(
+                [0, 0.5, 1.0],
+                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
+            )}}),
+             ('pulse_ratio_9_1_2000ms', {'mode': 'range', 'defaults': {
+                'Min': 0, 
+                'Max': 2, 
+                'colormap': pg.ColorMap(
+                [0, 0.5, 1.0],
+                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
+            )}}),
+             ('pulse_ratio_9_1_4000ms', {'mode': 'range', 'defaults': {
                 'Min': 0, 
                 'Max': 2, 
                 'colormap': pg.ColorMap(
@@ -680,7 +720,12 @@ class DynamicsAnalyzer(object):
                 'pulse_ratio_8_1_50hz': dynamics.pulse_ratio_8_1_50hz if dynamics is not None else float('nan'),
                 'pulse_ratio_2_1_50hz': dynamics.pulse_ratio_2_1_50hz if dynamics is not None else float('nan'),
                 'pulse_ratio_5_1_50hz': dynamics.pulse_ratio_5_1_50hz if dynamics is not None else float('nan'),
-                'pulse_ratio_9_1_50hz': dynamics.pulse_ratio_9_1_50hz if dynamics is not None else float('nan'),
+                'pulse_ratio_9_1_125ms': dynamics.pulse_ratio_9_1_125ms if dynamics is not None else float('nan'),
+                'pulse_ratio_9_1_250ms': dynamics.pulse_ratio_9_1_250ms if dynamics is not None else float('nan'),
+                'pulse_ratio_9_1_500ms': dynamics.pulse_ratio_9_1_500ms if dynamics is not None else float('nan'),
+                'pulse_ratio_9_1_1000ms': dynamics.pulse_ratio_9_1_1000ms if dynamics is not None else float('nan'),
+                'pulse_ratio_9_1_2000ms': dynamics.pulse_ratio_9_1_2000ms if dynamics is not None else float('nan'),
+                'pulse_ratio_9_1_4000ms': dynamics.pulse_ratio_9_1_4000ms if dynamics is not None else float('nan'),
                 'pulse_ratio_8_1_10hz': dynamics.pulse_ratio_8_1_10hz if dynamics is not None else float('nan'),
                 'pulse_ratio_8_1_20hz': dynamics.pulse_ratio_8_1_20hz if dynamics is not None else float('nan'),
                 'pulse_ratio_8_1_100hz': dynamics.pulse_ratio_8_1_100hz if dynamics is not None else float('nan'),
@@ -703,22 +748,26 @@ class DynamicsAnalyzer(object):
        
         return self.fields
 
-    def print_element_info(self, pre_class, post_class, field_name=None):
+    def print_element_info(self, pre_class, post_class, element, field_name=None):
         if field_name is not None:
-            element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class))
             print ("Connection type: %s -> %s" % (pre_class, post_class))    
             print ("\t Grand Average %s = %s" % (field_name, element[field_name].mean()))
             print ("Connected Pairs:")
+            no_qc_data = []
             for pair, value in element[field_name].iteritems():
-                print ("\t %s" % (pair))
+                if pair.synapse is not True:
+                    continue
                 if np.isnan(value):
-                    print("\t\t No QC Data")
+                    no_qc_data.append(pair)
                 else:
+                    print ("\t %s" % (pair))
                     print ("\t\t Average %s: %0.2f" % (field_name, value))
+            print("\t No QC Data:")
+            for pair in no_qc_data:
+                print ("\t\t %s" % (pair))
 
-    def plot_element_data(self, pre_class, post_class, field_name, color='g', trace_plt=None):
+    def plot_element_data(self, pre_class, post_class, element, field_name, color='g', trace_plt=None):
         trace_plt = None
-        element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class))
         val = element[field_name].mean()
         line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
         scatter = None
