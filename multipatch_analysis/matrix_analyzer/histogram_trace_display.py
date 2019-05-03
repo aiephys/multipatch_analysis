@@ -73,13 +73,13 @@ class MatrixHistogramPlot(pg.GraphicsLayoutWidget):
 
         return self.hist_plot
 
-    def plot_element_data(self, row, col, analyzer, color, trace_panel):
+    def plot_element_data(self, element, analyzer, color, trace_panel):
         self.trace_panel = trace_panel
-        pre_class = row[1]
-        post_class = col[1]
+        pre_class = element['pre_class'][0].name
+        post_class = element['post_class'][0].name
         self.trace_plot = self.trace_panel.addPlot()
         self.trace_plot_list.append(self.trace_plot)
-        self.line, self.scatter = analyzer.plot_element_data(pre_class, post_class, self.field_name, color=color, trace_plt=self.trace_plot)
+        self.line, self.scatter = analyzer.plot_element_data(pre_class, post_class, element, self.field_name, color=color, trace_plt=self.trace_plot)
         if len(self.trace_plot_list) > 1:
             first_plot = self.trace_plot_list[0]
             for plot in self.trace_plot_list[1:]:
@@ -96,6 +96,15 @@ class MatrixHistogramPlot(pg.GraphicsLayoutWidget):
         if self.trace_plot is not None:
            self.trace_panel.clear()
            self.trace_plot = None
+        self.trace_plot_list = []
+
+    def invalidate_output(self):
+        self.hist_plot.clear()
+        self.trace_panel.clear()
+        self.hist_plot = None
+        self.line = None
+        self.scatter = None
+        self.trace_plot = None
         self.trace_plot_list = []
 
 

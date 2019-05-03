@@ -211,27 +211,22 @@ class ConnectivityAnalyzer(object):
 
         return self.fields
 
-    def print_element_info(self, pre_class, post_class, field_name):
-        try:
-            element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class))
-            connections = element[element['connected'] == True].index.tolist()
-            print ("Connection type: %s -> %s" % (pre_class, post_class))
-            print ("Connected Pairs:")
-            for connection in connections:
-                print ("\t %s" % (connection))
-            gap_junctions = element[element['gap_junction'] == True].index.tolist()
-            print ("Gap Junctions:")
-            for gap in gap_junctions:
-                print ("\t %s" % (gap))
-            probed_pairs = element[element['probed'] == True].index.tolist()
-            print ("Probed Pairs:")
-            for probed in probed_pairs:
-                print ("\t %s" % (probed))
-        except KeyError:
-            print ('%s->%s has no data, please select another element' % (pre_class, post_class)) 
-
-    def plot_element_data(self, pre_class, post_class, field_name, color='g', trace_plt=None):
-        element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class))
+    def print_element_info(self, pre_class, post_class, element, field_name):
+        connections = element[element['connected'] == True].index.tolist()
+        print ("Connection type: %s -> %s" % (pre_class, post_class))
+        print ("Connected Pairs:")
+        for connection in connections:
+            print ("\t %s" % (connection))
+        gap_junctions = element[element['gap_junction'] == True].index.tolist()
+        print ("Gap Junctions:")
+        for gap in gap_junctions:
+            print ("\t %s" % (gap))
+        probed_pairs = element[element['probed'] == True].index.tolist()
+        print ("Probed Pairs:")
+        for probed in probed_pairs:
+            print ("\t %s" % (probed))
+        
+    def plot_element_data(self, pre_class, post_class, element, field_name, color='g', trace_plt=None):
         summary = element.agg(self.summary_stat)  
         val = summary[field_name]['metric_summary']
         line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
@@ -249,7 +244,8 @@ class ConnectivityAnalyzer(object):
                 trace_plt.plot(trace.time_values, trace.data)
                 traces.append(trace)
         grand_trace = TraceList(traces).mean()
-        trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3})
+        name = ('%s->%s, n=%d' % (pre_class, post_class, len(traces)))
+        trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3}, name=name)
         trace_plt.setXRange(0, 20e-3)
         trace_plt.setLabels(left=('', 'V'), bottom=('Time from stimulus', 's'))
         return line, scatter
@@ -472,11 +468,10 @@ class StrengthAnalyzer(object):
     def metric_conf(self, x):
         return [-np.nanstd(x), np.nanstd(x)]
 
-    def print_element_info(self, pre_class, post_class, field_name=None):
+    def print_element_info(self, pre_class, post_class, element, field_name=None):
         if field_name is not None:
             fn = field_name.split('_all')[0] if field_name.endswith('all') else field_name.split('_first_pulse')[0]
             units = [field[1].get('units', '') for field in self.fields if field[0] == field_name][0] 
-            element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class)) 
             print ("Connection type: %s -> %s" % (pre_class, post_class))    
             print ("\t Grand Average %s = %s" % (field_name, pg.siFormat(element[field_name].mean(), suffix=units)))
             print ("Connected Pairs:")
@@ -493,9 +488,8 @@ class StrengthAnalyzer(object):
             for pair in no_qc_data:
                 print ("\t\t %s" % (pair))
 
-    def plot_element_data(self, pre_class, post_class, field_name, color='g', trace_plt=None):
+    def plot_element_data(self, pre_class, post_class, element, field_name, color='g', trace_plt=None):
         fn = field_name.split('_all')[0] if field_name.endswith('all') else field_name.split('_first_pulse')[0]
-        element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class))
         val = element[field_name].mean()
         line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
         scatter = None
@@ -537,7 +531,8 @@ class StrengthAnalyzer(object):
             self.pair_items[pair_id].append(point)
         scatter.sigClicked.connect(self.scatter_plot_clicked)
         grand_trace = TraceList(traces).mean()
-        trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3})
+        name = ('%s->%s, n=%d' % (pre_class, post_class, len(traces)))
+        trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3}, name=name)
         units = 'V' if field_name.startswith('ic') else 'A'
         trace_plt.setXRange(0, 20e-3)
         trace_plt.setLabels(left=('', units), bottom=('Time from stimulus', 's'))
@@ -753,9 +748,8 @@ class DynamicsAnalyzer(object):
        
         return self.fields
 
-    def print_element_info(self, pre_class, post_class, field_name=None):
+    def print_element_info(self, pre_class, post_class, element, field_name=None):
         if field_name is not None:
-            element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class))
             print ("Connection type: %s -> %s" % (pre_class, post_class))    
             print ("\t Grand Average %s = %s" % (field_name, element[field_name].mean()))
             print ("Connected Pairs:")
@@ -772,9 +766,8 @@ class DynamicsAnalyzer(object):
             for pair in no_qc_data:
                 print ("\t\t %s" % (pair))
 
-    def plot_element_data(self, pre_class, post_class, field_name, color='g', trace_plt=None):
+    def plot_element_data(self, pre_class, post_class, element, field_name, color='g', trace_plt=None):
         trace_plt = None
-        element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class))
         val = element[field_name].mean()
         line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
         scatter = None
