@@ -1,5 +1,6 @@
 import os, sys, argparse
 import pyqtgraph as pg
+import numpy as np
 from multipatch_analysis import lims
 from affpyramid.ui import AffImageItem
 
@@ -13,7 +14,7 @@ except ValueError:
     pass
 
 # look up image file names
-jp2_files = sorted(lims.specimen_images(args.specimen)[0]['file'])
+jp2_files = sorted(lims.specimen_images(args.specimen)[0]['file'], key=lambda f: os.path.split(f)[-1])
 if sys.platform == 'win32':
     jp2_files = ['\\' + '\\'.join(f.split('/')) for f in jp2_files]
 aff_files = [os.path.splitext(f)[0] + '.aff' for f in jp2_files]
@@ -35,11 +36,12 @@ aff_image_item = None
 z_index = None
 def set_z_index(zi):
     global aff_image_item, z_index
+    zi = np.clip(zi, 0, len(aff_files)-1)
     z_index = zi
     if aff_image_item is not None:
         view.removeItem(aff_image_item)
     
-    aff_image_item = AffImageItem(aff_files[zi])
+    aff_image_item = AffImageItem(aff_files[int(zi)])
     view.addItem(aff_image_item)
 
 
@@ -64,6 +66,9 @@ class KeyHandler(pg.QtCore.QObject):
         if event.key() not in (pg.QtCore.Qt.Key_PageUp, pg.QtCore.Qt.Key_PageDown):
             return False
 
+        if event.isAutoRepeat():
+            return True
+
         if event.type() == event.KeyPress:
             self.pressed_keys.add(event.key())
         if event.type() == event.KeyRelease:
@@ -73,6 +78,8 @@ class KeyHandler(pg.QtCore.QObject):
         return True
 
     def update(self):
+        # Handle key presses on a timer so we get smooth scrolling across z planes
+
         zi = z_index
 
         dz = 1.0
@@ -82,14 +89,14 @@ class KeyHandler(pg.QtCore.QObject):
             dz *= 5.0
 
         if pg.QtCore.Qt.Key_PageUp in self.pressed_keys:
-            zi += dz
-        if pg.QtCore.Qt.Key_PageDown in self.pressed_keys:
             zi -= dz
+        if pg.QtCore.Qt.Key_PageDown in self.pressed_keys:
+            zi += dz
 
         if zi == z_index:
             return
 
-        set_z_index(int(zi))
+        set_z_index(zi)
         app.processEvents()
 
 
