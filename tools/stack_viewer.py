@@ -14,7 +14,10 @@ except ValueError:
 
 # look up image file names
 jp2_files = sorted(lims.specimen_images(args.specimen)[0]['file'])
+if sys.platform == 'win32':
+    jp2_files = ['\\' + '\\'.join(f.split('/')) for f in jp2_files]
 aff_files = [os.path.splitext(f)[0] + '.aff' for f in jp2_files]
+
 
 # make a window with zoomable view box
 app = pg.mkQApp()
@@ -44,16 +47,54 @@ set_z_index(len(aff_files) // 2)
 
 
 # catch pgup/pgdn to set z slice
-class KeyGrabber(pg.QtCore.QObject):
-    def eventFilter(self, obj, event):
-        if event.type() == event.KeyPress:
-            if event.key() == pg.QtCore.Qt.Key_PageUp:
-                set_z_index(z_index - 1)
-            elif event.key() == pg.QtCore.Qt.Key_PageDown:
-                set_z_index(z_index + 1)
 
-key_grabber = KeyGrabber()
-window.installEventFilter(key_grabber)
+class KeyHandler(pg.QtCore.QObject):
+    def __init__(self):
+        pg.QtCore.QObject.__init__(self)
+        self.pressed_keys = set()
+        self.modifiers = 0
+        self.timer = pg.QtCore.QTimer()
+        self.timer.timeout.connect(self.update)
+        self.timer.start(30)
+
+    def eventFilter(self, obj, event):
+        if event.type() not in (event.KeyPress, event.KeyRelease):
+            return False
+
+        if event.key() not in (pg.QtCore.Qt.Key_PageUp, pg.QtCore.Qt.Key_PageDown):
+            return False
+
+        if event.type() == event.KeyPress:
+            self.pressed_keys.add(event.key())
+        if event.type() == event.KeyRelease:
+            self.pressed_keys.remove(event.key())
+        self.modifiers = event.modifiers()
+
+        return True
+
+    def update(self):
+        zi = z_index
+
+        dz = 1.0
+        if int(self.modifiers & pg.QtCore.Qt.ControlModifier) > 0:
+            dz /= 5.0
+        if int(self.modifiers & pg.QtCore.Qt.ShiftModifier) > 0:
+            dz *= 5.0
+
+        if pg.QtCore.Qt.Key_PageUp in self.pressed_keys:
+            zi += dz
+        if pg.QtCore.Qt.Key_PageDown in self.pressed_keys:
+            zi -= dz
+
+        if zi == z_index:
+            return
+
+        set_z_index(int(zi))
+        app.processEvents()
+
+
+key_handler = KeyHandler()
+window.installEventFilter(key_handler)
 
 
 # Start event loop if the script is not running interactively
