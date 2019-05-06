@@ -1,8 +1,6 @@
 """
-Controls Matrix display and 2 side plots for main tab of Matrix Analyzer. 
+Controls Matrix display. 
 Includes ColorMapping control for Matrix
-Scatter plot displays histogram of matrix data as well as element data when element is selected
-Trace plot displays average trace responses from each pair in a selected element
 
 """
 
@@ -24,31 +22,7 @@ class SignalHandler(pg.QtCore.QObject):
         """
         sigOutputChanged = pg.QtCore.Signal(object) #self
 
-class MatrixTab(pg.QtGui.QWidget):
-    def __init__(self):
-        pg.QtGui.QWidget.__init__(self)
-        self.layout = pg.QtGui.QGridLayout()
-        self.setLayout(self.layout)
-        self.h_splitter = pg.QtGui.QSplitter()
-        self.h_splitter.setOrientation(pg.QtCore.Qt.Horizontal)
-        self.layout.addWidget(self.h_splitter, 0, 0)
-        self.control_panel_splitter = pg.QtGui.QSplitter()
-        self.control_panel_splitter.setOrientation(pg.QtCore.Qt.Vertical)
-        self.h_splitter.addWidget(self.control_panel_splitter)
-        self.update_button = pg.QtGui.QPushButton("Update Results")
-        self.control_panel_splitter.addWidget(self.update_button)
-        self.ptree = ptree.ParameterTree(showHeader=False)
-        self.control_panel_splitter.addWidget(self.ptree)
-        self.matrix_widget = MatrixWidget()
-        self.h_splitter.addWidget(self.matrix_widget)
-        self.plot_splitter = pg.QtGui.QSplitter()
-        self.plot_splitter.setOrientation(pg.QtCore.Qt.Vertical)
-        self.h_splitter.addWidget(self.plot_splitter)
-        self.scatter_plot = MatrixScatterPlot()
-        self.trace_plot = MatrixTracePlot()
-        self.plot_splitter.addWidget(self.scatter_plot)
-        self.plot_splitter.addWidget(self.trace_plot)
-        self.h_splitter.setSizes([150, 300, 200])
+
 
 class MatrixDisplayFilter(object):
     def __init__(self, view_box, data_fields):
@@ -59,7 +33,6 @@ class MatrixDisplayFilter(object):
         self.legend = None
         self.colorMap = ColorMapParameter()
         self.data_fields = data_fields
-        # self.confidence_fields = confidence_fields
         self.field_names = [field[0] for field in self.data_fields]
 
         self.colorMap.setFields(self.data_fields)
@@ -133,6 +106,15 @@ class MatrixDisplayFilter(object):
             self.legend.setLabels({'%0.02f' % (a*scale):b for a,b in zip(x, cmap_item.value().pos)})
         self.view_box.addItem(self.legend)
 
+    def get_colormap_field(self):
+        color_map_fields = self.colorMap.children()
+        if len(color_map_fields) > 1:
+            field_name = [field.name() for field in color_map_fields if field['Enabled'] is True][0]
+        else:
+            field_name = color_map_fields[0].name()
+
+        return field_name
+
     def invalidate_output(self):
         self.output = None
 
@@ -162,85 +144,38 @@ class MatrixWidget(pg.GraphicsLayoutWidget):
         self.sigClicked.emit(self, event, row, col) 
 
 
-class MatrixScatterPlot(pg.GraphicsLayoutWidget):
-    def __init__(self):
-        pg.GraphicsLayoutWidget.__init__(self)
-        self.setRenderHints(self.renderHints() | pg.QtGui.QPainter.Antialiasing)
-
-
-class MatrixTracePlot(pg.GraphicsLayoutWidget):
-    def __init__(self):
-        pg.GraphicsLayoutWidget.__init__(self)
-        self.setRenderHints(self.renderHints() | pg.QtGui.QPainter.Antialiasing)
-
 class MatrixDisplay(object):
     sigClicked = pg.QtCore.Signal(object, object, object, object, object) # self, matrix_item, event, row, col
     def __init__(self, window, output_fields, field_map):
-        self.matrix_tab = window
-        self.matrix_widget = self.matrix_tab.matrix_widget
+        self.main_window = window
+        self.matrix_widget = self.main_window.matrix_widget
         self.matrix_display_filter = MatrixDisplayFilter(self.matrix_widget.view_box, output_fields)
         self.field_map = field_map
-        self.hist_plot = None
-        self.line = None
-        self.scatter = None
-        self.trace_plot = None
-        self.trace_plot_list = []
         self.element = None
-        self.selected = 0
-        self.colors = [(0, 255, 0), (255, 0, 0), (0, 0, 255), (254, 169, 0), (170, 0, 127), (0, 230, 230)]
 
-        self.matrix_widget.sigClicked.connect(self.display_matrix_element_data)
-
-    def display_matrix_element_data(self, matrix_item, event, row, col):
+    def get_element_classes(self, row, col):
         pre_class, post_class = [k for k, v in self.matrix_map.items() if v==[row, col]][0]
+        return pre_class, post_class
+
+    def get_field_analyzer(self):
         analyzer = self.field_map[self.field_name]
-        analyzer.print_element_info(pre_class, post_class, self.field_name)
-        if self.hist_plot is not None:
-            if int(event.modifiers() & pg.QtCore.Qt.ControlModifier)>0:
-                self.selected += 1
-                if self.selected >= len(self.colors):
-                    self.selected = 0
-                self.display_element_data(row, col, analyzer, trace_plot_list=self.trace_plot_list)
-            else:
-                self.display_element_reset() 
-                self.display_element_data(row, col, analyzer)
+        return analyzer, field_name
 
-    def display_element_data(self, row, col, analyzer, trace_plot_list=None):
-        color = self.colors[self.selected]
-        self.element = self.matrix_widget.matrix.cells[row][col]
+    def color_element(self, row, col, color):
+        self.element = self.matrix_widget.matrix.cells[row[0]][col[0]]
         self.element.setPen(pg.mkPen({'color': color, 'width': 5}))
-        pre_class, post_class = [k for k, v in self.matrix_map.items() if v==[row, col]][0] 
-        self.trace_plot = self.matrix_tab.trace_plot.addPlot()
-        self.trace_plot_list.append(self.trace_plot)
-        self.line, self.scatter = analyzer.plot_element_data(pre_class, post_class, self.field_name, color=color, trace_plt=self.trace_plot)
-        if len(self.trace_plot_list) > 1:
-            first_plot = self.trace_plot_list[0]
-            for plot in self.trace_plot_list[1:]:
-                plot.setYLink(first_plot)
-                plot.setXLink(first_plot)
-        self.hist_plot.addItem(self.line)
-        if self.scatter is not None:
-            self.hist_plot.addItem(self.scatter)
 
-    def display_element_reset(self):
-        self.selected = 0
-        if self.hist_plot is not None:
-            [self.hist_plot.removeItem(item) for item in self.hist_plot.items[2:]]
-        if self.trace_plot is not None:
-           self.matrix_tab.trace_plot.clear()
-           self.trace_plot = None
-        self.trace_plot_list = []
-
+    def element_color_reset(self):
         show_confidence = self.matrix_display_filter.params['Show Confidence']
         bordercolor = 0.6 if show_confidence is None else 0.8
-        for cells in self.matrix_tab.matrix_widget.matrix.cells:
+        for cells in self.main_window.matrix_widget.matrix.cells:
             for cell in cells:
                 cell.setPen(pg.mkPen({'color': bordercolor, 'width': 1}))
 
     def update_matrix_display(self, results, group_results, cell_classes, cell_groups, field_map):
         self.results = results
         self.group_results = group_results
-        self.matrix_map = OrderedDict()
+        self.matrix_map = {}
         show_confidence = self.matrix_display_filter.params['Show Confidence']
 
         shape = (len(cell_groups),) * 2
@@ -263,9 +198,9 @@ class MatrixDisplay(object):
 
         # call display function on every matrix element
         
-        for i, pre in enumerate(cell_classes):
-            for j, post in enumerate(cell_classes):
-                self.matrix_map[(pre, post)] = [i, j]
+        for ii, pre in enumerate(cell_classes):
+            for jj, post in enumerate(cell_classes):
+                self.matrix_map[(pre, post)] = [ii, jj]
         for group, result in self.group_results.iterrows():
             i, j = self.matrix_map[group]
             no_data = all([result.get('conn_no_data',{}).get('metric_summary', True), result.get('strength_no_data',{}).get('metric_summary', True), result.get('dynamics_no_data',{}).get('metric_summary', True)])
@@ -294,39 +229,7 @@ class MatrixDisplay(object):
             #     row = list(tup)
             rows.append(row)
 
-        self.matrix_tab.matrix_widget.set_matrix_data(text=text, fgcolor=fgcolor, bgcolor=bgcolor, border_color=bordercolor,
+        self.main_window.matrix_widget.set_matrix_data(text=text, fgcolor=fgcolor, bgcolor=bgcolor, border_color=bordercolor,
                     rows=rows, cols=rows, size=50, header_color='k')
-
-
-        # plot hist or scatter of data in side panel, if there are multiple colormaps take the first enabled one
-        color_map_fields = self.matrix_display_filter.colorMap.children()
-        if len(color_map_fields) > 1:
-            self.field_name = [field.name() for field in color_map_fields if field['Enabled'] is True][0]
-        else:
-            self.field_name = color_map_fields[0].name()
-        field = self.matrix_display_filter.colorMap.fields[self.field_name]
-        if self.hist_plot is not None:
-            self.matrix_tab.scatter_plot.removeItem(self.hist_plot)
-        self.hist_plot = self.matrix_tab.scatter_plot.addPlot()
-        if field_map[self.field_name].name == 'connectivity':
-            vals = group_results[group_results[self.field_name]['metric_summary'].notnull()][self.field_name]['metric_summary'] 
-        else:
-            vals = results[results[self.field_name].notnull()][self.field_name]
-        neg = vals[vals < 0].min()
-        pos = vals[vals > 0].max()
-        if pos is np.nan or neg is np.nan:
-            bins = np.linspace(vals.min(), vals.max(), 10)
-        else:
-            span = pos - neg
-            pos_bins = int(round(10*(pos/span)))
-            neg_bins = 10 - pos_bins
-            bins = np.linspace(vals.min(), 0, neg_bins)
-            bins = sorted(set(np.append(bins, np.linspace(0, vals.max(), pos_bins), axis=0)))
-        y, x = np.histogram(vals, bins=bins)
-        self.hist_plot.plot(x, y, stepMode=True, fillLevel=0, brush=(255,255,255,150))
-        line = pg.InfiniteLine(0, pen={'color': 'w', 'width': 1, 'style': pg.QtCore.Qt.DotLine}, movable=False)
-        self.hist_plot.addItem(line)
-        units = field.get('units', '')
-        self.hist_plot.setLabels(left='Count', bottom=(self.field_name, units))
 
         # self.analysis.summary(self.results, self.field_name)
