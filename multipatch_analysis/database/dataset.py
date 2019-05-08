@@ -159,8 +159,8 @@ StimSpike = make_table(
     ]
 )
 
-StimSpike.pulse = relationship(StimPulse, back_populates="spikes")
-StimPulse.spikes = relationship(StimSpike, back_populates="pulse", single_parent=True)
+StimSpike.stim_pulse = relationship(StimPulse, back_populates="spikes")
+StimPulse.spikes = relationship(StimSpike, back_populates="stim_pulse", single_parent=True)
 
 
 class PulseResponseBase(object):
