@@ -16,7 +16,7 @@ class AverageFirstPulseFitPipelineModule(DatabasePipelineModule):
     """
     name = 'avg_first_pulse_fit'
     dependencies = [ConnectionStrengthPipelineModule]
-    table_group = db.first_pulse_fit_tables
+    table_group = db.avg_first_pulse_fit_table
     
     @classmethod
     def create_db_entries(cls, expt_id, session):
@@ -131,7 +131,7 @@ class SingleFirstPulseFitPipelineModule(DatabasePipelineModule):
     """
     name = 'single_first_pulse_fit'
     dependencies = [ConnectionStrengthPipelineModule]
-    table_group = db.first_pulse_fit_tables
+    table_group = db.single_first_pulse_fit_table
     
     @classmethod
     def create_db_entries(cls, expt_id, session):
