@@ -70,6 +70,7 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
 
                 txt = pg.QtGui.QGraphicsTextItem(text[i][j], parent=self)
                 br = txt.boundingRect()
+                txt.setTextWidth(br.width())
                 txt.setPos(x + size/2 - br.center().x(), y + size/2 - br.center().y())
                 txt.setDefaultTextColor(pg.mkColor(fgcolor[i][j]))
                 self.cell_labels[-1].append(txt)
@@ -206,7 +207,7 @@ class MatrixElementItem(pg.QtGui.QGraphicsRectItem):
     def mouseClickEvent(self, event):
         self.sigClicked.emit(self, event)    
     
-def distance_plot(connected, distance, plots=None, color=(100, 100, 255), window=40e-6, spacing=None, name=None, fill_alpha=30):
+def distance_plot(connected, distance, plots=None, color=(100, 100, 255), size=10, window=40e-6, spacing=None, name=None, fill_alpha=30):
     """Draw connectivity vs distance profiles with confidence intervals.
     
     Parameters
@@ -220,6 +221,8 @@ def distance_plot(connected, distance, plots=None, color=(100, 100, 255), window
     color : tuple
         (R, G, B) color values for line and confidence interval. The confidence interval
         will be drawn with alpha=100
+    size: int
+        size of scatter plot symbol
     window : float
         Width of distance window over which proportions are calculated for each point on
         the profile line.
@@ -269,7 +272,7 @@ def distance_plot(connected, distance, plots=None, color=(100, 100, 255), window
         plots[1].hideAxis('left')
 
         color2 = color + (100,)
-        scatter = plots[1].plot(pts[:,0], pts[:,1], pen=None, symbol='o', labels={'bottom': ('distance', 'm')}, symbolBrush=color2, symbolPen=None, name=name)
+        scatter = plots[1].plot(pts[:,0], pts[:,1], pen=None, symbol='o', labels={'bottom': ('distance', 'm')}, size=size, symbolBrush=color2, symbolPen=None, name=name)
         scatter.scatter.opts['compositionMode'] = pg.QtGui.QPainter.CompositionMode_Plus
 
     # use a sliding window to plot the proportion of connections found along with a 95% confidence interval

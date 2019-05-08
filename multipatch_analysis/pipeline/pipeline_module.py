@@ -131,14 +131,17 @@ class PipelineModule(object):
             
             print("Processing all jobs (parallel)..")
             pool = multiprocessing.Pool(processes=workers, maxtasksperchild=cls.maxtasksperchild)
-            # would like to just call cls._run_job, but we can't pass a method to Pool.map()
-            # instead we wrap this with the run_job_parallel function defined below.
-            parallel_jobs = [(cls, job) for job in run_jobs]
-            job_results = {}
-            chunksize = cls.maxtasksperchild or 1
-            for result in pool.imap(run_job_parallel, parallel_jobs, chunksize=chunksize):  # note: maxtasksperchild is broken unless we also force chunksize
-                job_results[result['job_id']] = result['error']
-                print("Finished %d/%d  (%0.1f%%)" % (len(job_results), len(run_jobs), 100*len(job_results)/len(run_jobs)))
+            try:
+                # would like to just call cls._run_job, but we can't pass a method to Pool.map()
+                # instead we wrap this with the run_job_parallel function defined below.
+                parallel_jobs = [(cls, job) for job in run_jobs]
+                job_results = {}
+                chunksize = cls.maxtasksperchild or 1
+                for result in pool.imap(run_job_parallel, parallel_jobs, chunksize=chunksize):  # note: maxtasksperchild is broken unless we also force chunksize
+                    job_results[result['job_id']] = result['error']
+                    print("Finished %d/%d  (%0.1f%%)" % (len(job_results), len(run_jobs), 100*len(job_results)/len(run_jobs)))
+            finally:
+                pool.close()
                 
         else:
             print("Processing all jobs (serial)..")
