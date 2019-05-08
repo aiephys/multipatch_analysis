@@ -60,6 +60,7 @@ def specimen_info(specimen_name=None, specimen_id=None):
             donors.full_genotype as genotype,
             donors.weight as weight,
             genders.name as sex,
+            structures.acronym as structure,
             tissue_processings.section_thickness_um as thickness,
             tissue_processings.instructions as section_instructions,
             plane_of_sections.name as plane_of_section,
@@ -74,6 +75,7 @@ def specimen_info(specimen_name=None, specimen_id=None):
             left join organisms on donors.organism_id=organisms.id
             left join ages on donors.age_id=ages.id
             left join genders on donors.gender_id=genders.id
+            left join structures on structures.id=specimens.structure_id
             left join tissue_processings on specimens.tissue_processing_id=tissue_processings.id
             left join plane_of_sections on tissue_processings.plane_of_section_id=plane_of_sections.id
             left join flipped_specimens on flipped_specimens.id = specimens.flipped_specimen_id
@@ -250,6 +252,28 @@ def specimen_species(specimen_name):
         raise ValueError("Could not find donor information")
     return r[0]['species']
 
+
+def specimen_donor_id(specimen):
+    if not isinstance(specimen, int):
+        specimen = specimen_id_from_name(specimen)
+    recs = query("select donor_id from specimens where id='%d'" % specimen)
+    return recs[0]['donor_id']
+        
+
+def donor_medical_conditions(donor_id=None, specimen=None):
+    """Returns a list of medical conditions associated with a donor or specimen.
+    """
+    if specimen is not None:
+        donor_id = specimen_donor_id(specimen)
+    
+    q = """
+    select medical_conditions.name, donor_medical_conditions.value from donor_medical_conditions
+    left join medical_conditions on donor_medical_conditions.medical_condition_id=medical_conditions.id
+    where donor_medical_conditions.donor_id=%d
+    """ % donor_id
+    r = query(q)
+    return [{'name': rec['name'], 'value': rec['value']} for rec in r]
+    
 
 def specimen_id_from_name(spec_name):
     """Return the LIMS ID of a specimen give its name.

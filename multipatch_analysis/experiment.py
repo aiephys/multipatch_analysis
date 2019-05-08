@@ -212,6 +212,22 @@ class Experiment(object):
             self._target_layers = list(target_layers)
         return self._target_layers
 
+    # @property
+    # def region(self):
+    #     # deprecated
+    #     return 'V1' if (not hasattr(self, '_region') or self._region is None) else self._region
+        
+    @property
+    def target_region(self):
+        if self.lims_record['organism'] == 'mouse':
+            # mouse: look up in acq4 metadata
+            rgn = self.expt_info.get('target_region', None)
+            corrected = {'V1': 'VisP'}.get(rgn, rgn)
+            return corrected
+        else:
+            # human: read from LIMS
+            return self.lims_record['structure']
+
     @property
     def labels(self):
         """A list of all fluorophores and other markers used in this experiment."""
@@ -685,10 +701,6 @@ class Experiment(object):
                     csum[typ]['udist'].append(ci.distance(cj))
             self._summary = csum
         return self._summary
-
-    @property
-    def region(self):
-        return 'V1' if (not hasattr(self, '_region') or self._region is None) else self._region
 
     @property
     def connections_probed(self):
