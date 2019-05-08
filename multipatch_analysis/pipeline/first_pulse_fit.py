@@ -14,9 +14,9 @@ import sys
 class AverageFirstPulseFitPipelineModule(DatabasePipelineModule):
     """Analyze synaptic connection strength for all pairs per experiment
     """
-    name = 'avg_first_pulse_fit'
+    name = 'avg_first_pulse_fit2'
     dependencies = [ConnectionStrengthPipelineModule]
-    table_group = db.first_pulse_fit_tables
+    table_group = db.avg_first_pulse_fit_table
     
     @classmethod
     def create_db_entries(cls, expt_id, session):
@@ -129,9 +129,9 @@ def get_single_pulse_data(session, pair):
 class SingleFirstPulseFitPipelineModule(DatabasePipelineModule):
     """Analyze synaptic connection strength for all pairs per experiment
     """
-    name = 'single_first_pulse_fit'
+    name = 'single_first_pulse_fit2'
     dependencies = [ConnectionStrengthPipelineModule]
-    table_group = db.first_pulse_fit_tables
+    table_group = db.single_pulse_fit_table
     
     @classmethod
     def create_db_entries(cls, expt_id, session):
