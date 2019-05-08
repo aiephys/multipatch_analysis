@@ -7,7 +7,7 @@ __all__ = ['single_first_pulse_fit_table', 'SingleFirstPulseFit']
 
 
 SingleFirstPulseFit = make_table(
-    name='single_first_pulse_fit2',
+    name='single_first_pulse_fit',
     comment="""Contains results of psp_fit on individual first pulses. The latency is forced
             to the value found via fitting the average of the first pulses (available in the
             avg_first_pulse_fit table). The heavily weighted section (meant to 
@@ -39,7 +39,7 @@ SingleFirstPulseFit = make_table(
     ]
 )
 
-PulseResponse.single_first_pulse_fit2 = relationship(SingleFirstPulseFit, back_populates="pulse_response", cascade="delete", single_parent=True, uselist=False)
-SingleFirstPulseFit.pulse_response = relationship(PulseResponse, back_populates="single_first_pulse_fit2", single_parent=True)
+PulseResponse.single_first_pulse_fit = relationship(SingleFirstPulseFit, back_populates="pulse_response", cascade="delete", single_parent=True, uselist=False)
+SingleFirstPulseFit.pulse_response = relationship(PulseResponse, back_populates="single_first_pulse_fit", single_parent=True)
 
 single_first_pulse_fit_table = TableGroup([SingleFirstPulseFit])

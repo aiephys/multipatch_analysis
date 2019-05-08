@@ -6,7 +6,7 @@ __all__ = ['avg_first_pulse_fit_table', 'AvgFirstPulseFit']
 
 
 AvgFirstPulseFit = make_table(
-    name='avg_first_pulse_fit2',
+    name='avg_first_pulse_fit',
     comment="""Contains results of psp_fit on spike aligned, average first pulse PSP for each
             connection that passed qc in current clamp. The latency is forced
             to be within +/-.5 ms to the found fitting all of the pulses in the train (available in the 
@@ -51,7 +51,7 @@ AvgFirstPulseFit = make_table(
 
 
 
-Pair.avg_first_pulse_fit2 = relationship(AvgFirstPulseFit, back_populates="pair", cascade="delete", single_parent=True, uselist=False)
-AvgFirstPulseFit.pair = relationship(Pair, back_populates="avg_first_pulse_fit2", single_parent=True)
+Pair.avg_first_pulse_fit = relationship(AvgFirstPulseFit, back_populates="pair", cascade="delete", single_parent=True, uselist=False)
+AvgFirstPulseFit.pair = relationship(Pair, back_populates="avg_first_pulse_fit", single_parent=True)
 
 avg_first_pulse_fit_table = TableGroup([AvgFirstPulseFit])
