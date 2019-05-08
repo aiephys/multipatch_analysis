@@ -131,7 +131,7 @@ class SingleFirstPulseFitPipelineModule(DatabasePipelineModule):
     """
     name = 'single_first_pulse_fit2'
     dependencies = [ConnectionStrengthPipelineModule]
-    table_group = db.single_pulse_fit_table
+    table_group = db.single_first_pulse_fit_table
     
     @classmethod
     def create_db_entries(cls, expt_id, session):
