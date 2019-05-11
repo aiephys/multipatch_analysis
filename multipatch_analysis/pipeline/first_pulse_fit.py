@@ -14,9 +14,9 @@ import sys
 class AverageFirstPulseFitPipelineModule(DatabasePipelineModule):
     """Analyze synaptic connection strength for all pairs per experiment
     """
-    name = 'avg_first_pulse_fit'
+    name = 'avg_first_pulse_fit2'
     dependencies = [ConnectionStrengthPipelineModule]
-    table_group = db.avg_first_pulse_fit_table
+    table_group = db.avg_first_pulse_fit_table2
     
     @classmethod
     def create_db_entries(cls, expt_id, session):
@@ -33,7 +33,7 @@ class AverageFirstPulseFitPipelineModule(DatabasePipelineModule):
                     errors += "(%d->%d) %s\n\n" % (pre_cell_id, post_cell_id, result['error'])
                 else:
                     result.pop('error')
-                    afpf = db.AvgFirstPulseFit(pair=pair, **result)
+                    afpf = db.AvgFirstPulseFit2(pair=pair, **result)
                     session.add(afpf)
             except:
                 # unhandled exception occurred; we consider this an unsuccessful run
@@ -52,8 +52,8 @@ class AverageFirstPulseFitPipelineModule(DatabasePipelineModule):
         
         This method is used by drop_jobs to delete records for specific job IDs.
         """
-        q = session.query(db.AvgFirstPulseFit)
-        q = q.filter(db.AvgFirstPulseFit.pair_id==db.Pair.id)
+        q = session.query(db.AvgFirstPulseFit2)
+        q = q.filter(db.AvgFirstPulseFit2.pair_id==db.Pair.id)
         q = q.filter(db.Pair.experiment_id==db.Experiment.id)
         q = q.filter(db.Experiment.acq_timestamp.in_(job_ids))
         return q.all()

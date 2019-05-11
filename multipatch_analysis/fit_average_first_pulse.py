@@ -6,6 +6,7 @@ import numpy as np
 from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.fitting import fit_psp
 from . import database as db
+import copy
 
 
 time_before_spike = 10.e-3 #time in seconds before spike to start trace waveforms
@@ -83,45 +84,57 @@ def extract_first_pulse_info_from_Pair_object(pair, desired_clamp='ic'):
     psp_amps_measured = []
     pulse_ids = []
     stim_freqs = []
+    pulse_starts = [] #keep track of time the pulse starts in the aligned trace reference below
+    pulse_ends = [] #keep track of time the pulse ends in the aligned trace reference below
     if len(pair.pulse_responses)==0:
         # print ("\t\tSKIPPING: pair_id %s, no pulse responses in pair table" % (pair.id))
-        return [], [], [], []
+        return [], [], [], [], [], []
+
     for pr in pair.pulse_responses:
-        stim_pulse = pr.stim_pulse
-        n_spikes = stim_pulse.n_spikes
-        pulse_number = stim_pulse.pulse_number
-        pulse_id = pr.stim_pulse_id
         ex_qc_pass = pr.ex_qc_pass
         in_qc_pass = pr.in_qc_pass
-        pcr = stim_pulse.recording.patch_clamp_recording
-        stim_freq = pcr.multi_patch_probe[0].induction_frequency
-        clamp_mode = pcr.clamp_mode
-        # current clamp
-        if clamp_mode != desired_clamp:
-            continue
-        # ensure that there was only 1 presynaptic spike
-        if n_spikes != 1:
-            continue
-        # we only want the first pulse of the train
-        if pulse_number != 1:
-            continue
 
-        data = pr.data
-        start_time = pr.start_time
-        spike_time = stim_pulse.spikes[0].max_dvdt_time        
-        data_trace = Trace(data=data, t0= start_time-spike_time+time_before_spike, sample_rate=db.default_sample_rate).time_slice(start=0, stop=None) #start of the data is the spike time
-
-        # append to output lists if neurons pass qc
+        # if neurons pass qc
         if (synapse_type == 'ex' and ex_qc_pass is True) or (synapse_type == 'in' and in_qc_pass is True):
+            stim_pulse = pr.stim_pulse
+            n_spikes = stim_pulse.n_spikes
+            pulse_number = stim_pulse.pulse_number
+            pulse_id = pr.stim_pulse_id
+            pcr = stim_pulse.recording.patch_clamp_recording
+            stim_freq = pcr.multi_patch_probe[0].induction_frequency
+            clamp_mode = pcr.clamp_mode
+            # current clamp
+            if clamp_mode != desired_clamp:
+                continue
+            # ensure that there was only 1 presynaptic spike
+            if n_spikes != 1:
+                continue
+            # we only want the first pulse of the train
+            if pulse_number != 1:
+                continue
+
+            data = pr.data
+            start_time = pr.start_time
+            spike_time = stim_pulse.spikes[0].max_dvdt_time
+            pulse_onset = stim_pulse.onset_time 
+            pulse_duration = stim_pulse.duration
+            t0 = start_time - spike_time + time_before_spike     
+            pulse_cut_start = pulse_onset - spike_time + time_before_spike
+            pulse_cut_end = pulse_cut_start + pulse_duration
+            data_trace = Trace(data=data, t0=t0, sample_rate=db.default_sample_rate).time_slice(start=0, stop=None) #start of the data is the spike time
+
             pulse_responses.append(data_trace)
             pulse_ids.append(pulse_id)
             stim_freqs.append(stim_freq)        
+            pulse_starts.append(pulse_cut_start)
+            pulse_ends.append(pulse_cut_end)
+            
         if synapse_type == 'in' and in_qc_pass is True:
             psp_amps_measured.append(pr.pulse_response_strength.neg_amp)
         if synapse_type == 'ex' and ex_qc_pass is True:
             psp_amps_measured.append(pr.pulse_response_strength.pos_amp)
 
-    return pulse_responses, pulse_ids, psp_amps_measured, stim_freq
+    return pulse_responses, pulse_ids, psp_amps_measured, stim_freq, pulse_starts, pulse_ends
 
 
 def get_average_pulse_response(pair, desired_clamp='ic'):
@@ -155,20 +168,20 @@ def get_average_pulse_response(pair, desired_clamp='ic'):
         value of baseline
     """
     # get pulses that pass qc
-    pulse_responses, pulse_ids, psp_amps_measured, freq = extract_first_pulse_info_from_Pair_object(pair, desired_clamp=desired_clamp)
+    pulse_responses, pulse_ids, psp_amps_measured, freq,  pulse_starts, pulse_ends= extract_first_pulse_info_from_Pair_object(pair, desired_clamp=desired_clamp)
 
-    # if pulses are returned take the average
+    # if pulses are returned take the average and remove section with pulse.  
     if len(pulse_responses)>0:
         avg_psp=TraceList(pulse_responses).mean()
     else:
-        return None, None, None, None, None, None, None
+        return None, None, None, None, None, None, None, None, None
 
     # get the measured baseline and amplitude of psp
     measured_relative_amp, measured_baseline=measure_amp(avg_psp.data, 
                         [0, int((time_before_spike-1.e-3)/avg_psp.dt)], 
                         [int((time_before_spike+.5e-3)/avg_psp.dt), -1])
 
-    return pulse_responses, pulse_ids, psp_amps_measured, freq, avg_psp, measured_relative_amp, measured_baseline 
+    return pulse_responses, pulse_ids, psp_amps_measured, freq, avg_psp, measured_relative_amp, measured_baseline,  pulse_starts, pulse_ends 
 
 
 def fit_trace(waveform, excitation, clamp_mode='ic', weight=None, latency=None, latency_jitter=None):
@@ -270,14 +283,21 @@ def fit_average_first_pulses(pair):
     # -----------fit current clamp data---------------------        
     # get pulses
     (pulse_responses_i, pulse_ids_i, psp_amps_measured_i, freq, avg_psp_i, 
-        measured_relative_amp_i, measured_baseline_i) = get_average_pulse_response(pair, desired_clamp='ic')
+        measured_relative_amp_i, measured_baseline_i,  pulse_starts, pulse_ends) = get_average_pulse_response(pair, desired_clamp='ic')
 
     if pulse_responses_i:
-        # weight and fit the trace
+
+        # create weighting for fit
+        fake=copy.deepcopy(avg_psp_i) #making a copy of the trace that I can set nans in without changing original trace
+        fake.time_slice(min(pulse_starts), max(pulse_ends)).data[:] = np.nan #set region where pulse is to nan so the weighting can easily be assigned 
         weight_i = np.ones(len(avg_psp_i.data)) * 10.  #set everything to ten initially
-        weight_i[int((time_before_spike-3e-3) / avg_psp_i.dt):int(time_before_spike / avg_psp_i.dt)] = 0.   #area around stim artifact note that since this is spike aligned there will be some blur in where the cross talk is
         weight_i[int((time_before_spike+.0001+xoffset) / avg_psp_i.dt):int((time_before_spike+.0001+xoffset+4e-3) / avg_psp_i.dt)] = 30.  #area around steep PSP rise 
+        weight_i[fake.data==np.nan] = 0.   #area around stim artifact note that since this is spike aligned there will be some blur in where the cross talk is
+
+        # fit trace
         avg_fit_i = fit_trace(avg_psp_i, excitation=excitation, weight=weight_i, latency=xoffset, latency_jitter=.5e-3)
+
+        # assign variables from fit
         latency_i = avg_fit_i.best_values['xoffset'] - time_before_spike
         amp_i = avg_fit_i.best_values['amp']
         rise_time_i = avg_fit_i.best_values['rise_time']
@@ -300,33 +320,40 @@ def fit_average_first_pulses(pair):
     # --------------fit voltage clamp data---------------------        
     # get pulses
     (pulse_responses_v, pulse_ids_v, psp_amps_measured_v, freq_v, avg_psp_v,  
-        measured_relative_amp_v, measured_baseline_v) = get_average_pulse_response(pair, desired_clamp='vc')
+        measured_relative_amp_v, measured_baseline_v, pulse_starts, pulse_ends) = get_average_pulse_response(pair, desired_clamp='vc')
 
-    if pulse_responses_v:
-        # weight and fit the trace    
-        weight_v = np.ones(len(avg_psp_v.data))*10.  #set everything to ten initially
-        weight_v[int((time_before_spike+.0001+xoffset)/avg_psp_v.dt):int((time_before_spike+.0001+xoffset+4e-3)/avg_psp_v.dt)] = 30.  #area around steep PSP rise 
-        avg_fit_v = fit_trace(avg_psp_v, excitation=excitation, clamp_mode = 'vc', weight=weight_v, latency=xoffset, latency_jitter=.5e-3)
-        latency_v = avg_fit_v.best_values['xoffset'] - time_before_spike
-        amp_v = avg_fit_v.best_values['amp']
-        rise_time_v = avg_fit_v.best_values['rise_time']
-        decay_tau_v = avg_fit_v.best_values['decay_tau']
-        avg_data_waveform_v = avg_psp_v.data
-        avg_fit_waveform_v = avg_fit_v.best_fit
-        dt_v = avg_psp_v.dt
-        nrmse_v = avg_fit_v.nrmse()
+    # if pulse_responses_v:
+   
+    #     # create weighting for fit
+    #     weight_v = np.ones(len(avg_psp_v.data))*10.  #set everything to ten initially
+    #     weight_v[int((time_before_spike+.0001+xoffset)/avg_psp_v.dt):int((time_before_spike+.0001+xoffset+4e-3)/avg_psp_v.dt)] = 30.  #area around steep PSP rise 
+        
+    #     # fit data
+    #     avg_fit_v = fit_trace(avg_psp_v, excitation=excitation, clamp_mode = 'vc', weight=weight_v, latency=xoffset, latency_jitter=.5e-3)
+        
+    #     # assign variables from fit
+    #     latency_v = avg_fit_v.best_values['xoffset'] - time_before_spike
+    #     amp_v = avg_fit_v.best_values['amp']
+    #     rise_time_v = avg_fit_v.best_values['rise_time']
+    #     decay_tau_v = avg_fit_v.best_values['decay_tau']
+    #     avg_data_waveform_v = avg_psp_v.data
+    #     avg_fit_waveform_v = avg_fit_v.best_fit
+    #     dt_v = avg_psp_v.dt
+    #     nrmse_v = avg_fit_v.nrmse()
 
-    else:
-        message = 'no suitable first pulses found in voltage clamp'
-        weight_v = np.array([0])
-        latency_v = None
-        amp_v = None
-        rise_time_v = None
-        decay_tau_v = None
-        avg_data_waveform_v = np.array([0])
-        avg_fit_waveform_v = np.array([0])
-        dt_v = None
-        nrmse_v = None
+    # else:
+    #     message = 'no suitable first pulses found in voltage clamp'
+    
+    # REINDENT WHEN if pulse_responses_v IS PUT BACK IN
+    weight_v = np.array([0])
+    latency_v = None
+    amp_v = None
+    rise_time_v = None
+    decay_tau_v = None
+    avg_data_waveform_v = np.array([0])
+    avg_fit_waveform_v = np.array([0])
+    dt_v = None
+    nrmse_v = None
     #------------ done with fitting section -----------
 
     # dictionary for ease of translation into the outpu table
