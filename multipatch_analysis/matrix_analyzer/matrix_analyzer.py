@@ -246,40 +246,6 @@ class MatrixAnalyzer(object):
         os.rename(self.preset_file + '.new', self.preset_file)
 
     def analyzer_presets(self):
-        # self.presets = [
-        #     {'name': 'None'},
-        #     {'name': 'Mouse full connectivity matrix', 'filters': {
-        #     'Data Filters': {
-        #         'Projects': {
-        #         'mouse V1 coarse matrix': True,
-        #     }},
-        #     'Cell Classes': {
-        #         'Mouse All Cre-types by layer': True,
-        #     },
-        #     'Matrix Display': {
-        #         'color_by': 'connection_probability',
-        #         'Text format': '{connected}/{probed}',
-        #         'Show Confidence': 'connection_probability',
-        #         'log_scale': True,
-        #     },
-        #     }},
-        #     {'name': 'testing', 'filters': {
-        #         'Data Filters': {
-        #             'Projects': {
-        #             'mouse V1 coarse matrix': True,
-        #         }},
-        #         'Cell Classes': {
-        #             'Mouse Layer 2/3': True,
-        #         },
-        #         'Matrix Display': {
-        #             'color_by': 'ic_fit_amp_all',
-        #             'Text format': '{ic_fit_amp_all.mV}',
-        #             'Show Confidence': 'None',
-        #             'log_scale': False,
-        #     },
-        #     }},
-        #     ]
-
         self.presets = self.load_presets()
 
         return self.presets
@@ -306,20 +272,6 @@ class MatrixAnalyzer(object):
         self.params.child('Data Filters').restoreState(preset_state['data filters'])
         self.params.child('Cell Classes').restoreState(preset_state['cell classes'])
         self.params.child('Matrix Display').restoreState(preset_state['matrix display'])
-
-        # if selected != 'None':
-        #     selected_preset = [preset for preset in self.presets if preset['name'] == selected][0] 
-        #     for filt, field in selected_preset['filters'].items():
-        #         for field_name, value in field.items():
-        #             if isinstance(value, dict):
-        #                 for subfield_name, v2 in value.items():
-        #                     self.params.child(filt).child(field_name).child(subfield_name).setValue(v2)
-        #             elif field_name == 'color_by':
-        #                 self.matrix_display_filter.colorMap.addNew(value)
-        #             elif isinstance(value, tuple):
-        #                 self.params.child(filt).child(field_name).setValue(value[0])
-        #             else:
-        #                 self.params.child(filt).child(field_name).setValue(value)
 
     def analyzers_needed(self):
         ## go through all of the visualizers
@@ -405,7 +357,7 @@ class MatrixAnalyzer(object):
             if self.main_window.matrix_widget.matrix is not None:
                 self.display_matrix_element_reset()
         p.disable()
-        p.print_stats(sort='cumulative')
+        # p.print_stats(sort='cumulative')
 
     def update_results(self):
         # Select pairs 
