@@ -829,67 +829,6 @@ def connection_probability_ci(n_connected, n_probed):
     # make sure we are consistent about how we measure connectivity confidence intervals
     return proportion_confint(n_connected, n_probed, method='beta')
 
-def query_pairs(project_name=None, acsf=None, age=None, species=None, distance=None, session=None, internal=None):
-    """Generate a query for selecting pairs from the database.
-
-    Parameters
-    ----------
-    project_name : str
-        Value to match from experiment.project_name (e.g. "mouse V1 coarse matrix" or "human coarse matrix")
-    """
-    pre_cell = db.aliased(db.Cell, name='pre_cell')
-    post_cell = db.aliased(db.Cell, name='post_cell')
-    pairs = session.query(
-        db.Pair, 
-        # pre_cell,
-        # post_cell,
-        # db.Experiment,
-        # db.Pair.synapse,
-        # ConnectionStrength.synapse_type,
-    )
-    pairs = pairs.join(pre_cell, pre_cell.id==db.Pair.pre_cell_id).join(post_cell, post_cell.id==db.Pair.post_cell_id)
-    pairs = pairs.join(db.Experiment).join(db.Slice)
-    pairs = pairs.join(db.ConnectionStrength)
-    
-    if project_name is not None:
-        if isinstance(project_name, str):
-            pairs = pairs.filter(db.Experiment.project_name==project_name)
-        else:
-            pairs = pairs.filter(db.Experiment.project_name.in_(project_name))
-
-    if acsf is not None:
-        if isinstance(acsf, str):
-            pairs = pairs.filter(db.Experiment.acsf==acsf)
-        else:
-            pairs = pairs.filter(db.Experiment.acsf.in_(acsf))
-
-    if age is not None:
-        if age[0] is not None:
-            pairs = pairs.filter(db.Slice.age>=age[0])
-        if age[1] is not None:
-            pairs = pairs.filter(db.Slice.age<=age[1])
-
-    if distance is not None:
-        if distance[0] is not None:
-            pairs = pairs.filter(db.Pair.distance>=distance[0])
-        if distance[1] is not None:
-            pairs = pairs.filter(db.Pair.distance<=distance[1])
-
-    if species is not None:
-        pairs = pairs.filter(db.Slice.species==species)
-
-    if internal is not None:
-        if isinstance(internal, str):
-            pairs = pairs.filter(db.Experiment.internal==internal)
-        else:
-            pairs = pairs.filter(db.Experiment.internal.in_(internal))
-
-    # calcium
-    # age
-    # egta
-
-    return pairs
-
 
 def pair_was_probed(pair, excitatory):
     qc_field = 'n_%s_test_spikes' % ('ex' if excitatory else 'in')

@@ -14,7 +14,7 @@ import pyqtgraph as pg
 import multipatch_analysis.database as db
 import pandas as pd
 import re, cProfile
-from analyzers import query_pairs, ConnectivityAnalyzer, StrengthAnalyzer, DynamicsAnalyzer, get_all_output_fields
+from analyzers import ConnectivityAnalyzer, StrengthAnalyzer, DynamicsAnalyzer, get_all_output_fields
 from multipatch_analysis import constants
 from multipatch_analysis.cell_class import CellClass, classify_cells, classify_pairs
 from matrix_display import MatrixDisplay, MatrixWidget
@@ -94,7 +94,7 @@ class ExperimentFilter(object):
             acsf_recipes = acsf_recipes if len(acsf_recipes) > 0 else None 
             internal_recipes = [child.name() for child in self.params.child('Internal').children() if child.value() is True]
             internal_recipes = internal_recipes if len(internal_recipes) > 0 else None 
-            self.pairs = query_pairs(project_name=project_names, acsf=acsf_recipes, session=session, internal=internal_recipes).all()
+            self.pairs = db.query_pairs(project_name=project_names, acsf=acsf_recipes, session=session, internal=internal_recipes).all()
         return self.pairs
 
     def invalidate_output(self):
