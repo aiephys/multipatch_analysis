@@ -236,23 +236,6 @@ def distance_plot(connected, distance, plots=None, color=(100, 100, 255), size=1
     color = pg.colorTuple(pg.mkColor(color))[:3]
     connected = np.array(connected).astype(float)
     distance = np.array(distance)
-    pts = np.vstack([distance, connected]).T
-    
-    # scatter points a bit
-    conn = pts[:,1] == 1
-    unconn = pts[:,1] == 0
-    if np.any(conn):
-        cscat = pg.pseudoScatter(pts[:,0][conn], spacing=10e-6, bidir=False)
-        mx = abs(cscat).max()
-        if mx != 0:
-            cscat = cscat * 0.2# / mx
-        pts[:,1][conn] = -5e-5 - cscat
-    if np.any(unconn):
-        uscat = pg.pseudoScatter(pts[:,0][unconn], spacing=10e-6, bidir=False)
-        mx = abs(uscat).max()
-        if mx != 0:
-            uscat = uscat * 0.2# / mx
-        pts[:,1][unconn] = uscat
 
     # scatter plot connections probed
     if plots is None:
@@ -267,6 +250,23 @@ def distance_plot(connected, distance, plots=None, color=(100, 100, 255), size=1
         plots[0].setLabels(bottom=('distance', 'm'), left='connection probability')
 
     if plots[1] is not None:
+         # scatter points a bit
+        pts = np.vstack([distance, connected]).T
+        conn = pts[:,1] == 1
+        unconn = pts[:,1] == 0
+        if np.any(conn):
+            cscat = pg.pseudoScatter(pts[:,0][conn], spacing=10e-6, bidir=False)
+            mx = abs(cscat).max()
+            if mx != 0:
+                cscat = cscat * 0.2# / mx
+            pts[:,1][conn] = -5e-5 - cscat
+        if np.any(unconn):
+            uscat = pg.pseudoScatter(pts[:,0][unconn], spacing=10e-6, bidir=False)
+            mx = abs(uscat).max()
+            if mx != 0:
+                uscat = uscat * 0.2# / mx
+            pts[:,1][unconn] = uscat
+        
         plots[1].setXLink(plots[0])
         plots[1].hideAxis('bottom')
         plots[1].hideAxis('left')
