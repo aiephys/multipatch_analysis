@@ -41,7 +41,7 @@ class ExperimentPipelineModule(DatabasePipelineModule):
             'rig_name': expt.rig_name,
             'project_name': expt.project_name,
             'acq_timestamp': expt.timestamp,
-            'target_region': expt_info.get('region'),
+            'target_region': expt.target_region,
             'internal': expt_info.get('internal'),
             'acsf': expt_info.get('solution'),
             'target_temperature': expt.target_temperature,

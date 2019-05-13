@@ -9,7 +9,8 @@ from .dataset import *
 from .pulse_response_strength import *
 from .dynamics import *
 from .connection_strength import *
-from .first_pulse_fit import *
+from .avg_first_pulse_fit import *
+from .single_first_pulse_fit import *
 from .gap_junction import *
 
 
@@ -53,3 +54,59 @@ def rollback():
     get_default_session().rollback()
 
 
+def query_pairs(project_name=None, acsf=None, age=None, species=None, distance=None, session=None, internal=None):
+    """Generate a query for selecting pairs from the database.
+
+    Parameters
+    ----------
+    project_name : str
+        Value to match from experiment.project_name (e.g. "mouse V1 coarse matrix" or "human coarse matrix")
+    """
+    pre_cell = aliased(Cell, name='pre_cell')
+    post_cell = aliased(Cell, name='post_cell')
+    pairs = session.query(
+        Pair, 
+        # pre_cell,
+        # post_cell,
+        # Experiment,
+        # Pair.synapse,
+        # ConnectionStrength.synapse_type,
+    )
+    pairs = pairs.join(pre_cell, pre_cell.id==Pair.pre_cell_id).join(post_cell, post_cell.id==Pair.post_cell_id)
+    pairs = pairs.join(Experiment).join(Slice)
+    pairs = pairs.join(ConnectionStrength)
+    
+    if project_name is not None:
+        if isinstance(project_name, str):
+            pairs = pairs.filter(Experiment.project_name==project_name)
+        else:
+            pairs = pairs.filter(Experiment.project_name.in_(project_name))
+
+    if acsf is not None:
+        if isinstance(acsf, str):
+            pairs = pairs.filter(Experiment.acsf==acsf)
+        else:
+            pairs = pairs.filter(Experiment.acsf.in_(acsf))
+
+    if age is not None:
+        if age[0] is not None:
+            pairs = pairs.filter(Slice.age>=age[0])
+        if age[1] is not None:
+            pairs = pairs.filter(Slice.age<=age[1])
+
+    if distance is not None:
+        if distance[0] is not None:
+            pairs = pairs.filter(Pair.distance>=distance[0])
+        if distance[1] is not None:
+            pairs = pairs.filter(Pair.distance<=distance[1])
+
+    if species is not None:
+        pairs = pairs.filter(Slice.species==species)
+
+    if internal is not None:
+        if isinstance(internal, str):
+            pairs = pairs.filter(Experiment.internal==internal)
+        else:
+            pairs = pairs.filter(Experiment.internal.in_(internal))
+
+    return pairs
