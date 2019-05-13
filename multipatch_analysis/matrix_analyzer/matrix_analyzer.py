@@ -389,7 +389,7 @@ class MatrixAnalyzer(object):
         self.selected = 0
         self.hist_plot.plot_element_reset()
         self.matrix_display.element_color_reset()
-        self.distance_plot.element_distance_reset(self.results, color=(128, 128, 128), name='All Connections')
+        self.distance_plot.element_distance_reset(self.results, color=(128, 128, 128), name='All Connections', suppress_scatter=True)
 
     def update_clicked(self):
         p = cProfile.Profile()
@@ -401,7 +401,7 @@ class MatrixAnalyzer(object):
             self.hist_plot.matrix_histogram(self.results, self.group_results, self.matrix_display.matrix_display_filter.colorMap, self.field_map)
             self.element_scatter.set_data(self.group_results)
             self.pair_scatter.set_data(self.results)
-            self.dist_plot = self.distance_plot.plot_distance(self.results, color=(128, 128, 128), name='All Connections')
+            self.dist_plot = self.distance_plot.plot_distance(self.results, color=(128, 128, 128), name='All Connections', suppress_scatter=True)
             if self.main_window.matrix_widget.matrix is not None:
                 self.display_matrix_element_reset()
         p.disable()

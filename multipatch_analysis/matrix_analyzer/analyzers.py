@@ -130,7 +130,7 @@ class ConnectivityAnalyzer(object):
             return sum(filter(None, x))
         else:
             p = x.apply(pd.Series)
-            p1 = p.apply(sum)
+            p1 = p.sum()
             connected = float(p1[0])
             probed = float(p1[1])
 
@@ -147,7 +147,7 @@ class ConnectivityAnalyzer(object):
     def metric_conf(self, x):
         if x.name.endswith('probability'):
             p = x.apply(pd.Series)
-            p1 = p.apply(sum)
+            p1 = p.sum()
             connected = float(p1[0])
             probed = float(p1[1])
             return connection_probability_ci(connected, probed)
@@ -458,10 +458,10 @@ class StrengthAnalyzer(object):
         if x.name == 'strength_no_data':
             return all(x)
         else:
-            return np.nanmean(x)
+            return x.mean()
 
     def metric_conf(self, x):
-        return [-np.nanstd(x), np.nanstd(x)]
+        return [-x.std(), x.std()]
 
     def print_element_info(self, pre_class, post_class, element, field_name=None):
         if field_name is not None:
