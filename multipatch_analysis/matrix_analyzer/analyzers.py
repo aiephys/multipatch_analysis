@@ -250,23 +250,18 @@ class ConnectivityAnalyzer(object):
         trace_plt.setLabels(left=('', 'V'), bottom=('Time from stimulus', 's'))
         return line, scatter
 
-    def summary(self, results, metric):
-        if metric =='connection_probability':
-            total_connected = 0
-            total_probed = 0
-            for connectivity in results.values():
-                total_connected += connectivity['n_connected']
-                total_probed += connectivity['n_probed']
+    def summary(self, ):
+        total_connected = self.results['connected'].sum()
+        total_probed = self.results['probed'].sum()
+        print ("Total connected / probed\t %d / %d" % (total_connected, total_probed))
 
-            print ("Total connected / probed\t %d / %d" % (total_connected, total_probed))
+        # if metric == 'matrix_completeness':
+        #     total_progress = 0
+        #     for connectivity in results.values():
+        #         total_progress += connectivity['matrix_completeness']
+        #     n_elements = len([element for element in results.values() if element['no_data'] is False])
 
-        if metric == 'matrix_completeness':
-            total_progress = 0
-            for connectivity in results.values():
-                total_progress += connectivity['matrix_completeness']
-            n_elements = len([element for element in results.values() if element['no_data'] is False])
-
-            print ("Total progress\t %0.1f%%, %d elements" % (100*total_progress/n_elements, n_elements))
+        #     print ("Total progress\t %0.1f%%, %d elements" % (100*total_progress/n_elements, n_elements))
 
 
 
