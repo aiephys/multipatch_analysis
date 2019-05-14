@@ -81,6 +81,20 @@ class TableGroup(object):
             return
 
         create_tables(tables=[self[k].__table__ for k in self.tables])
+        
+    def enable_triggers(self, enable):
+        """Enable or disable triggers for all tables in this group.
+        
+        This can be used to temporarily disable constraint checking on tables that are under development,
+        allowing the rest of the pipeline to continue operating (for example, if removing an object from 
+        the pipeline would violate a foreign key constraint, disabling triggers will allow this constraint
+        to go unchecked).
+        """
+        s = Session(readonly=False)
+        enable = 'enable' if enable else 'disable'
+        for table in self.tables.keys():
+            s.execute("alter table %s %s trigger all;" % (table, enable))
+        s.commit()
 
 
 #----------- define ORM classes -------------
