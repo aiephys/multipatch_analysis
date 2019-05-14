@@ -10,8 +10,71 @@ from ..fit_average_first_pulse import fit_average_first_pulses, fit_single_first
 import traceback
 import sys
 
+class AverageFirstPulseFitPipelineModule3(DatabasePipelineModule):
+    """Analyze synaptic connection strength for all pairs per experiment
+    """
+    name = 'avg_first_pulse_fit3'
+    dependencies = [ConnectionStrengthPipelineModule]
+    table_group = db.avg_first_pulse_fit_table3
+    
+    @classmethod
+    def create_db_entries(cls, expt_id, session):
+   
+        expt = db.experiment_from_timestamp(expt_id, session=session)
+       
+        fails = []
+        errors = ""
+        for (pre_cell_id, post_cell_id), pair in expt.pairs.items():
+            try:
+                result = fit_average_first_pulses(pair)
+                if result['error'] is not None:
+                    # known error occurred; we consider this a successful run
+                    errors += "(%d->%d) %s\n\n" % (pre_cell_id, post_cell_id, result['error'])
+                else:
+                    result.pop('error')
+                    afpf = db.AvgFirstPulseFit3(pair=pair, **result)
+                    session.add(afpf)
+            except:
+                # unhandled exception occurred; we consider this an unsuccessful run
+                exc = traceback.format_exception(*sys.exc_info())
+                errors += "(%d->%d) Exception\n%s" % (pre_cell_id, post_cell_id, exc)
+                fails.append((pre_cell_id, post_cell_id))
+               
+        if len(fails) > 0:
+            raise Exception("Exceptions occurred processing pairs: %s\n\n%s" % (fails, errors))
+        else:
+            return errors
+        
+    @classmethod
+    def job_records(cls, job_ids, session):
+        """Return a list of records associated with a list of job IDs.
+        
+        This method is used by drop_jobs to delete records for specific job IDs.
+        """
+        q = session.query(db.AvgFirstPulseFit3)
+        q = q.filter(db.AvgFirstPulseFit3.pair_id==db.Pair.id)
+        q = q.filter(db.Pair.experiment_id==db.Experiment.id)
+        q = q.filter(db.Experiment.acq_timestamp.in_(job_ids))
+        return q.all()
 
-class AverageFirstPulseFitPipelineModule(DatabasePipelineModule):
+def join_pulse_response_to_expt(query):
+    pre_rec = db.aliased(db.Recording)
+    post_rec = db.aliased(db.Recording)
+    joins = [
+        (post_rec, db.PulseResponse.recording),
+        (db.PatchClampRecording,),
+        (db.MultiPatchProbe,),
+        (db.SyncRec,),
+        (db.Experiment,),
+        (db.StimPulse, db.PulseResponse.stim_pulse),
+        (pre_rec, db.StimPulse.recording),
+    ]
+    for join_args in joins:
+        query = query.join(*join_args)
+
+    return query, pre_rec, post_rec
+
+class AverageFirstPulseFitPipelineModule2(DatabasePipelineModule):
     """Analyze synaptic connection strength for all pairs per experiment
     """
     name = 'avg_first_pulse_fit2'
@@ -54,6 +117,70 @@ class AverageFirstPulseFitPipelineModule(DatabasePipelineModule):
         """
         q = session.query(db.AvgFirstPulseFit2)
         q = q.filter(db.AvgFirstPulseFit2.pair_id==db.Pair.id)
+        q = q.filter(db.Pair.experiment_id==db.Experiment.id)
+        q = q.filter(db.Experiment.acq_timestamp.in_(job_ids))
+        return q.all()
+
+def join_pulse_response_to_expt(query):
+    pre_rec = db.aliased(db.Recording)
+    post_rec = db.aliased(db.Recording)
+    joins = [
+        (post_rec, db.PulseResponse.recording),
+        (db.PatchClampRecording,),
+        (db.MultiPatchProbe,),
+        (db.SyncRec,),
+        (db.Experiment,),
+        (db.StimPulse, db.PulseResponse.stim_pulse),
+        (pre_rec, db.StimPulse.recording),
+    ]
+    for join_args in joins:
+        query = query.join(*join_args)
+
+    return query, pre_rec, post_rec
+
+class AverageFirstPulseFitPipelineModule(DatabasePipelineModule):
+    """Analyze synaptic connection strength for all pairs per experiment                                                                                                                  
+    """
+    name = 'avg_first_pulse_fit'
+    dependencies = [ConnectionStrengthPipelineModule]
+    table_group = db.avg_first_pulse_fit_table
+
+    @classmethod
+    def create_db_entries(cls, expt_id, session):
+
+        expt = db.experiment_from_timestamp(expt_id, session=session)
+
+        fails = []
+        errors = ""
+        for (pre_cell_id, post_cell_id), pair in expt.pairs.items():
+            try:
+                result = fit_average_first_pulses(pair)
+                if result['error'] is not None:
+                    # known error occurred; we consider this a successful run                                                                                                             
+                    errors += "(%d->%d) %s\n\n" % (pre_cell_id, post_cell_id, result['error'])
+                else:
+                    result.pop('error')
+                    afpf = db.AvgFirstPulseFit(pair=pair, **result)
+                    session.add(afpf)
+            except:
+                # unhandled exception occurred; we consider this an unsuccessful run                                                                                                      
+                exc = traceback.format_exception(*sys.exc_info())
+                errors += "(%d->%d) Exception\n%s" % (pre_cell_id, post_cell_id, exc)
+                fails.append((pre_cell_id, post_cell_id))
+
+        if len(fails) > 0:
+            raise Exception("Exceptions occurred processing pairs: %s\n\n%s" % (fails, errors))
+        else:
+            return errors
+
+    @classmethod
+    def job_records(cls, job_ids, session):
+        """Return a list of records associated with a list of job IDs.                                                                                                                    
+                                                                                                                                                                                          
+        This method is used by drop_jobs to delete records for specific job IDs.                                                                                                          
+        """
+        q = session.query(db.AvgFirstPulseFit)
+        q = q.filter(db.AvgFirstPulseFit.pair_id==db.Pair.id)
         q = q.filter(db.Pair.experiment_id==db.Experiment.id)
         q = q.filter(db.Experiment.acq_timestamp.in_(job_ids))
         return q.all()

@@ -9,7 +9,9 @@ from .dataset import *
 from .pulse_response_strength import *
 from .dynamics import *
 from .connection_strength import *
+from .avg_first_pulse_fit3 import *
 from .avg_first_pulse_fit2 import *
+from .avg_first_pulse_fit import *
 from .single_first_pulse_fit import *
 from .gap_junction import *
 

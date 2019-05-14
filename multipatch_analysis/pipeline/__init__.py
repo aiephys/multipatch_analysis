@@ -6,7 +6,7 @@ from .morphology import MorphologyPipelineModule
 from .pulse_response import PulseResponsePipelineModule
 from .dynamics import DynamicsPipelineModule
 from .connection_strength import ConnectionStrengthPipelineModule
-from .first_pulse_fit import AverageFirstPulseFitPipelineModule
+from .first_pulse_fit import AverageFirstPulseFitPipelineModule, AverageFirstPulseFitPipelineModule2, AverageFirstPulseFitPipelineModule3
 from .first_pulse_fit import SingleFirstPulseFitPipelineModule
 
 def all_modules():

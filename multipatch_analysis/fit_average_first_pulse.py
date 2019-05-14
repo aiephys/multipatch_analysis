@@ -7,6 +7,7 @@ from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.fitting import fit_psp
 from . import database as db
 import copy
+import matplotlib.pyplot as plt
 
 
 time_before_spike = 10.e-3 #time in seconds before spike to start trace waveforms
@@ -159,18 +160,18 @@ def get_average_pulse_response(pair, desired_clamp='ic'):
     psp_amps_measured: list of floats
         amplitude of *pulse_responses* from the *pulse_response* table
     freq: list of floats
-        the stimulation frequency corresponding to the *pulse_responses* 
-    avg_psp: Trace
-        average of the pulse_responses
-    measured_relative_amp: float
-        measured amplitude relative to baseline
-    measured_baseline: float
-        value of baseline
+        the stimulAvgFirstPulseFit2ation frequency corresponding to the *pulse_responses* 
+    avg_psp: TraceAvgFirstPulseFit2
+        average ofAvgFirstPulseFit2 the pulse_responses
+    measured_relatAvgFirstPulseFit2ive_amp: float
+        measured aAvgFirstPulseFit2mplitude relative to baseline
+    measured_baselAvgFirstPulseFit2ine: float
+        value of bAvgFirstPulseFit2aseline
     """
-    # get pulses that pass qc
+    # get pulses tAvgFirstPulseFit2hat pass qc
     pulse_responses, pulse_ids, psp_amps_measured, freq,  pulse_starts, pulse_ends= extract_first_pulse_info_from_Pair_object(pair, desired_clamp=desired_clamp)
 
-    # if pulses are returned take the average and remove section with pulse.  
+    # if pulses arAvgFirstPulseFit2e returned take the average and remove section with pulse.  
     if len(pulse_responses)>0:
         avg_psp=TraceList(pulse_responses).mean()
     else:
@@ -292,7 +293,7 @@ def fit_average_first_pulses(pair):
         fake.time_slice(min(pulse_starts), max(pulse_ends)).data[:] = np.nan #set region where pulse is to nan so the weighting can easily be assigned 
         weight_i = np.ones(len(avg_psp_i.data)) * 10.  #set everything to ten initially
         weight_i[int((time_before_spike+.0001+xoffset) / avg_psp_i.dt):int((time_before_spike+.0001+xoffset+4e-3) / avg_psp_i.dt)] = 30.  #area around steep PSP rise 
-        weight_i[fake.data==np.nan] = 0.   #area around stim artifact note that since this is spike aligned there will be some blur in where the cross talk is
+        weight_i[np.isnan(fake.data)] = 0.   #area around stim artifact note that since this is spike aligned there will be some blur in where the cross talk is
 
         # fit trace
         avg_fit_i = fit_trace(avg_psp_i, excitation=excitation, weight=weight_i, latency=xoffset, latency_jitter=.5e-3)
