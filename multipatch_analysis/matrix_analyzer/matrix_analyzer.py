@@ -13,7 +13,7 @@ import numpy as np
 import pyqtgraph as pg
 import multipatch_analysis.database as db
 import pandas as pd
-import re, cProfile, os, pickle
+import re, cProfile, os, json, sys
 from analyzers import ConnectivityAnalyzer, StrengthAnalyzer, DynamicsAnalyzer, get_all_output_fields
 from multipatch_analysis import constants
 from multipatch_analysis.cell_class import CellClass, classify_cells, classify_pairs
@@ -216,20 +216,35 @@ class MatrixAnalyzer(object):
             pg.QtGui.QMessageBox.Ok)
         else:
             self.presets = self.load_presets()
-            new_preset_list = [p for p in self.presets.keys()] + [name]
-            self.params.child('Presets', 'Analyzer Presets').setLimits(new_preset_list)
+            cm_state = self.colormap_to_json()
+
             new_preset = {name: {
-                'data filters': self.params.child('Data Filters').saveState(),
-                'cell classes': self.params.child('Cell Classes').saveState(),
-                'matrix display': self.params.child('Matrix Display').saveState(),
+                'data filters': self.params.child('Data Filters').saveState(filter='user'),
+                'cell classes': self.params.child('Cell Classes').saveState(filter='user'),
+                'matrix colormap': cm_state,
+                'text format': self.params.child('Matrix Display', 'Text format').saveState(filter='user'),
+                'show confidence': self.params.child('Matrix Display', 'Show Confidence').saveState(filter='user'),
+                'log scale': self.params.child('Matrix Display', 'log_scale').saveState(filter='user')
                 }}
             self.presets.update(new_preset)
             self.write_presets()
+            new_preset_list = [p for p in self.presets.keys()]
+            self.params.child('Presets', 'Analyzer Presets').setLimits(new_preset_list)
+
+    def colormap_to_json(self):
+        cm_state = self.params.child('Matrix Display', 'Color Map').saveState()
+        # colormaps cannot be stored in a JSON, convert format
+        cm_state.pop('fields')
+        for item, state in cm_state['items'].items():
+            cm = state['value']
+            cm_state['items'][item]['value'] = {'pos': cm.pos.tolist(), 'color': cm.color.tolist()}
+        return cm_state
 
     def load_presets(self):
         if os.path.exists(self.preset_file):
             try:
-                loaded_presets = pickle.load(open(self.preset_file, 'rb'))
+                with open(self.preset_file) as json_file:
+                    loaded_presets = json.load(json_file)
             except:
                 loaded_presets = {}
                 sys.excepthook(*sys.exc_info())
@@ -240,15 +255,23 @@ class MatrixAnalyzer(object):
         return loaded_presets
 
     def write_presets(self):
-        pickle.dump(self.presets, open(self.preset_file + '.new', 'wb'))
+        json.dump(self.presets, open(self.preset_file + '.new', 'wb'))
         if os.path.exists(self.preset_file):
             os.remove(self.preset_file)
         os.rename(self.preset_file + '.new', self.preset_file)
 
     def analyzer_presets(self):
         self.presets = self.load_presets()
+        self.json_to_colormap()
 
         return self.presets
+
+    def json_to_colormap(self):
+        for name, preset in self.presets.items():
+            cm_state = preset['matrix colormap']
+            for item, state in cm_state['items'].items():
+                cm = cm_state['items'][item]['value']
+                self.presets[name]['matrix colormap']['items'][item]['value'] = pg.ColorMap(np.array(cm['pos']), np.array(cm['color']))
 
     def presetChanged(self):
         self.clear_preset_selections()
@@ -256,6 +279,7 @@ class MatrixAnalyzer(object):
         self.set_preset_selections(selected)
         
     def clear_preset_selections(self):
+        
         for field in self.experiment_filter.params.children():
             for item in field.children():
                 item.setValue(False)
@@ -271,8 +295,11 @@ class MatrixAnalyzer(object):
         preset_state = self.presets[selected]
         self.params.child('Data Filters').restoreState(preset_state['data filters'])
         self.params.child('Cell Classes').restoreState(preset_state['cell classes'])
-        self.params.child('Matrix Display').restoreState(preset_state['matrix display'])
-
+        self.params.child('Matrix Display', 'Color Map').restoreState(preset_state['matrix colormap'])
+        self.params.child('Matrix Display', 'Text format').restoreState(preset_state['text format'])
+        self.params.child('Matrix Display', 'Show Confidence').restoreState(preset_state['show confidence'])
+        self.params.child('Matrix Display', 'log_scale').restoreState(preset_state['log scale'])
+    
     def analyzers_needed(self):
         ## go through all of the visualizers
         data_needed = set(['connected', 'distance'])
