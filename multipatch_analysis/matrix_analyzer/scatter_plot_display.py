@@ -18,7 +18,7 @@ class ScatterPlotTab(pg.QtGui.QWidget):
         self.v_splitter.setOrientation(pg.QtCore.Qt.Vertical)
         self.layout.addWidget(self.v_splitter)
         self.element_scatter = ElementScatterPlot()
-        self.pair_scatter = PairScatterPlot()
+        self.pair_scatter = PairScatterPlot(self.element_scatter.plot)
         self.v_splitter.addWidget(self.element_scatter)
         self.v_splitter.addWidget(self.pair_scatter)
 
@@ -48,8 +48,8 @@ class ElementScatterPlot(pg.ScatterPlotWidget):
         self.data = None
 
 class PairScatterPlot(pg.ScatterPlotWidget):
-    def __init__(self):
-        pg.ScatterPlotWidget.__init__(self)
+    def __init__(self, plot):
+        pg.ScatterPlotWidget.__init__(self, plot)
 
         header = pg.QtGui.QLabel()
         header.setText('<span style="font-weight: bold">Pair-wise Scatter Plot</span>')
@@ -69,10 +69,3 @@ class PairScatterPlot(pg.ScatterPlotWidget):
         
     def invalidate_output(self):
         self.data = None
-
-def result_mean(result):
-    if np.isscalar(result):
-        return result
-    else:
-        return np.nanmean(result)
-
