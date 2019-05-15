@@ -229,7 +229,9 @@ class MatrixAnalyzer(object):
             self.presets.update(new_preset)
             self.write_presets()
             new_preset_list = [p for p in self.presets.keys()]
+            self.params.child('Presets', 'Analyzer Presets').sigValueChanged.disconnect(self.presetChanged)
             self.params.child('Presets', 'Analyzer Presets').setLimits(new_preset_list)
+            self.params.child('Presets', 'Analyzer Presets').sigValueChanged.connect(self.presetChanged)
 
     def colormap_to_json(self):
         cm_state = self.params.child('Matrix Display', 'Color Map').saveState()
@@ -244,7 +246,7 @@ class MatrixAnalyzer(object):
         if os.path.exists(self.preset_file):
             try:
                 with open(self.preset_file) as json_file:
-                    loaded_presets = json.load(json_file)
+                    loaded_presets = json.load(json_file, object_pairs_hook=OrderedDict)
             except:
                 loaded_presets = {}
                 sys.excepthook(*sys.exc_info())
