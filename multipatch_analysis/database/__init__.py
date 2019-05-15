@@ -1,4 +1,4 @@
-from .database import Session, aliased, default_session, get_default_session, reset_db, vacuum, dispose_engines, default_sample_rate, db_name, bake_sqlite
+from .database import Session, aliased, or_, and_, default_session, get_default_session, reset_db, vacuum, dispose_engines, default_sample_rate, db_name, bake_sqlite
 
 # Import table definitions from DB modules
 from .pipeline import *
@@ -54,59 +54,106 @@ def rollback():
     get_default_session().rollback()
 
 
-def query_pairs(project_name=None, acsf=None, age=None, species=None, distance=None, session=None, internal=None):
+@default_session
+def pair_query(pre_class=None, post_class=None, synapse=None, electrical=None, project_name=None, acsf=None, age=None, species=None, distance=None, internal=None, session=None):
     """Generate a query for selecting pairs from the database.
 
     Parameters
     ----------
-    project_name : str
-        Value to match from experiment.project_name (e.g. "mouse V1 coarse matrix" or "human coarse matrix")
+    pre_class : CellClass | None
+        Filter for pairs where the presynaptic cell belongs to this class
+    post_class : CellClass | None
+        Filter for pairs where the postsynaptic cell belongs to this class
+    synapse : bool | None
+        Include only pairs that are (or are not) connected by a chemical synapse
+    electrical : bool | None
+        Include only pairs that are (or are not) connected by an electrical synapse (gap junction)
+    project_name : str | list | None
+        Value(s) to match from experiment.project_name (e.g. "mouse V1 coarse matrix" or "human coarse matrix")
+    acsf : str | list | None
+        Filter for ACSF recipe name(s)
+    age : tuple | None
+        (min, max) age ranges to filter for. Either limit may be None to disable
+        that check.
+    species : str | None
+        Species ('mouse' or 'human') to filter for
+    distance : tuple | None
+        (min, max) intersomatic distance in meters
+    internal : str | list | None
+        Electrode internal solution recipe name(s)
+    
     """
     pre_cell = aliased(Cell, name='pre_cell')
     post_cell = aliased(Cell, name='post_cell')
-    pairs = session.query(
-        Pair, 
+    pre_morphology = aliased(Morphology, name='pre_morphology')
+    post_morphology = aliased(Morphology, name='post_morphology')
+    query = session.query(
+        Pair,
         # pre_cell,
         # post_cell,
+        # pre_morphology,
+        # post_morphology,
         # Experiment,
-        # Pair.synapse,
-        # ConnectionStrength.synapse_type,
+        # ConnectionStrength,
     )
-    pairs = pairs.join(pre_cell, pre_cell.id==Pair.pre_cell_id).join(post_cell, post_cell.id==Pair.post_cell_id)
-    pairs = pairs.join(Experiment).join(Slice)
-    pairs = pairs.join(ConnectionStrength)
+    query = query.join(pre_cell, pre_cell.id==Pair.pre_cell_id)
+    query = query.join(post_cell, post_cell.id==Pair.post_cell_id)
+    query = query.join(pre_morphology, pre_morphology.cell_id==pre_cell.id)
+    query = query.join(post_morphology, post_morphology.cell_id==post_cell.id)
+    query = query.join(Experiment, Pair.experiment_id==Experiment.id)
+    query = query.join(Slice, Experiment.slice_id==Slice.id)
+    query = query.join(ConnectionStrength)
     
+
+    if pre_class is not None:
+        query = pre_class.filter_query(query, pre_cell)
+
+    if post_class is not None:
+        query = post_class.filter_query(query, post_cell)
+
+    if synapse is not None:
+        query = query.filter(Pair.synapse==synapse)
+
+    if electrical is not None:
+        query = query.filter(Pair.electrical==electrical)
+
     if project_name is not None:
         if isinstance(project_name, str):
-            pairs = pairs.filter(Experiment.project_name==project_name)
+            query = query.filter(Experiment.project_name==project_name)
         else:
-            pairs = pairs.filter(Experiment.project_name.in_(project_name))
+            query = query.filter(Experiment.project_name.in_(project_name))
 
     if acsf is not None:
         if isinstance(acsf, str):
-            pairs = pairs.filter(Experiment.acsf==acsf)
+            query = query.filter(Experiment.acsf==acsf)
         else:
-            pairs = pairs.filter(Experiment.acsf.in_(acsf))
+            query = query.filter(Experiment.acsf.in_(acsf))
 
     if age is not None:
         if age[0] is not None:
-            pairs = pairs.filter(Slice.age>=age[0])
+            query = query.filter(Slice.age>=age[0])
         if age[1] is not None:
-            pairs = pairs.filter(Slice.age<=age[1])
+            query = query.filter(Slice.age<=age[1])
 
     if distance is not None:
         if distance[0] is not None:
-            pairs = pairs.filter(Pair.distance>=distance[0])
+            query = query.filter(Pair.distance>=distance[0])
         if distance[1] is not None:
-            pairs = pairs.filter(Pair.distance<=distance[1])
+            query = query.filter(Pair.distance<=distance[1])
 
     if species is not None:
-        pairs = pairs.filter(Slice.species==species)
+        query = query.filter(Slice.species==species)
 
     if internal is not None:
         if isinstance(internal, str):
-            pairs = pairs.filter(Experiment.internal==internal)
+            query = query.filter(Experiment.internal==internal)
         else:
-            pairs = pairs.filter(Experiment.internal.in_(internal))
+            query = query.filter(Experiment.internal.in_(internal))
 
-    return pairs
+    return query
+
+
+def dataframe(query):
+    import pandas
+    return pandas.read_sql(query.statement, query.session.bind)
+
