@@ -130,7 +130,7 @@ class ConnectivityAnalyzer(object):
             return sum(filter(None, x))
         else:
             p = x.apply(pd.Series)
-            p1 = p.apply(sum)
+            p1 = p.sum()
             connected = float(p1[0])
             probed = float(p1[1])
 
@@ -147,7 +147,7 @@ class ConnectivityAnalyzer(object):
     def metric_conf(self, x):
         if x.name.endswith('probability'):
             p = x.apply(pd.Series)
-            p1 = p.apply(sum)
+            p1 = p.sum()
             connected = float(p1[0])
             probed = float(p1[1])
             return connection_probability_ci(connected, probed)
@@ -250,23 +250,18 @@ class ConnectivityAnalyzer(object):
         trace_plt.setLabels(left=('', 'V'), bottom=('Time from stimulus', 's'))
         return line, scatter
 
-    def summary(self, results, metric):
-        if metric =='connection_probability':
-            total_connected = 0
-            total_probed = 0
-            for connectivity in results.values():
-                total_connected += connectivity['n_connected']
-                total_probed += connectivity['n_probed']
+    def summary(self, ):
+        total_connected = self.results['connected'].sum()
+        total_probed = self.results['probed'].sum()
+        print ("Total connected / probed\t %d / %d" % (total_connected, total_probed))
 
-            print ("Total connected / probed\t %d / %d" % (total_connected, total_probed))
+        # if metric == 'matrix_completeness':
+        #     total_progress = 0
+        #     for connectivity in results.values():
+        #         total_progress += connectivity['matrix_completeness']
+        #     n_elements = len([element for element in results.values() if element['no_data'] is False])
 
-        if metric == 'matrix_completeness':
-            total_progress = 0
-            for connectivity in results.values():
-                total_progress += connectivity['matrix_completeness']
-            n_elements = len([element for element in results.values() if element['no_data'] is False])
-
-            print ("Total progress\t %0.1f%%, %d elements" % (100*total_progress/n_elements, n_elements))
+        #     print ("Total progress\t %0.1f%%, %d elements" % (100*total_progress/n_elements, n_elements))
 
 
 
@@ -463,10 +458,10 @@ class StrengthAnalyzer(object):
         if x.name == 'strength_no_data':
             return all(x)
         else:
-            return np.nanmean(x)
+            return x.mean()
 
     def metric_conf(self, x):
-        return [-np.nanstd(x), np.nanstd(x)]
+        return [-x.std(), x.std()]
 
     def print_element_info(self, pre_class, post_class, element, field_name=None):
         if field_name is not None:

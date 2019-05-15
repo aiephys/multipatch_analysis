@@ -41,6 +41,7 @@ class DistancePlot(object):
         self.plots[0].addLegend()
         self.grid.show()
         self.plots[0].setLabels(bottom=('distance', 'm'), left='connection probability')
+        self.plots[0].setXRange(0, 200e-6)
         self.params = Parameter.create(name='Distance binning window', type='float', value=40.e-6, step=10.e-6, suffix='m', siPrefix=True)
         self.element_plot = None
         self.elements = []
@@ -51,20 +52,25 @@ class DistancePlot(object):
 
         self.params.sigTreeStateChanged.connect(self.update_plot)
 
-    def plot_distance(self, results, color, name, size=10):
+    def plot_distance(self, results, color, name, size=10, suppress_scatter=False):
         """Results needs to be a DataFrame or Series object with 'connected' and 'distance' as columns
 
         """
+        connected = results['connected']
+        distance = results['distance'] 
+        dist_win = self.params.value()
         if self.results is None:
             self.name = name
             self.color = color
             self.results = results
-        connected = results['connected']
-        distance = results['distance'] 
-        dist_win = self.params.value()
-        self.dist_plot = distance_plot(connected, distance, plots=self.plots, color=color, name=name, size=size, window=dist_win, spacing=dist_win)
-        self.plots[0].setXRange(0, 200e-6)
-        # 
+        if suppress_scatter is True:
+        #suppress scatter plot for all results (takes forever to plot)
+            plots = list(self.plots)
+            plots[1] = None
+            self.dist_plot = distance_plot(connected, distance, plots=plots, color=color, name=name, size=size, window=dist_win, spacing=dist_win)
+        else:
+            self.dist_plot = distance_plot(connected, distance, plots=self.plots, color=color, name=name, size=size, window=dist_win, spacing=dist_win)
+        
         return self.dist_plot
 
     def invalidate_output(self):
@@ -79,15 +85,15 @@ class DistancePlot(object):
         name = ('%s->%s' % (pre, post))
         self.element_plot = self.plot_distance(element, color=color, name=name, size=15)
 
-    def element_distance_reset(self, results, color, name):
+    def element_distance_reset(self, results, color, name, suppress_scatter=False):
         self.elements = []
         self.element_colors = []
         self.grid.clear()
-        self.dist_plot = self.plot_distance(results, color=color, name=name, size=10)
+        self.dist_plot = self.plot_distance(results, color=color, name=name, size=10, suppress_scatter=suppress_scatter)
 
     def update_plot(self):
         self.invalidate_output()
-        self.plot_distance(self.results, self.color, self.name)
+        self.plot_distance(self.results, self.color, self.name, suppress_scatter=True)
         if self.element_plot is not None:
             for element, color in zip(self.elements, self.element_colors):
                 self.element_distance(element, color, add_to_list=False)
