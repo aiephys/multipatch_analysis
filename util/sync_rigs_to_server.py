@@ -165,8 +165,9 @@ def sync_all(source='archive'):
             paths = find_all_sites(data_path)
 
             # synchronize files for each experiment to the server
-            log.extend(sync_experiments(paths))
-            synced_paths.append((rig_name, data_path, len(paths)))
+            new_log, changed_paths = sync_experiments(paths)
+            log.extend(new_log)
+            synced_paths.append((rig_name, data_path, len(changed_paths), len(paths)))
     
     return log, synced_paths
 
@@ -175,16 +176,18 @@ def sync_experiments(paths):
     """Given a list of paths to experiment site folders, synchronize all to the server
     """
     log = []
+    changed_paths = []
     for site_dir in paths:
         try:
             changes = sync_experiment(site_dir)
             if len(changes) > 0:
                 log.append((site_dir, changes))
+                changed_paths.append(site_dir)
         except Exception:
             exc = traceback.format_exc()
             print(exc)
             log.append((site_dir, [], exc, []))
-    return log
+    return log, changed_paths
 
 
 if __name__ == '__main__':
@@ -194,8 +197,8 @@ if __name__ == '__main__':
         # Synchronize all known rig data paths
         log, synced_paths = sync_all(source='archive')
         print("==========================\nSynchronized files from:")
-        for rig_name, data_path, n_expts in synced_paths:
-            print("%s  :  %s  (%d expts)" % (rig_name, data_path, n_expts))
+        for rig_name, data_path, n_expts_changed, n_expts_found in synced_paths:
+            print("%s  :  %s  (%d/%d expts updated)" % (rig_name, data_path, n_expts_changed, n_expts_found))
 
     else:
         # synchronize just the specified path(s)
