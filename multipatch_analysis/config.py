@@ -73,7 +73,7 @@ configfile = os.path.join(os.path.dirname(__file__), '..', 'config.yml')
 if not os.path.isfile(configfile):
     open(configfile, 'wb').write(template)
 
-config = yaml.load(open(configfile, 'rb'))
+config = yaml.load(open(configfile, 'rb'), Loader=yaml.FullLoader)
 
 for k,v in config.items():
     locals()[k] = v
