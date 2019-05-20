@@ -112,7 +112,7 @@ Electrode = make_table(
         ('final_resistance', 'float'),
         ('final_current', 'float'),
         ('notes', 'str'),
-        ('ext_id', 'int', 'Electrode ID (usually 1-8) referenced in external metadata records'),
+        ('ext_id', 'str', 'Electrode ID (usually 1-8) referenced in external metadata records'),
     ]
 )
 
