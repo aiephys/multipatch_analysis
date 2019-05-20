@@ -40,6 +40,16 @@ def experiment_from_timestamp(ts, session=None):
     
     return expts[0]
 
+@default_session
+def experiment_from_uid(uid, session=None):
+    expts = session.query(Experiment).filter(Experiment.expt_uid==uid).all()
+    if len(expts) == 0:
+        raise KeyError('No experiment found for uid %s' %uid)
+    elif len(expts) > 1:
+        raise RuntimeError("Multiple experiments found for uid %s" %uid)
+
+    return expts[0]
+
 
 @default_session
 def list_experiments(session=None):
