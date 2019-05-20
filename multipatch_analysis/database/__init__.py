@@ -111,8 +111,8 @@ def pair_query(pre_class=None, post_class=None, synapse=None, electrical=None, p
     query = query.join(pre_morphology, pre_morphology.cell_id==pre_cell.id)
     query = query.join(post_morphology, post_morphology.cell_id==post_cell.id)
     query = query.join(Experiment, Pair.experiment_id==Experiment.id)
-    query = query.join(Slice, Experiment.slice_id==Slice.id)
-    query = query.join(ConnectionStrength)
+    query = query.outerjoin(Slice, Experiment.slice_id==Slice.id) ## don't want to drop all pairs if we don't have slice or connection strength entries
+    query = query.outerjoin(ConnectionStrength)
     
 
     if pre_class is not None:
