@@ -60,7 +60,10 @@ class ExperimentBase(object):
         return cached_experiments()[self.acq_timestamp]
 
     def __repr__(self):
-        return "<%s %0.3f>" % (self.__class__.__name__, self.acq_timestamp)
+        if self.expt_uid is not None:
+            return "<%s %s>" % (self.__class__.__name__, self.expt_uid)
+        else:
+            return "<%s %0.3f>" % (self.__class__.__name__, self.acq_timestamp)
 
 
 Experiment = make_table(
@@ -145,7 +148,7 @@ Cell.electrode = relationship(Electrode, back_populates="cell", single_parent=Tr
 
 class PairBase(object):
     def __repr__(self):
-        return "<%s %0.3f %d %d>" % (self.__class__.__name__, self.experiment.acq_timestamp, self.pre_cell.ext_id, self.post_cell.ext_id)
+        return "<%s %s %d %d>" % (self.__class__.__name__, '%0.3f'%self.experiment.acq_timestamp if self.experiment.acq_timestamp is not None else None, self.pre_cell.ext_id, self.post_cell.ext_id)
 
 Pair = make_table(
     name='pair',
