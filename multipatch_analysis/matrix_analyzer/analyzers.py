@@ -848,8 +848,8 @@ def query_pairs(project_name=None, acsf=None, age=None, species=None, distance=N
         # ConnectionStrength.synapse_type,
     )
     pairs = pairs.join(pre_cell, pre_cell.id==db.Pair.pre_cell_id).join(post_cell, post_cell.id==db.Pair.post_cell_id)
-    pairs = pairs.join(db.Experiment).join(db.Slice)
-    pairs = pairs.join(db.ConnectionStrength)
+    pairs = pairs.join(db.Experiment).outerjoin(db.Slice) ## don't want to drop all pairs if there aren't slice entries
+    pairs = pairs.outerjoin(db.ConnectionStrength)
     
     if project_name is not None:
         if isinstance(project_name, str):
