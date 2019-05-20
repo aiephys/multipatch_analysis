@@ -24,7 +24,8 @@ class ExperimentBase(object):
     
     @property
     def cells(self):
-        return {elec.cell.ext_id: elec.cell for elec in self.electrodes if elec.cell is not None}
+        #return {elec.cell.ext_id: elec.cell for elec in self.electrodes if elec.cell is not None}
+        return {cell.ext_id: cell for cell in self.cell_list}
 
     @property
     def pairs(self):
