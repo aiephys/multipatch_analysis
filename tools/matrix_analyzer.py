@@ -129,6 +129,12 @@ if __name__ == '__main__':
             {'target_layer': '5'},
             {'target_layer': '6'},
         ]),
+
+        ('2P-Opto cre types', [
+            {'cre_type':'ntsr1'},
+            {'cre_type':'unknown'},
+            {'cre_type':'sst'},
+            {'cre_type':'tlx3'}])
     ])
 
 
