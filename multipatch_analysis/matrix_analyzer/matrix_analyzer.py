@@ -13,7 +13,7 @@ import numpy as np
 import pyqtgraph as pg
 import multipatch_analysis.database as db
 import pandas as pd
-import re, cProfile, os, json, sys
+import re, cProfile, os, json, sys, copy
 from analyzers import ConnectivityAnalyzer, StrengthAnalyzer, DynamicsAnalyzer, get_all_output_fields
 from multipatch_analysis import constants
 from multipatch_analysis.cell_class import CellClass, classify_cells, classify_pairs
@@ -110,7 +110,9 @@ class CellClassFilter(object):
         self.experiment_filter = ExperimentFilter() 
         self.cell_class_groups = cell_class_groups
         cell_group_list = [{'name': group, 'type': 'bool'} for group in self.cell_class_groups.keys()]
-        self.params = Parameter.create(name="Cell Classes", type="group", children=cell_group_list)
+        layer = [{'name': 'Define layer by:', 'type': 'list', 'values': ['target layer', 'annotated layer'], 'value': 'target layer'}]
+        children = layer + cell_group_list
+        self.params = Parameter.create(name="Cell Classes", type="group", children=children)
 
         self.params.sigTreeStateChanged.connect(self.invalidate_output)
 
@@ -119,14 +121,28 @@ class CellClassFilter(object):
         are members of each user selected cell class.
         This internally calls cell_class.classify_cells
         """
+        ccg = copy.deepcopy(self.cell_class_groups)
         if self.cell_groups is None:
             self.cell_classes = []
-            for group in self.params.children():
+            for group in self.params.children()[1:]:
                 if group.value() is True:
-                    self.cell_classes.extend(self.cell_class_groups[group.name()]) 
+                    self.cell_classes.extend(ccg[group.name()])
+            self.cell_classes = self.layer_call() 
             self.cell_classes = [CellClass(**c) for c in self.cell_classes]
             self.cell_groups = classify_cells(self.cell_classes, pairs=pairs)
         return self.cell_groups, self.cell_classes
+
+    def layer_call(self):
+        layer_def = self.params['Define layer by:']
+        if layer_def == 'target layer':
+            for c in self.cell_classes:
+                if c.get('cortical_layer') is not None:
+                    del c['cortical_layer']
+        elif layer_def == 'annotated layer':
+            for c in self.cell_classes:
+                if c.get('target_layer') is not None:
+                    del c['target_layer']
+        return self.cell_classes
 
     def invalidate_output(self):
         self.cell_groups = None
@@ -233,7 +249,7 @@ class MatrixAnalyzer(object):
             self.params.child('Presets', 'Analyzer Presets').setLimits(new_preset_list)
             self.params.child('Presets', 'Analyzer Presets').sigValueChanged.connect(self.presetChanged)
             self.presets = self.analyzer_presets()
-            
+
     def colormap_to_json(self):
         cm_state = self.params.child('Matrix Display', 'Color Map').saveState()
         # colormaps cannot be stored in a JSON, convert format
