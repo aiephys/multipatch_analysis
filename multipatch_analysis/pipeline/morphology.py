@@ -5,15 +5,26 @@ For generating a DB table describing cell morphology.
 """
 from __future__ import print_function, division
 
-import os
+import os, pyodbc, datetime
 from collections import OrderedDict
 from ..util import timestamp_to_datetime
 from .. import database as db
 from ..pipette_metadata import PipetteMetadata
-from .. import config
+from .. import config, lims
 from .pipeline_module import DatabasePipelineModule
 from .experiment import ExperimentPipelineModule
 
+col_names = {
+                'Cortical Layer': 'cortical_layer',
+                'Qual_Morpho_Type': 'qual_morpho_type',
+                'dendrite_type': 'dendrite_type',
+                'Apical_truncation_distance': 'apical_trunc_distance',
+                'Axon_truncation_distance': 'axon_trunc_distance',
+                'Axon origination': 'axon_origin',
+                'Axon_truncation': 'axon_truncation',
+                'Apical_truncation': 'apical_truncation',
+
+            }
 
 class MorphologyPipelineModule(DatabasePipelineModule):
     """Imports cell morphology data for each experiment
@@ -27,12 +38,22 @@ class MorphologyPipelineModule(DatabasePipelineModule):
         
         # Load experiment from DB
         expt = db.experiment_from_timestamp(job_id, session=session)
+        morpho_results = morpho_db()
+        # eventually get cluster id straight from expt.lims_specimen_id when filled in
+        expt_slice = expt.slice
+        cluster_cells = get_expt_cell_cluster(expt)
+        if cluster_cells is not None:
+            cells = {int(cell.external_specimen_name): cell.id for cell in cluster_cells if cell.external_specimen_name is not None}
         path = os.path.join(config.synphys_data, expt.storage_path)
         pip_meta = PipetteMetadata(path)
 
         for cell_id,cell in expt.cells.items():
             # How the experimenter described the morphology
             user_morpho = pip_meta.pipettes[cell.ext_id].get('morphology')
+            cell_specimen_id = None
+            if cluster_cells is not None:
+                cell_specimen_id = cells.get(cell.ext_id)
+                cell_morpho = morpho_results.get(cell_specimen_id)
 
             if user_morpho in (None, ''):
                 pyramidal = None
@@ -44,7 +65,18 @@ class MorphologyPipelineModule(DatabasePipelineModule):
 
             results = {
                 'pyramidal': pyramidal,
+                'cell_specimen_id': cell_specimen_id,
+                'morpho_db_hash': hash(None),
+
             }
+            
+            if cell_morpho is not None:
+                morpho_db_hash = hash(';'.join(filter(None, cell_morpho)))
+                results['morpho_db_hash'] = morpho_db_hash
+                for name1,name2 in col_names.items():
+                    results[name2] = cell_morpho.__getattribute__(name1)
+                if results['cortical_layer'] is not None:
+                    results['cortical_layer'] = results['cortical_layer'].strip('Layer')
 
             # Write new record to DB
             morphology = db.Morphology(cell_id=cell.id, **results)
@@ -68,17 +100,55 @@ class MorphologyPipelineModule(DatabasePipelineModule):
         
         # Look up nwb file locations for all experiments
         session = db.Session()
-        expt_recs = session.query(db.Experiment.acq_timestamp, db.Experiment.storage_path).all()
-        expt_paths = {rec.acq_timestamp: rec for rec in expt_recs}
+        # expts = session.query(db.Experiment).limit(20)
         session.rollback()
-        
+        morpho_results = morpho_db()
         # Return the greater of NWB mod time and experiment DB record mtime
         ready = OrderedDict()
         for expt_id, (expt_mtime, success) in expts.items():
             if success is not True:
                 continue
-            rec = expt_paths[expt_id]
-            pip_file = os.path.join(config.synphys_data, rec.storage_path, 'pipettes.yml')
-            pip_mtime = timestamp_to_datetime(os.stat(pip_file).st_mtime)
-            ready[rec.acq_timestamp] = max(expt_mtime, pip_mtime)
+
+            expt = session.query(db.Experiment).filter(db.Experiment.acq_timestamp==expt_id).all()[0]
+            cluster_cells = get_expt_cell_cluster(expt)
+            if cluster_cells is None:
+                continue
+            cell_hash_compare = []
+            for cell in cluster_cells:
+                if cell.id is None:
+                    continue
+                morpho_db_hash = hash(';'.join(filter(None, morpho_results.get(cell.id, [None]))))
+                cell_morpho_rec = session.query(db.Morphology).filter(db.Morphology.cell_specimen_id==str(cell.id)).all()
+                if len(cell_morpho_rec) == 1:
+                    cell_rec_hash = cell_morpho_rec[0].morpho_db_hash
+                    asdf
+                    cell_hash_compare.append(morpho_db_hash == cell_rec_hash)
+                else:
+                    cell_hash_compare.append(False)
+            if all(cell_hash_compare) is False:
+                ready[expt.acq_timestamp] = datetime.datetime.now()
+    
         return ready
+
+def morpho_db():
+    cnxn_str = r'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)}; DBQ=%s' % config.morpho_address
+    cnxn = pyodbc.connect(cnxn_str)
+    cursor = cnxn.cursor()
+    morpho_table = cursor.execute('select * from MPATCH_CellsofCluster')
+    results = morpho_table.fetchall()
+    morpho_results = {int(r.cell_specimen_id): r for r in results}
+
+    return morpho_results
+
+def get_expt_cell_cluster(expt):
+    expt_slice = expt.slice
+    try:
+        cluster = lims.expt_cluster_ids(expt_slice.lims_specimen_name, expt.acq_timestamp)
+    except ValueError: 
+        return None
+    if len(cluster)==1:
+        cluster_cells = lims.cluster_cells(cluster[0])
+    else:
+        cluster_cells = None
+
+    return cluster_cells
