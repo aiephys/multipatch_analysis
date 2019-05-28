@@ -355,8 +355,9 @@ def create_tables(tables=None, engine=None):
     # Create all tables
     global ORMBase
     if engine is None:
-        _, engine_rw = get_engines()
-    ORMBase.metadata.create_all(bind=engine_rw, tables=tables)
+        _, engine = get_engines()
+    ORMBase.metadata.create_all(bind=engine, tables=tables)
+
 
 def vacuum(tables=None):
     """Cleans up database and analyzes table statistics in order to improve query planning.
