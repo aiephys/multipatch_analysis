@@ -976,7 +976,7 @@ class Experiment(object):
                 
             inj = self.injections
             if inj is not None:
-                gt_name += ';' + inj
+                gt_name = ';'.join(gt_name.split(';') + [inj])
                 
             self._genotype = Genotype(gt_name)
         return self._genotype
