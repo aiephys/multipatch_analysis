@@ -403,7 +403,7 @@ def get_default_session():
     return _default_session
 
 
-def bake_sqlite(sqlite_file):
+def bake_sqlite(sqlite_file, skip_tables=(), skip_modules=()):
     """Dump a copy of the database to an sqlite file.
     """
     from ..pipeline import all_modules
@@ -414,16 +414,23 @@ def bake_sqlite(sqlite_file):
     read_session = Session()
     write_session = sessionmaker(bind=sqlite_engine)()
     last_size = 0
-    for mod in all_modules().values():
+    for modname, mod in all_modules().items():
         table_group = mod.table_group
         for table_name in table_group.tables:
+            if (table_name in skip_tables) or (modname in skip_modules):
+                print("Skipping %s.." % table_name)
+                continue
             print("Baking %s.." % table_name)
             table = table_group[table_name]
             
             # read from table in background thread, write to sqlite in main thread.
             reader = TableReadThread(table)
             for i,rec in enumerate(reader):
-                write_session.execute(table.__table__.insert(rec))
+                try:
+                    write_session.execute(table.__table__.insert(rec))
+                except Exception:
+                    print("Skip record %d:" % i)
+                    sys.excepthook(*sys.exc_info())
                 if i%200 == 0:
                     print("%d/%d   %0.2f%%\r" % (i, reader.max_id, (100.0*(i+1.0)/reader.max_id)), end="")
                     sys.stdout.flush()

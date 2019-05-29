@@ -10,7 +10,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--reset-db', action='store_true', default=False, help="Drop all tables in the database.", dest='reset_db')
 parser.add_argument('--vacuum', action='store_true', default=False, help="Ask the database to clean/optimize itself.")
 parser.add_argument('--bake', type=str, default=None, help="Bake current database into an sqlite file.")
-parser.add_argument('--overwrite', action='store_true', default=False, help="Overwrite bake file without asking.")
+parser.add_argument('--skip-tables', type=str, default="", help="Comma-separated list of tables to skip while baking.", dest="skip_tables")
+parser.add_argument('--overwrite', action='store_true', default=False, help="Overwrite existing sqlite file.")
+parser.add_argument('--update', action='store_true', default=False, help="Update existing sqlite file.")
 parser.add_argument('--dbg', action='store_true', default=False, help="Start debugging console.")
 
 args = parser.parse_args(sys.argv[1:])
@@ -36,14 +38,11 @@ if args.vacuum:
 
 
 if args.bake is not None:
-    if os.path.exists(args.bake) and not args.overwrite:
-        msg = "sqlite database file %s already exists; ok to overwrite? " % config.synphys_db_sqlite
-        ans = raw_input(msg)
-        if ans == 'y':
-            print("  Ok, you asked for it..")
+    if os.path.exists(args.bake):
+        if args.overwrite:
             os.remove(config.synphys_db_sqlite)
-        else:
-            print("  Phooey.")
+        elif not args.update:
+            print("sqlite database file %s already exists" % args.bake)
             sys.exit(0)
         
-    db.bake_sqlite(args.bake)
+    db.bake_sqlite(args.bake, skip_tables=args.skip_tables.split(','))
