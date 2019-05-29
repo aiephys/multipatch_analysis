@@ -406,24 +406,40 @@ def get_default_session():
 def bake_sqlite(sqlite_file, skip_tables=(), skip_modules=()):
     """Dump a copy of the database to an sqlite file.
     """
-    from ..pipeline import all_modules
     sqlite_addr = "sqlite:///%s" % sqlite_file
     sqlite_engine = create_engine(sqlite_addr)
     create_tables(engine=sqlite_engine)
+    read_engine = get_engines()[0]
     
-    read_session = Session()
-    write_session = sessionmaker(bind=sqlite_engine)()
     last_size = 0
+    for mod, table in clone_database(read_engine, sqlite_engine, skip_tables=skip_tables, skip_modules=skip_modules):
+        size = os.stat(sqlite_file).st_size
+        diff = size - last_size
+        last_size = size
+        print("   sqlite file size:  %0.2fGB  (+%0.2fGB for %s)" % (size*1e-9, diff*1e-9, table))
+
+
+def clone_database(source_engine, dest_engine, skip_tables=(), skip_modules=()):
+    """Iterator that copies all modules in a database from one engine to another.
+    
+    Yields each module and table name as it is completed.
+    
+    This function does not create tables in dest_engine; use create_tables if needed.
+    """
+    from ..pipeline import all_modules
+    
+    read_session = sessionmaker(bind=source_engine)()
+    write_session = sessionmaker(bind=dest_engine)()
     for modname, mod in all_modules().items():
         table_group = mod.table_group
         for table_name in table_group.tables:
             if (table_name in skip_tables) or (modname in skip_modules):
                 print("Skipping %s.." % table_name)
                 continue
-            print("Baking %s.." % table_name)
+            print("Cloning %s.." % table_name)
             table = table_group[table_name]
             
-            # read from table in background thread, write to sqlite in main thread.
+            # read from table in background thread, write to table in main thread.
             reader = TableReadThread(table)
             for i,rec in enumerate(reader):
                 try:
@@ -439,10 +455,7 @@ def bake_sqlite(sqlite_file, skip_tables=(), skip_modules=()):
             write_session.commit()
             read_session.rollback()
             
-            size = os.stat(sqlite_file).st_size
-            diff = size - last_size
-            last_size = size
-            print("   sqlite file size:  %0.2fGB  (+%0.2fGB for this table)" % (size*1e-9, diff*1e-9))
+            yield modname, table_name
 
     print("Optimizing database..")    
     write_session.execute("analyze")

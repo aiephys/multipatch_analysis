@@ -15,6 +15,7 @@ parser.add_argument('--overwrite', action='store_true', default=False, help="Ove
 parser.add_argument('--update', action='store_true', default=False, help="Update existing sqlite file.")
 parser.add_argument('--dbg', action='store_true', default=False, help="Start debugging console.")
 
+
 args = parser.parse_args(sys.argv[1:])
 
 if args.dbg:
