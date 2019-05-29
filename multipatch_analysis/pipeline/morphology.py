@@ -15,14 +15,13 @@ from .pipeline_module import DatabasePipelineModule
 from .experiment import ExperimentPipelineModule
 
 col_names = {
-                'Cortical Layer': 'cortical_layer',
-                'Qual_Morpho_Type': 'qual_morpho_type',
-                'dendrite_type': 'dendrite_type',
-                'Apical_truncation_distance': 'apical_trunc_distance',
-                'Axon_truncation_distance': 'axon_trunc_distance',
-                'Axon origination': 'axon_origin',
-                'Axon_truncation': 'axon_truncation',
-                'Apical_truncation': 'apical_truncation',
+                'Qual_Morpho_Type': {'name': 'qual_morpho_type', 'type': 'str'},
+                'dendrite_type': {'name': 'dendrite_type', 'type': ['spiny', 'aspiny', 'sparsely spiny', 'NEI']},
+                'Apical_truncation_distance': {'name': 'apical_trunc_distance', 'type': 'float'},
+                'Axon_truncation_distance': {'name': 'axon_trunc_distance', 'type': 'float'},
+                'Axon origination': {'name': 'axon_origin', 'type': ['soma', 'dendrite', 'NEI']},
+                'Axon_truncation': {'name': 'axon_truncation', 'type': ['truncated', 'borderline', 'intact', 'unclear', 'NEI']},
+                'Apical_truncation': {'name': 'apical_truncation', 'type': ['truncated', 'borderline', 'intact','unclear', 'NEI']},
 
             }
 
@@ -54,6 +53,12 @@ class MorphologyPipelineModule(DatabasePipelineModule):
             if cluster_cells is not None:
                 cell_specimen_id = cells.get(cell.ext_id)
                 cell_morpho = morpho_results.get(cell_specimen_id)
+                if cell_specimen_id is not None:
+                    cortical_layer = lims.cell_layer(cell_specimen_id)
+                    if cortical_layer is not None:
+                        cortical_layer = cortical_layer.lstrip('Layer')
+                else:
+                    cortical_layer = None
 
             if user_morpho in (None, ''):
                 pyramidal = None
@@ -65,6 +70,7 @@ class MorphologyPipelineModule(DatabasePipelineModule):
 
             results = {
                 'pyramidal': pyramidal,
+                'cortical_layer': cortical_layer,
                 'cell_specimen_id': cell_specimen_id,
                 'morpho_db_hash': hash(None),
 
@@ -73,10 +79,23 @@ class MorphologyPipelineModule(DatabasePipelineModule):
             if cell_morpho is not None:
                 morpho_db_hash = hash(';'.join(filter(None, cell_morpho)))
                 results['morpho_db_hash'] = morpho_db_hash
-                for name1,name2 in col_names.items():
-                    results[name2] = cell_morpho.__getattribute__(name1)
-                if results['cortical_layer'] is not None:
-                    results['cortical_layer'] = results['cortical_layer'].strip('Layer')
+                for morpho_db_name, result in col_names.items():
+                    col_name = result['name']
+                    col_type = result['type']
+                    data = cell_morpho.__getattribute__(morpho_db_name)
+                    if data is not None:
+                        if isinstance(col_type, list):
+                            d = [t for t in col_type if t == data]
+                            if len(d) == 1:
+                                data = d[0]
+                            else:
+                                raise Exception ('Error parsing morphology annotation %s for cell %d from column %s' % (data, cell_specimen_id, morpho_db_name))
+                        elif col_type == 'float':
+                            try:
+                                data = float(data)
+                            except ValueError:
+                                raise Exception ('Error parsing morphology annotation %s for cell %d from column %s' % (data, cell_specimen_id, morpho_db_name))
+                    results[col_name] = data
 
             # Write new record to DB
             morphology = db.Morphology(cell_id=cell.id, **results)
@@ -97,10 +116,10 @@ class MorphologyPipelineModule(DatabasePipelineModule):
         """
         # All experiments and their creation times in the DB
         expts = ExperimentPipelineModule.finished_jobs()
-        
+
         # Look up nwb file locations for all experiments
         session = db.Session()
-        # expts = session.query(db.Experiment).limit(20)
+        # expts = session.query(db.Experiment).filter(db.Experiment.acq_timestamp==1521667891.153).all()
         session.rollback()
         morpho_results = morpho_db()
         # Return the greater of NWB mod time and experiment DB record mtime
@@ -121,7 +140,6 @@ class MorphologyPipelineModule(DatabasePipelineModule):
                 cell_morpho_rec = session.query(db.Morphology).filter(db.Morphology.cell_specimen_id==str(cell.id)).all()
                 if len(cell_morpho_rec) == 1:
                     cell_rec_hash = cell_morpho_rec[0].morpho_db_hash
-                    asdf
                     cell_hash_compare.append(morpho_db_hash == cell_rec_hash)
                 else:
                     cell_hash_compare.append(False)

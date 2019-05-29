@@ -562,6 +562,28 @@ def cluster_cells(cluster):
     recs = query(q)
     return recs
 
+def cell_layer(cell):
+    """ Return layer call for Cell specimen
+    """
+    if not isinstance(cell, int):
+        cell = specimen_id_from_name(cell)
+
+    q = """select structures.acronym
+    from structures
+    left join specimens on specimens.cortex_layer_id=structures.id
+    where specimens.id=%d
+    """ % cell
+
+    recs = query(q)
+    if len(recs) == 0:
+        return None
+    if len(recs) != 1:
+        raise Exception ('Incorrect number of layers for cell %d' % cell)
+    rec = recs[0]
+    if len(rec) != 1:
+        raise Exception ('Incorrect number of layers for cell %d' % cell)
+    rec = rec[0]
+    return rec
 
 if __name__ == '__main__':
     # testing specimen
