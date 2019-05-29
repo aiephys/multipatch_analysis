@@ -579,11 +579,7 @@ def cell_layer(cell):
         return None
     if len(recs) != 1:
         raise Exception ('Incorrect number of layers for cell %d' % cell)
-    rec = recs[0]
-    if len(rec) != 1:
-        raise Exception ('Incorrect number of layers for cell %d' % cell)
-    rec = rec[0]
-    return rec
+    return recs[0][0]
 
 if __name__ == '__main__':
     # testing specimen
