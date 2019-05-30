@@ -343,29 +343,31 @@ class MatrixAnalyzer(object):
     def display_matrix_element_data(self, matrix_item, event, row, col):
         field_name = self.matrix_display.matrix_display_filter.get_colormap_field()
         pre_class, post_class = [k for k, v in self.matrix_display.matrix_map.items() if v==[row, col]][0]
-        try:
-            element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class))
-            analyzer = self.field_map[field_name]
-            analyzer.print_element_info(pre_class, post_class, element, field_name)
-            # from here row and col are tuples (row, pre_class) and (col, post_class) respectively
-            row = (row, pre_class)
-            col = (col, post_class)
-            if int(event.modifiers() & pg.QtCore.Qt.ControlModifier)>0:
-                self.selected += 1
-                if self.selected >= len(self.colors):
-                    self.selected = 0
-                color = self.colors[self.selected]
-                self.matrix_display.color_element(row, col, color)
-                self.hist_plot.plot_element_data(element, analyzer, color, self.trace_panel)
-                self.distance_plot.element_distance(element, color)
-            else:
-                self.display_matrix_element_reset() 
-                color = self.colors[self.selected]
-                self.matrix_display.color_element(row, col, color)
-                self.hist_plot.plot_element_data(element, analyzer, color, self.trace_panel)
-                self.distance_plot.element_distance(element, color)
-        except KeyError:
+
+        #element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class))
+        element = self.results.loc[self.pair_groups[(pre_class, post_class)]]
+        if len(element) == 0:
             print ('%s->%s has no data, please select another element' % (pre_class, post_class))
+            return
+        analyzer = self.field_map[field_name]
+        analyzer.print_element_info(pre_class, post_class, element, field_name)
+        # from here row and col are tuples (row, pre_class) and (col, post_class) respectively
+        row = (row, pre_class)
+        col = (col, post_class)
+        if int(event.modifiers() & pg.QtCore.Qt.ControlModifier)>0:
+            self.selected += 1
+            if self.selected >= len(self.colors):
+                self.selected = 0
+            color = self.colors[self.selected]
+            self.matrix_display.color_element(row, col, color)
+            self.hist_plot.plot_element_data(element, analyzer, color, self.trace_panel)
+            self.distance_plot.element_distance(element, color)
+        else:
+            self.display_matrix_element_reset() 
+            color = self.colors[self.selected]
+            self.matrix_display.color_element(row, col, color)
+            self.hist_plot.plot_element_data(element, analyzer, color, self.trace_panel)
+            self.distance_plot.element_distance(element, color)
 
     def display_matrix_element_reset(self):
         self.selected = 0
@@ -403,7 +405,7 @@ class MatrixAnalyzer(object):
         # analyze matrix elements
         for a, analysis in enumerate(self.active_analyzers):
             results = analysis.measure(self.pair_groups)
-            group_results = analysis.group_result()
+            group_results = analysis.group_result(self.pair_groups)
             if a == 0:
                 self.results = results
                 self.group_results = group_results
