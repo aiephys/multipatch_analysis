@@ -307,6 +307,16 @@ class ExperimentMetadataSubmission(object):
         if acq_plate_well is not None and acq_plate_well.strip() != hist_well:
             errors.append('LIMS histology well name "%s" does not match ACQ4 plate_well_ID "%s"' 
                     % (hist_well, acq_plate_well))
+                    
+        # make sure genotype matches specimen name
+        if self.spec_info['organism'] == 'mouse':
+            if self.spec_info['genotype'] is None:
+                errors.append('Specimen %s has no genotype' % spec_name)
+            else:
+                gt = genotypes.Genotype(self.spec_info['genotype'])
+                for part in gt.driver_lines + gt.reporter_lines:
+                    if part not in spec_name:
+                        errors.append('Specimen name %s does not contain genotype part %s' % (spec_name, part))
 
     def summary(self):
         summ = OrderedDict()
