@@ -31,17 +31,22 @@ from .. import config
 # database version should be incremented whenever the schema has changed
 db_version = 12
 db_name = '{database}_{version}'.format(database=config.synphys_db, version=db_version)
-app_name = ('mp_a:' + ' '.join(sys.argv))[:60]
+default_app_name = ('mp_a:' + ' '.join(sys.argv))[:60]
 
-extra = ""
-if config.synphys_db_host.startswith('postgres'):
-    extra = "/{database}?application_name={appname}".format(database=db_name, appname=app_name)
+def db_address(host, db_name=None, app_name=None):
+    if app_name is None:
+        app_name = default_app_name
+    if host.startswith('postgres'):
+        return "{host}/{db_name}?application_name={app_name}".format(host=host, db_name=db_name, app_name=app_name)
+    else:
+        return host
 
-db_address_ro = '{host}{extra}'.format(host=config.synphys_db_host, extra=extra)
+
+db_address_ro = db_address(config.synphys_db_host, db_name)
 if config.synphys_db_host_rw is None:
     db_address_rw = None
 else:
-    db_address_rw = '{host}{extra}'.format(host=config.synphys_db_host_rw, extra=extra)
+    db_address_rw = db_address(config.synphys_db_host_rw, db_name)
 
 
 default_sample_rate = 20000
@@ -317,11 +322,32 @@ def Session(readonly=True):
 def reset_db():
     """Drop the existing synphys database and initialize a new one.
     """
-    global engine_rw
+    global engine_rw, db_name
     
     dispose_engines()
     
-    pg_engine = create_engine(config.synphys_db_host_rw + '/postgres')
+    drop_database(db_name)
+    create_database(db_name)
+
+    # reconnect to DB
+    init_engines()
+    
+    create_tables()
+
+
+def list_databases(host=None):
+    if host is None:
+        host = config.synphys_db_host
+    pg_engine = create_engine(host + '/postgres')
+    with pg_engine.begin() as conn:
+        conn.connection.set_isolation_level(0)
+        return [rec[0] for rec in conn.execute('SELECT datname FROM pg_catalog.pg_database;')]
+
+
+def drop_database(db_name, host=None):
+    if host is None:
+        host = config.synphys_db_host_rw
+    pg_engine = create_engine(host + '/postgres')
     with pg_engine.begin() as conn:
         conn.connection.set_isolation_level(0)
         try:
@@ -330,20 +356,17 @@ def reset_db():
             if 'does not exist' not in err.message:
                 raise
 
-        conn.execute('create database %s' % db_name)
 
-    # reconnect to DB
-    init_engines()
-
-    # Grant readonly permissions
+def create_database(db_name, host=None):
+    if host is None:
+        host = config.synphys_db_host_rw
     ro_user = config.synphys_db_readonly_user
-    if ro_user is not None:
-        with engine_rw.begin() as conn:
-            conn.execute('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO %s;' % ro_user)
-            # should only be needed if there are already tables present
-            #conn.execute('GRANT SELECT ON ALL TABLES IN SCHEMA public TO %s;' % ro_user)
-    
-    create_tables()
+    pg_engine = create_engine(host + '/postgres')
+    with pg_engine.begin() as conn:
+        conn.connection.set_isolation_level(0)
+        conn.execute('create database %s' % db_name)
+        # Grant readonly permissions
+        conn.execute('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO %s;' % ro_user)
 
 
 def create_tables(tables=None, engine=None):
@@ -403,7 +426,7 @@ def get_default_session():
     return _default_session
 
 
-def bake_sqlite(sqlite_file, skip_tables=(), skip_modules=()):
+def bake_sqlite(sqlite_file, **kwds):
     """Dump a copy of the database to an sqlite file.
     """
     sqlite_addr = "sqlite:///%s" % sqlite_file
@@ -412,14 +435,36 @@ def bake_sqlite(sqlite_file, skip_tables=(), skip_modules=()):
     read_engine = get_engines()[0]
     
     last_size = 0
-    for mod, table in clone_database(read_engine, sqlite_engine, skip_tables=skip_tables, skip_modules=skip_modules):
+    for mod, table in copy_tables(read_engine, sqlite_engine, **kwds):
         size = os.stat(sqlite_file).st_size
         diff = size - last_size
         last_size = size
         print("   sqlite file size:  %0.2fGB  (+%0.2fGB for %s)" % (size*1e-9, diff*1e-9, table))
 
 
-def clone_database(source_engine, dest_engine, skip_tables=(), skip_modules=()):
+def clone_database(db_name, host=None, overwrite=False, **kwds):
+    """Copy the current database to a new database of the given name.
+    """
+    if db_name in list_databases(host):
+        if overwrite:
+            drop_database(db_name, host)
+        else:
+            raise Exception("Destination database %s already exists." % db_name)
+
+    if host is None:
+        host = config.synphys_db_host_rw
+    
+    source_engine = get_engines()[0]
+    dest_address = db_address(host, db_name)
+    dest_engine = create_engine(dest_address)
+    create_database(db_name, host)
+    create_tables(engine=dest_engine)
+    
+    for mod, table in copy_tables(source_engine, dest_engine, **kwds):
+        pass
+
+
+def copy_tables(source_engine, dest_engine, skip_tables=(), skip_modules=(), skip_errors=False):
     """Iterator that copies all modules in a database from one engine to another.
     
     Yields each module and table name as it is completed.
@@ -445,8 +490,11 @@ def clone_database(source_engine, dest_engine, skip_tables=(), skip_modules=()):
                 try:
                     write_session.execute(table.__table__.insert(rec))
                 except Exception:
-                    print("Skip record %d:" % i)
-                    sys.excepthook(*sys.exc_info())
+                    if skip_errors:
+                        print("Skip record %d:" % i)
+                        sys.excepthook(*sys.exc_info())
+                    else:
+                        raise
                 if i%200 == 0:
                     print("%d/%d   %0.2f%%\r" % (i, reader.max_id, (100.0*(i+1.0)/reader.max_id)), end="")
                     sys.stdout.flush()
