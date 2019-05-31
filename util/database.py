@@ -11,6 +11,7 @@ parser.add_argument('--reset-db', action='store_true', default=False, help="Drop
 parser.add_argument('--vacuum', action='store_true', default=False, help="Ask the database to clean/optimize itself.")
 parser.add_argument('--bake', type=str, default=None, help="Bake current database into an sqlite file.")
 parser.add_argument('--clone', type=str, default=None, help="Clone current database into a new database with the given name.")
+parser.add_argument('--tables', type=str, default=None, help="Comma-separated list of tables to include while baking.")
 parser.add_argument('--skip-tables', type=str, default="", help="Comma-separated list of tables to skip while baking.", dest="skip_tables")
 parser.add_argument('--overwrite', action='store_true', default=False, help="Overwrite existing sqlite file.")
 parser.add_argument('--update', action='store_true', default=False, help="Update existing sqlite file.")
@@ -25,7 +26,7 @@ if args.dbg:
     pg.dbg()
 
 if args.reset_db:
-    ans = raw_input('Reset database "%s"? ' % db.db_name)
+    ans = raw_input('Reset database "%s"? ' % db.database.db_address_rw_clean)
     if ans == 'y':
         print("  Ok, here we go..")
         db.reset_db()
@@ -40,19 +41,20 @@ if args.vacuum:
     print("   ..done.")
 
 
+tables = None if args.tables is None else args.tables.split(',')
 if args.bake is not None:
     if os.path.exists(args.bake):
         if args.overwrite:
-            os.remove(config.synphys_db_sqlite)
+            os.remove(args.bake)
         elif not args.update:
             print("sqlite database file %s already exists" % args.bake)
             sys.exit(0)
         
-    db.bake_sqlite(args.bake, skip_tables=args.skip_tables.split(','))
+    db.bake_sqlite(args.bake, tables=tables, skip_tables=args.skip_tables.split(','))
 
 
 if args.clone is not None:
-    db.clone_database(args.clone, skip_tables=args.skip_tables.split(','))
+    db.clone_database(args.clone, tables=tables, skip_tables=args.skip_tables.split(','))
 
 
 if args.drop is not None:

@@ -5,7 +5,7 @@ The actual schemas for database tables are implemented in other files in this su
 """
 from __future__ import division, print_function
 
-import os, sys, io, time, json, threading, gc
+import os, sys, io, time, json, threading, gc, re
 from datetime import datetime
 from collections import OrderedDict
 import numpy as np
@@ -48,6 +48,14 @@ if config.synphys_db_host_rw is None:
 else:
     db_address_rw = db_address(config.synphys_db_host_rw, db_name)
 
+# make a passwordless version of the address for printing
+m = re.match(r"(\w+\:/+)(([^\:]+)(\:\S+)?(\@))?([^\?]+)", db_address_rw)
+if m is not None:
+    g = m.groups()
+    db_address_rw_clean = g[0] + (g[2] or '') + (g[4] or '') + g[5]
+else:
+    db_address_rw_clean = db_address_rw
+
 
 default_sample_rate = 20000
 
@@ -73,7 +81,11 @@ class TableGroup(object):
                 drops.append(k)
         if len(drops) == 0:
             return
-        engine_rw.execute('drop table %s cascade' % (','.join(drops)))
+            
+        if engine_rw.name == 'sqlite':
+            engine_rw.execute('drop table %s' % (','.join(drops)))
+        else:
+            engine_rw.execute('drop table %s cascade' % (','.join(drops)))
 
     def create_tables(self):
         global engine_rw, engine_ro
@@ -165,6 +177,7 @@ column_data_types = {
 
 ORMBase = declarative_base()
 
+all_tables = OrderedDict()
 def make_table(name, columns, base=None, **table_args):
     """Generate an ORM mapping class from a simplified schema format.
 
@@ -186,6 +199,7 @@ def make_table(name, columns, base=None, **table_args):
         Column (for example: 'index', 'unique'). Optionally, *data_type* may be a 'tablename.id'
         string indicating that this column is a foreign key referencing another table.
     """
+    global all_tables
     props = {
         '__tablename__': name,
         '__table_args__': table_args,
@@ -215,7 +229,7 @@ def make_table(name, columns, base=None, **table_args):
     props['meta'] = Column(column_data_types['object'])
 
     if base is None:
-        return type(name, (ORMBase,), props)
+        new_table = type(name, (ORMBase,), props)
     else:
         # need to jump through a hoop to allow __init__ on table classes;
         # see: https://docs.sqlalchemy.org/en/latest/orm/constructors.html
@@ -224,8 +238,10 @@ def make_table(name, columns, base=None, **table_args):
             def _init_on_load(self, *args, **kwds):
                 base._init_on_load(self)
             props['_init_on_load'] = _init_on_load
-        return type(name, (base,ORMBase), props)
+        new_table = type(name, (base,ORMBase), props)
 
+    all_tables[name] = new_table
+    return new_table
 
 
 #-------------- initial DB access ----------------
@@ -242,9 +258,12 @@ def init_engines():
     
     if db_address_ro.startswith('postgres'):
         opts_ro = {'pool_size': 10, 'max_overflow': 40, 'isolation_level': 'AUTOCOMMIT'}
-        opts_rw = {'pool_size': 10, 'max_overflow': 40}
     else:
         opts_ro = {}
+        
+    if db_address_rw.startswith('postgres'):
+        opts_rw = {'pool_size': 10, 'max_overflow': 40}
+    else:
         opts_rw = {}
     
     engine_ro = create_engine(db_address_ro, **opts_ro)
@@ -347,26 +366,39 @@ def list_databases(host=None):
 def drop_database(db_name, host=None):
     if host is None:
         host = config.synphys_db_host_rw
-    pg_engine = create_engine(host + '/postgres')
-    with pg_engine.begin() as conn:
-        conn.connection.set_isolation_level(0)
-        try:
-            conn.execute('drop database %s' % db_name)
-        except sqlalchemy.exc.ProgrammingError as err:
-            if 'does not exist' not in err.message:
-                raise
+    
+    if host.startswith('sqlite:///'):
+        dbfile = host[10:]
+        if os.path.isfile(dbfile):
+            os.remove(dbfile)
+    elif host.startswith('postgres'):
+        pg_engine = create_engine(host + '/postgres')
+        with pg_engine.begin() as conn:
+            conn.connection.set_isolation_level(0)
+            try:
+                conn.execute('drop database %s' % db_name)
+            except sqlalchemy.exc.ProgrammingError as err:
+                if 'does not exist' not in err.message:
+                    raise
+    else:
+        raise TypeError("Unsupported database backend %s" % host.split(':')[0])
 
 
 def create_database(db_name, host=None):
     if host is None:
         host = config.synphys_db_host_rw
-    ro_user = config.synphys_db_readonly_user
-    pg_engine = create_engine(host + '/postgres')
-    with pg_engine.begin() as conn:
-        conn.connection.set_isolation_level(0)
-        conn.execute('create database %s' % db_name)
-        # Grant readonly permissions
-        conn.execute('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO %s;' % ro_user)
+    if host.startswith('sqlite'):
+        pass
+    elif host.startswith('postgres'):
+        ro_user = config.synphys_db_readonly_user
+        pg_engine = create_engine(host + '/postgres')
+        with pg_engine.begin() as conn:
+            conn.connection.set_isolation_level(0)
+            conn.execute('create database %s' % db_name)
+            # Grant readonly permissions
+            conn.execute('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO %s;' % ro_user)
+    else:
+        raise TypeError("Unsupported database backend %s" % host.split(':')[0])
 
 
 def create_tables(tables=None, engine=None):
@@ -435,7 +467,7 @@ def bake_sqlite(sqlite_file, **kwds):
     read_engine = get_engines()[0]
     
     last_size = 0
-    for mod, table in copy_tables(read_engine, sqlite_engine, **kwds):
+    for table in copy_tables(read_engine, sqlite_engine, **kwds):
         size = os.stat(sqlite_file).st_size
         diff = size - last_size
         last_size = size
@@ -460,50 +492,47 @@ def clone_database(db_name, host=None, overwrite=False, **kwds):
     create_database(db_name, host)
     create_tables(engine=dest_engine)
     
-    for mod, table in copy_tables(source_engine, dest_engine, **kwds):
+    for table in copy_tables(source_engine, dest_engine, **kwds):
         pass
 
 
-def copy_tables(source_engine, dest_engine, skip_tables=(), skip_modules=(), skip_errors=False):
+def copy_tables(source_engine, dest_engine, tables=None, skip_tables=(), skip_errors=False):
     """Iterator that copies all modules in a database from one engine to another.
     
     Yields each module and table name as it is completed.
     
     This function does not create tables in dest_engine; use create_tables if needed.
     """
-    from ..pipeline import all_modules
-    
+    global all_tables
     read_session = sessionmaker(bind=source_engine)()
     write_session = sessionmaker(bind=dest_engine)()
-    for modname, mod in all_modules().items():
-        table_group = mod.table_group
-        for table_name in table_group.tables:
-            if (table_name in skip_tables) or (modname in skip_modules):
-                print("Skipping %s.." % table_name)
-                continue
-            print("Cloning %s.." % table_name)
-            table = table_group[table_name]
+    
+    for table_name, table in all_tables.items():
+        if (table_name in skip_tables) or (tables is not None and table_name not in tables):
+            print("Skipping %s.." % table_name)
+            continue
+        print("Cloning %s.." % table_name)
+        
+        # read from table in background thread, write to table in main thread.
+        reader = TableReadThread(table)
+        for i,rec in enumerate(reader):
+            try:
+                write_session.execute(table.__table__.insert(rec))
+            except Exception:
+                if skip_errors:
+                    print("Skip record %d:" % i)
+                    sys.excepthook(*sys.exc_info())
+                else:
+                    raise
+            if i%200 == 0:
+                print("%d/%d   %0.2f%%\r" % (i, reader.max_id, (100.0*(i+1.0)/reader.max_id)), end="")
+                sys.stdout.flush()
             
-            # read from table in background thread, write to table in main thread.
-            reader = TableReadThread(table)
-            for i,rec in enumerate(reader):
-                try:
-                    write_session.execute(table.__table__.insert(rec))
-                except Exception:
-                    if skip_errors:
-                        print("Skip record %d:" % i)
-                        sys.excepthook(*sys.exc_info())
-                    else:
-                        raise
-                if i%200 == 0:
-                    print("%d/%d   %0.2f%%\r" % (i, reader.max_id, (100.0*(i+1.0)/reader.max_id)), end="")
-                    sys.stdout.flush()
-                
-            print("   committing %d rows..                    " % i)
-            write_session.commit()
-            read_session.rollback()
-            
-            yield modname, table_name
+        print("   committing %d rows..                    " % i)
+        write_session.commit()
+        read_session.rollback()
+        
+        yield table_name
 
     print("Optimizing database..")    
     write_session.execute("analyze")
