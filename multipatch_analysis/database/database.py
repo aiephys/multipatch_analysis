@@ -49,12 +49,12 @@ else:
     db_address_rw = db_address(config.synphys_db_host_rw, db_name)
 
 # make a passwordless version of the address for printing
-m = re.match(r"(\w+\:/+)(([^\:]+)(\:\S+)?(\@))?([^\?]+)", db_address_rw)
-if m is not None:
-    g = m.groups()
-    db_address_rw_clean = g[0] + (g[2] or '') + (g[4] or '') + g[5]
-else:
-    db_address_rw_clean = db_address_rw
+db_address_rw_clean = db_address_rw
+if db_address_rw is not None:
+    m = re.match(r"(\w+\:/+)(([^\:]+)(\:\S+)?(\@))?([^\?]+)", db_address_rw)
+    if m is not None:
+        g = m.groups()
+        db_address_rw_clean = g[0] + (g[2] or '') + (g[4] or '') + g[5]
 
 
 default_sample_rate = 20000
