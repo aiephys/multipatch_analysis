@@ -136,7 +136,7 @@ class MatrixWidget(pg.GraphicsLayoutWidget):
             self.view_box.removeItem(self.matrix)
 
         self.matrix = MatrixItem(text=text, fgcolor=fgcolor, bgcolor=bgcolor, border_color=border_color,
-                    rows=rows, cols=rows, size=50, header_color='k')
+                    rows=rows, cols=cols, size=50, header_color='k')
         self.matrix.sigClicked.connect(self.matrix_element_clicked)
         self.view_box.addItem(self.matrix)
 
@@ -172,10 +172,10 @@ class MatrixDisplay(object):
             for cell in cells:
                 cell.setPen(pg.mkPen({'color': bordercolor, 'width': 1}))
 
-    def update_matrix_display(self, results, group_results, cell_classes, cell_groups, field_map):
+    def update_matrix_display(self, results, group_results, cell_classes, cell_groups, field_map, pre_cell_classes=None, post_cell_classes=None):
         self.results = results
         self.group_results = group_results
-        self.matrix_map = {}
+        self.matrix_map = OrderedDict()
         show_confidence = self.matrix_display_filter.params['Show Confidence']
 
         shape = (len(cell_groups),) * 2
@@ -196,13 +196,28 @@ class MatrixDisplay(object):
         bordercolor.fill(default_bordercolor)
         self.matrix_display_filter.colormap_legend()
 
+        ## for backwards compatability and to avoid an api change, make it okay to just pass cell_classes
+        if pre_cell_classes == None:
+            pre_cell_classes = cell_classes
+        if post_cell_classes == None:
+            post_cell_classes = cell_classes
+
         # call display function on every matrix element
         
-        for ii, pre in enumerate(cell_classes):
-            for jj, post in enumerate(cell_classes):
+        for ii, pre in enumerate(pre_cell_classes):
+            for jj, post in enumerate(post_cell_classes):
                 self.matrix_map[(pre, post)] = [ii, jj]
         for group, result in self.group_results.iterrows():
-            i, j = self.matrix_map[group]
+            try:
+                ## do some shenanigans because cell_class == cell_class doens't work, instead need cell_class.name == cell_class.name
+                group_name = (group[0].name, group[1].name)
+                keys_names = [(pre.name, post.name) for pre, post in self.matrix_map.keys()]
+                key_index = keys_names.index(group_name)
+                i, j = self.matrix_map[self.matrix_map.keys()[key_index]]
+            except ValueError:
+                ### some group_results catagories won't be in matrix_map because of pre and post cell class specifications
+                continue
+
             no_data = all([result.get('conn_no_data',{}).get('metric_summary', True), result.get('strength_no_data',{}).get('metric_summary', True), result.get('dynamics_no_data',{}).get('metric_summary', True)])
             if no_data is False:
                 output = self.matrix_display_filter.element_display_output(result, default_bgcolor)
@@ -216,6 +231,9 @@ class MatrixDisplay(object):
         # attempt to fix so it doesn't break in mp_a\ui\graphics.py
         # at line 90. 
         rows = []
+        cols = []
+        pre_names = [pre.name for pre in pre_cell_classes] ## equality comparison happens on names, so need to convert to list of names here to ask if cell is in the list later
+        post_names = [post.name for post in post_cell_classes]
         for i,cell_class in enumerate(cell_classes):
             tup = cell_class.as_tuple
             row = tup[:1]
@@ -227,9 +245,12 @@ class MatrixDisplay(object):
             #     row = tup
             # elif len(tup) == 1:
             #     row = list(tup)
-            rows.append(row)
+            if cell_class in pre_names:
+                rows.append(row)
+            if cell_class in post_names:
+                cols.append(row)
 
         self.main_window.matrix_widget.set_matrix_data(text=text, fgcolor=fgcolor, bgcolor=bgcolor, border_color=bordercolor,
-                    rows=rows, cols=rows, size=50, header_color='k')
+                    rows=rows, cols=cols, size=50, header_color='k')
 
         # self.analysis.summary(self.results, self.field_name)
