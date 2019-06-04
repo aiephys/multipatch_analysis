@@ -316,6 +316,7 @@ class MatrixAnalyzer(object):
         element = self.results.loc[self.pair_groups[(pre_class, post_class)]]
         if len(element) == 0:
             print ('%s->%s has no data, please select another element' % (pre_class, post_class))
+            return
         analyzer = self.field_map[field_name]
         analyzer.print_element_info(pre_class, post_class, element, field_name)
         # from here row and col are tuples (row, pre_class) and (col, post_class) respectively
