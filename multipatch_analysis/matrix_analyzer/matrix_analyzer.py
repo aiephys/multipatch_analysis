@@ -109,7 +109,8 @@ class CellClassFilter(object):
         self.sigOutputChanged = self._signalHandler.sigOutputChanged
         self.experiment_filter = ExperimentFilter() 
         self.cell_class_groups = cell_class_groups.keys()
-        cell_group_list = [{'name': group, 'type': 'bool'} for group in self.cell_class_groups]
+        combo_def = {'name': 'pre/post', 'type':'list', 'value':'both', 'values':['both', 'presynaptic', 'postsynaptic']}
+        cell_group_list = [{'name': group, 'type': 'bool', 'children':[combo_def], 'expanded':False} for group in self.cell_class_groups]
         self.params = Parameter.create(name="Cell Classes", type="group", children=cell_group_list)
 
         self.params.sigTreeStateChanged.connect(self.invalidate_output)
@@ -127,6 +128,21 @@ class CellClassFilter(object):
             self.cell_classes = [CellClass(**c) for c in self.cell_classes]
             self.cell_groups = classify_cells(self.cell_classes, pairs=pairs)
         return self.cell_groups, self.cell_classes
+
+
+    def get_pre_or_post_classes(self, key):
+        """Return a list of postsynaptic cell_classes. This will be a subset of self.cell_classes."""
+        if self.cell_classes is None:
+            return []
+        classes = []
+        for group in self.params.children():
+            if group.value() is True:
+                if group['pre/post'] in ['both', key]:
+                    classes.extend(cell_class_groups[group.name()])
+        classes = [CellClass(**c) for c in classes]
+        return classes
+
+
 
     def invalidate_output(self):
         self.cell_groups = None
@@ -343,13 +359,16 @@ class MatrixAnalyzer(object):
         self.matrix_display.element_color_reset()
         self.distance_plot.element_distance_reset(self.results, color=(128, 128, 128), name='All Connections')
 
+
     def update_clicked(self):
         p = cProfile.Profile()
         p.enable()
         with pg.BusyCursor():
             self.analyzers_needed()
             self.update_results()
-            self.matrix_display.update_matrix_display(self.results, self.group_results, self.cell_classes, self.cell_groups, self.field_map)
+            pre_cell_classes = self.cell_class_filter.get_pre_or_post_classes('presynaptic')
+            post_cell_classes = self.cell_class_filter.get_pre_or_post_classes('postsynaptic')
+            self.matrix_display.update_matrix_display(self.results, self.group_results, self.cell_classes, self.cell_groups, self.field_map, pre_cell_classes=pre_cell_classes, post_cell_classes=post_cell_classes)
             self.hist_plot.matrix_histogram(self.results, self.group_results, self.matrix_display.matrix_display_filter.colorMap, self.field_map)
             self.element_scatter.set_data(self.group_results)
             self.pair_scatter.set_data(self.results)
