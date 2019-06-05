@@ -356,7 +356,7 @@ class ImageTreeItem(TypeSelectItem):
         self.setText(2, obj)
         illumination = info.get('illumination', {})
         if illumination is not None:
-            colors = info.get('illumination', {}).keys()
+            colors = list(illumination.keys())
         else:
             colors = []
         if len(colors) == 0:
