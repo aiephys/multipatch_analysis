@@ -15,7 +15,7 @@ class ExperimentBrowser(pg.TreeWidget):
         self.setColumnCount(7)
         self.setHeaderLabels(['date', 'timestamp', 'rig', 'organism', 'region', 'genotype', 'acsf'])
         self.setDragDropMode(self.NoDragDrop)
-        self.populate()
+        # self.populate(experiments=experiments)
         self._last_expanded = None
         
     def populate(self, experiments=None):

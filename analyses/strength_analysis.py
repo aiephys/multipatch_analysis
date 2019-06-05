@@ -861,6 +861,7 @@ class PairView(pg.QtCore.QObject):
         win.show()
         
         b = ExperimentBrowser()
+        b.populate()
         win.addWidget(b)
         
         rs_plots = ResponseStrengthPlots(self.session)
