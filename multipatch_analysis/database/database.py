@@ -259,16 +259,16 @@ def init_engines():
     if db_address_ro.startswith('postgres'):
         opts_ro = {'pool_size': 10, 'max_overflow': 40, 'isolation_level': 'AUTOCOMMIT'}
     else:
-        opts_ro = {}
-        
-    if db_address_rw.startswith('postgres'):
-        opts_rw = {'pool_size': 10, 'max_overflow': 40}
-    else:
-        opts_rw = {}
-    
+        opts_ro = {}        
     engine_ro = create_engine(db_address_ro, **opts_ro)
+
     if db_address_rw is not None:
+        if db_address_rw.startswith('postgres'):
+            opts_rw = {'pool_size': 10, 'max_overflow': 40}
+        else:
+            opts_rw = {}        
         engine_rw = create_engine(db_address_rw, **opts_rw)
+
     engine_pid = os.getpid()
 
 
