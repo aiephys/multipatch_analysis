@@ -209,15 +209,9 @@ class MatrixDisplay(object):
                 self.matrix_map[(pre, post)] = [ii, jj]
         for group, result in self.group_results.iterrows():
             try:
-                ## do some shenanigans because cell_class == cell_class doens't work, instead need cell_class.name == cell_class.name
-                group_name = (group[0].name, group[1].name)
-                keys_names = [(pre.name, post.name) for pre, post in self.matrix_map.keys()]
-                key_index = keys_names.index(group_name)
-                i, j = self.matrix_map[self.matrix_map.keys()[key_index]]
-            except ValueError:
-                ### some group_results catagories won't be in matrix_map because of pre and post cell class specifications
-                continue
-
+                i, j = self.matrix_map[group]
+            except KeyError: ## not all groups will be in the matrix
+                continue 
             no_data = all([result.get('conn_no_data',{}).get('metric_summary', True), result.get('strength_no_data',{}).get('metric_summary', True), result.get('dynamics_no_data',{}).get('metric_summary', True)])
             if no_data is False:
                 output = self.matrix_display_filter.element_display_output(result, default_bgcolor)
