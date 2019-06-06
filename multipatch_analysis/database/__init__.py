@@ -42,7 +42,7 @@ def experiment_from_timestamp(ts, session=None):
 
 @default_session
 def experiment_from_uid(uid, session=None):
-    expts = session.query(Experiment).filter(Experiment.expt_uid==uid).all()
+    expts = session.query(Experiment).filter(Experiment.ext_id==uid).all()
     if len(expts) == 0:
         raise KeyError('No experiment found for uid %s' %uid)
     elif len(expts) > 1:
