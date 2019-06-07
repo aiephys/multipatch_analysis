@@ -1,6 +1,7 @@
 import multipatch_analysis.database as db
 import pyqtgraph as pg
 import sys
+import numpy as np
 from pyqtgraph import parametertree as ptree
 from pyqtgraph.parametertree import Parameter
 from pyqtgraph.widgets.DataFilterWidget import DataFilterParameter
@@ -8,6 +9,8 @@ from neuroanalysis.ui.plot_grid import PlotGrid
 from multipatch_analysis.ui.experiment_browser import ExperimentBrowser
 from collections import OrderedDict
 from neuroanalysis.data import Trace, TraceList
+from neuroanalysis.baseline import float_mode
+from multipatch_analysis.connection_detection import fit_psp
 
 default_latency = 11e-3
 
@@ -38,11 +41,12 @@ class MainWindow(pg.QtGui.QWidget):
         self.h_splitter.addWidget(self.v_splitter)
         self.v_splitter.addWidget(self.experiment_browser)
         self.v_splitter.addWidget(self.ptree)
+        self.v_splitter.setSizes([100, 200])
         # self.next_pair_button = pg.QtGui.QPushButton("Load Next Pair")
         # self.v_splitter.addWidget(self.next_pair_button)
         self.h_splitter.addWidget(self.vc_plot.grid)
         self.h_splitter.addWidget(self.ic_plot.grid)
-        self.h_splitter.setSizes([200, 175, 175])
+        self.h_splitter.setSizes([200, 200, 200])
         self.layout.addWidget(self.h_splitter)
         
         self.show()
@@ -75,23 +79,20 @@ class ControlPanel(object):
         self.synapse = Parameter.create(name='Synapse call', type='list', values={'Excitatory': 'ex', 'Inhibitory': 'in', 'None': None})
         self.gap = Parameter.create(name='Gap junction call', type='bool')
         self.do_fit = Parameter.create(name='Fit PSP', type='action')
-        self.fit_params = Parameter.create(name='Fit parameters', type='group', children=[
-            {'name': 'Parameter', 'type': 'str', 'value': '-55 VC, -70 VC, -55 IC, -70 IC', 'readonly': True},
-            {'name': 'Amplitude', 'type': 'float', 'readonly': True},
-            {'name': 'Latency', 'type': 'float', 'readonly': True},
-            {'name': 'Rise time', 'type': 'float', 'readonly': True},
-            {'name': 'Decay tau', 'type': 'float', 'readonly': True},
-            ])
-        self.fit_pass = Parameter.create(name="Fit Pass", type='bool')
+        fit_cat = ['-55 VC', '-70 VC', '-55 IC', '-70 IC']
+        fit_param = [{'name': c, 'type': 'group', 'children': [
+            {'name': 'Parameter:', 'type': 'str', 'readonly': True, 'value': 'Amplitude, Latency, Rise time, Decay tau, NRMSE'},
+            {'name': 'Value:', 'type': 'str', 'readonly': True},
+            {'name': 'Fit Pass', 'type': 'bool'},
+            ]} for c in fit_cat]
+        self.fit_params = Parameter.create(name='Fit parameters', type='group', children=fit_param)
         self.save_params = Parameter.create(name='Save Analysis', type='action')
         self.comments = Parameter.create(name='Comments', type='text')
         self.params = Parameter.create(name='params', type='group', children=[
             self.latency,
             self.synapse,
             self.gap,
-            self.do_fit,
             self.fit_params,
-            self.fit_pass,
             self.save_params,
             self.comments
             ])
@@ -99,6 +100,34 @@ class ControlPanel(object):
     def update_params(self, **kargs):
         for k, v in kargs.items():
             self.params.child(k).setValue(v)
+
+    def update_fit_params(self, fit_params):
+        param_names = ['amp', 'xoffset', 'rise_time', 'decay_tau', 'nrmse']
+        for mode in ['vc', 'ic']:
+            if mode == 'vc':
+                suffix = ['A', 's', 's', 's', '']
+            elif mode == 'ic':
+                suffix = ['V', 's', 's', 's', '']
+            for holding in ['-55', '-70']:
+                group = self.params.child('Fit parameters', holding + ' ' + mode.upper())
+                values = fit_params[mode][holding]
+                format_values = self.format_fit_output(values, param_names, suffix)
+                group.child('Value:').setValue(format_values)
+
+    def format_fit_output(self, values, name, suffix):
+        format_list = []
+        for p in zip(name, suffix):
+            if values.get(p[0]) is None:
+                format_list.append('nan')
+            else:
+                value = values[p[0]]
+                if p[0] == 'nrmse':
+                    p_format = ('%0.2f' % value)
+                else:
+                    p_format = pg.siFormat(value, suffix=p[1])
+                format_list.append(p_format)
+        output = ", ".join(format_list)
+        return output
 
     def set_ic_latency(self, ic_superline):
         value = ic_superline.pos()
@@ -108,46 +137,17 @@ class ControlPanel(object):
         value = vc_superline.pos()
         self.params.child('Latency', 'VC').setValue(value)
 
-class VCPlot(pg.GraphicsLayoutWidget):
-    def __init__(self, superline):
+class TracePlot(pg.GraphicsLayoutWidget):
+    def __init__(self):
         pg.GraphicsLayoutWidget.__init__(self)
         self.grid = PlotGrid()
         self.grid.set_shape(2, 1)
         self.grid.show()
         self.plots = (self.grid[0, 0], self.grid[1, 0])
-        self.plots[0].setTitle('Voltage Clamp')
         self.plots[0].hideAxis('bottom')
-        self.plots[0].addItem(superline.new_line(default_latency))
-        self.plots[1].addItem(superline.new_line(default_latency))
-        self.plots[1].setXRange(5e-3, 20e-3)
-        self.plots[0].setXLink(self.plots[1])
-
-    def plot_traces(self, traces_dict):
-        for i, traces in enumerate(traces_dict.values()):
-            if len(traces) == 0:
-                continue
-            for trace in traces:
-                self.plots[i].plot(trace.time_values, trace.data, pen=(255,255,255,10))
-            grand_trace = TraceList(traces).mean()
-            self.plots[i].plot(grand_trace.time_values, grand_trace.data, pen={'color': 'b', 'width': 2})
-
-    def clear_plots(self):
-        self.plots[0].clear()
-        self.plots[1].clear()
-
-class ICPlot(pg.GraphicsLayoutWidget):
-    def __init__(self, superline):
-        pg.GraphicsLayoutWidget.__init__(self)
-        self.grid = PlotGrid()
-        self.grid.set_shape(2, 1)
-        self.grid.show()
-        self.plots = (self.grid[0, 0], self.grid[1, 0])
-        self.plots[0].setTitle('Current Clamp')
-        self.plots[0].hideAxis('bottom')
-        self.plots[0].addItem(superline.new_line(default_latency))
-        self.plots[1].addItem(superline.new_line(default_latency))
-        self.plots[1].setXRange(5e-3, 30e-3)
-        self.plots[0].setXLink(self.plots[1])
+        self.fit_item_55 = None
+        self.fit_item_70 = None
+        self.fit_color = {True: 'g', False: 'r'}
 
     def plot_traces(self, traces_dict):  
         for i, traces in enumerate(traces_dict.values()):
@@ -157,13 +157,70 @@ class ICPlot(pg.GraphicsLayoutWidget):
                 self.plots[i].plot(trace.time_values, trace.data, pen=(255,255,255,100))
             grand_trace = TraceList(traces).mean()
             self.plots[i].plot(grand_trace.time_values, grand_trace.data, pen={'color': 'b', 'width': 2})
+            self.plots[i].autoRange()
+            self.plots[i].setXRange(5e-3, 20e-3)
+            # y_range = [grand_trace.data.min(), grand_trace.data.max()]
+            # self.plots[i].setYRange(y_range[0], y_range[1], padding=1)
+
+    def plot_fit(self, trace, fit, holding, fit_pass):
+        if holding == '-55':
+            if self.fit_item_55 is not None:
+                self.plots[0].removeItem(self.fit_item_55)
+            self.fit_item_55 = pg.PlotDataItem(trace.time_values, fit.best_fit, pen={'color': self.fit_color[False], 'width': 3})
+            self.plots[0].addItem(self.fit_item_55)
+            
+        elif holding == '-70':
+            if self.fit_item_70 is not None:
+                self.plots[1].removeItem(self.fit_item_70)
+            self.fit_item_70 = pg.PlotDataItem(trace.time_values, fit.best_fit, pen={'color': self.fit_color[False], 'width': 3})
+            self.plots[1].addItem(self.fit_item_70)
+
+    def color_fit(self, name, value):
+        if '-55' in name:
+            if self.fit_item_55 is not None:
+                self.fit_item_55.setPen({'color': self.fit_color[value], 'width': 3})
+        if '-70' in name:
+            if self.fit_item_70 is not None:
+                self.fit_item_70.setPen({'color': self.fit_color[value], 'width': 3})
 
     def clear_plots(self):
+        # for plot in self.plots:
+        #     [plot.removeItem(item) for item in plot.items if type(item) != pg.InfiniteLine]
         self.plots[0].clear()
+        
         self.plots[1].clear()
+        self.plots[1].autoRange()
+        self.plots[1].setXRange(5e-3, 20e-3)
+        self.fit_item_70 = None
+        self.fit_item_55 = None
+
+
+
+class VCPlot(TracePlot):
+    def __init__(self, superline):
+        TracePlot.__init__(self)
+        self.plots[0].setTitle('Voltage Clamp')
+        self.plots[0].addItem(superline.new_line(default_latency))
+        self.plots[1].addItem(superline.new_line(default_latency))
+        self.plots[1].setXRange(5e-3, 20e-3)
+        self.plots[0].setXLink(self.plots[1])
+        self.plots[0].setLabel('left', units='A')
+        self.plots[1].setLabel('left', units='A')
+
+class ICPlot(TracePlot):
+    def __init__(self, superline):
+        TracePlot.__init__(self)
+        self.plots[0].setTitle('Current Clamp')
+        self.plots[0].addItem(superline.new_line(default_latency))
+        self.plots[1].addItem(superline.new_line(default_latency))
+        self.plots[1].setXRange(5e-3, 20e-3)
+        self.plots[0].setXLink(self.plots[1])
+        self.plots[0].setLabel('left', units='V')
+        self.plots[1].setLabel('left', units='V')
 
 class SuperLine(pg.QtCore.QObject):
     sigPositionChanged = pg.QtCore.Signal(object)
+    sigPositionChangeFinished = pg.QtCore.Signal(object)
 
     def __init__(self):
         pg.QtCore.QObject.__init__(self)
@@ -174,12 +231,17 @@ class SuperLine(pg.QtCore.QObject):
         self.line.setZValue(100)
         self.lines.append(self.line)
         self.line.sigPositionChanged.connect(self.line_sync)
+        self.line.sigPositionChangeFinished.connect(self.move_finished)
         return self.line
+
+    def move_finished(self):
+        self.sigPositionChangeFinished.emit(self)
 
     def line_sync(self, moved_line):
         for line in self.lines:
             with pg.SignalBlock(line.sigPositionChanged, self.line_sync):
-                line.setValue(moved_line.value())
+                with pg.SignalBlock(line.sigPositionChangeFinished, self.move_finished):
+                    line.setValue(moved_line.value())
         self.sigPositionChanged.emit(self)
 
     def pos(self):
@@ -198,37 +260,77 @@ class PairAnalysis(object):
         self.ctrl_panel = ControlPanel()
         self.ic_superline = SuperLine()
         self.ic_superline.sigPositionChanged.connect(self.ctrl_panel.set_ic_latency)
+        self.ic_superline.sigPositionChangeFinished.connect(self.fit_response_update)
         self.ic_plot = ICPlot(self.ic_superline)
         self.vc_superline = SuperLine()
         self.vc_superline.sigPositionChanged.connect(self.ctrl_panel.set_vc_latency)
+        self.vc_superline.sigPositionChangeFinished.connect(self.fit_response_update)
         self.vc_plot = VCPlot(self.vc_superline)
+        self.ctrl_panel.params.child('Fit parameters').sigTreeStateChanged.connect(self.colorize_fit)
         self.experiment_browser = ExperimentBrowser()
-            # start with latency of 11 ms, fit, then user can adjust if needed
-            # connect fit button to fitting algorithm (which one? from where?)
-                # need to pull set latency value as starting point
-            # plot fit on top of traces
+        self.fit_params = {}
+        self.fit_pass = False
+        self.nrmse_thresh = 4
+        self.use_x_range = True
+        self.signs = {'vc': {
+        '-55': {'ex': '-', 'in': '+'}, 
+        '-70': {'ex': '-', 'in': 'any'},
+        },
+        'ic':{
+        '-55': {'ex': '+', 'in': '-'},
+        '-70': {'ex': '+', 'in': 'any'},
+        },
+        }
+
             # connect save button to dump result into new DB
             # connect load next pair button to clear results and move to the next pair
 
+    def colorize_fit(self, param, changes):
+        for c in changes:
+            p, change, info = c
+            if p.name() != 'Fit Pass':
+                continue
+            if 'VC' in p.parent().name():
+                self.vc_plot.color_fit(p.parent().name(), info)
+            if 'IC' in p.parent().name():
+                self.ic_plot.color_fit(p.parent().name(), info)
+
+    def reset_display(self):
+        self.vc_plot.clear_plots()
+        self.ic_plot.clear_plots()
+        for p, plot in enumerate(self.vc_plot.plots):
+            line = self.vc_superline.lines[p]
+            line.setValue(default_latency)
+            plot.addItem(line)
+        for p, plot in enumerate(self.ic_plot.plots):
+            line = self.ic_superline.lines[p]
+            line.setValue(default_latency)
+            plot.addItem(line)
+        self.ctrl_panel.params.child('Comments').setValue('')
+        
     def load_pair(self, pair):
-        print ('loading responses...')
-        s = db.Session()
-        q = self.response_query(s, pair)
-        self.pulse_responses = q.all()
-        print('got this many responses: %d' % len(self.pulse_responses))
-        s.close()
+        with pg.BusyCursor():
+            self.pair = pair
+            self.reset_display()
+            print ('loading responses...')
+            s = db.Session()
+            q = self.response_query(s, pair)
+            self.pulse_responses = q.all()
+            print('got this many responses: %d' % len(self.pulse_responses))
+            s.close()
 
-        pair_params = {'Synapse call': pair.connection_strength.synapse_type, 'Gap junction call': pair.electrical}
-        self.ctrl_panel.update_params(**pair_params)
+            pair_params = {'Synapse call': pair.connection_strength.synapse_type, 'Gap junction call': pair.electrical}
+            self.ctrl_panel.update_params(**pair_params)
 
-        self.analyze_responses()
-
+            self.analyze_responses()
 
     def analyze_responses(self):
         ex_limits = [-80e-3, -63e-3]
         in_limits = [-62e-3, -45e-3]
-        self.grand_trace = OrderedDict([('vc', {'-55': [], '-70': []}), ('ic', {'-55': [], '-70': []})])
+        self.traces = OrderedDict([('vc', {'-55': [], '-70': []}), ('ic', {'-55': [], '-70': []})])
         for rec in self.pulse_responses:
+            if rec.ex_qc_pass is False:
+                continue
             if rec.ind_freq not in [10, 20, 50]:
                 continue
             data = rec.data
@@ -239,23 +341,25 @@ class PairAnalysis(object):
             data_trace = Trace(data=data, t0=start_time-spike_time+10e-3, sample_rate=db.default_sample_rate)
             if clamp == 'vc':
                 if in_limits[0] < holding < in_limits[1]:
-                    self.grand_trace['vc']['-55'].append(data_trace)
+                    self.traces['vc']['-55'].append(data_trace)
                 elif ex_limits[0] < holding < ex_limits[1]:
-                    self.grand_trace['vc']['-70'].append(data_trace)
+                    self.traces['vc']['-70'].append(data_trace)
             if clamp == 'ic':
                 if in_limits[0] < holding < in_limits[1]:
-                    self.grand_trace['ic']['-55'].append(data_trace)
+                    self.traces['ic']['-55'].append(data_trace)
                 elif ex_limits[0] < holding < ex_limits[1]:
-                    self.grand_trace['ic']['-70'].append(data_trace)        
+                    self.traces['ic']['-70'].append(data_trace)        
             
-        self.vc_plot.plot_traces(self.grand_trace['vc'])
-        self.ic_plot.plot_traces(self.grand_trace['ic'])
+        self.vc_plot.plot_traces(self.traces['vc'])
+        self.ic_plot.plot_traces(self.traces['ic'])
 
+        self.fit_responses()
 
     def response_query(self, session, pair):
         q = session.query(
         db.PulseResponse.id.label('response_id'),
         db.PulseResponse.data,
+        db.PulseResponse.ex_qc_pass,
         db.PulseResponse.start_time.label('rec_start'),
         db.StimSpike.max_dvdt_time.label('spike_time'),
         db.PatchClampRecording.clamp_mode,
@@ -271,14 +375,76 @@ class PairAnalysis(object):
 
         return q
 
+    def fit_response_update(self):
+        self.use_x_range = False
+        self.fit_responses(x_offset_win=[-0.1e-3, 0.1e-3])
+
+    def fit_responses(self, x_offset_win=[-1e-3, 6e-3]):
+        initial_fit_parameters = OrderedDict([('vc', {'-55': {}, '-70': {}}), ('ic', {'-55': {}, '-70': {}})])
+        output_fit_parameters = OrderedDict([('vc', {'-55': {}, '-70': {}}), ('ic', {'-55': {}, '-70': {}})])
+        for mode in ['vc', 'ic']:
+            if mode == 'vc':
+                stacked = False
+                initial_rise = 1e-3
+                rise_bounds = [0.1e-3, 5e-3]
+            elif mode == 'ic':
+                stacked  = True
+                initial_rise = 5e-3
+                rise_bounds = [1e-3, 25e-3]
+            for holding in ['-55', '-70']:
+                self.fit_pass = False
+                self.ctrl_panel.params.child('Fit parameters', holding + ' ' + mode.upper(), 'Fit Pass').setValue(self.fit_pass)
+                sign = self.signs[mode][holding].get(self.ctrl_panel.params['Synapse call'], 'any')
+                x_offset = self.ctrl_panel.params['Latency', mode.upper()]
+                initial_fit_parameters[mode][holding]['xoffset'] = x_offset
+                if len(self.traces[mode][holding]) == 0:
+                    continue
+                grand_trace = TraceList(self.traces[mode][holding]).mean()
+                base_rgn = grand_trace.time_slice(-6e-3, 0)
+                y_offset = float_mode(base_rgn.data)
+                initial_fit_parameters[mode][holding]['yoffset'] = y_offset
+                x_win = [x_offset + x_offset_win[0], x_offset + x_offset_win[1]]
+                rise_times = list(initial_rise*2.**np.arange(-2, 3, 0.5))
+                if self.use_x_range is True:
+                    x_range = (list(np.linspace(x_win[0], x_win[1], 7)), x_win[0], x_win[1])
+                else:
+                    x_range = (x_offset, 'fixed')
+                try:
+                    fit = fit_psp(grand_trace, 
+                        mode=mode, 
+                        sign=sign, 
+                        xoffset=x_range, 
+                        yoffset=(y_offset, None, None),
+                        rise_time=(rise_times, rise_bounds[0], rise_bounds[1]),
+                        stacked=stacked,
+                        )
+                    for param, val in fit.best_values.items():
+                        output_fit_parameters[mode][holding][param] = val
+                    output_fit_parameters[mode][holding]['yoffset'] = fit.best_values['yoffset']
+                    output_fit_parameters[mode][holding]['nrmse'] = fit.nrmse()
+                    self.fit_pass = fit.nrmse() < self.nrmse_thresh
+                    if mode == 'vc':
+                        self.vc_plot.plot_fit(grand_trace, fit, holding, self.fit_pass)
+                    elif mode == 'ic':
+                        self.ic_plot.plot_fit(grand_trace, fit, holding, self.fit_pass)
+                    self.ctrl_panel.params.child('Fit parameters', holding + ' ' + mode.upper(), 'Fit Pass').setValue(self.fit_pass)
+                except:
+                    print("Error in PSP fit:")
+                    sys.excepthook(*sys.exc_info())
+                    continue
+                
+        self.fit_params = {'initial': initial_fit_parameters, 'fit': output_fit_parameters}
+        self.ctrl_panel.update_fit_params(output_fit_parameters)
+
 
 if __name__ == '__main__':
 
     app = pg.mkQApp()
     pg.dbg()
 
+    expt_list = [1532552839.296, 1536184462.404, 1534802671.146, 1532552954.427, 1557178633.726, 1517266234.424, 1554243759.900]
     s = db.Session()
-    q = s.query(db.Experiment).filter(db.Experiment.acq_timestamp==1511913615.871)
+    q = s.query(db.Experiment).filter(db.Experiment.acq_timestamp.in_(expt_list))
     expts = q.all()
 
     mw = MainWindow()
