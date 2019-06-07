@@ -259,16 +259,16 @@ def init_engines():
     if db_address_ro.startswith('postgres'):
         opts_ro = {'pool_size': 10, 'max_overflow': 40, 'isolation_level': 'AUTOCOMMIT'}
     else:
-        opts_ro = {}
-        
-    if db_address_rw.startswith('postgres'):
-        opts_rw = {'pool_size': 10, 'max_overflow': 40}
-    else:
-        opts_rw = {}
-    
+        opts_ro = {}        
     engine_ro = create_engine(db_address_ro, **opts_ro)
+
     if db_address_rw is not None:
+        if db_address_rw.startswith('postgres'):
+            opts_rw = {'pool_size': 10, 'max_overflow': 40}
+        else:
+            opts_rw = {}        
         engine_rw = create_engine(db_address_rw, **opts_rw)
+
     engine_pid = os.getpid()
 
 
@@ -350,8 +350,9 @@ def reset_db():
 
     # reconnect to DB
     init_engines()
-    
+
     create_tables()
+    grant_readonly_permission(db_name)
 
 
 def list_databases(host=None):
@@ -388,17 +389,38 @@ def create_database(db_name, host=None):
     if host is None:
         host = config.synphys_db_host_rw
     if host.startswith('sqlite'):
-        pass
+        return
     elif host.startswith('postgres'):
         ro_user = config.synphys_db_readonly_user
-        pg_engine = create_engine(host + '/postgres')
+
+        # connect to postgres db just so we can create the new DB
+        pg_engine = create_engine(db_address(host, 'postgres'))
         with pg_engine.begin() as conn:
             conn.connection.set_isolation_level(0)
             conn.execute('create database %s' % db_name)
-            # Grant readonly permissions
-            conn.execute('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO %s;' % ro_user)
+            # conn.execute('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO %s;' % ro_user)
+
     else:
         raise TypeError("Unsupported database backend %s" % host.split(':')[0])
+
+
+def grant_readonly_permission(db_name, host=None):
+    if host is None:
+        host = config.synphys_db_host_rw
+    if host.startswith('sqlite'):
+        return
+    elif host.startswith('postgres'):
+        ro_user = config.synphys_db_readonly_user
+
+        # grant readonly permissions
+        pg_engine = create_engine(db_address(host, db_name))
+        with pg_engine.begin() as conn:
+            conn.connection.set_isolation_level(0)
+            for cmd in [
+                ('GRANT CONNECT ON DATABASE %s TO %s' % (db_name, ro_user)),
+                ('GRANT USAGE ON SCHEMA public TO %s' % ro_user),
+                ('GRANT SELECT ON ALL TABLES IN SCHEMA public to %s' % ro_user)]:
+                conn.execute(cmd)
 
 
 def create_tables(tables=None, engine=None):
