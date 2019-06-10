@@ -139,7 +139,7 @@ class CellClassFilter(object):
         for group in self.params.children():
             if group.value() is True:
                 if group['pre/post'] in ['both', key]:
-                    classes.extend(cell_class_groups[group.name()])
+                    classes.extend(self.cell_class_groups[group.name()])
         classes = [CellClass(**c) for c in classes]
         return classes
 
