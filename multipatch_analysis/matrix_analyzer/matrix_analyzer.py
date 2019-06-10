@@ -401,7 +401,7 @@ class MatrixAnalyzer(object):
             self.update_results()
             pre_cell_classes = self.cell_class_filter.get_pre_or_post_classes('presynaptic')
             post_cell_classes = self.cell_class_filter.get_pre_or_post_classes('postsynaptic')
-            self.matrix_display.update_matrix_display(self.results, self.group_results, self.cell_classes, self.cell_groups, self.field_map, pre_cell_classes=pre_cell_classes, post_cell_classes=post_cell_classes)
+            self.matrix_display.update_matrix_display(self.results, self.group_results, self.cell_groups, self.field_map, pre_cell_classes=pre_cell_classes, post_cell_classes=post_cell_classes)
             self.hist_plot.matrix_histogram(self.results, self.group_results, self.matrix_display.matrix_display_filter.colorMap, self.field_map)
             self.element_scatter.set_data(self.group_results)
             self.pair_scatter.set_data(self.results)

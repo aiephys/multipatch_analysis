@@ -172,7 +172,7 @@ class MatrixDisplay(object):
             for cell in cells:
                 cell.setPen(pg.mkPen({'color': bordercolor, 'width': 1}))
 
-    def update_matrix_display(self, results, group_results, cell_classes, cell_groups, field_map, pre_cell_classes=None, post_cell_classes=None):
+    def update_matrix_display(self, results, group_results, cell_groups, field_map, pre_cell_classes, post_cell_classes):
         self.results = results
         self.group_results = group_results
         self.matrix_map = OrderedDict()
@@ -195,12 +195,6 @@ class MatrixDisplay(object):
         bordercolor = np.empty(shape, dtype=object)
         bordercolor.fill(default_bordercolor)
         self.matrix_display_filter.colormap_legend()
-
-        ## for backwards compatability and to avoid an api change, make it okay to just pass cell_classes
-        if pre_cell_classes == None:
-            pre_cell_classes = cell_classes
-        if post_cell_classes == None:
-            post_cell_classes = cell_classes
 
         # call display function on every matrix element
         
@@ -228,7 +222,7 @@ class MatrixDisplay(object):
         cols = []
         pre_names = [pre.name for pre in pre_cell_classes] ## equality comparison happens on names, so need to convert to list of names here to ask if cell is in the list later
         post_names = [post.name for post in post_cell_classes]
-        for i,cell_class in enumerate(cell_classes):
+        for i,cell_class in enumerate(set(pre_cell_classes+post_cell_classes)):
             tup = cell_class.as_tuple
             row = tup[:1]
             if len(tup) > 1:
