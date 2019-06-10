@@ -263,7 +263,9 @@ def fit_average_first_pulses(pair):
     message = None #initialize error message 
     xoffset = pair.connection_strength.ic_fit_xoffset
     if not xoffset:
-        return {'error': 'no ic_fit_offset from connection_strength'}
+        # too much noise:
+        # return {'error': 'no ic_fit_offset from connection_strength'}
+        return {'error': None}
     # excitatory or inhibitory?
     excitation = pair.connection_strength.synapse_type
 

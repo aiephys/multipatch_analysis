@@ -85,7 +85,7 @@ class ExperimentFilter(object):
 
     def get_pair_list(self, session):
         """ Given a set of user selected experiment filters, return a list of pairs.
-        Internally uses multipatch_analysis.connectivity.query_pairs.
+        Internally uses multipatch_analysis.db.pair_query.
         """
         if self.pairs is None:
             project_names = [child.name() for child in self.params.child('Projects').children() if child.value() is True]
@@ -94,7 +94,7 @@ class ExperimentFilter(object):
             acsf_recipes = acsf_recipes if len(acsf_recipes) > 0 else None 
             internal_recipes = [child.name() for child in self.params.child('Internal').children() if child.value() is True]
             internal_recipes = internal_recipes if len(internal_recipes) > 0 else None 
-            self.pairs = db.query_pairs(project_name=project_names, acsf=acsf_recipes, session=session, internal=internal_recipes).all()
+            self.pairs = db.pair_query(project_name=project_names, acsf=acsf_recipes, session=session, internal=internal_recipes).all()
         return self.pairs
 
     def invalidate_output(self):

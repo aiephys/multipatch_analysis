@@ -115,6 +115,30 @@ class CellClass(object):
 
     def __str__(self):
         return self.name
+        
+    def filter_query(self, query, cell_table):
+        """Return a modified query (sqlalchemy) that filters results to include only those in
+        this cell class.
+        """
+        morpho = db.aliased(db.Morphology)
+        query = query.join(morpho, morpho.cell_id==cell_table.id)
+        tables = [cell_table, morpho]
+        for k, v in self.criteria.items():
+            found_attr = False
+            for table in tables:
+                if hasattr(table, k):
+                    found_attr = True
+                    if isinstance(v, tuple):
+                        query = query.filter(getattr(table, k).in_(v))
+                    else:
+                        query = query.filter(getattr(table, k)==v)
+                    break
+            if not found_attr:
+                raise Exception('Cannot use "%s" for cell typing; attribute not found on cell or cell.morphology' % k)
+
+        return query                
+                
+            
 
 
 def classify_cells(cell_classes, cells=None, pairs=None, session=None):
