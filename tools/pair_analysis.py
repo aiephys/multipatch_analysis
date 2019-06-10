@@ -11,6 +11,7 @@ from collections import OrderedDict
 from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.baseline import float_mode
 from multipatch_analysis.connection_detection import fit_psp
+from random import shuffle
 
 default_latency = 11e-3
 
@@ -145,6 +146,7 @@ class TracePlot(pg.GraphicsLayoutWidget):
         self.grid.show()
         self.plots = (self.grid[0, 0], self.grid[1, 0])
         self.plots[0].hideAxis('bottom')
+        self.plots[1].setLabel('bottom', text='Time from spike', units='s')
         self.fit_item_55 = None
         self.fit_item_70 = None
         self.fit_color = {True: 'g', False: 'r'}
@@ -319,7 +321,11 @@ class PairAnalysis(object):
             print('got this many responses: %d' % len(self.pulse_responses))
             s.close()
 
-            pair_params = {'Synapse call': pair.connection_strength.synapse_type, 'Gap junction call': pair.electrical}
+            if pair.synapse is True:
+                synapse_type = pair.connection_strength.synapse_type
+            else:
+                synapse_type = None
+            pair_params = {'Synapse call': synapse_type, 'Gap junction call': pair.electrical}
             self.ctrl_panel.update_params(**pair_params)
 
             self.analyze_responses()
@@ -383,14 +389,6 @@ class PairAnalysis(object):
         initial_fit_parameters = OrderedDict([('vc', {'-55': {}, '-70': {}}), ('ic', {'-55': {}, '-70': {}})])
         output_fit_parameters = OrderedDict([('vc', {'-55': {}, '-70': {}}), ('ic', {'-55': {}, '-70': {}})])
         for mode in ['vc', 'ic']:
-            if mode == 'vc':
-                stacked = False
-                initial_rise = 1e-3
-                rise_bounds = [0.1e-3, 5e-3]
-            elif mode == 'ic':
-                stacked  = True
-                initial_rise = 5e-3
-                rise_bounds = [1e-3, 25e-3]
             for holding in ['-55', '-70']:
                 self.fit_pass = False
                 self.ctrl_panel.params.child('Fit parameters', holding + ' ' + mode.upper(), 'Fit Pass').setValue(self.fit_pass)
@@ -401,6 +399,17 @@ class PairAnalysis(object):
                     continue
                 grand_trace = TraceList(self.traces[mode][holding]).mean()
                 base_rgn = grand_trace.time_slice(-6e-3, 0)
+                weight = np.ones(len(grand_trace.data))*10.  #set everything to ten initially
+                weight[int(12e-3/db.default_sample_rate):int(19e-3/db.default_sample_rate)] = 30.  #area around steep PSP rise 
+                if mode == 'vc':
+                    stacked = False
+                    initial_rise = 1e-3
+                    rise_bounds = [0.1e-3, 5e-3]
+                elif mode == 'ic':
+                    stacked  = True
+                    initial_rise = 5e-3
+                    rise_bounds = [1e-3, 25e-3]
+                    weight[int(10e-3/db.default_sample_rate):int(12e-3/db.default_sample_rate)] = 0.   #area around stim artifact
                 y_offset = float_mode(base_rgn.data)
                 initial_fit_parameters[mode][holding]['yoffset'] = y_offset
                 x_win = [x_offset + x_offset_win[0], x_offset + x_offset_win[1]]
@@ -442,8 +451,13 @@ if __name__ == '__main__':
     app = pg.mkQApp()
     pg.dbg()
 
-    expt_list = [1532552839.296, 1536184462.404, 1534802671.146, 1532552954.427, 1557178633.726, 1517266234.424, 1554243759.900]
+    # expt_list = [1532552839.296, 1536184462.404, 1534802671.146, 1532552954.427, 1557178633.726, 1517266234.424, 1554243759.900]
     s = db.Session()
+    e = s.query(db.Experiment.acq_timestamp)
+    expt_list = e.all()
+    expt_list = [ee[0] for ee in expt_list]
+    shuffle(expt_list)
+    expt_list = expt_list[:5]
     q = s.query(db.Experiment).filter(db.Experiment.acq_timestamp.in_(expt_list))
     expts = q.all()
 
