@@ -132,9 +132,11 @@ if __name__ == '__main__':
 
         ('2P-Opto cre types', [
             {'cre_type':'ntsr1'},
-            {'cre_type':'unknown'},
+            #{'cre_type':'unknown'},
             {'cre_type':'sst'},
-            {'cre_type':'tlx3'}])
+            {'cre_type':'tlx3'},
+            {'cre_type':'rorb'},
+            {'cre_type':'scnn1a'}])
     ])
 
 
