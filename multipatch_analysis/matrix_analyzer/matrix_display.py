@@ -83,6 +83,8 @@ class MatrixDisplayFilter(object):
     def colormap_legend(self):
         if self.legend is not None:
             self.view_box.removeItem(self.legend)
+        if len(self.colorMap.children()) == 0:
+            raise Exception("No color maps are selected.")
         cmap_item = [cmap for cmap in self.colorMap.children() if cmap['Enabled'] is True][0]
         log_scale = self.params.child('log_scale').value()
         colors = cmap_item.value().color
