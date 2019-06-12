@@ -113,6 +113,8 @@ class CellClassFilter(object):
         combo_def = {'name': 'pre/post', 'type':'list', 'value':'both', 'values':['both', 'presynaptic', 'postsynaptic']}
         cell_group_list = [{'name': group, 'type': 'bool', 'children':[combo_def], 'expanded':False} for group in self.cell_class_groups.keys()]
         self.params = Parameter.create(name="Cell Classes", type="group", children=cell_group_list)
+        for p in self.params.children():
+            p.sigValueChanged.connect(self.expand_param)
 
         self.params.sigTreeStateChanged.connect(self.invalidate_output)
 
@@ -142,6 +144,11 @@ class CellClassFilter(object):
                     classes.extend(self.cell_class_groups[group.name()])
         classes = [CellClass(**c) for c in classes]
         return classes
+
+    def expand_param(self, param, value):
+        if value:
+            param.items.keys()[0].setExpanded(value)
+
 
 
 
