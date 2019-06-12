@@ -42,14 +42,14 @@ class MainWindow(pg.QtGui.QWidget):
         self.h_splitter.addWidget(self.v_splitter)
         self.v_splitter.addWidget(self.experiment_browser)
         self.v_splitter.addWidget(self.ptree)
-        self.v_splitter.setSizes([100, 200])
+        self.v_splitter.setSizes([100, 300])
         # self.next_pair_button = pg.QtGui.QPushButton("Load Next Pair")
         # self.v_splitter.addWidget(self.next_pair_button)
         self.h_splitter.addWidget(self.vc_plot.grid)
         self.h_splitter.addWidget(self.ic_plot.grid)
         self.h_splitter.setSizes([200, 200, 200])
         self.layout.addWidget(self.h_splitter)
-        
+        self.setGeometry(280, 130, 1500, 900)
         self.show()
 
         # self.next_pair_button.clicked.connect(self.load_next_pair)
@@ -152,13 +152,16 @@ class TracePlot(pg.GraphicsLayoutWidget):
         self.fit_color = {True: 'g', False: 'r'}
 
     def plot_traces(self, traces_dict):  
-        for i, traces in enumerate(traces_dict.values()):
-            if len(traces) == 0:
-                continue
-            for trace in traces:
-                self.plots[i].plot(trace.time_values, trace.data, pen=(255,255,255,100))
-            grand_trace = TraceList(traces).mean()
-            self.plots[i].plot(grand_trace.time_values, grand_trace.data, pen={'color': 'b', 'width': 2})
+        pen = {'qc_pass': (255,255,255,100), 'qc_fail': (150, 0, 0)}
+        for i, holding in enumerate(traces_dict.keys()):
+            for qc, traces in traces_dict[holding].items():
+                if len(traces) == 0:
+                    continue
+                for trace in traces:
+                    self.plots[i].plot(trace.time_values, trace.data, pen=pen[qc])
+                if qc == 'qc_pass':
+                    grand_trace = TraceList(traces).mean()
+                    self.plots[i].plot(grand_trace.time_values, grand_trace.data, pen={'color': 'b', 'width': 2})
             self.plots[i].autoRange()
             self.plots[i].setXRange(5e-3, 20e-3)
             # y_range = [grand_trace.data.min(), grand_trace.data.max()]
@@ -333,28 +336,40 @@ class PairAnalysis(object):
     def analyze_responses(self):
         ex_limits = [-80e-3, -63e-3]
         in_limits = [-62e-3, -45e-3]
-        self.traces = OrderedDict([('vc', {'-55': [], '-70': []}), ('ic', {'-55': [], '-70': []})])
+        self.traces = OrderedDict([('vc', {'-55': {'qc_pass': [], 'qc_fail': []}, '-70': {'qc_pass': [], 'qc_fail': []}}), 
+                                ('ic', {'-55': {'qc_pass': [], 'qc_fail': []}, '-70': {'qc_pass': [], 'qc_fail': []}})])
         for rec in self.pulse_responses:
-            if rec.ex_qc_pass is False:
-                continue
+            qc_pass = rec.ex_qc_pass
             if rec.ind_freq not in [10, 20, 50]:
                 continue
             data = rec.data
             start_time = rec.rec_start
-            spike_time = rec.spike_time
+            spike_time = rec.spike_time if rec.spike_time is not None else 0. 
             clamp = rec.clamp_mode
             holding = rec.baseline_potential
             data_trace = Trace(data=data, t0=start_time-spike_time+10e-3, sample_rate=db.default_sample_rate)
             if clamp == 'vc':
                 if in_limits[0] < holding < in_limits[1]:
-                    self.traces['vc']['-55'].append(data_trace)
+                    if qc_pass is False:
+                        self.traces['vc']['-55']['qc_fail'].append(data_trace)
+                    else:
+                        self.traces['vc']['-55']['qc_pass'].append(data_trace)
                 elif ex_limits[0] < holding < ex_limits[1]:
-                    self.traces['vc']['-70'].append(data_trace)
+                    if qc_pass is False:
+                        self.traces['vc']['-70']['qc_fail'].append(data_trace)
+                    else:
+                        self.traces['vc']['-70']['qc_pass'].append(data_trace)
             if clamp == 'ic':
                 if in_limits[0] < holding < in_limits[1]:
-                    self.traces['ic']['-55'].append(data_trace)
+                    if qc_pass is False:
+                        self.traces['ic']['-55']['qc_fail'].append(data_trace)
+                    else:
+                        self.traces['ic']['-55']['qc_pass'].append(data_trace)
                 elif ex_limits[0] < holding < ex_limits[1]:
-                    self.traces['ic']['-70'].append(data_trace)        
+                    if qc_pass is False:
+                        self.traces['vc']['-70']['qc_fail'].append(data_trace)
+                    else:
+                        self.traces['vc']['-70']['qc_pass'].append(data_trace)        
             
         self.vc_plot.plot_traces(self.traces['vc'])
         self.ic_plot.plot_traces(self.traces['ic'])
@@ -395,9 +410,9 @@ class PairAnalysis(object):
                 sign = self.signs[mode][holding].get(self.ctrl_panel.params['Synapse call'], 'any')
                 x_offset = self.ctrl_panel.params['Latency', mode.upper()]
                 initial_fit_parameters[mode][holding]['xoffset'] = x_offset
-                if len(self.traces[mode][holding]) == 0:
+                if len(self.traces[mode][holding]['qc_pass']) == 0:
                     continue
-                grand_trace = TraceList(self.traces[mode][holding]).mean()
+                grand_trace = TraceList(self.traces[mode][holding]['qc_pass']).mean()
                 base_rgn = grand_trace.time_slice(-6e-3, 0)
                 weight = np.ones(len(grand_trace.data))*10.  #set everything to ten initially
                 weight[int(12e-3/db.default_sample_rate):int(19e-3/db.default_sample_rate)] = 30.  #area around steep PSP rise 
