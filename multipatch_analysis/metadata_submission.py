@@ -316,7 +316,7 @@ class ExperimentMetadataSubmission(object):
                 gt = genotypes.Genotype(self.spec_info['genotype'])
                 for part in gt.driver_lines + gt.reporter_lines:
                     if part not in spec_name:
-                        errors.append('Specimen name %s does not contain genotype part %s' % (spec_name, part))
+                        warnings.append('Specimen name %s does not contain genotype part %s' % (spec_name, part))
 
     def summary(self):
         summ = OrderedDict()
