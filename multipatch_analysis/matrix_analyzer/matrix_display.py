@@ -220,23 +220,23 @@ class MatrixDisplay(object):
         # at line 90. 
         rows = []
         cols = []
-        pre_names = [pre.name for pre in pre_cell_classes] ## equality comparison happens on names, so need to convert to list of names here to ask if cell is in the list later
-        post_names = [post.name for post in post_cell_classes]
-        for i,cell_class in enumerate(set(pre_cell_classes+post_cell_classes)):
+        for i,cell_class in enumerate(pre_cell_classes):
             tup = cell_class.as_tuple
             row = tup[:1]
             if len(tup) > 1:
                 row = row + (' '.join(tup[1:]),)
             else:
                 row = (' '*i,) + row
-            # if len(tup) > 1:
-            #     row = tup
-            # elif len(tup) == 1:
-            #     row = list(tup)
-            if cell_class in pre_names:
-                rows.append(row)
-            if cell_class in post_names:
-                cols.append(row)
+            rows.append(row)
+        for i,cell_class in enumerate(post_cell_classes):
+            tup = cell_class.as_tuple
+            col = tup[:1]
+            if len(tup) > 1:
+                col = col + (' '.join(tup[1:]),)
+            else:
+                col = (' '*i,) + col
+            cols.append(col)
+
 
         self.main_window.matrix_widget.set_matrix_data(text=text, fgcolor=fgcolor, bgcolor=bgcolor, border_color=bordercolor,
                     rows=rows, cols=cols, size=50, header_color='k')
