@@ -688,9 +688,12 @@ class ExperimentMetadata(Experiment):
                     if in_lims is True and slice_fixed is True and image_20x is not None:
                         image_tags = lims.specimen_tags(cell_cluster)
                         if image_tags is not None:   
-                            if '63x no go' in image_tags:
+                            if '63x no go' in image_tags :
                                 rec['63x'] = '-'
                                 rec['cell map'] = '-'
+                            elif 'cell map no go' in image_tags:
+                                rec['cell map'] = '-'
+                                self.map_message = 'Site marked unmappable by user'
                             else:
                                 image_63x = self.biocytin_63x_files
                                 rec['63x'] = image_63x is not None
