@@ -7,8 +7,7 @@ __all__ = ['morphology_tables', 'Morphology']
 
 Morphology = make_table(name='morphology', comment="Describes morphological properties of cells.", columns=[
     ('cell_id', 'cell.id', 'The ID of the cell described by each record', {'index': True, 'unique': True}),
-    ('cell_specimen_id', 'int', 'LIMS cell specimen ID', {'index': True}),
-    ('morpho_db_hash', 'int', 'hash of Morphology team database for update tracking', {'index': True}),
+    ('morpho_db_hash', 'int', 'hash of Morphology team database for update tracking'),
     ('pyramidal', 'bool', 'whether the experimenter labeled the cell as pyramidal', {'index': True}),
     ('cortical_layer', 'str', 'cortical layer of cell defined by layer drawing annotation', {'index': True}),
     ('qual_morpho_type', 'str', 'qualitative desctription of cell morphology', {'index': True}),

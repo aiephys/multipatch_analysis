@@ -38,27 +38,21 @@ class MorphologyPipelineModule(DatabasePipelineModule):
         # Load experiment from DB
         expt = db.experiment_from_timestamp(job_id, session=session)
         morpho_results = morpho_db()
-        # eventually get cluster id straight from expt.lims_specimen_id when filled in
-        expt_slice = expt.slice
-        cluster_cells = get_expt_cell_cluster(expt)
-        if cluster_cells is not None:
-            cells = {int(cell.external_specimen_name): cell.id for cell in cluster_cells if cell.external_specimen_name is not None}
+        
         path = os.path.join(config.synphys_data, expt.storage_path)
         pip_meta = PipetteMetadata(path)
 
         for cell_id,cell in expt.cells.items():
             # How the experimenter described the morphology
             user_morpho = pip_meta.pipettes[cell.ext_id].get('morphology')
-            cell_specimen_id = None
-            if cluster_cells is not None:
-                cell_specimen_id = cells.get(cell.ext_id)
-                cell_morpho = morpho_results.get(cell_specimen_id)
-                if cell_specimen_id is not None:
-                    cortical_layer = lims.cell_layer(cell_specimen_id)
-                    if cortical_layer is not None:
-                        cortical_layer = cortical_layer.lstrip('Layer')
-                else:
-                    cortical_layer = None
+            cell_specimen_id = cell.meta.get('lims_specimen_id')
+            cell_morpho = morpho_results.get(cell_specimen_id)
+            if cell_specimen_id is not None:
+                cortical_layer = lims.cell_layer(cell_specimen_id)
+                if cortical_layer is not None:
+                    cortical_layer = cortical_layer.lstrip('Layer')
+            else:
+                cortical_layer = None
 
             if user_morpho in (None, ''):
                 pyramidal = None
@@ -71,7 +65,6 @@ class MorphologyPipelineModule(DatabasePipelineModule):
             results = {
                 'pyramidal': pyramidal,
                 'cortical_layer': cortical_layer,
-                'cell_specimen_id': cell_specimen_id,
                 'morpho_db_hash': hash(None),
 
             }
@@ -129,7 +122,10 @@ class MorphologyPipelineModule(DatabasePipelineModule):
                 continue
 
             expt = session.query(db.Experiment).filter(db.Experiment.acq_timestamp==expt_id).all()[0]
-            cluster_cells = get_expt_cell_cluster(expt)
+            cluster = expt.lims_specimen_id
+            if cluster is None:
+                continue
+            cluster_cells = lims.cluster_cells(cluster)
             if cluster_cells is None:
                 continue
             cell_hash_compare = []
@@ -137,8 +133,8 @@ class MorphologyPipelineModule(DatabasePipelineModule):
                 if cell.id is None:
                     continue
                 morpho_db_hash = hash(';'.join(filter(None, morpho_results.get(cell.id, [None]))))
-                cell_morpho_rec = session.query(db.Morphology).filter(db.Morphology.cell_specimen_id==str(cell.id)).all()
-                if len(cell_morpho_rec) == 1:
+                cell_morpho_rec = session.query(db.Morphology).join(db.Cell).filter(db.Cell.meta.info.get('lims_specimen_id')==str(cell.id)).all()
+                if len(cell_morpho_rec) == 1:   
                     cell_rec_hash = cell_morpho_rec[0].morpho_db_hash
                     cell_hash_compare.append(morpho_db_hash == cell_rec_hash)
                 else:
@@ -157,16 +153,3 @@ def morpho_db():
     morpho_results = {int(r.cell_specimen_id): r for r in results}
 
     return morpho_results
-
-def get_expt_cell_cluster(expt):
-    expt_slice = expt.slice
-    try:
-        cluster = lims.expt_cluster_ids(expt_slice.lims_specimen_name, expt.acq_timestamp)
-    except ValueError: 
-        return None
-    if len(cluster)==1:
-        cluster_cells = lims.cluster_cells(cluster[0])
-    else:
-        cluster_cells = None
-
-    return cluster_cells
