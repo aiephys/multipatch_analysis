@@ -142,43 +142,58 @@ class TracePlot(pg.GraphicsLayoutWidget):
     def __init__(self):
         pg.GraphicsLayoutWidget.__init__(self)
         self.grid = PlotGrid()
-        self.grid.set_shape(2, 1)
+        self.grid.set_shape(4, 1)
+        self.grid.grid.ci.layout.setRowStretchFactor(0, 3)
+        self.grid.grid.ci.layout.setRowStretchFactor(1, 8)
+        self.grid.grid.ci.layout.setRowStretchFactor(2, 5)
+        self.grid.grid.ci.layout.setRowStretchFactor(3, 10)
         self.grid.show()
-        self.plots = (self.grid[0, 0], self.grid[1, 0])
-        self.plots[0].hideAxis('bottom')
-        self.plots[1].setLabel('bottom', text='Time from spike', units='s')
+        self.trace_plots = (self.grid[1, 0], self.grid[3, 0])
+        self.spike_plots = (self.grid[0, 0], self.grid[2, 0])
+        self.plots = self.spike_plots + self.trace_plots
+        for plot in self.plots[:-1]:
+            plot.hideAxis('bottom')
+        self.plots[-1].setLabel('bottom', text='Time from spike', units='s')
         self.fit_item_55 = None
         self.fit_item_70 = None
         self.fit_color = {True: 'g', False: 'r'}
+        self.qc_color = {'qc_pass': (255,255,255,100), 'qc_fail': (150, 0, 0)}
 
     def plot_traces(self, traces_dict):  
-        pen = {'qc_pass': (255,255,255,100), 'qc_fail': (150, 0, 0)}
         for i, holding in enumerate(traces_dict.keys()):
             for qc, traces in traces_dict[holding].items():
                 if len(traces) == 0:
                     continue
                 for trace in traces:
-                    self.plots[i].plot(trace.time_values, trace.data, pen=pen[qc])
+                    self.trace_plots[i].plot(trace.time_values, trace.data, pen=self.qc_color[qc])
                 if qc == 'qc_pass':
                     grand_trace = TraceList(traces).mean()
-                    self.plots[i].plot(grand_trace.time_values, grand_trace.data, pen={'color': 'b', 'width': 2})
-            self.plots[i].autoRange()
-            self.plots[i].setXRange(5e-3, 20e-3)
+                    self.trace_plots[i].plot(grand_trace.time_values, grand_trace.data, pen={'color': 'b', 'width': 2})
+            self.trace_plots[i].autoRange()
+            self.trace_plots[i].setXRange(5e-3, 20e-3)
             # y_range = [grand_trace.data.min(), grand_trace.data.max()]
             # self.plots[i].setYRange(y_range[0], y_range[1], padding=1)
+
+    def plot_spikes(self, spikes_dict):
+        for i, holding in enumerate(spikes_dict.keys()):
+            for qc, spikes in spikes_dict[holding].items():
+                if len(spikes) == 0:
+                    continue
+                for spike in spikes:
+                    self.spike_plots[i].plot(spike.time_values, spike.data, pen=self.qc_color[qc])
 
     def plot_fit(self, trace, fit, holding, fit_pass):
         if holding == '-55':
             if self.fit_item_55 is not None:
-                self.plots[0].removeItem(self.fit_item_55)
+                self.trace_plots[0].removeItem(self.fit_item_55)
             self.fit_item_55 = pg.PlotDataItem(trace.time_values, fit.best_fit, pen={'color': self.fit_color[False], 'width': 3})
-            self.plots[0].addItem(self.fit_item_55)
+            self.trace_plots[0].addItem(self.fit_item_55)
             
         elif holding == '-70':
             if self.fit_item_70 is not None:
-                self.plots[1].removeItem(self.fit_item_70)
+                self.trace_plots[1].removeItem(self.fit_item_70)
             self.fit_item_70 = pg.PlotDataItem(trace.time_values, fit.best_fit, pen={'color': self.fit_color[False], 'width': 3})
-            self.plots[1].addItem(self.fit_item_70)
+            self.trace_plots[1].addItem(self.fit_item_70)
 
     def color_fit(self, name, value):
         if '-55' in name:
@@ -189,39 +204,41 @@ class TracePlot(pg.GraphicsLayoutWidget):
                 self.fit_item_70.setPen({'color': self.fit_color[value], 'width': 3})
 
     def clear_plots(self):
-        # for plot in self.plots:
-        #     [plot.removeItem(item) for item in plot.items if type(item) != pg.InfiniteLine]
-        self.plots[0].clear()
+        for plot in self.plots:
+            plot.clear()
         
-        self.plots[1].clear()
-        self.plots[1].autoRange()
-        self.plots[1].setXRange(5e-3, 20e-3)
+        self.plots[-1].autoRange()
+        self.plots[-1].setXRange(5e-3, 20e-3)
         self.fit_item_70 = None
         self.fit_item_55 = None
-
 
 
 class VCPlot(TracePlot):
     def __init__(self, superline):
         TracePlot.__init__(self)
         self.plots[0].setTitle('Voltage Clamp')
-        self.plots[0].addItem(superline.new_line(default_latency))
-        self.plots[1].addItem(superline.new_line(default_latency))
-        self.plots[1].setXRange(5e-3, 20e-3)
-        self.plots[0].setXLink(self.plots[1])
-        self.plots[0].setLabel('left', units='A')
-        self.plots[1].setLabel('left', units='A')
+        for plot in self.plots[:-1]:
+            plot.addItem(superline.new_line(default_latency))
+            plot.setXLink(self.plots[-1])
+        self.plots[-1].setXRange(5e-3, 20e-3)
+        self.plots[-1].addItem(superline.new_line(default_latency))
+
+        for plot in self.plots:
+            plot.setLabel('left', units='A')
 
 class ICPlot(TracePlot):
     def __init__(self, superline):
         TracePlot.__init__(self)
         self.plots[0].setTitle('Current Clamp')
-        self.plots[0].addItem(superline.new_line(default_latency))
-        self.plots[1].addItem(superline.new_line(default_latency))
-        self.plots[1].setXRange(5e-3, 20e-3)
-        self.plots[0].setXLink(self.plots[1])
-        self.plots[0].setLabel('left', units='V')
-        self.plots[1].setLabel('left', units='V')
+        for plot in self.plots[:-1]:
+            plot.addItem(superline.new_line(default_latency))
+            plot.setXLink(self.plots[-1])
+        self.plots[-1].setXRange(5e-3, 20e-3)
+        self.plots[-1].addItem(superline.new_line(default_latency))
+
+        for plot in self.plots:
+            plot.setLabel('left', units='V')
+        
 
 class SuperLine(pg.QtCore.QObject):
     sigPositionChanged = pg.QtCore.Signal(object)
@@ -336,43 +353,38 @@ class PairAnalysis(object):
     def analyze_responses(self):
         ex_limits = [-80e-3, -63e-3]
         in_limits = [-62e-3, -45e-3]
+        qc = {False: 'qc_fail', True: 'qc_pass'}
         self.traces = OrderedDict([('vc', {'-55': {'qc_pass': [], 'qc_fail': []}, '-70': {'qc_pass': [], 'qc_fail': []}}), 
                                 ('ic', {'-55': {'qc_pass': [], 'qc_fail': []}, '-70': {'qc_pass': [], 'qc_fail': []}})])
+        self.spikes = OrderedDict([('vc', {'-55': {'qc_pass': [], 'qc_fail': []}, '-70': {'qc_pass': [], 'qc_fail': []}}), 
+                                ('ic', {'-55': {'qc_pass': [], 'qc_fail': []}, '-70': {'qc_pass': [], 'qc_fail': []}})])
         for rec in self.pulse_responses:
-            qc_pass = rec.ex_qc_pass
             if rec.ind_freq not in [10, 20, 50]:
                 continue
             data = rec.data
+            spike = rec.spike
+            n_spikes = rec.n_spikes
             start_time = rec.rec_start
             spike_time = rec.spike_time if rec.spike_time is not None else 0. 
             clamp = rec.clamp_mode
             holding = rec.baseline_potential
-            data_trace = Trace(data=data, t0=start_time-spike_time+10e-3, sample_rate=db.default_sample_rate)
-            if clamp == 'vc':
-                if in_limits[0] < holding < in_limits[1]:
-                    if qc_pass is False:
-                        self.traces['vc']['-55']['qc_fail'].append(data_trace)
-                    else:
-                        self.traces['vc']['-55']['qc_pass'].append(data_trace)
-                elif ex_limits[0] < holding < ex_limits[1]:
-                    if qc_pass is False:
-                        self.traces['vc']['-70']['qc_fail'].append(data_trace)
-                    else:
-                        self.traces['vc']['-70']['qc_pass'].append(data_trace)
-            if clamp == 'ic':
-                if in_limits[0] < holding < in_limits[1]:
-                    if qc_pass is False:
-                        self.traces['ic']['-55']['qc_fail'].append(data_trace)
-                    else:
-                        self.traces['ic']['-55']['qc_pass'].append(data_trace)
-                elif ex_limits[0] < holding < ex_limits[1]:
-                    if qc_pass is False:
-                        self.traces['vc']['-70']['qc_fail'].append(data_trace)
-                    else:
-                        self.traces['vc']['-70']['qc_pass'].append(data_trace)        
+            t0 = start_time-spike_time+10e-3
+            data_trace = Trace(data=data, t0=t0, sample_rate=db.default_sample_rate)
+            spike_trace = Trace(data=spike, t0=t0, sample_rate=db.default_sample_rate)
+            trace_qc_pass = rec.ex_qc_pass
+            spike_qc_pass = n_spikes == 1
             
+            if in_limits[0] < holding < in_limits[1]:
+                self.traces[clamp]['-55'][qc[trace_qc_pass]].append(data_trace)
+                self.spikes[clamp]['-55'][qc[spike_qc_pass]].append(spike_trace)
+            elif ex_limits[0] < holding < ex_limits[1]:
+                self.traces[clamp]['-70'][qc[trace_qc_pass]].append(data_trace)
+                self.spikes[clamp]['-70'][qc[spike_qc_pass]].append(spike_trace)
+
         self.vc_plot.plot_traces(self.traces['vc'])
+        self.vc_plot.plot_spikes(self.spikes['vc'])
         self.ic_plot.plot_traces(self.traces['ic'])
+        self.ic_plot.plot_spikes(self.spikes['ic'])
 
         self.fit_responses()
 
@@ -382,6 +394,8 @@ class PairAnalysis(object):
         db.PulseResponse.data,
         db.PulseResponse.ex_qc_pass,
         db.PulseResponse.start_time.label('rec_start'),
+        db.StimPulse.data.label('spike'),
+        db.StimPulse.n_spikes,
         db.StimSpike.max_dvdt_time.label('spike_time'),
         db.PatchClampRecording.clamp_mode,
         db.PatchClampRecording.baseline_potential,
