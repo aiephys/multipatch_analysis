@@ -75,7 +75,7 @@ class MorphologyPipelineModule(DatabasePipelineModule):
                 for morpho_db_name, result in col_names.items():
                     col_name = result['name']
                     col_type = result['type']
-                    data = cell_morpho.__getattribute__(morpho_db_name)
+                    data = getattr(cell_morpho, morpho_db_name)
                     if data is not None:
                         if isinstance(col_type, list):
                             d = [t for t in col_type if t == data]
