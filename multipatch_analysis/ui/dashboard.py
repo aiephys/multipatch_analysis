@@ -684,33 +684,38 @@ class ExperimentMetadata(Experiment):
                         self.lims_message = self.lims_submissions
  
                     rec['LIMS'] = in_lims
+                    image_63x = self.biocytin_63x_files
 
                     if in_lims is True and slice_fixed is True and image_20x is not None:
+                        cell_info = lims.cluster_cells(cell_cluster)
+                        x_coord = all([ci['x_coord'] is not None for ci in cell_info])
+                        x_coord_values = all([ci['x_coord'] != 0 for ci in cell_info])
+                        y_coord = all([ci['y_coord'] is not None  for ci in cell_info])
+                        y_coord_values = all([ci['y_coord'] != 0 for ci in cell_info])
+                        polygon = all([ci['polygon_id'] is not None  for ci in cell_info])
+                        mapped = len(cell_info) > 0 and x_coord is True and y_coord is True
+                        if mapped is True and x_coord_values is False and y_coord_values is False:
+                            mapped = ('Incomplete', (255, 255, 102))
+                            self.map_message = 'Cell positions contain 0-values, please re-map'
+                        if mapped is True and polygon is False:
+                            mapped = ('Incomplete', [c * 0.5 + 128 for c in pass_color])
+                            self.map_message = 'Cell positions submitted to LIMS but polygons have not been drawn yet'
+                        rec['cell map'] = mapped
                         image_tags = lims.specimen_tags(cell_cluster)
-                        if image_tags is not None:   
-                            if '63x no go' in image_tags :
-                                rec['63x'] = '-'
+                        if image_tags is not None:
+                            if 'cell map no go' in image_tags:
                                 rec['cell map'] = '-'
-                            elif 'cell map no go' in image_tags:
-                                rec['cell map'] = '-'
-                                self.map_message = 'Site marked unmappable by user'
-                            else:
-                                image_63x = self.biocytin_63x_files
+                                self.map_message = 'Site marked unmappable by user'  
+                            if image_63x is None:
+                                if '63x no go' in image_tags:
+                                    rec['63x'] = '-'
+                                    rec['cell map'] = '-'
+                                if '63x go' in image_tags:
+                                    rec['63x'] = ('63x GO', [c * 0.5 + 128 for c in pass_color])
+                                if '63x imaging started' in image_tags:
+                                    rec['63x'] = ('Imaging started...', [c * 0.5 + 128 for c in pass_color])
+                            else:        
                                 rec['63x'] = image_63x is not None
-                                cell_info = lims.cluster_cells(cell_cluster)
-                                x_coord = all([ci['x_coord'] is not None for ci in cell_info])
-                                x_coord_values = all([ci['x_coord'] != 0 for ci in cell_info])
-                                y_coord = all([ci['y_coord'] is not None  for ci in cell_info])
-                                y_coord_values = all([ci['y_coord'] != 0 for ci in cell_info])
-                                polygon = all([ci['polygon_id'] is not None  for ci in cell_info])
-                                mapped = len(cell_info) > 0 and x_coord is True and y_coord is True
-                                if mapped is True and x_coord_values is False and y_coord_values is False:
-                                    mapped = ('Incomplete', (255, 255, 102))
-                                    self.map_message = 'Cell positions contain 0-values, please re-map'
-                                if mapped is True and polygon is False:
-                                    mapped = ('Incomplete', [c * 0.5 + 128 for c in pass_color])
-                                    self.map_message = 'Cell positions submitted to LIMS but polygons have not been drawn yet'
-                                rec['cell map'] = mapped
                                 
             else:
                 if self.mosaic_file is not None:
