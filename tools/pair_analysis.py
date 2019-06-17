@@ -17,6 +17,7 @@ default_latency = 11e-3
 comment_hashtag = [
     '',
     '#doublespike',
+    '#doublepsp',
     '#badspikes',
     '#fixable',
     '#secondopinion',
@@ -110,8 +111,8 @@ class ControlPanel(object):
 
     def add_text_to_comments(self):
         text = self.comments['Hashtag']
-        comments = self.comments[''] + '/n'
-        update_comments = comments + text
+        comments = self.comments['']
+        update_comments = comments + text + '\n'
         self.comments.child('').setValue(update_comments)
         
     def update_params(self, **kargs):
