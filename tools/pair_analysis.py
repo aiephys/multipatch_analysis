@@ -14,6 +14,13 @@ from multipatch_analysis.connection_detection import fit_psp
 from random import shuffle
 
 default_latency = 11e-3
+comment_hashtag = [
+    '',
+    '#doublespike',
+    '#badspikes',
+    '#fixable',
+    '#secondopinion',
+    '#lostcause']
 
 class SignalHandler(pg.QtCore.QObject):
         """Because we can't subclass from both QObject and QGraphicsRectItem at the same time
@@ -79,7 +86,6 @@ class ControlPanel(object):
             ])
         self.synapse = Parameter.create(name='Synapse call', type='list', values={'Excitatory': 'ex', 'Inhibitory': 'in', 'None': None})
         self.gap = Parameter.create(name='Gap junction call', type='bool')
-        self.do_fit = Parameter.create(name='Fit PSP', type='action')
         fit_cat = ['-55 VC', '-70 VC', '-55 IC', '-70 IC']
         fit_param = [{'name': c, 'type': 'group', 'children': [
             {'name': 'Parameter:', 'type': 'str', 'readonly': True, 'value': 'Amplitude, Latency, Rise time, Decay tau, NRMSE'},
@@ -88,7 +94,9 @@ class ControlPanel(object):
             ]} for c in fit_cat]
         self.fit_params = Parameter.create(name='Fit parameters', type='group', children=fit_param)
         self.save_params = Parameter.create(name='Save Analysis', type='action')
-        self.comments = Parameter.create(name='Comments', type='text')
+        self.comments = Parameter.create(name='Comments', type='group', children=[
+            {'name': 'Hashtag', 'type': 'list', 'values': comment_hashtag},
+            {'name': '', 'type': 'text'}])
         self.params = Parameter.create(name='params', type='group', children=[
             self.latency,
             self.synapse,
@@ -97,6 +105,14 @@ class ControlPanel(object):
             self.save_params,
             self.comments
             ])
+
+        self.comments.child('Hashtag').sigValueChanged.connect(self.add_text_to_comments)
+
+    def add_text_to_comments(self):
+        text = self.comments['Hashtag']
+        comments = self.comments[''] + '/n'
+        update_comments = comments + text
+        self.comments.child('').setValue(update_comments)
         
     def update_params(self, **kargs):
         for k, v in kargs.items():
@@ -184,15 +200,17 @@ class TracePlot(pg.GraphicsLayoutWidget):
 
     def plot_fit(self, trace, fit, holding, fit_pass):
         if holding == '-55':
+            self.trace_plots[0].addLegend()
             if self.fit_item_55 is not None:
                 self.trace_plots[0].removeItem(self.fit_item_55)
-            self.fit_item_55 = pg.PlotDataItem(trace.time_values, fit.best_fit, pen={'color': self.fit_color[False], 'width': 3})
+            self.fit_item_55 = pg.PlotDataItem(trace.time_values, fit.best_fit, name='-55 holding', pen={'color': self.fit_color[False], 'width': 3})
             self.trace_plots[0].addItem(self.fit_item_55)
-            
+        
         elif holding == '-70':
+            self.trace_plots[1].addLegend()  
             if self.fit_item_70 is not None:
                 self.trace_plots[1].removeItem(self.fit_item_70)
-            self.fit_item_70 = pg.PlotDataItem(trace.time_values, fit.best_fit, pen={'color': self.fit_color[False], 'width': 3})
+            self.fit_item_70 = pg.PlotDataItem(trace.time_values, fit.best_fit, name='-70 holding', pen={'color': self.fit_color[False], 'width': 3})
             self.trace_plots[1].addItem(self.fit_item_70)
 
     def color_fit(self, name, value):
@@ -303,7 +321,6 @@ class PairAnalysis(object):
         '-70': {'ex': '+', 'in': 'any'},
         },
         }
-
             # connect save button to dump result into new DB
             # connect load next pair button to clear results and move to the next pair
 
@@ -328,7 +345,8 @@ class PairAnalysis(object):
             line = self.ic_superline.lines[p]
             line.setValue(default_latency)
             plot.addItem(line)
-        self.ctrl_panel.params.child('Comments').setValue('')
+        self.ctrl_panel.params.child('Comments', 'Hashtag').setValue('')
+        self.ctrl_panel.params.child('Comments', '').setValue('')
         
     def load_pair(self, pair):
         with pg.BusyCursor():
@@ -369,7 +387,8 @@ class PairAnalysis(object):
             clamp = rec.clamp_mode
             holding = rec.baseline_potential
             t0 = start_time-spike_time+10e-3
-            data_trace = Trace(data=data, t0=t0, sample_rate=db.default_sample_rate)
+            baseline = float_mode(data[0:int(db.default_sample_rate*6e-3)])
+            data_trace = Trace(data=data-baseline, t0=t0, sample_rate=db.default_sample_rate)
             spike_trace = Trace(data=spike, t0=t0, sample_rate=db.default_sample_rate)
             trace_qc_pass = rec.ex_qc_pass
             spike_qc_pass = n_spikes == 1
@@ -439,8 +458,6 @@ class PairAnalysis(object):
                     initial_rise = 5e-3
                     rise_bounds = [1e-3, 25e-3]
                     weight[int(10e-3/db.default_sample_rate):int(12e-3/db.default_sample_rate)] = 0.   #area around stim artifact
-                y_offset = float_mode(base_rgn.data)
-                initial_fit_parameters[mode][holding]['yoffset'] = y_offset
                 x_win = [x_offset + x_offset_win[0], x_offset + x_offset_win[1]]
                 rise_times = list(initial_rise*2.**np.arange(-2, 3, 0.5))
                 if self.use_x_range is True:
@@ -452,11 +469,12 @@ class PairAnalysis(object):
                         mode=mode, 
                         sign=sign, 
                         xoffset=x_range, 
-                        yoffset=(y_offset, None, None),
                         rise_time=(rise_times, rise_bounds[0], rise_bounds[1]),
                         stacked=stacked,
                         )
                     for param, val in fit.best_values.items():
+                        if param == 'xoffset':
+                            val  = val - 10e-3
                         output_fit_parameters[mode][holding][param] = val
                     output_fit_parameters[mode][holding]['yoffset'] = fit.best_values['yoffset']
                     output_fit_parameters[mode][holding]['nrmse'] = fit.nrmse()
