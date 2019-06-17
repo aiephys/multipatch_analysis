@@ -19,6 +19,7 @@ class CellClass(object):
         pv_class = CellClass(cre_type='pvalb')
         inhibitory_class = CellClass(cre_type=('pvalb', 'sst', 'vip'))
         l23_pyr_class = CellClass(pyramidal=True, target_layer='2/3')
+        l5_spiny_class = CellClass(dendrite_type='spiny', cortical_layer='5')
     """
     def __init__(self, display_names=None, **criteria):
         self.criteria = criteria
@@ -45,8 +46,15 @@ class CellClass(object):
         name = []
 
         target_layer = self.criteria.get('target_layer')
+        cortical_layer = self.criteria.get('cortical_layer')
+
         if target_layer is not None:
             name.append('L' + target_layer)
+        elif cortical_layer is not None:
+            name.append('L' + cortical_layer)
+
+        if 'dendrite_type' in self.criteria:
+            name.append('%s' % self.criteria['dendrite_type'])
 
         if 'pyramidal' in self.criteria:
             name.append('pyr' if self.criteria['pyramidal'] else 'nonpyr')
@@ -64,7 +72,8 @@ class CellClass(object):
         """
         cre = self.criteria.get('cre_type')
         pyr = self.criteria.get('pyramidal')
-        return cre == 'unknown' or cre in constants.EXCITATORY_CRE_TYPES or pyr is True
+        dendrite = self.criteria.get('dendrite_type')
+        return cre == 'unknown' or cre in constants.EXCITATORY_CRE_TYPES or pyr is True or dendrite == 'spiny'
 
     def __contains__(self, cell):
         morpho = cell.morphology
@@ -174,7 +183,7 @@ def classify_cells(cell_classes, cells=None, pairs=None, session=None):
         assert session is None, "session and pairs arguments are mutually exclusive"
         cells = set([p.pre_cell for p in pairs] + [p.post_cell for p in pairs])
     if cells is None:
-        cells = session.query(db.Cell, db.Cell.cre_type, db.Cell.target_layer, db.Morphology.pyramidal).join(db.Morphology)
+        cells = session.query(db.Cell, db.Cell.cre_type, db.Cell.target_layer, db.Morphology.pyramidal, db.Morphology.cortical_layer, db.Morphology.dendrite_type).join(db.Morphology)
     cell_groups = OrderedDict([(cell_class, set()) for cell_class in cell_classes])
     for cell in cells:
         for cell_class in cell_classes:

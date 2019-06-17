@@ -34,6 +34,14 @@ class ExperimentPipelineModule(DatabasePipelineModule):
         slice_entry = db.slice_from_timestamp(ts, session=session)
         
         expt_info = expt.expt_info
+        expt_lims_id = lims.expt_cluster_ids(slice_entry.lims_specimen_name, expt.timestamp)
+
+        if len(expt_lims_id) == 1:
+            expt_lims_id = expt_lims_id[0]
+        elif len(expt_lims_id) == 0:
+            expt_lims_id = None
+        else:
+            raise Exception ('Too many LIMS specimens %d' % len(expt_lims_id))
         fields = {
             'original_path': expt.original_path,
             'storage_path': expt.server_path,
@@ -45,6 +53,7 @@ class ExperimentPipelineModule(DatabasePipelineModule):
             'internal': expt_info.get('internal'),
             'acsf': expt_info.get('solution'),
             'target_temperature': expt.target_temperature,
+            'lims_specimen_id': expt_lims_id,
         }
 
         # Create entry in experiment table
@@ -54,6 +63,9 @@ class ExperimentPipelineModule(DatabasePipelineModule):
 
         # create pipette and cell entries
         cell_entries = {}
+        
+        if expt_lims_id is not None:
+            lims_cells = lims.cluster_cells(expt_lims_id)
         for e_id, elec in expt.electrodes.items():
             elec_entry = db.Electrode(experiment=expt_entry, ext_id=elec.electrode_id, device_id=elec.device_id)
             for k in ['patch_status', 'start_time', 'stop_time',  
@@ -65,6 +77,14 @@ class ExperimentPipelineModule(DatabasePipelineModule):
 
             if elec.cell is not None:
                 cell = elec.cell
+                cell_meta = {}
+                if expt_lims_id is not None:
+                    #there are some weird cases where the query in lims.cluster_cells returns duplicate results
+                    cell_lims_id = list(set([lims_cell.id for lims_cell in lims_cells if int(lims_cell.external_specimen_name) == cell.cell_id]))
+                    if len(cell_lims_id) == 1:
+                        cell_meta['lims_specimen_id'] = cell_lims_id[0]
+                    else:
+                        cell_meta['lims_specimen_id'] = None
                 cell_entry = db.Cell(
                     experiment=expt_entry,
                     electrode=elec_entry,
@@ -74,6 +94,7 @@ class ExperimentPipelineModule(DatabasePipelineModule):
                     is_excitatory=cell.is_excitatory,
                     depth=cell.depth,
                     position=cell.position,
+                    meta=cell_meta
                 )
                 session.add(cell_entry)
                 cell_entries[cell] = cell_entry
