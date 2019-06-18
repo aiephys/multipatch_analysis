@@ -1,4 +1,4 @@
-from .database import Session, aliased, or_, and_, default_session, get_default_session, reset_db, vacuum, dispose_engines, default_sample_rate, db_name, bake_sqlite, clone_database
+from .database import Session, aliased, or_, and_, reset_db, vacuum, dispose_engines, default_sample_rate, db_name, bake_sqlite, clone_database
 
 # Import table definitions from DB modules
 from .pipeline import *
@@ -12,6 +12,37 @@ from .connection_strength import *
 from .avg_first_pulse_fit import *
 from .single_first_pulse_fit import *
 from .gap_junction import *
+
+
+
+_default_session = None
+def default_session(fn):
+    """Decorator used to auto-fill `session` keyword arguments
+    with a global default Session instance.
+    
+    If the global session is used, then it will be rolled back after 
+    the decorated function returns (to prevent idle-in-transaction timeouts).
+    """
+    
+    def wrap_with_session(*args, **kwds):
+        used_default_session = False
+        if kwds.get('session', None) is None:
+            kwds['session'] = get_default_session()
+            used_default_session = True
+        try:
+            ret = fn(*args, **kwds)
+            return ret
+        finally:
+            if used_default_session:
+                get_default_session().rollback()
+    return wrap_with_session    
+
+
+def get_default_session():
+    global _default_session
+    if _default_session is None:
+        _default_session = Session(readonly=True)
+    return _default_session
 
 
 @default_session

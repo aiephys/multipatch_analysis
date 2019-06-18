@@ -28,38 +28,13 @@ from sqlalchemy.sql.expression import func
 
 from .. import config
 
+
 # database version should be incremented whenever the schema has changed
 db_version = 12
 db_name = '{database}_{version}'.format(database=config.synphys_db, version=db_version)
 default_app_name = ('mp_a:' + ' '.join(sys.argv))[:60]
 
-def db_address(host, db_name=None, app_name=None):
-    if app_name is None:
-        app_name = default_app_name
-    if host.startswith('postgres'):
-        return "{host}/{db_name}?application_name={app_name}".format(host=host, db_name=db_name, app_name=app_name)
-    else:
-        return host
-
-
-db_address_ro = db_address(config.synphys_db_host, db_name)
-if config.synphys_db_host_rw is None:
-    db_address_rw = None
-else:
-    db_address_rw = db_address(config.synphys_db_host_rw, db_name)
-
-# make a passwordless version of the address for printing
-db_address_rw_clean = db_address_rw
-if db_address_rw is not None:
-    m = re.match(r"(\w+\:/+)(([^\:]+)(\:\S+)?(\@))?([^\?]+)", db_address_rw)
-    if m is not None:
-        g = m.groups()
-        db_address_rw_clean = g[0] + (g[2] or '') + (g[4] or '') + g[5]
-
-
 default_sample_rate = 20000
-
-
 _sample_rate_str = '%dkHz' % (default_sample_rate // 1000)
 
 
@@ -67,37 +42,35 @@ class TableGroup(object):
     """Class used to manage a group of tables that act as a single unit--tables in a group
     are always created and deleted together.
     """    
-    def __init__(self, tables):
+    def __init__(self, tables, database):
+        self.db = database
         self.tables = OrderedDict([(t.__table__.name,t) for t in tables])
 
     def __getitem__(self, item):
         return self.tables[item]
 
     def drop_tables(self):
-        global engine_rw
         drops = []
         for k in self.tables:
-            if k in engine_rw.table_names():
+            if k in self.db.engine_rw.table_names():
                 drops.append(k)
         if len(drops) == 0:
             return
             
-        if engine_rw.name == 'sqlite':
-            engine_rw.execute('drop table %s' % (','.join(drops)))
+        if self.db.engine_rw.name == 'sqlite':
+            self.db.engine_rw.execute('drop table %s' % (','.join(drops)))
         else:
-            engine_rw.execute('drop table %s cascade' % (','.join(drops)))
+            self.db.engine_rw.execute('drop table %s cascade' % (','.join(drops)))
 
     def create_tables(self):
-        global engine_rw, engine_ro
-        
         # if we do not have write access, just verify that the tables exist
-        if engine_rw is None:
+        if self.db.engine_rw is None:
             for k in self.tables:
-                if k not in engine_ro.table_names():
-                    raise Exception("Table %s not found in database %s" % (k, db_address_ro))
+                if k not in self.db.engine_ro.table_names():
+                    raise Exception("Table %s not found in database %s" % (k, self.db))
             return
 
-        create_tables(tables=[self[k].__table__ for k in self.tables])
+        self.db.create_tables(tables=[self[k].__table__ for k in self.tables])
         
     def enable_triggers(self, enable):
         """Enable or disable triggers for all tables in this group.
@@ -244,323 +217,335 @@ def make_table(name, columns, base=None, **table_args):
     return new_table
 
 
-#-------------- initial DB access ----------------
-engine_ro = None
-engine_rw = None
-engine_pid = None  # pid of process that created this engine. 
-def init_engines():
-    """Initialize ro and rw (if possible) database engines.
-    
-    If any engines are currently defined, they will be disposed first.
-    """
-    global engine_ro, engine_rw, engine_pid
-    dispose_engines()
-    
-    if db_address_ro.startswith('postgres'):
-        opts_ro = {'pool_size': 10, 'max_overflow': 40, 'isolation_level': 'AUTOCOMMIT'}
-    else:
-        opts_ro = {}        
-    engine_ro = create_engine(db_address_ro, **opts_ro)
 
-    if db_address_rw is not None:
-        if db_address_rw.startswith('postgres'):
-            opts_rw = {'pool_size': 10, 'max_overflow': 40}
+class Database(object):
+    """Methods for doing relational database maintenance via sqlalchemy.
+    
+    Supported backends: postgres, sqlite.
+    
+    Features:
+    - Automatically build/dispose ro and rw engines (especially after fork)
+    - Generate ro/rw sessions on demand
+    - Methods for creating / dropping databases
+    """
+    def __init__(self, ro_host, rw_host, db_name, ormbase):
+        self.ormbase = ormbase
+        self.ro_host = ro_host
+        self.rw_host = rw_host
+        self.db_name = db_name
+        self._ro_engine = None
+        self._rw_engine = None
+        self._maint_engine = None
+        self._engine_pid = None  # pid of process that created these engines.
+        self._ro_sessionmaker = None
+        self._rw_sessionmaker = None
+
+        self.ro_address = self.db_address(ro_host, db_name)
+        self.rw_address = self.db_address(rw_host, db_name)
+
+        # make a passwordless version of the address for printing
+        self.rw_address_clean = self.rw_address
+        if self.rw_address is not None:
+            m = re.match(r"(\w+\:/+)(([^\:]+)(\:\S+)?(\@))?([^\?]+)", self.rw_address)
+            if m is not None:
+                g = m.groups()
+                self.rw_address_clean = g[0] + (g[2] or '') + (g[4] or '') + g[5]
+
+    def __repr__(self):
+        return "<Database %s (%s)>" % (self.ro_address, 'ro' if self.rw_address is None else 'rw')
+
+    @property
+    def backend(self):
+        """Return the backend used by this database (sqlite, postgres, etc.)
+        """
+        return self.ro_host.partition(':')[0]
+
+    @staticmethod
+    def db_address(host, db_name=None, app_name=None):
+        """Return a complete address for DB access given a host (like postgres://user:pw@host) and database name.
+
+        Appends an app name to postgres addresses.
+        """
+        if host.startswith('postgres'):
+            app_name = app_name or default_app_name
+            return "{host}/{db_name}?application_name={app_name}".format(host=host, db_name=db_name, app_name=app_name)
         else:
-            opts_rw = {}        
-        engine_rw = create_engine(db_address_rw, **opts_rw)
-
-    engine_pid = os.getpid()
-
-
-def dispose_engines():
-    global engine_ro, engine_rw, engine_pid, _sessionmaker_ro, _sessionmaker_rw
-    if engine_ro is not None:
-        engine_ro.dispose()
-        engine_ro = None
-        _sessionmaker_ro = None
-    if engine_rw is not None:
-        engine_rw.dispose()
-        engine_rw = None
-        _sessionmaker_rw = None
+            return "{host}/{db_name}".format(host=host, db_name=db_name)
         
-    # collect now or else we might try to collect engine-related garbage in forked processes,
-    # which can lead to "OperationalError: server closed the connection unexpectedly"
-    # Note: if this turns out to be flaky as well, we can just disable connection pooling.
-    gc.collect()
-    
-    engine_pid = None    
-
-
-def get_engines():
-    """Return ro and rw (if possible) database engines.
-    """
-    global engine_ro, engine_rw, engine_pid
-    if os.getpid() != engine_pid:
-        # In forked processes, we need to re-initialize the engine before
-        # creating a new session, otherwise child processes will
-        # inherit and muck with the same connections. See:
-        # https://docs.sqlalchemy.org/en/latest/faq/connections.html#how-do-i-use-engines-connections-sessions-with-python-multiprocessing-or-os-fork
-        if engine_pid is not None:
-            print("Making new session for subprocess %d != %d" % (os.getpid(), engine_pid))
-        dispose_engines()
-    
-    if engine_ro is None:
-        init_engines()
-    
-    return engine_ro, engine_rw
-    
-
-init_engines()
-
-
-_sessionmaker_ro = None
-_sessionmaker_rw = None
-# external users should create sessions from here.
-def Session(readonly=True):
-    """Create and return a new database Session instance.
-    
-    If readonly is True, then the session is created using read-only credentials and has autocommit enabled.
-    This prevents idle-in-transaction timeouts that occur when GUI analysis tools would otherwise leave transactions
-    open after each request.
-    """
-    global _sessionmaker_ro, _sessionmaker_rw, engine_ro, engine_rw, engine_pid
-    engine_ro, engine_rw = get_engines()
+    def _dispose_engines(self):
+        """Dispose and existing DB engines. This is necessary when forking to avoid accessing the same DB
+        connection simultaneously from two processes.
+        """
+        if self._ro_engine is not None:
+            self._ro_engine.dispose()
+        if self._rw_engine is not None:
+            self._rw_engine.dispose()
+        if self._maint_engine is not None:
+            self._maint_engine.dispose()
+        self._ro_engine = None
+        self._ro_sessionmaker = None
+        self._rw_engine = None
+        self._rw_sessionmaker = None
+        self._maint_engine = None
+        self._engine_pid = None    
             
-    if readonly:
-        if _sessionmaker_ro is None:
-            _sessionmaker_ro = sessionmaker(bind=engine_ro)
-        return _sessionmaker_ro()
-    else:
-        if engine_rw is None:
-            raise RuntimeError("Cannot start read-write DB session; no write access engine is defined (see config.synphys_db_host_rw)")
-        if _sessionmaker_rw is None:
-            _sessionmaker_rw = sessionmaker(bind=engine_rw)
-        return _sessionmaker_rw()
+        # collect now or else we might try to collect engine-related garbage in forked processes,
+        # which can lead to "OperationalError: server closed the connection unexpectedly"
+        # Note: if this turns out to be flaky as well, we can just disable connection pooling.
+        gc.collect()
 
+    def _check_engines(self):
+        """Dispose engines if they were built for a different PID
+        """
+        if os.getpid() != self._engine_pid:
+            # In forked processes, we need to re-initialize the engine before
+            # creating a new session, otherwise child processes will
+            # inherit and muck with the same connections. See:
+            # https://docs.sqlalchemy.org/en/latest/faq/connections.html#how-do-i-use-engines-connections-sessions-with-python-multiprocessing-or-os-fork
+            if self._engine_pid is not None:
+                print("Making new session for subprocess %d != %d" % (os.getpid(), self._engine_pid))
+            self._dispose_engines()
 
-def reset_db():
-    """Drop the existing synphys database and initialize a new one.
-    """
-    global engine_rw, db_name
+    @property
+    def ro_engine(self):
+        """The read-only database engine.
+        """
+        self._check_engines()
+        if self._ro_engine is None:
+            if self.backend == 'postgres':
+                opts = {'pool_size': 10, 'max_overflow': 40, 'isolation_level': 'AUTOCOMMIT'}
+            else:
+                opts = {}        
+            self._ro_engine = create_engine(self.ro_address, **opts)
+            self._engine_pid = os.getpid()
+        return self._ro_engine
     
-    dispose_engines()
+    @property
+    def rw_engine(self):
+        """The read-write database engine.
+        """
+        self._check_engines()
+        if self._rw_engine is None:
+            if self.backend == 'postgres':
+                opts = {'pool_size': 10, 'max_overflow': 40}
+            else:
+                opts = {}        
+            self._rw_engine = create_engine(self.rw_address, **opts)
+            self._engine_pid = os.getpid()
+        return self._rw_engine
     
-    drop_database(db_name)
-    create_database(db_name)
-
-    # reconnect to DB
-    init_engines()
-
-    create_tables()
-    grant_readonly_permission(db_name)
-
-
-def list_databases(host=None):
-    if host is None:
-        host = config.synphys_db_host
-    pg_engine = create_engine(host + '/postgres')
-    with pg_engine.begin() as conn:
-        conn.connection.set_isolation_level(0)
-        return [rec[0] for rec in conn.execute('SELECT datname FROM pg_catalog.pg_database;')]
-
-
-def drop_database(db_name, host=None):
-    if host is None:
-        host = config.synphys_db_host_rw
-    
-    if host.startswith('sqlite:///'):
-        dbfile = host[10:]
-        if os.path.isfile(dbfile):
-            os.remove(dbfile)
-    elif host.startswith('postgres'):
-        pg_engine = create_engine(host + '/postgres')
-        with pg_engine.begin() as conn:
-            conn.connection.set_isolation_level(0)
-            try:
-                conn.execute('drop database %s' % db_name)
-            except sqlalchemy.exc.ProgrammingError as err:
-                if 'does not exist' not in err.message:
-                    raise
-    else:
-        raise TypeError("Unsupported database backend %s" % host.split(':')[0])
-
-
-def create_database(db_name, host=None):
-    if host is None:
-        host = config.synphys_db_host_rw
-    if host.startswith('sqlite'):
-        return
-    elif host.startswith('postgres'):
-        ro_user = config.synphys_db_readonly_user
-
-        # connect to postgres db just so we can create the new DB
-        pg_engine = create_engine(db_address(host, 'postgres'))
-        with pg_engine.begin() as conn:
-            conn.connection.set_isolation_level(0)
-            conn.execute('create database %s' % db_name)
-            # conn.execute('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO %s;' % ro_user)
-
-    else:
-        raise TypeError("Unsupported database backend %s" % host.split(':')[0])
-
-
-def grant_readonly_permission(db_name, host=None):
-    if host is None:
-        host = config.synphys_db_host_rw
-    if host.startswith('sqlite'):
-        return
-    elif host.startswith('postgres'):
-        ro_user = config.synphys_db_readonly_user
-
-        # grant readonly permissions
-        pg_engine = create_engine(db_address(host, db_name))
-        with pg_engine.begin() as conn:
-            conn.connection.set_isolation_level(0)
-            for cmd in [
-                ('GRANT CONNECT ON DATABASE %s TO %s' % (db_name, ro_user)),
-                ('GRANT USAGE ON SCHEMA public TO %s' % ro_user),
-                ('GRANT SELECT ON ALL TABLES IN SCHEMA public to %s' % ro_user)]:
-                conn.execute(cmd)
-
-
-def create_tables(tables=None, engine=None):
-    """Create tables in the database.
-    
-    A list of *tables* may be optionally specified (see sqlalchemy.schema.MetaData.create_all) to 
-    create a subset of known tables.
-    """
-    # Create all tables
-    global ORMBase
-    if engine is None:
-        _, engine = get_engines()
-    ORMBase.metadata.create_all(bind=engine, tables=tables)
-    grant_readonly_permission(db_name)
-
-
-def vacuum(tables=None):
-    """Cleans up database and analyzes table statistics in order to improve query planning.
-    Should be run after any significant changes to the database.
-    """
-    engine_ro, engine_rw = get_engines()
-    with engine_rw.begin() as conn:
-        conn.connection.set_isolation_level(0)
-        if tables is None:
-            conn.execute('vacuum analyze')
-        else:
-            for table in tables:
-                conn.execute('vacuum analyze %s' % table)
-
-
-_default_session = None
-def default_session(fn):
-    """Decorator used to auto-fill `session` keyword arguments
-    with a global default Session instance.
-    
-    If the global session is used, then it will be rolled back after 
-    the decorated function returns (to prevent idle-in-transaction timeouts).
-    """
-    
-    def wrap_with_session(*args, **kwds):
-        used_default_session = False
-        if kwds.get('session', None) is None:
-            kwds['session'] = get_default_session()
-            used_default_session = True
-        try:
-            ret = fn(*args, **kwds)
-            return ret
-        finally:
-            if used_default_session:
-                get_default_session().rollback()
-    return wrap_with_session    
-
-
-def get_default_session():
-    global _default_session
-    if _default_session is None:
-        _default_session = Session(readonly=True)
-    return _default_session
-
-
-def bake_sqlite(sqlite_file, **kwds):
-    """Dump a copy of the database to an sqlite file.
-    """
-    sqlite_addr = "sqlite:///%s" % sqlite_file
-    sqlite_engine = create_engine(sqlite_addr)
-    create_tables(engine=sqlite_engine)
-    read_engine = get_engines()[0]
-    
-    last_size = 0
-    for table in copy_tables(read_engine, sqlite_engine, **kwds):
-        size = os.stat(sqlite_file).st_size
-        diff = size - last_size
-        last_size = size
-        print("   sqlite file size:  %0.2fGB  (+%0.2fGB for %s)" % (size*1e-9, diff*1e-9, table))
-
-
-def clone_database(db_name, host=None, overwrite=False, **kwds):
-    """Copy the current database to a new database of the given name.
-    """
-    if db_name in list_databases(host):
-        if overwrite:
-            drop_database(db_name, host)
-        else:
-            raise Exception("Destination database %s already exists." % db_name)
-
-    if host is None:
-        host = config.synphys_db_host_rw
-    
-    source_engine = get_engines()[0]
-    dest_address = db_address(host, db_name)
-    dest_engine = create_engine(dest_address)
-    create_database(db_name, host)
-    create_tables(engine=dest_engine)
-    
-    for table in copy_tables(source_engine, dest_engine, **kwds):
-        pass
-
-
-def copy_tables(source_engine, dest_engine, tables=None, skip_tables=(), skip_errors=False):
-    """Iterator that copies all modules in a database from one engine to another.
-    
-    Yields each module and table name as it is completed.
-    
-    This function does not create tables in dest_engine; use create_tables if needed.
-    """
-    global all_tables
-    read_session = sessionmaker(bind=source_engine)()
-    write_session = sessionmaker(bind=dest_engine)()
-    
-    for table_name, table in all_tables.items():
-        if (table_name in skip_tables) or (tables is not None and table_name not in tables):
-            print("Skipping %s.." % table_name)
-            continue
-        print("Cloning %s.." % table_name)
+    @property
+    def maint_engine(self):
+        """The maintenance engine.
         
-        # read from table in background thread, write to table in main thread.
-        reader = TableReadThread(table)
-        for i,rec in enumerate(reader):
-            try:
-                write_session.execute(table.__table__.insert(rec))
-            except Exception:
-                if skip_errors:
-                    print("Skip record %d:" % i)
-                    sys.excepthook(*sys.exc_info())
-                else:
-                    raise
-            if i%200 == 0:
-                print("%d/%d   %0.2f%%\r" % (i, reader.max_id, (100.0*(i+1.0)/reader.max_id)), end="")
-                sys.stdout.flush()
+        For postgres DBs, this connects to the "postgres" database.
+        """
+        self._check_engines()
+        if self._maint_engine is None:
+            if self.backend == 'postgres':
+                opts = {'pool_size': 10, 'max_overflow': 40}
+            else:
+                # maybe just return rw engine for postgres?
+                raise Exception("no maintenance connection for DB %s" % self)
+            maint_addr = self.db_address(self.rw_host, 'postgres')
+            self._maint_engine = create_engine(maint_addr, **opts)
+            self._engine_pid = os.getpid()
+        return self._maint_engine
+
+    # external users should create sessions from here.
+    def session(self, readonly=True):
+        """Create and return a new database Session instance.
+        
+        If readonly is True, then the session is created using read-only credentials and has autocommit enabled.
+        This prevents idle-in-transaction timeouts that occur when GUI analysis tools would otherwise leave transactions
+        open after each request.
+        """
+        if readonly:
+            if self._ro_sessionmaker is None:
+                self._ro_sessionmaker = sessionmaker(bind=self.ro_engine)
+            return self._ro_sessionmaker()
+        else:
+            if self.rw_engine is None:
+                raise RuntimeError("Cannot start read-write DB session; no write access engine is defined (see config.synphys_db_host_rw)")
+            if self._rw_sessionmaker is None:
+                self._rw_sessionmaker = sessionmaker(bind=self.rw_engine)
+            return self._rw_sessionmaker()
+
+    def reset_db(self):
+        """Drop the existing database and initialize a new one.
+        """
+        self._dispose_engines()
+        
+        self.drop_database()
+        self.create_database()
+        
+        self.create_tables()
+        self.grant_readonly_permission()
+
+    def list_databases(self):
+        engine = self.maint_engine
+        with engine.begin() as conn:
+            conn.connection.set_isolation_level(0)
+            return [rec[0] for rec in conn.execute('SELECT datname FROM pg_catalog.pg_database;')]
+
+    @property
+    def exists(self):
+        """Bool indicating whether this DB exists yet.
+        """
+        if self.backend == 'sqlite':
+            return os.path.isfile(self.db_name)
+        else:
+            return self.db_name in self.list_databases()
+
+    def drop_database(self):
+        host = self.rw_address
+        if self.backend == 'sqlite'):
+            if os.path.isfile(self.db_name):
+                os.remove(self.db_name)
+        elif host.backend == 'postgres':
+            engine = self.maint_engine
+            with engine.begin() as conn:
+                conn.connection.set_isolation_level(0)
+                try:
+                    conn.execute('drop database %s' % self.db_name)
+                except sqlalchemy.exc.ProgrammingError as err:
+                    if 'does not exist' not in err.message:
+                        raise
+        else:
+            raise TypeError("Unsupported database backend %s" % self.backend)
+
+    def create_database(self):
+        if self.backend == 'sqlite':
+            return
+        elif self.backend == 'postgres':
+            # connect to postgres db just so we can create the new DB
+            engine = self.maint_engine
+            with engine.begin() as conn:
+                conn.connection.set_isolation_level(0)
+                conn.execute('create database %s' % self.db_name)
+                # conn.execute('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO %s;' % ro_user)
+        else:
+            raise TypeError("Unsupported database backend %s" % self.backend)
+
+    def grant_readonly_permission(self):
+        if self.backend == 'sqlite':
+            return
+        elif self.backend == 'postgres':
+            ro_user = config.synphys_db_readonly_user
+
+            # grant readonly permissions
+            with self.rw_engine.begin() as conn:
+                conn.connection.set_isolation_level(0)
+                for cmd in [
+                    ('GRANT CONNECT ON DATABASE %s TO %s' % (self.db_name, ro_user)),
+                    ('GRANT USAGE ON SCHEMA public TO %s' % ro_user),
+                    ('GRANT SELECT ON ALL TABLES IN SCHEMA public to %s' % ro_user)]:
+                    conn.execute(cmd)
+        else:
+            raise TypeError("Unsupported database backend %s" % self.backend)
+
+    def create_tables(self, tables=None):
+        """Create tables in the database.
+        
+        A list of *tables* may be optionally specified (see sqlalchemy.schema.MetaData.create_all) to 
+        create a subset of known tables.
+        """
+        # Create all tables
+        self.ormbase.metadata.create_all(bind=self.rw_engine, tables=tables)
+        self.grant_readonly_permission()
+
+    def vacuum(self, tables=None):
+        """Cleans up database and analyzes table statistics in order to improve query planning.
+        Should be run after any significant changes to the database.
+        """
+        with self.rw_engine.begin() as conn:
+            conn.connection.set_isolation_level(0)
+            if tables is None:
+                conn.execute('vacuum analyze')
+            else:
+                for table in tables:
+                    conn.execute('vacuum analyze %s' % table)
+
+    def bake_sqlite(self, sqlite_file, **kwds):
+        """Dump a copy of this database to an sqlite file.
+        """
+        sqlite_db = Database(ro_host="sqlite://", rw_host="sqlite://", db_name=sqlite_file, ormbase=self.ormbase)
+        sqlite_db.create_tables()
+        
+        last_size = 0
+        for table in self.iter_copy_tables(self, sqlite_db, **kwds):
+            size = os.stat(sqlite_file).st_size
+            diff = size - last_size
+            last_size = size
+            print("   sqlite file size:  %0.2fGB  (+%0.2fGB for %s)" % (size*1e-9, diff*1e-9, table))
+
+    def clone_database(self, dest_db_name=None, dest_db=None, overwrite=False, **kwds):
+        """Copy this database to a new one.
+        """
+        if dest_db_name is not None:
+            assert isinstance(dest_db_name, str), "Destination DB name bust be a string"
+            assert dest_db is None, "Only specify one of dest_db_name or dest_db, not both"
+            dest_db = Database(self.ro_host, self.rw_host, dest_db_name, self.ormbase)    
+        
+        if dest_db.exists:
+            if overwrite:
+                dest_db.drop_database()
+            else:
+                raise Exception("Destination database %s already exists." % dest_db)
+
+        dest_db.create_database()
+        dest_db.create_tables()
+        
+        for table in self.iter_copy_tables(self, dest_db, **kwds):
+            pass
+
+    @staticmethod
+    def iter_copy_tables(source_db, dest_db, tables=None, skip_tables=(), skip_errors=False, vacuum=True):
+        """Iterator that copies all tables from one database to another.
+        
+        Yields each table name as it is completed.
+        
+        This function does not create tables in dest_db; use db.create_tables if needed.
+        """
+        
+        # TODO:
+        #  self.ormbase.metadata.sorted_tables should suffice in place of this global:
+        global all_tables
+        
+        read_session = source_db.session(readonly=True)
+        write_session = dest_db.session(readonly=False)
+        
+        for table_name, table in all_tables.items():
+            if (table_name in skip_tables) or (tables is not None and table_name not in tables):
+                print("Skipping %s.." % table_name)
+                continue
+            print("Cloning %s.." % table_name)
             
-        print("   committing %d rows..                    " % i)
-        write_session.commit()
-        read_session.rollback()
-        
-        yield table_name
+            # read from table in background thread, write to table in main thread.
+            reader = TableReadThread(source_db, table)
+            for i,rec in enumerate(reader):
+                try:
+                    write_session.execute(table.__table__.insert(rec))
+                except Exception:
+                    if skip_errors:
+                        print("Skip record %d:" % i)
+                        sys.excepthook(*sys.exc_info())
+                    else:
+                        raise
+                if i%200 == 0:
+                    print("%d/%d   %0.2f%%\r" % (i, reader.max_id, (100.0*(i+1.0)/reader.max_id)), end="")
+                    sys.stdout.flush()
+                
+            print("   committing %d rows..                    " % i)
+            write_session.commit()
+            read_session.rollback()
+            
+            yield table_name
 
-    print("Optimizing database..")    
-    write_session.execute("analyze")
-    write_session.commit()
-    print("All finished!")
+        if vacuum:
+            print("Optimizing database..")
+            dest_db.vacuum()
+        print("All finished!")
 
 
 class TableReadThread(threading.Thread):
@@ -568,18 +553,19 @@ class TableReadThread(threading.Thread):
     
     Records are queried chunkwise and queued in a background thread to enable more efficient streaming.
     """
-    def __init__(self, table, chunksize=1000):
+    def __init__(self, db, table, chunksize=1000):
         threading.Thread.__init__(self)
         self.daemon = True
         
+        self.db = db
         self.table = table
         self.chunksize = chunksize
         self.queue = queue.Queue(maxsize=5)
-        self.max_id = Session().query(func.max(table.id)).all()[0][0]        
+        self.max_id = db.session().query(func.max(table.id)).all()[0][0]        
         self.start()
         
     def run(self):
-        session = Session()
+        session = self.db.session()
         table = self.table
         chunksize = self.chunksize
         all_columns = table.__table__.c
@@ -598,4 +584,3 @@ class TableReadThread(threading.Thread):
                 break
             for rec in recs:
                 yield rec
-    
