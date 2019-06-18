@@ -5,14 +5,17 @@ For generating a DB table describing cell morphology.
 """
 from __future__ import print_function, division
 
-import os, pyodbc, datetime
+import os, datetime
+
 from collections import OrderedDict
-from ..util import timestamp_to_datetime
+from ..util import timestamp_to_datetime, optional_import
 from .. import database as db
 from ..pipette_metadata import PipetteMetadata
 from .. import config, lims
 from .pipeline_module import DatabasePipelineModule
 from .experiment import ExperimentPipelineModule
+pyodbc = optional_import('pyodbc')
+
 
 col_names = {
                 'Qual_Morpho_Type': {'name': 'qual_morpho_type', 'type': 'str'},
