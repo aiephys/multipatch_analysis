@@ -348,7 +348,7 @@ class DatabasePipelineModule(PipelineModule):
         """Create space (folders, tables, etc.) for this analyzer to store its results.
         """
         print("Initialize tables in %s" % cls.name)
-        cls.table_group.create_tables()
+        db.default_database.create_tables(cls.table_group)
         
     @classmethod
     def drop_all(cls, reinitialize=True, drop_deps=True):
@@ -361,7 +361,7 @@ class DatabasePipelineModule(PipelineModule):
             
         # drop tables and pipeline job records
         print("Drop all in %s" % cls.name)
-        cls.table_group.drop_tables()
+        db.default_db.drop_tables(cls.table_group)
         session = db.Session(readonly=False)
         session.query(db.Pipeline).filter(db.Pipeline.module_name==cls.name).delete()
         session.commit()

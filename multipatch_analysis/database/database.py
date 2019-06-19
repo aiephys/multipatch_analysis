@@ -5,7 +5,7 @@ The actual schemas for database tables are implemented in other files in this su
 """
 from __future__ import division, print_function
 
-import os, sys, io, time, json, threading, gc, re
+import os, sys, io, time, json, threading, gc, re, weakref
 from datetime import datetime
 from collections import OrderedDict
 import numpy as np
@@ -188,6 +188,8 @@ class Database(object):
     - Generate ro/rw sessions on demand
     - Methods for creating / dropping databases
     """
+    _all_dbs = weakref.WeakSet()
+    
     def __init__(self, ro_host, rw_host, db_name, ormbase):
         self.ormbase = ormbase
         self.ro_host = ro_host
@@ -202,6 +204,7 @@ class Database(object):
 
         self.ro_address = self.db_address(ro_host, db_name)
         self.rw_address = self.db_address(rw_host, db_name)
+        self._all_dbs.add(self)
 
     def __repr__(self):
         return "<Database %s (%s)>" % (self.ro_address, 'ro' if self.rw_address is None else 'rw')
@@ -237,8 +240,8 @@ class Database(object):
         """
         return Database(self.ro_host, self.rw_host, db_name, self.ormbase)
         
-    def _dispose_engines(self):
-        """Dispose and existing DB engines. This is necessary when forking to avoid accessing the same DB
+    def dispose_engines(self):
+        """Dispose any existing DB engines. This is necessary when forking to avoid accessing the same DB
         connection simultaneously from two processes.
         """
         if self._ro_engine is not None:
@@ -259,6 +262,13 @@ class Database(object):
         # Note: if this turns out to be flaky as well, we can just disable connection pooling.
         gc.collect()
 
+    @classmethod
+    def dispose_all_engines(cls):
+        """Dispose engines on all Database instances.
+        """
+        for db in cls._all_dbs:
+            db.dispose_engines()
+
     def _check_engines(self):
         """Dispose engines if they were built for a different PID
         """
@@ -269,7 +279,7 @@ class Database(object):
             # https://docs.sqlalchemy.org/en/latest/faq/connections.html#how-do-i-use-engines-connections-sessions-with-python-multiprocessing-or-os-fork
             if self._engine_pid is not None:
                 print("Making new session for subprocess %d != %d" % (os.getpid(), self._engine_pid))
-            self._dispose_engines()
+            self.dispose_engines()
 
     @property
     def ro_engine(self):
@@ -339,7 +349,7 @@ class Database(object):
     def reset_db(self):
         """Drop the existing database and initialize a new one.
         """
-        self._dispose_engines()
+        self.dispose_engines()
         
         self.drop_database()
         self.create_database()

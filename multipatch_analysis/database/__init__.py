@@ -49,6 +49,14 @@ def get_default_session():
     return _default_session
 
 
+# for backward compatibility
+def Session(**kwds):
+    return default_db.session(**kwds)
+
+
+def dispose_engines():
+    Database.dispose_all_engines()
+
 @default_session
 def slice_from_timestamp(ts, session=None):
     slices = session.query(Slice).filter(Slice.acq_timestamp==ts).all()
