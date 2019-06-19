@@ -1,6 +1,7 @@
 from __future__ import print_function
 import os, re, json
 from . import config
+import sqlalchemy
 
 
 _lims_engine = None
@@ -283,6 +284,11 @@ def specimen_id_from_name(spec_name):
         raise ValueError('No LIMS specimen named "%s"' % spec_name)
     return recs[0]['id']
 
+def find_specimen_ids_matching_name(spec_name):
+    """Return a list of LIMS IDs whose names include spec_name"""
+    q = sqlalchemy.text("select id from specimens where name like :name", bindparams=[sqlalchemy.bindparam('name', value='%%%s%%' %spec_name)])
+    recs = query(q)
+    return [r['id'] for r in recs]
 
 def specimen_name(spec_id):
     recs = query("select name from specimens where id=%s" % spec_id)
