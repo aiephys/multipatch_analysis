@@ -26,18 +26,18 @@ if args.dbg:
     pg.dbg()
 
 if args.reset_db:
-    ans = raw_input('Reset database "%s"? ' % db.database.db_address_rw_clean)
+    ans = raw_input('Reset database "%s"? ' % db.default_db)
     if ans == 'y':
         print("  Ok, here we go..")
-        db.reset_db()
+        db.default_db.reset_db()
         print("    ..done.")
     else:
         print("  Oh very well. Some other time, perhaps.")
 
 if args.vacuum:
     # cleans up DB and analyzes column statistics to improve query performance
-    print("Mopping up %s.." % db.db_name)
-    db.vacuum()
+    print("Mopping up %s.." % db.default_db.db_name)
+    db.default_db.vacuum()
     print("   ..done.")
 
 
@@ -50,18 +50,19 @@ if args.bake is not None:
             print("sqlite database file %s already exists" % args.bake)
             sys.exit(0)
         
-    db.bake_sqlite(args.bake, tables=tables, skip_tables=args.skip_tables.split(','))
+    db.default_db.bake_sqlite(args.bake, tables=tables, skip_tables=args.skip_tables.split(','))
 
 
 if args.clone is not None:
-    db.clone_database(args.clone, tables=tables, skip_tables=args.skip_tables.split(','))
+    db.default_db.clone_database(args.clone, tables=tables, skip_tables=args.skip_tables.split(','))
 
 
 if args.drop is not None:
-    ans = raw_input("Seriously? I'm gonna dump the entire \"%s\" database? (y/n) " % args.drop)
+    drop_db = db.default_db.get_database(args.drop)
+    ans = raw_input("Seriously? I'm gonna dump the entire \"%s\" database? (y/n) " % drop_db)
     if ans == 'y':
         print("  Ok, don't look..")
-        db.database.drop_database(args.drop)
+        drop_db.drop_database()
         print("    ..done.")
     else:
         print("  Whew! Close one.")

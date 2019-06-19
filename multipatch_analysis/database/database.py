@@ -206,6 +206,13 @@ class Database(object):
     def __repr__(self):
         return "<Database %s (%s)>" % (self.ro_address, 'ro' if self.rw_address is None else 'rw')
 
+    def __str__(self):
+        # str(engine) does a nice job of masking passwords
+        s = str(self.ro_engine)[7:]
+        s.rstrip(')')
+        s = s.partition('?')[0]
+        return s
+
     @property
     def backend(self):
         """Return the backend used by this database (sqlite, postgres, etc.)
@@ -224,6 +231,11 @@ class Database(object):
             return "{host}/{db_name}?application_name={app_name}".format(host=host, db_name=db_name, app_name=app_name)
         else:
             return "{host}/{db_name}".format(host=host, db_name=db_name)
+
+    def get_database(self, db_name):
+        """Return a new Database object with the same hosts and orm base, but different db name
+        """
+        return Database(self.ro_host, self.rw_host, db_name, self.ormbase)
         
     def _dispose_engines(self):
         """Dispose and existing DB engines. This is necessary when forking to avoid accessing the same DB
@@ -265,7 +277,7 @@ class Database(object):
         """
         self._check_engines()
         if self._ro_engine is None:
-            if self.backend == 'postgres':
+            if self.backend == 'postgresql':
                 opts = {'pool_size': 10, 'max_overflow': 40, 'isolation_level': 'AUTOCOMMIT'}
             else:
                 opts = {}        
@@ -279,7 +291,7 @@ class Database(object):
         """
         self._check_engines()
         if self._rw_engine is None:
-            if self.backend == 'postgres':
+            if self.backend == 'postgresql':
                 opts = {'pool_size': 10, 'max_overflow': 40}
             else:
                 opts = {}        
@@ -295,7 +307,7 @@ class Database(object):
         """
         self._check_engines()
         if self._maint_engine is None:
-            if self.backend == 'postgres':
+            if self.backend == 'postgresql':
                 opts = {'pool_size': 10, 'max_overflow': 40}
             else:
                 # maybe just return rw engine for postgres?
@@ -354,7 +366,7 @@ class Database(object):
         if self.backend == 'sqlite':
             if os.path.isfile(self.db_name):
                 os.remove(self.db_name)
-        elif self.backend == 'postgres':
+        elif self.backend == 'postgresql':
             engine = self.maint_engine
             with engine.begin() as conn:
                 conn.connection.set_isolation_level(0)
@@ -369,7 +381,7 @@ class Database(object):
     def create_database(self):
         if self.backend == 'sqlite':
             return
-        elif self.backend == 'postgres':
+        elif self.backend == 'postgresql':
             # connect to postgres db just so we can create the new DB
             engine = self.maint_engine
             with engine.begin() as conn:
@@ -382,7 +394,7 @@ class Database(object):
     def grant_readonly_permission(self):
         if self.backend == 'sqlite':
             return
-        elif self.backend == 'postgres':
+        elif self.backend == 'postgresql':
             ro_user = config.synphys_db_readonly_user
 
             # grant readonly permissions
@@ -561,22 +573,28 @@ class TableReadThread(threading.Thread):
         self.start()
         
     def run(self):
-        session = self.db.session()
-        table = self.table
-        chunksize = self.chunksize
-        all_columns = table.__table__.c
-        for i in range(0, self.max_id, chunksize):
-            query = session.query(*all_columns).filter((table.id >= i) & (table.id < i+chunksize))
-            records = query.all()
-            self.queue.put(records)
-        self.queue.put(None)
-        session.rollback()
-        session.close()
+        try:
+            session = self.db.session()
+            table = self.table
+            chunksize = self.chunksize
+            all_columns = table.__table__.c
+            for i in range(0, self.max_id, chunksize):
+                query = session.query(*all_columns).filter((table.id >= i) & (table.id < i+chunksize))
+                records = query.all()
+                self.queue.put(records)
+            self.queue.put(None)
+            session.rollback()
+            session.close()
+        except Exception as exc:
+            self.queue.put(exc)
+            raise
     
     def __iter__(self):
         while True:
             recs = self.queue.get()
             if recs is None:
                 break
+            if isinstance(recs, Exception):
+                raise recs
             for rec in recs:
                 yield rec
