@@ -694,20 +694,25 @@ class ExperimentMetadata(Experiment):
                             else:
                                 image_63x = self.biocytin_63x_files
                                 rec['63x'] = image_63x is not None
-                                cell_info = lims.cluster_cells(cell_cluster)
-                                x_coord = all([ci['x_coord'] is not None for ci in cell_info])
-                                x_coord_values = all([ci['x_coord'] != 0 for ci in cell_info])
-                                y_coord = all([ci['y_coord'] is not None  for ci in cell_info])
-                                y_coord_values = all([ci['y_coord'] != 0 for ci in cell_info])
-                                polygon = all([ci['polygon_id'] is not None  for ci in cell_info])
-                                mapped = len(cell_info) > 0 and x_coord is True and y_coord is True
-                                if mapped is True and x_coord_values is False and y_coord_values is False:
-                                    mapped = ('Incomplete', (255, 255, 102))
-                                    self.map_message = 'Cell positions contain 0-values, please re-map'
-                                if mapped is True and polygon is False:
-                                    mapped = ('Incomplete', [c * 0.5 + 128 for c in pass_color])
-                                    self.map_message = 'Cell positions submitted to LIMS but polygons have not been drawn yet'
-                                rec['cell map'] = mapped
+                                cell_specimens = lims.child_specimens(cell_cluster)
+                                if len(cell_specimens) != 0:
+                                    cell_info = lims.cluster_cells(cell_cluster)
+                                    x_coord = all([ci['x_coord'] is not None for ci in cell_info])
+                                    x_coord_values = all([ci['x_coord'] != 0 for ci in cell_info])
+                                    y_coord = all([ci['y_coord'] is not None  for ci in cell_info])
+                                    y_coord_values = all([ci['y_coord'] != 0 for ci in cell_info])
+                                    polygons = [lims.cell_polygon(cell.id) for cell in cell_info if cell is not None]
+                                    polygons = all(polygon is not None for polygon in polygons)
+                                    mapped = len(cell_info) > 0 and x_coord is True and y_coord is True
+                                    if mapped is True and x_coord_values is False and y_coord_values is False:
+                                        mapped = ('Incomplete', (255, 255, 102))
+                                        self.map_message = 'Cell positions contain 0-values, please re-map'
+                                    if mapped is True and polygons is False:
+                                        mapped = ('Incomplete', [c * 0.5 + 128 for c in pass_color])
+                                        self.map_message = 'Cell positions submitted to LIMS but polygons have not been drawn yet'
+                                    rec['cell map'] = mapped
+                                else:
+                                    rec['cell map'] = False
                                 
             else:
                 if self.mosaic_file is not None:

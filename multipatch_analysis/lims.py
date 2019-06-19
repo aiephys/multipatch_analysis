@@ -558,12 +558,25 @@ def cluster_cells(cluster):
     if not isinstance(cluster, int):
         cluster = specimen_id_from_name(cluster)
     
-    q = """select child.id, child.name, child.x_coord, child.y_coord, child.external_specimen_name, child.ephys_qc_result, biospecimen_polygons.polygon_id
+    q = """select child.id, child.name, child.x_coord, child.y_coord, child.external_specimen_name, child.ephys_qc_result
     from specimens parent 
     left join specimens child on child.parent_id=parent.id
-    left join biospecimen_polygons on biospecimen_polygons.biospecimen_id=child.id
     where parent.id=%d
     """ % cluster
+
+    recs = query(q)
+    return recs
+
+def cell_polygon(cell):
+    """ Return polygon id for cell specimen
+    """ 
+    if not isinstance(cell, int):
+        cell = specimen_id_from_name(cell)
+
+    q = """select polygon_id
+    from biospecimen_polygons
+    where biospecimen_id=%d
+    """ % cell
 
     recs = query(q)
     return recs
