@@ -63,9 +63,7 @@ class ExperimentPipelineModule(DatabasePipelineModule):
 
         # create pipette and cell entries
         cell_entries = {}
-        
-        if expt_lims_id is not None:
-            lims_cells = lims.cluster_cells(expt_lims_id)
+            
         for e_id, elec in expt.electrodes.items():
             elec_entry = db.Electrode(experiment=expt_entry, ext_id=elec.electrode_id, device_id=elec.device_id)
             for k in ['patch_status', 'start_time', 'stop_time',  
@@ -77,12 +75,14 @@ class ExperimentPipelineModule(DatabasePipelineModule):
 
             if elec.cell is not None:
                 cell = elec.cell
-                cell_meta = {}
                 if expt_lims_id is not None:
-                    #there are some weird cases where the query in lims.cluster_cells returns duplicate results
-                    cell_lims_id = list(set([lims_cell.id for lims_cell in lims_cells if int(lims_cell.external_specimen_name) == cell.cell_id]))
-                    if len(cell_lims_id) == 1:
-                        cell_meta['lims_specimen_id'] = cell_lims_id[0]
+                    cell_specimens = lims.child_specimens(expt_lims_id)
+                    if len(cell_specimens) != 0:
+                        lims_cells = lims.cluster_cells(expt_lims_id)
+                        cell_meta = {}
+                        cell_id_map = {int(lims_cell.external_specimen_name): lims_cell.id for lims_cell in lims_cells if lims_cell is not None}
+                        cell_lims_id = cell_id_map.get(cell.cell_id)
+                        cell_meta['lims_specimen_id'] = cell_lims_id
                     else:
                         cell_meta['lims_specimen_id'] = None
                 cell_entry = db.Cell(
