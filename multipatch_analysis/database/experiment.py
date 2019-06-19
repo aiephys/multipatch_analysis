@@ -61,8 +61,8 @@ class ExperimentBase(object):
         return cached_experiments()[self.acq_timestamp]
 
     def __repr__(self):
-        if self.expt_uid is not None:
-            return "<%s %s>" % (self.__class__.__name__, self.expt_uid)
+        if self.ext_id is not None:
+            return "<%s %s>" % (self.__class__.__name__, self.ext_id)
         else:
             return "<%s %0.3f>" % (self.__class__.__name__, self.acq_timestamp)
 
