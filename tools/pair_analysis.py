@@ -15,13 +15,18 @@ from random import shuffle
 
 default_latency = 11e-3
 comment_hashtag = [
-    '',
     '#doublespike',
     '#doublepsp',
     '#badspikes',
     '#fixable',
     '#secondopinion',
-    '#lostcause']
+    '#lostcause',
+    '#MVP',
+    '#crosstalk',
+    '#badqc']
+
+comment_hashtag.sort(key=lambda x:x[1])
+comment_hashtag = [''] + comment_hashtag
 
 class SignalHandler(pg.QtCore.QObject):
         """Because we can't subclass from both QObject and QGraphicsRectItem at the same time
@@ -94,15 +99,17 @@ class ControlPanel(object):
             {'name': 'Fit Pass', 'type': 'bool'},
             ]} for c in fit_cat]
         self.fit_params = Parameter.create(name='Fit parameters', type='group', children=fit_param)
+        self.warn_param = Parameter.create(name='Warnings', type='text', readonly=True)
         self.save_params = Parameter.create(name='Save Analysis', type='action')
         self.comments = Parameter.create(name='Comments', type='group', children=[
-            {'name': 'Hashtag', 'type': 'list', 'values': comment_hashtag},
+            {'name': 'Hashtag', 'type': 'list', 'values': comment_hashtag, 'value': ''},
             {'name': '', 'type': 'text'}])
         self.params = Parameter.create(name='params', type='group', children=[
             self.latency,
             self.synapse,
             self.gap,
             self.fit_params,
+            self.warn_param,
             self.save_params,
             self.comments
             ])
@@ -296,6 +303,7 @@ class SuperLine(pg.QtCore.QObject):
 
         return position
 
+
 class PairAnalysis(object):
     def __init__(self):
         self.ctrl_panel = ControlPanel()
@@ -443,7 +451,7 @@ class PairAnalysis(object):
                 self.ctrl_panel.params.child('Fit parameters', holding + ' ' + mode.upper(), 'Fit Pass').setValue(self.fit_pass)
                 sign = self.signs[mode][holding].get(self.ctrl_panel.params['Synapse call'], 'any')
                 x_offset = self.ctrl_panel.params['Latency', mode.upper()]
-                initial_fit_parameters[mode][holding]['xoffset'] = x_offset
+                initial_fit_parameters[mode][holding]['xoffset'] = x_offset - 10e-3
                 if len(self.traces[mode][holding]['qc_pass']) == 0:
                     continue
                 grand_trace = TraceList(self.traces[mode][holding]['qc_pass']).mean()
@@ -489,9 +497,36 @@ class PairAnalysis(object):
                     print("Error in PSP fit:")
                     sys.excepthook(*sys.exc_info())
                     continue
-                
         self.fit_params = {'initial': initial_fit_parameters, 'fit': output_fit_parameters}
-        self.ctrl_panel.update_fit_params(output_fit_parameters)
+        self.ctrl_panel.update_fit_params(self.fit_params['fit'])
+        self.generate_warnings(x_offset_win)   
+
+    def generate_warnings(self, x_bounds):
+        latency_mode = []
+        for mode in ['vc', 'ic']:
+            latency_holding = []
+            for holding in ['-55', '-70']:
+                initial_latency = self.fit_params['initial'][mode][holding]['xoffset']
+                fit_latency = self.fit_params['fit'].get(mode).get(holding).get('xoffset')
+                if fit_latency is None:
+                    continue
+                x_win = [initial_latency + x_bounds[0], initial_latency + x_bounds[1]]
+                latency_holding.append(fit_latency)
+                if fit_latency == x_win[0] or fit_latency == x_win[1]:
+                    warning  = 'Latency for %s %s is hitting a fit boundary' % (holding, mode)
+                    self.warnings.append(warning)
+            if len(latency_holding) > 1 and len(set(latency_holding)) != 1:
+                warning = 'Latencies for %s mode do not match' % mode
+                self.warnings.append(warning)
+            latency_mode.append(np.mean(latency_holding))
+        latency_diff = np.diff(latency_mode)[0]
+        if  latency_diff > 1e-3:
+            warning = 'Latency across modes differs by %s' % pg.siFormat(latency_diff, suffix='s')
+            self.warnings.append(warning)
+
+        print_warning = '\n'.join(self.warnings)
+        self.ctrl_panel.params.child('Warnings').setValue(print_warning)
+
 
 
 if __name__ == '__main__':
@@ -501,7 +536,7 @@ if __name__ == '__main__':
 
     # expt_list = [1532552839.296, 1536184462.404, 1534802671.146, 1532552954.427, 1557178633.726, 1517266234.424, 1554243759.900]
     s = db.Session()
-    e = s.query(db.Experiment.acq_timestamp)
+    e = s.query(db.Experiment.acq_timestamp).join(db.Pair).filter(db.Pair.synapse==True)
     expt_list = e.all()
     expt_list = [ee[0] for ee in expt_list]
     shuffle(expt_list)
