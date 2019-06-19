@@ -73,7 +73,12 @@ configfile = os.path.join(os.path.dirname(__file__), '..', 'config.yml')
 if not os.path.isfile(configfile):
     open(configfile, 'wb').write(template)
 
-config = yaml.load(open(configfile, 'rb'), Loader=yaml.FullLoader)
+if hasattr(yaml, 'FullLoader'):
+    # pyyaml new API
+    config = yaml.load(open(configfile, 'rb'), Loader=yaml.FullLoader)
+else:
+    # pyyaml old API
+    config = yaml.load(open(configfile, 'rb'))
 
 for k,v in config.items():
     locals()[k] = v
