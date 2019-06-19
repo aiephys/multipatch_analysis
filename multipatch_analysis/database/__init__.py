@@ -1,4 +1,5 @@
-from .database import Session, aliased, or_, and_, reset_db, vacuum, dispose_engines, default_sample_rate, db_name, bake_sqlite, clone_database
+from .. import config
+from .database import Database, db_version, ORMBase, aliased, or_, and_, default_sample_rate
 
 # Import table definitions from DB modules
 from .pipeline import *
@@ -13,6 +14,9 @@ from .avg_first_pulse_fit import *
 from .single_first_pulse_fit import *
 from .gap_junction import *
 
+
+default_db_name = '{database}_{version}'.format(database=config.synphys_db, version=db_version)
+default_db = Database(config.synphys_db_host, config.synphys_db_host_rw, default_db_name, ORMBase)
 
 
 _default_session = None
@@ -39,9 +43,9 @@ def default_session(fn):
 
 
 def get_default_session():
-    global _default_session
+    global _default_session, default_db
     if _default_session is None:
-        _default_session = Session(readonly=True)
+        _default_session = default_db.session(readonly=True)
     return _default_session
 
 

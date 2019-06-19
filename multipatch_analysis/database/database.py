@@ -30,61 +30,21 @@ from .. import config
 
 
 # database version should be incremented whenever the schema has changed
-db_version = 12
-db_name = '{database}_{version}'.format(database=config.synphys_db, version=db_version)
+db_version = 13
 default_app_name = ('mp_a:' + ' '.join(sys.argv))[:60]
 
 default_sample_rate = 20000
 _sample_rate_str = '%dkHz' % (default_sample_rate // 1000)
 
 
-class TableGroup(object):
+class TableGroup(list):
     """Class used to manage a group of tables that act as a single unit--tables in a group
     are always created and deleted together.
     """    
-    def __init__(self, tables, database):
-        self.db = database
-        self.tables = OrderedDict([(t.__table__.name,t) for t in tables])
+    def __init__(self, tables):
+        print("TableGroup is deprecated!")
+        list.__init__(self, tables)
 
-    def __getitem__(self, item):
-        return self.tables[item]
-
-    def drop_tables(self):
-        drops = []
-        for k in self.tables:
-            if k in self.db.engine_rw.table_names():
-                drops.append(k)
-        if len(drops) == 0:
-            return
-            
-        if self.db.engine_rw.name == 'sqlite':
-            self.db.engine_rw.execute('drop table %s' % (','.join(drops)))
-        else:
-            self.db.engine_rw.execute('drop table %s cascade' % (','.join(drops)))
-
-    def create_tables(self):
-        # if we do not have write access, just verify that the tables exist
-        if self.db.engine_rw is None:
-            for k in self.tables:
-                if k not in self.db.engine_ro.table_names():
-                    raise Exception("Table %s not found in database %s" % (k, self.db))
-            return
-
-        self.db.create_tables(tables=[self[k].__table__ for k in self.tables])
-        
-    def enable_triggers(self, enable):
-        """Enable or disable triggers for all tables in this group.
-        
-        This can be used to temporarily disable constraint checking on tables that are under development,
-        allowing the rest of the pipeline to continue operating (for example, if removing an object from 
-        the pipeline would violate a foreign key constraint, disabling triggers will allow this constraint
-        to go unchecked).
-        """
-        s = Session(readonly=False)
-        enable = 'enable' if enable else 'disable'
-        for table in self.tables.keys():
-            s.execute("alter table %s %s trigger all;" % (table, enable))
-        s.commit()
 
 
 #----------- define ORM classes -------------
@@ -243,14 +203,6 @@ class Database(object):
         self.ro_address = self.db_address(ro_host, db_name)
         self.rw_address = self.db_address(rw_host, db_name)
 
-        # make a passwordless version of the address for printing
-        self.rw_address_clean = self.rw_address
-        if self.rw_address is not None:
-            m = re.match(r"(\w+\:/+)(([^\:]+)(\:\S+)?(\@))?([^\?]+)", self.rw_address)
-            if m is not None:
-                g = m.groups()
-                self.rw_address_clean = g[0] + (g[2] or '') + (g[4] or '') + g[5]
-
     def __repr__(self):
         return "<Database %s (%s)>" % (self.ro_address, 'ro' if self.rw_address is None else 'rw')
 
@@ -258,6 +210,7 @@ class Database(object):
     def backend(self):
         """Return the backend used by this database (sqlite, postgres, etc.)
         """
+        # maybe ro_engine.name instead?
         return self.ro_host.partition(':')[0]
 
     @staticmethod
@@ -398,11 +351,10 @@ class Database(object):
             return self.db_name in self.list_databases()
 
     def drop_database(self):
-        host = self.rw_address
-        if self.backend == 'sqlite'):
+        if self.backend == 'sqlite':
             if os.path.isfile(self.db_name):
                 os.remove(self.db_name)
-        elif host.backend == 'postgres':
+        elif self.backend == 'postgres':
             engine = self.maint_engine
             with engine.begin() as conn:
                 conn.connection.set_isolation_level(0)
@@ -444,8 +396,18 @@ class Database(object):
         else:
             raise TypeError("Unsupported database backend %s" % self.backend)
 
+    def list_orm_tables(self):
+        """Return a dependency-sorted list of tables that are described by the ORM base for this database.
+        """
+        return self.ormbase.metadata.sorted_tables
+
+    def list_db_tables(self):
+        """Return a list of tables in this database.
+        """
+        return self.ro_engine.table_names()
+
     def create_tables(self, tables=None):
-        """Create tables in the database.
+        """Create tables in the database from the ORM base specification.
         
         A list of *tables* may be optionally specified (see sqlalchemy.schema.MetaData.create_all) to 
         create a subset of known tables.
@@ -453,6 +415,40 @@ class Database(object):
         # Create all tables
         self.ormbase.metadata.create_all(bind=self.rw_engine, tables=tables)
         self.grant_readonly_permission()
+
+    def drop_tables(self, tables=None):
+        """Drop a list of tables (or all ORM-defined tables, if no list is given) from this database.
+        """
+        drops = []
+        orm_tables = self.list_orm_tables()
+        db_tables = self.list_db_tables()
+        for k in orm_tables:
+            if tables is not None and k not in tables:
+                continue
+            if k in db_tables:
+                drops.append(k)
+        if len(drops) == 0:
+            return
+            
+        if self.backend == 'sqlite':
+            self.rw_engine.execute('drop table %s' % (','.join(drops)))
+        else:
+            self.rw_engine.execute('drop table %s cascade' % (','.join(drops)))
+
+    # Seems to be not working correctly        
+    # def enable_triggers(self, enable):
+    #     """Enable or disable triggers for all tables in this group.
+    #    
+    #     This can be used to temporarily disable constraint checking on tables that are under development,
+    #     allowing the rest of the pipeline to continue operating (for example, if removing an object from 
+    #     the pipeline would violate a foreign key constraint, disabling triggers will allow this constraint
+    #     to go unchecked).
+    #     """
+    #     s = Session(readonly=False)
+    #     enable = 'enable' if enable else 'disable'
+    #     for table in self.tables.keys():
+    #         s.execute("alter table %s %s trigger all;" % (table, enable))
+    #     s.commit()
 
     def vacuum(self, tables=None):
         """Cleans up database and analyzes table statistics in order to improve query planning.
