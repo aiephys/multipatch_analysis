@@ -675,7 +675,7 @@ class ExperimentMetadata(Experiment):
 
                     cell_cluster = self.lims_cell_cluster_id
                     lims_ignore_path = os.path.join(self.archive_path, '.mpe_ignore')
-                    if os.path.isfile(lims_ignore_path):
+                    if cell_cluster is None and os.path.isfile(lims_ignore_path):
                         lims_ignore_file = os.path.join(self.archive_path, '.mpe_ignore')
                         in_lims = "FAILED"
                         self.lims_message = open(lims_ignore_file, 'r').read()
