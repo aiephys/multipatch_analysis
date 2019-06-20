@@ -502,6 +502,7 @@ class PairAnalysis(object):
         self.generate_warnings(x_offset_win)   
 
     def generate_warnings(self, x_bounds):
+        self.warnings = []
         latency_mode = []
         for mode in ['vc', 'ic']:
             latency_holding = []
@@ -534,7 +535,7 @@ if __name__ == '__main__':
     app = pg.mkQApp()
     pg.dbg()
 
-    # expt_list = [1532552839.296, 1536184462.404, 1534802671.146, 1532552954.427, 1557178633.726, 1517266234.424, 1554243759.900]
+    # expt_list = [1525985474.422, 1552517721.641]
     s = db.Session()
     e = s.query(db.Experiment.acq_timestamp).join(db.Pair).filter(db.Pair.synapse==True)
     expt_list = e.all()
