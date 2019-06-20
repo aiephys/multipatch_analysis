@@ -13,7 +13,7 @@ import numpy as np
 import pyqtgraph as pg
 import multipatch_analysis.database as db
 import pandas as pd
-import re, cProfile, os, json, sys
+import re, cProfile, os, json, sys, copy
 from analyzers import ConnectivityAnalyzer, StrengthAnalyzer, DynamicsAnalyzer, get_all_output_fields
 from multipatch_analysis import constants
 from multipatch_analysis.cell_class import CellClass, classify_cells, classify_pairs
@@ -101,6 +101,7 @@ class ExperimentFilter(object):
         self.pairs = None
         self.sigOutputChanged.emit(self)
 
+
 class CellClassFilter(object):
     def __init__(self, cell_class_groups):
         self.cell_groups = None
@@ -108,9 +109,15 @@ class CellClassFilter(object):
         self._signalHandler = SignalHandler()
         self.sigOutputChanged = self._signalHandler.sigOutputChanged
         self.experiment_filter = ExperimentFilter() 
+
         self.cell_class_groups = cell_class_groups
-        cell_group_list = [{'name': group, 'type': 'bool'} for group in self.cell_class_groups.keys()]
-        self.params = Parameter.create(name="Cell Classes", type="group", children=cell_group_list)
+        combo_def = {'name': 'pre/post', 'type':'list', 'value':'both', 'values':['both', 'presynaptic', 'postsynaptic']}
+        cell_group_list = [{'name': group, 'type': 'bool', 'children':[combo_def], 'expanded':False} for group in self.cell_class_groups.keys()]
+        layer = [{'name': 'Define layer by:', 'type': 'list', 'values': ['target layer', 'annotated layer'], 'value': 'target layer'}]
+        children = layer + cell_group_list
+        self.params = Parameter.create(name="Cell Classes", type="group", children=children)
+        for p in self.params.children():
+            p.sigValueChanged.connect(self.expand_param)
 
         self.params.sigTreeStateChanged.connect(self.invalidate_output)
 
@@ -119,19 +126,50 @@ class CellClassFilter(object):
         are members of each user selected cell class.
         This internally calls cell_class.classify_cells
         """
+        ccg = copy.deepcopy(self.cell_class_groups)
         if self.cell_groups is None:
             self.cell_classes = []
-            for group in self.params.children():
+            for group in self.params.children()[1:]:
                 if group.value() is True:
-                    self.cell_classes.extend(self.cell_class_groups[group.name()]) 
+                    self.cell_classes.extend(ccg[group.name()])
+            self.cell_classes = self.layer_call() 
             self.cell_classes = [CellClass(**c) for c in self.cell_classes]
             self.cell_groups = classify_cells(self.cell_classes, pairs=pairs)
         return self.cell_groups, self.cell_classes
+
+    def layer_call(self):
+        layer_def = self.params['Define layer by:']
+        if layer_def == 'target layer':
+            for c in self.cell_classes:
+                if c.get('cortical_layer') is not None:
+                    del c['cortical_layer']
+        elif layer_def == 'annotated layer':
+            for c in self.cell_classes:
+                if c.get('target_layer') is not None:
+                    del c['target_layer']
+        return self.cell_classes
+
+    def get_pre_or_post_classes(self, key):
+        """Return a list of postsynaptic cell_classes. This will be a subset of self.cell_classes."""
+        if self.cell_classes is None:
+            return []
+        classes = []
+        for group in self.params.children():
+            if group.value() is True:
+                if group['pre/post'] in ['both', key]:
+                    classes.extend(self.cell_class_groups[group.name()])
+        classes = [CellClass(**c) for c in classes]
+        return classes
+
+    def expand_param(self, param, value):
+        if value:
+            param.items.keys()[0].setExpanded(value)
 
     def invalidate_output(self):
         self.cell_groups = None
         self.cell_classes = None
         self.sigOutputChanged.emit(self)
+
 
 class MatrixAnalyzer(object):
     sigClicked = pg.QtCore.Signal(object, object, object, object, object) # self, matrix_item, row, col
@@ -233,7 +271,7 @@ class MatrixAnalyzer(object):
             self.params.child('Presets', 'Analyzer Presets').setLimits(new_preset_list)
             self.params.child('Presets', 'Analyzer Presets').sigValueChanged.connect(self.presetChanged)
             self.presets = self.analyzer_presets()
-            
+
     def colormap_to_json(self):
         cm_state = self.params.child('Matrix Display', 'Color Map').saveState()
         # colormaps cannot be stored in a JSON, convert format
@@ -343,29 +381,31 @@ class MatrixAnalyzer(object):
     def display_matrix_element_data(self, matrix_item, event, row, col):
         field_name = self.matrix_display.matrix_display_filter.get_colormap_field()
         pre_class, post_class = [k for k, v in self.matrix_display.matrix_map.items() if v==[row, col]][0]
-        try:
-            element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class))
-            analyzer = self.field_map[field_name]
-            analyzer.print_element_info(pre_class, post_class, element, field_name)
-            # from here row and col are tuples (row, pre_class) and (col, post_class) respectively
-            row = (row, pre_class)
-            col = (col, post_class)
-            if int(event.modifiers() & pg.QtCore.Qt.ControlModifier)>0:
-                self.selected += 1
-                if self.selected >= len(self.colors):
-                    self.selected = 0
-                color = self.colors[self.selected]
-                self.matrix_display.color_element(row, col, color)
-                self.hist_plot.plot_element_data(element, analyzer, color, self.trace_panel)
-                self.distance_plot.element_distance(element, color)
-            else:
-                self.display_matrix_element_reset() 
-                color = self.colors[self.selected]
-                self.matrix_display.color_element(row, col, color)
-                self.hist_plot.plot_element_data(element, analyzer, color, self.trace_panel)
-                self.distance_plot.element_distance(element, color)
-        except KeyError:
+
+        #element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class))
+        element = self.results.loc[self.pair_groups[(pre_class, post_class)]]
+        if len(element) == 0:
             print ('%s->%s has no data, please select another element' % (pre_class, post_class))
+            return
+        analyzer = self.field_map[field_name]
+        analyzer.print_element_info(pre_class, post_class, element, field_name)
+        # from here row and col are tuples (row, pre_class) and (col, post_class) respectively
+        row = (row, pre_class)
+        col = (col, post_class)
+        if int(event.modifiers() & pg.QtCore.Qt.ControlModifier)>0:
+            self.selected += 1
+            if self.selected >= len(self.colors):
+                self.selected = 0
+            color = self.colors[self.selected]
+            self.matrix_display.color_element(row, col, color)
+            self.hist_plot.plot_element_data(element, analyzer, color, self.trace_panel)
+            self.distance_plot.element_distance(element, color)
+        else:
+            self.display_matrix_element_reset() 
+            color = self.colors[self.selected]
+            self.matrix_display.color_element(row, col, color)
+            self.hist_plot.plot_element_data(element, analyzer, color, self.trace_panel)
+            self.distance_plot.element_distance(element, color)
 
     def display_matrix_element_reset(self):
         self.selected = 0
@@ -373,13 +413,16 @@ class MatrixAnalyzer(object):
         self.matrix_display.element_color_reset()
         self.distance_plot.element_distance_reset(self.results, color=(128, 128, 128), name='All Connections', suppress_scatter=True)
 
+
     def update_clicked(self):
         p = cProfile.Profile()
         p.enable()
         with pg.BusyCursor():
             self.analyzers_needed()
             self.update_results()
-            self.matrix_display.update_matrix_display(self.results, self.group_results, self.cell_classes, self.cell_groups, self.field_map)
+            pre_cell_classes = self.cell_class_filter.get_pre_or_post_classes('presynaptic')
+            post_cell_classes = self.cell_class_filter.get_pre_or_post_classes('postsynaptic')
+            self.matrix_display.update_matrix_display(self.results, self.group_results, self.cell_groups, self.field_map, pre_cell_classes=pre_cell_classes, post_cell_classes=post_cell_classes)
             self.hist_plot.matrix_histogram(self.results, self.group_results, self.matrix_display.matrix_display_filter.colorMap, self.field_map)
             self.element_scatter.set_data(self.group_results)
             self.pair_scatter.set_data(self.results)
@@ -403,7 +446,7 @@ class MatrixAnalyzer(object):
         # analyze matrix elements
         for a, analysis in enumerate(self.active_analyzers):
             results = analysis.measure(self.pair_groups)
-            group_results = analysis.group_result()
+            group_results = analysis.group_result(self.pair_groups)
             if a == 0:
                 self.results = results
                 self.group_results = group_results

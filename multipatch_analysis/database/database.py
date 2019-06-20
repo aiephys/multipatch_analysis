@@ -434,6 +434,7 @@ def create_tables(tables=None, engine=None):
     if engine is None:
         _, engine = get_engines()
     ORMBase.metadata.create_all(bind=engine, tables=tables)
+    grant_readonly_permission(db_name)
 
 
 def vacuum(tables=None):

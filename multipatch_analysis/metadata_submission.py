@@ -315,6 +315,8 @@ class ExperimentMetadataSubmission(object):
             else:
                 gt = genotypes.Genotype(self.spec_info['genotype'])
                 for part in gt.driver_lines + gt.reporter_lines:
+                    # Error if the first chunk (usually something like "Ai193" or "Sim1") is not in the specimen name
+                    part = part.partition('(')[0].partition('-')[0]
                     if part not in spec_name:
                         errors.append('Specimen name %s does not contain genotype part %s' % (spec_name, part))
 
