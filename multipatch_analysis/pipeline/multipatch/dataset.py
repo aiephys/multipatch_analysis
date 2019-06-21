@@ -29,9 +29,7 @@ class DatasetPipelineModule(DatabasePipelineModule):
     # when running parallel, each child process may run only one job before being killed
     maxtasksperchild = 1  
     
-    @classmethod
-    def create_db_entries(cls, job_id, session):
-        
+    def create_db_entries(self, job_id, session):
         # Load experiment from DB
         expt_entry = db.experiment_from_timestamp(job_id, session=session)
         elecs_by_ad_channel = {elec.device_id:elec for elec in expt_entry.electrodes}
@@ -238,8 +236,7 @@ class DatasetPipelineModule(DatabasePipelineModule):
                     )
                     session.add(base_entry)
         
-    @classmethod
-    def job_records(cls, job_ids, session):
+    def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.
         
         This method is used by drop_jobs to delete records for specific job IDs.
@@ -247,7 +244,6 @@ class DatasetPipelineModule(DatabasePipelineModule):
         # only need to return from syncrec table; other tables will be dropped automatically.
         return session.query(db.SyncRec).filter(db.SyncRec.experiment_id==db.Experiment.id).filter(db.Experiment.acq_timestamp.in_(job_ids)).all()
 
-    @classmethod
     def ready_jobs(self):
         """Return an ordered dict of all jobs that are ready to be processed (all dependencies are present)
         and the dates that dependencies were created.
@@ -256,7 +252,7 @@ class DatasetPipelineModule(DatabasePipelineModule):
         expts = ExperimentPipelineModule.finished_jobs()
         
         # Look up nwb file locations for all experiments
-        session = db.Session()
+        session = db.session()
         expt_recs = session.query(db.Experiment.acq_timestamp, db.Experiment.storage_path, db.Experiment.ephys_file).filter(db.Experiment.ephys_file != None).all()
         expt_paths = {rec.acq_timestamp: rec for rec in expt_recs}
         session.rollback()

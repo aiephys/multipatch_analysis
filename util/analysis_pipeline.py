@@ -1,18 +1,18 @@
 from __future__ import print_function
 import argparse, sys, os, logging
 import pyqtgraph as pg 
-from multipatch_analysis.pipeline import all_modules
+from multipatch_analysis.pipeline import all_pipelines
 import multipatch_analysis.database as db
 from multipatch_analysis import config
 
 
 if __name__ == '__main__':
     logging.basicConfig()
-    
-    all_modules = all_modules()
+    all_pipelines = all_pipelines()
     
     parser = argparse.ArgumentParser(description="Process analysis pipeline jobs")
-    parser.add_argument('modules', type=str, nargs='+', help="The name of the analysis module(s) to run: %s" % ', '.join(list(all_modules.keys())))
+    parser.add_argument('pipeline', type=str, nargs=1, help="The name of the pipeline to run: %s" % ', '.join(list(all_pipelines.keys())))
+    parser.add_argument('modules', type=str, nargs='+', help="The name of the analysis module(s) to run")
     parser.add_argument('--rebuild', action='store_true', default=False, help="Remove and rebuild tables for this analysis")
     parser.add_argument('--retry', action='store_true', default=False, help="Retry processing jobs that previously failed")
     parser.add_argument('--workers', type=int, default=None, help="Set the number of concurrent processes during update")
@@ -29,6 +29,10 @@ if __name__ == '__main__':
 
     if args.local:
         pg.dbg()
+
+    database = db.default_database
+    pipeline = all_pipelines[args.pipeline](database=database)
+    all_modules = database.all_modules()
     
     if 'all' in args.modules:
         modules = list(all_modules.values())

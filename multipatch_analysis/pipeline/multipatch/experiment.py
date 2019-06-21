@@ -4,7 +4,6 @@ import numpy as np
 from datetime import datetime
 from collections import OrderedDict
 from acq4.util.DataManager import getDirHandle
-from .. import database as db
 from ..database import experiment_tables
 from .pipeline_module import DatabasePipelineModule
 from .. import config, synphys_cache
@@ -22,8 +21,8 @@ class ExperimentPipelineModule(DatabasePipelineModule):
     table_group = experiment_tables
     
     
-    @classmethod
-    def create_db_entries(cls, job_id, session):
+    def create_db_entries(self, job_id, session):
+        db = self.database
         cache = synphys_cache.get_cache()
         all_expts = cache.list_experiments()
         site_path = all_expts[job_id]
@@ -134,29 +133,28 @@ class ExperimentPipelineModule(DatabasePipelineModule):
                 pre_id = pre_cell_entry.electrode.device_id
                 post_id = post_cell_entry.electrode.device_id
         
-    @classmethod
-    def job_records(cls, job_ids, session):
+    def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.
         
         This method is used by drop_jobs to delete records for specific job IDs.
         """
         # only need to return from experiment table; other tables will be dropped automatically.
+        db = self.database
         return session.query(db.Experiment).filter(db.Experiment.acq_timestamp.in_(job_ids)).all()
 
-    @classmethod
-    def dependent_job_ids(cls, module, job_ids):
+    def dependent_job_ids(self, module, job_ids):
         """Return a list of all finished job IDs in this module that depend on 
         specific jobs from another module.
         """
-        if module not in cls.dependencies:
-            raise ValueError("%s does not depend on module %s" % (cls, module))
+        if module not in self.dependencies:
+            raise ValueError("%s does not depend on module %s" % (self, module))
         
-        session = db.Session()
+        db = self.database
+        session = db.session()
         dep_ids = session.query(db.Experiment.acq_timestamp).join(db.Slice).filter(db.Slice.acq_timestamp.in_(job_ids)).all()
         session.rollback()
         return [rec.acq_timestamp for rec in dep_ids]
 
-    @classmethod
     def ready_jobs(self):
         """Return an ordered dict of all jobs that are ready to be processed (all dependencies are present)
         and the dates that dependencies were created.
@@ -166,7 +164,8 @@ class ExperimentPipelineModule(DatabasePipelineModule):
         # cache = synphys_cache.get_cache()
         # all_expts = cache.list_experiments()
         
-        session = db.Session()
+        db = self.database
+        session = db.session()
         slices = session.query(db.Slice.storage_path).all()
         
         ymls = []

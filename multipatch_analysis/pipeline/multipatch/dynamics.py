@@ -9,7 +9,7 @@ import os
 import numpy as np
 from collections import OrderedDict
 from ..util import timestamp_to_datetime
-from .. import database as db
+from ..database import dynamics_tables
 from .pipeline_module import DatabasePipelineModule
 from .pulse_response import PulseResponsePipelineModule
 from .connection_strength import ConnectionStrengthPipelineModule
@@ -20,10 +20,10 @@ class DynamicsPipelineModule(DatabasePipelineModule):
     """
     name = 'dynamics'
     dependencies = [PulseResponsePipelineModule, ConnectionStrengthPipelineModule]
-    table_group = db.dynamics_tables
+    table_group = dynamics_tables
     
-    @classmethod
-    def create_db_entries(cls, job_id, session):
+    def create_db_enselfes(self, job_id, session):
+        db = self.database
         delays = [125, 250, 500, 1000, 2000, 4000]
         # Load experiment from DB
         expt = db.experiment_from_timestamp(job_id, session=session)
@@ -101,10 +101,10 @@ class DynamicsPipelineModule(DatabasePipelineModule):
                     pulse_ratio_8_1_200hz=pulse_ratio_8_1_200hz)
                 session.add(dynamics)
         
-    @classmethod
-    def job_records(cls, job_ids, session):
+    def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.
         
         This method is used by drop_jobs to delete records for specific job IDs.
         """
+        db = self.database
         return session.query(db.Dynamics).filter(db.Dynamics.pair_id==db.Pair.id).filter(db.Pair.experiment_id==db.Experiment.id).filter(db.Experiment.acq_timestamp.in_(job_ids)).all()

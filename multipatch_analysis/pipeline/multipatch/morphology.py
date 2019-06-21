@@ -9,7 +9,7 @@ import os, datetime
 
 from collections import OrderedDict
 from ..util import timestamp_to_datetime, optional_import
-from .. import database as db
+from ..database import morphology_tables
 from ..pipette_metadata import PipetteMetadata
 from .. import config, lims
 from .pipeline_module import DatabasePipelineModule
@@ -33,11 +33,10 @@ class MorphologyPipelineModule(DatabasePipelineModule):
     """
     name = 'morphology'
     dependencies = [ExperimentPipelineModule]
-    table_group = db.morphology_tables
+    table_group = morphology_tables
     
-    @classmethod
-    def create_db_entries(cls, job_id, session):
-        
+    def create_db_entries(self, job_id, session):
+        db = self.database
         # Load experiment from DB
         expt = db.experiment_from_timestamp(job_id, session=session)
         morpho_results = morpho_db()
@@ -97,24 +96,24 @@ class MorphologyPipelineModule(DatabasePipelineModule):
             morphology = db.Morphology(cell_id=cell.id, **results)
             session.add(morphology)
         
-    @classmethod
-    def job_records(cls, job_ids, session):
+    def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.
         
         This method is used by drop_jobs to delete records for specific job IDs.
         """
+        db = self.database
         return session.query(db.Morphology).filter(db.Morphology.cell_id==db.Cell.id).filter(db.Cell.experiment_id==db.Experiment.id).filter(db.Experiment.acq_timestamp.in_(job_ids)).all()
 
-    @classmethod
     def ready_jobs(self):
         """Return an ordered dict of all jobs that are ready to be processed (all dependencies are present)
         and the dates that dependencies were created.
         """
+        db = self.database
         # All experiments and their creation times in the DB
         expts = ExperimentPipelineModule.finished_jobs()
 
         # Look up nwb file locations for all experiments
-        session = db.Session()
+        session = db.session()
         # expts = session.query(db.Experiment).filter(db.Experiment.acq_timestamp==1521667891.153).all()
         session.rollback()
         morpho_results = morpho_db()
@@ -146,6 +145,7 @@ class MorphologyPipelineModule(DatabasePipelineModule):
                 ready[expt.acq_timestamp] = datetime.datetime.now()
     
         return ready
+
 
 def morpho_db():
     cnxn_str = r'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)}; DBQ=%s' % config.morpho_address

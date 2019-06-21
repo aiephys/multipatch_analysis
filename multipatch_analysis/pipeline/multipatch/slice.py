@@ -16,8 +16,7 @@ class SlicePipelineModule(DatabasePipelineModule):
     dependencies = []
     table_group = slice_tables
     
-    @classmethod
-    def create_db_entries(cls, job_id, session):
+    def create_db_entries(self, job_id, session):
         slices = all_slices()
         path = slices[job_id]
         dh = getDirHandle(path)
@@ -75,16 +74,15 @@ class SlicePipelineModule(DatabasePipelineModule):
             'storage_path': dh.name(relativeTo=dh.parent().parent()),
         }
 
-        sl = db.Slice(**fields)
+        sl = self.database.Slice(**fields)
         session.add(sl)
 
-    @classmethod
-    def job_records(cls, job_ids, session):
+    def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.
         """
+        db = self.database
         return session.query(db.Slice).filter(db.Slice.acq_timestamp.in_(job_ids)).all()
 
-    @classmethod
     def ready_jobs(self):
         """Return an ordered dict of all jobs that are ready to be processed (all dependencies are present)
         and the dates that dependencies were created.
