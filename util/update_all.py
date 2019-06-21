@@ -45,18 +45,24 @@ if __name__ == '__main__':
             sys.exit(-1)
 
     while True:
+        logfile = 'update_logs/' + time.strftime('%Y-%m-%d_%H-%M-%S') + '.log'
         for name, cmd in stages.items():
             cmd, msg = cmd
-            print("======================================================================================")
-            print("    " + msg)
-            print("======================================================================================")
+            msg = ("======================================================================================\n" + 
+                   "    " + msg + "\n" + 
+                   "======================================================================================\n")
+            print(msg)
+            open(logfile, 'a').write(msg)
             
             if name in skip:
-                print("   [ skipping ]")
+                msg = "   [ skipping ]\n"
+                print(msg)
+                open(logfile, 'a').write(msg)
+                
                 skip.remove(name)  # only skip once
                 continue
 
-            os.system(cmd)
+            os.system(cmd + " 2>&1 | tee -a " + logfile)
         delay()
 
 

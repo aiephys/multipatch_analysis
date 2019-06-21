@@ -70,10 +70,8 @@ if __name__ == '__main__':
     if args.rebuild:
         for module in modules:
             print("Dropping module %s" % module.name)
-            module.drop_all(reinitialize=False)
-        for module in modules:
-            print("Initializing module %s" % module.name)
-            module.initialize()
+            module.drop_all(reinitialize=True)
+        print("  done.")
 
     if args.drop:
         for module in modules:

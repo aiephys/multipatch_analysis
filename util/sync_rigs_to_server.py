@@ -102,7 +102,8 @@ def _sync_paths(source, target, changes):
             #   - others > 5GB
             src_size = os.stat(src_path).st_size
             # extension may be buried behind a backup date like "somefile.pxp_2018-11-20_02-01-20_0"
-            ext = re.match(r'.*(.[a-z]{3})(_2.*)?', os.path.split(src_path)[1]).groups()[0]
+            m = re.match(r'.*(.[a-z]{3})(_2.*)?', os.path.split(src_path)[1])
+            ext = '' if m is None else m.groups()[0]
             max_size = {'.pxp': 20e9, '.nwb': 7e9}.get(ext, 5e9)
 
             if src_size > max_size:

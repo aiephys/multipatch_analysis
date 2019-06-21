@@ -168,7 +168,7 @@ for rules in DRIVER_LINES.values():
         ALL_DRIVERS |= set([d for d in deps if d[0] != '~'])
 ALL_DRIVERS = ALL_DRIVERS - set(EXPRESSION_FACTORS) - set(DRUGS)
 
-ALL_REPORTERS = set()
+ALL_REPORTERS = set(FLUOROPHORES.keys())
 for rules in REPORTER_LINES.values():
     for deps, prods in rules:
         ALL_REPORTERS |= set(prods)

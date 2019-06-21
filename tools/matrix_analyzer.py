@@ -17,55 +17,56 @@ if __name__ == '__main__':
     # Define cell classes
     cell_class_groups = OrderedDict([
         ('Mouse All Cre-types by layer', [
-            {'cre_type': 'unknown', 'target_layer': '2/3'},
+            {'cre_type': 'unknown', 'target_layer': '2/3','cortical_layer': '2/3'},
             #{'pyramidal': True, 'target_layer': '2/3'},
-            {'cre_type': 'pvalb', 'target_layer': '2/3'},
-            {'cre_type': 'sst', 'target_layer': '2/3'},
-            {'cre_type': 'vip', 'target_layer': '2/3'},
+            {'cre_type': 'pvalb', 'target_layer': '2/3', 'cortical_layer': '2/3'},
+            {'cre_type': 'sst', 'target_layer': '2/3', 'cortical_layer': '2/3'},
+            {'cre_type': 'vip', 'target_layer': '2/3', 'cortical_layer': '2/3'},
            # {'cre_type': 'rorb', 'target_layer': '4'},
-            {'cre_type': 'nr5a1', 'target_layer': '4'},
-            {'cre_type': 'pvalb', 'target_layer': '4'},
-            {'cre_type': 'sst', 'target_layer': '4'},
-            {'cre_type': 'vip', 'target_layer': '4'},
-            {'cre_type': 'sim1', 'target_layer': '5'},
-            {'cre_type': 'tlx3', 'target_layer': '5'},
-            {'cre_type': 'pvalb', 'target_layer': '5'},
-            {'cre_type': 'sst', 'target_layer': '5'},
-            {'cre_type': 'vip', 'target_layer': '5'},
-            {'cre_type': 'ntsr1', 'target_layer': '6'},
-            {'cre_type': 'pvalb', 'target_layer': '6'},
-            {'cre_type': 'sst', 'target_layer': '6'},
-            {'cre_type': 'vip', 'target_layer': '6'},
+            {'cre_type': 'nr5a1', 'target_layer': '4', 'cortical_layer': '4'},
+            {'cre_type': 'pvalb', 'target_layer': '4', 'cortical_layer': '4'},
+            {'cre_type': 'sst', 'target_layer': '4', 'cortical_layer': '4'},
+            {'cre_type': 'vip', 'target_layer': '4', 'cortical_layer': '4'},
+            {'cre_type': 'sim1', 'target_layer': '5', 'cortical_layer': '5'},
+            {'cre_type': 'tlx3', 'target_layer': '5', 'cortical_layer': '5'},
+            {'cre_type': 'pvalb', 'target_layer': '5', 'cortical_layer': '5'},
+            {'cre_type': 'sst', 'target_layer': '5', 'cortical_layer': '5'},
+            {'cre_type': 'vip', 'target_layer': '5', 'cortical_layer': '5'},
+            {'cre_type': 'ntsr1', 'target_layer': '6', 'cortical_layer': '6'},
+            {'cre_type': 'pvalb', 'target_layer': '6', 'cortical_layer': '6'},
+            {'cre_type': 'sst', 'target_layer': '6', 'cortical_layer': '6'},
+            {'cre_type': 'vip', 'target_layer': '6', 'cortical_layer': '6'},
         ]),
 
         ('Mouse Layer 2/3', [
-            {'cre_type': 'unknown', 'target_layer': '2/3'},
+            # {'cre_type': 'unknown', 'target_layer': '2/3'},
             #{'pyramidal': True, 'target_layer': '2/3'},
-            {'cre_type': 'pvalb', 'target_layer': '2/3'},
-            {'cre_type': 'sst', 'target_layer': '2/3'},
-            {'cre_type': 'vip', 'target_layer': '2/3'},
+            {'dendrite_type': 'spiny', 'target_layer': '2/3', 'cortical_layer': '2/3'},
+            {'cre_type': 'pvalb', 'target_layer': '2/3', 'cortical_layer': '2/3'},
+            {'cre_type': 'sst', 'target_layer': '2/3', 'cortical_layer': '2/3'},
+            {'cre_type': 'vip', 'target_layer': '2/3', 'cortical_layer': '2/3'},
         ]),
         
         ('Mouse Layer 4', [
-            {'cre_type': 'nr5a1', 'target_layer': '4'},
-            {'cre_type': 'pvalb', 'target_layer': '4'},
-            {'cre_type': 'sst', 'target_layer': '4'},
-            {'cre_type': 'vip', 'target_layer': '4'},
+            {'cre_type': 'nr5a1', 'target_layer': '4', 'cortical_layer': '4'},
+            {'cre_type': 'pvalb', 'target_layer': '4', 'cortical_layer': '4'},
+            {'cre_type': 'sst', 'target_layer': '4', 'cortical_layer': '4'},
+            {'cre_type': 'vip', 'target_layer': '4', 'cortical_layer': '4'},
         ]),
 
         ('Mouse Layer 5', [
-            {'cre_type': ('sim1', 'fam84b'), 'target_layer': '5', 'display_names': ('L5', 'PT\nsim1, fam84b')},
-            {'cre_type': 'tlx3', 'target_layer': '5', 'display_names': ('L5', 'IT\ntlx3')},
-            {'cre_type': 'pvalb', 'target_layer': '5'},
-            {'cre_type': 'sst', 'target_layer': '5'},
-            {'cre_type': 'vip', 'target_layer': '5'},
+            {'cre_type': ('sim1', 'fam84b'), 'target_layer': '5', 'display_names': ('L5', 'PT\nsim1, fam84b'), 'cortical_layer': '5'},
+            {'cre_type': 'tlx3', 'target_layer': '5', 'display_names': ('L5', 'IT\ntlx3'), 'cortical_layer': '5'},
+            {'cre_type': 'pvalb', 'target_layer': '5', 'cortical_layer': '5'},
+            {'cre_type': 'sst', 'target_layer': '5', 'cortical_layer': '5'},
+            {'cre_type': 'vip', 'target_layer': '5', 'cortical_layer': '5'},
         ]),
 
         ('Mouse Layer 6', [
-            {'cre_type': 'ntsr1', 'target_layer': '6'},
-            {'cre_type': 'pvalb', 'target_layer': '6'},
-            {'cre_type': 'sst', 'target_layer': '6'},
-            {'cre_type': 'vip', 'target_layer': '6'},
+            {'cre_type': 'ntsr1', 'target_layer': '6', 'cortical_layer': '6'},
+            {'cre_type': 'pvalb', 'target_layer': '6', 'cortical_layer': '6'},
+            {'cre_type': 'sst', 'target_layer': '6', 'cortical_layer': '6'},
+            {'cre_type': 'vip', 'target_layer': '6', 'cortical_layer': '6'},
         ]),
 
         ('Mouse Inhibitory Cre-types',[
@@ -91,14 +92,14 @@ if __name__ == '__main__':
         ('Mouse E-I Cre-types by layer',[
             # {'pyramidal': True, 'target_layer': '2/3'},
             {'cre_type': 'unknown', 'target_layer': '2/3'},
-            {'cre_type': ('pvalb', 'sst', 'vip'), 'target_layer': '2/3', 'display_names': ('L2/3', 'Inhibitory\npvalb, sst, vip')},
+            {'cre_type': ('pvalb', 'sst', 'vip'), 'target_layer': '2/3', 'display_names': ('L2/3', 'Inhibitory\npvalb, sst, vip'), 'cortical_layer': '2/3'},
             {'cre_type': 'nr5a1', 'target_layer': '4'},
-            {'cre_type': ('pvalb', 'sst', 'vip'), 'target_layer': '4', 'display_names': ('L4', 'Inhibitory\npvalb, sst, vip')},
+            {'cre_type': ('pvalb', 'sst', 'vip'), 'target_layer': '4', 'display_names': ('L4', 'Inhibitory\npvalb, sst, vip'), 'cortical_layer': '4'},
             {'cre_type': 'sim1', 'target_layer': '5'},
             {'cre_type': 'tlx3', 'target_layer': '5'},
-            {'cre_type': ('pvalb', 'sst', 'vip'), 'target_layer': '5', 'display_names': ('L5', 'Inhibitory\npvalb, sst, vip')},
+            {'cre_type': ('pvalb', 'sst', 'vip'), 'target_layer': '5', 'display_names': ('L5', 'Inhibitory\npvalb, sst, vip'), 'cortical_layer': '5'},
             {'cre_type': 'ntsr1', 'target_layer': '6'},
-            {'cre_type': ('pvalb', 'sst', 'vip'), 'target_layer': '6', 'display_names': ('L6', 'Inhibitory\npvalb, sst, vip')},     
+            {'cre_type': ('pvalb', 'sst', 'vip'), 'target_layer': '6', 'display_names': ('L6', 'Inhibitory\npvalb, sst, vip'), 'cortical_layer': '6'},     
         ]),
 
         ('Pyramidal / Nonpyramidal by layer', [
@@ -129,6 +130,14 @@ if __name__ == '__main__':
             {'target_layer': '5'},
             {'target_layer': '6'},
         ]),
+
+        ('2P-Opto cre types', [
+            {'cre_type':'ntsr1'},
+            #{'cre_type':'unknown'},
+            {'cre_type':'sst'},
+            {'cre_type':'tlx3'},
+            {'cre_type':'rorb'},
+            {'cre_type':'scnn1a'}])
     ])
 
 
