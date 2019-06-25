@@ -1,6 +1,6 @@
-from .database import make_table, TableGroup
+from .database import make_table
 
-__all__ = ['slice_tables', 'Slice']
+__all__ = ['Slice']
 
 
 Slice = make_table(name='slice', comment="All brain slices on which an experiment was attempted.", columns=[
@@ -20,5 +20,3 @@ Slice = make_table(name='slice', comment="All brain slices on which an experimen
     ('lims_specimen_name', 'str', 'Name of LIMS "slice" specimen'),
     ('storage_path', 'str', 'Location of data within server or cache storage'),
 ])
-
-slice_tables = TableGroup([Slice])

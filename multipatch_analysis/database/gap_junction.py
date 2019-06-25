@@ -1,9 +1,9 @@
 from sqlalchemy.orm import relationship
-from .database import make_table, TableGroup
+from .database import make_table
 from .experiment import Pair
 
 
-__all__ = ['gap_junction_tables', 'GapJunction']
+__all__ = ['GapJunction']
 
 
 GapJunction = make_table(
@@ -18,5 +18,3 @@ GapJunction = make_table(
 
 Pair.gap_junction = relationship(GapJunction, back_populates="pair", cascade="delete", single_parent=True, uselist=False)
 GapJunction.pair = relationship(Pair, back_populates="gap_junction", single_parent=True)
-
-gap_junction_tables = TableGroup([GapJunction])

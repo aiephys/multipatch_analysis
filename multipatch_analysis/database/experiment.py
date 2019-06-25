@@ -1,12 +1,12 @@
 import os
 from collections import OrderedDict
-from .database import TableGroup, make_table
+from .database import make_table
 from sqlalchemy.orm import relationship, deferred, sessionmaker, aliased
 from .slice import Slice
 from .. import config
 
 
-__all__ = ['experiment_tables', 'Experiment', 'Electrode', 'Cell', 'Pair']
+__all__ = ['Experiment', 'Electrode', 'Cell', 'Pair']
 
 
 class ExperimentBase(object):
@@ -172,7 +172,3 @@ Pair.pre_cell = relationship(Cell, foreign_keys=[Pair.pre_cell_id])
 
 Pair.post_cell = relationship(Cell, foreign_keys=[Pair.post_cell_id])
 #Cell.post_pairs = relationship(Pair, back_populates="post_cell", single_parent=True, foreign_keys=[Pair.post_cell])        
-
-
-experiment_tables = TableGroup([Experiment, Electrode, Cell, Pair])
-

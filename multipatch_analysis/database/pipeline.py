@@ -1,7 +1,7 @@
 from collections import OrderedDict
-from .database import make_table, TableGroup
+from .database import make_table
 
-__all__ = ['pipeline_tables', 'Pipeline']
+__all__ = ['Pipeline']
 
 
 Pipeline = make_table(
@@ -15,5 +15,3 @@ Pipeline = make_table(
         ('error', 'str', 'Error or warning messages generated during job processing'),
     ]
 )
-
-pipeline_tables = TableGroup([Pipeline])

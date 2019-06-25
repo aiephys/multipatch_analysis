@@ -1,8 +1,8 @@
 from sqlalchemy.orm import relationship
-from .database import make_table, TableGroup
+from .database import make_table
 from .experiment import Pair
 
-__all__ = ['avg_first_pulse_fit_table', 'AvgFirstPulseFit']
+__all__ = ['AvgFirstPulseFit']
 
 
 AvgFirstPulseFit = make_table(
@@ -48,10 +48,5 @@ AvgFirstPulseFit = make_table(
     ]
 )
 
-
-
-
 Pair.avg_first_pulse_fit = relationship(AvgFirstPulseFit, back_populates="pair", cascade="delete", single_parent=True, uselist=False)
 AvgFirstPulseFit.pair = relationship(Pair, back_populates="avg_first_pulse_fit", single_parent=True)
-
-avg_first_pulse_fit_table = TableGroup([AvgFirstPulseFit])
