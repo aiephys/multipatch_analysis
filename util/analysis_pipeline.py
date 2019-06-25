@@ -11,7 +11,7 @@ if __name__ == '__main__':
     all_pipelines = all_pipelines()
     
     parser = argparse.ArgumentParser(description="Process analysis pipeline jobs")
-    parser.add_argument('pipeline', type=str, nargs=1, help="The name of the pipeline to run: %s" % ', '.join(list(all_pipelines.keys())))
+    parser.add_argument('pipeline', type=str, help="The name of the pipeline to run: %s" % ', '.join(list(all_pipelines.keys())))
     parser.add_argument('modules', type=str, nargs='+', help="The name of the analysis module(s) to run")
     parser.add_argument('--rebuild', action='store_true', default=False, help="Remove and rebuild tables for this analysis")
     parser.add_argument('--retry', action='store_true', default=False, help="Retry processing jobs that previously failed")
@@ -30,9 +30,9 @@ if __name__ == '__main__':
     if args.local:
         pg.dbg()
 
-    database = db.default_database
-    pipeline = all_pipelines[args.pipeline](database=database)
-    all_modules = database.all_modules()
+    database = db.default_db
+    pipeline = all_pipelines[args.pipeline](database=database, config=config)
+    all_modules = pipeline.sorted_modules()
     
     if 'all' in args.modules:
         modules = list(all_modules.values())

@@ -8,9 +8,8 @@ from __future__ import print_function, division
 import os
 import numpy as np
 from collections import OrderedDict
-from ..util import timestamp_to_datetime
-from ..database import dynamics_tables
-from .pipeline_module import DatabasePipelineModule
+from ...util import timestamp_to_datetime
+from ..pipeline_module import DatabasePipelineModule
 from .pulse_response import PulseResponsePipelineModule
 from .connection_strength import ConnectionStrengthPipelineModule
 
@@ -20,7 +19,7 @@ class DynamicsPipelineModule(DatabasePipelineModule):
     """
     name = 'dynamics'
     dependencies = [PulseResponsePipelineModule, ConnectionStrengthPipelineModule]
-    table_group = dynamics_tables
+    table_group = ['dynamics']
     
     def create_db_enselfes(self, job_id, session):
         db = self.database

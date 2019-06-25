@@ -3,11 +3,10 @@ from __future__ import print_function, division
 
 import os
 import pyqtgraph as pg
-from ..database import pulse_response_strength_tables
-from .. import config
-from .pipeline_module import DatabasePipelineModule
+from ... import config
+from ..pipeline_module import DatabasePipelineModule
 from .dataset import DatasetPipelineModule
-from ..pulse_response_strength import baseline_query, response_query, analyze_response_strength
+from ...pulse_response_strength import baseline_query, response_query, analyze_response_strength
 
 
 class PulseResponsePipelineModule(DatabasePipelineModule):
@@ -15,7 +14,7 @@ class PulseResponsePipelineModule(DatabasePipelineModule):
     """
     name = 'pulse_response'
     dependencies = [DatasetPipelineModule]
-    table_group = pulse_response_strength_tables
+    table_group = ['pulse_response_strength', 'baseline_response_strength']
     
     def create_db_entries(self, expt_id, session):
         _compute_strength('pulse_response', expt_id, session, self.database)

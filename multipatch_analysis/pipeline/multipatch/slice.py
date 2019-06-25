@@ -2,11 +2,9 @@ import os, glob, re, pickle, time
 from datetime import datetime
 from collections import OrderedDict
 from acq4.util.DataManager import getDirHandle
-from .. import database as db
-from ..database import slice_tables
-from .pipeline_module import DatabasePipelineModule
-from .. import config, lims, constants
-from ..util import datetime_to_timestamp, timestamp_to_datetime
+from ..pipeline_module import DatabasePipelineModule
+from ... import config, lims, constants
+from ...util import datetime_to_timestamp, timestamp_to_datetime
 
 
 class SlicePipelineModule(DatabasePipelineModule):
@@ -14,7 +12,7 @@ class SlicePipelineModule(DatabasePipelineModule):
     """
     name = 'slice'
     dependencies = []
-    table_group = slice_tables
+    table_group = ['slice']
     
     def create_db_entries(self, job_id, session):
         slices = all_slices()

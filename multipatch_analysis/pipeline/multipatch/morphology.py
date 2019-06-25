@@ -8,11 +8,10 @@ from __future__ import print_function, division
 import os, datetime
 
 from collections import OrderedDict
-from ..util import timestamp_to_datetime, optional_import
-from ..database import morphology_tables
-from ..pipette_metadata import PipetteMetadata
-from .. import config, lims
-from .pipeline_module import DatabasePipelineModule
+from ...util import timestamp_to_datetime, optional_import
+from ...pipette_metadata import PipetteMetadata
+from ... import config, lims
+from ..pipeline_module import DatabasePipelineModule
 from .experiment import ExperimentPipelineModule
 pyodbc = optional_import('pyodbc')
 
@@ -33,7 +32,7 @@ class MorphologyPipelineModule(DatabasePipelineModule):
     """
     name = 'morphology'
     dependencies = [ExperimentPipelineModule]
-    table_group = morphology_tables
+    table_group = ['morphology']
     
     def create_db_entries(self, job_id, session):
         db = self.database

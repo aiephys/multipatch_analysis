@@ -4,12 +4,10 @@ import numpy as np
 from datetime import datetime
 from collections import OrderedDict
 from acq4.util.DataManager import getDirHandle
-from ..database import experiment_tables
-from .pipeline_module import DatabasePipelineModule
-from .. import config, synphys_cache
-from .. import lims
-from ..util import datetime_to_timestamp
-from ..experiment import Experiment
+from ..pipeline_module import DatabasePipelineModule
+from ... import config, synphys_cache, lims
+from ...util import datetime_to_timestamp
+from ...experiment import Experiment
 from .slice import SlicePipelineModule
 
 
@@ -18,8 +16,7 @@ class ExperimentPipelineModule(DatabasePipelineModule):
     """
     name = 'experiment'
     dependencies = [SlicePipelineModule]
-    table_group = experiment_tables
-    
+    table_group = ['experiment', 'electrode', 'cell', 'pair']    
     
     def create_db_entries(self, job_id, session):
         db = self.database
@@ -146,7 +143,7 @@ class ExperimentPipelineModule(DatabasePipelineModule):
         """Return a list of all finished job IDs in this module that depend on 
         specific jobs from another module.
         """
-        if module not in self.dependencies:
+        if type(module) not in self.dependencies:
             raise ValueError("%s does not depend on module %s" % (self, module))
         
         db = self.database

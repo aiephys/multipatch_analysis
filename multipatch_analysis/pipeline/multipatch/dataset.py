@@ -3,19 +3,15 @@ import numpy as np
 from datetime import datetime
 from collections import OrderedDict
 from acq4.util.DataManager import getDirHandle
-from .. import config, synphys_cache
-from .. import lims
-from .. import qc
-from ..util import timestamp_to_datetime
-from ..experiment import Experiment
-from .. import database as db
-from ..database import dataset_tables
-from .pipeline_module import DatabasePipelineModule
+from ... import config, synphys_cache, lims, qc
+from ...util import timestamp_to_datetime
+from ...experiment import Experiment
+from ..pipeline_module import DatabasePipelineModule
 from .experiment import ExperimentPipelineModule
-from ..connection_detection import PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
+from ...connection_detection import PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.data import PatchClampRecording
-from ..data import MultiPatchExperiment, MultiPatchProbe
+from ...data import MultiPatchExperiment, MultiPatchProbe
 
 
 class DatasetPipelineModule(DatabasePipelineModule):
@@ -23,7 +19,7 @@ class DatasetPipelineModule(DatabasePipelineModule):
     """
     name = 'dataset'
     dependencies = [ExperimentPipelineModule]
-    table_group = dataset_tables
+    table_group = ['sync_rec', 'recording', 'patch_clamp_recording', 'multi_patch_probe', 'test_pulse', 'stim_pulse', 'stim_spike', 'pulse_response', 'baseline']
 
     # datasets are large and NWB access leaks memory
     # when running parallel, each child process may run only one job before being killed
@@ -242,6 +238,7 @@ class DatasetPipelineModule(DatabasePipelineModule):
         This method is used by drop_jobs to delete records for specific job IDs.
         """
         # only need to return from syncrec table; other tables will be dropped automatically.
+        db = self.database
         return session.query(db.SyncRec).filter(db.SyncRec.experiment_id==db.Experiment.id).filter(db.Experiment.acq_timestamp.in_(job_ids)).all()
 
     def ready_jobs(self):

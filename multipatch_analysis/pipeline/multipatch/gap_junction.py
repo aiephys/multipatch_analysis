@@ -3,9 +3,8 @@ from __future__ import print_function, division
 
 import os
 import pyqtgraph as pg
-from ..database as import gap_junction_tables
-from .. import config
-from .pipeline_module import DatabasePipelineModule
+from ... import config
+from ..pipeline_module import DatabasePipelineModule
 from .experiment import ExperimentPipelineModule
 from .dataset import DatasetPipelineModule
 
@@ -15,7 +14,7 @@ class GapJunctionPipelineModule(DatabasePipelineModule):
     """
     name = 'gap_junction'
     dependencies = [ExperimentPipelineModule, DatasetPipelineModule]
-    table_group = gap_junction_tables
+    table_group = ['gap_junction']
     
     def create_db_entries(self, expt_id, session):
         db = self.database

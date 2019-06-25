@@ -2,11 +2,11 @@
 from __future__ import print_function, division
 
 import os
-from ..database import avg_first_pulse_fit_table, single_first_pulse_fit_table, aliased
-from .. import config
-from .pipeline_module import DatabasePipelineModule
+from ...database import aliased
+from ... import config
+from ..pipeline_module import DatabasePipelineModule
 from .connection_strength import ConnectionStrengthPipelineModule
-from ..fit_average_first_pulse import fit_average_first_pulses, fit_single_first_pulse
+from ...fit_average_first_pulse import fit_average_first_pulses, fit_single_first_pulse
 import traceback
 import sys
 
@@ -16,7 +16,7 @@ class AverageFirstPulseFitPipelineModule(DatabasePipelineModule):
     """
     name = 'avg_first_pulse_fit'
     dependencies = [ConnectionStrengthPipelineModule]
-    table_group = avg_first_pulse_fit_table
+    table_group = ['avg_first_pulse_fit']
     
     def create_db_entries(self, expt_id, session):
         db = self.database
@@ -131,7 +131,7 @@ class SingleFirstPulseFitPipelineModule(DatabasePipelineModule):
     """
     name = 'single_first_pulse_fit'
     dependencies = [ConnectionStrengthPipelineModule]
-    table_group = single_first_pulse_fit_table
+    table_group = ['single_first_pulse_fit']
     
     def create_db_entries(self, expt_id, session):
         db = self.database   

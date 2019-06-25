@@ -3,13 +3,12 @@ from __future__ import print_function, division
 
 import os
 import pyqtgraph as pg
-from ..database import connection_strength_tables
-from .. import config
-from .pipeline_module import DatabasePipelineModule
+from ... import config
+from ..pipeline_module import DatabasePipelineModule
 from .experiment import ExperimentPipelineModule
 from .dataset import DatasetPipelineModule
 from .pulse_response import PulseResponsePipelineModule
-from ..connection_strength import get_amps, get_baseline_amps, analyze_pair_connectivity
+from ...connection_strength import get_amps, get_baseline_amps, analyze_pair_connectivity
 
 
 class ConnectionStrengthPipelineModule(DatabasePipelineModule):
@@ -17,7 +16,7 @@ class ConnectionStrengthPipelineModule(DatabasePipelineModule):
     """
     name = 'connection_strength'
     dependencies = [ExperimentPipelineModule, DatasetPipelineModule, PulseResponsePipelineModule]
-    table_group = connection_strength_tables
+    table_group = ['connection_strength']
     
     def create_db_entries(self, expt_id, session):
         db = self.database
