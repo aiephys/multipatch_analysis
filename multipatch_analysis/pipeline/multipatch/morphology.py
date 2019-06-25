@@ -34,8 +34,11 @@ class MorphologyPipelineModule(DatabasePipelineModule):
     dependencies = [ExperimentPipelineModule]
     table_group = ['morphology']
     
-    def create_db_entries(self, job_id, session):
-        db = self.database
+    @classmethod
+    def create_db_entries(cls, job, session):
+        db = job['database']
+        job_id = job['job_id']
+
         # Load experiment from DB
         expt = db.experiment_from_timestamp(job_id, session=session)
         morpho_results = morpho_db()

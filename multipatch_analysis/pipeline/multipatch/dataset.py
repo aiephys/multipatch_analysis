@@ -25,7 +25,11 @@ class DatasetPipelineModule(DatabasePipelineModule):
     # when running parallel, each child process may run only one job before being killed
     maxtasksperchild = 1  
     
-    def create_db_entries(self, job_id, session):
+    @classmethod
+    def create_db_entries(cls, job, session):
+        db = job['database']
+        job_id = job['job_id']
+
         # Load experiment from DB
         expt_entry = db.experiment_from_timestamp(job_id, session=session)
         elecs_by_ad_channel = {elec.device_id:elec for elec in expt_entry.electrodes}

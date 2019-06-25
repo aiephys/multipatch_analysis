@@ -16,9 +16,12 @@ class PulseResponsePipelineModule(DatabasePipelineModule):
     dependencies = [DatasetPipelineModule]
     table_group = ['pulse_response_strength', 'baseline_response_strength']
     
-    def create_db_entries(self, expt_id, session):
-        _compute_strength('pulse_response', expt_id, session, self.database)
-        _compute_strength('baseline', expt_id, session, self.database)
+    @classmethod
+    def create_db_entries(cls, job, session):
+        db = job['database']
+        expt_id = job['job_id']
+        _compute_strength('pulse_response', expt_id, session, db)
+        _compute_strength('baseline', expt_id, session, db)
         
     def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.

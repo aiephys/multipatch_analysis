@@ -21,8 +21,11 @@ class DynamicsPipelineModule(DatabasePipelineModule):
     dependencies = [PulseResponsePipelineModule, ConnectionStrengthPipelineModule]
     table_group = ['dynamics']
     
-    def create_db_enselfes(self, job_id, session):
-        db = self.database
+    @classmethod
+    def create_db_entries(cls, job, session):
+        db = job['database']
+        job_id = job['job_id']
+
         delays = [125, 250, 500, 1000, 2000, 4000]
         # Load experiment from DB
         expt = db.experiment_from_timestamp(job_id, session=session)

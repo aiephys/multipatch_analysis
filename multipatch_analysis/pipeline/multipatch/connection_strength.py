@@ -18,8 +18,11 @@ class ConnectionStrengthPipelineModule(DatabasePipelineModule):
     dependencies = [ExperimentPipelineModule, DatasetPipelineModule, PulseResponsePipelineModule]
     table_group = ['connection_strength']
     
-    def create_db_entries(self, expt_id, session):
-        db = self.database
+    @classmethod
+    def create_db_entries(cls, job, session):
+        db = job['database']
+        expt_id = job['job_id']
+        
         expt = db.experiment_from_timestamp(expt_id, session=session)
 
         for pair in expt.pair_list:

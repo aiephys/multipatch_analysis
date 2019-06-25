@@ -14,7 +14,11 @@ class SlicePipelineModule(DatabasePipelineModule):
     dependencies = []
     table_group = ['slice']
     
-    def create_db_entries(self, job_id, session):
+    @classmethod
+    def create_db_entries(cls, job, session):
+        job_id = job['job_id']
+        db = job['database']
+
         slices = all_slices()
         path = slices[job_id]
         dh = getDirHandle(path)
@@ -72,7 +76,7 @@ class SlicePipelineModule(DatabasePipelineModule):
             'storage_path': dh.name(relativeTo=dh.parent().parent()),
         }
 
-        sl = self.database.Slice(**fields)
+        sl = db.Slice(**fields)
         session.add(sl)
 
     def job_records(self, job_ids, session):

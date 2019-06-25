@@ -1,9 +1,9 @@
 import os
 from collections import OrderedDict
-from .database import make_table
 from sqlalchemy.orm import relationship, deferred, sessionmaker, aliased
+from ... import config
+from . import make_table
 from .slice import Slice
-from .. import config
 
 
 __all__ = ['Experiment', 'Electrode', 'Cell', 'Pair']

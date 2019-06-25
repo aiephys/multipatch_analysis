@@ -18,8 +18,11 @@ class ExperimentPipelineModule(DatabasePipelineModule):
     dependencies = [SlicePipelineModule]
     table_group = ['experiment', 'electrode', 'cell', 'pair']    
     
-    def create_db_entries(self, job_id, session):
-        db = self.database
+    @classmethod
+    def create_db_entries(cls, job, session):
+        db = job['database']
+        job_id = job['job_id']
+
         cache = synphys_cache.get_cache()
         all_expts = cache.list_experiments()
         site_path = all_expts[job_id]
@@ -156,7 +159,8 @@ class ExperimentPipelineModule(DatabasePipelineModule):
         """Return an ordered dict of all jobs that are ready to be processed (all dependencies are present)
         and the dates that dependencies were created.
         """
-        finished_slices = SlicePipelineModule.finished_jobs()
+        slice_module = self.pipeline.sorted_modules()['slice']
+        finished_slices = slice_module.finished_jobs()
         
         # cache = synphys_cache.get_cache()
         # all_expts = cache.list_experiments()

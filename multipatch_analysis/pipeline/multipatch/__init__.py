@@ -31,5 +31,4 @@ class MultipatchPipeline(Pipeline):
     def __init__(self, database, config):
         self.config = config
         self.database = database
-        Pipeline.__init__(self)
-        
+        Pipeline.__init__(self, config=config, database=database)

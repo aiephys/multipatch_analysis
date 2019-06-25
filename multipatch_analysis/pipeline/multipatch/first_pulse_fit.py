@@ -18,8 +18,11 @@ class AverageFirstPulseFitPipelineModule(DatabasePipelineModule):
     dependencies = [ConnectionStrengthPipelineModule]
     table_group = ['avg_first_pulse_fit']
     
-    def create_db_entries(self, expt_id, session):
-        db = self.database
+    @classmethod
+    def create_db_entries(cls, job, session):
+        db = job['database']
+        expt_id = job['job_id']
+
         expt = db.experiment_from_timestamp(expt_id, session=session)
        
         fails = []

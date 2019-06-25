@@ -1,5 +1,5 @@
 from sqlalchemy.orm import relationship
-from .database import make_table
+from . import make_table
 from .experiment import Pair
 
 __all__ = ['AvgFirstPulseFit']

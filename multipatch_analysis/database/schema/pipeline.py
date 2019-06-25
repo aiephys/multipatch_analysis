@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from .database import make_table
+from . import make_table
 
 __all__ = ['Pipeline']
 

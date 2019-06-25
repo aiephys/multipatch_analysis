@@ -1,8 +1,9 @@
 from collections import OrderedDict
 import numpy as np
 from neuroanalysis.data import Trace
-from .database import make_table, _sample_rate_str, default_sample_rate
 from sqlalchemy.orm import relationship
+from ..database import _sample_rate_str, default_sample_rate
+from . import make_table
 from .experiment import Experiment, Electrode, Pair
 
 

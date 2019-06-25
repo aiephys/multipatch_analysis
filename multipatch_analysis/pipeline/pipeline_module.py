@@ -113,7 +113,16 @@ class PipelineModule(object):
             print("Dropping %d invalid results (will update).." % len(run_job_ids))
             self.drop_jobs(run_job_ids)
 
-        run_jobs = [(expt_id, i, len(run_job_ids)) for i, expt_id in enumerate(run_job_ids)]
+        # Make a list of specifications for jobs to be run.
+        run_jobs = [{
+            'job_id': expt_id, 
+            'job_number': i, 
+            'n_jobs': len(run_job_ids),
+            'module_class': self.__class__,
+        } for i, expt_id in enumerate(run_job_ids)]
+        
+        # Allow subclasses to modify spec (especially to add configuration on _where_ to store results)
+        run_jobs = [self.make_job_spec(job) for job in run_jobs]
 
         if parallel:
             # kill DB connections before forking multiple processes
@@ -124,10 +133,9 @@ class PipelineModule(object):
             try:
                 # would like to just call self._run_job, but we can't pass a method to Pool.map()
                 # instead we wrap this with the run_job_parallel function defined below.
-                parallel_jobs = [(self, job) for job in run_jobs]
                 job_results = {}
                 chunksize = self.maxtasksperchild or 1
-                for result in pool.imap(run_job_parallel, parallel_jobs, chunksize=chunksize):  # note: maxtasksperchild is broken unless we also force chunksize
+                for result in pool.imap(run_job_parallel, run_jobs, chunksize=chunksize):  # note: maxtasksperchild is broken unless we also force chunksize
                     job_results[result['job_id']] = result['error']
                     print("Finished %d/%d  (%0.1f%%)" % (len(job_results), len(run_jobs), 100*len(job_results)/len(run_jobs)))
             finally:
@@ -143,32 +151,47 @@ class PipelineModule(object):
         errors = {job:result for job,result in job_results.items() if result is not None}
         return {'n_dropped': len(drop_job_ids), 'n_updated': len(run_job_ids), 'n_errors': len(errors), 'errors': errors, 'n_retry': n_retry}
 
-    def _run_job(self, job, raise_exceptions=False):
+    def make_job_spec(self, spec):
+        """Return a dictionary modified from *spec* that contains all
+        parameters needed to run a single job. 
+        
+        These parameters will be passed to _run_job(), possibly in a subprocess, so it
+        is necessary for the returned specification to be picklable.
+        """
+        return spec
+
+    @classmethod
+    def _run_job(cls, job, raise_exceptions=False):
         """Entry point for running a single analysis job; may be invoked in a subprocess.
         """
-        job_id, job_index, n_jobs = job
-        print("Processing %s %d/%d  %0.3f" % (self.name, job_index+1, n_jobs, job_id))
+        job_n = job['job_number']
+        n_jobs = job['n_jobs']
+        job_id = job['job_id']
+        
+        print("Processing %s %d/%d  %0.3f" % (cls.name, job_n+1, n_jobs, job_id))
         start = time.time()
         try:
-            self.process_job(job_id)
+            cls.process_job(job)
         except Exception as exc:
             if raise_exceptions:
                 raise
             else:
-                print("Error processing %s %d/%d  %0.3f:" % (self.name, job_index+1, n_jobs, job_id))
+                print("Error processing %s %d/%d  %0.3f:" % (cls.name, job_n+1, n_jobs, job_id))
                 sys.excepthook(*sys.exc_info())
                 return {'job_id': job_id, 'error': str(exc)}
         else:
-            print("Finished %s %d/%d  %0.3f  (%0.2f sec)" % (self.name, job_index+1, n_jobs, job_id, time.time()-start))
+            print("Finished %s %d/%d  %0.3f  (%0.2f sec)" % (cls.name, job_n+1, n_jobs, job_id, time.time()-start))
             return {'job_id': job_id, 'error': None}
-    
-    def process_job(self, job_id):
+   
+    @classmethod 
+    def process_job(cls, job):
         """Process analysis for one job.
         
         Parameters
         ----------
-        job_id :
-            The ID of the job to be processed.
+        job : dict
+            A dictionary describing the job to be run. Minimally contains 'job_id', but subclasses
+            may supplement this by extending make_job_spec().
         
         Must be reimplemented in subclasses.
         """
@@ -263,8 +286,8 @@ class PipelineModule(object):
 
 def run_job_parallel(job):
     # multiprocessing Pool.map doesn't work on methods; must be a plain function
-    self, job = job
-    return self._run_job(job)
+    cls = job['module_class']
+    return cls._run_job(job)
 
 
 class DatabasePipelineModule(PipelineModule):
@@ -279,8 +302,11 @@ class DatabasePipelineModule(PipelineModule):
     def database(self):
         return self.pipeline.database    
 
-    def create_db_entries(self, job_id, session):
+    @classmethod
+    def create_db_entries(cls, job_id, session):
         """Generate DB entries for *job_id* and add them to *session*.
+        
+        May be invoked in a subprocess.
         """
         raise NotImplementedError()
         
@@ -302,16 +328,34 @@ class DatabasePipelineModule(PipelineModule):
         # (usually this is the experiment ID)
         return job_ids
 
-    def process_job(self, job_id):
-        db = self.database
+    def make_job_spec(self, spec):
+        """Return a dictionary modified from *spec* that contains all
+        parameters needed to run a single job. 
+        
+        These parameters will be passed to _run_job(), possibly in a subprocess, so it
+        is necessary for the returned specification to be picklable.
+        """
+        spec['database'] = self.database
+        return spec
+
+    @classmethod
+    def process_job(cls, job):
+        """Process a single job for this module, handling database session commit/rollback and logging
+        job status to the pipeline table.
+        
+        Note: this is a class method because it may be invoked in a subprocess.
+        """
+        db = job['database']
+        job_id = job['job_id']
+        
         session = db.session(readonly=False)
         # drop old pipeline job record
-        session.query(db.Pipeline).filter(db.Pipeline.job_id==job_id).filter(db.Pipeline.module_name==self.name).delete()
+        session.query(db.Pipeline).filter(db.Pipeline.job_id==job_id).filter(db.Pipeline.module_name==cls.name).delete()
         session.commit()
         
         try:
-            errors = self.create_db_entries(job_id, session)
-            job_result = db.Pipeline(module_name=self.name, job_id=job_id, success=True, error=errors, finish_time=datetime.now())
+            errors = cls.create_db_entries(job, session)
+            job_result = db.Pipeline(module_name=cls.name, job_id=job_id, success=True, error=errors, finish_time=datetime.now())
             session.add(job_result)
 
             session.commit()
@@ -319,7 +363,7 @@ class DatabasePipelineModule(PipelineModule):
             session.rollback()
             
             err = ''.join(traceback.format_exception(*sys.exc_info()))
-            job_result = db.Pipeline(module_name=self.name, job_id=job_id, success=False, error=err, finish_time=datetime.now())
+            job_result = db.Pipeline(module_name=cls.name, job_id=job_id, success=False, error=err, finish_time=datetime.now())
             session.add(job_result)
             session.commit()
             raise

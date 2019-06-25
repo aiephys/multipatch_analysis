@@ -1,6 +1,6 @@
 from sqlalchemy.orm import relationship
+from . import make_table
 from .pulse_response_strength import PulseResponseStrength, BaselineResponseStrength
-from .database import make_table
 from .experiment import Pair
 
 

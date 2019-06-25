@@ -18,7 +18,8 @@ class Pipeline(object):
             pipelines.update(pcls.all_pipelines())
         return pipelines
     
-    def __init__(self):
+    def __init__(self, **kwds):
+        self.kwds = kwds
         self.modules = [mcls(self) for mcls in self.module_classes]
 
     def sorted_modules(self):
@@ -26,7 +27,7 @@ class Pipeline(object):
         topologically sorted by dependencies (least dependent to most dependent).
         """
         excluded = [PipelineModule, DatabasePipelineModule]
-        deps = {c:c.downstream_modules() for c in self.modules if type(c) not in excluded}
+        deps = {c:c.upstream_modules() for c in self.modules if type(c) not in excluded}
         return OrderedDict([(mod.name, mod) for mod in toposort(deps)])
         
     def update(self, modules=None, job_ids=None):
@@ -49,4 +50,6 @@ class Pipeline(object):
         if modules is None:
             modules = self.modules
         
+    def __getstsate__(self):
+        return self.kwds
         
