@@ -88,11 +88,15 @@ class Analyzer(pg.QtCore.QObject):
             if len(pair_group) == 0:
                 continue
             res = self.results.loc[pair_group]
-            res['extra'] = list(np.zeros(len(res.index))) ## create an extra column to group by.
+            res['extra'] = [0]*len(res.index) ## create an extra column to group by.
             result = res.groupby(['extra']).agg(self.summary_stat) 
 
             if group_results is None:
                 group_results = pd.DataFrame(result, index=index)
+                #dtype_dict = {}
+                #for i in range(len(result.columns)):
+                #    dtype_dict[result.columns[i]] = result.dtypes[result.columns[i]]
+
             pre_class, post_class = pair_class
             group_results.loc[pre_class, post_class] = result.iloc[0]
 
@@ -100,6 +104,8 @@ class Analyzer(pg.QtCore.QObject):
         nan_indices = group_results.loc[group_results.isnull().all(axis=1), :].index.tolist()
         for i in nan_indices:
             group_results = group_results.drop(i)
+
+        group_results = group_results.astype(self.summary_dtypes)
 
         self.group_results = group_results
         return self.group_results
@@ -155,7 +161,12 @@ class ConnectivityAnalyzer(Analyzer):
             'gap_junction_probability': [self.metric_summary, self.metric_conf],
             'matrix_completeness': [self.metric_summary, self.metric_conf],
             'distance': [self.metric_summary, self.metric_conf],
-            
+        }
+        self.summary_dtypes = {
+            ('conn_no_data', 'metric_summary'): bool,
+            ('probed', 'metric_summary'): int,
+            ('connected', 'metric_summary'): int,
+            ('gap_junction', 'metric_summary'):int,
         }
 
     def metric_summary(self, x): 
@@ -164,6 +175,9 @@ class ConnectivityAnalyzer(Analyzer):
         if x.name == 'distance':
             return np.nanmean(x)
         if x.name in ['connected', 'probed', 'gap_junction']:
+            #print("+++ metric_summary: ", x.name)
+            #print(x)
+            #print(type(x))
             return sum(filter(None, x))
         else:
             p = x.apply(pd.Series)
@@ -237,7 +251,7 @@ class ConnectivityAnalyzer(Analyzer):
 
         return self.results
 
-    # def group_result(self):
+    # def group_result(self, pair_groups):
     #     if self.group_results is not None:
     #         return self.group_results
 
@@ -332,6 +346,8 @@ class StrengthAnalyzer(Analyzer):
         'vc_decay_tau_first_pulse': [self.metric_summary, self.metric_conf],
         'strength_no_data': self.metric_summary,
         }
+        self.summary_dtypes = {} ## dict to specify how we want to cast different summary measures
+        ## looks like {('ic_fit_amp_all', 'metric_summary'):float}
 
         self.fields = [
             ('None',{}),
@@ -612,6 +628,8 @@ class DynamicsAnalyzer(Analyzer):
             'pulse_ratio_8_1_100hz': [self.metric_summary, self.metric_conf],
             'pulse_ratio_8_1_200hz': [self.metric_summary, self.metric_conf],
         }
+        self.summary_dtypes = {} ## dict to specify how we want to cast different summary measures
+        ## looks like {('pulse_ratio_8_1_50hz', 'metric_summary'):float}
         
         self.fields = [
             ('None', {}),
