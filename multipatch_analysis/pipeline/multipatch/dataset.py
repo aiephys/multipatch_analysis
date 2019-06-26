@@ -3,19 +3,15 @@ import numpy as np
 from datetime import datetime
 from collections import OrderedDict
 from acq4.util.DataManager import getDirHandle
-from .. import config, synphys_cache
-from .. import lims
-from .. import qc
-from ..util import timestamp_to_datetime
-from ..experiment import Experiment
-from .. import database as db
-from ..database import dataset_tables
-from .pipeline_module import DatabasePipelineModule
+from ... import config, synphys_cache, lims, qc
+from ...util import timestamp_to_datetime
+from ...experiment import Experiment
+from ..pipeline_module import DatabasePipelineModule
 from .experiment import ExperimentPipelineModule
-from ..connection_detection import PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
+from ...connection_detection import PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.data import PatchClampRecording
-from ..data import MultiPatchExperiment, MultiPatchProbe
+from ...data import MultiPatchExperiment, MultiPatchProbe
 
 
 class DatasetPipelineModule(DatabasePipelineModule):
@@ -23,15 +19,17 @@ class DatasetPipelineModule(DatabasePipelineModule):
     """
     name = 'dataset'
     dependencies = [ExperimentPipelineModule]
-    table_group = dataset_tables
+    table_group = ['sync_rec', 'recording', 'patch_clamp_recording', 'multi_patch_probe', 'test_pulse', 'stim_pulse', 'stim_spike', 'pulse_response', 'baseline']
 
     # datasets are large and NWB access leaks memory
     # when running parallel, each child process may run only one job before being killed
     maxtasksperchild = 1  
     
     @classmethod
-    def create_db_entries(cls, job_id, session):
-        
+    def create_db_entries(cls, job, session):
+        db = job['database']
+        job_id = job['job_id']
+
         # Load experiment from DB
         expt_entry = db.experiment_from_timestamp(job_id, session=session)
         elecs_by_ad_channel = {elec.device_id:elec for elec in expt_entry.electrodes}
@@ -238,16 +236,15 @@ class DatasetPipelineModule(DatabasePipelineModule):
                     )
                     session.add(base_entry)
         
-    @classmethod
-    def job_records(cls, job_ids, session):
+    def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.
         
         This method is used by drop_jobs to delete records for specific job IDs.
         """
         # only need to return from syncrec table; other tables will be dropped automatically.
+        db = self.database
         return session.query(db.SyncRec).filter(db.SyncRec.experiment_id==db.Experiment.id).filter(db.Experiment.acq_timestamp.in_(job_ids)).all()
 
-    @classmethod
     def ready_jobs(self):
         """Return an ordered dict of all jobs that are ready to be processed (all dependencies are present)
         and the dates that dependencies were created.
@@ -256,7 +253,7 @@ class DatasetPipelineModule(DatabasePipelineModule):
         expts = ExperimentPipelineModule.finished_jobs()
         
         # Look up nwb file locations for all experiments
-        session = db.Session()
+        session = db.session()
         expt_recs = session.query(db.Experiment.acq_timestamp, db.Experiment.storage_path, db.Experiment.ephys_file).filter(db.Experiment.ephys_file != None).all()
         expt_paths = {rec.acq_timestamp: rec for rec in expt_recs}
         session.rollback()

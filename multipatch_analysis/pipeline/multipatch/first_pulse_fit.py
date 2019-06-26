@@ -2,11 +2,11 @@
 from __future__ import print_function, division
 
 import os
-from .. import database as db
-from .. import config
-from .pipeline_module import DatabasePipelineModule
+from ...database import aliased
+from ... import config
+from ..pipeline_module import DatabasePipelineModule
 from .connection_strength import ConnectionStrengthPipelineModule
-from ..fit_average_first_pulse import fit_average_first_pulses, fit_single_first_pulse
+from ...fit_average_first_pulse import fit_average_first_pulses, fit_single_first_pulse
 import traceback
 import sys
 
@@ -16,11 +16,13 @@ class AverageFirstPulseFitPipelineModule(DatabasePipelineModule):
     """
     name = 'avg_first_pulse_fit'
     dependencies = [ConnectionStrengthPipelineModule]
-    table_group = db.avg_first_pulse_fit_table
+    table_group = ['avg_first_pulse_fit']
     
     @classmethod
-    def create_db_entries(cls, expt_id, session):
-   
+    def create_db_entries(cls, job, session):
+        db = job['database']
+        expt_id = job['job_id']
+
         expt = db.experiment_from_timestamp(expt_id, session=session)
        
         fails = []
@@ -46,19 +48,20 @@ class AverageFirstPulseFitPipelineModule(DatabasePipelineModule):
         else:
             return errors
         
-    @classmethod
-    def job_records(cls, job_ids, session):
+    def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.
         
         This method is used by drop_jobs to delete records for specific job IDs.
         """
+        db = self.database
         q = session.query(db.AvgFirstPulseFit)
         q = q.filter(db.AvgFirstPulseFit.pair_id==db.Pair.id)
         q = q.filter(db.Pair.experiment_id==db.Experiment.id)
         q = q.filter(db.Experiment.acq_timestamp.in_(job_ids))
         return q.all()
 
-def join_pulse_response_to_expt(query):
+
+def join_pulse_response_to_expt(db, query):
     pre_rec = db.aliased(db.Recording)
     post_rec = db.aliased(db.Recording)
     joins = [
@@ -75,7 +78,7 @@ def join_pulse_response_to_expt(query):
 
     return query, pre_rec, post_rec
 
-def get_single_pulse_data(session, pair):
+def get_single_pulse_data(session, pair, db):
     """Select records from pulse_response_strength table
     This is a version grabbed from cs.get_amps altered to get
     additional info.  Note that if cs.get_baseline_amps is also
@@ -100,7 +103,7 @@ def get_single_pulse_data(session, pair):
     q = session.query(*cols)
     #q = q.join(db.PulseResponse)
     
-    q, pre_rec, post_rec = join_pulse_response_to_expt(q)
+    q, pre_rec, post_rec = join_pulse_response_to_expt(db, q)
     q = q.join(db.StimSpike)
     # note that these are aliased so needed to be joined outside the join_pulse_response_to_expt() function
     q = q.add_columns(post_rec.start_time.label('rec_start_time'))
@@ -131,17 +134,16 @@ class SingleFirstPulseFitPipelineModule(DatabasePipelineModule):
     """
     name = 'single_first_pulse_fit'
     dependencies = [ConnectionStrengthPipelineModule]
-    table_group = db.single_first_pulse_fit_table
+    table_group = ['single_first_pulse_fit']
     
-    @classmethod
-    def create_db_entries(cls, expt_id, session):
-   
+    def create_db_entries(self, expt_id, session):
+        db = self.database   
         expt = db.experiment_from_timestamp(expt_id, session=session)
        
         fails = []
         errors = ""
         for (pre_cell_id, post_cell_id), pair in expt.pairs.items():
-            passing_first_pulses = get_single_pulse_data(session, pair)         
+            passing_first_pulses = get_single_pulse_data(session, pair, db)         
             for pr in passing_first_pulses: 
                 try:
                     result = fit_single_first_pulse(pr, pair)
@@ -163,12 +165,12 @@ class SingleFirstPulseFitPipelineModule(DatabasePipelineModule):
         else:
             return errors
         
-    @classmethod
-    def job_records(cls, job_ids, session):
+    def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.
         
         This method is used by drop_jobs to delete records for specific job IDs.
         """
+        db = self.database
         q = session.query(db.SingleFirstPulseFit)
         q = q.filter(db.SingleFirstPulseFit.pulse_response_id==db.PulseResponse.id)
         q = q.filter(db.PulseResponse.pair_id==db.Pair.id)

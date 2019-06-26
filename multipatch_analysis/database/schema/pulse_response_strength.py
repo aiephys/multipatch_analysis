@@ -1,9 +1,9 @@
 from sqlalchemy.orm import relationship
-from .database import make_table, TableGroup
+from . import make_table
 from .dataset import PulseResponse, Baseline
 
 
-__all__ = ['pulse_response_strength_tables', 'PulseResponseStrength', 'BaselineResponseStrength']
+__all__ = ['PulseResponseStrength', 'BaselineResponseStrength']
 
 
 PulseResponseStrength = make_table(
@@ -41,6 +41,3 @@ PulseResponseStrength.pulse_response = relationship(PulseResponse, back_populate
 
 Baseline.baseline_response_strength = relationship(BaselineResponseStrength, back_populates="baseline", cascade="delete", single_parent=True, uselist=False)
 BaselineResponseStrength.baseline = relationship(Baseline, back_populates="baseline_response_strength", single_parent=True)
-
-
-pulse_response_strength_tables = TableGroup([PulseResponseStrength, BaselineResponseStrength])

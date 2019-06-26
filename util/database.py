@@ -4,7 +4,6 @@ import os, sys, user, argparse
 from multipatch_analysis import database as db
 from multipatch_analysis.config import synphys_db
 from multipatch_analysis import config
-from multipatch_analysis.pipeline import all_modules
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--reset-db', action='store_true', default=False, help="Drop all tables in the database.", dest='reset_db')

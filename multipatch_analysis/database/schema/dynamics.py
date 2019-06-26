@@ -1,9 +1,9 @@
 from sqlalchemy.orm import relationship
-from .database import make_table, TableGroup
+from . import make_table
 from .experiment import Pair
 
 
-__all__ = ['dynamics_tables', 'Dynamics']
+__all__ = ['Dynamics']
 
 
 Dynamics = make_table(
@@ -30,6 +30,3 @@ Dynamics = make_table(
 
 Pair.dynamics = relationship(Dynamics, back_populates="pair", cascade="delete", single_parent=True, uselist=False)
 Dynamics.pair = relationship(Pair, back_populates="dynamics", single_parent=True)
-
-
-dynamics_tables = TableGroup([Dynamics])

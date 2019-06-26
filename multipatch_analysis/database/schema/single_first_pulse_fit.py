@@ -1,9 +1,9 @@
 from sqlalchemy.orm import relationship
-from .database import make_table, TableGroup
+from . import make_table
 from .dataset import PulseResponse
 
 
-__all__ = ['single_first_pulse_fit_table', 'SingleFirstPulseFit']
+__all__ = ['SingleFirstPulseFit']
 
 
 SingleFirstPulseFit = make_table(
@@ -41,5 +41,3 @@ SingleFirstPulseFit = make_table(
 
 PulseResponse.single_first_pulse_fit = relationship(SingleFirstPulseFit, back_populates="pulse_response", cascade="delete", single_parent=True, uselist=False)
 SingleFirstPulseFit.pulse_response = relationship(PulseResponse, back_populates="single_first_pulse_fit", single_parent=True)
-
-single_first_pulse_fit_table = TableGroup([SingleFirstPulseFit])

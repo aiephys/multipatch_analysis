@@ -3,11 +3,10 @@ from __future__ import print_function, division
 
 import os
 import pyqtgraph as pg
-from .. import database as db
-from .. import config
-from .pipeline_module import DatabasePipelineModule
+from ... import config
+from ..pipeline_module import DatabasePipelineModule
 from .dataset import DatasetPipelineModule
-from ..pulse_response_strength import baseline_query, response_query, analyze_response_strength
+from ...pulse_response_strength import baseline_query, response_query, analyze_response_strength
 
 
 class PulseResponsePipelineModule(DatabasePipelineModule):
@@ -15,19 +14,21 @@ class PulseResponsePipelineModule(DatabasePipelineModule):
     """
     name = 'pulse_response'
     dependencies = [DatasetPipelineModule]
-    table_group = db.pulse_response_strength_tables
+    table_group = ['pulse_response_strength', 'baseline_response_strength']
     
     @classmethod
-    def create_db_entries(cls, expt_id, session):
-        _compute_strength('pulse_response', expt_id, session)
-        _compute_strength('baseline', expt_id, session)
+    def create_db_entries(cls, job, session):
+        db = job['database']
+        expt_id = job['job_id']
+        _compute_strength('pulse_response', expt_id, session, db)
+        _compute_strength('baseline', expt_id, session, db)
         
-    @classmethod
-    def job_records(cls, job_ids, session):
+    def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.
         
         This method is used by drop_jobs to delete records for specific job IDs.
         """
+        db = self.database
         q = session.query(db.PulseResponseStrength)
         q = q.filter(db.PulseResponseStrength.pulse_response_id==db.PulseResponse.id)
         q = q.filter(db.PulseResponse.pair_id==db.Pair.id)
@@ -46,7 +47,7 @@ class PulseResponsePipelineModule(DatabasePipelineModule):
         return prs+brs
 
 
-def _compute_strength(source, expt_id, session):
+def _compute_strength(source, expt_id, session, db):
     """Compute per-pulse-response strength metrics
     """
     if source == 'baseline':

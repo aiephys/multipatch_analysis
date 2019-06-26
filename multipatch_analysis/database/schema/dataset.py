@@ -1,12 +1,13 @@
 from collections import OrderedDict
 import numpy as np
 from neuroanalysis.data import Trace
-from .database import make_table, TableGroup, _sample_rate_str, default_sample_rate
 from sqlalchemy.orm import relationship
+from ..database import _sample_rate_str, default_sample_rate
+from . import make_table
 from .experiment import Experiment, Electrode, Pair
 
 
-__all__ = ['dataset_tables', 'SyncRec', 'Recording', 'PatchClampRecording', 'MultiPatchProbe', 'TestPulse', 'StimPulse', 'StimSpike', 'PulseResponse', 'Baseline']
+__all__ = ['SyncRec', 'Recording', 'PatchClampRecording', 'MultiPatchProbe', 'TestPulse', 'StimPulse', 'StimSpike', 'PulseResponse', 'Baseline']
 
 
 SyncRec = make_table(
@@ -218,6 +219,3 @@ Baseline = make_table(
 
 Recording.baselines = relationship(Baseline, back_populates="recording", cascade='save-update,merge,delete', single_parent=True)
 Baseline.recording = relationship(Recording, back_populates="baselines")
-
-
-dataset_tables = TableGroup([SyncRec, Recording, PatchClampRecording, MultiPatchProbe, TestPulse, StimPulse, Baseline, StimSpike, PulseResponse])

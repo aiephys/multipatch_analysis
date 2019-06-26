@@ -2,11 +2,9 @@ import os, glob, re, pickle, time
 from datetime import datetime
 from collections import OrderedDict
 from acq4.util.DataManager import getDirHandle
-from .. import database as db
-from ..database import slice_tables
-from .pipeline_module import DatabasePipelineModule
-from .. import config, lims, constants
-from ..util import datetime_to_timestamp, timestamp_to_datetime
+from ..pipeline_module import DatabasePipelineModule
+from ... import config, lims, constants
+from ...util import datetime_to_timestamp, timestamp_to_datetime
 
 
 class SlicePipelineModule(DatabasePipelineModule):
@@ -14,10 +12,13 @@ class SlicePipelineModule(DatabasePipelineModule):
     """
     name = 'slice'
     dependencies = []
-    table_group = slice_tables
+    table_group = ['slice']
     
     @classmethod
-    def create_db_entries(cls, job_id, session):
+    def create_db_entries(cls, job, session):
+        job_id = job['job_id']
+        db = job['database']
+
         slices = all_slices()
         path = slices[job_id]
         dh = getDirHandle(path)
@@ -78,13 +79,12 @@ class SlicePipelineModule(DatabasePipelineModule):
         sl = db.Slice(**fields)
         session.add(sl)
 
-    @classmethod
-    def job_records(cls, job_ids, session):
+    def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.
         """
+        db = self.database
         return session.query(db.Slice).filter(db.Slice.acq_timestamp.in_(job_ids)).all()
 
-    @classmethod
     def ready_jobs(self):
         """Return an ordered dict of all jobs that are ready to be processed (all dependencies are present)
         and the dates that dependencies were created.

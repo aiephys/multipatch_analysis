@@ -37,16 +37,6 @@ default_sample_rate = 20000
 _sample_rate_str = '%dkHz' % (default_sample_rate // 1000)
 
 
-class TableGroup(list):
-    """Class used to manage a group of tables that act as a single unit--tables in a group
-    are always created and deleted together.
-    """    
-    def __init__(self, tables):
-        print("TableGroup is deprecated!")
-        list.__init__(self, tables)
-
-
-
 #----------- define ORM classes -------------
 
 class NDArray(TypeDecorator):
@@ -108,16 +98,16 @@ column_data_types = {
 }
 
 
-ORMBase = declarative_base()
 
-all_tables = OrderedDict()
-def make_table(name, columns, base=None, **table_args):
+def make_table(ormbase, name, columns, base=None, **table_args):
     """Generate an ORM mapping class from a simplified schema format.
 
     Columns named 'id' (int) and 'meta' (object) are added automatically.
 
     Parameters
     ----------
+    ormbase : ORMBase instance
+        The sqlalchemy ORM base on which to create this table.
     name : str
         Name of the table, used to set __tablename__ in the new class
     base : class or None
@@ -132,7 +122,6 @@ def make_table(name, columns, base=None, **table_args):
         Column (for example: 'index', 'unique'). Optionally, *data_type* may be a 'tablename.id'
         string indicating that this column is a foreign key referencing another table.
     """
-    global all_tables
     props = {
         '__tablename__': name,
         '__table_args__': table_args,
@@ -157,12 +146,10 @@ def make_table(name, columns, base=None, **table_args):
         if defer_col:
             props[colname] = deferred(props[colname])
 
-    # props['time_created'] = Column(DateTime, default=func.now())
-    # props['time_modified'] = Column(DateTime, onupdate=func.current_timestamp())
     props['meta'] = Column(column_data_types['object'])
 
     if base is None:
-        new_table = type(name, (ORMBase,), props)
+        new_table = type(name, (ormbase,), props)
     else:
         # need to jump through a hoop to allow __init__ on table classes;
         # see: https://docs.sqlalchemy.org/en/latest/orm/constructors.html
@@ -171,9 +158,8 @@ def make_table(name, columns, base=None, **table_args):
             def _init_on_load(self, *args, **kwds):
                 base._init_on_load(self)
             props['_init_on_load'] = _init_on_load
-        new_table = type(name, (base,ORMBase), props)
+        new_table = type(name, (base, ormbase), props)
 
-    all_tables[name] = new_table
     return new_table
 
 
@@ -192,6 +178,8 @@ class Database(object):
     
     def __init__(self, ro_host, rw_host, db_name, ormbase):
         self.ormbase = ormbase
+        self._mappings = {}
+        
         self.ro_host = ro_host
         self.rw_host = rw_host
         self.db_name = db_name
@@ -205,6 +193,62 @@ class Database(object):
         self.ro_address = self.db_address(ro_host, db_name)
         self.rw_address = self.db_address(rw_host, db_name)
         self._all_dbs.add(self)
+        
+        self._default_session = None
+
+    @property
+    def default_session(self):
+        if self._default_session is None:
+            self._default_session = self.session(readonly=True)
+        return self._default_session
+
+    def query(self, *args, **kwds):
+        return self.default_session.query(*args, **kwds)
+
+    @staticmethod
+    def dataframe(query):
+        """Return a pandas dataframe containing the results of a sqlalchemy query.
+        """
+        import pandas
+        return pandas.read_sql(query.statement, query.session.bind)
+
+    # def use_default_session(self, fn):
+    #     """Decorator used to auto-fill `session` keyword arguments
+    #     with a global default Session instance.
+        
+    #     If the global session is used, then it will be rolled back after 
+    #     the decorated function returns (to prevent idle-in-transaction timeouts).
+    #     """
+    #     def wrap_with_session(*args, **kwds):
+    #         used_default_session = False
+    #         if kwds.get('session', None) is None:
+    #             kwds['session'] = self.default_session
+    #             used_default_session = True
+    #         try:
+    #             ret = fn(*args, **kwds)
+    #             return ret
+    #         finally:
+    #             if used_default_session:
+    #                 self.default_session.rollback()
+    #     return wrap_with_session    
+
+    def _find_mappings(self):
+        mappings = {cls.__tablename__:cls for cls in self.ormbase.__subclasses__()}
+        order = [t.name for t in self.ormbase.metadata.sorted_tables]
+        self._mappings = OrderedDict([(t, mappings[t]) for t in order if t in mappings])
+
+    def __getattr__(self, attr):
+        try:
+            # pretty sure I'll regret this later:  I want to be able to ask for db.TableName
+            # and return the ORM object for a table.
+            
+            # convert CamelCase to snake_case  (credit: https://stackoverflow.com/a/12867228/643629)
+            table = re.sub(r'((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))', r'_\1', attr).lower()
+            if table not in self._mappings:
+                self._find_mappings()
+            return self._mappings[table]
+        except Exception:
+            return object.__getattribute__(self, attr)
 
     def __repr__(self):
         return "<Database %s (%s)>" % (self.ro_address, 'ro' if self.rw_address is None else 'rw')
@@ -418,23 +462,36 @@ class Database(object):
         else:
             raise TypeError("Unsupported database backend %s" % self.backend)
 
-    def list_orm_tables(self):
-        """Return a dependency-sorted list of tables that are described by the ORM base for this database.
+    def orm_tables(self):
+        """Return a dependency-sorted of ORM mapping objectstables that are described by the ORM base for this database.
         """
-        return self.ormbase.metadata.sorted_tables
+        # need to re-run every time because we can't tell when a new mapping has been added.
+        self._find_mappings()
+        return self._mappings
 
-    def list_db_tables(self):
-        """Return a list of tables in this database.
+    def metadata_tables(self):
+        """Return an ordered dictionary (dependency-sorted) of {name:Table} pairs, one for 
+        each table in the sqlalchemy metadata for this database.
+        """
+        return OrderedDict([(t.name, t) for t in self.ormbase.metadata.sorted_tables])
+
+    def table_names(self):
+        """Return a list of the names of tables in this database.
+        
+        May contain names that are not present in metadata_tables or orm_tables.
         """
         return self.ro_engine.table_names()
 
     def create_tables(self, tables=None):
         """Create tables in the database from the ORM base specification.
         
-        A list of *tables* may be optionally specified (see sqlalchemy.schema.MetaData.create_all) to 
+        A list of the names of *tables* may be optionally specified to 
         create a subset of known tables.
         """
         # Create all tables
+        meta_tables = self.metadata_tables()
+        if tables is not None:
+            tables = [meta_tables[t] for t in tables]
         self.ormbase.metadata.create_all(bind=self.rw_engine, tables=tables)
         self.grant_readonly_permission()
 
@@ -442,9 +499,9 @@ class Database(object):
         """Drop a list of tables (or all ORM-defined tables, if no list is given) from this database.
         """
         drops = []
-        orm_tables = self.list_orm_tables()
-        db_tables = self.list_db_tables()
-        for k in orm_tables:
+        meta_tables = self.metadata_tables()
+        db_tables = self.table_names()
+        for k in meta_tables:
             if tables is not None and k not in tables:
                 continue
             if k in db_tables:
@@ -525,15 +582,10 @@ class Database(object):
         
         This function does not create tables in dest_db; use db.create_tables if needed.
         """
-        
-        # TODO:
-        #  self.ormbase.metadata.sorted_tables should suffice in place of this global:
-        global all_tables
-        
         read_session = source_db.session(readonly=True)
         write_session = dest_db.session(readonly=False)
         
-        for table_name, table in all_tables.items():
+        for table_name, table in source_db.metadata_tables():
             if (table_name in skip_tables) or (tables is not None and table_name not in tables):
                 print("Skipping %s.." % table_name)
                 continue
