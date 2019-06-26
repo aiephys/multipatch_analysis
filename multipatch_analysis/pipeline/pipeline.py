@@ -22,13 +22,18 @@ class Pipeline(object):
         self.kwds = kwds
         self.modules = [mcls(self) for mcls in self.module_classes]
 
+        excluded = [PipelineModule, DatabasePipelineModule]
+        deps = {c:c.upstream_modules() for c in self.modules if type(c) not in excluded}
+        self._sorted_modules = OrderedDict([(mod.name, mod) for mod in toposort(deps)])
+
     def sorted_modules(self):
         """Return an ordered dictionary mapping {name: module} of all modules in this pipeline,
         topologically sorted by dependencies (least dependent to most dependent).
         """
-        excluded = [PipelineModule, DatabasePipelineModule]
-        deps = {c:c.upstream_modules() for c in self.modules if type(c) not in excluded}
-        return OrderedDict([(mod.name, mod) for mod in toposort(deps)])
+        return self._sorted_modules
+    
+    def get_module(self, module_name):
+        return self.sorted_modules()[module_name]
         
     def update(self, modules=None, job_ids=None):
         if modules is None:

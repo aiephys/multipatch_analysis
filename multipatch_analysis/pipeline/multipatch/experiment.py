@@ -159,7 +159,7 @@ class ExperimentPipelineModule(DatabasePipelineModule):
         """Return an ordered dict of all jobs that are ready to be processed (all dependencies are present)
         and the dates that dependencies were created.
         """
-        slice_module = self.pipeline.sorted_modules()['slice']
+        slice_module = self.pipeline.get_module('slice')
         finished_slices = slice_module.finished_jobs()
         
         # cache = synphys_cache.get_cache()

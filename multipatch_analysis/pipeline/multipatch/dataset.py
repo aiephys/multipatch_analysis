@@ -249,8 +249,11 @@ class DatasetPipelineModule(DatabasePipelineModule):
         """Return an ordered dict of all jobs that are ready to be processed (all dependencies are present)
         and the dates that dependencies were created.
         """
+        db = self.database
+        
         # All experiments and their creation times in the DB
-        expts = ExperimentPipelineModule.finished_jobs()
+        expt_module = self.pipeline.get_module('experiment')
+        expts = expt_module.finished_jobs()
         
         # Look up nwb file locations for all experiments
         session = db.session()

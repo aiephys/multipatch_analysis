@@ -226,12 +226,13 @@ class PipelineModule(object):
         """
         # default implpementation collects IDs of finished jobs from upstream modules.
         job_times = OrderedDict()
-        for i,mod_cls in enumerate(self.dependencies):
+        deps = self.upstream_modules()
+        for i,mod in enumerate(deps):
             jobs = mod.finished_jobs()
             for job_id,(ts,success) in jobs.items():
                 if success is False:
                     continue
-                job_times.setdefault(job_id, [None]*len(self.dependencies))
+                job_times.setdefault(job_id, [None]*len(deps))
                 job_times[job_id][i] = ts
             
         ready = OrderedDict()
