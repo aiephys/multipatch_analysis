@@ -646,8 +646,8 @@ class PairAnalysis(object):
         pair_params = {'Synapse call': data['synapse_type'], 'Gap junction call': data['gap_junction']}
         self.ctrl_panel.update_params(**pair_params)
         self.ctrl_panel.update_fit_params(data['fit_parameters']['fit'])
-        warnings = '\n'.join(data['fit_warnings'])
-        self.ctrl_panel.params.child('Warnings').setValue(warnings)
+        self.warnings = '\n'.join(data['fit_warnings'])
+        self.ctrl_panel.params.child('Warnings').setValue(self.warnings)
         self.ctrl_panel.params.child('Comments', '').setValue(data['comments'])
         for mode in modes:
             for holding in holdings:
@@ -676,13 +676,13 @@ if __name__ == '__main__':
     app = pg.mkQApp()
     pg.dbg()
 
-    expt_list = [1502751709.407]
+    # expt_list = [1502751709.407]
     s = db.session()
-    # e = s.query(db.Experiment.acq_timestamp).join(db.Pair).filter(db.Pair.synapse==True)
-    # expt_list = e.all()
-    # expt_list = [ee[0] for ee in expt_list]
-    # shuffle(expt_list)
-    # expt_list = expt_list[:5]
+    e = s.query(db.Experiment.acq_timestamp).join(db.Pair).filter(db.Pair.synapse==True)
+    expt_list = e.all()
+    expt_list = [ee[0] for ee in expt_list]
+    shuffle(expt_list)
+    expt_list = expt_list[:5]
     q = s.query(db.Experiment).filter(db.Experiment.acq_timestamp.in_(expt_list))
     expts = q.all()
 
