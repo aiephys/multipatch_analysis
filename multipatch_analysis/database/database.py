@@ -33,8 +33,6 @@ from .. import config
 db_version = 13
 default_app_name = ('mp_a:' + ' '.join(sys.argv))[:60]
 
-default_sample_rate = 20000
-_sample_rate_str = '%dkHz' % (default_sample_rate // 1000)
 
 
 #----------- define ORM classes -------------
