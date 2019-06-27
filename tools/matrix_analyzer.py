@@ -1,6 +1,6 @@
 import sys
 import pyqtgraph as pg
-import multipatch_analysis.database as db
+from multipatch_analysis.database import default_db as db
 from multipatch_analysis.matrix_analyzer import MatrixAnalyzer
 from collections import OrderedDict
 
@@ -11,7 +11,7 @@ if __name__ == '__main__':
     # pg.setConfigOption('background', 'w')
     # pg.setConfigOption('foreground', 'k')
 
-    session = db.Session()
+    session = db.session()
 
     
     # Define cell classes

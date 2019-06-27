@@ -1,4 +1,5 @@
-import multipatch_analysis.database as db
+from multipatch_analysis.database import default_db as db
+import multipatch_analysis.data_notes_db as notes_db
 import pyqtgraph as pg
 import sys
 import numpy as np
@@ -10,6 +11,7 @@ from multipatch_analysis.ui.experiment_browser import ExperimentBrowser
 from collections import OrderedDict
 from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.baseline import float_mode
+from neuroanalysis.fitting import Psp
 from multipatch_analysis.connection_detection import fit_psp
 from random import shuffle
 
@@ -27,6 +29,9 @@ comment_hashtag = [
 
 comment_hashtag.sort(key=lambda x:x[1])
 comment_hashtag = [''] + comment_hashtag
+
+modes = ['vc', 'ic']
+holdings = ['-55', '-70']
 
 class SignalHandler(pg.QtCore.QObject):
         """Because we can't subclass from both QObject and QGraphicsRectItem at the same time
@@ -47,6 +52,7 @@ class MainWindow(pg.QtGui.QWidget):
         self.pair_param = Parameter.create(name='Current Pair', type='str', readonly=True)
         self.ptree.addParameters(self.pair_param)
         self.ptree.addParameters(self.params, showTop=False)
+        self.save_btn = pg.FeedbackButton('Save Analysis')
         self.ic_plot = self.pair_analyzer.ic_plot
         self.vc_plot = self.pair_analyzer.vc_plot
         self.experiment_browser = self.pair_analyzer.experiment_browser
@@ -55,7 +61,8 @@ class MainWindow(pg.QtGui.QWidget):
         self.h_splitter.addWidget(self.v_splitter)
         self.v_splitter.addWidget(self.experiment_browser)
         self.v_splitter.addWidget(self.ptree)
-        self.v_splitter.setSizes([100, 300])
+        self.v_splitter.addWidget(self.save_btn)
+        self.v_splitter.setSizes([100, 300, 20])
         # self.next_pair_button = pg.QtGui.QPushButton("Load Next Pair")
         # self.v_splitter.addWidget(self.next_pair_button)
         self.h_splitter.addWidget(self.vc_plot.grid)
@@ -67,7 +74,16 @@ class MainWindow(pg.QtGui.QWidget):
 
         # self.next_pair_button.clicked.connect(self.load_next_pair)
         self.experiment_browser.itemSelectionChanged.connect(self.selected_pair)
+        self.save_btn.clicked.connect(self.save_to_db)
         
+
+    def save_to_db(self):
+        try:
+            self.pair_analyzer.save_to_db()
+            self.save_btn.success()
+        except:
+            self.save_btn.failure()
+            raise
 
     def set_expts(self, expts):
         self.experiment_browser.populate(experiments=expts)
@@ -80,9 +96,29 @@ class MainWindow(pg.QtGui.QWidget):
         if hasattr(item, 'pair') is False:
             return
         pair = item.pair
+        ## check to see if the pair has already been analyzed
+        expt_id = '%0.3f' % pair.experiment.acq_timestamp
+        pre_cell_id = str(pair.pre_cell.ext_id)
+        post_cell_id = str(pair.post_cell.ext_id)
+        s = notes_db.db.session()
+        q = s.query(notes_db.PairNotes).filter(notes_db.PairNotes.expt_id==expt_id).filter(notes_db.PairNotes.pre_cell_id==pre_cell_id).filter(notes_db.PairNotes.post_cell_id==post_cell_id)
+        record = q.all()
         self.pair_param.setValue(pair)
-        self.pair_analyzer.load_pair(pair)
-
+        if len(record) == 0:
+            self.pair_analyzer.load_pair(pair)
+            self.pair_analyzer.analyze_responses()
+            self.pair_analyzer.fit_responses()
+        elif len(record) == 1:
+            msg = pg.QtGui.QMessageBox.question(self, "Pair Analysis", 
+                "Pair %s %s->%s has already been analyzed. \n Would you like to load the results?" % (expt_id, pre_cell_id, post_cell_id),
+                pg.QtGui.QMessageBox.Yes | pg.QtGui.QMessageBox.No)
+            if msg == pg.QtGui.QMessageBox.Yes:
+                self.pair_analyzer.load_pair(pair, record=record[0])
+                self.pair_analyzer.analyze_responses()
+                self.pair_analyzer.load_saved_fit(record[0])
+        else:
+            raise Exception('More than one record for this pair %s %s->%s was found in the Pair Notes database' % (expt_id, pre_cell_id, post_cell_id))
+        s.close()
 
 class ControlPanel(object):
     def __init__(self):
@@ -100,7 +136,6 @@ class ControlPanel(object):
             ]} for c in fit_cat]
         self.fit_params = Parameter.create(name='Fit parameters', type='group', children=fit_param)
         self.warn_param = Parameter.create(name='Warnings', type='text', readonly=True)
-        self.save_params = Parameter.create(name='Save Analysis', type='action')
         self.comments = Parameter.create(name='Comments', type='group', children=[
             {'name': 'Hashtag', 'type': 'list', 'values': comment_hashtag, 'value': ''},
             {'name': '', 'type': 'text'}])
@@ -110,7 +145,6 @@ class ControlPanel(object):
             self.gap,
             self.fit_params,
             self.warn_param,
-            self.save_params,
             self.comments
             ])
 
@@ -128,12 +162,12 @@ class ControlPanel(object):
 
     def update_fit_params(self, fit_params):
         param_names = ['amp', 'xoffset', 'rise_time', 'decay_tau', 'nrmse']
-        for mode in ['vc', 'ic']:
+        for mode in modes:
             if mode == 'vc':
                 suffix = ['A', 's', 's', 's', '']
             elif mode == 'ic':
                 suffix = ['V', 's', 's', 's', '']
-            for holding in ['-55', '-70']:
+            for holding in holdings:
                 group = self.params.child('Fit parameters', holding + ' ' + mode.upper())
                 values = fit_params[mode][holding]
                 format_values = self.format_fit_output(values, param_names, suffix)
@@ -206,19 +240,19 @@ class TracePlot(pg.GraphicsLayoutWidget):
                 for spike in spikes:
                     self.spike_plots[i].plot(spike.time_values, spike.data, pen=self.qc_color[qc])
 
-    def plot_fit(self, trace, fit, holding, fit_pass):
+    def plot_fit(self, trace, fit, holding, fit_pass=False):
         if holding == '-55':
             self.trace_plots[0].addLegend()
             if self.fit_item_55 is not None:
                 self.trace_plots[0].removeItem(self.fit_item_55)
-            self.fit_item_55 = pg.PlotDataItem(trace.time_values, fit.best_fit, name='-55 holding', pen={'color': self.fit_color[False], 'width': 3})
+            self.fit_item_55 = pg.PlotDataItem(trace.time_values, fit, name='-55 holding', pen={'color': self.fit_color[fit_pass], 'width': 3})
             self.trace_plots[0].addItem(self.fit_item_55)
         
         elif holding == '-70':
             self.trace_plots[1].addLegend()  
             if self.fit_item_70 is not None:
                 self.trace_plots[1].removeItem(self.fit_item_70)
-            self.fit_item_70 = pg.PlotDataItem(trace.time_values, fit.best_fit, name='-70 holding', pen={'color': self.fit_color[False], 'width': 3})
+            self.fit_item_70 = pg.PlotDataItem(trace.time_values, fit, name='-70 holding', pen={'color': self.fit_color[fit_pass], 'width': 3})
             self.trace_plots[1].addItem(self.fit_item_70)
 
     def color_fit(self, name, value):
@@ -357,17 +391,18 @@ class PairAnalysis(object):
         self.ctrl_panel.params.child('Comments', 'Hashtag').setValue('')
         self.ctrl_panel.params.child('Comments', '').setValue('')
         
-    def load_pair(self, pair):
+    def load_pair(self, pair, record=None):
+        self.record = hash(record)
         with pg.BusyCursor():
             self.pair = pair
             self.reset_display()
             print ('loading responses...')
-            s = db.Session()
+            s = db.session()
             q = self.response_query(s, pair)
             self.pulse_responses = q.all()
             print('got this many responses: %d' % len(self.pulse_responses))
             s.close()
-
+                
             if pair.synapse is True:
                 synapse_type = pair.connection_strength.synapse_type
             else:
@@ -375,7 +410,7 @@ class PairAnalysis(object):
             pair_params = {'Synapse call': synapse_type, 'Gap junction call': pair.electrical}
             self.ctrl_panel.update_params(**pair_params)
 
-            self.analyze_responses()
+            
 
     def analyze_responses(self):
         ex_limits = [-80e-3, -63e-3]
@@ -414,7 +449,6 @@ class PairAnalysis(object):
         self.ic_plot.plot_traces(self.traces['ic'])
         self.ic_plot.plot_spikes(self.spikes['ic'])
 
-        self.fit_responses()
 
     def response_query(self, session, pair):
         q = session.query(
@@ -445,8 +479,8 @@ class PairAnalysis(object):
     def fit_responses(self, x_offset_win=[-1e-3, 6e-3]):
         initial_fit_parameters = OrderedDict([('vc', {'-55': {}, '-70': {}}), ('ic', {'-55': {}, '-70': {}})])
         output_fit_parameters = OrderedDict([('vc', {'-55': {}, '-70': {}}), ('ic', {'-55': {}, '-70': {}})])
-        for mode in ['vc', 'ic']:
-            for holding in ['-55', '-70']:
+        for mode in modes:
+            for holding in holdings:
                 self.fit_pass = False
                 self.ctrl_panel.params.child('Fit parameters', holding + ' ' + mode.upper(), 'Fit Pass').setValue(self.fit_pass)
                 sign = self.signs[mode][holding].get(self.ctrl_panel.params['Synapse call'], 'any')
@@ -489,9 +523,9 @@ class PairAnalysis(object):
                     output_fit_parameters[mode][holding]['nrmse'] = fit.nrmse()
                     self.fit_pass = fit.nrmse() < self.nrmse_thresh
                     if mode == 'vc':
-                        self.vc_plot.plot_fit(grand_trace, fit, holding, self.fit_pass)
+                        self.vc_plot.plot_fit(grand_trace, fit.best_fit, holding, self.fit_pass)
                     elif mode == 'ic':
-                        self.ic_plot.plot_fit(grand_trace, fit, holding, self.fit_pass)
+                        self.ic_plot.plot_fit(grand_trace, fit.best_fit, holding, self.fit_pass)
                     self.ctrl_panel.params.child('Fit parameters', holding + ' ' + mode.upper(), 'Fit Pass').setValue(self.fit_pass)
                 except:
                     print("Error in PSP fit:")
@@ -504,9 +538,9 @@ class PairAnalysis(object):
     def generate_warnings(self, x_bounds):
         self.warnings = []
         latency_mode = []
-        for mode in ['vc', 'ic']:
+        for mode in modes:
             latency_holding = []
-            for holding in ['-55', '-70']:
+            for holding in holdings:
                 initial_latency = self.fit_params['initial'][mode][holding]['xoffset']
                 fit_latency = self.fit_params['fit'].get(mode).get(holding).get('xoffset')
                 if fit_latency is None:
@@ -528,6 +562,113 @@ class PairAnalysis(object):
         print_warning = '\n'.join(self.warnings)
         self.ctrl_panel.params.child('Warnings').setValue(print_warning)
 
+    def save_to_db(self):
+        fit_pass = {}
+        for mode in modes:
+            fit_pass[mode] = {}
+            for holding in holdings:
+                fit_pass[mode][holding] = self.ctrl_panel.params['Fit parameters', holding + ' ' + mode.upper(), 'Fit Pass']
+
+        expt_id = '%0.3f' % self.pair.experiment.acq_timestamp
+        pre_cell_id = str(self.pair.pre_cell.ext_id)   
+        post_cell_id = str(self.pair.post_cell.ext_id)
+
+        meta = OrderedDict({
+        'expt_id': expt_id,
+        'pre_cell_id': pre_cell_id,
+        'post_cell_id': post_cell_id,
+        'synapse_type': self.ctrl_panel.params['Synapse call'],
+        'gap_junction': self.ctrl_panel.params['Gap junction call'],
+        'fit_parameters': self.fit_params,
+        'fit_pass': fit_pass,
+        'fit_warnings': self.warnings,
+        'comments': self.ctrl_panel.params['Comments', ''],
+        })
+
+        fields = {
+        'expt_id': expt_id,
+        'pre_cell_id': pre_cell_id,
+        'post_cell_id': post_cell_id, 
+        'notes': meta,
+        }
+
+        s = notes_db.db.session(readonly=False)
+        q = s.query(notes_db.PairNotes).filter(notes_db.PairNotes.expt_id==expt_id).filter(notes_db.PairNotes.pre_cell_id==pre_cell_id).filter(notes_db.PairNotes.post_cell_id==post_cell_id)
+        rec = q.all()
+        if len(rec) == 0:
+            record_check = hash(None)
+        elif len(rec) == 1:
+            saved_rec = rec[0]
+            record_check = hash(saved_rec)
+        else:
+            raise Exception('More than one record was found for pair %s %s->%s in the Pair Notes database' % (expt_id, pre_cell_id, post_cell_id))
+
+        if self.record == record_check:
+            entry = notes_db.PairNotes(**fields)
+            s.add(entry)
+            s.commit()
+        else:
+            self.print_pair_notes(meta, saved_rec)
+            msg = pg.QtGui.QMessageBox.question(None, "Pair Analysis", 
+                "The record you are about to save conflicts with what is in the Pair Notes database.\nYou can see the differences in the console.\nWould you like to overwrite?",
+                pg.QtGui.QMessageBox.Yes | pg.QtGui.QMessageBox.No)
+            if msg == pg.QtGui.QMessageBox.Yes:
+                saved_rec.expt_id = expt_id
+                saved_rec.pre_cell_id = pre_cell_id
+                saved_rec.post_cell_id = post_cell_id
+                saved_rec.notes = meta
+                s.commit() 
+            else:
+                raise Exception('Save Cancelled')
+        s.close()
+
+    def print_pair_notes(self, meta, saved_rec):
+        print ('Pair Notes Item:\tCurrent value\tSaved value')
+        print ("================\t=============\t============")
+        for k, v in meta.items():
+            if k == 'fit_pass':
+                continue
+            if k == 'fit_parameters':
+                for mode in modes:
+                    for holding in holdings:
+                        current_params = meta['fit_parameters']['fit'][mode][holding]
+                        fp = meta['fit_pass'][mode][holding]
+                        saved_params = saved_rec.notes['fit_parameters']['fit'][mode][holding]
+                        fp2 = saved_rec.notes['fit_pass'][mode][holding]
+                        print ('Fit parameters for %s %s:\t%s\t%s' % (mode, holding, fp, fp2))
+                        for p, param in current_params.items():
+                            print ('%s:\t%s\t%s' % (p, pg.siFormat(param), pg.siFormat(saved_params[p])))
+            else:
+                print ('%s:\t%s\t%s' % (k, v, saved_rec.notes[k]))
+
+    def load_saved_fit(self, record):
+        data = record.notes
+        pair_params = {'Synapse call': data['synapse_type'], 'Gap junction call': data['gap_junction']}
+        self.ctrl_panel.update_params(**pair_params)
+        self.ctrl_panel.update_fit_params(data['fit_parameters']['fit'])
+        warnings = '\n'.join(data['fit_warnings'])
+        self.ctrl_panel.params.child('Warnings').setValue(warnings)
+        self.ctrl_panel.params.child('Comments', '').setValue(data['comments'])
+        for mode in modes:
+            for holding in holdings:
+                fit_pass = data['fit_pass'][mode][holding]
+                self.ctrl_panel.params.child('Fit parameters', holding + ' ' + mode.upper(), 'Fit Pass').setValue(fit_pass)
+                fit_params = data['fit_parameters']['fit'][mode][holding]
+                if fit_params:
+                    p = Psp()
+                    avg = TraceList(self.traces[mode][holding]['qc_pass']).mean()
+                    fit_psp = p.eval(x=avg.time_values, 
+                        xoffset=fit_params['xoffset'] + 10e-3, 
+                        yoffset=fit_params['yoffset'], 
+                        amp=fit_params['amp'],
+                        rise_time=fit_params['rise_time'],
+                        decay_tau=fit_params['decay_tau'],
+                        rise_power=fit_params['rise_power'])
+                    if mode == 'vc':
+                        self.vc_plot.plot_fit(avg, fit_psp, holding, fit_pass=fit_pass)
+                    if mode == 'ic':
+                        self.ic_plot.plot_fit(avg, fit_psp, holding, fit_pass=fit_pass)
+
 
 
 if __name__ == '__main__':
@@ -535,13 +676,13 @@ if __name__ == '__main__':
     app = pg.mkQApp()
     pg.dbg()
 
-    # expt_list = [1525985474.422, 1552517721.641]
-    s = db.Session()
-    e = s.query(db.Experiment.acq_timestamp).join(db.Pair).filter(db.Pair.synapse==True)
-    expt_list = e.all()
-    expt_list = [ee[0] for ee in expt_list]
-    shuffle(expt_list)
-    expt_list = expt_list[:5]
+    expt_list = [1502751709.407]
+    s = db.session()
+    # e = s.query(db.Experiment.acq_timestamp).join(db.Pair).filter(db.Pair.synapse==True)
+    # expt_list = e.all()
+    # expt_list = [ee[0] for ee in expt_list]
+    # shuffle(expt_list)
+    # expt_list = expt_list[:5]
     q = s.query(db.Experiment).filter(db.Experiment.acq_timestamp.in_(expt_list))
     expts = q.all()
 
