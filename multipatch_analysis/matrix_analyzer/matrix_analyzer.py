@@ -11,9 +11,9 @@ from __future__ import print_function, division
 from collections import OrderedDict
 import numpy as np
 import pyqtgraph as pg
-import multipatch_analysis.database as db
 import pandas as pd
 import re, cProfile, os, json, sys, copy
+from multipatch_analysis.database import default_db as db
 from analyzers import ConnectivityAnalyzer, StrengthAnalyzer, DynamicsAnalyzer, get_all_output_fields
 from multipatch_analysis import constants
 from multipatch_analysis.cell_class import CellClass, classify_cells, classify_pairs
@@ -65,7 +65,7 @@ class Tabs(pg.QtGui.QTabWidget):
 
 class ExperimentFilter(object):
     def __init__(self):  
-        s = db.Session()
+        s = db.session()
         self._signalHandler = SignalHandler()
         self.sigOutputChanged = self._signalHandler.sigOutputChanged
         self.pairs = None

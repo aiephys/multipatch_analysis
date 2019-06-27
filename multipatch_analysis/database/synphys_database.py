@@ -5,8 +5,11 @@ from .schema import ORMBase
 class SynphysDatabase(Database):
     """Augments the Database class with convenience methods for querying the synphys database.
     """
+    default_sample_rate = 20000
+    _sample_rate_str = '%dkHz' % (default_sample_rate // 1000)
+
     def __init__(self, ro_host, rw_host, db_name):
-        Database.__init__(self, ro_host, rw_host, db_name, ORMBase)
+        Database.__init__(self, ro_host, rw_host, db_name, ORMBase)   
         
     def slice_from_timestamp(self, ts, session=None):
         session = session or self.default_session

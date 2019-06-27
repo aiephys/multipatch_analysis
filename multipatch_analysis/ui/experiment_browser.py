@@ -2,7 +2,7 @@ from __future__ import print_function, division
 from datetime import datetime
 import pyqtgraph as pg
 
-from multipatch_analysis import database as db
+from multipatch_analysis.database import default_db as db
 
 
 class ExperimentBrowser(pg.TreeWidget):
@@ -21,7 +21,7 @@ class ExperimentBrowser(pg.TreeWidget):
     def populate(self, experiments=None):
         self.items_by_pair_id = {}
         
-        self.session = db.Session()
+        self.session = db.session()
         
         if experiments is None:
             experiments = db.list_experiments(session=self.session)
