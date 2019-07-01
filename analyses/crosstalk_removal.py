@@ -6,6 +6,7 @@ Question: can we digitally remove pipette electrical / capacitive crosstalk some
 from __future__ import division, print_function
 import numpy as np
 import pyqtgraph as pg
+from sqlalchemy.orm import aliased
 
 from neuroanalysis.data import TraceList
 from neuroanalysis import filter
@@ -163,8 +164,8 @@ class CrosstalkAnalyzer(object):
         limit = self.params['data', 'limit']
         with pg.BusyCursor():
             
-            pre_prec = db.aliased(db.PatchClampRecording)
-            post_prec = db.aliased(db.PatchClampRecording)
+            pre_prec = aliased(db.PatchClampRecording)
+            post_prec = aliased(db.PatchClampRecording)
             q = db.query(db.PulseResponse).join(db.StimPulse).join(db.Pair)
             q = q.join(pre_prec, db.PulseResponse.recording_id==pre_prec.recording_id)
             q = q.join(post_prec, db.StimPulse.recording_id==post_prec.recording_id)

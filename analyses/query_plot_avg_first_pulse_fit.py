@@ -4,6 +4,7 @@
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+from sqlalchemy.orm import aliased
 from multipatch_analysis.database import database as db
 from multipatch_analysis import fit_average_first_pulse as fafp
 
@@ -76,8 +77,8 @@ pv = [(1533244490.755, 6, 4),
 data = []
 for uid, pre_cell_ext_id, post_cell_ext_id in pv:
 
-    pre_cell = db.aliased(db.Cell)
-    post_cell = db.aliased(db.Cell)
+    pre_cell = aliased(db.Cell)
+    post_cell = aliased(db.Cell)
     stuff = session.query(fafp.AvgFirstPulseFit, db.Pair)\
             .join(db.Pair).join(db.Experiment)\
             .join(pre_cell, db.Pair.pre_cell_id==pre_cell.id)\

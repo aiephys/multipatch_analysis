@@ -19,10 +19,10 @@ from distutils.version import LooseVersion
 if LooseVersion(sqlalchemy.__version__) < '1.2':
     raise Exception('requires at least sqlalchemy 1.2')
 
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, Float, Date, DateTime, LargeBinary, ForeignKey, or_, and_
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, Float, Date, DateTime, LargeBinary, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import relationship, deferred, sessionmaker, aliased, reconstructor
+from sqlalchemy.orm import relationship, deferred, sessionmaker, reconstructor
 from sqlalchemy.types import TypeDecorator
 from sqlalchemy.sql.expression import func
 
@@ -155,7 +155,6 @@ def make_table(ormbase, name, columns, base=None, **table_args):
     return new_table
 
 
-
 class Database(object):
     """Methods for doing relational database maintenance via sqlalchemy.
     
@@ -188,11 +187,6 @@ class Database(object):
         self._all_dbs.add(self)
         
         self._default_session = None
-
-        # wrap a few highly-used functions from sqlalchemy for convenience (and backward compatibility)
-        self.aliased = aliased
-        self.or_ = or_
-        self.and_ = and_
 
     @property
     def default_session(self):

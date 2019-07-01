@@ -1,5 +1,6 @@
 from multipatch_analysis.database import default_db as db
 import multipatch_analysis.connection_strength as cs 
+from sqlalchemy.orm import aliased
 from multipatch_analysis.database.database import TableGroup
 import pandas
 import multipatch_analysis.fit_average_first_pulse as afpf
@@ -7,8 +8,8 @@ import matplotlib.pyplot as plt
 
 
 def join_pulse_response_to_expt(query):
-    pre_rec = db.aliased(db.Recording)
-    post_rec = db.aliased(db.Recording)
+    pre_rec = aliased(db.Recording)
+    post_rec = aliased(db.Recording)
     joins = [
         (post_rec, db.PulseResponse.recording),
         (db.PatchClampRecording,),

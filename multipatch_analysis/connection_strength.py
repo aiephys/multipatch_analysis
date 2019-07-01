@@ -6,14 +6,12 @@ Analyses that measure the strength of synaptic connections.
 from __future__ import print_function, division
 
 import sys, multiprocessing, time
-
 import numpy as np
 import pandas
 import scipy.stats
-
+from sqlalchemy.orm import aliased
 from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.baseline import float_mode
-
 from .connection_detection import fit_psp
 from .database import default_db as db
 
@@ -138,8 +136,8 @@ def get_baseline_amps(session, pair, clamp_mode='ic', amps=None, get_data=True):
 
 
 def join_pulse_response_to_expt(query):
-    pre_rec = db.aliased(db.Recording)
-    post_rec = db.aliased(db.Recording)
+    pre_rec = aliased(db.Recording)
+    post_rec = aliased(db.Recording)
     joins = [
         (post_rec, db.PulseResponse.recording),
         (db.PatchClampRecording,),

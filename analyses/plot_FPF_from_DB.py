@@ -1,5 +1,6 @@
 import argparse, first_pulse_from_DB
 import pyqtgraph as pg
+from sqlalchemy.orm import aliased
 from neuroanalysis.ui.plot_grid import PlotGrid
 from multipatch_analysis.database import database as db
 from neuroanalysis.data import Trace, TraceList
@@ -36,8 +37,8 @@ def plot_features(organism=None, conn_type=None, calcium=None, age=None, sweep_t
         feature_grid.show()
 
         for i, select in enumerate(selection):
-            pre_cell = db.aliased(db.Cell)
-            post_cell = db.aliased(db.Cell)
+            pre_cell = aliased(db.Cell)
+            post_cell = aliased(db.Cell)
             q_filter = []
             if sweep_thresh is not None:
                 q_filter.append(FirstPulseFeatures.n_sweeps>=sweep_thresh)

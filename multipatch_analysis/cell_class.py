@@ -1,6 +1,7 @@
 
 from __future__ import print_function, division
 
+from sqlalchemy.orm import aliased
 from collections import OrderedDict
 from . import database as db
 from . import constants
@@ -120,7 +121,7 @@ class CellClass(object):
         """Return a modified query (sqlalchemy) that filters results to include only those in
         this cell class.
         """
-        morpho = db.aliased(db.Morphology)
+        morpho = aliased(db.Morphology)
         query = query.join(morpho, morpho.cell_id==cell_table.id)
         tables = [cell_table, morpho]
         for k, v in self.criteria.items():

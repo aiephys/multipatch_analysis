@@ -62,8 +62,8 @@ class AverageFirstPulseFitPipelineModule(DatabasePipelineModule):
 
 
 def join_pulse_response_to_expt(db, query):
-    pre_rec = db.aliased(db.Recording)
-    post_rec = db.aliased(db.Recording)
+    pre_rec = aliased(db.Recording)
+    post_rec = aliased(db.Recording)
     joins = [
         (post_rec, db.PulseResponse.recording),
         (db.PatchClampRecording,),
