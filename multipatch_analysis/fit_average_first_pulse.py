@@ -5,7 +5,7 @@ avg_first_pulse_fit table.
 import numpy as np
 from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.fitting import fit_psp
-from . import database as db
+from .database import default_db as db
 
 
 time_before_spike = 10.e-3 #time in seconds before spike to start trace waveforms
