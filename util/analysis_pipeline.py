@@ -2,7 +2,7 @@ from __future__ import print_function
 import argparse, sys, os, logging
 import pyqtgraph as pg 
 from multipatch_analysis.pipeline import all_pipelines
-import multipatch_analysis.database as db
+from multipatch_analysis.database import default_db as db
 from multipatch_analysis import config
 
 
@@ -30,8 +30,7 @@ if __name__ == '__main__':
     if args.local:
         pg.dbg()
 
-    database = db.default_db
-    pipeline = all_pipelines[args.pipeline](database=database, config=config)
+    pipeline = all_pipelines[args.pipeline](database=db, config=config)
     all_modules = pipeline.sorted_modules()
     
     if 'all' in args.modules:

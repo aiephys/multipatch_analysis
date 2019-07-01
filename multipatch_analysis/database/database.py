@@ -29,14 +29,6 @@ from sqlalchemy.sql.expression import func
 from .. import config
 
 
-# database version should be incremented whenever the schema has changed
-db_version = 13
-default_app_name = ('mp_a:' + ' '.join(sys.argv))[:60]
-
-default_sample_rate = 20000
-_sample_rate_str = '%dkHz' % (default_sample_rate // 1000)
-
-
 #----------- define ORM classes -------------
 
 class NDArray(TypeDecorator):
@@ -175,7 +167,8 @@ class Database(object):
     - Methods for creating / dropping databases
     """
     _all_dbs = weakref.WeakSet()
-    
+    default_app_name = ('mp_a:' + ' '.join(sys.argv))[:60]
+
     def __init__(self, ro_host, rw_host, db_name, ormbase):
         self.ormbase = ormbase
         self._mappings = {}
@@ -195,6 +188,11 @@ class Database(object):
         self._all_dbs.add(self)
         
         self._default_session = None
+
+        # wrap a few highly-used functions from sqlalchemy for convenience (and backward compatibility)
+        self.aliased = aliased
+        self.or_ = or_
+        self.and_ = and_
 
     @property
     def default_session(self):
@@ -267,14 +265,14 @@ class Database(object):
         # maybe ro_engine.name instead?
         return self.ro_host.partition(':')[0]
 
-    @staticmethod
-    def db_address(host, db_name=None, app_name=None):
+    @classmethod
+    def db_address(cls, host, db_name=None, app_name=None):
         """Return a complete address for DB access given a host (like postgres://user:pw@host) and database name.
 
         Appends an app name to postgres addresses.
         """
         if host.startswith('postgres'):
-            app_name = app_name or default_app_name
+            app_name = app_name or cls.default_app_name
             return "{host}/{db_name}?application_name={app_name}".format(host=host, db_name=db_name, app_name=app_name)
         else:
             return "{host}/{db_name}".format(host=host, db_name=db_name)

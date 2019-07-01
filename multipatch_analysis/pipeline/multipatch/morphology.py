@@ -6,7 +6,6 @@ For generating a DB table describing cell morphology.
 from __future__ import print_function, division
 
 import os, datetime
-
 from collections import OrderedDict
 from ...util import timestamp_to_datetime, optional_import
 from ...pipette_metadata import PipetteMetadata
@@ -26,6 +25,7 @@ col_names = {
                 'Apical_truncation': {'name': 'apical_truncation', 'type': ['truncated', 'borderline', 'intact','unclear', 'NEI']},
 
             }
+
 
 class MorphologyPipelineModule(DatabasePipelineModule):
     """Imports cell morphology data for each experiment
@@ -112,15 +112,22 @@ class MorphologyPipelineModule(DatabasePipelineModule):
         """
         db = self.database
         # All experiments and their creation times in the DB
-        expts = ExperimentPipelineModule.finished_jobs()
+        expts = self.pipeline.get_module('experiment').finished_jobs()
 
         # Look up nwb file locations for all experiments
         session = db.session()
         # expts = session.query(db.Experiment).filter(db.Experiment.acq_timestamp==1521667891.153).all()
         session.rollback()
-        morpho_results = morpho_db()
+        
         # Return the greater of NWB mod time and experiment DB record mtime
         ready = OrderedDict()
+
+        try:
+            morpho_results = morpho_db()
+        except ImportError as exc:
+            print("Skipping morphology: %s" % str(exc))
+            return ready
+
         for expt_id, (expt_mtime, success) in expts.items():
             if success is not True:
                 continue

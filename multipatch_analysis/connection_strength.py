@@ -15,7 +15,7 @@ from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.baseline import float_mode
 
 from .connection_detection import fit_psp
-from . import database as db
+from .database import default_db as db
 
 
 def get_amps(session, pair, clamp_mode='ic', get_data=False):

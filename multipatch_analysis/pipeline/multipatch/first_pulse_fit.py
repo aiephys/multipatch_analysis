@@ -2,7 +2,7 @@
 from __future__ import print_function, division
 
 import os
-from ...database import aliased
+from sqlalchemy.orm import aliased
 from ... import config
 from ..pipeline_module import DatabasePipelineModule
 from .connection_strength import ConnectionStrengthPipelineModule

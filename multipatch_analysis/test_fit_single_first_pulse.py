@@ -1,4 +1,4 @@
-import multipatch_analysis.database as db
+from multipatch_analysis.database import default_db as db
 import multipatch_analysis.connection_strength as cs 
 from multipatch_analysis.database.database import TableGroup
 import pandas

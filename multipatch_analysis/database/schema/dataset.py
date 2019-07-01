@@ -2,9 +2,9 @@ from collections import OrderedDict
 import numpy as np
 from neuroanalysis.data import Trace
 from sqlalchemy.orm import relationship
-from ..database import _sample_rate_str, default_sample_rate
 from . import make_table
 from .experiment import Experiment, Electrode, Pair
+from ..synphys_database import SynphysDatabase
 
 
 __all__ = ['SyncRec', 'Recording', 'PatchClampRecording', 'MultiPatchProbe', 'TestPulse', 'StimPulse', 'StimSpike', 'PulseResponse', 'Baseline']
@@ -109,7 +109,7 @@ class StimPulseBase(object):
     @property
     def recorded_tseries(self):
         if self._rec_tseries is None:
-            self._rec_tseries = Trace(self.data, sample_rate=default_sample_rate, t0=self.data_start_time)
+            self._rec_tseries = Trace(self.data, sample_rate=SynphysDatabase.default_sample_rate, t0=self.data_start_time)
         return self._rec_tseries
 
     @property
@@ -138,7 +138,7 @@ StimPulse = make_table(
         ('duration', 'float', 'Length of the pulse in seconds'),
         ('n_spikes', 'int', 'Number of spikes evoked by this pulse'),
         # ('first_spike', 'stim_spike.id', 'The ID of the first spike evoked by this pulse'),
-        ('data', 'array', 'Numpy array of presynaptic recording sampled at '+_sample_rate_str, {'deferred': True}),
+        ('data', 'array', 'Numpy array of presynaptic recording sampled at '+SynphysDatabase._sample_rate_str, {'deferred': True}),
         ('data_start_time', 'float', "Starting time of the data chunk, relative to the beginning of the recording"),
     ]
 )
@@ -171,7 +171,7 @@ class PulseResponseBase(object):
     @property
     def post_tseries(self):
         if self._post_tseries is None:
-            self._post_tseries = Trace(self.data, sample_rate=default_sample_rate, t0=self.start_time)
+            self._post_tseries = Trace(self.data, sample_rate=SynphysDatabase.default_sample_rate, t0=self.start_time)
         return self._post_tseries
 
     @property
@@ -191,7 +191,7 @@ PulseResponse = make_table(
         ('stim_pulse_id', 'stim_pulse.id', 'The presynaptic pulse', {'index': True}),
         ('pair_id', 'pair.id', 'The pre-post cell pair involved in this pulse response', {'index': True}),
         ('start_time', 'float', 'Starting time of this chunk of the recording in seconds, relative to the beginning of the recording'),
-        ('data', 'array', 'numpy array of response data sampled at '+_sample_rate_str, {'deferred': True}),
+        ('data', 'array', 'numpy array of response data sampled at '+SynphysDatabase._sample_rate_str, {'deferred': True}),
         ('ex_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for excitatory synapse probing', {'index': True}),
         ('in_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for inhibitory synapse probing', {'index': True}),
     ]
@@ -210,7 +210,7 @@ Baseline = make_table(
     columns=[
         ('recording_id', 'recording.id', 'The recording from which this baseline snippet was extracted.', {'index': True}),
         ('start_time', 'float', "Starting time of this chunk of the recording in seconds, relative to the beginning of the recording"),
-        ('data', 'array', 'numpy array of baseline data sampled at '+_sample_rate_str, {'deferred': True}),
+        ('data', 'array', 'numpy array of baseline data sampled at '+SynphysDatabase._sample_rate_str, {'deferred': True}),
         ('mode', 'float', 'most common value in the baseline snippet'),
         ('ex_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for excitatory synapse probing'),
         ('in_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for inhibitory synapse probing'),

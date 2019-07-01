@@ -1,6 +1,6 @@
 import sys
 import pyqtgraph as pg
-import multipatch_analysis.database as db
+from multipatch_analysis.database import default_db as db
 from multipatch_analysis.matrix_analyzer import MatrixAnalyzer
 from collections import OrderedDict
 

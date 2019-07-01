@@ -1,11 +1,17 @@
 from .database import Database, aliased
-from .schema import ORMBase
 
 
 class SynphysDatabase(Database):
     """Augments the Database class with convenience methods for querying the synphys database.
     """
+    # database version should be incremented whenever the schema has changed
+    db_version = 13
+    
+    default_sample_rate = 20000
+    _sample_rate_str = '%dkHz' % (default_sample_rate // 1000)
+
     def __init__(self, ro_host, rw_host, db_name):
+        from .schema import ORMBase
         Database.__init__(self, ro_host, rw_host, db_name, ORMBase)
         
     def slice_from_timestamp(self, ts, session=None):

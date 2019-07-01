@@ -15,7 +15,7 @@ from neuroanalysis import filter
 from neuroanalysis.event_detection import exp_deconvolve
 from neuroanalysis.baseline import float_mode
 
-from . import database as db
+from .database import default_db as db
 
 
 def measure_peak(trace, sign, spike_time, pulse_times, spike_delay=1e-3, response_window=4e-3):
