@@ -6,7 +6,7 @@ class SynphysDatabase(Database):
     """Augments the Database class with convenience methods for querying the synphys database.
     """
     # database version should be incremented whenever the schema has changed
-    db_version = 13
+    db_version = 12
     
     default_sample_rate = 20000
     _sample_rate_str = '%dkHz' % (default_sample_rate // 1000)
