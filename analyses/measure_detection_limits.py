@@ -174,7 +174,7 @@ def build_detection_limits():
     signal = filtered['confidence']
     background = filtered['ic_base_deconv_amp_mean']
 
-    session = db.Session()
+    session = db.session()
 
     # do selected connections first
     count = 0

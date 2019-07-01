@@ -65,7 +65,7 @@ class Tabs(pg.QtGui.QTabWidget):
 
 class ExperimentFilter(object):
     def __init__(self):  
-        s = db.Session()
+        s = db.session()
         self._signalHandler = SignalHandler()
         self.sigOutputChanged = self._signalHandler.sigOutputChanged
         self.pairs = None

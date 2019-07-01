@@ -134,7 +134,7 @@ human_classes = [
 ]
 
 
-session = db.Session()
+session = db.session()
 
 
 max_distance = None#100e-6

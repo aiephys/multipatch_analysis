@@ -12,7 +12,7 @@ from neuroanalysis.data import TraceList
 from neuroanalysis import filter
 from multipatch_analysis.ui.experiment_browser import ExperimentBrowser
 from multipatch_analysis.connection_strength import get_amps, get_baseline_amps
-from multipatch_analysis import database as db
+from multipatch_analysis.database import default_db as db
 from multipatch_analysis import data
 
 
@@ -76,7 +76,7 @@ class CrosstalkAnalyzer(object):
             expt_browser = ExperimentBrowser()
         self.expt_browser = expt_browser
         expt_browser.itemSelectionChanged.connect(self.expt_selection_changed)
-        self.session = db.Session()
+        self.session = db.session()
         self.pair = None
         self.response_list = None
         self.corrected_response_list = None

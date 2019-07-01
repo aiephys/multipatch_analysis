@@ -68,7 +68,7 @@ def init_tables():
     FirstPulseFeatures = first_pulse_features_tables['first_pulse_features']
 
 def update_analysis(limit=None):
-    s = db.Session()
+    s = db.session()
     q = s.query(db.Pair, FirstPulseFeatures).outerjoin(FirstPulseFeatures).filter(FirstPulseFeatures.pair_id == None)
     if limit is not None:
         q = q.limit(limit)
@@ -134,7 +134,7 @@ def filter_pulse_responses(pair):
     ### get first pulse response if it passes qc for excitatory or inhibitory analysis
 
     # TODO: learn how to do what's below in one query
-    # s = db.Session()
+    # s = db.session()
     # q = s.query(db.PulseResponse.data, db.StimSpike, db.PatchClampRecording)
     # q = q.join(db.StimPulse).join(db.StimSpike).join(db.PatchClampRecording)
     # filters = [

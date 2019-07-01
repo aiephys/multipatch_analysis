@@ -156,7 +156,7 @@ if __name__ == '__main__':
     deconv_plots = []
     hist_plots = []
 
-    session = db.Session()
+    session = db.session()
 
     def add_connection_plots(i, name, timestamp, pre_id, post_id):
         global session, win, filtered

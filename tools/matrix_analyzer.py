@@ -11,7 +11,7 @@ if __name__ == '__main__':
     # pg.setConfigOption('background', 'w')
     # pg.setConfigOption('foreground', 'k')
 
-    session = db.Session()
+    session = db.session()
 
     
     # Define cell classes

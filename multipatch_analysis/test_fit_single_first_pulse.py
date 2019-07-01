@@ -79,7 +79,7 @@ pre_cell_id=3
 post_cell_id=1
 
 # query a pair
-session = db.Session()
+session = db.session()
 expt = db.experiment_from_timestamp(uid, session=session)
 pair = expt.pairs[(pre_cell_id, post_cell_id)]
 

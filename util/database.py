@@ -1,7 +1,7 @@
 from __future__ import division, print_function
 
 import os, sys, user, argparse
-from multipatch_analysis import database as db
+import multipatch_analysis.database as db
 from multipatch_analysis.config import synphys_db
 from multipatch_analysis import config
 

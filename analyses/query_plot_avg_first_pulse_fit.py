@@ -11,7 +11,7 @@ from multipatch_analysis import fit_average_first_pulse as fafp
 #----------------------------------------------------------------
 #-------------------------- queries -----------------------------
 #----------------------------------------------------------------
-session=db.Session()
+session=db.session()
 
 # ---- Query all---------------
 '''Note that this query can take several minutes'''

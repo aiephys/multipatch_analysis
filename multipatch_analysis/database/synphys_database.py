@@ -1,4 +1,5 @@
-from .database import Database, aliased
+from sqlalchemy.orm import aliased
+from .database import Database
 
 
 class SynphysDatabase(Database):

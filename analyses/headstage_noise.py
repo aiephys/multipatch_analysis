@@ -2,7 +2,7 @@ from __future__ import division
 import time, datetime
 import multipatch_analysis.database.database as db
 from neuroanalysis.ui.plot_grid import PlotGrid
-s = db.Session()
+s = db.session()
 
 
 q = """

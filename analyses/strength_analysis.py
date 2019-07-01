@@ -28,7 +28,7 @@ from neuroanalysis.event_detection import exp_deconvolve
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.fitting import Psp
 
-from multipatch_analysis import database as db
+from multipatch_analysis.database import default_db as db
 from multipatch_analysis.ui.multipatch_nwb_viewer import MultipatchNwbViewer
 from multipatch_analysis.ui.experiment_browser import ExperimentBrowser
 from multipatch_analysis.pulse_response_strength import response_query, baseline_query, analyze_response_strength
@@ -512,7 +512,7 @@ def query_all_pairs(classifier=None):
         joins=" ".join(joins),
     )
 
-    session = db.Session()
+    session = db.session()
     df = pandas.read_sql(query, session.bind)
 
     recs = df.to_records()
@@ -853,7 +853,7 @@ class PairView(pg.QtCore.QObject):
         pg.QtCore.QObject.__init__(self)
 
         # global session for querying from DB
-        self.session = db.Session()
+        self.session = db.session()
 
         win = pg.QtGui.QSplitter()
         win.setOrientation(pg.QtCore.Qt.Horizontal)
@@ -1047,7 +1047,7 @@ if __name__ == '__main__':
     spw.pair_clicked.connect(pair_view.select_pair)
 
     # Print a little report about synapses that may have been misclassified
-    session = db.Session()
+    session = db.session()
 
     fn_mask = (recs['confidence'] > 0.2) & (recs['synapse'] == False)
     fp_mask = (recs['confidence'] < 0.2) & (recs['synapse'] == True)

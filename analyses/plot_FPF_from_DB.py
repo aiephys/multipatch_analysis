@@ -6,7 +6,7 @@ from multipatch_analysis.database import database as db
 from neuroanalysis.data import Trace, TraceList
 
 def plot_features(organism=None, conn_type=None, calcium=None, age=None, sweep_thresh=None, fit_thresh=None):
-    s = db.Session()
+    s = db.session()
 
     filters = {
         'organism': organism,
