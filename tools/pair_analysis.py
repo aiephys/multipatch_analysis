@@ -67,8 +67,17 @@ class MainWindow(pg.QtGui.QWidget):
         # self.v_splitter.addWidget(self.next_pair_button)
         self.h_splitter.addWidget(self.vc_plot.grid)
         self.h_splitter.addWidget(self.ic_plot.grid)
-        self.h_splitter.setSizes([200, 200, 200])
+        self.fit_compare = self.pair_analyzer.fit_compare
+        self.meta_compare = self.pair_analyzer.meta_compare
+        self.v2_splitter = pg.QtGui.QSplitter()
+        self.v2_splitter.setOrientation(pg.QtCore.Qt.Vertical)
+        self.v2_splitter.addWidget(self.fit_compare)
+        self.v2_splitter.addWidget(self.meta_compare)
+        self.h_splitter.addWidget(self.v2_splitter)
+        self.h_splitter.setSizes([200, 200, 200, 500])
         self.layout.addWidget(self.h_splitter)
+        self.fit_compare.hide()
+        self.meta_compare.hide()
         self.setGeometry(280, 130, 1500, 900)
         self.show()
 
@@ -89,6 +98,8 @@ class MainWindow(pg.QtGui.QWidget):
         self.experiment_browser.populate(experiments=expts)
 
     def selected_pair(self):
+        self.fit_compare.hide()
+        self.meta_compare.hide()
         selected = self.experiment_browser.selectedItems()
         if len(selected) != 1:
             return
@@ -351,6 +362,8 @@ class PairAnalysis(object):
         self.vc_plot = VCPlot(self.vc_superline)
         self.ctrl_panel.params.child('Fit parameters').sigTreeStateChanged.connect(self.colorize_fit)
         self.experiment_browser = ExperimentBrowser()
+        self.fit_compare = pg.DiffTreeWidget()
+        self.meta_compare = pg.DiffTreeWidget()
         self.fit_params = {}
         self.fit_pass = False
         self.nrmse_thresh = 4
@@ -364,8 +377,17 @@ class PairAnalysis(object):
         '-70': {'ex': '+', 'in': 'any'},
         },
         }
-            # connect save button to dump result into new DB
-            # connect load next pair button to clear results and move to the next pair
+        
+        self.fit_precision = {
+        'amp': {'vc': 10, 'ic': 6},
+        'exp_amp': {'vc': 14, 'ic': 6},
+        'decay_tau': {'vc': 8, 'ic': 8},
+        'nrmse': {'vc': 2, 'ic': 2},
+        'rise_time': {'vc': 7, 'ic': 6},
+        'rise_power': {'vc': 0, 'ic': 0},
+        'xoffset': {'vc': 7, 'ic': 7},
+        'yoffset': {'vc': 5, 'ic': 14},
+        }
 
     def colorize_fit(self, param, changes):
         for c in changes:
@@ -573,7 +595,7 @@ class PairAnalysis(object):
         pre_cell_id = str(self.pair.pre_cell.ext_id)   
         post_cell_id = str(self.pair.post_cell.ext_id)
 
-        meta = OrderedDict({
+        meta = {
         'expt_id': expt_id,
         'pre_cell_id': pre_cell_id,
         'post_cell_id': post_cell_id,
@@ -583,7 +605,7 @@ class PairAnalysis(object):
         'fit_pass': fit_pass,
         'fit_warnings': self.warnings,
         'comments': self.ctrl_panel.params['Comments', ''],
-        })
+        }
 
         fields = {
         'expt_id': expt_id,
@@ -610,7 +632,7 @@ class PairAnalysis(object):
         else:
             self.print_pair_notes(meta, saved_rec)
             msg = pg.QtGui.QMessageBox.question(None, "Pair Analysis", 
-                "The record you are about to save conflicts with what is in the Pair Notes database.\nYou can see the differences in the console.\nWould you like to overwrite?",
+                "The record you are about to save conflicts with what is in the Pair Notes database.\nYou can see the differences highlighted in red.\nWould you like to overwrite?",
                 pg.QtGui.QMessageBox.Yes | pg.QtGui.QMessageBox.No)
             if msg == pg.QtGui.QMessageBox.Yes:
                 saved_rec.expt_id = expt_id
@@ -623,23 +645,22 @@ class PairAnalysis(object):
         s.close()
 
     def print_pair_notes(self, meta, saved_rec):
-        print ('Pair Notes Item:\tCurrent value\tSaved value')
-        print ("================\t=============\t============")
-        for k, v in meta.items():
-            if k == 'fit_pass':
-                continue
-            if k == 'fit_parameters':
-                for mode in modes:
-                    for holding in holdings:
-                        current_params = meta['fit_parameters']['fit'][mode][holding]
-                        fp = meta['fit_pass'][mode][holding]
-                        saved_params = saved_rec.notes['fit_parameters']['fit'][mode][holding]
-                        fp2 = saved_rec.notes['fit_pass'][mode][holding]
-                        print ('Fit parameters for %s %s:\t%s\t%s' % (mode, holding, fp, fp2))
-                        for p, param in current_params.items():
-                            print ('%s:\t%s\t%s' % (p, pg.siFormat(param), pg.siFormat(saved_params[p])))
-            else:
-                print ('%s:\t%s\t%s' % (k, v, saved_rec.notes[k]))
+        current_fit = {k:v for k, v in meta['fit_parameters']['fit'].items()}
+        saved_fit = {k:v for k, v in saved_rec.notes['fit_parameters']['fit'].items()}
+        for mode in modes:
+            for holding in holdings:
+                current_fit[mode][holding] = {k:round(v, self.fit_precision[k][mode]) for k, v in current_fit[mode][holding].items()}
+                saved_fit[mode][holding] = {k:round(v, self.fit_precision[k][mode]) for k, v in saved_fit[mode][holding].items()}
+        self.fit_compare.setData(current_fit, saved_fit)
+        self.fit_compare.trees[0].setHeaderLabels(['Current Fit Parameters', 'type', 'value'])
+        self.fit_compare.trees[1].setHeaderLabels(['Saved Fit Parameters', 'type', 'value'])
+        current_meta = {k:v for k, v in meta.items() if k != 'fit_parameters'} 
+        saved_meta = {k:v for k, v in saved_rec.notes.items() if k != 'fit_parameters'} 
+        self.meta_compare.setData(current_meta, saved_meta)
+        self.meta_compare.trees[0].setHeaderLabels(['Current Metadata', 'type', 'value'])
+        self.meta_compare.trees[1].setHeaderLabels(['Saved Metadata', 'type', 'value'])
+        self.fit_compare.show()
+        self.meta_compare.show()
 
     def load_saved_fit(self, record):
         data = record.notes
@@ -676,13 +697,13 @@ if __name__ == '__main__':
     app = pg.mkQApp()
     pg.dbg()
 
-    # expt_list = [1502751709.407]
+    expt_list = [1539292152.917]
     s = db.session()
-    e = s.query(db.Experiment.acq_timestamp).join(db.Pair).filter(db.Pair.synapse==True)
-    expt_list = e.all()
-    expt_list = [ee[0] for ee in expt_list]
-    shuffle(expt_list)
-    expt_list = expt_list[:5]
+    # e = s.query(db.Experiment.acq_timestamp).join(db.Pair).filter(db.Pair.synapse==True)
+    # expt_list = e.all()
+    # expt_list = [ee[0] for ee in expt_list]
+    # shuffle(expt_list)
+    # expt_list = expt_list[:10]
     q = s.query(db.Experiment).filter(db.Experiment.acq_timestamp.in_(expt_list))
     expts = q.all()
 
