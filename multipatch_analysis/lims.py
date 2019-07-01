@@ -1,6 +1,7 @@
 from __future__ import print_function
 import os, re, json
 from . import config
+import sqlalchemy
 
 
 _lims_engine = None
@@ -283,6 +284,11 @@ def specimen_id_from_name(spec_name):
         raise ValueError('No LIMS specimen named "%s"' % spec_name)
     return recs[0]['id']
 
+def find_specimen_ids_matching_name(spec_name):
+    """Return a list of LIMS IDs whose names include spec_name"""
+    q = sqlalchemy.text("select id from specimens where name like :name", bindparams=[sqlalchemy.bindparam('name', value='%%%s%%' %spec_name)])
+    recs = query(q)
+    return [r['id'] for r in recs]
 
 def specimen_name(spec_id):
     recs = query("select name from specimens where id=%s" % spec_id)
@@ -552,12 +558,25 @@ def cluster_cells(cluster):
     if not isinstance(cluster, int):
         cluster = specimen_id_from_name(cluster)
     
-    q = """select child.id, child.name, child.x_coord, child.y_coord, child.external_specimen_name, child.ephys_qc_result, biospecimen_polygons.polygon_id
+    q = """select child.id, child.name, child.x_coord, child.y_coord, child.external_specimen_name, child.ephys_qc_result
     from specimens parent 
     left join specimens child on child.parent_id=parent.id
-    left join biospecimen_polygons on biospecimen_polygons.biospecimen_id=child.id
     where parent.id=%d
     """ % cluster
+
+    recs = query(q)
+    return recs
+
+def cell_polygon(cell):
+    """ Return polygon id for cell specimen
+    """ 
+    if not isinstance(cell, int):
+        cell = specimen_id_from_name(cell)
+
+    q = """select polygon_id
+    from biospecimen_polygons
+    where biospecimen_id=%d
+    """ % cell
 
     recs = query(q)
     return recs

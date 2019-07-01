@@ -83,6 +83,8 @@ class MatrixDisplayFilter(object):
     def colormap_legend(self):
         if self.legend is not None:
             self.view_box.removeItem(self.legend)
+        if len(self.colorMap.children()) == 0:
+            raise Exception("No color maps are selected.")
         cmap_item = [cmap for cmap in self.colorMap.children() if cmap['Enabled'] is True][0]
         log_scale = self.params.child('log_scale').value()
         colors = cmap_item.value().color
@@ -136,7 +138,7 @@ class MatrixWidget(pg.GraphicsLayoutWidget):
             self.view_box.removeItem(self.matrix)
 
         self.matrix = MatrixItem(text=text, fgcolor=fgcolor, bgcolor=bgcolor, border_color=border_color,
-                    rows=rows, cols=rows, size=50, header_color='k')
+                    rows=rows, cols=cols, size=50, header_color='k')
         self.matrix.sigClicked.connect(self.matrix_element_clicked)
         self.view_box.addItem(self.matrix)
 
@@ -172,10 +174,10 @@ class MatrixDisplay(object):
             for cell in cells:
                 cell.setPen(pg.mkPen({'color': bordercolor, 'width': 1}))
 
-    def update_matrix_display(self, results, group_results, cell_classes, cell_groups, field_map):
+    def update_matrix_display(self, results, group_results, cell_groups, field_map, pre_cell_classes, post_cell_classes):
         self.results = results
         self.group_results = group_results
-        self.matrix_map = {}
+        self.matrix_map = OrderedDict()
         show_confidence = self.matrix_display_filter.params['Show Confidence']
 
         shape = (len(cell_groups),) * 2
@@ -198,11 +200,14 @@ class MatrixDisplay(object):
 
         # call display function on every matrix element
         
-        for ii, pre in enumerate(cell_classes):
-            for jj, post in enumerate(cell_classes):
+        for ii, pre in enumerate(pre_cell_classes):
+            for jj, post in enumerate(post_cell_classes):
                 self.matrix_map[(pre, post)] = [ii, jj]
         for group, result in self.group_results.iterrows():
-            i, j = self.matrix_map[group]
+            try:
+                i, j = self.matrix_map[group]
+            except KeyError: ## not all groups will be in the matrix
+                continue 
             no_data = all([result.get('conn_no_data',{}).get('metric_summary', True), result.get('strength_no_data',{}).get('metric_summary', True), result.get('dynamics_no_data',{}).get('metric_summary', True)])
             if no_data is False:
                 output = self.matrix_display_filter.element_display_output(result, default_bgcolor)
@@ -216,20 +221,26 @@ class MatrixDisplay(object):
         # attempt to fix so it doesn't break in mp_a\ui\graphics.py
         # at line 90. 
         rows = []
-        for i,cell_class in enumerate(cell_classes):
+        cols = []
+        for i,cell_class in enumerate(pre_cell_classes):
             tup = cell_class.as_tuple
             row = tup[:1]
             if len(tup) > 1:
                 row = row + (' '.join(tup[1:]),)
             else:
                 row = (' '*i,) + row
-            # if len(tup) > 1:
-            #     row = tup
-            # elif len(tup) == 1:
-            #     row = list(tup)
             rows.append(row)
+        for i,cell_class in enumerate(post_cell_classes):
+            tup = cell_class.as_tuple
+            col = tup[:1]
+            if len(tup) > 1:
+                col = col + (' '.join(tup[1:]),)
+            else:
+                col = (' '*i,) + col
+            cols.append(col)
+
 
         self.main_window.matrix_widget.set_matrix_data(text=text, fgcolor=fgcolor, bgcolor=bgcolor, border_color=bordercolor,
-                    rows=rows, cols=rows, size=50, header_color='k')
+                    rows=rows, cols=cols, size=50, header_color='k')
 
         # self.analysis.summary(self.results, self.field_name)

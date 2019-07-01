@@ -108,6 +108,8 @@ class CellClass(object):
         """
         if isinstance(a, str):
             return a == self.name
+        elif isinstance(a, CellClass):
+            return a.name == self.name
         else:
             return object.__eq__(self)  # should raise NotImplemented
 

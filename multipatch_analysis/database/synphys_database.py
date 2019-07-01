@@ -40,6 +40,16 @@ class SynphysDatabase(Database):
         
         return expts[0]
 
+    def experiment_from_uid(self, uid, session=None):
+        session = session or self.default_session
+        expts = session.query(self.Experiment).filter(self.Experiment.ext_id==uid).all()
+        if len(expts) == 0:
+            raise KeyError('No experiment found for uid %s' %uid)
+        elif len(expts) > 1:
+            raise RuntimeError("Multiple experiments found for uid %s" %uid)
+
+        return expts[0]
+
     def list_experiments(self, session=None):
         session = session or self.default_session
         return session.query(self.Experiment).all()
@@ -91,9 +101,8 @@ class SynphysDatabase(Database):
         query = query.join(pre_morphology, pre_morphology.cell_id==pre_cell.id)
         query = query.join(post_morphology, post_morphology.cell_id==post_cell.id)
         query = query.join(self.Experiment, self.Pair.experiment_id==self.Experiment.id)
-        query = query.join(self.Slice, self.Experiment.slice_id==self.Slice.id)
-        query = query.join(self.ConnectionStrength)
-        
+        query = query.outerjoin(self.Slice, self.Experiment.slice_id==self.Slice.id) ## don't want to drop all pairs if we don't have slice or connection strength entries
+        query = query.outerjoin(self.ConnectionStrength)
 
         if pre_class is not None:
             query = pre_class.filter_query(query, pre_cell)
