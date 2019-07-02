@@ -29,8 +29,6 @@ from sqlalchemy.sql.expression import func
 from .. import config
 
 
-#----------- define ORM classes -------------
-
 class NDArray(TypeDecorator):
     """For marshalling arrays in/out of binary DB fields.
     """

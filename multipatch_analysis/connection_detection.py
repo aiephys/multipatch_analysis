@@ -2,6 +2,7 @@ from copy import deepcopy
 import numpy as np
 import scipy.signal
 import pyqtgraph as pg
+import warnings
 
 from .data import MultiPatchProbe, Analyzer, PulseStimAnalyzer
 from . import qc

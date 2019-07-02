@@ -13,9 +13,9 @@ class ExperimentBrowser(pg.TreeWidget):
     def __init__(self):
         pg.TreeWidget.__init__(self)
         self.setColumnCount(7)
-        self.setHeaderLabels(['date', 'timestamp', 'rig', 'organism', 'region', 'genotype', 'acsf'])
+        self.setHeaderLabels(['date', 'timestamp', 'rig', 'organism', 'project', 'region', 'genotype', 'acsf'])
         self.setDragDropMode(self.NoDragDrop)
-        self.populate()
+        # self.populate(experiments=experiments)
         self._last_expanded = None
         
     def populate(self, experiments=None):
@@ -33,7 +33,7 @@ class ExperimentBrowser(pg.TreeWidget):
             date = expt.acq_timestamp
             date_str = datetime.fromtimestamp(date).strftime('%Y-%m-%d')
             slice = expt.slice
-            expt_item = pg.TreeWidgetItem(map(str, [date_str, '%0.3f'%expt.acq_timestamp, expt.rig_name, slice.species, expt.target_region, slice.genotype, expt.acsf]))
+            expt_item = pg.TreeWidgetItem(map(str, [date_str, '%0.3f'%expt.acq_timestamp, expt.rig_name, slice.species, expt.project_name, expt.target_region, slice.genotype, expt.acsf]))
             expt_item.expt = expt
             self.addTopLevelItem(expt_item)
 
