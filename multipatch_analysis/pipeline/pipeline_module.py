@@ -167,8 +167,11 @@ class PipelineModule(object):
         job_n = job['job_number']
         n_jobs = job['n_jobs']
         job_id = job['job_id']
-        
-        print("Processing %s %d/%d  %s" % (cls.name, job_index+1, n_jobs, job_id))
+
+        if type(job_id) not in [str, unicode]:
+            job_id = "%03f" % job_id
+        print("Processing %s %d/%d  %s" % (cls.name, job_n+1, n_jobs, job_id))
+
         start = time.time()
         try:
             cls.process_job(job)

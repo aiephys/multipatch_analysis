@@ -1,5 +1,6 @@
 from .pipeline import Pipeline
 from . import multipatch
+from . import opto
 
 
 def all_pipelines():
