@@ -181,7 +181,7 @@ class Database(object):
         self._rw_sessionmaker = None
 
         self.ro_address = self.db_address(ro_host, db_name)
-        self.rw_address = self.db_address(rw_host, db_name)
+        self.rw_address = None if rw_host is None else self.db_address(rw_host, db_name)
         self._all_dbs.add(self)
         
         self._default_session = None
@@ -335,6 +335,8 @@ class Database(object):
         """
         self._check_engines()
         if self._rw_engine is None:
+            if self.rw_address is None:
+                return None
             if self.backend == 'postgresql':
                 opts = {'pool_size': 10, 'max_overflow': 40}
             else:
