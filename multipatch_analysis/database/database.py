@@ -577,7 +577,7 @@ class Database(object):
         read_session = source_db.session(readonly=True)
         write_session = dest_db.session(readonly=False)
         
-        for table_name, table in source_db.metadata_tables():
+        for table_name, table in source_db.metadata_tables().items():
             if (table_name in skip_tables) or (tables is not None and table_name not in tables):
                 print("Skipping %s.." % table_name)
                 continue
@@ -587,7 +587,7 @@ class Database(object):
             reader = TableReadThread(source_db, table)
             for i,rec in enumerate(reader):
                 try:
-                    write_session.execute(table.__table__.insert(rec))
+                    write_session.execute(table.insert(rec))
                 except Exception:
                     if skip_errors:
                         print("Skip record %d:" % i)
@@ -623,7 +623,7 @@ class TableReadThread(threading.Thread):
         self.table = table
         self.chunksize = chunksize
         self.queue = queue.Queue(maxsize=5)
-        self.max_id = db.session().query(func.max(table.id)).all()[0][0]        
+        self.max_id = db.session().query(func.max(table.columns['id'])).all()[0][0]
         self.start()
         
     def run(self):
@@ -631,9 +631,9 @@ class TableReadThread(threading.Thread):
             session = self.db.session()
             table = self.table
             chunksize = self.chunksize
-            all_columns = table.__table__.c
+            all_columns = table.columns
             for i in range(0, self.max_id, chunksize):
-                query = session.query(*all_columns).filter((table.id >= i) & (table.id < i+chunksize))
+                query = session.query(*all_columns).filter((table.columns['id'] >= i) & (table.columns['id'] < i+chunksize))
                 records = query.all()
                 self.queue.put(records)
             self.queue.put(None)
