@@ -1,6 +1,6 @@
 """prototyping spike detection on file from nwb.
 """
-import multipatch_analysis.database as db
+from multipatch_analysis.database import default_db as db
 import multipatch_analysis.connection_strength as cs
 import numpy as np
 import pandas as pd
@@ -33,7 +33,7 @@ cell_ids = [#[1544582617.589, 1, 8, 5656957, 5654136, 5654045],  #this is a good
             [1534297702.068, 7, 2]
             ]
 
-s = db.Session()
+s = db.session()
 for cell_id in cell_ids:
     expt = db.experiment_from_timestamp(cell_id[0])
     pair = expt.pairs[cell_id[1], cell_id[2]]
