@@ -382,6 +382,15 @@ class PairAnalysis(object):
                 '-70': {'ex': '+', 'in': 'any'},
             },
         }
+        self.traces = OrderedDict([
+            ('vc', {'-55': {'qc_pass': [], 'qc_fail': []}, '-70': {'qc_pass': [], 'qc_fail': []}}), 
+            ('ic', {'-55': {'qc_pass': [], 'qc_fail': []}, '-70': {'qc_pass': [], 'qc_fail': []}}),
+        ])
+        self.spikes = OrderedDict([
+            ('vc', {'-55': {'qc_pass': [], 'qc_fail': []}, '-70': {'qc_pass': [], 'qc_fail': []}}), 
+            ('ic', {'-55': {'qc_pass': [], 'qc_fail': []}, '-70': {'qc_pass': [], 'qc_fail': []}}),
+        ])
+
         
         self.fit_precision = {
             'amp': {'vc': 10, 'ic': 6},
