@@ -378,7 +378,7 @@ class Dashboard(QtGui.QWidget):
 
             item.setText(i, display_val)
             if color is not None:
-                item.setBackgroundColor(i, pg.mkColor(color))
+                item.setBackground(i, pg.mkBrush(color))
 
             # update filter fields
             filter_field = self.filter_fields.get(field)
