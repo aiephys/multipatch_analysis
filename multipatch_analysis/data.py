@@ -135,7 +135,17 @@ class PulseStimAnalyzer(Analyzer):
                     # assume negative pulses do not evoke spikes
                     # (todo: should be watching for rebound spikes as well)
                     continue
-                spike = detect_evoked_spike(self.rec, [on, off])
+                # cut out a chunk of the recording for spike detection
+                start_time = pre_trace.time_at(on)
+                pulse_end_time = pre_trace.time_at(off)
+                stop_time = pulse_end_time + 10e-3
+                if i < len(pulses) - 1:
+                    next_pulse_time = pre_trace.time_at(pulses[i+1][0])
+                    stop_time = min(stop_time, next_pulse_time)
+                start_idx = pre_trace.index_at(start_time)
+                stop_idx = pre_trace.index_at(stop_time)
+                chunk = self.rec[start_idx:stop_idx]
+                spike = detect_evoked_spike(chunk, [start_time, pulse_end_time])
                 spike_info.append({'pulse_n': i, 'pulse_ind': on, 'pulse_len': off-on, 'spike': spike})
             self._evoked_spikes = spike_info
         return self._evoked_spikes
