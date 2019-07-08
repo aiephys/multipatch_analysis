@@ -209,9 +209,9 @@ class MatrixAnalyzer(object):
         self.cell_class_filter = CellClassFilter(self.cell_class_groups)
         self.matrix_display = MatrixDisplay(self.main_window, self.output_fields, self.field_map)
         self.matrix_display_filter = self.matrix_display.matrix_display_filter
-        self.element_scatter.set_fields(self.output_fields, self.field_map)
+        self.element_scatter.set_fields(self.output_fields)
         pair_fields = [f for f in self.output_fields if f[0] not in ['connection_probability', 'gap_junction_probability', 'matrix_completeness']]
-        self.pair_scatter.set_fields(pair_fields, self.field_map)
+        self.pair_scatter.set_fields(pair_fields)
         self.visualizers = [self.matrix_display_filter, self.hist_plot, self.element_scatter, self.pair_scatter, self.distance_plot]
 
         self.default_preset = default_preset
