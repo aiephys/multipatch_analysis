@@ -1,7 +1,7 @@
 from multipatch_analysis.database import default_db as db
 import multipatch_analysis.data_notes_db as notes_db
 import pyqtgraph as pg
-import sys
+import sys, copy
 import numpy as np
 from pyqtgraph import parametertree as ptree
 from pyqtgraph.parametertree import Parameter
@@ -11,7 +11,7 @@ from multipatch_analysis.ui.experiment_browser import ExperimentBrowser
 from collections import OrderedDict
 from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.baseline import float_mode
-from neuroanalysis.fitting import Psp
+from neuroanalysis.fitting import Psp, StackedPsp
 from multipatch_analysis.connection_detection import fit_psp
 from random import shuffle, seed
 
@@ -337,13 +337,14 @@ class SuperLine(pg.QtCore.QObject):
 
         return position
         
-    def set_value(self, value):
+    def set_value(self, value, block_fit=False):
         for line in self.lines:
             with pg.SignalBlock(line.sigPositionChanged, self.line_sync):
                 with pg.SignalBlock(line.sigPositionChangeFinished, self.move_finished):
                     line.setValue(value)
         self.sigPositionChanged.emit(self)
-        self.sigPositionChangeFinished.emit(self)
+        if block_fit is False:
+            self.sigPositionChangeFinished.emit(self)
 
 
 class PairAnalysis(object):
@@ -352,14 +353,14 @@ class PairAnalysis(object):
         
         self.ic_superline = SuperLine()
         self.ic_superline.sigPositionChanged.connect(self.ctrl_panel.set_ic_latency)
-        self.ic_superline.sigPositionChangeFinished.connect(self.fit_response_update)
+        self.ic_superline.sigPositionChangeFinished.connect(self.ic_fit_response_update)
         self.ic_plot = TracePlot('Current Clamp', 'V')
         for plot in self.ic_plot.trace_plots:
             plot.addItem(self.ic_superline.new_line(default_latency))
 
         self.vc_superline = SuperLine()
         self.vc_superline.sigPositionChanged.connect(self.ctrl_panel.set_vc_latency)
-        self.vc_superline.sigPositionChangeFinished.connect(self.fit_response_update)
+        self.vc_superline.sigPositionChangeFinished.connect(self.vc_fit_response_update)
         self.vc_plot = TracePlot('Voltage Clamp', 'A')
         for plot in self.vc_plot.trace_plots:
             plot.addItem(self.vc_superline.new_line(default_latency))
@@ -368,7 +369,7 @@ class PairAnalysis(object):
         self.experiment_browser = ExperimentBrowser()
         self.fit_compare = pg.DiffTreeWidget()
         self.meta_compare = pg.DiffTreeWidget()
-        self.fit_params = {}
+        self.fit_params = {'initial': {}, 'fit': {}}
         self.fit_pass = False
         self.nrmse_thresh = 4
         self.use_x_range = True
@@ -391,7 +392,16 @@ class PairAnalysis(object):
             ('ic', {'-55': {'qc_pass': [], 'qc_fail': []}, '-70': {'qc_pass': [], 'qc_fail': []}}),
         ])
 
-        
+        self.initial_fit_parameters = OrderedDict([
+            ('vc', {'-55': {}, '-70': {}}), 
+            ('ic', {'-55': {}, '-70': {}}),
+        ])
+        self.output_fit_parameters = OrderedDict([
+            ('vc', {'-55': {}, '-70': {}}), 
+            ('ic', {'-55': {}, '-70': {}}),
+        ])
+
+        self.fit_params = {'initial': self.initial_fit_parameters, 'fit': self.output_fit_parameters}
         self.fit_precision = {
             'amp': {'vc': 10, 'ic': 6},
             'exp_amp': {'vc': 14, 'ic': 6},
@@ -423,6 +433,14 @@ class PairAnalysis(object):
         
     def load_pair(self, pair, record=None):
         self.record = hash(record)
+        self.initial_fit_parameters = OrderedDict([
+            ('vc', {'-55': {}, '-70': {}}), 
+            ('ic', {'-55': {}, '-70': {}}),
+        ])
+        self.output_fit_parameters = OrderedDict([
+            ('vc', {'-55': {}, '-70': {}}), 
+            ('ic', {'-55': {}, '-70': {}}),
+        ])
         with pg.BusyCursor():
             self.pair = pair
             self.reset_display()
@@ -444,14 +462,7 @@ class PairAnalysis(object):
         ex_limits = [-80e-3, -63e-3]
         in_limits = [-62e-3, -45e-3]
         qc = {False: 'qc_fail', True: 'qc_pass'}
-        self.traces = OrderedDict([
-            ('vc', {'-55': {'qc_pass': [], 'qc_fail': []}, '-70': {'qc_pass': [], 'qc_fail': []}}), 
-            ('ic', {'-55': {'qc_pass': [], 'qc_fail': []}, '-70': {'qc_pass': [], 'qc_fail': []}}),
-        ])
-        self.spikes = OrderedDict([
-            ('vc', {'-55': {'qc_pass': [], 'qc_fail': []}, '-70': {'qc_pass': [], 'qc_fail': []}}), 
-            ('ic', {'-55': {'qc_pass': [], 'qc_fail': []}, '-70': {'qc_pass': [], 'qc_fail': []}}),
-        ])
+
         for rec in self.pulse_responses:
             if rec.ind_freq not in [10, 20, 50]:
                 continue
@@ -503,30 +514,30 @@ class PairAnalysis(object):
 
         return q
 
-    def fit_response_update(self):
+    def ic_fit_response_update(self):
         self.use_x_range = False
-        self.fit_responses(x_offset_win=[-0.1e-3, 0.1e-3])
+        self.fit_responses(x_offset_win=[-0.1e-3, 0.1e-3], mode='ic')
 
-    def fit_responses(self, x_offset_win=[-1e-3, 6e-3]):
-        initial_fit_parameters = OrderedDict([
-            ('vc', {'-55': {}, '-70': {}}), 
-            ('ic', {'-55': {}, '-70': {}}),
-        ])
-        output_fit_parameters = OrderedDict([
-            ('vc', {'-55': {}, '-70': {}}), 
-            ('ic', {'-55': {}, '-70': {}}),
-        ])
+    def vc_fit_response_update(self):
+        self.use_x_range = False
+        self.fit_responses(x_offset_win=[-0.1e-3, 0.1e-3], mode='vc')
+
+    def fit_responses(self, x_offset_win=[-1e-3, 6e-3], mode=None):
+        if mode is not None:
+            c_modes = [mode]
+        else:
+            c_modes = modes
         with pg.ProgressDialog("curve fitting..", maximum=len(modes)*len(holdings)) as dlg:
-            for mode in modes:
+            for mode in c_modes:
                 for holding in holdings:
                     ifp, ofp = self._fit_responses(mode, holding, x_offset_win)
-                    initial_fit_parameters[mode][holding] = ifp
-                    output_fit_parameters[mode][holding] = ofp
+                    self.initial_fit_parameters[mode][holding].update(ifp)
+                    self.output_fit_parameters[mode][holding].update(ofp)
                     dlg += 1
                     if dlg.wasCanceled():
                         raise Exception("User canceled fit")
-                
-        self.fit_params = {'initial': initial_fit_parameters, 'fit': output_fit_parameters}
+        self.fit_params['initial'].update(self.initial_fit_parameters)
+        self.fit_params['fit'].update(self.output_fit_parameters)
         self.ctrl_panel.update_fit_params(self.fit_params['fit'])
         self.generate_warnings(x_offset_win)   
 
@@ -593,9 +604,9 @@ class PairAnalysis(object):
         for mode in modes:
             latency_holding = []
             for holding in holdings:
-                initial_latency = self.fit_params['initial'][mode][holding]['xoffset']
+                initial_latency = self.fit_params['initial'].get(mode).get(holding).get('xoffset')
                 fit_latency = self.fit_params['fit'].get(mode).get(holding).get('xoffset')
-                if fit_latency is None:
+                if fit_latency is None or initial_latency is None:
                     continue
                 x_win = [initial_latency + x_bounds[0], initial_latency + x_bounds[1]]
                 latency_holding.append(fit_latency)
@@ -607,7 +618,7 @@ class PairAnalysis(object):
                 self.warnings.append(warning)
             latency_mode.append(np.mean(latency_holding))
         latency_diff = np.diff(latency_mode)[0]
-        if  latency_diff > 1e-3:
+        if  latency_diff > 0.2e-3:
             warning = 'Latency across modes differs by %s' % pg.siFormat(latency_diff, suffix='s')
             self.warnings.append(warning)
 
@@ -689,6 +700,7 @@ class PairAnalysis(object):
 
         current_meta = {k:v for k, v in meta.items() if k != 'fit_parameters'} 
         saved_meta = {k:v for k, v in saved_rec.notes.items() if k != 'fit_parameters'} 
+        saved_meta.update({k:str(saved_meta[k]) for k in ['comments', 'expt_id', 'pre_cell_id', 'post_cell_id']})
 
         self.meta_compare.setData(current_meta, saved_meta)
         self.meta_compare.trees[0].setHeaderLabels(['Current Metadata', 'type', 'value'])
@@ -702,34 +714,39 @@ class PairAnalysis(object):
         pair_params = {'Synapse call': data['synapse_type'], 'Gap junction call': data['gap_junction']}
         self.ctrl_panel.update_params(**pair_params)
         self.ctrl_panel.update_fit_params(data['fit_parameters']['fit'])
-        self.warnings = '\n'.join(data['fit_warnings'])
-        self.ctrl_panel.params.child('Warnings').setValue(self.warnings)
+        self.warnings = data['fit_warnings']
+        self.ctrl_panel.params.child('Warnings').setValue('\n'.join(self.warnings))
         self.ctrl_panel.params.child('Comments', '').setValue(data['comments'])
+        self.fit_params = data['fit_parameters']
+        self.output_fit_parameters = data['fit_parameters']['fit']
+        self.initial_fit_parameters = data['fit_parameters']['initial']
 
+        initial_vc_latency = data['fit_parameters']['initial']['vc']['-55']['xoffset'] + 10e-3
+        self.vc_superline.set_value(initial_vc_latency, block_fit=True)
+        initial_ic_latency = data['fit_parameters']['initial']['ic']['-55']['xoffset'] + 10e-3
+        self.ic_superline.set_value(initial_ic_latency, block_fit=True)
         for mode in modes:
             for holding in holdings:
                 fit_pass = data['fit_pass'][mode][holding]
                 self.ctrl_panel.params.child('Fit parameters', holding + ' ' + mode.upper(), 'Fit Pass').setValue(fit_pass)
-                fit_params = data['fit_parameters']['fit'][mode][holding]
+                fit_params = copy.deepcopy(data['fit_parameters']['fit'][mode][holding])
                 
                 if fit_params:
-                    p = Psp()
+                    fit_params['xoffset'] += 10e-3
+                    fit_params.pop('nrmse', None)
+                    if mode == 'ic':
+                        p = StackedPsp() 
+                    if mode == 'vc':
+                        p = Psp()
+                        
                     avg = TraceList(self.traces[mode][holding]['qc_pass']).mean()
                     
-                    fit_psp = p.eval(
-                        x=avg.time_values, 
-                        xoffset=fit_params['xoffset'] + 10e-3, 
-                        yoffset=fit_params['yoffset'], 
-                        amp=fit_params['amp'],
-                        rise_time=fit_params['rise_time'],
-                        decay_tau=fit_params['decay_tau'],
-                        rise_power=fit_params['rise_power']
-                    )
+                    fit_psp = p.eval(x=avg.time_values, **fit_params)
                     
                     if mode == 'vc':
                         self.vc_plot.plot_fit(avg, fit_psp, holding, fit_pass=fit_pass)
                     if mode == 'ic':
-                        self.ic_plot.plot_fit(avg, fit_psp, holding, fit_pass=fit_pass)
+                        self.ic_plot.plot_fit(avg, fit_psp, holding, fit_pass=fit_pass)            
 
 
 
