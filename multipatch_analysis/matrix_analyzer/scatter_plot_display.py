@@ -25,27 +25,34 @@ class ScatterPlotTab(pg.QtGui.QWidget):
 class ElementScatterPlot(pg.ScatterPlotWidget):
     def __init__(self):
         pg.ScatterPlotWidget.__init__(self)
-        
-
+    
         header = pg.QtGui.QLabel()
         header.setText('<span style="font-weight: bold">Element-wise Scatter Plot</span>')
         self.ctrlPanel.insertWidget(0, header)
 
     def set_fields(self, fields):
-        self.fields = [f for f in fields if f != ('None', {})]
+        self.fields = [('pair_class', {'mode': 'enum'})]
+        self.fields.extend([f for f in fields if f != ('None', {})])
         self.setFields(self.fields)
 
     def set_data(self, data):
         field_data = data.xs('metric_summary', axis='columns', level=1, drop_level=True)
-        field_data.reset_index(in_place=True)
-        field_data['pair_class'] = list(zip(field_data.pre_class, field_data.post_class))
+        field_data.reset_index(inplace=True)
+        field_data['pair_class'] = field_data.apply(lambda row: '-'.join([row.pre_class.name, row.post_class.name]), axis=1)
         field_data.drop(columns=['pre_class', 'post_class'])
-        asdf
         rec_data = field_data.to_records()
         names = tuple([str(name) for name in rec_data.dtype.names]) # for some reason the unicode throws off
         rec_data.dtype.names = names
 
+        self.fields['pair_class']['values'] = list(field_data.pair_class)
         self.setData(rec_data)
+
+    def color_selected_element(self, color, pre_class, post_class):
+        pair_name = '-'.join([pre_class.name, post_class.name])
+        pair_map = self.colorMap.child('pair_class')
+        if pair_map is None:
+            pair_map = self.colorMap.addNew('pair_class')
+        pair_map['Values', pair_name] = pg.mkColor(color)
 
     def invalidate_output(self):
         self.data = None
@@ -59,15 +66,25 @@ class PairScatterPlot(pg.ScatterPlotWidget):
         self.ctrlPanel.insertWidget(0, header)
 
     def set_fields(self, fields):
-        self.fields = [f for f in fields if f != ('None', {})]
+        self.fields = [('pair_class', {'mode': 'enum'})]
+        self.fields.extend([f for f in fields if f != ('None', {})])
         self.setFields(self.fields)
 
     def set_data(self, data):
+        data['pair_class'] = data.apply(lambda row: '-'.join([row.pre_class.name, row.post_class.name]), axis=1)
         rec_data = data.to_records()
         names = tuple([str(name) for name in rec_data.dtype.names]) # for some reason the unicode throws off
         rec_data.dtype.names = names
 
+        self.fields['pair_class']['values'] = list(data.pair_class)
         self.setData(rec_data)
-        
+
+    def color_selected_element(self, color, pre_class, post_class):
+        pair_name = '-'.join([pre_class.name, post_class.name])
+        pair_map = self.colorMap.child('pair_class')
+        if pair_map is None:
+            pair_map = self.colorMap.addNew('pair_class')
+        pair_map['Values', pair_name] = pg.mkColor(color)
+
     def invalidate_output(self):
         self.data = None

@@ -152,8 +152,8 @@ class CellClassFilter(object):
 
     def get_pre_or_post_classes(self, key):
         """Return a list of postsynaptic cell_classes. This will be a subset of self.cell_classes."""
-        if self.cell_classes is None:
-            return []
+        # if self.cell_classes is None:
+        #     return []
         classes = []
         for group in self.params.children():
             if group.value() is True:
@@ -163,7 +163,7 @@ class CellClassFilter(object):
         return classes
 
     def expand_param(self, param, value):
-        if value:
+        if isinstance(value, bool):
             param.items.keys()[0].setExpanded(value)
 
     def invalidate_output(self):
@@ -401,12 +401,14 @@ class MatrixAnalyzer(object):
             self.matrix_display.color_element(row, col, color)
             self.hist_plot.plot_element_data(element, analyzer, color, self.trace_panel)
             self.distance_plot.element_distance(element, color)
+            self.element_scatter.color_selected_element(color, pre_class, post_class)
         else:
             self.display_matrix_element_reset() 
             color = self.colors[self.selected]
             self.matrix_display.color_element(row, col, color)
             self.hist_plot.plot_element_data(element, analyzer, color, self.trace_panel)
             self.distance_plot.element_distance(element, color)
+            self.element_scatter.color_selected_element(color, pre_class, post_class)
 
     def display_matrix_element_reset(self):
         self.selected = 0
