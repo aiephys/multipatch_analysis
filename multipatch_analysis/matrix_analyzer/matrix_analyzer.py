@@ -402,6 +402,7 @@ class MatrixAnalyzer(object):
             self.hist_plot.plot_element_data(element, analyzer, color, self.trace_panel)
             self.distance_plot.element_distance(element, color)
             self.element_scatter.color_selected_element(color, pre_class, post_class)
+            self.pair_scatter.color_selected_element(color, pre_class, post_class)
         else:
             self.display_matrix_element_reset() 
             color = self.colors[self.selected]
@@ -409,13 +410,15 @@ class MatrixAnalyzer(object):
             self.hist_plot.plot_element_data(element, analyzer, color, self.trace_panel)
             self.distance_plot.element_distance(element, color)
             self.element_scatter.color_selected_element(color, pre_class, post_class)
+            self.pair_scatter.color_selected_element(color, pre_class, post_class)
 
     def display_matrix_element_reset(self):
         self.selected = 0
         self.hist_plot.plot_element_reset()
         self.matrix_display.element_color_reset()
         self.distance_plot.element_distance_reset(self.results, color=(128, 128, 128), name='All Connections', suppress_scatter=True)
-
+        self.element_scatter.reset_element_color()
+        self.pair_scatter.reset_element_color()
 
     def update_clicked(self):
         p = cProfile.Profile()
