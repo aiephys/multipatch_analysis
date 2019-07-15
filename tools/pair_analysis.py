@@ -9,10 +9,9 @@ from pyqtgraph.widgets.DataFilterWidget import DataFilterParameter
 from neuroanalysis.ui.plot_grid import PlotGrid
 from multipatch_analysis.ui.experiment_browser import ExperimentBrowser
 from collections import OrderedDict
-from neuroanalysis.data import Trace, TraceList
-from neuroanalysis.baseline import float_mode
+from neuroanalysis.data import TraceList
 from neuroanalysis.fitting import Psp, StackedPsp
-from multipatch_analysis.connection_detection import fit_psp
+from multipatch_analysis.avg_response_fit import response_query, sort_responses, fit_avg_response, pair_notes_query
 from random import shuffle, seed
 
 default_latency = 11e-3
@@ -108,7 +107,7 @@ class MainWindow(pg.QtGui.QWidget):
         pre_cell_id = str(pair.pre_cell.ext_id)
         post_cell_id = str(pair.post_cell.ext_id)
         s = notes_db.db.session()
-        q = s.query(notes_db.PairNotes).filter(notes_db.PairNotes.expt_id==expt_id).filter(notes_db.PairNotes.pre_cell_id==pre_cell_id).filter(notes_db.PairNotes.post_cell_id==post_cell_id)
+        q = pair_notes_query(s, pair)
         record = q.all()
         self.pair_param.setValue(pair)
         if len(record) == 0:
@@ -369,10 +368,9 @@ class PairAnalysis(object):
         self.experiment_browser = ExperimentBrowser()
         self.fit_compare = pg.DiffTreeWidget()
         self.meta_compare = pg.DiffTreeWidget()
-        self.fit_params = {'initial': {}, 'fit': {}}
-        self.fit_pass = False
         self.nrmse_thresh = 4
-        self.use_x_range = True
+        self.traces = OrderedDict()
+        self.spikes = OrderedDict()
         self.signs = {
             'vc': {
                 '-55': {'ex': '-', 'in': '+'}, 
@@ -383,25 +381,7 @@ class PairAnalysis(object):
                 '-70': {'ex': '+', 'in': 'any'},
             },
         }
-        self.traces = OrderedDict([
-            ('vc', {'-55': {'qc_pass': [], 'qc_fail': []}, '-70': {'qc_pass': [], 'qc_fail': []}}), 
-            ('ic', {'-55': {'qc_pass': [], 'qc_fail': []}, '-70': {'qc_pass': [], 'qc_fail': []}}),
-        ])
-        self.spikes = OrderedDict([
-            ('vc', {'-55': {'qc_pass': [], 'qc_fail': []}, '-70': {'qc_pass': [], 'qc_fail': []}}), 
-            ('ic', {'-55': {'qc_pass': [], 'qc_fail': []}, '-70': {'qc_pass': [], 'qc_fail': []}}),
-        ])
 
-        self.initial_fit_parameters = OrderedDict([
-            ('vc', {'-55': {}, '-70': {}}), 
-            ('ic', {'-55': {}, '-70': {}}),
-        ])
-        self.output_fit_parameters = OrderedDict([
-            ('vc', {'-55': {}, '-70': {}}), 
-            ('ic', {'-55': {}, '-70': {}}),
-        ])
-
-        self.fit_params = {'initial': self.initial_fit_parameters, 'fit': self.output_fit_parameters}
         self.fit_precision = {
             'amp': {'vc': 10, 'ic': 6},
             'exp_amp': {'vc': 14, 'ic': 6},
@@ -426,8 +406,8 @@ class PairAnalysis(object):
     def reset_display(self):
         self.vc_plot.clear_plots()
         self.ic_plot.clear_plots()
-        self.vc_superline.set_value(default_latency)
-        self.ic_superline.set_value(default_latency)
+        self.vc_superline.set_value(default_latency, block_fit=True)
+        self.ic_superline.set_value(default_latency, block_fit=True)
         self.ctrl_panel.params.child('Comments', 'Hashtag').setValue('')
         self.ctrl_panel.params.child('Comments', '').setValue('')
         
@@ -441,12 +421,14 @@ class PairAnalysis(object):
             ('vc', {'-55': {}, '-70': {}}), 
             ('ic', {'-55': {}, '-70': {}}),
         ])
+        self.fit_params = {'initial': self.initial_fit_parameters, 'fit': self.output_fit_parameters}
+
         with pg.BusyCursor():
             self.pair = pair
             self.reset_display()
             print ('loading responses...')
             s = db.session()
-            q = self.response_query(s, pair)
+            q = response_query(s, pair)
             self.pulse_responses = q.all()
             print('got this many responses: %d' % len(self.pulse_responses))
             s.close()
@@ -459,70 +441,21 @@ class PairAnalysis(object):
             self.ctrl_panel.update_params(**pair_params)
 
     def analyze_responses(self):
-        ex_limits = [-80e-3, -63e-3]
-        in_limits = [-62e-3, -45e-3]
-        qc = {False: 'qc_fail', True: 'qc_pass'}
-
-        for rec in self.pulse_responses:
-            if rec.ind_freq not in [10, 20, 50]:
-                continue
-            data = rec.data
-            spike = rec.spike
-            n_spikes = rec.n_spikes
-            start_time = rec.rec_start
-            spike_time = rec.spike_time if rec.spike_time is not None else 0. 
-            clamp = rec.clamp_mode
-            holding = rec.baseline_potential
-            t0 = start_time-spike_time+10e-3
-            baseline = float_mode(data[0:int(db.default_sample_rate*6e-3)])
-            data_trace = Trace(data=data-baseline, t0=t0, sample_rate=db.default_sample_rate)
-            spike_trace = Trace(data=spike, t0=t0, sample_rate=db.default_sample_rate)
-            trace_qc_pass = rec.ex_qc_pass
-            spike_qc_pass = n_spikes == 1
-            
-            if in_limits[0] < holding < in_limits[1]:
-                self.traces[clamp]['-55'][qc[trace_qc_pass]].append(data_trace)
-                self.spikes[clamp]['-55'][qc[spike_qc_pass]].append(spike_trace)
-            elif ex_limits[0] < holding < ex_limits[1]:
-                self.traces[clamp]['-70'][qc[trace_qc_pass]].append(data_trace)
-                self.spikes[clamp]['-70'][qc[spike_qc_pass]].append(spike_trace)
-
+        self.traces, self.spikes = sort_responses(self.pulse_responses)
         self.vc_plot.plot_traces(self.traces['vc'])
         self.vc_plot.plot_spikes(self.spikes['vc'])
         self.ic_plot.plot_traces(self.traces['ic'])
         self.ic_plot.plot_spikes(self.spikes['ic'])
 
-    def response_query(self, session, pair):
-        q = session.query(
-            db.PulseResponse.id.label('response_id'),
-            db.PulseResponse.data,
-            db.PulseResponse.ex_qc_pass,
-            db.PulseResponse.start_time.label('rec_start'),
-            db.StimPulse.data.label('spike'),
-            db.StimPulse.n_spikes,
-            db.StimSpike.max_dvdt_time.label('spike_time'),
-            db.PatchClampRecording.clamp_mode,
-            db.PatchClampRecording.baseline_potential,
-            db.MultiPatchProbe.induction_frequency.label('ind_freq'),
-        )
-        q = q.join(db.StimPulse, db.PulseResponse.stim_pulse)
-        q = q.join(db.StimSpike, db.StimSpike.stim_pulse_id==db.StimPulse.id)
-        q = q.join(db.Recording, db.PulseResponse.recording)
-        q = q.join(db.PatchClampRecording)
-        q = q.join(db.MultiPatchProbe)
-        q = q.filter(db.PulseResponse.pair_id==pair.id)
-
-        return q
-
     def ic_fit_response_update(self):
-        self.use_x_range = False
-        self.fit_responses(x_offset_win=[-0.1e-3, 0.1e-3], mode='ic')
+        latency = self.ctrl_panel.params['Latency', 'IC']
+        self.fit_responses(mode='ic', latency=latency)
 
     def vc_fit_response_update(self):
-        self.use_x_range = False
-        self.fit_responses(x_offset_win=[-0.1e-3, 0.1e-3], mode='vc')
+        latency = self.ctrl_panel.params['Latency', 'VC']
+        self.fit_responses(mode='vc', latency=latency)
 
-    def fit_responses(self, x_offset_win=[-1e-3, 6e-3], mode=None):
+    def fit_responses(self, mode=None, latency=None):
         if mode is not None:
             c_modes = [mode]
         else:
@@ -530,75 +463,28 @@ class PairAnalysis(object):
         with pg.ProgressDialog("curve fitting..", maximum=len(modes)*len(holdings)) as dlg:
             for mode in c_modes:
                 for holding in holdings:
-                    ifp, ofp = self._fit_responses(mode, holding, x_offset_win)
-                    self.initial_fit_parameters[mode][holding].update(ifp)
+                    self.fit_pass = False
+                    sign = self.signs[mode][holding].get(self.ctrl_panel.params['Synapse call'], 'any')
+                    ofp, x_offset, best_fit = fit_avg_response(self.traces, mode, holding, latency, sign)
+                    self.initial_fit_parameters[mode][holding]['xoffset'] = x_offset
                     self.output_fit_parameters[mode][holding].update(ofp)
+                    self.fit_pass = ofp.get('nrmse', self.nrmse_thresh) < self.nrmse_thresh
+                    self.ctrl_panel.params.child('Fit parameters', holding + ' ' + mode.upper(), 'Fit Pass').setValue(self.fit_pass)
+                    if mode == 'vc'and bool(ofp):
+                        avg_trace = TraceList(self.traces['vc'][holding]['qc_pass']).mean()
+                        self.vc_plot.plot_fit(avg_trace, best_fit, holding, self.fit_pass)
+                    elif mode == 'ic' and bool(ofp):
+                        avg_trace = TraceList(self.traces['ic'][holding]['qc_pass']).mean()
+                        self.ic_plot.plot_fit(avg_trace, best_fit, holding, self.fit_pass)
                     dlg += 1
                     if dlg.wasCanceled():
                         raise Exception("User canceled fit")
         self.fit_params['initial'].update(self.initial_fit_parameters)
         self.fit_params['fit'].update(self.output_fit_parameters)
         self.ctrl_panel.update_fit_params(self.fit_params['fit'])
-        self.generate_warnings(x_offset_win)   
+        self.generate_warnings()   
 
-    def _fit_responses(self, mode, holding, x_offset_win):
-        initial_fit_parameters = {}
-        output_fit_parameters = {}
-        
-        self.fit_pass = False
-        self.ctrl_panel.params.child('Fit parameters', holding + ' ' + mode.upper(), 'Fit Pass').setValue(self.fit_pass)
-        sign = self.signs[mode][holding].get(self.ctrl_panel.params['Synapse call'], 'any')
-        x_offset = self.ctrl_panel.params['Latency', mode.upper()]
-        initial_fit_parameters['xoffset'] = x_offset - 10e-3
-        if len(self.traces[mode][holding]['qc_pass']) == 0:
-            return initial_fit_parameters, output_fit_parameters
-        
-        grand_trace = TraceList(self.traces[mode][holding]['qc_pass']).mean()
-        weight = np.ones(len(grand_trace.data))*10.  #set everything to ten initially
-        weight[int(12e-3/db.default_sample_rate):int(19e-3/db.default_sample_rate)] = 30.  #area around steep PSP rise 
-        if mode == 'vc':
-            stacked = False
-            initial_rise = 1e-3
-            rise_bounds = [0.1e-3, 5e-3]
-        elif mode == 'ic':
-            stacked  = True
-            initial_rise = 5e-3
-            rise_bounds = [1e-3, 25e-3]
-            weight[int(10e-3/db.default_sample_rate):int(12e-3/db.default_sample_rate)] = 0.   #area around stim artifact
-        x_win = [x_offset + x_offset_win[0], x_offset + x_offset_win[1]]
-        rise_times = list(initial_rise*2.**np.arange(-2, 3, 0.5))
-        if self.use_x_range is True:
-            x_range = (list(np.linspace(x_win[0], x_win[1], 7)), x_win[0], x_win[1])
-        else:
-            x_range = (x_offset, 'fixed')
-
-        try:
-            fit = fit_psp(grand_trace, 
-                mode=mode, 
-                sign=sign, 
-                xoffset=x_range, 
-                rise_time=(rise_times, rise_bounds[0], rise_bounds[1]),
-                stacked=stacked,
-                )
-            for param, val in fit.best_values.items():
-                if param == 'xoffset':
-                    val  = val - 10e-3
-                output_fit_parameters[param] = val
-            output_fit_parameters['yoffset'] = fit.best_values['yoffset']
-            output_fit_parameters['nrmse'] = fit.nrmse()
-            self.fit_pass = fit.nrmse() < self.nrmse_thresh
-            if mode == 'vc':
-                self.vc_plot.plot_fit(grand_trace, fit.best_fit, holding, self.fit_pass)
-            elif mode == 'ic':
-                self.ic_plot.plot_fit(grand_trace, fit.best_fit, holding, self.fit_pass)
-            self.ctrl_panel.params.child('Fit parameters', holding + ' ' + mode.upper(), 'Fit Pass').setValue(self.fit_pass)
-        except:
-            print("Error in PSP fit:")
-            sys.excepthook(*sys.exc_info())
-
-        return initial_fit_parameters, output_fit_parameters
-
-    def generate_warnings(self, x_bounds):
+    def generate_warnings(self):
         self.warnings = []
         latency_mode = []
         for mode in modes:
@@ -608,11 +494,7 @@ class PairAnalysis(object):
                 fit_latency = self.fit_params['fit'].get(mode).get(holding).get('xoffset')
                 if fit_latency is None or initial_latency is None:
                     continue
-                x_win = [initial_latency + x_bounds[0], initial_latency + x_bounds[1]]
                 latency_holding.append(fit_latency)
-                if fit_latency == x_win[0] or fit_latency == x_win[1]:
-                    warning  = 'Latency for %s %s is hitting a fit boundary' % (holding, mode)
-                    self.warnings.append(warning)
             if len(latency_holding) > 1 and len(set(latency_holding)) != 1:
                 warning = 'Latencies for %s mode do not match' % mode
                 self.warnings.append(warning)
@@ -656,7 +538,7 @@ class PairAnalysis(object):
         }
 
         s = notes_db.db.session(readonly=False)
-        q = s.query(notes_db.PairNotes).filter(notes_db.PairNotes.expt_id==expt_id).filter(notes_db.PairNotes.pre_cell_id==pre_cell_id).filter(notes_db.PairNotes.post_cell_id==post_cell_id)
+        q = pair_notes_query(s, pair)
         rec = q.all()
         if len(rec) == 0:
             record_check = hash(None)
@@ -753,7 +635,7 @@ class PairAnalysis(object):
 if __name__ == '__main__':
 
     app = pg.mkQApp()
-    # pg.dbg()
+    pg.dbg()
 
     # expt_list = [1539292152.917]
     s = db.session()
