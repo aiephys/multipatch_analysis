@@ -71,9 +71,7 @@ if __name__ == '__main__':
             args.bake = False
 
     if args.rebuild:
-        for module in modules:
-            print("Dropping module %s" % module.name)
-            module.drop_all(reinitialize=True)
+        pipeline.drop(modules)
         print("  done.")
 
     if args.drop:
