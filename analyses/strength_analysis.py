@@ -367,14 +367,14 @@ class ResponseStrengthAnalyzer(object):
             q = response_query(self.session)
             q = q.join(db.PulseResponseStrength)
             q = q.filter(db.PulseResponseStrength.id.in_(ids))
-            q = q.add_column(db.PulseResponse.start_time)
+            q = q.add_column(db.PulseResponse.data_start_time)
             traces = self.selected_fg_traces
             plot = self.fg_trace_plot
         else:
             q = baseline_query(self.session)
             q = q.join(db.BaselineResponseStrength)
             q = q.filter(db.BaselineResponseStrength.id.in_(ids))
-            q = q.add_column(db.Baseline.start_time)
+            q = q.add_column(db.Baseline.data_start_time)
             traces = self.selected_bg_traces
             plot = self.bg_trace_plot
         

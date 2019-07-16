@@ -89,7 +89,7 @@ def get_baseline_amps(session, pair, clamp_mode='ic', amps=None, get_data=True):
         db.PatchClampRecording.baseline_potential,
         db.PatchClampRecording.baseline_current,
         db.Recording.start_time.label('rec_start_time'),
-        db.Baseline.start_time.label('response_start_time'),
+        db.Baseline.data_start_time.label('response_start_time'),
     ]
     if get_data:
         cols.append(db.Baseline.data)

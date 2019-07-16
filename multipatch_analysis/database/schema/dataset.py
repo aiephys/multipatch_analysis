@@ -211,8 +211,8 @@ Baseline = make_table(
     comment="A snippet of baseline data, matched to a postsynaptic recording",
     columns=[
         ('recording_id', 'recording.id', 'The recording from which this baseline snippet was extracted.', {'index': True}),
-        ('start_time', 'float', "Starting time of this chunk of the recording in seconds, relative to the beginning of the recording"),
         ('data', 'array', 'numpy array of baseline data sampled at '+SynphysDatabase._sample_rate_str, {'deferred': True}),
+        ('data_start_time', 'float', "Starting time of this chunk of the recording in seconds, relative to the beginning of the recording"),
         ('mode', 'float', 'most common value in the baseline snippet'),
         ('ex_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for excitatory synapse probing'),
         ('in_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for inhibitory synapse probing'),

@@ -215,8 +215,8 @@ class DatasetPipelineModule(DatabasePipelineModule):
 
                     base_entry = db.Baseline(
                         recording=rec_entries[dev],
-                        start_time=start,
                         data=data,
+                        data_start_time=start,
                         mode=float_mode(data),
                         ex_qc_pass=ex_qc_pass,
                         in_qc_pass=in_qc_pass,
