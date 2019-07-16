@@ -934,7 +934,7 @@ def str_analysis_result_table(results, recs):
         ('in_qc_pass', bool),
         ('clamp_mode', object),
         ('pulse_number', int),
-        ('max_dvdt_time', float),
+        ('max_slope_time', float),
         ('response_start_time', float),
         ('data', object),
         ('rec_start_time', float),
@@ -948,7 +948,7 @@ def str_analysis_result_table(results, recs):
         for key,val in result.items():
             if key in table.dtype.names:
                 table[i][key] = val
-        table[i]['max_dvdt_time'] = 10e-3
+        table[i]['max_slope_time'] = 10e-3
         table[i]['response_start_time'] = 0
     return table
 

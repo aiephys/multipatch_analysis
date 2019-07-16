@@ -37,7 +37,7 @@ class ExperimentBase(object):
 
     @property
     def nwb_cache_file(self):
-        from ..synphys_cache import SynPhysCache
+        from ...synphys_cache import SynPhysCache
         return SynPhysCache().get_cache(self.nwb_file)
 
     @property
@@ -48,7 +48,7 @@ class ExperimentBase(object):
         """
 
         if not hasattr(self, '_data'):
-            from ..data import MultiPatchExperiment
+            from ...data import MultiPatchExperiment
             self._data = MultiPatchExperiment(self.nwb_cache_file)
         return self._data
 
@@ -57,7 +57,7 @@ class ExperimentBase(object):
         """Return the original Experiment object that was used to import
         data into the DB, if available.
         """
-        from ..experiment_list import cached_experiments
+        from ...experiment_list import cached_experiments
         return cached_experiments()[self.acq_timestamp]
 
     def __repr__(self):

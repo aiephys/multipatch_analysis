@@ -115,30 +115,27 @@ class DatasetPipelineModule(DatabasePipelineModule):
                 session.add(mprec_entry)
             
                 # import presynaptic stim pulses
-                pulses = psa.pulses()
+                pulses = psa.pulse_chunks()
                 
                 pulse_entries = {}
                 all_pulse_entries[rec.device_id] = pulse_entries
-                
-                rec_tvals = rec['primary'].time_values
 
                 for i,pulse in enumerate(pulses):
                     # Record information about all pulses, including test pulse.
-                    t0 = rec_tvals[pulse[0]]
-                    t1 = rec_tvals[pulse[1]]
+                    t0, t1 = pulse.meta['pulse_edges']
                     data_start = max(0, t0 - 10e-3)
                     data_stop = t0 + 10e-3
                     pulse_entry = db.StimPulse(
                         recording=rec_entry,
-                        pulse_number=i,
+                        pulse_number=pulse.meta['pulse_n'],
                         onset_time=t0,
-                        amplitude=pulse[2],
+                        amplitude=pulse.meta['pulse_amplitude'],
                         duration=t1-t0,
-                        data=rec['primary'].time_slice(data_start, data_stop).resample(sample_rate=20000).data,
+                        data=pulse['primary'].resample(sample_rate=20000).data,
                         data_start_time=data_start,
                     )
                     session.add(pulse_entry)
-                    pulse_entries[i] = pulse_entry
+                    pulse_entries[pulse.meta['pulse_n']] = pulse_entry
                     
 
                 # import presynaptic evoked spikes
@@ -147,29 +144,21 @@ class DatasetPipelineModule(DatabasePipelineModule):
                 spikes = psa.evoked_spikes()
                 for i,sp in enumerate(spikes):
                     pulse = pulse_entries[sp['pulse_n']]
-                    if sp['spike'] is not None:
-                        spinfo = sp['spike']
-                        extra = {
-                            'peak_time': rec_tvals[spinfo['peak_index']],
-                            'max_dvdt_time': rec_tvals[spinfo['rise_index']],
-                            'max_dvdt': spinfo['max_dvdt'],
-                        }
-                        if 'peak_diff' in spinfo:
-                            extra['peak_diff'] = spinfo['peak_diff']
-                        if 'peak_value' in spinfo:
-                            extra['peak_value'] = spinfo['peak_value']
-                        
-                        pulse.n_spikes = 1
-                    else:
-                        extra = {}
-                        pulse.n_spikes = 0
-                    
-                    spike_entry = db.StimSpike(
-                        stim_pulse=pulse,
-                        **extra
-                    )
-                    session.add(spike_entry)
-                    pulse.first_spike = spike_entry
+                    pulse.n_spikes = len(sp['spikes'])
+                    for i,spike in enumerate(sp['spikes']):
+                        spike_entry = db.StimSpike(
+                            stim_pulse=pulse,
+                            onset_time=spike['onset_time'],
+                            peak_time=spike['peak_time'],
+                            max_slope_time=spike['max_slope_time'],
+                            max_slope=spike['max_slope'],
+                            peak_diff=spike.get('peak_diff'),
+                            peak_value=spike['peak_value'],
+                        )
+                        session.add(spike_entry)
+                        if i == 0:
+                            # pulse.first_spike = spike_entry
+                            pulse.first_spike_time = spike_entry.max_slope_time
             
             if not srec_has_mp_probes:
                 continue
@@ -183,7 +172,6 @@ class DatasetPipelineModule(DatabasePipelineModule):
 
                     # get all responses, regardless of the presence of a spike
                     responses = mpa.get_spike_responses(srec[pre_dev], srec[post_dev], align_to='pulse', require_spike=False)
-                    post_tvals = srec[post_dev]['primary'].time_values
                     for resp in responses:
                         # base_entry = db.Baseline(
                         #     recording=rec_entries[post_dev],
@@ -204,8 +192,8 @@ class DatasetPipelineModule(DatabasePipelineModule):
                             recording=rec_entries[post_dev],
                             stim_pulse=all_pulse_entries[pre_dev][resp['pulse_n']],
                             pair=pair_entry,
-                            start_time=post_tvals[resp['rec_start']],
                             data=resp['response'].resample(sample_rate=20000).data,
+                            data_start_time=resp['rec_start'],
                             ex_qc_pass=resp['ex_qc_pass'],
                             in_qc_pass=resp['in_qc_pass'],
                         )
@@ -214,7 +202,6 @@ class DatasetPipelineModule(DatabasePipelineModule):
             # generate up to 20 baseline snippets for each recording
             for dev in srec.devices:
                 rec = srec[dev]
-                rec_tvals = rec['primary'].time_values
                 dist = BaselineDistributor.get(rec)
                 for i in range(20):
                     base = dist.get_baseline_chunk(20e-3)
@@ -222,13 +209,13 @@ class DatasetPipelineModule(DatabasePipelineModule):
                         # all out!
                         break
                     start, stop = base
-                    data = rec['primary'][start:stop].resample(sample_rate=20000).data
+                    data = rec['primary'].time_slice(start, stop).resample(sample_rate=20000).data
 
                     ex_qc_pass, in_qc_pass = qc.pulse_response_qc_pass(rec, [start, stop], None, [])
 
                     base_entry = db.Baseline(
                         recording=rec_entries[dev],
-                        start_time=rec_tvals[start],
+                        start_time=start,
                         data=data,
                         mode=float_mode(data),
                         ex_qc_pass=ex_qc_pass,

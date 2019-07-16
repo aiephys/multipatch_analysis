@@ -56,7 +56,7 @@ def pulse_response_qc_pass(post_rec, window, n_spikes, adjacent_pulses):
     post_rec : Recording
         The postsynaptic Recording instance
     window : list
-        [start, stop] indices indicating the region of the postsynaptic recording containing the pulse response
+        [start, stop] times indicating the region of the postsynaptic recording containing the pulse response
     n_spikes : int or None
         The number of presynaptic spikes evoked for this pulse response. If None, then this
         check is skipped (this is used for background data where we do not expect to have spikes).
@@ -82,15 +82,15 @@ def pulse_response_qc_pass(post_rec, window, n_spikes, adjacent_pulses):
     
     # Check for noise in response window
     if post_rec.clamp_mode == 'ic':
-        data = post_rec['primary'][window[0]:window[1]]
+        data = post_rec['primary'].time_slice(window[0], window[1])
         base = data.median()
         if data.std() > 1.5e-3:
             return False, False
         if data.data.max() > -40e-3:
             return False, False
     elif post_rec.clamp_mode == 'vc':
-        data = post_rec['primary'][window[0]:window[1]]
-        base = post_rec['command'][window[0]:window[1]].median()
+        data = post_rec['primary'].time_slice(window[0], window[1])
+        base = post_rec['command'].time_slice(window[0], window[1]).median()
         if data.std() > 15e-12:
             return False, False
     else:

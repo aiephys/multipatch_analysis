@@ -74,11 +74,11 @@ class ExperimentPipelineModule(DatabasePipelineModule):
 
             if elec.cell is not None:
                 cell = elec.cell
+                cell_meta = {}
                 if expt_lims_id is not None:
                     cell_specimens = lims.child_specimens(expt_lims_id)
                     if len(cell_specimens) != 0:
                         lims_cells = lims.cluster_cells(expt_lims_id)
-                        cell_meta = {}
                         cell_id_map = {int(lims_cell.external_specimen_name): lims_cell.id for lims_cell in lims_cells if lims_cell is not None}
                         cell_lims_id = cell_id_map.get(cell.cell_id)
                         cell_meta['lims_specimen_id'] = cell_lims_id

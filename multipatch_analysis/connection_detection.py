@@ -25,14 +25,12 @@ class BaselineDistributor(Analyzer):
         """Return the (start, stop) indices of a chunk of unused baseline with the
         given duration.
         """
-        dt = self.rec['primary'].dt
-        chunk_size = int(np.round(duration / dt))
         while True:
             if len(self.baselines) == 0:
                 return None
             start, stop = self.baselines[0]
             chunk_start = max(start, self.ptr)
-            chunk_stop = chunk_start + chunk_size
+            chunk_stop = chunk_start + duration
             if chunk_stop <= stop:
                 self.ptr = chunk_stop
                 return chunk_start, chunk_stop
@@ -53,7 +51,7 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         """Given a pre- and a postsynaptic recording, return a structure
         containing evoked responses.
         
-            [{pulse_n, pulse_ind, spike, response, baseline}, ...]
+            [{pulse_n, pulse_time, spike, response, baseline}, ...]
         
         """
         # detect presynaptic spikes
@@ -67,30 +65,31 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
             # a baseline measurement.
             return []
 
-        dt = post_rec['primary'].dt
-        
         # Select ranges to extract from postsynaptic recording
         result = []
         for i,pulse in enumerate(spikes):
             pulse = pulse.copy()
-            spike = pulse['spike']
-            if require_spike and spike is None:
-                continue
+            if len(pulse['spikes']) == 0:
+                if require_spike:
+                    continue
+                spike = None
+            else:
+                spike = pulse['spikes'][0]
             
             if align_to == 'spike':
                 # start recording window at the rising phase of the presynaptic spike
-                pulse['rec_start'] = spike['rise_index'] - int(pre_pad / dt)
+                pulse['rec_start'] = spike['max_slope_time'] - pre_pad
             elif align_to == 'pulse':
                 # align to pulse onset
-                pulse['rec_start'] = pulse['pulse_ind'] - int(pre_pad / dt)
-            pulse['rec_start'] = max(0, pulse['rec_start'])
+                pulse['rec_start'] = pulse['pulse_start'] - pre_pad
+            pulse['rec_start'] = max(pre_rec['primary'].t0, pulse['rec_start'])
             
             # get times of nearby pulses
-            prev_pulse = None if i == 0 else spikes[i-1]['pulse_ind'] + spikes[i-1]['pulse_len']
-            this_pulse = pulse['pulse_ind']
-            next_pulse = None if i+1 >= len(spikes) else spikes[i+1]['pulse_ind']
+            prev_pulse = None if i == 0 else spikes[i-1]['pulse_end']
+            this_pulse = pulse['pulse_start']
+            next_pulse = None if i+1 >= len(spikes) else spikes[i+1]['pulse_start']
 
-            max_stop = pulse['rec_start'] + int(50e-3 / dt)
+            max_stop = pulse['rec_start'] + 50e-3
             if next_pulse is not None:
                 # truncate window early if there is another pulse
                 pulse['rec_stop'] = min(max_stop, next_pulse)
@@ -99,18 +98,18 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
                 pulse['rec_stop'] = max_stop
             
             # Extract data from postsynaptic recording
-            pulse['response'] = post_rec['primary'][pulse['rec_start']:pulse['rec_stop']]
+            pulse['response'] = post_rec['primary'].time_slice(pulse['rec_start'], pulse['rec_stop'])
             assert len(pulse['response']) > 0
 
             # Extract presynaptic spike and stimulus command
-            pulse['pre_rec'] = pre_rec['primary'][pulse['rec_start']:pulse['rec_stop']]
-            pulse['command'] = pre_rec['command'][pulse['rec_start']:pulse['rec_stop']]
+            pulse['pre_rec'] = pre_rec['primary'].time_slice(pulse['rec_start'], pulse['rec_stop'])
+            pulse['command'] = pre_rec['command'].time_slice(pulse['rec_start'], pulse['rec_stop'])
 
             # select baseline region between 8th and 9th pulses
-            baseline_dur = int(100e-3 / dt)
-            stop = spikes[8]['pulse_ind']
+            baseline_dur = 100e-3
+            stop = spikes[8]['pulse_start']
             start = stop - baseline_dur
-            pulse['baseline'] = post_rec['primary'][start:stop]
+            pulse['baseline'] = post_rec['primary'].time_slice(start, stop)
             pulse['baseline_start'] = start
             pulse['baseline_stop'] = stop
 
@@ -119,9 +118,9 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
             n_spikes = 0 if spike is None else 1  # eventually should check for multiple spikes
             adj_pulse_times = []
             if prev_pulse is not None:
-                adj_pulse_times.append((prev_pulse - this_pulse) * dt)
+                adj_pulse_times.append(prev_pulse - this_pulse)
             if next_pulse is not None:
-                adj_pulse_times.append((next_pulse - this_pulse) * dt)
+                adj_pulse_times.append(next_pulse - this_pulse)
             pulse['ex_qc_pass'], pulse['in_qc_pass'] = qc.pulse_response_qc_pass(post_rec=post_rec, window=pulse_window, n_spikes=n_spikes, adjacent_pulses=adj_pulse_times)
 
             assert len(pulse['baseline']) > 0
@@ -137,10 +136,9 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         if len(spikes) < 10:
             return None
         
-        dt = post_rec['primary'].dt
-        start = spikes[first_pulse]['pulse_ind'] - int(20e-3 / dt)
-        stop = spikes[last_pulse]['pulse_ind'] + int(50e-3 / dt)
-        return post_rec['primary'][start:stop]
+        start = spikes[first_pulse]['pulse_start'] - 20e-3
+        stop = spikes[last_pulse]['pulse_start'] + 50e-3
+        return post_rec['primary'].time_slice(start, stop)
 
     def stim_params(self, pre_rec):
         return PulseStimAnalyzer.get(pre_rec).stim_params()

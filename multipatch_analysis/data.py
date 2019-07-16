@@ -2,7 +2,7 @@ import numpy as np
 
 from neuroanalysis.miesnwb import MiesNwb, MiesSyncRecording, MiesRecording
 from neuroanalysis.stimuli import find_square_pulses
-from neuroanalysis.spike_detection import detect_evoked_spike
+from neuroanalysis.spike_detection import detect_evoked_spikes
 
 
 class MultiPatchExperiment(MiesNwb):
@@ -35,13 +35,16 @@ class MultiPatchSyncRecording(MiesSyncRecording):
         due to absence of pulses.
         """
         if self._baseline_mask is None:
-            mask = np.zeros(len(self.recordings[0]['primary']), dtype=bool)
-            dt = self.recordings[0]['primary'].dt
+            pri = self.recordings[0]['primary']
+            mask = np.zeros(len(pri), dtype=bool)
+            dt = pri.dt
             settle_size = int(settling_time / dt)
             for rec in self.recordings:
                 pa = PulseStimAnalyzer.get(rec)
                 for pulse in pa.pulses():
-                    mask[pulse[0]:pulse[1] + settle_size] = True
+                    start = pri.index_at(pulse[0])
+                    stop = pri.index_at(pulse[1])
+                    mask[start:stop + settle_size] = True
             self._baseline_mask = mask
 
             starts = list(np.argwhere(~mask[1:] & mask[:-1])[:,0])
@@ -50,7 +53,8 @@ class MultiPatchSyncRecording(MiesSyncRecording):
                 starts.insert(0, 0)
             if stops[-1] < starts[-1]:
                 stops.append(len(mask))
-            self._baseline_regions = [r for r in zip(starts, stops) if r[1] > r[0]]
+            baseline_inds = [r for r in zip(starts, stops) if r[1] > r[0]]
+            self._baseline_regions = [(pri.time_at(i0), pri.time_at(i1)) for i0, i1 in baseline_inds]
 
         return self._baseline_regions
 
@@ -104,7 +108,7 @@ class PulseStimAnalyzer(Analyzer):
         self._evoked_spikes = None
         
     def pulses(self):
-        """Return a list of (start, stop, amp) tuples describing square pulses
+        """Return a list of (start_time, stop_time, amp) tuples describing square pulses
         in the stimulus.
         """
         if self._pulses is None:
@@ -112,41 +116,58 @@ class PulseStimAnalyzer(Analyzer):
             pulses = find_square_pulses(trace)
             self._pulses = []
             for p in pulses:
-                start = trace.index_at(p.global_start_time)
-                stop = trace.index_at(p.global_start_time + p.duration)
+                start = p.global_start_time
+                stop = p.global_start_time + p.duration
                 self._pulses.append((start, stop, p.amplitude))
         return self._pulses
+
+    def pulse_chunks(self):
+        """Return time-slices of this recording where evoked spikes are expected to be found (one chunk
+        per pulse)
+        
+        Each recording returned has extra metadata keys added: 
+        - pulse_edges: start/end times of the stimulus pulse
+        - pulse_amplitude: amplitude of stimulus puse (in V or A)
+        - pulse_n: the number of this pulse (all detected square pulses are numbered in order from 0)
+
+        """
+        pre_trace = self.rec['primary']
+
+        # Detect pulse times
+        pulses = self.pulses()
+
+        # cut out a chunk for each pulse
+        chunks = []
+        for i,pulse in enumerate(pulses):
+            pulse_start_time, pulse_end_time, amp = pulse
+            if amp < 0:
+                # assume negative pulses do not evoke spikes
+                # (todo: should be watching for rebound spikes as well)
+                continue
+            # cut out a chunk of the recording for spike detection
+            start_time = pulse_start_time - 2e-3
+            stop_time = pulse_end_time + 4e-3
+            if i < len(pulses) - 1:
+                # truncate chunk if another pulse is present
+                next_pulse_time = pulses[i+1][0]
+                stop_time = min(stop_time, next_pulse_time)
+            chunk = self.rec.time_slice(start_time, stop_time)
+            chunk.meta['pulse_edges'] = [pulse_start_time, pulse_end_time]
+            chunk.meta['pulse_amplitude'] = amp
+            chunk.meta['pulse_n'] = i
+            chunks.append(chunk)
+        return chunks
 
     def evoked_spikes(self):
         """Given presynaptic Recording, detect action potentials
         evoked by current injection or unclamped spikes evoked by a voltage pulse.
         """
         if self._evoked_spikes is None:
-            pre_trace = self.rec['primary']
-
-            # Detect pulse times
-            pulses = self.pulses()
-
-            # detect spike times
             spike_info = []
-            for i,pulse in enumerate(pulses):
-                on, off, amp = pulse
-                if amp < 0:
-                    # assume negative pulses do not evoke spikes
-                    # (todo: should be watching for rebound spikes as well)
-                    continue
-                # cut out a chunk of the recording for spike detection
-                start_time = pre_trace.time_at(on)
-                pulse_end_time = pre_trace.time_at(off)
-                stop_time = pulse_end_time + 10e-3
-                if i < len(pulses) - 1:
-                    next_pulse_time = pre_trace.time_at(pulses[i+1][0])
-                    stop_time = min(stop_time, next_pulse_time)
-                start_idx = pre_trace.index_at(start_time)
-                stop_idx = pre_trace.index_at(stop_time)
-                chunk = self.rec[start_idx:stop_idx]
-                spike = detect_evoked_spike(chunk, [start_time, pulse_end_time])
-                spike_info.append({'pulse_n': i, 'pulse_ind': on, 'pulse_len': off-on, 'spike': spike})
+            for i,chunk in enumerate(self.pulse_chunks()):
+                pulse_edges = chunk.meta['pulse_edges']
+                spikes = detect_evoked_spikes(chunk, pulse_edges)
+                spike_info.append({'pulse_n': chunk.meta['pulse_n'], 'pulse_start': pulse_edges[0], 'pulse_end': pulse_edges[1], 'spikes': spikes})
             self._evoked_spikes = spike_info
         return self._evoked_spikes
 
