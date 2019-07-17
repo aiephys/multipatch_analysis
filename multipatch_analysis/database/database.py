@@ -267,7 +267,7 @@ class Database(object):
             app_name = app_name or cls.default_app_name
             return "{host}/{db_name}?application_name={app_name}".format(host=host, db_name=db_name, app_name=app_name)
         else:
-            return "{host}/{db_name}".format(host=host, db_name=db_name)
+            return host 
 
     def get_database(self, db_name):
         """Return a new Database object with the same hosts and orm base, but different db name

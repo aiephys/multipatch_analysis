@@ -14,7 +14,7 @@ from neuroanalysis.fitting import Psp, StackedPsp
 from multipatch_analysis.avg_response_fit import response_query, sort_responses, fit_avg_response, pair_notes_query
 from random import shuffle, seed
 
-default_latency = 11e-3
+default_latency = 1e-3
 comment_hashtag = [
     '#doublespike',
     '#doublepsp',
@@ -235,8 +235,8 @@ class TracePlot(pg.GraphicsLayoutWidget):
         for plot in self.spike_plots:
             plot.setXLink(self.plots[-1])
             plot.setLabel('left', text="presynaptic spike")
-            plot.addLine(x=10e-3)
-        self.plots[-1].setXRange(5e-3, 20e-3)
+            plot.addLine(x=0)
+        self.plots[-1].setXRange(-5e-3, 10e-3)
         
         self.items = []
 
@@ -252,7 +252,7 @@ class TracePlot(pg.GraphicsLayoutWidget):
                     item = self.trace_plots[i].plot(grand_trace.time_values, grand_trace.data, pen={'color': 'b', 'width': 2})
                     self.items.append(item)
             self.trace_plots[i].autoRange()
-            self.trace_plots[i].setXRange(5e-3, 20e-3)
+            self.trace_plots[i].setXRange(-5e-3, 10e-3)
             # y_range = [grand_trace.data.min(), grand_trace.data.max()]
             # self.plots[i].setYRange(y_range[0], y_range[1], padding=1)
 
@@ -294,7 +294,7 @@ class TracePlot(pg.GraphicsLayoutWidget):
         self.items = []
         
         self.plots[-1].autoRange()
-        self.plots[-1].setXRange(5e-3, 20e-3)
+        self.plots[-1].setXRange(-5e-3, 10e-3)
         self.fit_item_70 = None
         self.fit_item_55 = None
         
@@ -603,9 +603,9 @@ class PairAnalysis(object):
         self.output_fit_parameters = data['fit_parameters']['fit']
         self.initial_fit_parameters = data['fit_parameters']['initial']
 
-        initial_vc_latency = data['fit_parameters']['initial']['vc']['-55']['xoffset'] + 10e-3
+        initial_vc_latency = data['fit_parameters']['initial']['vc']['-55']['xoffset']
         self.vc_superline.set_value(initial_vc_latency, block_fit=True)
-        initial_ic_latency = data['fit_parameters']['initial']['ic']['-55']['xoffset'] + 10e-3
+        initial_ic_latency = data['fit_parameters']['initial']['ic']['-55']['xoffset']
         self.ic_superline.set_value(initial_ic_latency, block_fit=True)
         for mode in modes:
             for holding in holdings:
@@ -614,7 +614,6 @@ class PairAnalysis(object):
                 fit_params = copy.deepcopy(data['fit_parameters']['fit'][mode][holding])
                 
                 if fit_params:
-                    fit_params['xoffset'] += 10e-3
                     fit_params.pop('nrmse', None)
                     if mode == 'ic':
                         p = StackedPsp() 

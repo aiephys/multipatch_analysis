@@ -29,18 +29,17 @@ class AvgResponseFitPipelineModule(DatabasePipelineModule):
 
         for pair in expt.pair_list:
             # Generate fit results for this pair
-            fit_parameters = OrderedDict([
-                ('vc', {'-55': {}, '-70': {}}), 
-                ('ic', {'-55': {}, '-70': {}}),
-                ])
-           
             q = response_query(session=session, pair=pair)
             pulse_responses = q.all()
             traces, _ = sort_responses(pulse_responses)
+            modes, holdings = traces.items()
+            holdings = holdings.keys()
+            fit_parameters = OrderedDict()
             q2 = pair_notes_query(session=s2, pair=pair)
             notes = q2.all()
-            for clamp_mode in ('vc', 'ic'):
-                for holding in ('-55', '-70'):  
+            for clamp_mode in modes:
+                for holding in holdings:
+                fit_parameters[clamp_mode][holding] = {}  
                     if len(notes) == 0:
                         latency = None
                         sign = 'any'
@@ -53,7 +52,7 @@ class AvgResponseFitPipelineModule(DatabasePipelineModule):
                     fit_parameters[clamp_mode][holding], xoffset, _ = fit_avg_response(traces, clamp_mode, holding, latency, sign)
             
             results = {
-            'latency': xoffset - 10e-3,
+            'latency': xoffset,
             'fit_parameters': fit_parameters
             }
 
