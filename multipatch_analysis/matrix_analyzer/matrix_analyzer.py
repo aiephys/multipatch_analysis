@@ -152,8 +152,8 @@ class CellClassFilter(object):
 
     def get_pre_or_post_classes(self, key):
         """Return a list of postsynaptic cell_classes. This will be a subset of self.cell_classes."""
-        if self.cell_classes is None:
-            return []
+        # if self.cell_classes is None:
+        #     return []
         classes = []
         for group in self.params.children():
             if group.value() is True:
@@ -163,7 +163,7 @@ class CellClassFilter(object):
         return classes
 
     def expand_param(self, param, value):
-        if value:
+        if isinstance(value, bool):
             param.items.keys()[0].setExpanded(value)
 
     def invalidate_output(self):
@@ -209,9 +209,9 @@ class MatrixAnalyzer(object):
         self.cell_class_filter = CellClassFilter(self.cell_class_groups)
         self.matrix_display = MatrixDisplay(self.main_window, self.output_fields, self.field_map)
         self.matrix_display_filter = self.matrix_display.matrix_display_filter
-        self.element_scatter.set_fields(self.output_fields, self.field_map)
+        self.element_scatter.set_fields(self.output_fields)
         pair_fields = [f for f in self.output_fields if f[0] not in ['connection_probability', 'gap_junction_probability', 'matrix_completeness']]
-        self.pair_scatter.set_fields(pair_fields, self.field_map)
+        self.pair_scatter.set_fields(pair_fields)
         self.visualizers = [self.matrix_display_filter, self.hist_plot, self.element_scatter, self.pair_scatter, self.distance_plot]
 
         self.default_preset = default_preset
@@ -401,19 +401,24 @@ class MatrixAnalyzer(object):
             self.matrix_display.color_element(row, col, color)
             self.hist_plot.plot_element_data(element, analyzer, color, self.trace_panel)
             self.distance_plot.element_distance(element, color)
+            self.element_scatter.color_selected_element(color, pre_class, post_class)
+            self.pair_scatter.color_selected_element(color, pre_class, post_class)
         else:
             self.display_matrix_element_reset() 
             color = self.colors[self.selected]
             self.matrix_display.color_element(row, col, color)
             self.hist_plot.plot_element_data(element, analyzer, color, self.trace_panel)
             self.distance_plot.element_distance(element, color)
+            self.element_scatter.color_selected_element(color, pre_class, post_class)
+            self.pair_scatter.color_selected_element(color, pre_class, post_class)
 
     def display_matrix_element_reset(self):
         self.selected = 0
         self.hist_plot.plot_element_reset()
         self.matrix_display.element_color_reset()
         self.distance_plot.element_distance_reset(self.results, color=(128, 128, 128), name='All Connections', suppress_scatter=True)
-
+        self.element_scatter.reset_element_color()
+        self.pair_scatter.reset_element_color()
 
     def update_clicked(self):
         p = cProfile.Profile()

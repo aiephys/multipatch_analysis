@@ -6,63 +6,131 @@
                     "value": "target layer"
                 }, 
                 "Mouse All Cre-types by layer": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Mouse Layer 2/3": {
-                    "value": true
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
+                    "value": false
                 }, 
                 "Mouse Layer 4": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Mouse Layer 5": {
-                    "value": false
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
+                    "value": true
                 }, 
                 "Mouse Layer 6": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Mouse Inhibitory Cre-types": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Mouse Excitatory Cre-types": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Mouse E-I Cre-types": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Mouse E-I Cre-types by layer": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Pyramidal / Nonpyramidal by layer": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Pyramidal by layer": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "All cells by layer": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
+                    "value": false
+                }, 
+                "2P-Opto cre types": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }
             }, 
             "value": null
         }, 
         "log scale": {
-            "value": true
+            "value": false
         }, 
         "show confidence": {
             "value": "None"
         }, 
         "matrix colormap": {
             "items": {
-                "connection_probability": {
-                    "field": "connection_probability", 
+                "ic_fit_amp_all": {
+                    "field": "ic_fit_amp_all", 
                     "children": {
                         "Min": {
-                            "value": 0.0
+                            "value": -0.001
                         }, 
                         "Max": {
-                            "value": 1.0
+                            "value": 0.001
                         }, 
                         "Operation": {
-                            "value": "Add"
+                            "value": "Overlay"
                         }, 
                         "Channels..": {
                             "children": {
@@ -98,46 +166,25 @@
                             [
                                 0, 
                                 0, 
-                                100, 
+                                255, 
                                 255
                             ], 
                             [
-                                80, 
+                                255, 
+                                255, 
+                                255, 
+                                255
+                            ], 
+                            [
+                                255, 
                                 0, 
-                                80, 
-                                255
-                            ], 
-                            [
-                                140, 
                                 0, 
-                                0, 
-                                255
-                            ], 
-                            [
-                                255, 
-                                100, 
-                                0, 
-                                255
-                            ], 
-                            [
-                                255, 
-                                255, 
-                                100, 
-                                255
-                            ], 
-                            [
-                                255, 
-                                255, 
-                                255, 
                                 255
                             ]
                         ], 
                         "pos": [
                             0.0, 
-                            0.01, 
-                            0.03, 
-                            0.1, 
-                            0.3, 
+                            0.5, 
                             1.0
                         ]
                     }
@@ -145,7 +192,7 @@
             }
         }, 
         "text format": {
-            "value": "{connected}/{probed}"
+            "value": ""
         }, 
         "data filters": {
             "children": {
@@ -175,6 +222,9 @@
                         "patch-seq": {
                             "value": false
                         }, 
+                        "": {
+                            "value": false
+                        }, 
                         "caspase inhibitor": {
                             "value": false
                         }, 
@@ -200,28 +250,28 @@
                 }, 
                 "Internal": {
                     "children": {
-                        "None": {
-                            "value": false
-                        }, 
-                        "K-Gluc -EGTA": {
+                        "": {
                             "value": false
                         }, 
                         " K-Gluc 1uM EGTA": {
                             "value": false
                         }, 
-                        "": {
+                        "K-Gluc 1uM EGTA": {
+                            "value": false
+                        }, 
+                        "K-Gluc -EGTA": {
                             "value": false
                         }, 
                         "mixed": {
                             "value": false
                         }, 
-                        "Standard K-Gluc": {
-                            "value": false
-                        }, 
                         "PatchSeq": {
                             "value": false
                         }, 
-                        "K-Gluc 1uM EGTA": {
+                        "Standard K-Gluc": {
+                            "value": false
+                        }, 
+                        "None": {
                             "value": false
                         }
                     }, 
@@ -379,39 +429,107 @@
                     "value": "target layer"
                 }, 
                 "Mouse All Cre-types by layer": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": true
                 }, 
                 "Mouse Layer 2/3": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Mouse Layer 4": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Mouse Layer 5": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Mouse Layer 6": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Mouse Inhibitory Cre-types": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Mouse Excitatory Cre-types": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Mouse E-I Cre-types": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Mouse E-I Cre-types by layer": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Pyramidal / Nonpyramidal by layer": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Pyramidal by layer": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "All cells by layer": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
+                    "value": false
+                }, 
+                "2P-Opto cre types": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }
             }, 
@@ -548,6 +666,9 @@
                         "patch-seq": {
                             "value": false
                         }, 
+                        "": {
+                            "value": false
+                        }, 
                         "caspase inhibitor": {
                             "value": false
                         }, 
@@ -573,28 +694,28 @@
                 }, 
                 "Internal": {
                     "children": {
-                        "None": {
-                            "value": false
-                        }, 
-                        "K-Gluc -EGTA": {
+                        "": {
                             "value": false
                         }, 
                         " K-Gluc 1uM EGTA": {
                             "value": false
                         }, 
-                        "": {
+                        "K-Gluc 1uM EGTA": {
+                            "value": false
+                        }, 
+                        "K-Gluc -EGTA": {
                             "value": false
                         }, 
                         "mixed": {
                             "value": false
                         }, 
-                        "Standard K-Gluc": {
-                            "value": false
-                        }, 
                         "PatchSeq": {
                             "value": false
                         }, 
-                        "K-Gluc 1uM EGTA": {
+                        "Standard K-Gluc": {
+                            "value": false
+                        }, 
+                        "None": {
                             "value": false
                         }
                     }, 
@@ -611,39 +732,107 @@
                     "value": "target layer"
                 }, 
                 "Mouse All Cre-types by layer": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Mouse Layer 2/3": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": true
                 }, 
                 "Mouse Layer 4": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": true
                 }, 
                 "Mouse Layer 5": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": true
                 }, 
                 "Mouse Layer 6": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": true
                 }, 
                 "Mouse Inhibitory Cre-types": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Mouse Excitatory Cre-types": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Mouse E-I Cre-types": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Mouse E-I Cre-types by layer": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Pyramidal / Nonpyramidal by layer": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Pyramidal by layer": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "All cells by layer": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
+                    "value": false
+                }, 
+                "2P-Opto cre types": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }
             }, 
@@ -750,7 +939,7 @@
             }
         }, 
         "text format": {
-            "value": "{connected}/{probed}"
+            "value": "{connected}\\{probed}"
         }, 
         "data filters": {
             "children": {
@@ -780,6 +969,9 @@
                         "patch-seq": {
                             "value": false
                         }, 
+                        "": {
+                            "value": false
+                        }, 
                         "caspase inhibitor": {
                             "value": false
                         }, 
@@ -805,28 +997,28 @@
                 }, 
                 "Internal": {
                     "children": {
-                        "None": {
-                            "value": false
-                        }, 
-                        "K-Gluc -EGTA": {
+                        "": {
                             "value": false
                         }, 
                         " K-Gluc 1uM EGTA": {
                             "value": false
                         }, 
-                        "": {
+                        "K-Gluc 1uM EGTA": {
+                            "value": false
+                        }, 
+                        "K-Gluc -EGTA": {
                             "value": false
                         }, 
                         "mixed": {
                             "value": false
                         }, 
-                        "Standard K-Gluc": {
-                            "value": false
-                        }, 
                         "PatchSeq": {
                             "value": false
                         }, 
-                        "K-Gluc 1uM EGTA": {
+                        "Standard K-Gluc": {
+                            "value": false
+                        }, 
+                        "None": {
                             "value": false
                         }
                     }, 
@@ -843,39 +1035,107 @@
                     "value": "target layer"
                 }, 
                 "Mouse All Cre-types by layer": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": true
                 }, 
                 "Mouse Layer 2/3": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Mouse Layer 4": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Mouse Layer 5": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Mouse Layer 6": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Mouse Inhibitory Cre-types": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Mouse Excitatory Cre-types": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Mouse E-I Cre-types": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Mouse E-I Cre-types by layer": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Pyramidal / Nonpyramidal by layer": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "Pyramidal by layer": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }, 
                 "All cells by layer": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
+                    "value": false
+                }, 
+                "2P-Opto cre types": {
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }, 
                     "value": false
                 }
             }, 
@@ -975,7 +1235,7 @@
             }
         }, 
         "text format": {
-            "value": "{connected}/{probed}"
+            "value": "{connected}\\{probed}"
         }, 
         "data filters": {
             "children": {
@@ -1005,6 +1265,9 @@
                         "patch-seq": {
                             "value": false
                         }, 
+                        "": {
+                            "value": false
+                        }, 
                         "caspase inhibitor": {
                             "value": false
                         }, 
@@ -1030,28 +1293,28 @@
                 }, 
                 "Internal": {
                     "children": {
-                        "None": {
-                            "value": false
-                        }, 
-                        "K-Gluc -EGTA": {
+                        "": {
                             "value": false
                         }, 
                         " K-Gluc 1uM EGTA": {
                             "value": false
                         }, 
-                        "": {
+                        "K-Gluc 1uM EGTA": {
+                            "value": false
+                        }, 
+                        "K-Gluc -EGTA": {
                             "value": false
                         }, 
                         "mixed": {
                             "value": false
                         }, 
-                        "Standard K-Gluc": {
-                            "value": false
-                        }, 
                         "PatchSeq": {
                             "value": false
                         }, 
-                        "K-Gluc 1uM EGTA": {
+                        "Standard K-Gluc": {
+                            "value": false
+                        }, 
+                        "None": {
                             "value": false
                         }
                     }, 
