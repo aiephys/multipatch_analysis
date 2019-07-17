@@ -9,7 +9,7 @@ from collections import OrderedDict
 import numpy as np
 from .. import config, lims
 from ..experiment import Experiment
-from .. import database
+from ..database import default_db as database
 from ..genotypes import Genotype
 from .actions import ExperimentActions
 from ..yaml_local import yaml
