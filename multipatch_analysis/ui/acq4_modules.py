@@ -95,9 +95,6 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         self.layout.addWidget(self.submit_btn, 1, 0)
         self.submit_btn.clicked.connect(self.submit)
 
-        self.map_no_go = QtGui.QCheckBox("Cell map no go")
-        self.layout.addWidget(self.map_no_go)
-
     def load_clicked(self):
         """
         Checks that directory is pointed at a slice
@@ -151,12 +148,6 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         Creates dictionary of cell locations and enables the save button
         If the cluster is unmappable (no stained cells, damage, etc.) the json will submit cell_map_no_go to specimen tags
         """
-
-        cell_map_no_go = self.map_no_go.isChecked()
-        if cell_map_no_go is True:
-            self.data = {}
-            self.data['cell map no go'] = cell_map_no_go
-            return
             
         items = self.mosaic_editor.canvas.items
         image_20 = lims.specimen_20x_image(self.specimen_name, treatment='Biocytin')
