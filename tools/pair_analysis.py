@@ -246,7 +246,8 @@ class TracePlot(pg.GraphicsLayoutWidget):
                 if len(traces) == 0:
                     continue
                 for trace in traces:
-                    self.trace_plots[i].plot(trace.time_values, trace.data, pen=self.qc_color[qc])
+                    item = self.trace_plots[i].plot(trace.time_values, trace.data, pen=self.qc_color[qc])
+                    self.items.append(item)
                 if qc == 'qc_pass':
                     grand_trace = TraceList(traces).mean()
                     item = self.trace_plots[i].plot(grand_trace.time_values, grand_trace.data, pen={'color': 'b', 'width': 2})
@@ -412,6 +413,7 @@ class PairAnalysis(object):
         self.ctrl_panel.params.child('Comments', '').setValue('')
         
     def load_pair(self, pair, record=None):
+        self.reset_display
         self.record = hash(record)
         self.initial_fit_parameters = OrderedDict([
             ('vc', {'-55': {}, '-70': {}}), 
