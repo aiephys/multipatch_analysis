@@ -177,9 +177,8 @@ class PulseStimAnalyzer(Analyzer):
         pulses = [p[0] for p in self.pulses() if p[2] > 0]
         if len(pulses) < 2:
             return None, None
-        dt = self.rec['command'].dt
-        ind_freq = np.round(1.0 / (dt * (pulses[1] - pulses[0])))
-        rec_delay = np.round(dt*np.diff(pulses).max(), 3)
+        ind_freq = np.round(1.0 / (pulses[1] - pulses[0]))
+        rec_delay = np.round(np.diff(pulses).max(), 3)
         
         return ind_freq, rec_delay
 
