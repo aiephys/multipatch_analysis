@@ -406,7 +406,7 @@ class Dashboard(QtGui.QWidget):
                 search_hit = False
                 if rec['lims_slice_name'] is not None and search in rec['lims_slice_name']:
                     search_hit = True
-                elif search in str(rec['timestamp']) or search in str(np.round(rec['timestamp'], 2)):
+                elif search in ("%0.3f" % rec['timestamp']) or search in str(np.round(rec['timestamp'], 2)):
                     search_hit = True
                 elif rec['description'] is not None and search in rec['description']:
                     search_hit = True
