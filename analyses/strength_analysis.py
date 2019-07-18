@@ -1022,8 +1022,6 @@ def simulate_connection(fg_recs, bg_results, classifier, amp, rtime, n_trials=8)
 
 
 if __name__ == '__main__':
-    import user
-
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=int, default=0, help="Seed used to randomize classifier inputs")    
     parser.add_argument('--pairview', default=False, action='store_true', help="Only display experiment browser ui")

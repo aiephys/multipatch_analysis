@@ -765,6 +765,6 @@ def detect_connections(expt):
             lsnr = np.log(fit.snr)
             lnrmse = np.log(fit.nrmse())
             if lsnr > lnrmse + 6:
-                print "Connection:", pre_id, post_id, fit.snr, fit.nrmse()
+                print("Connection:", pre_id, post_id, fit.snr, fit.nrmse())
 
 
