@@ -8,10 +8,9 @@ from ...util import timestamp_to_datetime
 from ...experiment import Experiment
 from ..pipeline_module import DatabasePipelineModule
 from .experiment import ExperimentPipelineModule
-from ...connection_detection import PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.data import PatchClampRecording
-from ...data import MultiPatchExperiment, MultiPatchProbe
+from ...data import MultiPatchExperiment, MultiPatchProbe, PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
 
 
 class DatasetPipelineModule(DatabasePipelineModule):
