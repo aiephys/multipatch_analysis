@@ -18,4 +18,11 @@ class PipetteMetadata(object):
 
     def load_yml(self, yml_file):
         self.yml_file = yml_file
-        self.pipettes = yaml.load(open(yml_file, 'rb'))
+
+        if hasattr(yaml, 'FullLoader'):
+            # pyyaml new API
+            self.pipettes = yaml.load(open(yml_file, 'rb'), Loader=yaml.FullLoader)
+        else:
+            # pyyaml old API
+            self.pipettes = yaml.load(open(yml_file, 'rb'))
+
