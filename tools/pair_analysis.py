@@ -436,7 +436,7 @@ class PairAnalysis(object):
             s.close()
                 
             if pair.synapse is True:
-                synapse_type = pair.connection_strength.synapse_type
+                synapse_type = pair.connection_strength.synapse_type if pair.connection_strength is not None else None
             else:
                 synapse_type = None
             pair_params = {'Synapse call': synapse_type, 'Gap junction call': pair.electrical}
@@ -540,7 +540,7 @@ class PairAnalysis(object):
         }
 
         s = notes_db.db.session(readonly=False)
-        q = pair_notes_query(s, pair)
+        q = pair_notes_query(s, self.pair)
         rec = q.all()
         if len(rec) == 0:
             record_check = hash(None)
