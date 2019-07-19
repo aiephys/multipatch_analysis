@@ -1,7 +1,7 @@
 from multipatch_analysis.database import default_db as db
 import multipatch_analysis.data_notes_db as notes_db
 import pyqtgraph as pg
-import sys, copy
+import sys, copy, argparse
 import numpy as np
 from pyqtgraph import parametertree as ptree
 from pyqtgraph.parametertree import Parameter
@@ -436,7 +436,7 @@ class PairAnalysis(object):
             s.close()
                 
             if pair.synapse is True:
-                synapse_type = pair.connection_strength.synapse_type
+                synapse_type = pair.connection_strength.synapse_type if pair.connection_strength is not None else None
             else:
                 synapse_type = None
             pair_params = {'Synapse call': synapse_type, 'Gap junction call': pair.electrical}
@@ -540,7 +540,7 @@ class PairAnalysis(object):
         }
 
         s = notes_db.db.session(readonly=False)
-        q = pair_notes_query(s, pair)
+        q = pair_notes_query(s, self.pair)
         rec = q.all()
         if len(rec) == 0:
             record_check = hash(None)
@@ -637,15 +637,26 @@ if __name__ == '__main__':
 
     app = pg.mkQApp()
     pg.dbg()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--user', nargs=1, type=int)
+
+    args = parser.parse_args(sys.argv[1:])
+    user = args.user
+    n_users = 6
 
     # expt_list = [1539292152.917]
     s = db.session()
     e = s.query(db.Experiment.acq_timestamp).join(db.Pair).filter(db.Pair.synapse==True)
     expt_list = e.all()
     expt_list = [ee[0] for ee in expt_list]
-    seed(0)
-    shuffle(expt_list)
-    expt_list = expt_list[:10]
+    if user is not None:
+        user = user[0]
+        expt_list = expt_list[user::n_users]
+        expt_list = expt_list[:10]
+    else:
+        seed(0)
+        shuffle(expt_list)
+        expt_list = expt_list[:10]
     q = s.query(db.Experiment).filter(db.Experiment.acq_timestamp.in_(expt_list))
     expts = q.all()
 

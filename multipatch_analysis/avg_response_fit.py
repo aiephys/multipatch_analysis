@@ -11,6 +11,7 @@ from collections import OrderedDict
 from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.fitting import Psp, StackedPsp
+from multipatch_analysis.qc import spike_qc
 from multipatch_analysis.fitting import fit_psp
 
 
@@ -19,10 +20,12 @@ def response_query(session, pair):
         db.PulseResponse.id.label('response_id'),
         db.PulseResponse.data,
         db.PulseResponse.ex_qc_pass,
-        db.PulseResponse.start_time.label('rec_start'),
+        db.PulseResponse.data_start_time.label('rec_start'),
         db.StimPulse.data.label('spike'),
+        db.StimPulse.data_start_time.label('spike_start'),
         db.StimPulse.n_spikes,
-        db.StimSpike.max_dvdt_time.label('spike_time'),
+        db.StimPulse.first_spike_time,
+        db.StimSpike.max_slope_time.label('spike_time'),
         db.PatchClampRecording.clamp_mode,
         db.PatchClampRecording.baseline_potential,
         db.MultiPatchProbe.induction_frequency.label('ind_freq'),
@@ -62,32 +65,30 @@ def sort_responses(pulse_responses):
         ('ic', {'-55': {'qc_pass': [], 'qc_fail': []}, '-70': {'qc_pass': [], 'qc_fail': []}}),
     ])
 
-    for rec in pulse_responses:
+    for rec in pulse_responses: 
         if rec.ind_freq not in [10, 20, 50]:
             continue
         data_trace = Trace(data=rec.data, sample_rate=db.default_sample_rate)
         spike_trace = Trace(data=rec.spike, sample_rate=db.default_sample_rate)
         n_spikes = rec.n_spikes
-        start_time = rec.rec_start
-        spike_time = rec.spike_time if rec.spike_time is not None else 0. 
+        spike_time = rec.spike_time
+        if spike_time is None:
+            continue 
         clamp = rec.clamp_mode
         holding = rec.baseline_potential
-        t0 = start_time-spike_time ## spike aligned at 0ms
-        data_trace.t0 = t0
-        spike_trace.t0 = t0
+        data_trace.t0 = rec.rec_start - spike_time
+        spike_trace.t0 = rec.spike_start - spike_time
         baseline_trace = data_trace.time_slice(-10e-3, -4e-3)
         baseline = float_mode(baseline_trace.data)
         bsub_data_trace = data_trace - baseline
-        spike_qc_pass = n_spikes == 1
-        trace_qc_pass = rec.ex_qc_pass
-        
+        spike_qc_pass, trace_qc_pass = spike_qc(n_spikes, rec.ex_qc_pass)
+
         if in_limits[0] < holding < in_limits[1]:
             traces[clamp]['-55'][qc[trace_qc_pass]].append(bsub_data_trace)
             spikes[clamp]['-55'][qc[spike_qc_pass]].append(spike_trace)
         elif ex_limits[0] < holding < ex_limits[1]:
             traces[clamp]['-70'][qc[trace_qc_pass]].append(bsub_data_trace)
             spikes[clamp]['-70'][qc[spike_qc_pass]].append(spike_trace)
-        
     return traces, spikes
 
 
@@ -107,9 +108,9 @@ def fit_avg_response(traces, mode, holding, latency, sign):
         grand_trace = TraceList(traces[mode][holding]['qc_pass']).mean()
 
         weight = np.ones(len(grand_trace.data))*10.  #set everything to ten initially
-        weight[int(2e-3/db.default_sample_rate):int(9e-3/db.default_sample_rate)] = 30.  #area around steep PSP rise 
+        weight[int(1e-3/db.default_sample_rate):int(3e-3/db.default_sample_rate)] = 30.  #area around steep PSP rise 
         ic_weight = weight
-        ic_weight[0:int(2e-3/db.default_sample_rate)] = 0.   #area around stim artifact
+        ic_weight[0:int(1e-3/db.default_sample_rate)] = 0.   #area around stim artifact
 
         mode_params = {'vc': {
             'stacked': False,
@@ -130,9 +131,9 @@ def fit_avg_response(traces, mode, holding, latency, sign):
         rise_bounds = mode_params[mode]['rise_bounds']
         weight = mode_params[mode]['weight']
         
-        rise_times = list(initial_rise*2.**np.arange(-2, 3, 1))
+        rise_times = list(initial_rise*2.**np.arange(-2, 3, 0.5))
         x_win = [x_offset + x_offset_win[0], x_offset + x_offset_win[1]]
-        x_range = list(np.linspace(x_win[0], x_win[1], 4))
+        x_range = list(np.linspace(x_win[0], x_win[1], 7))
 
         try:
             fit = fit_psp(grand_trace, 
@@ -149,5 +150,6 @@ def fit_avg_response(traces, mode, holding, latency, sign):
         except:
             print("Error in PSP fit:")
             sys.excepthook(*sys.exc_info())
+            return output_fit_parameters, x_offset, None
 
         return output_fit_parameters, x_offset, fit.best_fit
