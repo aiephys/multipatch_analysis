@@ -108,3 +108,12 @@ def pulse_response_qc_pass(post_rec, window, n_spikes, adjacent_pulses):
     qc_pass = tuple([((bmin < base < bmax) and (bmin < base2 < bmax)) for bmin, bmax in limits])
 
     return qc_pass
+
+def spike_qc(n_spikes, post_qc):
+    """If there is not exactly 1 presynaptic spike, qc Fail spike and postsynaptic response
+    """
+
+    spike_qc_pass = n_spikes == 1
+    trace_qc_pass = False if spike_qc_pass is False else post_qc
+
+    return spike_qc_pass, trace_qc_pass

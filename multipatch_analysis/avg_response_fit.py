@@ -12,6 +12,7 @@ from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.fitting import Psp, StackedPsp
 from multipatch_analysis.connection_detection import fit_psp
+from multipatch_analysis.qc import spike_qc
 
 def response_query(session, pair):
     q = session.query(
@@ -77,8 +78,7 @@ def sort_responses(pulse_responses):
         baseline_trace = data_trace.time_slice(-10e-3, -4e-3)
         baseline = float_mode(baseline_trace.data)
         bsub_data_trace = data_trace - baseline
-        spike_qc_pass = n_spikes == 1
-        trace_qc_pass = False if spike_qc_pass is False else rec.ex_qc_pass # Fail trace if spike doesn't pass qc
+        spike_qc_pass, trace_qc_pass = spike_qc(n_spikes, rec.ex_qc_pass)
 
         if in_limits[0] < holding < in_limits[1]:
             traces[clamp]['-55'][qc[trace_qc_pass]].append(bsub_data_trace)
