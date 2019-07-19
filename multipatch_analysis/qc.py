@@ -25,7 +25,7 @@ def recording_qc_pass(rec):
     if rec.baseline_current < -800e-12 or rec.baseline_current > 800e-12:
         return False
     if rec.clamp_mode == 'ic':
-        if rec.baseline_potential < -85e-3 or rec.baseline_potential > -45e-3:
+        if rec.baseline_potential is None or rec.baseline_potential < -85e-3 or rec.baseline_potential > -45e-3:
             return False
         if rec.baseline_rms_noise > 5e-3:
             return False

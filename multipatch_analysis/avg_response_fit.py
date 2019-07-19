@@ -11,8 +11,9 @@ from collections import OrderedDict
 from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.fitting import Psp, StackedPsp
-from multipatch_analysis.connection_detection import fit_psp
 from multipatch_analysis.qc import spike_qc
+from multipatch_analysis.fitting import fit_psp
+
 
 def response_query(session, pair):
     q = session.query(
@@ -38,6 +39,7 @@ def response_query(session, pair):
 
     return q
 
+
 def pair_notes_query(session, pair):
     expt_id = '%0.3f' % pair.experiment.acq_timestamp
     pre_cell_id = str(pair.pre_cell.ext_id)
@@ -48,6 +50,7 @@ def pair_notes_query(session, pair):
     q = q.filter(notes_db.PairNotes.post_cell_id==post_cell_id)
 
     return q
+
 
 def sort_responses(pulse_responses):
     ex_limits = [-80e-3, -63e-3]
@@ -87,6 +90,7 @@ def sort_responses(pulse_responses):
             traces[clamp]['-70'][qc[trace_qc_pass]].append(bsub_data_trace)
             spikes[clamp]['-70'][qc[spike_qc_pass]].append(spike_trace)
     return traces, spikes
+
 
 def fit_avg_response(traces, mode, holding, latency, sign):
         output_fit_parameters = {}

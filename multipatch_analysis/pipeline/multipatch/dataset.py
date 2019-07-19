@@ -8,10 +8,9 @@ from ...util import timestamp_to_datetime
 from ...experiment import Experiment
 from ..pipeline_module import DatabasePipelineModule
 from .experiment import ExperimentPipelineModule
-from ...connection_detection import PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.data import PatchClampRecording
-from ...data import MultiPatchExperiment, MultiPatchProbe
+from ...data import MultiPatchExperiment, MultiPatchProbe, PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
 
 
 class DatasetPipelineModule(DatabasePipelineModule):
@@ -123,16 +122,15 @@ class DatasetPipelineModule(DatabasePipelineModule):
                 for i,pulse in enumerate(pulses):
                     # Record information about all pulses, including test pulse.
                     t0, t1 = pulse.meta['pulse_edges']
-                    data_start = max(0, t0 - 10e-3)
-                    data_stop = t0 + 10e-3
+                    resampled = pulse['primary'].resample(sample_rate=20000)
                     pulse_entry = db.StimPulse(
                         recording=rec_entry,
                         pulse_number=pulse.meta['pulse_n'],
                         onset_time=t0,
                         amplitude=pulse.meta['pulse_amplitude'],
                         duration=t1-t0,
-                        data=pulse['primary'].resample(sample_rate=20000).data,
-                        data_start_time=data_start,
+                        data=resampled.data,
+                        data_start_time=resampled.t0,
                     )
                     session.add(pulse_entry)
                     pulse_entries[pulse.meta['pulse_n']] = pulse_entry
@@ -188,12 +186,14 @@ class DatasetPipelineModule(DatabasePipelineModule):
                             pair_entry.n_ex_test_spikes += 1
                         if resp['in_qc_pass']:
                             pair_entry.n_in_test_spikes += 1
+                            
+                        resampled = resp['response'].resample(sample_rate=20000)
                         resp_entry = db.PulseResponse(
                             recording=rec_entries[post_dev],
                             stim_pulse=all_pulse_entries[pre_dev][resp['pulse_n']],
                             pair=pair_entry,
-                            data=resp['response'].resample(sample_rate=20000).data,
-                            data_start_time=resp['rec_start'],
+                            data=resampled.data,
+                            data_start_time=resampled.t0,
                             ex_qc_pass=resp['ex_qc_pass'],
                             in_qc_pass=resp['in_qc_pass'],
                         )

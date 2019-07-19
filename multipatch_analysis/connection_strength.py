@@ -12,7 +12,7 @@ import scipy.stats
 from sqlalchemy.orm import aliased
 from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.baseline import float_mode
-from .connection_detection import fit_psp
+from .fitting import fit_psp
 from .database import default_db as db
 
 

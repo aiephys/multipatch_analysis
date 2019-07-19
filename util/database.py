@@ -1,6 +1,7 @@
 from __future__ import division, print_function
 
 import os, sys, argparse
+import six
 import multipatch_analysis.database as db
 from multipatch_analysis.config import synphys_db
 from multipatch_analysis import config
@@ -25,7 +26,7 @@ if args.dbg:
     pg.dbg()
 
 if args.reset_db:
-    ans = raw_input('Reset database "%s"? ' % db.default_db)
+    ans = six.moves.input('Reset database "%s"? ' % db.default_db)
     if ans == 'y':
         print("  Ok, here we go..")
         db.default_db.reset_db()
@@ -58,7 +59,7 @@ if args.clone is not None:
 
 if args.drop is not None:
     drop_db = db.default_db.get_database(args.drop)
-    ans = raw_input("Seriously? I'm gonna dump the entire \"%s\" database? (y/n) " % drop_db)
+    ans = six.moves.input("Seriously? I'm gonna dump the entire \"%s\" database? (y/n) " % drop_db)
     if ans == 'y':
         print("  Ok, don't look..")
         drop_db.drop_database()

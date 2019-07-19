@@ -27,7 +27,7 @@ from scipy import stats
 
 from multipatch_analysis.constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
 from manuscript_figures import get_response, get_amplitude, response_filter, train_amp, write_cache
-from multipatch_analysis.connection_detection import fit_psp
+from multipatch_analysis.fitting import fit_psp
 from manuscript_figures import arg_to_date, load_cache, summary_plot_pulse, get_expts
 
 
