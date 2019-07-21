@@ -634,30 +634,29 @@ class PairAnalysis(object):
 
 
 if __name__ == '__main__':
+    from sqlalchemy import or_
 
     app = pg.mkQApp()
     pg.dbg()
     parser = argparse.ArgumentParser()
-    parser.add_argument('--user', nargs=1, type=int)
+    parser.add_argument('--user', type=int)
 
     args = parser.parse_args(sys.argv[1:])
     user = args.user
     n_users = 6
 
-    # expt_list = [1539292152.917]
     s = db.session()
-    e = s.query(db.Experiment.acq_timestamp).join(db.Pair).filter(db.Pair.synapse==True)
-    expt_list = e.all()
-    expt_list = [ee[0] for ee in expt_list]
+    synapses = s.query(db.Pair).filter(or_(db.Pair.synapse==True, db.Pair.electrical==True)).all()
+    timestamps = set([pair.experiment.acq_timestamp for pair in synapses])
+    
     if user is not None:
-        user = user[0]
-        expt_list = expt_list[user::n_users]
-        expt_list = expt_list[:10]
+        user_nums = [(ts, int(ts*1000) % n_users) for ts in timestamps]
+        timestamps = [un[0] for un in user_nums if un[1] == args.user]
     else:
         seed(0)
-        shuffle(expt_list)
-        expt_list = expt_list[:10]
-    q = s.query(db.Experiment).filter(db.Experiment.acq_timestamp.in_(expt_list))
+        shuffle(timestamps)
+        timestamps = timestamps[:10]
+    q = s.query(db.Experiment).filter(db.Experiment.acq_timestamp.in_(timestamps))
     expts = q.all()
 
     mw = MainWindow()

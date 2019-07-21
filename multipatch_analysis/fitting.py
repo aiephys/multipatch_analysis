@@ -1,6 +1,7 @@
 import numpy as np
 import warnings
 
+from pyqtgraph.debug import Profiler
 from neuroanalysis.fitting import StackedPsp, Psp
 from .data import MultiPatchProbe, Analyzer, PulseStimAnalyzer
 
@@ -154,7 +155,7 @@ def fit_psp(response,
     fit: lmfit.model.ModelResult
         Best fit
     """           
-    
+    prof = Profiler(disabled=False, delayed=False)    
     # extracting these for ease of use
     t=response.time_values
     y=response.data
@@ -232,12 +233,14 @@ def fit_psp(response,
 
     # convert initial parameters into a list of dictionaries to be consumed by psp.fit()        
     param_dict_list= create_all_fit_param_combos(base_params)
+    prof('init')
 
     # cycle though different parameters sets and chose best one
     best_fit = None
     best_score = None
     for p in param_dict_list:
         fit = psp.fit(y, x=t, params=p, fit_kws=fit_kws, method=method)
+        prof('fit: %s' % p)
         err = np.sum(fit.residual**2)  # note: using this because normalized (nrmse) is not necessary to comparing fits within the same data set
         if best_fit is None or err < best_score:
             best_fit = fit

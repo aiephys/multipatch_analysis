@@ -50,6 +50,9 @@ def pulse_response_qc_pass(post_rec, window, n_spikes, adjacent_pulses):
     * Excitatory response baseline potential must be between -45 and -80 mV
     * Overall stdev for postsynaptic recording must be < 1.5 mV or < 15 pA
     * Current clamp response must never exceed -40 mV
+    
+    These criteria are intended as minimal quality control when determining _whether_ a synaptic
+    connection exists between two cells. 
 
     Parameters
     ----------

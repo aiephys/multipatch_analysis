@@ -112,19 +112,20 @@ def fit_avg_response(traces, mode, holding, latency, sign):
         ic_weight = weight
         ic_weight[0:int(1e-3/db.default_sample_rate)] = 0.   #area around stim artifact
 
-        mode_params = {'vc': {
-            'stacked': False,
-            'initial_rise': 1e-3,
-            'rise_bounds': [0.1e-3, 6e-3],
-            'weight': weight
+        mode_params = {
+            'vc': {
+                'stacked': False,
+                'initial_rise': 1e-3,
+                'rise_bounds': [0.1e-3, 6e-3],
+                'weight': weight
             },
             'ic': {
-            'stacked': True,
-            'initial_rise': 5e-3,
-            'rise_bounds': [1e-3, 30e-3],
-            'weight': ic_weight
+                'stacked': True,
+                'initial_rise': 5e-3,
+                'rise_bounds': [1e-3, 30e-3],
+                'weight': ic_weight
             }
-            }
+        }
         
         stacked = mode_params[mode]['stacked']
         initial_rise = mode_params[mode]['initial_rise']
@@ -142,7 +143,9 @@ def fit_avg_response(traces, mode, holding, latency, sign):
                 xoffset=(x_range, x_win[0], x_win[1]),
                 rise_time=(rise_times, rise_bounds[0], rise_bounds[1]),
                 stacked=stacked,
-                )
+                fit_kws={'tol': 0.01},
+                
+            )
             for param, val in fit.best_values.items():
                 output_fit_parameters[param] = val
             output_fit_parameters['yoffset'] = fit.best_values['yoffset']
