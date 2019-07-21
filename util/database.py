@@ -2,7 +2,7 @@ from __future__ import division, print_function
 
 import os, sys, argparse
 import six
-import multipatch_analysis.database as db
+from multipatch_analysis.database import default_db as db
 from multipatch_analysis.config import synphys_db
 from multipatch_analysis import config
 
@@ -26,18 +26,18 @@ if args.dbg:
     pg.dbg()
 
 if args.reset_db:
-    ans = six.moves.input('Reset database "%s"? ' % db.default_db)
+    ans = six.moves.input('Reset database "%s"? ' % db)
     if ans == 'y':
         print("  Ok, here we go..")
-        db.default_db.reset_db()
+        db.reset_db()
         print("    ..done.")
     else:
         print("  Oh very well. Some other time, perhaps.")
 
 if args.vacuum:
     # cleans up DB and analyzes column statistics to improve query performance
-    print("Mopping up %s.." % db.default_db.db_name)
-    db.default_db.vacuum()
+    print("Mopping up %s.." % db.db_name)
+    db.vacuum()
     print("   ..done.")
 
 
@@ -50,15 +50,15 @@ if args.bake is not None:
             print("sqlite database file %s already exists" % args.bake)
             sys.exit(0)
         
-    db.default_db.bake_sqlite(args.bake, tables=tables, skip_tables=args.skip_tables.split(','))
+    db.bake_sqlite(args.bake, tables=tables, skip_tables=args.skip_tables.split(','))
 
 
 if args.clone is not None:
-    db.default_db.clone_database(args.clone, tables=tables, skip_tables=args.skip_tables.split(','))
+    db.clone_database(args.clone, tables=tables, skip_tables=args.skip_tables.split(','))
 
 
 if args.drop is not None:
-    drop_db = db.default_db.get_database(args.drop)
+    drop_db = db.get_database(args.drop)
     ans = six.moves.input("Seriously? I'm gonna dump the entire \"%s\" database? (y/n) " % drop_db)
     if ans == 'y':
         print("  Ok, don't look..")
