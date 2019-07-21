@@ -39,9 +39,9 @@ if __name__ == '__main__':
         ]),
 
         ('Mouse Layer 2/3', [
-            # {'cre_type': 'unknown', 'target_layer': '2/3'},
+            {'cre_type': 'unknown', 'target_layer': '2/3', 'cortical_layer': '2/3'},
             #{'pyramidal': True, 'target_layer': '2/3'},
-            {'dendrite_type': 'spiny', 'target_layer': '2/3', 'cortical_layer': '2/3'},
+            # {'dendrite_type': 'spiny', 'target_layer': '2/3', 'cortical_layer': '2/3'},
             {'cre_type': 'pvalb', 'target_layer': '2/3', 'cortical_layer': '2/3'},
             {'cre_type': 'sst', 'target_layer': '2/3', 'cortical_layer': '2/3'},
             {'cre_type': 'vip', 'target_layer': '2/3', 'cortical_layer': '2/3'},
