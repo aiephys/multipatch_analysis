@@ -412,6 +412,7 @@ class PairAnalysis(object):
         self.ic_superline.set_value(default_latency, block_fit=True)
         self.ctrl_panel.params.child('Comments', 'Hashtag').setValue('')
         self.ctrl_panel.params.child('Comments', '').setValue('')
+        self.ctrl_panel.params.child('Warnings').setValue('')
         
     def load_pair(self, pair, record=None):
         self.reset_display
