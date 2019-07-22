@@ -500,13 +500,15 @@ class PairAnalysis(object):
                 fit_latency = self.fit_params['fit'].get(mode).get(holding).get('xoffset')
                 if fit_latency is None or initial_latency is None:
                     continue
+                if abs(np.diff([fit_latency, initial_latency])) > 0.1e-3:
+                    warning = 'Initial latency and fit latency differ by %s' % pg.siFormat(abs(np.diff([fit_latency, initial_latency])), suffix='s')
                 latency_holding.append(fit_latency)
-            if len(latency_holding) == 2 and np.diff(latency_holding) > 0.01e-3:
+            if len(latency_holding) == 2 and abs(np.diff(latency_holding)) > 0.01e-3:
                 warning = 'Latencies for %s mode do not match' % mode
                 self.warnings.append(warning)
             latency_mode.append(np.mean(latency_holding))
         latency_diff = np.diff(latency_mode)[0]
-        if  latency_diff > 0.2e-3:
+        if  abs(latency_diff) > 0.2e-3:
             warning = 'Latency across modes differs by %s' % pg.siFormat(latency_diff, suffix='s')
             self.warnings.append(warning)
 
@@ -578,7 +580,7 @@ class PairAnalysis(object):
         else:
             raise Exception('More than one record was found for pair %s %s->%s in the Pair Notes database' % (expt_id, pre_cell_id, post_cell_id))
 
-        if self.record == record_check:
+        if hash(self.record) == record_check:
             entry = notes_db.PairNotes(**fields)
             s.add(entry)
             s.commit()
