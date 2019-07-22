@@ -519,10 +519,10 @@ class PairAnalysis(object):
                 elif mode == 'vc':
                     guess = -1 if fit['amp'] > 0 else 1
                 guess_sign.append(guess)
-        if np.all(np.array(guess)) == 1):
-            guess = "Excitatory"
-        elif np.all(np.array(guess)) == -1):
-            guess = "Inhibitory"
+        if np.all(np.array(guess) == 1):
+            guess = "ex"
+        elif np.all(np.array(guess) == -1):
+            guess = "in"
         else:
             guess = None
         if guess is None:
@@ -667,7 +667,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args(sys.argv[1:])
     user = args.user
-    n_users = 6
+    n_users = 10
 
     s = db.session()
     synapses = s.query(db.Pair).filter(or_(db.Pair.synapse==True, db.Pair.electrical==True)).all()
@@ -678,6 +678,7 @@ if __name__ == '__main__':
         timestamps = [un[0] for un in user_nums if un[1] == args.user]
     else:
         seed(0)
+        timestamps = list(timestamps)
         shuffle(timestamps)
         timestamps = timestamps[:10]
     q = s.query(db.Experiment).filter(db.Experiment.acq_timestamp.in_(timestamps))
