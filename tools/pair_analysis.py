@@ -506,6 +506,30 @@ class PairAnalysis(object):
             warning = 'Latency across modes differs by %s' % pg.siFormat(latency_diff, suffix='s')
             self.warnings.append(warning)
 
+        if np.min(latency_mode) < 0.4e-3 and self.ctrl_panel.params['Gap junction call'] is False:
+            self.warnings.append("Short latency; is this a gap junction?")
+
+        guess_sign = []
+        for mode, fits1 in self.output_fit_parameters.items():
+            for holding, fit in fits1.items():
+                if 'amp' not in fit:
+                    continue
+                if mode == 'ic':
+                    guess = 1 if fit['amp'] > 0 else -1
+                elif mode == 'vc':
+                    guess = -1 if fit['amp'] > 0 else 1
+                guess_sign.append(guess)
+        if np.all(np.array(guess)) == 1):
+            guess = "Excitatory"
+        elif np.all(np.array(guess)) == -1):
+            guess = "Inhibitory"
+        else:
+            guess = None
+        if guess is None:
+            self.warnings.append("Mixed amplitude signs; pick ex/in carefully.")
+        elif guess != self.ctrl_panel.params['Synapse call']:
+            self.warnings.append("Looks like an %s synapse??" % guess)
+
         print_warning = '\n'.join(self.warnings)
         self.ctrl_panel.params.child('Warnings').setValue(print_warning)
 
