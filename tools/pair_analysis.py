@@ -20,11 +20,12 @@ comment_hashtag = [
     '#doublepsp',
     '#badspikes',
     '#fixable',
-    '#secondopinion',
+    '#needsecondopinion',
     '#lostcause',
     '#MVP',
     '#crosstalk',
-    '#badqc'
+    '#badqc',
+    '#risetime',
 ]
 
 comment_hashtag.sort(key=lambda x:x[1])
