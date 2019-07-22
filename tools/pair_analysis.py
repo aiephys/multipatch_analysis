@@ -26,6 +26,7 @@ comment_hashtag = [
     '#crosstalk',
     '#badqc',
     '#risetime',
+    '#baseline',
 ]
 
 comment_hashtag.sort(key=lambda x:x[1])
