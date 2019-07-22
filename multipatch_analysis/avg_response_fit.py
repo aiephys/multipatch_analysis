@@ -143,7 +143,7 @@ def fit_avg_response(traces, mode, holding, latency, sign):
                 xoffset=(x_range, x_win[0], x_win[1]),
                 rise_time=(rise_times, rise_bounds[0], rise_bounds[1]),
                 stacked=stacked,
-                fit_kws={'tol': 0.01},
+                fit_kws={'tol': 0.01, 'maxiter': 50},
                 
             )
             for param, val in fit.best_values.items():

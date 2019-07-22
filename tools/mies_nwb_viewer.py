@@ -74,7 +74,7 @@ if __name__ == '__main__':
             try:
                 expt = expts[arg]
             except Exception:
-                print "Could not find experiment %s" % arg
+                print("Could not find experiment %s" % arg)
                 sys.exit(-1)
             arg = expt.nwb_file
 

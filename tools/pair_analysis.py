@@ -248,6 +248,8 @@ class TracePlot(pg.GraphicsLayoutWidget):
                     continue
                 for trace in traces:
                     item = self.trace_plots[i].plot(trace.time_values, trace.data, pen=self.qc_color[qc])
+                    if qc == 'qc_fail':
+                        item.setZValue(-10)
                     self.items.append(item)
                 if qc == 'qc_pass':
                     grand_trace = TraceList(traces).mean()
@@ -415,7 +417,6 @@ class PairAnalysis(object):
         self.ctrl_panel.params.child('Warnings').setValue('')
         
     def load_pair(self, pair, record=None):
-        self.reset_display
         self.record = hash(record)
         self.initial_fit_parameters = OrderedDict([
             ('vc', {'-55': {}, '-70': {}}), 
