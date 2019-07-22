@@ -498,7 +498,7 @@ class PairAnalysis(object):
                 if fit_latency is None or initial_latency is None:
                     continue
                 latency_holding.append(fit_latency)
-            if len(latency_holding) > 1 and len(set(latency_holding)) != 1:
+            if len(latency_holding) == 2 and np.diff(latency_holding) > 0.01e-3:
                 warning = 'Latencies for %s mode do not match' % mode
                 self.warnings.append(warning)
             latency_mode.append(np.mean(latency_holding))
