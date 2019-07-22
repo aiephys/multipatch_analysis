@@ -239,7 +239,11 @@ def fit_psp(response,
     best_fit = None
     best_score = None
     for p in param_dict_list:
-        fit = psp.fit(y, x=t, params=p, fit_kws=fit_kws, method=method)
+        try:
+            fit = psp.fit(y, x=t, params=p, fit_kws=fit_kws, method=method)
+        except:
+            print("Error in PSP fit:")
+            sys.excepthook(*sys.exc_info())
         prof('fit: %s' % p)
         err = np.sum(fit.residual**2)  # note: using this because normalized (nrmse) is not necessary to comparing fits within the same data set
         if best_fit is None or err < best_score:
