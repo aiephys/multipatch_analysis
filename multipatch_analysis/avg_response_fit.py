@@ -132,9 +132,9 @@ def fit_avg_response(traces, mode, holding, latency, sign):
         rise_bounds = mode_params[mode]['rise_bounds']
         weight = mode_params[mode]['weight']
         
-        rise_times = list(initial_rise*2.**np.arange(-2, 3, 0.5))
+        rise_times = list(initial_rise*2.**np.arange(-2, 3, 1))
         x_win = [x_offset + x_offset_win[0], x_offset + x_offset_win[1]]
-        x_range = list(np.linspace(x_win[0], x_win[1], 7))
+        x_range = list(np.linspace(x_win[0], x_win[1], 4))
 
         try:
             fit = fit_psp(grand_trace, 

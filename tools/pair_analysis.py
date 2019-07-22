@@ -20,11 +20,12 @@ comment_hashtag = [
     '#doublepsp',
     '#badspikes',
     '#fixable',
-    '#secondopinion',
+    '#needsecondopinion',
     '#lostcause',
     '#MVP',
     '#crosstalk',
-    '#badqc'
+    '#badqc',
+    '#risetime',
 ]
 
 comment_hashtag.sort(key=lambda x:x[1])
@@ -498,7 +499,7 @@ class PairAnalysis(object):
                 if fit_latency is None or initial_latency is None:
                     continue
                 latency_holding.append(fit_latency)
-            if len(latency_holding) > 1 and len(set(latency_holding)) != 1:
+            if len(latency_holding) == 2 and np.diff(latency_holding) > 0.01e-3:
                 warning = 'Latencies for %s mode do not match' % mode
                 self.warnings.append(warning)
             latency_mode.append(np.mean(latency_holding))
@@ -506,6 +507,30 @@ class PairAnalysis(object):
         if  latency_diff > 0.2e-3:
             warning = 'Latency across modes differs by %s' % pg.siFormat(latency_diff, suffix='s')
             self.warnings.append(warning)
+
+        if np.min(latency_mode) < 0.4e-3 and self.ctrl_panel.params['Gap junction call'] is False:
+            self.warnings.append("Short latency; is this a gap junction?")
+
+        guess_sign = []
+        for mode, fits1 in self.output_fit_parameters.items():
+            for holding, fit in fits1.items():
+                if 'amp' not in fit:
+                    continue
+                if mode == 'ic':
+                    guess = 1 if fit['amp'] > 0 else -1
+                elif mode == 'vc':
+                    guess = -1 if fit['amp'] > 0 else 1
+                guess_sign.append(guess)
+        if np.all(np.array(guess) == 1):
+            guess = "ex"
+        elif np.all(np.array(guess) == -1):
+            guess = "in"
+        else:
+            guess = None
+        if guess is None:
+            self.warnings.append("Mixed amplitude signs; pick ex/in carefully.")
+        elif guess != self.ctrl_panel.params['Synapse call']:
+            self.warnings.append("Looks like an %s synapse??" % guess)
 
         print_warning = '\n'.join(self.warnings)
         self.ctrl_panel.params.child('Warnings').setValue(print_warning)
@@ -644,7 +669,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args(sys.argv[1:])
     user = args.user
-    n_users = 6
+    n_users = 10
 
     s = db.session()
     synapses = s.query(db.Pair).filter(or_(db.Pair.synapse==True, db.Pair.electrical==True)).all()
@@ -655,6 +680,7 @@ if __name__ == '__main__':
         timestamps = [un[0] for un in user_nums if un[1] == args.user]
     else:
         seed(0)
+        timestamps = list(timestamps)
         shuffle(timestamps)
         timestamps = timestamps[:10]
     q = s.query(db.Experiment).filter(db.Experiment.acq_timestamp.in_(timestamps))
