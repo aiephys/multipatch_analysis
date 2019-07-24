@@ -448,10 +448,17 @@ class PairAnalysis(object):
 
     def analyze_responses(self):
         self.traces, self.spikes = sort_responses(self.pulse_responses)
-        self.vc_plot.plot_traces(self.traces['vc'])
-        self.vc_plot.plot_spikes(self.spikes['vc'])
-        self.ic_plot.plot_traces(self.traces['ic'])
-        self.ic_plot.plot_spikes(self.spikes['ic'])
+        fitable_responses = []
+        for mode in modes:
+            for holding in holdings:
+                fitable_responses.append(bool(self.traces[mode][holding]['qc_pass']))
+        if all(fitable_responses) == False:
+            print('No fitable responses, bailing out')
+        else:
+            self.vc_plot.plot_traces(self.traces['vc'])
+            self.vc_plot.plot_spikes(self.spikes['vc'])
+            self.ic_plot.plot_traces(self.traces['ic'])
+            self.ic_plot.plot_spikes(self.spikes['ic'])
 
     def ic_fit_response_update(self):
         latency = self.ctrl_panel.params['Latency', 'IC']
@@ -516,6 +523,7 @@ class PairAnalysis(object):
             self.warnings.append("Short latency; is this a gap junction?")
 
         guess_sign = []
+        guess = None
         for mode, fits1 in self.output_fit_parameters.items():
             for holding, fit in fits1.items():
                 if 'amp' not in fit:
@@ -529,8 +537,6 @@ class PairAnalysis(object):
             guess = "ex"
         elif np.all(np.array(guess) == -1):
             guess = "in"
-        else:
-            guess = None
         if guess is None:
             self.warnings.append("Mixed amplitude signs; pick ex/in carefully.")
         elif guess != self.ctrl_panel.params['Synapse call']:
@@ -677,6 +683,7 @@ if __name__ == '__main__':
 
     s = db.session()
     synapses = s.query(db.Pair).filter(or_(db.Pair.synapse==True, db.Pair.electrical==True)).all()
+    print (len(synapses))
     timestamps = set([pair.experiment.acq_timestamp for pair in synapses])
     
     if user is not None:
