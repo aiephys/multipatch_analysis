@@ -452,13 +452,12 @@ class PairAnalysis(object):
         for mode in modes:
             for holding in holdings:
                 fitable_responses.append(bool(self.traces[mode][holding]['qc_pass']))
-        if all(fitable_responses) == False:
+        if not any(fitable_responses):
             print('No fitable responses, bailing out')
-        else:
-            self.vc_plot.plot_traces(self.traces['vc'])
-            self.vc_plot.plot_spikes(self.spikes['vc'])
-            self.ic_plot.plot_traces(self.traces['ic'])
-            self.ic_plot.plot_spikes(self.spikes['ic'])
+        self.vc_plot.plot_traces(self.traces['vc'])
+        self.vc_plot.plot_spikes(self.spikes['vc'])
+        self.ic_plot.plot_traces(self.traces['ic'])
+        self.ic_plot.plot_spikes(self.spikes['ic'])
 
     def ic_fit_response_update(self):
         latency = self.ctrl_panel.params['Latency', 'IC']
