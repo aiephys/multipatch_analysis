@@ -227,7 +227,7 @@ class TracePlot(pg.GraphicsLayoutWidget):
         self.fit_item_55 = None
         self.fit_item_70 = None
         self.fit_color = {True: 'g', False: 'r'}
-        self.qc_color = {'qc_pass': (255,255,255,100), 'qc_fail': (150, 0, 0)}
+        self.qc_color = {'qc_pass': (255, 255, 255, 100), 'qc_fail': (255, 0, 0, 100)}
 
         self.plots[0].setTitle(title)
         for (plot, holding) in zip(self.trace_plots, holdings):
@@ -267,6 +267,8 @@ class TracePlot(pg.GraphicsLayoutWidget):
                     continue
                 for spike in spikes:
                     item = self.spike_plots[i].plot(spike.time_values, spike.data, pen=self.qc_color[qc])
+                    if qc == 'qc_fail':
+                        item.setZValue(-10)
                     self.items.append(item)
 
     def plot_fit(self, trace, fit, holding, fit_pass=False):
@@ -500,7 +502,7 @@ class PairAnalysis(object):
                     continue
                 latency_holding.append(fit_latency)
             if len(latency_holding) == 2 and np.diff(latency_holding) > 0.01e-3:
-                warning = 'Latencies for %s mode do not match' % mode
+                warning = 'Fit latencies for %s mode do not match' % mode
                 self.warnings.append(warning)
             latency_mode.append(np.mean(latency_holding))
         latency_diff = np.diff(latency_mode)[0]
