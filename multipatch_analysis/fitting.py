@@ -1,5 +1,5 @@
 import numpy as np
-import warnings
+import warnings, sys
 
 from pyqtgraph.debug import Profiler
 from neuroanalysis.fitting import StackedPsp, Psp

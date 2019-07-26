@@ -26,6 +26,7 @@ comment_hashtag = [
     '#crosstalk',
     '#badqc',
     '#risetime',
+    '#baseline',
 ]
 
 comment_hashtag.sort(key=lambda x:x[1])
@@ -416,6 +417,7 @@ class PairAnalysis(object):
         self.ic_superline.set_value(default_latency, block_fit=True)
         self.ctrl_panel.params.child('Comments', 'Hashtag').setValue('')
         self.ctrl_panel.params.child('Comments', '').setValue('')
+        self.ctrl_panel.params.child('Warnings').setValue('')
         
     def load_pair(self, pair, record=None):
         self.record = hash(record)
@@ -448,6 +450,12 @@ class PairAnalysis(object):
 
     def analyze_responses(self):
         self.traces, self.spikes = sort_responses(self.pulse_responses)
+        fitable_responses = []
+        for mode in modes:
+            for holding in holdings:
+                fitable_responses.append(bool(self.traces[mode][holding]['qc_pass']))
+        if not any(fitable_responses):
+            print('No fitable responses, bailing out')
         self.vc_plot.plot_traces(self.traces['vc'])
         self.vc_plot.plot_spikes(self.spikes['vc'])
         self.ic_plot.plot_traces(self.traces['ic'])
@@ -500,13 +508,15 @@ class PairAnalysis(object):
                 fit_latency = self.fit_params['fit'].get(mode).get(holding).get('xoffset')
                 if fit_latency is None or initial_latency is None:
                     continue
+                if abs(np.diff([fit_latency, initial_latency])) > 0.1e-3:
+                    warning = 'Initial latency and fit latency differ by %s' % pg.siFormat(abs(np.diff([fit_latency, initial_latency])), suffix='s')
                 latency_holding.append(fit_latency)
-            if len(latency_holding) == 2 and np.diff(latency_holding) > 0.01e-3:
+            if len(latency_holding) == 2 and abs(np.diff(latency_holding)) > 0.01e-3:
                 warning = 'Fit latencies for %s mode do not match' % mode
                 self.warnings.append(warning)
             latency_mode.append(np.mean(latency_holding))
         latency_diff = np.diff(latency_mode)[0]
-        if  latency_diff > 0.2e-3:
+        if  abs(latency_diff) > 0.2e-3:
             warning = 'Latency across modes differs by %s' % pg.siFormat(latency_diff, suffix='s')
             self.warnings.append(warning)
 
@@ -514,6 +524,7 @@ class PairAnalysis(object):
             self.warnings.append("Short latency; is this a gap junction?")
 
         guess_sign = []
+        guess = None
         for mode, fits1 in self.output_fit_parameters.items():
             for holding, fit in fits1.items():
                 if 'amp' not in fit:
@@ -527,8 +538,6 @@ class PairAnalysis(object):
             guess = "ex"
         elif np.all(np.array(guess) == -1):
             guess = "in"
-        else:
-            guess = None
         if guess is None:
             self.warnings.append("Mixed amplitude signs; pick ex/in carefully.")
         elif guess != self.ctrl_panel.params['Synapse call']:
@@ -578,7 +587,7 @@ class PairAnalysis(object):
         else:
             raise Exception('More than one record was found for pair %s %s->%s in the Pair Notes database' % (expt_id, pre_cell_id, post_cell_id))
 
-        if self.record == record_check:
+        if hash(self.record) == record_check:
             entry = notes_db.PairNotes(**fields)
             s.add(entry)
             s.commit()
@@ -675,6 +684,7 @@ if __name__ == '__main__':
 
     s = db.session()
     synapses = s.query(db.Pair).filter(or_(db.Pair.synapse==True, db.Pair.electrical==True)).all()
+    print (len(synapses))
     timestamps = set([pair.experiment.acq_timestamp for pair in synapses])
     
     if user is not None:

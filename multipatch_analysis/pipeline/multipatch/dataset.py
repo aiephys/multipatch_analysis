@@ -187,7 +187,7 @@ class DatasetPipelineModule(DatabasePipelineModule):
                         if resp['in_qc_pass']:
                             pair_entry.n_in_test_spikes += 1
                             
-                        resampled = resp['response'].resample(sample_rate=20000)
+                        resampled = resp['response']['primary'].resample(sample_rate=20000)
                         resp_entry = db.PulseResponse(
                             recording=rec_entries[post_dev],
                             stim_pulse=all_pulse_entries[pre_dev][resp['pulse_n']],

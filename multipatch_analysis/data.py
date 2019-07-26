@@ -166,6 +166,11 @@ class PulseStimAnalyzer(Analyzer):
     def evoked_spikes(self):
         """Given presynaptic Recording, detect action potentials
         evoked by current injection or unclamped spikes evoked by a voltage pulse.
+
+        Returns
+        -------
+        spikes : list
+            [{'pulse_n', 'pulse_start', 'pulse_end', 'spikes': [...]}, ...]
         """
         if self._evoked_spikes is None:
             spike_info = []
@@ -201,13 +206,25 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         """Given a pre- and a postsynaptic recording, return a structure
         containing evoked responses.
         
-            [{pulse_n, pulse_time, spike, response, baseline}, ...]
+        Returns
+        -------
+        responses : list
+            Each item in the list is a dict corresponding to a single presynaptic stimulus, with the following keys:
+            * pulse_n: number of this stimulus within the sweep
+            * pulse_start: start time of the stimulus pulse
+            * pulse_end: end time of the stimulus pulse 
+            * spikes: list of presynaptic spikes detected 
+            * response: time slice of the postsynaptic recording
+            * pre_rec: time slice of the presynaptic recording
+            * baseline
         
         """
         # detect presynaptic spikes
         pulse_stim = PulseStimAnalyzer.get(pre_rec)
         spikes = pulse_stim.evoked_spikes()
-        
+        # spikes looks like:
+        #   [{'pulse_n', 'pulse_start', 'pulse_end', 'spikes': [...]}, ...]
+
         if not isinstance(pre_rec, MultiPatchProbe):
             # this does not look like the correct kind of stimulus; bail out
             # Ideally we can make this agnostic to the exact stim type in the future,
@@ -248,12 +265,11 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
                 pulse['rec_stop'] = max_stop
             
             # Extract data from postsynaptic recording
-            pulse['response'] = post_rec['primary'].time_slice(pulse['rec_start'], pulse['rec_stop'])
+            pulse['response'] = post_rec.time_slice(pulse['rec_start'], pulse['rec_stop'])
             assert len(pulse['response']) > 0
 
             # Extract presynaptic spike and stimulus command
-            pulse['pre_rec'] = pre_rec['primary'].time_slice(pulse['rec_start'], pulse['rec_stop'])
-            pulse['command'] = pre_rec['command'].time_slice(pulse['rec_start'], pulse['rec_stop'])
+            pulse['pre_rec'] = pre_rec.time_slice(pulse['rec_start'], pulse['rec_stop'])
 
             # select baseline region between 8th and 9th pulses
             baseline_dur = 100e-3
@@ -265,7 +281,7 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
 
             # Add minimal QC metrics for excitatory and inhibitory measurements
             pulse_window = [pulse['rec_start'], pulse['rec_stop']]
-            n_spikes = 0 if spike is None else 1  # eventually should check for multiple spikes
+            n_spikes = 0 if spike is None else 1
             adj_pulse_times = []
             if prev_pulse is not None:
                 adj_pulse_times.append(prev_pulse - this_pulse)
