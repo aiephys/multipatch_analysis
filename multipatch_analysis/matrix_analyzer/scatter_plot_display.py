@@ -9,6 +9,7 @@ import pyqtgraph as pg
 import pandas as pd
 import numpy as np
 
+
 class ScatterPlotTab(pg.QtGui.QWidget):
     def __init__(self):
         pg.QtGui.QWidget.__init__(self)
