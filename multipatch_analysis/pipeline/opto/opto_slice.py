@@ -6,7 +6,7 @@ from multipatch_analysis import config, lims, constants
 from acq4.util.DataManager import getDirHandle
 from collections import OrderedDict
 from multipatch_analysis.util import datetime_to_timestamp, timestamp_to_datetime
-import multipatch_analysis.database as db
+#import multipatch_analysis.database as db
 
 
 #from .opto_experiment import OptoExperimentPipelineModule
@@ -19,7 +19,10 @@ class OptoSlicePipelineModule(DatabasePipelineModule):
     table_group = ['slice']
 
     @classmethod
-    def create_db_entries(cls, job_id, session):
+    def create_db_entries(cls, job, session):
+        job_id = job['job_id']
+        db = job['database']
+
         slices = all_slices()
         path = slices[job_id]
         dh = getDirHandle(path)

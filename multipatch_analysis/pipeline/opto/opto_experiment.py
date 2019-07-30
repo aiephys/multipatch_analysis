@@ -1,5 +1,5 @@
 from multipatch_analysis.pipeline.pipeline_module import DatabasePipelineModule
-import multipatch_analysis.database as db
+#import multipatch_analysis.database as db
 from multipatch_analysis import config
 from .opto_slice import OptoSlicePipelineModule
 from collections import OrderedDict
@@ -19,9 +19,12 @@ class OptoExperimentPipelineModule(DatabasePipelineModule):
     table_group = ['experiment', 'electrode', 'cell', 'pair']
 
     @classmethod
-    def create_db_entries(cls, job_id, session, expt=None):
+    def create_db_entries(cls, job, session, expt=None):
         """Generate DB entries for *job_id* and add them to *session*.
         """
+        job_id = job['job_id']
+        db = job['database']
+
         try:
             if expt is None:
             #    raise Exception("Please pass an Experiment (data model) object. Looking up job_ids is not yet implemented.")
