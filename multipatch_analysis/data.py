@@ -266,7 +266,7 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
             
             # Extract data from postsynaptic recording
             pulse['response'] = post_rec.time_slice(pulse['rec_start'], pulse['rec_stop'])
-            assert len(pulse['response']) > 0
+            assert len(pulse['response']['primary']) > 0
 
             # Extract presynaptic spike and stimulus command
             pulse['pre_rec'] = pre_rec.time_slice(pulse['rec_start'], pulse['rec_stop'])
