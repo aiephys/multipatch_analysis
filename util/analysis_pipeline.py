@@ -31,7 +31,11 @@ if __name__ == '__main__':
     if args.local:
         pg.dbg()
 
-    pipeline = all_pipelines[args.pipeline](database=db, config=config)
+    try:
+        pipeline = all_pipelines[args.pipeline](database=db, config=config)
+    except KeyError:
+        raise Exception("Could not find pipeline named %s. Options are: %s"%(args.pipeline, str(all_pipelines.keys())))
+
     all_modules = pipeline.sorted_modules()
     
     if 'all' in args.modules:
