@@ -35,7 +35,7 @@ class OptoExperimentPipelineModule(DatabasePipelineModule):
                 elif len(indices) == 0:
                     raise Exception("Could not find csv entry for %s"%job_id)
 
-                entry = all_expts['expt_list'][i]
+                entry = all_expts['expt_list'][indices[0]]
                 entry['distances'] = [e for e in all_expts['distances'] if e['exp_id']==job_id]
                 print('create_db_entries for:', entry['site_path'], "job_id:", job_id)
                 expt = Experiment(site_path=entry['site_path'], loading_library=opto, meta_info=entry)
