@@ -526,7 +526,7 @@ class Database(object):
         Should be run after any significant changes to the database.
         """
         with self.rw_engine.begin() as conn:
-            if self.backend == 'postgres':
+            if self.backend == 'postgresql':
                 conn.connection.set_isolation_level(0)
             if tables is None:
                 conn.execute('vacuum analyze')
