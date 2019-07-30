@@ -103,7 +103,7 @@ if __name__ == '__main__':
         for module, result in report:
             print("------ %s : %d errors -------" % (module.name, result['n_errors']))
             for job, err in result['errors'].items():
-                print("    %0.3f : %s" % (job, err))
+                print("    %s : %s" % (job, err))
         
             
         print("\n================== Update Report ===========================")
