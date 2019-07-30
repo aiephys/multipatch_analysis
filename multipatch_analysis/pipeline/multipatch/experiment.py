@@ -74,6 +74,7 @@ class ExperimentPipelineModule(DatabasePipelineModule):
 
             if elec.cell is not None:
                 cell = elec.cell
+                cell_meta = {}
                 if expt_lims_id is not None:
                     cell_specimens = lims.child_specimens(expt_lims_id)
                     cell_meta = {}

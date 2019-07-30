@@ -6,16 +6,15 @@ Includes ColorMapping control for Matrix
 
 from __future__ import print_function, division
 
-
-import numpy as np
-import pyqtgraph as pg
-import pandas as pd
 from collections import OrderedDict
-from analyzers import results_scatter, FormattableNumber
-from multipatch_analysis.ui.graphics import MatrixItem
+import numpy as np
+import pandas as pd
+import pyqtgraph as pg
 from pyqtgraph import parametertree as ptree
 from pyqtgraph.parametertree import Parameter
 from pyqtgraph.widgets.ColorMapWidget import ColorMapParameter
+from multipatch_analysis.ui.graphics import MatrixItem
+from .analyzers import results_scatter, FormattableNumber
 
 class SignalHandler(pg.QtCore.QObject):
         """Because we can't subclass from both QObject and QGraphicsRectItem at the same time

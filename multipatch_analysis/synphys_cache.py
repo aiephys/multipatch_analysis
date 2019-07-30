@@ -1,6 +1,6 @@
 import os, sys, glob
 from collections import OrderedDict
-import config
+from . import config
 from .util import sync_file, dir_timestamp
 
 

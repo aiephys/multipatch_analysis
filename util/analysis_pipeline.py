@@ -1,5 +1,6 @@
 from __future__ import print_function
 import argparse, sys, os, logging
+import six
 import pyqtgraph as pg 
 from multipatch_analysis.pipeline import all_pipelines
 from multipatch_analysis.database import default_db as db
@@ -40,11 +41,11 @@ if __name__ == '__main__':
         for mod in args.modules:
             try:
                 if mod.startswith(':'):
-                    i = all_modules.keys().index(mod[1:])
-                    modules.extend(all_modules.values()[:i])
+                    i = list(all_modules.keys()).index(mod[1:])
+                    modules.extend(list(all_modules.values())[:i])
                 elif mod.endswith(':'):
-                    i = all_modules.keys().index(mod[:-1])
-                    modules.extend(all_modules.values()[i:])
+                    i = list(all_modules.keys()).index(mod[:-1])
+                    modules.extend(list(all_modules.values())[i:])
                 else:
                     modules.append(all_modules[mod])
             except (KeyError, ValueError):
@@ -56,13 +57,13 @@ if __name__ == '__main__':
     
     if args.rebuild:
         mod_names = ', '.join([module.name for module in modules])
-        if raw_input("Rebuild modules: %s? (y/n) " % mod_names) != 'y':
+        if six.moves.input("Rebuild modules: %s? (y/n) " % mod_names) != 'y':
             print("  Nuts.")
             sys.exit(-1)
 
     if args.bake and os.path.exists(config.synphys_db_sqlite):
         msg = "sqlite database file %s already exists; ok to overwrite? (y/n) " % config.synphys_db_sqlite
-        ans = raw_input(msg)
+        ans = six.moves.input(msg)
         if ans == 'y':
             print("  Ok, you asked for it..")
             os.remove(config.synphys_db_sqlite)
@@ -71,9 +72,7 @@ if __name__ == '__main__':
             args.bake = False
 
     if args.rebuild:
-        for module in modules:
-            print("Dropping module %s" % module.name)
-            module.drop_all(reinitialize=True)
+        pipeline.drop(modules)
         print("  done.")
 
     if args.drop:

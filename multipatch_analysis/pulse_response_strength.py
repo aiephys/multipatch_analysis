@@ -33,6 +33,10 @@ def measure_peak(trace, sign, spike_time, pulse_times, spike_delay=1e-3, respons
 
     baseline = float_mode(trace.time_slice(baseline_start, baseline_stop).data)
     response = trace.time_slice(response_start, response_stop)
+    if (response.t_end - response.t0) < 0.8 * response_window:
+        # response window is too short; don't attempt to make a measurement.
+        # (this only happens when the spike is very late and the next pulse is very soon)
+        return None, None
 
     if sign == '+':
         i = np.argmax(response.data)
@@ -90,16 +94,15 @@ def response_query(session):
     q = session.query(
         db.PulseResponse.id.label('response_id'),
         db.PulseResponse.data,
-        db.PulseResponse.start_time.label('rec_start'),
+        db.PulseResponse.data_start_time.label('rec_start'),
         db.StimPulse.onset_time.label('pulse_start'),
         db.StimPulse.duration.label('pulse_dur'),
-        db.StimSpike.max_dvdt_time.label('spike_time'),
+        db.StimPulse.first_spike_time.label('spike_time'),
         db.PatchClampRecording.clamp_mode,
         db.PulseResponse.ex_qc_pass,
         db.PulseResponse.in_qc_pass,
     )
     q = q.join(db.StimPulse, db.PulseResponse.stim_pulse)
-    q = q.join(db.StimSpike, db.StimSpike.stim_pulse_id==db.StimPulse.id)
     q = q.join(db.Recording, db.PulseResponse.recording)
     q = q.join(db.PatchClampRecording)
 

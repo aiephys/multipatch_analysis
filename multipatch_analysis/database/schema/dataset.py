@@ -137,6 +137,7 @@ StimPulse = make_table(
         ('amplitude', 'float', 'Amplitude of the presynaptic pulse'),
         ('duration', 'float', 'Length of the pulse in seconds'),
         ('n_spikes', 'int', 'Number of spikes evoked by this pulse'),
+        ('first_spike_time', 'float', 'Time of the first spike evoked by this pulse, measured from the max slope of the spike rising phase.'),
         # ('first_spike', 'stim_spike.id', 'The ID of the first spike evoked by this pulse'),
         ('data', 'array', 'Numpy array of presynaptic recording sampled at '+SynphysDatabase._sample_rate_str, {'deferred': True}),
         ('data_start_time', 'float', "Starting time of the data chunk, relative to the beginning of the recording"),
@@ -149,14 +150,15 @@ StimPulse.recording = relationship(Recording, back_populates="stim_pulses")
 
 StimSpike = make_table(
     name='stim_spike',
-    comment= "An action potential evoked by a stimulus pulse",
+    comment= "An action potential evoked by a stimulus pulse. Note that some metrics may be omitted if they could not be determined accurately.",
     columns=[
         ('stim_pulse_id', 'stim_pulse.id', '', {'index': True}),
+        ('onset_time', 'float', "The time of the earliest detectable effect of the spike."),
+        ('max_slope_time', 'float', "The time of the max slope of the spike, relative to the beginning of the recording."),
+        ('max_slope', 'float', 'Maximum slope of the presynaptic spike'),
         ('peak_time', 'float', "The time of the peak of the spike, relative to the beginning of the recording."),
         ('peak_diff', 'float', 'Amplitude of the spike peak, relative to baseline'),
-        ('peak_val', 'float', 'Absolute value of the spike peak'),
-        ('max_dvdt_time', 'float', "The time of the max dv/dt of the spike, relative to the beginning of the recording."),
-        ('max_dvdt', 'float', 'Maximum slope of the presynaptic spike'),
+        ('peak_value', 'float', 'Absolute value of the spike peak'),
     ]
 )
 
@@ -190,8 +192,8 @@ PulseResponse = make_table(
         ('recording_id', 'recording.id', 'The full recording from which this pulse was extracted', {'index': True}),
         ('stim_pulse_id', 'stim_pulse.id', 'The presynaptic pulse', {'index': True}),
         ('pair_id', 'pair.id', 'The pre-post cell pair involved in this pulse response', {'index': True}),
-        ('start_time', 'float', 'Starting time of this chunk of the recording in seconds, relative to the beginning of the recording'),
         ('data', 'array', 'numpy array of response data sampled at '+SynphysDatabase._sample_rate_str, {'deferred': True}),
+        ('data_start_time', 'float', 'Starting time of this chunk of the recording in seconds, relative to the beginning of the recording'),
         ('ex_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for excitatory synapse probing', {'index': True}),
         ('in_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for inhibitory synapse probing', {'index': True}),
     ]
@@ -209,8 +211,8 @@ Baseline = make_table(
     comment="A snippet of baseline data, matched to a postsynaptic recording",
     columns=[
         ('recording_id', 'recording.id', 'The recording from which this baseline snippet was extracted.', {'index': True}),
-        ('start_time', 'float', "Starting time of this chunk of the recording in seconds, relative to the beginning of the recording"),
         ('data', 'array', 'numpy array of baseline data sampled at '+SynphysDatabase._sample_rate_str, {'deferred': True}),
+        ('data_start_time', 'float', "Starting time of this chunk of the recording in seconds, relative to the beginning of the recording"),
         ('mode', 'float', 'most common value in the baseline snippet'),
         ('ex_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for excitatory synapse probing'),
         ('in_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for inhibitory synapse probing'),

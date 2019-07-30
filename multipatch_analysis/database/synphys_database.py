@@ -6,7 +6,7 @@ class SynphysDatabase(Database):
     """Augments the Database class with convenience methods for querying the synphys database.
     """
     # database version should be incremented whenever the schema has changed
-    db_version = 12
+    db_version = 13
     
     default_sample_rate = 20000
     _sample_rate_str = '%dkHz' % (default_sample_rate // 1000)
@@ -98,8 +98,8 @@ class SynphysDatabase(Database):
         )
         query = query.join(pre_cell, pre_cell.id==self.Pair.pre_cell_id)
         query = query.join(post_cell, post_cell.id==self.Pair.post_cell_id)
-        query = query.join(pre_morphology, pre_morphology.cell_id==pre_cell.id)
-        query = query.join(post_morphology, post_morphology.cell_id==post_cell.id)
+        query = query.outerjoin(pre_morphology, pre_morphology.cell_id==pre_cell.id)
+        query = query.outerjoin(post_morphology, post_morphology.cell_id==post_cell.id)
         query = query.join(self.Experiment, self.Pair.experiment_id==self.Experiment.id)
         query = query.outerjoin(self.Slice, self.Experiment.slice_id==self.Slice.id) ## don't want to drop all pairs if we don't have slice or connection strength entries
         query = query.outerjoin(self.ConnectionStrength)

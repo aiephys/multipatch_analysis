@@ -367,14 +367,14 @@ class ResponseStrengthAnalyzer(object):
             q = response_query(self.session)
             q = q.join(db.PulseResponseStrength)
             q = q.filter(db.PulseResponseStrength.id.in_(ids))
-            q = q.add_column(db.PulseResponse.start_time)
+            q = q.add_column(db.PulseResponse.data_start_time)
             traces = self.selected_fg_traces
             plot = self.fg_trace_plot
         else:
             q = baseline_query(self.session)
             q = q.join(db.BaselineResponseStrength)
             q = q.filter(db.BaselineResponseStrength.id.in_(ids))
-            q = q.add_column(db.Baseline.start_time)
+            q = q.add_column(db.Baseline.data_start_time)
             traces = self.selected_bg_traces
             plot = self.bg_trace_plot
         
@@ -934,7 +934,7 @@ def str_analysis_result_table(results, recs):
         ('in_qc_pass', bool),
         ('clamp_mode', object),
         ('pulse_number', int),
-        ('max_dvdt_time', float),
+        ('max_slope_time', float),
         ('response_start_time', float),
         ('data', object),
         ('rec_start_time', float),
@@ -948,7 +948,7 @@ def str_analysis_result_table(results, recs):
         for key,val in result.items():
             if key in table.dtype.names:
                 table[i][key] = val
-        table[i]['max_dvdt_time'] = 10e-3
+        table[i]['max_slope_time'] = 10e-3
         table[i]['response_start_time'] = 0
     return table
 
@@ -1022,8 +1022,6 @@ def simulate_connection(fg_recs, bg_results, classifier, amp, rtime, n_trials=8)
 
 
 if __name__ == '__main__':
-    import user
-
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=int, default=0, help="Seed used to randomize classifier inputs")    
     parser.add_argument('--pairview', default=False, action='store_true', help="Only display experiment browser ui")

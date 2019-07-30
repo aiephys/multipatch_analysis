@@ -93,8 +93,8 @@ def get_single_pulse_data(session, pair, db):
         db.PatchClampRecording.baseline_potential,
         db.PatchClampRecording.baseline_current,
         db.StimPulse.pulse_number,
-        db.StimSpike.max_dvdt_time.label('spike_time'), #note that in my fit_average_first_pulse code I filter for spikes[0] so there may be an error with multiple here
-        db.PulseResponse.start_time.label('response_start_time'),
+        db.StimSpike.max_slope_time.label('spike_time'), #note that in my fit_average_first_pulse code I filter for spikes[0] so there may be an error with multiple here
+        db.PulseResponse.data_start_time.label('response_start_time'),
         db.MultiPatchProbe.induction_frequency.label('stim_freq'),
         db.PulseResponse.data,
     ]

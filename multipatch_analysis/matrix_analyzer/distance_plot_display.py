@@ -2,10 +2,10 @@
 Distance vs connection probability plots for Matrix Analyzer.
 
 """
-
 from __future__ import print_function, division
-import pyqtgraph as pg
+
 import numpy as np
+import pyqtgraph as pg
 from pyqtgraph.widgets.ColorMapWidget import ColorMapParameter
 from pyqtgraph import parametertree as ptree
 from pyqtgraph.parametertree import Parameter

@@ -5,31 +5,32 @@ Prototype code for analyzing connectivity and synaptic properties between cell c
 
 
 """
-
 from __future__ import print_function, division
 
+import re, cProfile, os, json, sys, copy
 from collections import OrderedDict
 import numpy as np
-import pyqtgraph as pg
-from multipatch_analysis.database import default_db as db
 import pandas as pd
-import re, cProfile, os, json, sys, copy
-from multipatch_analysis.database import default_db as db
-from analyzers import ConnectivityAnalyzer, StrengthAnalyzer, DynamicsAnalyzer, get_all_output_fields
-from multipatch_analysis import constants
-from multipatch_analysis.cell_class import CellClass, classify_cells, classify_pairs
-from matrix_display import MatrixDisplay, MatrixWidget
-from scatter_plot_display import ScatterPlotTab
-from distance_plot_display import DistancePlotTab
-from histogram_trace_display import HistogramTab
+import pyqtgraph as pg
 from pyqtgraph import parametertree as ptree
 from pyqtgraph.parametertree import Parameter
 from pyqtgraph.widgets.DataFilterWidget import DataFilterParameter
+
+from multipatch_analysis.database import default_db as db
+from multipatch_analysis import constants
+from multipatch_analysis.cell_class import CellClass, classify_cells, classify_pairs
+from .analyzers import ConnectivityAnalyzer, StrengthAnalyzer, DynamicsAnalyzer, get_all_output_fields
+from .matrix_display import MatrixDisplay, MatrixWidget
+from .scatter_plot_display import ScatterPlotTab
+from .distance_plot_display import DistancePlotTab
+from .histogram_trace_display import HistogramTab
+
 
 class SignalHandler(pg.QtCore.QObject):
         """Because we can't subclass from both QObject and QGraphicsRectItem at the same time
         """
         sigOutputChanged = pg.QtCore.Signal(object) #self
+
 
 class MainWindow(pg.QtGui.QWidget):
     def __init__(self):
@@ -51,6 +52,7 @@ class MainWindow(pg.QtGui.QWidget):
         self.tabs = Tabs()
         self.h_splitter.addWidget(self.tabs)
         self.h_splitter.setSizes([300, 600, 400])        
+
 
 class Tabs(pg.QtGui.QTabWidget):
     def __init__(self, parent=None):
@@ -164,7 +166,7 @@ class CellClassFilter(object):
 
     def expand_param(self, param, value):
         if isinstance(value, bool):
-            param.items.keys()[0].setExpanded(value)
+            list(param.items.keys())[0].setExpanded(value)
 
     def invalidate_output(self):
         self.cell_groups = None

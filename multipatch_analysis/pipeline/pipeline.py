@@ -38,16 +38,28 @@ class Pipeline(object):
     def update(self, modules=None, job_ids=None):
         if modules is None:
             modules = self.modules
-
         
     def drop(self, modules=None, job_ids=None):
         if modules is None:
-            modules = self.modules
-        for module in modules:
-            if job_ids is None:
-                print("Dropping and reinitializing module %s" % module.name)
-                module.drop_all(reinitialize=True)
-            else:
+            modules = self.sorted_modules().keys()
+        else:
+            # if modules were specified, then generate the complete sorted list of dependent modules 
+            # that need to be dropped as well
+            mods = set()
+            for module in modules:
+                mods.add(module)
+                mods = mods | set(module.all_downstream_modules())
+            modules = [m for m in self.sorted_modules().values() if m in mods]
+
+        if job_ids is None:
+            for module in reversed(modules):
+                print("Dropping module %s" % module.name)
+                module.drop_all()
+            for module in modules:
+                print("Reinitializing module %s" % module.name)
+                module.initialize()
+        else:
+            for module in reversed(modules):
                 print("Dropping %d jobs in module %s" % (len(job_ids), module.name))
                 module.drop_jobs(job_ids=job_ids)
         

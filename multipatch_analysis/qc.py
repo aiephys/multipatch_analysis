@@ -25,7 +25,7 @@ def recording_qc_pass(rec):
     if rec.baseline_current < -800e-12 or rec.baseline_current > 800e-12:
         return False
     if rec.clamp_mode == 'ic':
-        if rec.baseline_potential < -85e-3 or rec.baseline_potential > -45e-3:
+        if rec.baseline_potential is None or rec.baseline_potential < -85e-3 or rec.baseline_potential > -45e-3:
             return False
         if rec.baseline_rms_noise > 5e-3:
             return False
@@ -50,13 +50,16 @@ def pulse_response_qc_pass(post_rec, window, n_spikes, adjacent_pulses):
     * Excitatory response baseline potential must be between -45 and -80 mV
     * Overall stdev for postsynaptic recording must be < 1.5 mV or < 15 pA
     * Current clamp response must never exceed -40 mV
+    
+    These criteria are intended as minimal quality control when determining _whether_ a synaptic
+    connection exists between two cells. 
 
     Parameters
     ----------
     post_rec : Recording
         The postsynaptic Recording instance
     window : list
-        [start, stop] indices indicating the region of the postsynaptic recording containing the pulse response
+        [start, stop] times indicating the region of the postsynaptic recording containing the pulse response
     n_spikes : int or None
         The number of presynaptic spikes evoked for this pulse response. If None, then this
         check is skipped (this is used for background data where we do not expect to have spikes).
@@ -82,15 +85,15 @@ def pulse_response_qc_pass(post_rec, window, n_spikes, adjacent_pulses):
     
     # Check for noise in response window
     if post_rec.clamp_mode == 'ic':
-        data = post_rec['primary'][window[0]:window[1]]
+        data = post_rec['primary'].time_slice(window[0], window[1])
         base = data.median()
         if data.std() > 1.5e-3:
             return False, False
         if data.data.max() > -40e-3:
             return False, False
     elif post_rec.clamp_mode == 'vc':
-        data = post_rec['primary'][window[0]:window[1]]
-        base = post_rec['command'][window[0]:window[1]].median()
+        data = post_rec['primary'].time_slice(window[0], window[1])
+        base = post_rec['command'].time_slice(window[0], window[1]).median()
         if data.std() > 15e-12:
             return False, False
     else:
@@ -108,3 +111,12 @@ def pulse_response_qc_pass(post_rec, window, n_spikes, adjacent_pulses):
     qc_pass = tuple([((bmin < base < bmax) and (bmin < base2 < bmax)) for bmin, bmax in limits])
 
     return qc_pass
+
+def spike_qc(n_spikes, post_qc):
+    """If there is not exactly 1 presynaptic spike, qc Fail spike and postsynaptic response
+    """
+
+    spike_qc_pass = n_spikes == 1
+    trace_qc_pass = False if spike_qc_pass is False else post_qc
+
+    return spike_qc_pass, trace_qc_pass

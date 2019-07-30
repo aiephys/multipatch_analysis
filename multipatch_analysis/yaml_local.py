@@ -4,8 +4,12 @@ Add custom behavior to YAML serializer:
 * Load and save OrderedDict as a regular dict, but with key order preserved.
 
 """
+import sys
 import yaml
 import collections
+
+if sys.version[0] > '2':
+    unicode = str
 
 # Credit: https://stackoverflow.com/questions/5121931/in-python-how-can-you-load-yaml-mappings-as-ordereddicts
 _mapping_tag = yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG

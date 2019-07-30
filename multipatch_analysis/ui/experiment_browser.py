@@ -38,8 +38,8 @@ class ExperimentBrowser(pg.TreeWidget):
             self.addTopLevelItem(expt_item)
 
             for pair in expt.pair_list:
-                if pair.n_ex_test_spikes == 0 and pair.n_in_test_spikes == 0:
-                    continue
+                # if pair.n_ex_test_spikes == 0 and pair.n_in_test_spikes == 0:
+                #     continue
                 cells = '%d => %d' % (pair.pre_cell.ext_id, pair.post_cell.ext_id)
                 conn = {True:"syn", False:"-", None:"?"}[pair.synapse]
                 types = 'L%s %s => L%s %s' % (pair.pre_cell.target_layer or "?", pair.pre_cell.cre_type, pair.post_cell.target_layer or "?", pair.post_cell.cre_type)

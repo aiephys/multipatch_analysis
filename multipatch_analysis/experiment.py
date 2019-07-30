@@ -881,7 +881,13 @@ class Experiment(object):
                 # multiple NWB files here; try using the file manifest to resolve.
                 manifest = os.path.join(self.path, 'file_manifest.yml')
                 if os.path.isfile(manifest):
-                    manifest = yaml.load(open(manifest, 'rb'))
+                    
+                    if hasattr(yaml, 'FullLoader'):
+                        # pyyaml new API
+                        manifest = yaml.load(open(manifest, 'rb'), Loader=yaml.FullLoader)
+                    else:
+                        # pyyaml old API
+                        manifest = yaml.load(open(manifest, 'rb'))
                     for f in manifest:
                         if f['category'] == 'MIES physiology':
                             self._nwb_file = os.path.join(os.path.dirname(self.path), f['path'])

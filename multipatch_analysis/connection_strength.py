@@ -12,7 +12,7 @@ import scipy.stats
 from sqlalchemy.orm import aliased
 from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.baseline import float_mode
-from .connection_detection import fit_psp
+from .fitting import fit_psp
 from .database import default_db as db
 
 
@@ -35,8 +35,8 @@ def get_amps(session, pair, clamp_mode='ic', get_data=False):
         db.PatchClampRecording.baseline_potential,
         db.PatchClampRecording.baseline_current,
         db.StimPulse.pulse_number,
-        db.StimSpike.max_dvdt_time,
-        db.PulseResponse.start_time.label('response_start_time'),
+        db.StimSpike.max_slope_time,
+        db.PulseResponse.data_start_time.label('response_start_time'),
     ]
     if get_data:
         cols.append(db.PulseResponse.data)
@@ -89,7 +89,7 @@ def get_baseline_amps(session, pair, clamp_mode='ic', amps=None, get_data=True):
         db.PatchClampRecording.baseline_potential,
         db.PatchClampRecording.baseline_current,
         db.Recording.start_time.label('rec_start_time'),
-        db.Baseline.start_time.label('response_start_time'),
+        db.Baseline.data_start_time.label('response_start_time'),
     ]
     if get_data:
         cols.append(db.Baseline.data)
@@ -308,7 +308,9 @@ def analyze_pair_connectivity(amps, sign=None):
         # bg_traces = TraceList([Trace(data, sample_rate=db.default_sample_rate) for data in amps[clamp_mode, 'bg']['data']])
         fg_traces = TraceList()
         for rec in fg:
-            t0 = rec['response_start_time'] - rec['max_dvdt_time']   # time-align to presynaptic spike
+            if not np.isfinite(rec['max_slope_time']) or rec['max_slope_time'] is None:
+                continue
+            t0 = rec['response_start_time'] - rec['max_slope_time']   # time-align to presynaptic spike
             trace = Trace(rec['data'], sample_rate=db.default_sample_rate, t0=t0)
             fg_traces.append(trace)
         

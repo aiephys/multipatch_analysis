@@ -7,7 +7,7 @@ from neuroanalysis.ui.filter import SignalFilter, ArtifactRemover
 from neuroanalysis.ui.baseline import BaselineRemover
 from neuroanalysis.ui.fitting import FitExplorer
 from neuroanalysis.data import Trace
-from neuroanalysis.spike_detection import detect_evoked_spike
+from neuroanalysis.spike_detection import detect_evoked_spikes
 from neuroanalysis import fitting
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.stats import ragged_mean
@@ -152,19 +152,19 @@ class PairView(QtGui.QWidget):
                 plot.plot(trace.time_values, trace.data, pen=color, antialias=False)
 
             # detect spike times
-            spike_inds = []
+            spike_times = []
             spike_info = []
             for on, off in zip(on_times, off_times):
-                spike = detect_evoked_spike(sweep[pre], [on, off])
-                spike_info.append(spike)
-                if spike is None:
-                    spike_inds.append(None)
-                else:
-                    spike_inds.append(spike['rise_index'])
+                spikes = detect_evoked_spikes(sweep[pre], [on, off])
+                spike_info.append(spikes)
+                for spike in spikes:
+                    if spike['max_slope_time'] is None:
+                        continue
+                    spike_times.append(spike['max_slope_time'])
             spikes.append(spike_info)
                     
             dt = pre_trace.dt
-            vticks = pg.VTickGroup([x * dt for x in spike_inds if x is not None], yrange=[0.0, 0.2], pen=color)
+            vticks = pg.VTickGroup(spike_times, yrange=[0.0, 0.2], pen=color)
             self.pre_plot.addItem(vticks)
 
         # Iterate over spikes, plotting average response

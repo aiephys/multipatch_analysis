@@ -5,16 +5,16 @@ Trace plot displays average trace responses from each pair in a selected element
 
 from __future__ import print_function, division
 
-
-import numpy as np
-import pyqtgraph as pg
-import pandas as pd
 from collections import OrderedDict
-from analyzers import results_scatter, FormattableNumber
-from multipatch_analysis.ui.graphics import MatrixItem
+import numpy as np
+import pandas as pd
+import pyqtgraph as pg
 from pyqtgraph import parametertree as ptree
 from pyqtgraph.parametertree import Parameter
 from pyqtgraph.widgets.ColorMapWidget import ColorMapParameter
+from multipatch_analysis.ui.graphics import MatrixItem
+from .analyzers import results_scatter, FormattableNumber
+
 
 class HistogramTab(pg.QtGui.QWidget):
     def __init__(self):

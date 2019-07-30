@@ -91,4 +91,7 @@ def _compute_strength(source, expt_id, session, db):
             brs = db.BaselineResponseStrength(**rec)
             session.add(brs)
 
+    # just to collect error messages here in case we have made a mistake:
+    session.flush()
+    
     prof('insert')

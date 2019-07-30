@@ -107,9 +107,11 @@ def extract_first_pulse_info_from_Pair_object(pair, desired_clamp='ic'):
             continue
 
         data = pr.data
-        start_time = pr.start_time
-        spike_time = stim_pulse.spikes[0].max_dvdt_time        
-        data_trace = Trace(data=data, t0= start_time-spike_time+time_before_spike, sample_rate=db.default_sample_rate).time_slice(start=0, stop=None) #start of the data is the spike time
+        start_time = pr.data_start_time
+        spike_time = stim_pulse.spikes[0].max_slope_time
+        if spike_time is None:
+            continue
+        data_trace = Trace(data=data, t0=start_time-spike_time+time_before_spike, sample_rate=db.default_sample_rate).time_slice(start=0, stop=None) #start of the data is the spike time
 
         # append to output lists if neurons pass qc
         if (synapse_type == 'ex' and ex_qc_pass is True) or (synapse_type == 'in' and in_qc_pass is True):
