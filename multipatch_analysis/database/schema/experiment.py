@@ -61,7 +61,10 @@ class ExperimentBase(object):
         return cached_experiments()[self.acq_timestamp]
 
     def __repr__(self):
-        return "<%s %0.3f>" % (self.__class__.__name__, self.acq_timestamp)
+        if self.ext_id is not None:
+            return "<%s %s>" % (self.__class__.__name__, self.ext_id)
+        else:
+            return "<%s %0.3f>" % (self.__class__.__name__, self.acq_timestamp)
 
 
 Experiment = make_table(
@@ -85,7 +88,8 @@ Experiment = make_table(
         ('target_temperature', 'float', 'The intended temperature of the experiment (but actual recording temperature is stored elsewhere)'),
         ('date', 'datetime', 'The date of this experiment'),
         ('lims_specimen_id', 'int', 'ID of LIMS "CellCluster" specimen.'),
-        #('ext_id', 'str', 'Unique external identifier string for the experiment.')
+        ('ext_id', 'str', 'Unique external identifier string for the experiment.')
+
     ]
 )
 
@@ -109,7 +113,7 @@ Electrode = make_table(
         ('final_resistance', 'float'),
         ('final_current', 'float'),
         ('notes', 'str'),
-        ('ext_id', 'int', 'Electrode ID (usually 1-8) referenced in external metadata records'),
+        ('ext_id', 'str', 'Electrode ID (usually 1-8) referenced in external metadata records'),
     ]
 )
 
@@ -134,7 +138,7 @@ Cell = make_table(
         ('has_dye_fill', 'bool', 'Indicates whether the cell was filled with fluorescent dye during the experiment'),
         ('depth', 'float', 'Depth of the cell (in m) from the cut surface of the slice.'),
         ('position', 'object', '3D location of this cell in the arbitrary coordinate system of the experiment'),
-        ('ext_id', 'int', 'Cell ID (usually 1-8) referenced in external metadata records', {'index': True}),
+        ('ext_id', 'str', 'Cell ID (usually 1-8) referenced in external metadata records', {'index': True}),
     ]
 )
 
@@ -149,8 +153,7 @@ class PairBase(object):
         uid = getattr(self.experiment, 'ext_id', None)
         if uid is None or uid == '':
             uid = str('%0.3f'%self.experiment.acq_timestamp if self.experiment.acq_timestamp is not None else None)
-        return "<%s %s %d %d>" % (self.__class__.__name__, uid, self.pre_cell.ext_id, self.post_cell.ext_id)
-
+        return "<%s %s %s %s>" % (self.__class__.__name__, uid, self.pre_cell.ext_id, self.post_cell.ext_id)
 
 Pair = make_table(
     name='pair',
