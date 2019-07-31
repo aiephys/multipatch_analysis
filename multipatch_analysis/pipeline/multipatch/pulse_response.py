@@ -33,7 +33,7 @@ class PulseResponsePipelineModule(DatabasePipelineModule):
         q = q.filter(db.PulseResponseStrength.pulse_response_id==db.PulseResponse.id)
         q = q.filter(db.PulseResponse.pair_id==db.Pair.id)
         q = q.filter(db.Pair.experiment_id==db.Experiment.id)
-        q = q.filter(db.Experiment.acq_timestamp.in_(job_ids))
+        q = q.filter(db.Experiment.ext_id.in_(job_ids))
         prs = q.all()
         
         q = session.query(db.BaselineResponseStrength)
@@ -41,7 +41,7 @@ class PulseResponsePipelineModule(DatabasePipelineModule):
         q = q.filter(db.Baseline.recording_id==db.Recording.id)
         q = q.filter(db.Recording.sync_rec_id==db.SyncRec.id)
         q = q.filter(db.SyncRec.experiment_id==db.Experiment.id)
-        q = q.filter(db.Experiment.acq_timestamp.in_(job_ids))
+        q = q.filter(db.Experiment.ext_id.in_(job_ids))
         brs = q.all()
         
         return prs+brs
@@ -58,7 +58,7 @@ def _compute_strength(source, expt_id, session, db):
         raise ValueError("Invalid source %s" % source)
 
     # select just data for the selected experiment
-    q = q.join(db.SyncRec).join(db.Experiment).filter(db.Experiment.acq_timestamp==expt_id)
+    q = q.join(db.SyncRec).join(db.Experiment).filter(db.Experiment.ext_id==expt_id)
 
     prof = pg.debug.Profiler(delayed=False)
     

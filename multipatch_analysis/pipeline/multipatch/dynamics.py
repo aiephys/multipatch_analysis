@@ -109,4 +109,4 @@ class DynamicsPipelineModule(DatabasePipelineModule):
         This method is used by drop_jobs to delete records for specific job IDs.
         """
         db = self.database
-        return session.query(db.Dynamics).filter(db.Dynamics.pair_id==db.Pair.id).filter(db.Pair.experiment_id==db.Experiment.id).filter(db.Experiment.acq_timestamp.in_(job_ids)).all()
+        return session.query(db.Dynamics).filter(db.Dynamics.pair_id==db.Pair.id).filter(db.Pair.experiment_id==db.Experiment.id).filter(db.Experiment.ext_id.in_(job_ids)).all()

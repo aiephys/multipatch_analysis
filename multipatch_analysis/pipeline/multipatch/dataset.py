@@ -5,7 +5,7 @@ from collections import OrderedDict
 from acq4.util.DataManager import getDirHandle
 from ... import config, synphys_cache, lims, qc
 from ...util import timestamp_to_datetime
-from ...experiment import Experiment
+from ...data import Experiment
 from ..pipeline_module import DatabasePipelineModule
 from .experiment import ExperimentPipelineModule
 from neuroanalysis.baseline import float_mode
@@ -230,7 +230,7 @@ class DatasetPipelineModule(DatabasePipelineModule):
         """
         # only need to return from syncrec table; other tables will be dropped automatically.
         db = self.database
-        return session.query(db.SyncRec).filter(db.SyncRec.experiment_id==db.Experiment.id).filter(db.Experiment.acq_timestamp.in_(job_ids)).all()
+        return session.query(db.SyncRec).filter(db.SyncRec.experiment_id==db.Experiment.id).filter(db.Experiment.ext_id.in_(job_ids)).all()
 
     def ready_jobs(self):
         """Return an ordered dict of all jobs that are ready to be processed (all dependencies are present)
@@ -244,8 +244,8 @@ class DatasetPipelineModule(DatabasePipelineModule):
         
         # Look up nwb file locations for all experiments
         session = db.session()
-        expt_recs = session.query(db.Experiment.acq_timestamp, db.Experiment.storage_path, db.Experiment.ephys_file).filter(db.Experiment.ephys_file != None).all()
-        expt_paths = {rec.acq_timestamp: rec for rec in expt_recs}
+        expt_recs = session.query(db.Experiment.ext_id, db.Experiment.storage_path, db.Experiment.ephys_file).filter(db.Experiment.ephys_file != None).all()
+        expt_paths = {rec.ext_id: rec for rec in expt_recs}
         session.rollback()
         
         # Return the greater of NWB mod time and experiment DB record mtime
@@ -257,5 +257,5 @@ class DatasetPipelineModule(DatabasePipelineModule):
             rec = expt_paths[expt_id]
             ephys_file = os.path.join(config.synphys_data, rec.storage_path, rec.ephys_file)
             nwb_mtime = timestamp_to_datetime(os.stat(ephys_file).st_mtime)
-            ready[rec.acq_timestamp] = max(expt_mtime, nwb_mtime)
+            ready[rec.ext_id] = max(expt_mtime, nwb_mtime)
         return ready

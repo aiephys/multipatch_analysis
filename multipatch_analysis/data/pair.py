@@ -1,3 +1,4 @@
+import numpy as np
 
 
 class Pair(object):
@@ -8,6 +9,8 @@ class Pair(object):
     
     Parameters
     ----------
+    experiment : Experiment instance
+        The experiment to which this pair belongs
     pre_cell : Cell instance
         Presynaptic cell
     post_cell : Cell instance
@@ -19,7 +22,8 @@ class Pair(object):
     electrical : bool | None
         Whether an electrical synapse connects pre_cell to post_cell
     """
-    def __init__(self, pre_cell, post_cell, synapse=None, synapse_sign=None, electrical=None):
+    def __init__(self, experiment, pre_cell, post_cell, synapse=None, synapse_sign=None, electrical=None):
+        self.experiment = experiment
         self.pre_cell = pre_cell
         self.post_cell = post_cell
         self.synapse = synapse
@@ -28,6 +32,8 @@ class Pair(object):
 
     @property
     def distance(self):
+        """Disance between cell positions
+        """
         p1, p2 = self.pre_cell.position, self.post_cell.position
         if None in [p1, p2]:
             return None

@@ -8,7 +8,7 @@ from __future__ import print_function, division
 import os, datetime
 from collections import OrderedDict
 from ...util import timestamp_to_datetime, optional_import
-from ...pipette_metadata import PipetteMetadata
+from ...data.pipette_metadata import PipetteMetadata
 from ... import config, lims
 from ..pipeline_module import DatabasePipelineModule
 from .experiment import ExperimentPipelineModule
@@ -104,7 +104,7 @@ class MorphologyPipelineModule(DatabasePipelineModule):
         This method is used by drop_jobs to delete records for specific job IDs.
         """
         db = self.database
-        return session.query(db.Morphology).filter(db.Morphology.cell_id==db.Cell.id).filter(db.Cell.experiment_id==db.Experiment.id).filter(db.Experiment.acq_timestamp.in_(job_ids)).all()
+        return session.query(db.Morphology).filter(db.Morphology.cell_id==db.Cell.id).filter(db.Cell.experiment_id==db.Experiment.id).filter(db.Experiment.ext_id.in_(job_ids)).all()
 
     def ready_jobs(self):
         """Return an ordered dict of all jobs that are ready to be processed (all dependencies are present)
@@ -116,7 +116,7 @@ class MorphologyPipelineModule(DatabasePipelineModule):
 
         # Look up nwb file locations for all experiments
         session = db.session()
-        # expts = session.query(db.Experiment).filter(db.Experiment.acq_timestamp==1521667891.153).all()
+        # expts = session.query(db.Experiment).filter(db.Experiment.ext_id==1521667891.153).all()
         session.rollback()
         
         # Return the greater of NWB mod time and experiment DB record mtime
@@ -132,7 +132,7 @@ class MorphologyPipelineModule(DatabasePipelineModule):
             if success is not True:
                 continue
 
-            expt = session.query(db.Experiment).filter(db.Experiment.acq_timestamp==expt_id).all()[0]
+            expt = session.query(db.Experiment).filter(db.Experiment.ext_id==expt_id).all()[0]
             cluster = expt.lims_specimen_id
             if cluster is None:
                 continue
@@ -151,7 +151,7 @@ class MorphologyPipelineModule(DatabasePipelineModule):
                 else:
                     cell_hash_compare.append(False)
             if all(cell_hash_compare) is False:
-                ready[expt.acq_timestamp] = datetime.datetime.now()
+                ready[expt.ext_id] = datetime.datetime.now()
     
         return ready
 

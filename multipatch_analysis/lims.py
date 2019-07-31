@@ -1,5 +1,6 @@
 from __future__ import print_function
 import os, re, json
+import six
 from . import config
 import sqlalchemy
 
@@ -385,7 +386,7 @@ def specimen_metadata(specimen):
     if meta == '':
         return None
 
-    if isinstance(meta, basestring):
+    if isinstance(meta, six.string_types):
         meta = json.loads(meta)  # unserialization corrects for a LIMS bug; we can remove this later.
     return meta
 

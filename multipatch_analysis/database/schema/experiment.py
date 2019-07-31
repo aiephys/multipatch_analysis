@@ -52,14 +52,6 @@ class ExperimentBase(object):
             self._data = MultiPatchDataset(self.nwb_cache_file)
         return self._data
 
-    @property
-    def source_experiment(self):
-        """Return the original Experiment object that was used to import
-        data into the DB, if available.
-        """
-        from ...experiment_list import cached_experiments
-        return cached_experiments()[self.acq_timestamp]
-
     def __repr__(self):
         if self.ext_id is not None:
             return "<%s %s>" % (self.__class__.__name__, self.ext_id)
@@ -72,12 +64,11 @@ Experiment = make_table(
     base=ExperimentBase, 
     comment= "A group of cells patched simultaneously in the same slice.", 
     columns=[
-        ('original_path', 'str', 'Original location of raw data on rig.'),
+        ('ext_id', 'str', 'Unique external identifier string for the experiment.', {'unique': True, 'index': True}),
         ('storage_path', 'str', 'Location of data within server or cache storage.'),
         ('ephys_file', 'str', 'Name of ephys NWB file relative to storage_path.'),
-        ('rig_name', 'str', 'Identifier for the rig that generated these results.'),
         ('project_name', 'str', 'Name of the project to which this experiment belongs.', {'index': True}),
-        ('acq_timestamp', 'float', 'Creation timestamp for site data acquisition folder.', {'unique': True, 'index': True}),
+        ('date', 'datetime', 'The date of this experiment'),
         ('slice_id', 'slice.id', 'ID of the slice used for this experiment', {'index': True}),
         ('target_region', 'str', 'The intended brain region for this experiment'),
         ('internal', 'str', 'The name of the internal solution used in this experiment '
@@ -85,11 +76,11 @@ Experiment = make_table(
                             'The solution should be described in the pycsf database.', {'index': True}),
         ('acsf', 'str', 'The name of the ACSF solution used in this experiment. '
                         'The solution should be described in the pycsf database.', {'index': True}),
-        ('target_temperature', 'float', 'The intended temperature of the experiment (but actual recording temperature is stored elsewhere)'),
-        ('date', 'datetime', 'The date of this experiment'),
+        ('target_temperature', 'float', 'The intended temperature of the experiment (measured temperature per-recording is stored elsewhere)'),
         ('lims_specimen_id', 'int', 'ID of LIMS "CellCluster" specimen.'),
-        ('ext_id', 'str', 'Unique external identifier string for the experiment.')
-
+        ('rig_name', 'str', 'Identifier for the rig that generated these results.'),
+        ('operator_name', 'str', 'Opertator that generated these results.'),
+        ('acq_timestamp', 'float', 'Creation timestamp for site data acquisition folder.', {'unique': True, 'index': True}),
     ]
 )
 

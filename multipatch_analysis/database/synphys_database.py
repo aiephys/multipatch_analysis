@@ -40,15 +40,25 @@ class SynphysDatabase(Database):
         
         return expts[0]
 
-    def experiment_from_uid(self, uid, session=None):
+    def experiment_from_ext_id(self, ext_id, session=None):
         session = session or self.default_session
-        expts = session.query(self.Experiment).filter(self.Experiment.ext_id==uid).all()
+        expts = session.query(self.Experiment).filter(self.Experiment.ext_id==ext_id).all()
         if len(expts) == 0:
-            raise KeyError('No experiment found for uid %s' %uid)
+            raise KeyError('No experiment found for ext_id %s' %ext_id)
         elif len(expts) > 1:
-            raise RuntimeError("Multiple experiments found for uid %s" %uid)
+            raise RuntimeError("Multiple experiments found for ext_id %s" %ext_id)
 
         return expts[0]
+
+    def slice_from_ext_id(self, ext_id, session=None):
+        session = session or self.default_session
+        slices = session.query(self.Slice).filter(self.Slice.ext_id==ext_id).all()
+        if len(slices) == 0:
+            raise KeyError("No slice found for ext_id %0.3f" % ext_id)
+        elif len(slices) > 1:
+            raise KeyError("Multiple slices found for ext_id %0.3f" % ext_id)
+        
+        return slices[0]
 
     def list_experiments(self, session=None):
         session = session or self.default_session
