@@ -117,19 +117,18 @@ Cell = make_table(
     comment="Each row represents a single cell in an experiment.",
     columns=[
         ('experiment_id', 'experiment.id', '', {'index': True}),
+        ('ext_id', 'str', 'Cell ID (usually 1-8) referenced in external metadata records', {'index': True}),
         ('electrode_id', 'electrode.id', 'ID of the electrode used to patch this cell, if any.', {'index': True}),
         ('cre_type', 'str', 'Comma-separated list of cre drivers apparently expressed by this cell', {'index': True}),
         ('target_layer', 'str', 'The intended cortical layer for this cell (used as a placeholder until the actual layer call is made)', {'index': True}),
+        ('position', 'object', '3D location of this cell in the arbitrary coordinate system of the experiment'),
+        ('depth', 'float', 'Depth of the cell (in m) from the cut surface of the slice.'),
         ('is_excitatory', 'bool', 'True if the cell is determined to be excitatory by synaptic current, cre type, or morphology', {'index': True}),
-        ('synapse_sign', 'int', 'The sign of synaptic potentials produced by this cell: excitatory=+1, inhibitory=-1, mixed=0'),
         ('patch_start', 'float', 'Time at which this cell was first patched'),
         ('patch_stop', 'float', 'Time at which the electrode was detached from the cell'),
         ('seal_resistance', 'float', 'The seal resistance recorded for this cell immediately before membrane rupture'),
         ('has_biocytin', 'bool', 'If true, then the soma was seen to be darkly stained with biocytin (this indicates a good reseal, but does may not indicate a high-quality fill)'),
         ('has_dye_fill', 'bool', 'Indicates whether the cell was filled with fluorescent dye during the experiment'),
-        ('depth', 'float', 'Depth of the cell (in m) from the cut surface of the slice.'),
-        ('position', 'object', '3D location of this cell in the arbitrary coordinate system of the experiment'),
-        ('ext_id', 'str', 'Cell ID (usually 1-8) referenced in external metadata records', {'index': True}),
     ]
 )
 
@@ -166,9 +165,5 @@ Pair = make_table(
 
 Experiment.pair_list = relationship(Pair, back_populates="experiment", cascade='save-update,merge,delete', single_parent=True)
 Pair.experiment = relationship(Experiment, back_populates="pair_list")
-
 Pair.pre_cell = relationship(Cell, foreign_keys=[Pair.pre_cell_id])
-#Cell.pre_pairs = relationship(Pair, back_populates="pre_cell", single_parent=True, foreign_keys=[Pair.pre_cell])
-
 Pair.post_cell = relationship(Cell, foreign_keys=[Pair.post_cell_id])
-#Cell.post_pairs = relationship(Pair, back_populates="post_cell", single_parent=True, foreign_keys=[Pair.post_cell])        

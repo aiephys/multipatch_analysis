@@ -11,7 +11,7 @@ class Cell(object):
     ----------
     expt : Experiment
         The experiment that this cell is included in
-    cell_id : int
+    cell_id : atr
         ID that identifies this cell uniquely amongst all other cells in the same experiment.
 
     """
