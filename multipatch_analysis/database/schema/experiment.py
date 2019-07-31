@@ -161,11 +161,11 @@ Pair = make_table(
         ('pre_cell_id', 'cell.id', 'ID of the presynaptic cell', {'index': True}),
         ('post_cell_id', 'cell.id', 'ID of the postsynaptic cell', {'index': True}),
         ('synapse', 'bool', 'Whether the experimenter thinks there is a synapse', {'index': True}),
+        ('synapse_type', 'str', '"ex" or "in" indicating whether the synapse is excitatory or inhibitory', {'index': True}),
         ('electrical', 'bool', 'Whether the experimenter thinks there is a gap junction', {'index': True}),
         ('crosstalk_artifact', 'float', 'Amplitude of crosstalk artifact measured in current clamp'),
         ('n_ex_test_spikes', 'int', 'Number of QC-passed spike-responses recorded for this pair at excitatory holding potential', {'index': True}),
         ('n_in_test_spikes', 'int', 'Number of QC-passed spike-responses recorded for this pair at inhibitory holding potential', {'index': True}),
-        ('synapse_sign', 'int', 'Sign of synaptic current amplitude (+1 for excitatory, -1 for inhibitory', {'index': True}),
         ('distance', 'float', 'Distance between somas (in m)'),
     ]
 )
