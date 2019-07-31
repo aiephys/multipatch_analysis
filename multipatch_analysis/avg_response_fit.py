@@ -2,17 +2,64 @@
 Spike time is set to 0ms
 """
 
-from multipatch_analysis.database import default_db as db
-import multipatch_analysis.data_notes_db as notes_db
-import pyqtgraph as pg
 import sys
-import numpy as np
 from collections import OrderedDict
+import numpy as np
+import pyqtgraph as pg
 from neuroanalysis.data import Trace, TraceList
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.fitting import Psp, StackedPsp
+from multipatch_analysis.database import default_db as db
+import multipatch_analysis.data_notes_db as notes_db
 from multipatch_analysis.qc import spike_qc
 from multipatch_analysis.fitting import fit_psp
+
+
+def get_pair_avg_fits(pair, session, notes_session):
+    """Return PSP fits to averaged responses for this pair.
+    
+    Operations are:
+    - query all pulse responses for this pair
+    - sort by clamp mode and holding potential
+    - generate average response for each mode/holding combination
+    - fit averages to PSP curve
+    
+    Returns
+    -------
+    results : dict
+        {(mode, holding): {
+            'traces': , 'average', 'fit_params'}, ...}
+    
+    """
+    results = {}
+    
+    # query and sort pulse responses
+    pulse_responses = response_query(session=session, pair=pair).all()
+    all_traces, _ = sort_responses(pulse_responses)
+    
+    q2 = pair_notes_query(session=notes_session, pair=pair)
+    notes = q2.all()
+    
+    for clamp_mode, holdings in all_traces.items():
+        for holding, traces in holdings.items():
+            if len(notes) == 0:
+                latency = None
+                sign = 'any'
+            elif len(notes) == 1:
+                latency = notes.notes['fit_parameters']['initial'][clamp_mode][holding]['xoffset']
+                sign = notes.notes['synapse_type'] 
+            else:
+                raise Exception('More than one record for this pair %s %s->%s was found in the Pair Notes database' % (expt_id, pre_cell_id, post_cell_id))
+
+            fit_params, xoffset, _, avg_response = fit_avg_response(traces, clamp_mode, holding, latency, sign)
+            
+            results[clamp_mode, holding] = {
+                'traces': traces,
+                'average': avg_response,
+                'fit_params': fit_params,
+            }
+
+    return results
 
 
 def response_query(session, pair):
@@ -32,7 +79,7 @@ def response_query(session, pair):
     )
     q = q.join(db.StimPulse, db.PulseResponse.stim_pulse)
     q = q.join(db.StimSpike, db.StimSpike.stim_pulse_id==db.StimPulse.id)
-    q = q.join(db.Recording, db.PulseResponse.recording)
+    q = q.join(db.Recording, db.PulseResponse.recording)traces
     q = q.join(db.PatchClampRecording)
     q = q.join(db.MultiPatchProbe)
     q = q.filter(db.PulseResponse.pair_id==pair.id)
@@ -102,10 +149,10 @@ def fit_avg_response(traces, mode, holding, latency, sign):
             x_offset = latency
             x_offset_win = [-0.1e-3, 0.1e-3]
         
-        if len(traces[mode][holding]['qc_pass']) == 0:
+        if len(traces['qc_pass']) == 0:
             return output_fit_parameters, x_offset, None
         
-        grand_trace = TraceList(traces[mode][holding]['qc_pass']).mean()
+        grand_trace = TraceList(traces['qc_pass']).mean()
 
         weight = np.ones(len(grand_trace.data))*10.  #set everything to ten initially
         weight[int(1e-3/db.default_sample_rate):int(3e-3/db.default_sample_rate)] = 30.  #area around steep PSP rise 
@@ -155,4 +202,4 @@ def fit_avg_response(traces, mode, holding, latency, sign):
             sys.excepthook(*sys.exc_info())
             return output_fit_parameters, x_offset, None
 
-        return output_fit_parameters, x_offset, fit.best_fit
+        return output_fit_parameters, x_offset, fit.best_fit, grand_trace

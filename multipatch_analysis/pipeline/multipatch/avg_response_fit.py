@@ -9,7 +9,7 @@ from ..pipeline_module import DatabasePipelineModule
 from .experiment import ExperimentPipelineModule
 from .dataset import DatasetPipelineModule
 from .pulse_response import PulseResponsePipelineModule
-from ...avg_response_fit import response_query, sort_responses, fit_avg_response, pair_notes_query
+from ...avg_response_fit import get_pair_avg_fits
 
 
 class AvgResponseFitPipelineModule(DatabasePipelineModule):
@@ -28,32 +28,11 @@ class AvgResponseFitPipelineModule(DatabasePipelineModule):
         expt = db.experiment_from_timestamp(expt_id, session=session)
 
         for pair in expt.pair_list:
-            # Generate fit results for this pair
-            q = response_query(session=session, pair=pair)
-            pulse_responses = q.all()
-            traces, _ = sort_responses(pulse_responses)
-            modes, holdings = traces.items()
-            holdings = holdings.keys()
-            fit_parameters = OrderedDict()
-            q2 = pair_notes_query(session=s2, pair=pair)
-            notes = q2.all()
-            for clamp_mode in modes:
-                for holding in holdings:
-                fit_parameters[clamp_mode][holding] = {}  
-                    if len(notes) == 0:
-                        latency = None
-                        sign = 'any'
-                    elif len(notes) == 1:
-                        latency = notes.notes['fit_parameters']['initial'][clamp_mode][holding]['xoffset']
-                        sign = notes.notes['synapse_type'] 
-                    else:
-                        raise Exception('More than one record for this pair %s %s->%s was found in the Pair Notes database' % (expt_id, pre_cell_id, post_cell_id))
-
-                    fit_parameters[clamp_mode][holding], xoffset, _ = fit_avg_response(traces, clamp_mode, holding, latency, sign)
-            
+            fits = get_pair_avg_fits(pair, session, s2)
+                        
             results = {
-            'latency': xoffset,
-            'fit_parameters': fit_parameters
+                'latency': xoffset,
+                'fit_parameters': fit_parameters,
             }
 
             # Write new record to DB
