@@ -15,16 +15,15 @@ import yaml
 import pyqtgraph as pg
 import pyqtgraph.configfile
 
-from . import lims
-from .constants import ALL_CRE_TYPES, ALL_LABELS, FLUOROPHORES, LAYERS, INJECTIONS
+from .. import lims, yaml_local, config
+from ..constants import ALL_CRE_TYPES, ALL_LABELS, FLUOROPHORES, LAYERS, INJECTIONS
+from ..genotypes import Genotype
+from ..synphys_cache import SynPhysCache
+from ..util import timestamp_to_datetime
 from .cell import Cell
 from .electrode import Electrode
 from .data import MultiPatchDataset
 from .pipette_metadata import PipetteMetadata
-from .genotypes import Genotype
-from .synphys_cache import SynPhysCache
-from . import yaml_local, config
-from .util import timestamp_to_datetime
 
 
 class Experiment(object):

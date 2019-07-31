@@ -19,6 +19,7 @@ from sqlalchemy.orm import aliased
 import sklearn.svm, sklearn.preprocessing, sklearn.ensemble
 
 import pyqtgraph as pg
+import pyqtgraph.dockarea
 from pyqtgraph.Qt import QtGui, QtCore
 
 from neuroanalysis.ui.plot_grid import PlotGrid

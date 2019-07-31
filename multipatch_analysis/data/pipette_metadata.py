@@ -1,6 +1,6 @@
 import os
 import yaml
-from . import yaml_local
+from .. import yaml_local
 
 
 class PipetteMetadata(object):

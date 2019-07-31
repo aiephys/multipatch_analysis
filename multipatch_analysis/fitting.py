@@ -3,7 +3,6 @@ import warnings, sys
 
 from pyqtgraph.debug import Profiler
 from neuroanalysis.fitting import StackedPsp, Psp
-from .data import MultiPatchProbe, Analyzer, PulseStimAnalyzer
 
 
 def test_create_all_fit_param_combos():

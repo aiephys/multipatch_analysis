@@ -1,6 +1,5 @@
 
 
-
 class Electrode(object):
     """Represents a single patch clamp electrode.
 

@@ -5,7 +5,7 @@ from neuroanalysis.stimuli import find_square_pulses
 from neuroanalysis.spike_detection import detect_evoked_spikes
 from neuroanalysis.data import TSeries, TSeriesList
 
-from . import qc
+from .. import qc
 
 
 class MultiPatchDataset(MiesNwb):
