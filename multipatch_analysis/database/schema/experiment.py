@@ -48,8 +48,8 @@ class ExperimentBase(object):
         """
 
         if not hasattr(self, '_data'):
-            from ...data import MultiPatchExperiment
-            self._data = MultiPatchExperiment(self.nwb_cache_file)
+            from ...data import MultiPatchDataset
+            self._data = MultiPatchDataset(self.nwb_cache_file)
         return self._data
 
     @property

@@ -10,7 +10,7 @@ from ..pipeline_module import DatabasePipelineModule
 from .experiment import ExperimentPipelineModule
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.data import PatchClampRecording
-from ...data import MultiPatchExperiment, MultiPatchProbe, PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
+from ...data import MultiPatchDataset, MultiPatchProbe, PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
 
 
 class DatasetPipelineModule(DatabasePipelineModule):

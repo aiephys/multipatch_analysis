@@ -19,7 +19,7 @@ from . import lims
 from .constants import ALL_CRE_TYPES, ALL_LABELS, FLUOROPHORES, LAYERS, INJECTIONS
 from .cell import Cell
 from .electrode import Electrode
-from .data import MultiPatchExperiment
+from .data import MultiPatchDataset
 from .pipette_metadata import PipetteMetadata
 from .genotypes import Genotype
 from .synphys_cache import SynPhysCache
@@ -910,7 +910,7 @@ class Experiment(object):
         Contains all ephys recordings.
         """
         if self._data is None:
-            self._data = MultiPatchExperiment(self.nwb_cache_file)
+            self._data = MultiPatchDataset(self.nwb_cache_file)
         return self._data
 
     def close_data(self):

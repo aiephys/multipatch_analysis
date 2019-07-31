@@ -3,12 +3,12 @@ import numpy as np
 from neuroanalysis.miesnwb import MiesNwb, MiesSyncRecording, MiesRecording
 from neuroanalysis.stimuli import find_square_pulses
 from neuroanalysis.spike_detection import detect_evoked_spikes
-from neuroanalysis.data import Trace, TraceList
+from neuroanalysis.data import TSeries, TSeriesList
 
 from . import qc
 
 
-class MultiPatchExperiment(MiesNwb):
+class MultiPatchDataset(MiesNwb):
     """Extension of neuroanalysis data abstraction layer to include
     multipatch-specific metadata.
     """
@@ -416,8 +416,8 @@ class EvokedResponseGroup(object):
             # downsample all traces to the same rate
             # yarg: how does this change SNR?
 
-            avg = TraceList([r.copy(t0=0) for r in responses]).mean()
-            avg_baseline = TraceList([b.copy(t0=0) for b in baselines]).mean().data
+            avg = TSeriesList([r.copy(t0=0) for r in responses]).mean()
+            avg_baseline = TSeriesList([b.copy(t0=0) for b in baselines]).mean().data
 
             # subtract baseline
             baseline = np.median(avg_baseline)
@@ -440,7 +440,7 @@ class EvokedResponseGroup(object):
     def mean(self):
         if len(self) == 0:
             return None
-        return TraceList(self.responses).mean()
+        return TSeriesList(self.responses).mean()
 
     def fit_psp(self, **kwds):
         response = self.bsub_mean()
@@ -499,7 +499,7 @@ class StimPulse(object):
     @property
     def recorded_tseries(self):
         if self._rec_tseries is None:
-            self._rec_tseries = Trace(self.data, sample_rate=default_sample_rate, t0=self.data_start_time)
+            self._rec_tseries = TSeries(self.data, sample_rate=default_sample_rate, t0=self.data_start_time)
         return self._rec_tseries
 
     @property
