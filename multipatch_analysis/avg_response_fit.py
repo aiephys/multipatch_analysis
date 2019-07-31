@@ -6,7 +6,7 @@ import sys
 from collections import OrderedDict
 import numpy as np
 import pyqtgraph as pg
-from neuroanalysis.data import Trace, TraceList
+from neuroanalysis.data import TSeries, TSeriesList
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.fitting import Psp, StackedPsp
 from multipatch_analysis.database import default_db as db
@@ -115,8 +115,8 @@ def sort_responses(pulse_responses):
     for rec in pulse_responses: 
         if rec.ind_freq not in [10, 20, 50]:
             continue
-        data_trace = Trace(data=rec.data, sample_rate=db.default_sample_rate)
-        spike_trace = Trace(data=rec.spike, sample_rate=db.default_sample_rate)
+        data_trace = TSeries(data=rec.data, sample_rate=db.default_sample_rate)
+        spike_trace = TSeries(data=rec.spike, sample_rate=db.default_sample_rate)
         n_spikes = rec.n_spikes
         spike_time = rec.spike_time
         if spike_time is None:
@@ -152,7 +152,13 @@ def fit_avg_response(traces, mode, holding, latency, sign):
         if len(traces['qc_pass']) == 0:
             return output_fit_parameters, x_offset, None
         
+<<<<<<< HEAD
         grand_trace = TraceList(traces['qc_pass']).mean()
+||||||| merged common ancestors
+        grand_trace = TraceList(traces[mode][holding]['qc_pass']).mean()
+=======
+        grand_trace = TSeriesList(traces[mode][holding]['qc_pass']).mean()
+>>>>>>> master
 
         weight = np.ones(len(grand_trace.data))*10.  #set everything to ten initially
         weight[int(1e-3/db.default_sample_rate):int(3e-3/db.default_sample_rate)] = 30.  #area around steep PSP rise 

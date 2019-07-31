@@ -6,7 +6,7 @@ from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.ui.filter import SignalFilter, ArtifactRemover
 from neuroanalysis.ui.baseline import BaselineRemover
 from neuroanalysis.ui.fitting import FitExplorer
-from neuroanalysis.data import Trace
+from neuroanalysis.data import TSeries
 from neuroanalysis.spike_detection import detect_evoked_spikes
 from neuroanalysis import fitting
 from neuroanalysis.baseline import float_mode

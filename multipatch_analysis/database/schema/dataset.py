@@ -1,6 +1,6 @@
 from collections import OrderedDict
 import numpy as np
-from neuroanalysis.data import Trace
+from neuroanalysis.data import TSeries
 from sqlalchemy.orm import relationship
 from . import make_table
 from .experiment import Experiment, Electrode, Pair
@@ -109,7 +109,7 @@ class StimPulseBase(object):
     @property
     def recorded_tseries(self):
         if self._rec_tseries is None:
-            self._rec_tseries = Trace(self.data, sample_rate=SynphysDatabase.default_sample_rate, t0=self.data_start_time)
+            self._rec_tseries = TSeries(self.data, sample_rate=SynphysDatabase.default_sample_rate, t0=self.data_start_time)
         return self._rec_tseries
 
     @property
@@ -173,7 +173,7 @@ class PulseResponseBase(object):
     @property
     def post_tseries(self):
         if self._post_tseries is None:
-            self._post_tseries = Trace(self.data, sample_rate=SynphysDatabase.default_sample_rate, t0=self.start_time)
+            self._post_tseries = TSeries(self.data, sample_rate=SynphysDatabase.default_sample_rate, t0=self.start_time)
         return self._post_tseries
 
     @property

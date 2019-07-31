@@ -11,7 +11,7 @@ import pyqtgraph as pg
 import numpy as np
 from scipy import stats, ndimage
 
-from neuroanalysis.data import Trace, TraceList
+from neuroanalysis.data import TSeries, TSeriesList
 import strength_analysis
 from multipatch_analysis.database import database as db
 
@@ -21,7 +21,7 @@ from multipatch_analysis.database import database as db
 def write_csv(fh, data, description, units='membrane voltage (V)'):
     """Used to generate csv file accompanying figure.
     """
-    if isinstance(data, Trace):
+    if isinstance(data, TSeries):
         write_csv(fh, data.time_values, description + " time (s)")
         write_csv(fh, data.data, description + " %s" % units)
     else:
@@ -249,10 +249,10 @@ if __name__ == '__main__':
             # # deconv_plot.plot(trace.time_values, trace.data, pen=(0, 0, 0, 20))
 
         # plot average trace
-        mean = TraceList(traces).mean()
+        mean = TSeriesList(traces).mean()
         trace_plot.plot(mean.time_values, mean.data, pen={'color':'g', 'width': 2}, shadowPen={'color':'k', 'width': 3}, antialias=True)
         write_csv(csv_file, mean, "Figure 3B; {name}; average".format(name=name))
-        # mean = TraceList(deconvs).mean()
+        # mean = TSeriesList(deconvs).mean()
         # # deconv_plot.plot(mean.time_values, mean.data, pen={'color':'g', 'width': 2}, shadowPen={'color':'k', 'width': 3}, antialias=True)
 
         # add label
@@ -298,7 +298,7 @@ if __name__ == '__main__':
             bsub = [t.copy(data=t.data - np.median(t.time_slice(0, 1e-3).data)) for t in traces]
             for t in bsub:
                 plt.plot(t.time_values, t.data, pen=(0, 0, 0, 50))
-            mean = TraceList(bsub).mean()
+            mean = TSeriesList(bsub).mean()
             plt.plot(mean.time_values, mean.data, pen='g')
 
 

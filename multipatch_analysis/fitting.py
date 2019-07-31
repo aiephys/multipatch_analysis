@@ -3,7 +3,6 @@ import warnings, sys
 
 from pyqtgraph.debug import Profiler
 from neuroanalysis.fitting import StackedPsp, Psp
-from .data import MultiPatchProbe, Analyzer, PulseStimAnalyzer
 
 
 def test_create_all_fit_param_combos():
@@ -100,7 +99,7 @@ def fit_psp(response,
     
     Parameters
     ----------
-    response : neuroanalysis.data.Trace class
+    response : neuroanalysis.data.TSeries class
         Contains data on trace waveform.
     mode : string
         either 'ic' for current clamp or 'vc' for voltage clamp

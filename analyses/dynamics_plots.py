@@ -7,7 +7,7 @@ from multipatch_analysis.experiment_list import cached_experiments
 from manuscript_figures import cache_response, train_amp, induction_summary, recovery_summary, write_cache, get_response, \
     train_qc, colors_human, colors_mouse, deconv_train
 from synapse_comparison import load_cache
-from neuroanalysis.data import TraceList
+from neuroanalysis.data import TSeriesList
 from neuroanalysis.ui.plot_grid import PlotGrid
 from multipatch_analysis.synaptic_dynamics import RawDynamicsAnalyzer
 from rep_connections import ee_connections, human_connections, all_connections, ii_connections, ei_connections, ie_connections, no_include
@@ -149,8 +149,8 @@ for c in range(len(connection_types)):
         ind_pass_qc = train_qc(induction_grand[freq], ind_offsets, amp=qc_params[1][c], sign=qc_params[0], plot=qc_plot)
         n_synapses = len(ind_pass_qc[0])
         if n_synapses > 0:
-            induction_grand_trace = TraceList(ind_pass_qc[0]).mean()
-            ind_rec_grand_trace = TraceList(ind_pass_qc[1]).mean()
+            induction_grand_trace = TSeriesList(ind_pass_qc[0]).mean()
+            ind_rec_grand_trace = TSeriesList(ind_pass_qc[1]).mean()
             ind_amp = train_amp(ind_pass_qc, ind_offsets, '+')
             ind_amp_grand = np.nanmean(ind_amp, 0)
 
@@ -175,8 +175,8 @@ for c in range(len(connection_types)):
             ind_plot[f, c].setLabels(bottom=('t', 's'))
             if deconv is True:
                 ind_deconv = deconv_train(ind_pass_qc[:2])
-                ind_deconv_grand = TraceList(ind_deconv[0]).mean()
-                ind_rec_deconv_grand = TraceList(ind_deconv[1]).mean()
+                ind_deconv_grand = TSeriesList(ind_deconv[0]).mean()
+                ind_rec_deconv_grand = TSeriesList(ind_deconv[1]).mean()
                 [deconv_ind_plot[f, c].plot(ind.time_values, ind.data, pen=trace_color) for ind in ind_deconv[0]]
                 [deconv_ind_plot[f, c].plot(rec.time_values, rec.data, pen=trace_color) for rec in ind_deconv[1]]
                 deconv_ind_plot[f, c].plot(ind_deconv_grand.time_values, ind_deconv_grand.data,
@@ -202,8 +202,8 @@ for c in range(len(connection_types)):
         rec_pass_qc = train_qc(recovery_grand[delta], rec_offsets, amp=qc_params[1][c], sign=qc_params[0], plot=None)
         n_synapses = len(rec_pass_qc[0])
         if n_synapses > 0:
-            recovery_grand_trace = TraceList(rec_pass_qc[1]).mean()
-            rec_ind_grand_trace = TraceList(rec_pass_qc[0]).mean()
+            recovery_grand_trace = TSeriesList(rec_pass_qc[1]).mean()
+            rec_ind_grand_trace = TSeriesList(rec_pass_qc[0]).mean()
             rec_amp = train_amp(rec_pass_qc, rec_offsets, '+')
             rec_amp_grand = np.mean(rec_amp, 0)
             if t == 0:
@@ -223,8 +223,8 @@ for c in range(len(connection_types)):
             rec_plot[t, c].setLabels(bottom=('t', 's'))
             if deconv is True:
                 rec_deconv = deconv_train(rec_pass_qc[:2])
-                rec_deconv_grand = TraceList(rec_deconv[0]).mean()
-                rec_ind_deconv_grand = TraceList(rec_deconv[1]).mean()
+                rec_deconv_grand = TSeriesList(rec_deconv[0]).mean()
+                rec_ind_deconv_grand = TSeriesList(rec_deconv[1]).mean()
                 #log_rec_plt.plot(rec_deconv_grand.time_values, rec_deconv_grand.data,
                 #                    pen={'color': color, 'width': 2})
                 rec_deconv_ind_grand2 = rec_ind_deconv_grand.copy(t0=delta + 0.2)

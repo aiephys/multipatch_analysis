@@ -14,7 +14,7 @@ import pandas as pd
 from statsmodels.stats.proportion import proportion_confint
 from multipatch_analysis.database import default_db as db
 # from first_pulse_deconvolved_amps import get_deconvolved_first_pulse_amps
-from neuroanalysis.data import Trace, TraceList
+from neuroanalysis.data import TSeries, TSeriesList
 from neuroanalysis.baseline import float_mode
 
 
@@ -294,7 +294,7 @@ class ConnectivityAnalyzer(Analyzer):
                 trace = format_trace(trace, baseline_window, x_offset, align='psp')
                 trace_plt.plot(trace.time_values, trace.data)
                 traces.append(trace)
-        grand_trace = TraceList(traces).mean()
+        grand_trace = TSeriesList(traces).mean()
         name = ('%s->%s, n=%d' % (pre_class, post_class, len(traces)))
         trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3}, name=name)
         trace_plt.setXRange(0, 20e-3)
@@ -575,7 +575,7 @@ class StrengthAnalyzer(Analyzer):
             pair_id = point.data().id
             self.pair_items[pair_id].append(point)
         scatter.sigClicked.connect(self.scatter_plot_clicked)
-        grand_trace = TraceList(traces).mean()
+        grand_trace = TSeriesList(traces).mean()
         name = ('%s->%s, n=%d' % (pre_class, post_class, len(traces)))
         trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3}, name=name)
         units = 'V' if field_name.startswith('ic') else 'A'
@@ -835,7 +835,7 @@ class DynamicsAnalyzer(Analyzer):
             scatter = pg.ScatterPlotItem(symbol='o', brush=(color + (150,)), pen='w', size=12)
             scatter.setData(values, y_values + 10.)
             if trace_plt is not None:
-                grand_trace = TraceList(traces).mean()
+                grand_trace = TSeriesList(traces).mean()
                 trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3})
                 units = 'V' if field_name.startswith('ic') else 'A'
                 trace_plt.setXRange(0, 20e-3)
@@ -849,7 +849,7 @@ class DynamicsAnalyzer(Analyzer):
 def format_trace(trace, baseline_win, x_offset, align='spike'):
     # align can be to the pre-synaptic spike (default) or the onset of the PSP ('psp')
     baseline = float_mode(trace[0:baseline_win])
-    trace = Trace(data=(trace-baseline), sample_rate=db.default_sample_rate)
+    trace = TSeries(data=(trace-baseline), sample_rate=db.default_sample_rate)
     if align == 'psp':
         trace.t0 = -x_offset
     return trace

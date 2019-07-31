@@ -3,7 +3,7 @@ avg_first_pulse_fit table.
 """
 
 import numpy as np
-from neuroanalysis.data import Trace, TraceList
+from neuroanalysis.data import TSeries, TSeriesList
 from neuroanalysis.fitting import fit_psp
 from .database import default_db as db
 
@@ -62,7 +62,7 @@ def extract_first_pulse_info_from_Pair_object(pair, desired_clamp='ic'):
     
     Return
     ------
-    pulse_responses: TraceList 
+    pulse_responses: TSeriesList 
         traces where the start of each trace is 10 ms before the spike 
     pulse_ids: list of ints
         pulse ids of *pulse_responses*
@@ -111,7 +111,7 @@ def extract_first_pulse_info_from_Pair_object(pair, desired_clamp='ic'):
         spike_time = stim_pulse.spikes[0].max_slope_time
         if spike_time is None:
             continue
-        data_trace = Trace(data=data, t0=start_time-spike_time+time_before_spike, sample_rate=db.default_sample_rate).time_slice(start=0, stop=None) #start of the data is the spike time
+        data_trace = TSeries(data=data, t0=start_time-spike_time+time_before_spike, sample_rate=db.default_sample_rate).time_slice(start=0, stop=None) #start of the data is the spike time
 
         # append to output lists if neurons pass qc
         if (synapse_type == 'ex' and ex_qc_pass is True) or (synapse_type == 'in' and in_qc_pass is True):
@@ -141,7 +141,7 @@ def get_average_pulse_response(pair, desired_clamp='ic'):
     Returns
     -------
     Note that all returned variables are set to None if there are no acceptable (qc pasing) sweeps
-    pulse_responses: TraceList 
+    pulse_responses: TSeriesList 
         traces where the start of each trace is 10 ms before the spike 
     pulse_ids: list of ints
         pulse ids of *pulse_responses*
@@ -149,7 +149,7 @@ def get_average_pulse_response(pair, desired_clamp='ic'):
         amplitude of *pulse_responses* from the *pulse_response* table
     freq: list of floats
         the stimulation frequency corresponding to the *pulse_responses* 
-    avg_psp: Trace
+    avg_psp: TSeries
         average of the pulse_responses
     measured_relative_amp: float
         measured amplitude relative to baseline
@@ -161,7 +161,7 @@ def get_average_pulse_response(pair, desired_clamp='ic'):
 
     # if pulses are returned take the average
     if len(pulse_responses)>0:
-        avg_psp=TraceList(pulse_responses).mean()
+        avg_psp=TSeriesList(pulse_responses).mean()
     else:
         return None, None, None, None, None, None, None
 
@@ -177,7 +177,7 @@ def fit_trace(waveform, excitation, clamp_mode='ic', weight=None, latency=None, 
     """
     Input
     -----
-    waveform: Trace Object
+    waveform: TSeries Object
         contains data to be fit
     clamp_mode: string
         'vc' denotes voltage clamp
@@ -396,7 +396,7 @@ def fit_single_first_pulse(pr, pair):
         dt_i = None
         nrmse_i = None
         if pair.avg_first_pulse_fit.vc_latency:
-            data_trace = Trace(data=pr.data, 
+            data_trace = TSeries(data=pr.data, 
                 t0= pr.response_start_time - pr.spike_time + time_before_spike, 
                 sample_rate=db.default_sample_rate).time_slice(start=0, stop=None)
             xoffset = pair.avg_first_pulse_fit.vc_latency
@@ -428,7 +428,7 @@ def fit_single_first_pulse(pr, pair):
         dt_v = None
         nrmse_v = None
         if pair.avg_first_pulse_fit.ic_latency:
-            data_trace = Trace(data=pr.data, 
+            data_trace = TSeries(data=pr.data, 
                 t0= pr.response_start_time - pr.spike_time + time_before_spike, 
                 sample_rate=db.default_sample_rate).time_slice(start=0, stop=None)  #TODO: annoys me that this is repetitive in vc code above.
             xoffset = pair.avg_first_pulse_fit.ic_latency

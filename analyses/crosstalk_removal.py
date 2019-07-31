@@ -8,7 +8,7 @@ import numpy as np
 import pyqtgraph as pg
 from sqlalchemy.orm import aliased
 
-from neuroanalysis.data import TraceList
+from neuroanalysis.data import TSeriesList
 from neuroanalysis import filter
 from multipatch_analysis.ui.experiment_browser import ExperimentBrowser
 from multipatch_analysis.connection_strength import get_amps, get_baseline_amps
@@ -23,7 +23,7 @@ class StimResponseList(object):
         self.srs = srs
 
     def get_tseries(self, series, bsub=True, align='stim', bsub_window=(-3e-3, 0)):
-        """Return a TraceList of timeseries, optionally baseline-subtracted and time-aligned.
+        """Return a TSeriesList of timeseries, optionally baseline-subtracted and time-aligned.
         
         Parameters
         ----------
@@ -51,7 +51,7 @@ class StimResponseList(object):
                 t_align = t_align or 0
                 ts = ts.copy(t0=ts.t0-t_align)
             tseries.append(ts)
-        return TraceList(tseries)
+        return TSeriesList(tseries)
 
     def __iter__(self):
         for sr in self.srs:

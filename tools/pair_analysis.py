@@ -9,7 +9,7 @@ from pyqtgraph.widgets.DataFilterWidget import DataFilterParameter
 from neuroanalysis.ui.plot_grid import PlotGrid
 from multipatch_analysis.ui.experiment_browser import ExperimentBrowser
 from collections import OrderedDict
-from neuroanalysis.data import TraceList
+from neuroanalysis.data import TSeriesList
 from neuroanalysis.fitting import Psp, StackedPsp
 from multipatch_analysis.avg_response_fit import response_query, sort_responses, fit_avg_response, pair_notes_query
 from random import shuffle, seed
@@ -248,7 +248,7 @@ class ControlPanel(object):
         self.params.child('Latency', 'VC').setValue(value)
 
 
-class TracePlot(pg.GraphicsLayoutWidget):
+class TSeriesPlot(pg.GraphicsLayoutWidget):
     def __init__(self, title, units):
         pg.GraphicsLayoutWidget.__init__(self)
         self.grid = PlotGrid()
@@ -292,7 +292,7 @@ class TracePlot(pg.GraphicsLayoutWidget):
                         item.setZValue(-10)
                     self.items.append(item)
                 if qc == 'qc_pass':
-                    grand_trace = TraceList(traces).mean()
+                    grand_trace = TSeriesList(traces).mean()
                     item = self.trace_plots[i].plot(grand_trace.time_values, grand_trace.data, pen={'color': 'b', 'width': 2})
                     self.items.append(item)
             self.trace_plots[i].autoRange()
@@ -399,14 +399,14 @@ class PairAnalysis(object):
         self.ic_superline = SuperLine()
         self.ic_superline.sigPositionChanged.connect(self.ctrl_panel.set_ic_latency)
         self.ic_superline.sigPositionChangeFinished.connect(self.ic_fit_response_update)
-        self.ic_plot = TracePlot('Current Clamp', 'V')
+        self.ic_plot = TSeriesPlot('Current Clamp', 'V')
         for plot in self.ic_plot.trace_plots:
             plot.addItem(self.ic_superline.new_line(default_latency))
 
         self.vc_superline = SuperLine()
         self.vc_superline.sigPositionChanged.connect(self.ctrl_panel.set_vc_latency)
         self.vc_superline.sigPositionChangeFinished.connect(self.vc_fit_response_update)
-        self.vc_plot = TracePlot('Voltage Clamp', 'A')
+        self.vc_plot = TSeriesPlot('Voltage Clamp', 'A')
         for plot in self.vc_plot.trace_plots:
             plot.addItem(self.vc_superline.new_line(default_latency))
             
@@ -522,10 +522,10 @@ class PairAnalysis(object):
                     self.fit_pass = ofp.get('nrmse', self.nrmse_thresh) < self.nrmse_thresh
                     self.ctrl_panel.params.child('Fit parameters', holding + ' ' + mode.upper(), 'Fit Pass').setValue(self.fit_pass)
                     if mode == 'vc'and bool(ofp):
-                        avg_trace = TraceList(self.traces['vc'][holding]['qc_pass']).mean()
+                        avg_trace = TSeriesList(self.traces['vc'][holding]['qc_pass']).mean()
                         self.vc_plot.plot_fit(avg_trace, best_fit, holding, self.fit_pass)
                     elif mode == 'ic' and bool(ofp):
-                        avg_trace = TraceList(self.traces['ic'][holding]['qc_pass']).mean()
+                        avg_trace = TSeriesList(self.traces['ic'][holding]['qc_pass']).mean()
                         self.ic_plot.plot_fit(avg_trace, best_fit, holding, self.fit_pass)
                     dlg += 1
                     if dlg.wasCanceled():
@@ -696,7 +696,7 @@ class PairAnalysis(object):
                     if mode == 'vc':
                         p = Psp()
                         
-                    avg = TraceList(self.traces[mode][holding]['qc_pass']).mean()
+                    avg = TSeriesList(self.traces[mode][holding]['qc_pass']).mean()
                     
                     fit_psp = p.eval(x=avg.time_values, **fit_params)
                     
