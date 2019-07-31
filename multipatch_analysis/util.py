@@ -27,6 +27,7 @@ def dir_timestamp(path):
     in_dir = False
     search_indent = None
     for line in open(index_file, 'rb').readlines():
+        line = line.decode('latin1')
         if line.startswith('.:'):
             in_dir = True
             continue

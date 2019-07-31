@@ -420,7 +420,7 @@ class Database(object):
                 try:
                     conn.execute('drop database %s' % self.db_name)
                 except sqlalchemy.exc.ProgrammingError as err:
-                    if 'does not exist' not in err.message:
+                    if 'does not exist' not in err.args[0]:
                         raise
         else:
             raise TypeError("Unsupported database backend %s" % self.backend)

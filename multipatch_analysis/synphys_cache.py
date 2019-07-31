@@ -31,7 +31,7 @@ class SynPhysCache(object):
         if self._expts is None:
             yamls = self.list_pip_yamls()
             site_dirs = sorted([os.path.dirname(yml) for yml in yamls], reverse=True)
-            self._expts = OrderedDict([(dir_timestamp(site_dir), site_dir) for site_dir in site_dirs])
+            self._expts = OrderedDict([('%0.3f'%dir_timestamp(site_dir), site_dir) for site_dir in site_dirs])
         return self._expts
 
     def list_nwbs(self):

@@ -20,7 +20,7 @@ if __name__ == '__main__':
     parser.add_argument('--local', action='store_true', default=False, help="Disable concurrent processing to make debugging easier")
     parser.add_argument('--raise-exc', action='store_true', default=False, help="Disable catching exceptions encountered during processing", dest='raise_exc')
     parser.add_argument('--limit', type=int, default=None, help="Limit the number of experiments to process")
-    parser.add_argument('--uids', type=lambda s: [float(x) for x in s.split(',')], default=None, help="Select specific IDs to analyze (or drop)", )
+    parser.add_argument('--uids', type=lambda s: s.split(','), default=None, help="Select specific IDs to analyze (or drop)", )
     parser.add_argument('--drop', action='store_true', default=False, help="Drop selected analysis results (do not run updates)", )
     parser.add_argument('--vacuum', action='store_true', default=False, help="Run VACUUM ANALYZE on the database to optimize its query planner", )
     parser.add_argument('--bake', action='store_true', default=False, help="Bake an sqlite file after the pipeline update completes", )
@@ -99,7 +99,7 @@ if __name__ == '__main__':
         for module, result in report:
             print("------ %s : %d errors -------" % (module.name, result['n_errors']))
             for job, err in result['errors'].items():
-                print("    %0.3f : %s" % (job, err))
+                print("    %s : %s" % (job, err))
         
             
         print("\n================== Update Report ===========================")

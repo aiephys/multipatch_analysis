@@ -21,6 +21,7 @@ from ..genotypes import Genotype
 from ..synphys_cache import SynPhysCache
 from ..util import timestamp_to_datetime
 from .cell import Cell
+from .pair import Pair
 from .electrode import Electrode
 from .data import MultiPatchDataset
 from .pipette_metadata import PipetteMetadata
@@ -32,6 +33,7 @@ class Experiment(object):
         self.source_id = (None, None)
         self._electrodes = None
         self._cells = None
+        self._pairs = None
         self._connections = None
         self._gaps = None
         self._region = None
@@ -146,6 +148,33 @@ class Experiment(object):
             mtime = max(mtime, os.stat(file).st_mtime)
         
         return timestamp_to_datetime(mtime)
+
+    @property
+    def pairs(self):
+        if self._pairs is None:
+            self._pairs = {}
+            for i, pre_cell in self.cells.items():
+                for j, post_cell in self.cells.items():
+                    if i == j:
+                        continue
+                        
+                    # check to see if i,j is in manual connection calls
+                    # (do not use expt.connections, which excludes some connections based on QC)
+                    syn_calls = self.connection_calls
+                    synapse = None if syn_calls is None else ((i, j) in syn_calls)
+                    gap_calls = self.gap_calls
+                    electrical = None if gap_calls is None else ((i, j) in gap_calls)
+                    
+                    pair = Pair(
+                        experiment=self,
+                        pre_cell=pre_cell,
+                        post_cell=post_cell,
+                        synapse=synapse,
+                        electrical=electrical,
+                    )
+                    self._pairs[pre_cell.cell_id, post_cell.cell_id] = pair
+            
+        return self._pairs
 
     @property
     def connections(self):
@@ -847,8 +876,10 @@ class Experiment(object):
         return self._slice_info
 
     @property
-    def slice_timestamp(self):
-        return self.slice_info['__timestamp__']
+    def slice_id(self):
+        """Unique string ID for this experiment's slice
+        """
+        return "%0.3f" % self.slice_info['__timestamp__']
 
     @property
     def slice_path(self):
@@ -1051,10 +1082,10 @@ class Experiment(object):
             mplog = self.multipatch_log
         except TypeError:
             return None
-        lines = [l for l in open(mplog, 'rb').readlines() if 'surface_depth_changed' in l]
+        lines = [l for l in open(mplog, 'rb').readlines() if b'surface_depth_changed' in l]
         if len(lines) == 0:
             return None
-        line = lines[-1].rstrip(',\r\n')
+        line = lines[-1].rstrip(b',\r\n')
         return json.loads(line)['surface_depth']
 
     @property
@@ -1083,7 +1114,7 @@ class Experiment(object):
         """
         ss = os.path.join(self.path, 'sync_source')
         if os.path.isfile(ss):
-            return open(ss, 'rb').read()
+            return open(ss, 'rb').read().decode('latin1')
         else:
             return self.path
 

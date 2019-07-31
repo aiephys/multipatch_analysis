@@ -60,6 +60,7 @@ class SlicePipelineModule(DatabasePipelineModule):
             genotype = ';'.join(genotype.split(';') + [constants.INJECTIONS[inj]])
 
         fields = {
+            'ext_id': job_id,
             'acq_timestamp': info['__timestamp__'],
             'species': limsdata['organism'],
             'date_of_birth': limsdata['date_of_birth'],
@@ -128,7 +129,7 @@ def all_slices():
         if ts is None:
             print("MISSING TIMESTAMP: %s" % path)
             continue
-        _all_slices[ts] = path
+        _all_slices["%0.3f"%ts] = path
         
     try:
         tmpfile = cachefile+'.tmp'

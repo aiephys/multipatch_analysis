@@ -39,5 +39,5 @@ class GapJunctionPipelineModule(DatabasePipelineModule):
         q = session.query(db.GapJunction)
         q = q.filter(db.GapJunction.pair_id==db.Pair.id)
         q = q.filter(db.Pair.experiment_id==db.Experiment.id)
-        q = q.filter(db.Experiment.acq_timestamp.in_(job_ids))
+        q = q.filter(db.Experiment.ext_id.in_(job_ids))
         return q.all()
