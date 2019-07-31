@@ -10,7 +10,7 @@ import numpy as np
 import pandas
 import scipy.stats
 from sqlalchemy.orm import aliased
-from neuroanalysis.data import Trace, TraceList
+from neuroanalysis.data import TSeries, TSeriesList
 from neuroanalysis.baseline import float_mode
 from .fitting import fit_psp
 from .database import default_db as db
@@ -305,13 +305,13 @@ def analyze_pair_connectivity(amps, sign=None):
         ### generate the average response and psp fit
         
         # collect all bg and fg traces
-        # bg_traces = TraceList([Trace(data, sample_rate=db.default_sample_rate) for data in amps[clamp_mode, 'bg']['data']])
-        fg_traces = TraceList()
+        # bg_traces = TSeriesList([TSeries(data, sample_rate=db.default_sample_rate) for data in amps[clamp_mode, 'bg']['data']])
+        fg_traces = TSeriesList()
         for rec in fg:
             if not np.isfinite(rec['max_slope_time']) or rec['max_slope_time'] is None:
                 continue
             t0 = rec['response_start_time'] - rec['max_slope_time']   # time-align to presynaptic spike
-            trace = Trace(rec['data'], sample_rate=db.default_sample_rate, t0=t0)
+            trace = TSeries(rec['data'], sample_rate=db.default_sample_rate, t0=t0)
             fg_traces.append(trace)
         
         # get averages

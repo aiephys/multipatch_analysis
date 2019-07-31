@@ -11,7 +11,7 @@ import numpy as np
 import pyqtgraph as pg
 import scipy.stats
 
-from neuroanalysis.data import Trace
+from neuroanalysis.data import TSeries
 from multipatch_analysis.experiment_list import ExperimentList, cache_file
 from multipatch_analysis.cell_class import CellClass, classify_cells
 from multipatch_analysis.connectivity import query_pairs, measure_connectivity
@@ -22,7 +22,7 @@ from multipatch_analysis.ui.graphics import distance_plot
 def write_csv(fh, data, description, units='connection probability %'):
     """Used to generate csv file accompanying figure.
     """
-    if isinstance(data, Trace):
+    if isinstance(data, TSeries):
         write_csv(fh, data, description + "distance(um)")
         write_csv(fh, data, description + " %s" % units)
     else:

@@ -1,6 +1,6 @@
 """
 Scatter plot displays histogram of matrix data as well as element data when element is selected
-Trace plot displays average trace responses from each pair in a selected element
+TSeries plot displays average trace responses from each pair in a selected element
 """
 
 from __future__ import print_function, division
@@ -25,7 +25,7 @@ class HistogramTab(pg.QtGui.QWidget):
         self.v_splitter.setOrientation(pg.QtCore.Qt.Vertical)
         self.layout.addWidget(self.v_splitter)
         self.hist = MatrixHistogramPlot()
-        self.trace_plot = MatrixTracePlot()
+        self.trace_plot = MatrixTSeriesPlot()
         self.v_splitter.addWidget(self.hist)
         self.v_splitter.addWidget(self.trace_plot)
 
@@ -108,7 +108,7 @@ class MatrixHistogramPlot(pg.GraphicsLayoutWidget):
         self.trace_plot_list = []
 
 
-class MatrixTracePlot(pg.GraphicsLayoutWidget):
+class MatrixTSeriesPlot(pg.GraphicsLayoutWidget):
     def __init__(self):
         pg.GraphicsLayoutWidget.__init__(self)
         self.setRenderHints(self.renderHints() | pg.QtGui.QPainter.Antialiasing)

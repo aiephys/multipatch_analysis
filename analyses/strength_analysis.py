@@ -19,10 +19,11 @@ from sqlalchemy.orm import aliased
 import sklearn.svm, sklearn.preprocessing, sklearn.ensemble
 
 import pyqtgraph as pg
+import pyqtgraph.dockarea
 from pyqtgraph.Qt import QtGui, QtCore
 
 from neuroanalysis.ui.plot_grid import PlotGrid
-from neuroanalysis.data import Trace, TraceList
+from neuroanalysis.data import TSeries, TSeriesList
 from neuroanalysis import filter
 from neuroanalysis.event_detection import exp_deconvolve
 from neuroanalysis.baseline import float_mode
@@ -446,7 +447,7 @@ class ResponseStrengthAnalyzer(object):
                 trace_list.append(plot.plot(trace.time_values, trace.data, pen=(pen if qc_pass else qc_fail_pen)))
 
             if avg and len(traces) > 0:
-                mean = TraceList(traces).mean()
+                mean = TSeriesList(traces).mean()
                 trace_list.append(plot.plot(mean.time_values, mean.data, pen='g'))
                 trace_list[-1].setZValue(10)
 
@@ -985,7 +986,7 @@ def simulate_response(fg_recs, bg_results, amp, rtime, seed=None):
         fg_result = analyze_response_strength(rec, 'baseline')
         fg_results.append(fg_result)
 
-        traces.append(Trace(rec.data, sample_rate=db.default_sample_rate))
+        traces.append(TSeries(rec.data, sample_rate=db.default_sample_rate))
         traces[-1].amp = r_amps[k]
     fg_results = str_analysis_result_table(fg_results, fg_recs)
     conn_result = analyze_pair_connectivity({('ic', 'fg'): fg_results, ('ic', 'bg'): bg_results, ('vc', 'fg'): [], ('vc', 'bg'): []}, sign=1)

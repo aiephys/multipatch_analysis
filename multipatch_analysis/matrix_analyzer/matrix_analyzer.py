@@ -59,7 +59,7 @@ class Tabs(pg.QtGui.QTabWidget):
         pg.QtGui.QTabWidget.__init__(self)
 
         self.hist_tab = HistogramTab()
-        self.addTab(self.hist_tab, 'Histogram and Traces')
+        self.addTab(self.hist_tab, 'Histogram and TSeries')
         self.scatter_tab = ScatterPlotTab()
         self.addTab(self.scatter_tab, 'Scatter Plots')
         self.distance_tab = DistancePlotTab()
