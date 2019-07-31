@@ -3,7 +3,7 @@ import pyqtgraph as pg
 from sqlalchemy.orm import aliased
 from neuroanalysis.ui.plot_grid import PlotGrid
 from multipatch_analysis.database import database as db
-from neuroanalysis.data import Trace, TraceList
+from neuroanalysis.data import TSeries, TSeriesList
 
 def plot_features(organism=None, conn_type=None, calcium=None, age=None, sweep_thresh=None, fit_thresh=None):
     s = db.session()
@@ -78,11 +78,11 @@ def plot_features(organism=None, conn_type=None, calcium=None, age=None, sweep_t
             trace_list = []
             for pair in results:
                 #TODO set t0 to latency to align to foot of PSP
-                trace = Trace(data=pair.avg_psp, sample_rate=db.default_sample_rate)
+                trace = TSeries(data=pair.avg_psp, sample_rate=db.default_sample_rate)
                 trace_list.append(trace)
                 response_grid[i, 0].plot(trace.time_values, trace.data)
             if len(trace_list) > 0:
-                grand_trace = TraceList(trace_list).mean()
+                grand_trace = TSeriesList(trace_list).mean()
                 response_grid[i, 0].plot(grand_trace.time_values, grand_trace.data, pen='b')
                 response_grid[i, 0].setTitle('layer %s, %s-> layer %s, %s; n_synapses = %d' %
                                           (pre_layer, pre_cre, post_layer, post_cre, len(trace_list)))

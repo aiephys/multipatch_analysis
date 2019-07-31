@@ -1,5 +1,5 @@
 from multipatch_analysis.database import database as db
-from neuroanalysis.data import Trace, TraceList
+from neuroanalysis.data import TSeries, TSeriesList
 from neuroanalysis.fitting import fit_psp
 from neuroanalysis.baseline import float_mode
 
@@ -90,7 +90,7 @@ def update_analysis(limit=None):
 
 def first_pulse_features(pair, pulse_responses, pulse_response_amps):
 
-    avg_psp = TraceList(pulse_responses).mean()
+    avg_psp = TSeriesList(pulse_responses).mean()
     dt = avg_psp.dt
     avg_psp_baseline = float_mode(avg_psp.data[:int(10e-3/dt)])
     avg_psp_bsub = avg_psp.copy(data=avg_psp.data - avg_psp_baseline)
@@ -179,7 +179,7 @@ def filter_pulse_responses(pair):
         data = pr.data
         start_time = pr.start_time
         spike_time = stim_pulse.spikes[0].max_dvdt_time
-        data_trace = Trace(data=data, t0=start_time - spike_time, sample_rate=db.default_sample_rate)
+        data_trace = TSeries(data=data, t0=start_time - spike_time, sample_rate=db.default_sample_rate)
 
         if synapse_type == 'ex' and ex_qc_pass is True:
             pulse_responses.append(data_trace)

@@ -11,7 +11,7 @@ import pyqtgraph as pg
 import numpy as np
 from scipy import stats
 
-from neuroanalysis.data import Trace, TraceList
+from neuroanalysis.data import TSeries, TSeriesList
 import strength_analysis
 from strength_analysis import TableGroup
 from multipatch_analysis.database import database as db
@@ -77,9 +77,9 @@ def measure_limit(pair, session, classifier):
         #deconv_plot.plot(trace.time_values, trace.data, pen=(0, 0, 0, 20))
 
     ## plot average trace
-    #mean = TraceList(traces).mean()
+    #mean = TSeriesList(traces).mean()
     #trace_plot.plot(mean.time_values, mean.data, pen={'color':'g', 'width': 2}, shadowPen={'color':'k', 'width': 3}, antialias=True)
-    #mean = TraceList(deconvs).mean()
+    #mean = TSeriesList(deconvs).mean()
     #deconv_plot.plot(mean.time_values, mean.data, pen={'color':'g', 'width': 2}, shadowPen={'color':'k', 'width': 3}, antialias=True)
 
     #bins = np.arange(-0.001, 0.015, 0.0005) 

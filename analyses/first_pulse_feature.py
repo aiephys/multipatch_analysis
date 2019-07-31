@@ -7,7 +7,7 @@ from multipatch_analysis.experiment_list import cached_experiments
 from manuscript_figures import get_response, get_amplitude, response_filter, feature_anova, write_cache, trace_plot, \
     colors_human, colors_mouse, fail_rate, pulse_qc, feature_kw
 from synapse_comparison import load_cache, summary_plot_pulse
-from neuroanalysis.data import TraceList
+from neuroanalysis.data import TSeriesList
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.fitting import fit_psp
 from rep_connections import ee_connections, human_connections, no_include, all_connections, ie_connections, ii_connections, ei_connections
@@ -201,7 +201,7 @@ for expt in all_expts:
 # if len(grand_response[conn_type[0]]['trace']) == 0:
 #     continue
 # if len(grand_response[conn_type[0]]['trace']) > 1:
-#     grand_trace = TraceList(grand_response[conn_type[0]]['trace']).mean()
+#     grand_trace = TSeriesList(grand_response[conn_type[0]]['trace']).mean()
 # else:
 #     grand_trace = grand_response[conn_type[0]]['trace'][0]
 # n_synapses = len(grand_response[conn_type[0]]['trace'])

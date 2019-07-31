@@ -10,7 +10,7 @@ import sys, multiprocessing, time
 import numpy as np
 import pyqtgraph as pg
 
-from neuroanalysis.data import Trace
+from neuroanalysis.data import TSeries
 from neuroanalysis import filter
 from neuroanalysis.event_detection import exp_deconvolve
 from neuroanalysis.baseline import float_mode
@@ -140,7 +140,7 @@ def analyze_response_strength(rec, source, remove_artifacts=False, deconvolve=Tr
     3. Apply deconvolution / artifact removal / lpf
     4. Measure peak deflection on deconvolved trace
     """
-    data = Trace(rec.data, sample_rate=db.default_sample_rate)
+    data = TSeries(rec.data, sample_rate=db.default_sample_rate)
     if source == 'pulse_response':
         # Find stimulus pulse edges for artifact removal
         start = rec.pulse_start - rec.rec_start
