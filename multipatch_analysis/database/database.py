@@ -267,7 +267,8 @@ class Database(object):
             app_name = app_name or cls.default_app_name
             return "{host}/{db_name}?application_name={app_name}".format(host=host, db_name=db_name, app_name=app_name)
         else:
-            return host 
+            # for sqlite, db_name is the file path
+            return "{host}/{db_name}".format(host=host, db_name=db_name)
 
     def get_database(self, db_name):
         """Return a new Database object with the same hosts and orm base, but different db name
@@ -537,6 +538,8 @@ class Database(object):
     def bake_sqlite(self, sqlite_file, **kwds):
         """Dump a copy of this database to an sqlite file.
         """
+        if os.path.exists(sqlite_file):
+            raise Exception("File %s already exists" % sqlite_file)
         sqlite_db = Database(ro_host="sqlite://", rw_host="sqlite://", db_name=sqlite_file, ormbase=self.ormbase)
         sqlite_db.create_tables()
         
