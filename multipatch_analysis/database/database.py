@@ -529,17 +529,17 @@ class Database(object):
         with self.rw_engine.begin() as conn:
             if self.backend == 'postgresql':
                 conn.connection.set_isolation_level(0)
-            if tables is None:
-                conn.execute('vacuum analyze')
+                if tables is None:
+                    conn.execute('vacuum analyze')
+                else:
+                    for table in tables:
+                        conn.execute('vacuum analyze %s' % table)
             else:
-                for table in tables:
-                    conn.execute('vacuum analyze %s' % table)
+                conn.execute('vacuum')
 
     def bake_sqlite(self, sqlite_file, **kwds):
         """Dump a copy of this database to an sqlite file.
         """
-        if os.path.exists(sqlite_file):
-            raise Exception("File %s already exists" % sqlite_file)
         sqlite_db = Database(ro_host="sqlite://", rw_host="sqlite://", db_name=sqlite_file, ormbase=self.ormbase)
         sqlite_db.create_tables()
         
@@ -589,6 +589,7 @@ class Database(object):
             
             # read from table in background thread, write to table in main thread.
             reader = TableReadThread(source_db, table)
+            i = 0
             for i,rec in enumerate(reader):
                 try:
                     write_session.execute(table.insert(rec))
@@ -627,7 +628,7 @@ class TableReadThread(threading.Thread):
         self.table = table
         self.chunksize = chunksize
         self.queue = queue.Queue(maxsize=5)
-        self.max_id = db.session().query(func.max(table.columns['id'])).all()[0][0]
+        self.max_id = db.session().query(func.max(table.columns['id'])).all()[0][0] or 0
         self.start()
         
     def run(self):
@@ -644,6 +645,7 @@ class TableReadThread(threading.Thread):
             session.rollback()
             session.close()
         except Exception as exc:
+            sys.excepthook(*sys.exc_info())
             self.queue.put(exc)
             raise
     

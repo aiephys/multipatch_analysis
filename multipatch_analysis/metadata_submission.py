@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from collections import OrderedDict
 import acq4
 
-from . import config, lims, constants, genotypes, experiment_list
+from . import config, lims, constants, genotypes
 from . import yaml_local  # adds support for OrderedDict
 
 
