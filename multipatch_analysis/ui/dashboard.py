@@ -49,7 +49,8 @@ class Dashboard(QtGui.QWidget):
             ('20x', 'U100'), 
             ('cell map', 'U100'), 
             ('63x', 'U100'), 
-            ('morphology', 'U100')
+            ('morphology', 'U100'),
+            ('layers drawn', 'U100')
         ]
 
         # data tracked but not displayed
@@ -706,6 +707,18 @@ class ExperimentMetadata(Experiment):
                             rec['cell map'] = mapped
                         else:
                             rec['cell map'] = False
+                        if rec['cell map'] is True:
+                            layers = [lims.cell_layer(cell) for cell in cell_specimens]
+                            layers_drawn = [layer is not None for layer in layers]
+                            rec['layers drawn'] = all(layers_drawn)
+                            morpho = database.query(database.Morphology).all()
+                            cell_morpho = [cell.morpho_db_hash for cell in morpho if cell.cell.meta.get('lims_specimen_id') in cell_specimens]
+                            has_morpho = [True for cell in cell_morpho if cell != hash(None)]
+                            rec['morphology'] = any(has_morpho)
+                        else:
+                            rec['layers drawn'] = '-'
+                            rec['morphology'] = '-'
+
                         image_tags = lims.specimen_tags(cell_cluster)
                         if image_tags is not None:
                             if 'cell map no go' in image_tags:
