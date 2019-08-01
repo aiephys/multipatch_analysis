@@ -25,6 +25,7 @@ from .pair import Pair
 from .electrode import Electrode
 from .data import MultiPatchDataset
 from .pipette_metadata import PipetteMetadata
+from . import data_notes_db
 
 
 class Experiment(object):
@@ -164,12 +165,22 @@ class Experiment(object):
                     synapse = None if syn_calls is None else ((i, j) in syn_calls)
                     gap_calls = self.gap_calls
                     electrical = None if gap_calls is None else ((i, j) in gap_calls)
+                    synapse_type = None
+
+                    # If this pair has a record in the data notes DB, then it overrides
+                    # anything found in pipettes.yml
+                    pair_notes = data_notes_db.get_pair_notes(self.uid, pre_cell.cell_id, post_cell.cell_id)
+                    if pair_notes is not None:
+                        electrical = pair_notes['gap_junction']
+                        synapse_type = pair_notes['synapse_type']
+                        synapse = synapse_type in ('ex', 'in')
                     
                     pair = Pair(
                         experiment=self,
                         pre_cell=pre_cell,
                         post_cell=post_cell,
                         synapse=synapse,
+                        synapse_type=synapse_type,
                         electrical=electrical,
                     )
                     self._pairs[pre_cell.cell_id, post_cell.cell_id] = pair

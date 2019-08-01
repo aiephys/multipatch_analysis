@@ -10,6 +10,7 @@ from .experiment import ExperimentPipelineModule
 from .dataset import DatasetPipelineModule
 from .pulse_response import PulseResponsePipelineModule
 from ...avg_response_fit import get_pair_avg_fits
+from ...data import data_notes_db as notes_db
 
 
 class AvgResponseFitPipelineModule(DatabasePipelineModule):
@@ -29,15 +30,18 @@ class AvgResponseFitPipelineModule(DatabasePipelineModule):
 
         for pair in expt.pair_list:
             fits = get_pair_avg_fits(pair, session, s2)
-                        
-            results = {
-                'latency': xoffset,
-                'fit_parameters': fit_parameters,
-            }
-
-            # Write new record to DB
-            conn = db.AvgResponseFit(pair_id=pair.id, **results)
-            session.add(conn)
+            for (mode, holding), fit in fits.items():
+                rec = db.AvgResponseFit(
+                    pair_id=pair.id,
+                    clamp_mode=mode,
+                    holding=holding,
+                    nrmse=fit['nrmse'],
+                    initial_xoffset=fit['latency'],
+                    manual_qc_pass=fit['matches_qc_pass'],
+                )
+                for k in ['xoffset', 'yoffset', 'amp', 'rise_time', 'decay_tau', 'exp_amp', 'exp_tau']:
+                    setattr(rec, 'fit_'+k, fit[k])
+                session.add(rec)
         
     def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.

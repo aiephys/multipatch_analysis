@@ -1,4 +1,5 @@
 import os
+from collections import OrderedDict
 import yaml
 from .. import yaml_local
 
@@ -21,8 +22,17 @@ class PipetteMetadata(object):
 
         if hasattr(yaml, 'FullLoader'):
             # pyyaml new API
-            self.pipettes = yaml.load(open(yml_file, 'rb'), Loader=yaml.FullLoader)
+            pipettes = yaml.load(open(yml_file, 'rb'), Loader=yaml.FullLoader)
         else:
             # pyyaml old API
-            self.pipettes = yaml.load(open(yml_file, 'rb'))
+            pipettes = yaml.load(open(yml_file, 'rb'))
 
+        # convert integer pipette IDs to str, to match data models downstream
+        self.pipettes = OrderedDict()
+        for k,v in pipettes.items():
+            self.pipettes[str(k)] = v
+            if v['synapse_to'] is not None:
+                v['synapse_to'] = [str(x) for x in v['synapse_to']]
+            if v['gap_to'] is not None:
+                v['gap_to'] = [str(x) for x in v['gap_to']]
+            

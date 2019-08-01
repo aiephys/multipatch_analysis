@@ -23,5 +23,14 @@ db = Database(config.synphys_db_host, config.synphys_db_host_rw, "data_notes", D
 db.create_tables()
 
 
-
-
+def get_pair_notes(expt_id, pre_cell_id, post_cell_id):
+    q = db.query(PairNotes.notes).filter(PairNotes.expt_id==expt_id)
+    q = q.filter(PairNotes.pre_cell_id==pre_cell_id)
+    q = q.filter(PairNotes.post_cell_id==post_cell_id)
+    
+    recs = q.all()
+    if len(recs) == 0:
+        return None
+    elif len(recs) > 1:
+        raise Exception("Multiple records found in pair_notes for pair %s %s %s!" % (expt_id, pre_cell_id, post_cell_id))
+    return recs[0].notes

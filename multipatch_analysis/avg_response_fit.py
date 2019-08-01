@@ -10,7 +10,7 @@ from neuroanalysis.data import TSeries, TSeriesList
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.fitting import Psp, StackedPsp
 from multipatch_analysis.database import default_db as db
-import multipatch_analysis.data_notes_db as notes_db
+import multipatch_analysis.data.data_notes_db as notes_db
 from multipatch_analysis.qc import spike_qc
 from multipatch_analysis.fitting import fit_psp
 
@@ -79,7 +79,7 @@ def response_query(session, pair):
     )
     q = q.join(db.StimPulse, db.PulseResponse.stim_pulse)
     q = q.join(db.StimSpike, db.StimSpike.stim_pulse_id==db.StimPulse.id)
-    q = q.join(db.Recording, db.PulseResponse.recording)traces
+    q = q.join(db.Recording, db.PulseResponse.recording)
     q = q.join(db.PatchClampRecording)
     q = q.join(db.MultiPatchProbe)
     q = q.filter(db.PulseResponse.pair_id==pair.id)
@@ -152,13 +152,7 @@ def fit_avg_response(traces, mode, holding, latency, sign):
         if len(traces['qc_pass']) == 0:
             return output_fit_parameters, x_offset, None
         
-<<<<<<< HEAD
-        grand_trace = TraceList(traces['qc_pass']).mean()
-||||||| merged common ancestors
-        grand_trace = TraceList(traces[mode][holding]['qc_pass']).mean()
-=======
-        grand_trace = TSeriesList(traces[mode][holding]['qc_pass']).mean()
->>>>>>> master
+        grand_trace = TSeriesList(traces['qc_pass']).mean()
 
         weight = np.ones(len(grand_trace.data))*10.  #set everything to ten initially
         weight[int(1e-3/db.default_sample_rate):int(3e-3/db.default_sample_rate)] = 30.  #area around steep PSP rise 

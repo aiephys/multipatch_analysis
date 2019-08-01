@@ -22,12 +22,12 @@ class Pair(object):
     electrical : bool | None
         Whether an electrical synapse connects pre_cell to post_cell
     """
-    def __init__(self, experiment, pre_cell, post_cell, synapse=None, synapse_sign=None, electrical=None):
+    def __init__(self, experiment, pre_cell, post_cell, synapse=None, synapse_type=None, electrical=None):
         self.experiment = experiment
         self.pre_cell = pre_cell
         self.post_cell = post_cell
         self.synapse = synapse
-        self.synapse_sign = synapse_sign
+        self.synapse_type = synapse_type
         self.electrical = electrical
 
     @property

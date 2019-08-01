@@ -109,9 +109,10 @@ class ExperimentPipelineModule(DatabasePipelineModule):
                 pre_cell=pre_cell_entry,
                 post_cell=post_cell_entry,
                 synapse=pair.synapse,
+                synapse_type=pair.synapse_type,
                 electrical=pair.electrical,
-                n_ex_test_spikes=0,  # will be counted later
-                n_in_test_spikes=0,
+                n_ex_test_spikes=None,  # will be counted later
+                n_in_test_spikes=None,
                 distance=pair.distance,
             )
             session.add(pair_entry)
