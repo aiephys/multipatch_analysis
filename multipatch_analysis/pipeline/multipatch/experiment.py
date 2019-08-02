@@ -7,7 +7,7 @@ from acq4.util.DataManager import getDirHandle
 from ..pipeline_module import DatabasePipelineModule
 from ... import config, synphys_cache, lims
 from ...util import datetime_to_timestamp
-from ...experiment import Experiment
+from ...data.experiment import Experiment
 from .slice import SlicePipelineModule
 
 

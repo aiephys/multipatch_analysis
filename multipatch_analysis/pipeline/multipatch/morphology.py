@@ -8,7 +8,7 @@ from __future__ import print_function, division
 import os, datetime
 from collections import OrderedDict
 from ...util import timestamp_to_datetime, optional_import
-from ...pipette_metadata import PipetteMetadata
+from ...data.pipette_metadata import PipetteMetadata
 from ... import config, lims
 from ..pipeline_module import DatabasePipelineModule
 from .experiment import ExperimentPipelineModule
