@@ -20,7 +20,7 @@ col_names = {
                 'dendrite_type': {'name': 'dendrite_type', 'type': ['spiny', 'aspiny', 'sparsely spiny', 'NEI']},
                 'Apical_truncation_distance': {'name': 'apical_trunc_distance', 'type': 'float'},
                 'Axon_truncation_distance': {'name': 'axon_trunc_distance', 'type': 'float'},
-                'Axon origination': {'name': 'axon_origin', 'type': ['soma', 'dendrite', 'NEI']},
+                'Axon origination': {'name': 'axon_origin', 'type': ['soma', 'dendrite', 'unclear', 'NEI']},
                 'Axon_truncation': {'name': 'axon_truncation', 'type': ['truncated', 'borderline', 'intact', 'unclear', 'NEI']},
                 'Apical_truncation': {'name': 'apical_truncation', 'type': ['truncated', 'borderline', 'intact','unclear', 'NEI']},
 
