@@ -10,26 +10,24 @@ from .experiment import ExperimentPipelineModule
 from .dataset import DatasetPipelineModule
 from .pulse_response import PulseResponsePipelineModule
 from ...avg_response_fit import get_pair_avg_fits
-from ...data import data_notes_db as notes_db
 
 
 class AvgResponseFitPipelineModule(DatabasePipelineModule):
     """Generate fit to response average for all pairs per experiment
     """
     name = 'avg_response_fit'
-    dependencies = [ExperimentPipelineModule, DatasetPipelineModule, PulseResponsePipelineModule]
+    dependencies = [ExperimentPipelineModule, DatasetPipelineModule]
     table_group = ['avg_response_fit']
     
     @classmethod
     def create_db_entries(cls, job, session):
         db = job['database']
         expt_id = job['job_id']
-        s2 = notes_db.db.session()
         
         expt = db.experiment_from_timestamp(expt_id, session=session)
 
         for pair in expt.pair_list:
-            fits = get_pair_avg_fits(pair, session, s2)
+            fits = get_pair_avg_fits(pair, session)
             for (mode, holding), fit in fits.items():
                 rec = db.AvgResponseFit(
                     pair_id=pair.id,

@@ -27,4 +27,4 @@ AvgResponseFit = make_table(
 )
 
 Pair.avg_response_fits = relationship(AvgResponseFit, back_populates="pair", cascade="delete", single_parent=True, uselist=True)
-AvgResponseFit.pair = relationship(Pair, back_populates="avg_response_fit", single_parent=True)
+AvgResponseFit.pair = relationship(Pair, back_populates="avg_response_fits", single_parent=True)

@@ -34,7 +34,7 @@ comment_hashtag.sort(key=lambda x:x[1])
 comment_hashtag = [''] + comment_hashtag
 
 modes = ['vc', 'ic']
-holdings = ['-55', '-70']
+holdings = [-55, -70]
 
 
 class MainWindow(pg.QtGui.QWidget):
@@ -281,16 +281,23 @@ class TSeriesPlot(pg.GraphicsLayoutWidget):
         
         self.items = []
 
-    def plot_traces(self, traces_dict):  
-        for i, holding in enumerate(traces_dict.keys()):
-            for qc, traces in traces_dict[holding].items():
-                if len(traces) == 0:
+    def plot_responses(self, pulse_responses):
+        self.plot_traces(pulse_responses)
+        self.plot_spikes(pulse_responses)
+
+    def plot_traces(self, pulse_responses):  
+        for i, holding in enumerate(pulse_responses.keys()):
+            for qc, prs in pulse_responses[holding].items():
+                if len(prs) == 0:
                     continue
-                for trace in traces:
+                traces = []
+                for pr in prs:
+                    trace = pr.post_tseries
                     item = self.trace_plots[i].plot(trace.time_values, trace.data, pen=self.qc_color[qc])
                     if qc == 'qc_fail':
                         item.setZValue(-10)
                     self.items.append(item)
+                    traces.append(trace)
                 if qc == 'qc_pass':
                     grand_trace = TSeriesList(traces).mean()
                     item = self.trace_plots[i].plot(grand_trace.time_values, grand_trace.data, pen={'color': 'b', 'width': 2})
@@ -300,12 +307,13 @@ class TSeriesPlot(pg.GraphicsLayoutWidget):
             # y_range = [grand_trace.data.min(), grand_trace.data.max()]
             # self.plots[i].setYRange(y_range[0], y_range[1], padding=1)
 
-    def plot_spikes(self, spikes_dict):
-        for i, holding in enumerate(spikes_dict.keys()):
-            for qc, spikes in spikes_dict[holding].items():
-                if len(spikes) == 0:
+    def plot_spikes(self, pulse_responses):
+        for i, holding in enumerate(pulse_responses.keys()):
+            for qc, prs in pulse_responses[holding].items():
+                if len(prs) == 0:
                     continue
-                for spike in spikes:
+                for pr in prs:
+                    spike = pr.pre_tseries
                     item = self.spike_plots[i].plot(spike.time_values, spike.data, pen=self.qc_color[qc])
                     if qc == 'qc_fail':
                         item.setZValue(-10)
@@ -415,8 +423,7 @@ class PairAnalysis(object):
         self.fit_compare = pg.DiffTreeWidget()
         self.meta_compare = pg.DiffTreeWidget()
         self.nrmse_thresh = 4
-        self.traces = OrderedDict()
-        self.spikes = OrderedDict()
+        self.sorted_responses = None
         self.signs = {
             'vc': {
                 '-55': {'ex': '-', 'in': '+'}, 
@@ -476,27 +483,27 @@ class PairAnalysis(object):
             print ('loading responses...')
             q = response_query(default_session, pair)
             self.pulse_responses = q.all()
-            print('got this many responses: %d' % len(self.pulse_responses))
+            print('got this %d pulse responses' % len(self.pulse_responses))
                 
             if pair.synapse is True:
-                synapse_type = pair.connection_strength.synapse_type if pair.connection_strength is not None else None
+                synapse_type = pair.synapse_type
             else:
                 synapse_type = None
             pair_params = {'Synapse call': synapse_type, 'Gap junction call': pair.electrical}
             self.ctrl_panel.update_params(**pair_params)
 
     def analyze_responses(self):
-        self.traces, self.spikes = sort_responses(self.pulse_responses)
-        fitable_responses = []
+        self.sorted_responses = sort_responses(self.pulse_responses)
+
+        got_fitable_responses = False
         for mode in modes:
             for holding in holdings:
-                fitable_responses.append(bool(self.traces[mode][holding]['qc_pass']))
-        if not any(fitable_responses):
+                got_fitable_responses = got_fitable_responses or self.sorted_responses[mode, holding]['qc_pass'] > 0
+        if not got_fitable_responses:
             print('No fitable responses, bailing out')
-        self.vc_plot.plot_traces(self.traces['vc'])
-        self.vc_plot.plot_spikes(self.spikes['vc'])
-        self.ic_plot.plot_traces(self.traces['ic'])
-        self.ic_plot.plot_spikes(self.spikes['ic'])
+        
+        self.vc_plot.plot_responses({holding: self.sorted_responses['vc', holding] for holding in holdings})
+        self.ic_plot.plot_responses({holding: self.sorted_responses['ic', holding] for holding in holdings})
 
     def ic_fit_response_update(self):
         latency = self.ctrl_panel.params['Latency', 'IC']

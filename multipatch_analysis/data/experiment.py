@@ -461,7 +461,7 @@ class Experiment(object):
                         if m is None:
                             post_id = None  # triggers ValueError below
                         else:
-                            post_id = int(m.groups()[0])
+                            post_id = m.groups()[0]
                         if m.groups()[1] == '?':
                             # ignore questionable connections for now
                             continue
