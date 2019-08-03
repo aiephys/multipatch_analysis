@@ -30,31 +30,38 @@ def get_pair_avg_fits(pair, session, notes_session=None):
         {(mode, holding): {
             'traces': , 
             'average', 
-            'fit_params'
+            'fit_params',
+            'initial_latency',
+            'fit_qc_pass',
             }, 
         }
     
     """
+    prof = pg.debug.Profiler(disabled=False, delayed=False)
     results = {}
     
     # query and sort pulse responses
     records = response_query(session=session, pair=pair).all()
+    prof('query prs')
     pulse_responses = [rec[0] for rec in records]
     sorted_responses = sort_responses(pulse_responses)
-    
+    prof('sort prs')
+
     notes = notes_db.get_pair_notes(pair.experiment.ext_id, pair.pre_cell.ext_id, pair.post_cell.ext_id, session=notes_session)
-    
+    prof('get pair notes')
+
     for (clamp_mode, holding), responses in sorted_responses.items():
         if len(responses['qc_pass']) == 0:
             results[clamp_mode, holding] = None
             continue
             
         if notes is None:
+            init_latency = None
             latency_window = (0.5e-3, 8e-3)
             sign = 0
         else:
-            latency = notes['fit_parameters']['initial'][clamp_mode][str(holding)]['xoffset']
-            latency_window = (latency - 100e-6, latency + 100e-6)
+            init_latency = notes['fit_parameters']['initial'][clamp_mode][str(holding)]['xoffset']
+            latency_window = (init_latency - 100e-6, init_latency + 100e-6)
             
             # Expected response sign depends on synapse type, clamp mode, and holding:
             if notes['synapse_type'] == 'ex':
@@ -65,12 +72,16 @@ def get_pair_avg_fits(pair, session, notes_session=None):
                 else:
                     sign = 1 if clamp_mode == 'vc' else -1
 
-        fit_params, avg_response = fit_avg_pulse_response(responses['qc_pass'], latency_window, sign)
+        prof('prepare %s %s' % (clamp_mode, holding))
+        fit_result, avg_response = fit_avg_pulse_response(responses['qc_pass'], latency_window, sign)
+        prof('fit avg')
         
         results[clamp_mode, holding] = {
             'responses': responses,
             'average': avg_response,
-            'fit_params': fit_params,
+            'initial_latency': init_latency,
+            'fit_result': fit_result,
+            'fit_qc_pass': check_fit_qc_pass(fit_result, notes),
         }
 
     return results
@@ -113,10 +124,28 @@ def sort_responses(pulse_responses):
         holding = post_rec.patch_clamp_recording.baseline_potential
 
         if in_limits[0] <= holding < in_limits[1]:
-            qc_pass = qc[pr.in_qc_pass and pr.stim_pulse.n_spikes == 1]
+            qc_pass = qc[pr.in_qc_pass and pr.stim_pulse.n_spikes == 1 and pr.stim_pulse.first_spike_time is not None]
             sorted_responses[clamp_mode, -55][qc_pass].append(pr)
         elif ex_limits[0] <= holding < ex_limits[1]:
-            qc_pass = qc[pr.ex_qc_pass and pr.stim_pulse.n_spikes == 1]
+            qc_pass = qc[pr.ex_qc_pass and pr.stim_pulse.n_spikes == 1 and pr.stim_pulse.first_spike_time is not None]
             sorted_responses[clamp_mode, -70][qc_pass].append(pr)
     
     return sorted_responses
+
+
+def check_fit_qc_pass(fit_result, notes_record):
+    if notes_record is None:
+        return False
+    if notes_record['qc_pass'] is not True:
+        return False
+    expected_params = notes_record['fit_result']
+    fit_params = fit_result.best_values
+    for k,v1 in fit_params.items():
+        v2 = expected_params[k]
+        if abs(v1-v2) / v2 > 0.1:
+            return False
+    if abs(fit_params['xoffset'] - expected_params['xoffset']) > 100e-6:
+        return False
+
+    return True
+    

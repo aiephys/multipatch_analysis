@@ -122,6 +122,7 @@ def all_slices():
             return pickle.load(open(cachefile, 'rb'))
     
     slice_dirs = sorted(glob.glob(os.path.join(config.synphys_data, '*', 'slice_*')))
+    print(slice_dirs)
     _all_slices = OrderedDict()
     for path in slice_dirs:
         dh = getDirHandle(path)

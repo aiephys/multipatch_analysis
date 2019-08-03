@@ -29,16 +29,20 @@ class AvgResponseFitPipelineModule(DatabasePipelineModule):
         for pair in expt.pair_list:
             fits = get_pair_avg_fits(pair, session)
             for (mode, holding), fit in fits.items():
+                if fit is None:
+                    continue
                 rec = db.AvgResponseFit(
                     pair_id=pair.id,
                     clamp_mode=mode,
                     holding=holding,
-                    nrmse=fit['nrmse'],
-                    initial_xoffset=fit['latency'],
-                    manual_qc_pass=fit['matches_qc_pass'],
+                    nrmse=fit['fit_result'].nrmse(),
+                    initial_xoffset=fit['initial_latency'],
+                    manual_qc_pass=fit['fit_qc_pass'],
                 )
+
                 for k in ['xoffset', 'yoffset', 'amp', 'rise_time', 'decay_tau', 'exp_amp', 'exp_tau']:
-                    setattr(rec, 'fit_'+k, fit[k])
+                    setattr(rec, 'fit_'+k, fit['fit_result'].best_values[k])
+
                 session.add(rec)
         
     def job_records(self, job_ids, session):

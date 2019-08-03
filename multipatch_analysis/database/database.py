@@ -162,6 +162,7 @@ class Database(object):
     - Automatically build/dispose ro and rw engines (especially after fork)
     - Generate ro/rw sessions on demand
     - Methods for creating / dropping databases
+    - Clone databases across backends
     """
     _all_dbs = weakref.WeakSet()
     default_app_name = ('mp_a:' + ' '.join(sys.argv))[:60]
@@ -202,26 +203,6 @@ class Database(object):
         import pandas
         return pandas.read_sql(query.statement, query.session.bind)
 
-    # def use_default_session(self, fn):
-    #     """Decorator used to auto-fill `session` keyword arguments
-    #     with a global default Session instance.
-        
-    #     If the global session is used, then it will be rolled back after 
-    #     the decorated function returns (to prevent idle-in-transaction timeouts).
-    #     """
-    #     def wrap_with_session(*args, **kwds):
-    #         used_default_session = False
-    #         if kwds.get('session', None) is None:
-    #             kwds['session'] = self.default_session
-    #             used_default_session = True
-    #         try:
-    #             ret = fn(*args, **kwds)
-    #             return ret
-    #         finally:
-    #             if used_default_session:
-    #                 self.default_session.rollback()
-    #     return wrap_with_session    
-
     def _find_mappings(self):
         mappings = {cls.__tablename__:cls for cls in self.ormbase.__subclasses__()}
         order = [t.name for t in self.ormbase.metadata.sorted_tables]
@@ -246,7 +227,7 @@ class Database(object):
     def __str__(self):
         # str(engine) does a nice job of masking passwords
         s = str(self.ro_engine)[7:]
-        s.rstrip(')')
+        s = s.rstrip(')')
         s = s.partition('?')[0]
         return s
 
@@ -268,7 +249,9 @@ class Database(object):
             return "{host}/{db_name}?application_name={app_name}".format(host=host, db_name=db_name, app_name=app_name)
         else:
             # for sqlite, db_name is the file path
-            return "{host}/{db_name}".format(host=host, db_name=db_name)
+            if not host.endswith('/'):
+                host = host + '/'
+            return host + db_name
 
     def get_database(self, db_name):
         """Return a new Database object with the same hosts and orm base, but different db name
@@ -503,7 +486,8 @@ class Database(object):
             return
             
         if self.backend == 'sqlite':
-            self.rw_engine.execute('drop table %s' % (','.join(drops)))
+            for table in drops:
+                self.rw_engine.execute('drop table %s' % table)
         else:
             self.rw_engine.execute('drop table %s cascade' % (','.join(drops)))
 
