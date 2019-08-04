@@ -15,7 +15,7 @@ from multipatch_analysis.qc import spike_qc
 from multipatch_analysis.fitting import fit_avg_pulse_response
 
 
-def get_pair_avg_fits(pair, session, notes_session=None):
+def get_pair_avg_fits(pair, session, notes_session=None, ui=None):
     """Return PSP fits to averaged responses for this pair.
     
     Operations are:
@@ -38,6 +38,7 @@ def get_pair_avg_fits(pair, session, notes_session=None):
     
     """
     prof = pg.debug.Profiler(disabled=False, delayed=False)
+    prof(str(pair))
     results = {}
     
     # query and sort pulse responses
@@ -49,6 +50,10 @@ def get_pair_avg_fits(pair, session, notes_session=None):
 
     notes = notes_db.get_pair_notes(pair.experiment.ext_id, pair.pre_cell.ext_id, pair.post_cell.ext_id, session=notes_session)
     prof('get pair notes')
+
+    if ui is not None:
+        ui.show_pulse_responses(sorted_responses)
+        ui.show_data_notes(clamp_mode, holding, notes)
 
     for (clamp_mode, holding), responses in sorted_responses.items():
         if len(responses['qc_pass']) == 0:
@@ -75,7 +80,10 @@ def get_pair_avg_fits(pair, session, notes_session=None):
         prof('prepare %s %s' % (clamp_mode, holding))
         fit_result, avg_response = fit_avg_pulse_response(responses['qc_pass'], latency_window, sign)
         prof('fit avg')
-        
+
+        if ui is not None:
+            ui.show_fit_results(clamp_mode, holding, fit_result, avg_response)
+
         results[clamp_mode, holding] = {
             'responses': responses,
             'average': avg_response,
@@ -134,6 +142,7 @@ def sort_responses(pulse_responses):
 
 
 def check_fit_qc_pass(fit_result, notes_record):
+    raise Exception("check notes structure")
     if notes_record is None:
         return False
     if notes_record['qc_pass'] is not True:
