@@ -1,25 +1,32 @@
 import pyqtgraph as pg
+from neuroanalysis.ui.plot_grid import PlotGrid
+from multipatch_analysis.data import PulseResponseList
 
 
-class PairAvgFitUi(object):
+class AvgResponseFitUi(object):
     def __init__(self):
         self.widget = pg.QtGui.QSplitter(pg.QtCore.Qt.Horizontal)
         self.plots = {}
         for clamp_mode in ('ic', 'vc'):
             units = {'ic': 'V', 'vc': 'A'}[clamp_mode]
             for holding in (-70, -55):
-                self.plots[clamp_mode, holding] = PulseResponsePlot("%s %d" % (clamp_mode, holding), units)
+                prp = PulseResponsePlot("%s %d" % (clamp_mode, holding), units)
+                self.plots[clamp_mode, holding] = prp
+                self.widget.addWidget(prp.grid)
 
     def show_pulse_responses(self, prs):
         for (clamp_mode, holding), plot in self.plots.items():
             plot.show_pulse_responses(prs[clamp_mode, holding]['qc_pass'], prs[clamp_mode, holding]['qc_fail'])
 
     def show_data_notes(self, notes):
+        if notes is None:
+            return
         for (clamp_mode, holding), plot in self.plots.items():
-            plot.show_expected_fit(notes[clamp_mode, holding])
+            plot.show_data_notes(notes[clamp_mode, holding])
 
-    def show_fit_results(self, results, average):
-
+    def show_fit_results(self, clamp_mode, holding, results, average):
+        plot = self.plots[clamp_mode, holding]
+        plot.show_fit_results(results, average)
 
 
 class PulseResponsePlot(object):
@@ -39,46 +46,35 @@ class PulseResponsePlot(object):
         self.response_plot.setLabel('bottom', text='Time from spike', units='s')
         self.response_plot.setXLink(self.spike_plot)
         # self.response_plot.setLabel('left', text="%d holding" % int(holding), units=units)
+
+        self.response_plot.enableAutoRange(False, False)
         
         self.items = []
 
-    def plot_responses(self, pulse_responses):
-        self.plot_traces(pulse_responses)
-        self.plot_spikes(pulse_responses)
+    def show_pulse_responses(self, passed_prs, failed_prs):
+        for prs, pen in [(failed_prs, (255, 0, 0, 40)), (passed_prs, (255, 255, 255, 40))]:
+            if len(prs) == 0:
+                continue
 
-    def plot_traces(self, pulse_responses):  
-        for i, holding in enumerate(pulse_responses.keys()):
-            for qc, prs in pulse_responses[holding].items():
-                if len(prs) == 0:
-                    continue
-                traces = []
-                for pr in prs:
-                    trace = pr.post_tseries
-                    item = self.trace_plots[i].plot(trace.time_values, trace.data, pen=self.qc_color[qc])
-                    if qc == 'qc_fail':
-                        item.setZValue(-10)
-                    self.items.append(item)
-                    traces.append(trace)
-                if qc == 'qc_pass':
-                    grand_trace = TSeriesList(traces).mean()
-                    item = self.trace_plots[i].plot(grand_trace.time_values, grand_trace.data, pen={'color': 'b', 'width': 2})
-                    self.items.append(item)
-            self.trace_plots[i].autoRange()
-            self.trace_plots[i].setXRange(-5e-3, 10e-3)
-            # y_range = [grand_trace.data.min(), grand_trace.data.max()]
-            # self.plots[i].setYRange(y_range[0], y_range[1], padding=1)
+            prl = PulseResponseList(prs)
 
-    def plot_spikes(self, pulse_responses):
-        for i, holding in enumerate(pulse_responses.keys()):
-            for qc, prs in pulse_responses[holding].items():
-                if len(prs) == 0:
-                    continue
-                for pr in prs:
-                    spike = pr.pre_tseries
-                    item = self.spike_plots[i].plot(spike.time_values, spike.data, pen=self.qc_color[qc])
-                    if qc == 'qc_fail':
-                        item.setZValue(-10)
-                    self.items.append(item)
+            post_ts = prl.post_tseries(align='spike', bsub=True)
+            for ts in post_ts:
+                item = self.response_plot.plot(ts.time_values, ts.data, pen=pen)
+                self.items.append(item)
+
+            pre_ts = prl.pre_tseries(align='spike', bsub=True)
+            for ts in pre_ts:
+                item = self.spike_plot.plot(ts.time_values, ts.data, pen=pen)
+                self.items.append(item)
+
+        self.response_plot.autoRange()
+
+    def show_data_notes(self, notes):
+        pass
+
+    def show_fit_results(self, results, average):
+        pass
 
     def plot_fit(self, trace, fit, holding, fit_pass=False):
         if holding == '-55':

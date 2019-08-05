@@ -71,7 +71,7 @@ backup_paths:
 
 configfile = os.path.join(os.path.dirname(__file__), '..', 'config.yml')
 if not os.path.isfile(configfile):
-    open(configfile, 'wb').write(template)
+    open(configfile, 'wb').write(template.encode('utf8'))
 
 if hasattr(yaml, 'FullLoader'):
     # pyyaml new API

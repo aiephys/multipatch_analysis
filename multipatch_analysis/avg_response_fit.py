@@ -53,7 +53,8 @@ def get_pair_avg_fits(pair, session, notes_session=None, ui=None):
 
     if ui is not None:
         ui.show_pulse_responses(sorted_responses)
-        ui.show_data_notes(clamp_mode, holding, notes)
+        ui.show_data_notes(notes)
+        prof('update ui')
 
     for (clamp_mode, holding), responses in sorted_responses.items():
         if len(responses['qc_pass']) == 0:
@@ -142,9 +143,9 @@ def sort_responses(pulse_responses):
 
 
 def check_fit_qc_pass(fit_result, notes_record):
-    raise Exception("check notes structure")
     if notes_record is None:
         return False
+    raise Exception("check notes structure")
     if notes_record['qc_pass'] is not True:
         return False
     expected_params = notes_record['fit_result']
@@ -157,4 +158,3 @@ def check_fit_qc_pass(fit_result, notes_record):
         return False
 
     return True
-    

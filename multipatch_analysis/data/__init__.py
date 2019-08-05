@@ -4,5 +4,5 @@ from .cell import Cell
 from .data import (
     MultiPatchDataset, MultiPatchProbe,
     PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor, 
-    EvokedResponseGroup, PulseResponse, StimPulse,
+    PulseResponseList, PulseResponse, StimPulse,
 )

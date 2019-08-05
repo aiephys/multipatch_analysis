@@ -24,7 +24,7 @@ class AvgResponseFitPipelineModule(DatabasePipelineModule):
         db = job['database']
         expt_id = job['job_id']
         
-        expt = db.experiment_from_timestamp(expt_id, session=session)
+        expt = db.experiment_from_ext_id(expt_id, session=session)
 
         for pair in expt.pair_list:
             fits = get_pair_avg_fits(pair, session)

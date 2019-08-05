@@ -4,7 +4,7 @@ import warnings, sys
 from pyqtgraph.debug import Profiler
 from neuroanalysis.data import TSeriesList
 from neuroanalysis.fitting import StackedPsp, Psp, fit_psp
-
+from multipatch_analysis.data import PulseResponseList
 
 
 def fit_avg_pulse_response(pulse_response_list, latency_window, sign, ui=None):
@@ -33,16 +33,8 @@ def fit_avg_pulse_response(pulse_response_list, latency_window, sign, ui=None):
     pair = pulse_response_list[0].pair
     clamp_mode = pulse_response_list[0].recording.patch_clamp_recording.clamp_mode
 
-    # make a list of spike-aligned postsynaptic tseries    
-    tsl = []
-    for pr in pulse_response_list:
-        spike_t = pr.stim_pulse.first_spike_time
-        if spike_t is None:
-            continue
-        post_ts = pr.post_tseries
-        ts = post_ts.copy(t0=post_ts.t0-spike_t)
-        tsl.append(ts)
-    tsl = TSeriesList(tsl)
+    # make a list of spike-aligned postsynaptic tseries
+    tsl = PulseResponseList(pulse_response_list).post_tseries(align='spike', bsub=True)
     prof('make tseries list')
     
     # average all together
@@ -58,8 +50,8 @@ def fit_avg_pulse_response(pulse_response_list, latency_window, sign, ui=None):
     weight[onset_start_idx:onset_stop_idx] = 3.0
     
     # decide whether to mask out crosstalk artifact
-    pre_id = int(pr.pair.pre_cell.electrode.ext_id)
-    post_id = int(pr.pair.post_cell.electrode.ext_id)
+    pre_id = int(pair.pre_cell.electrode.ext_id)
+    post_id = int(pair.post_cell.electrode.ext_id)
     if abs(pre_id - post_id) < 3:
         # nearby electrodes; mask out crosstalk
         pass
