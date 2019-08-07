@@ -716,6 +716,7 @@ if __name__ == '__main__':
     parser.add_argument('--user', type=int)
     parser.add_argument('--check', action='store_true')
     parser.add_argument('--hashtag', action='store_true')
+    parser.add_argument('--timestamps', type=float, nargs='*')
 
     args = parser.parse_args(sys.argv[1:])
     user = args.user
@@ -747,7 +748,9 @@ if __name__ == '__main__':
         print('%d pairs in notes db' % len(pair_in_notes))
         print('%d pairs not in notes db' % len(pair_not_in_notes))
         print('%d pairs mysteriously missing' % (len(ghost_pair)))
-        print('%d/%d pairs accounted for' % (sum([len(pair_in_notes), len(pair_not_in_notes), len(ghost_pair)]), len(synapses)))   
+        print('%d/%d pairs accounted for' % (sum([len(pair_in_notes), len(pair_not_in_notes), len(ghost_pair)]), len(synapses)))
+    elif args.timestamps is not None:
+        timestamps = args.timestamps   
     else:
         seed(0)
         timestamps = list(timestamps)

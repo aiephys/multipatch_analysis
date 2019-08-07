@@ -3,6 +3,7 @@
 QC functions meant to ensure consistent filtering across different analyses
 """
 import numpy as np
+import pyqtgraph as pg
 
 
 def recording_qc_pass(rec):
@@ -21,23 +22,39 @@ def recording_qc_pass(rec):
     ----------
     rec : PatchClampRecording
         The PatchClampRecording instance to evaluate
+
+    Returns
+    -------
+    qc_pass: bool
+        Whether this recording passes qc_pass
+    failures: list
+        qc failures
     """
+    failures = []
+
     if rec.baseline_current < -800e-12 or rec.baseline_current > 800e-12:
-        return False
+       failures.append('basline current of %s is outside of bounds [-800pA, 800pA]' % pg.siFormat(rec.baseline_current, suffix='A'))
+    
     if rec.clamp_mode == 'ic':
-        if rec.baseline_potential is None or rec.baseline_potential < -85e-3 or rec.baseline_potential > -45e-3:
-            return False
+        if rec.baseline_potential is None:
+            failures.append('baseline potential is None')
+        elif rec.baseline_potential < -85e-3 or rec.baseline_potential > -45e-3:
+            failures.append('baseline potential of %s is outside of bounds [-85mV, -45mV]' % pg.siFormat(rec.baseline_potential, suffix='V'))
+        
         if rec.baseline_rms_noise > 5e-3:
-            return False
+            failures.append('baseline rms noise of %s exceeds 5mV' % pg.siFormat(rec.baseline_rms_noise, suffix='V'))
+        
     elif rec.clamp_mode == 'vc':
         if rec.baseline_rms_noise > 200e-12:
-            return False
+           failures.append('baseline rms noise of %s exceeds 200pA' % pg.siFormat(rec.baseline_rms_noise, suffix='A'))
+       
         
     data = rec['primary'].data
     if (data == 0).sum() > len(data) // 10:
-        return False
+        failures.append('data recording contains a significant chunk of zeros')
 
-    return True
+    qc_pass = len(failures)==0
+    return qc_pass, failures
 
 
 def pulse_response_qc_pass(post_rec, window, n_spikes, adjacent_pulses):
@@ -74,43 +91,59 @@ def pulse_response_qc_pass(post_rec, window, n_spikes, adjacent_pulses):
         Whether this pulse-response passes QC for detecting excitatory connections
     in_qc_pass : bool
         Whether this pulse-response passes QC for detecting inhibitory connections
+    failures : dict
+        QC failures for ex and in
     """
+    
+    failures = {'ex': [], 'in': []}
+
     # Require the postsynaptic recording to pass basic QC
-    if recording_qc_pass(post_rec) is False:
-        return False, False
+    recording_pass_qc, _ = recording_qc_pass(post_rec)
+    if recording_pass_qc is False:
+        [failures[k].append('postsynaptic recording failed QC') for k in failures.keys()]
 
     # require at least 1 presynaptic spike
     if n_spikes == 0:
-        return False, False
-    
+        [failures[k].append('%d spikes detected in presynaptic recording' % n_spikes) for k in failures.keys()]
+
     # Check for noise in response window
     if post_rec.clamp_mode == 'ic':
         data = post_rec['primary'].time_slice(window[0], window[1])
         base = data.median()
         if data.std() > 1.5e-3:
-            return False, False
+            [failures[k].append('STD of response window, %s, exceeds 1.5mV' % pg.siFormat(data.std(), suffix='V')) for k in failures.keys()]
         if data.data.max() > -40e-3:
-            return False, False
+            [failures[k].append('Max in response window, %s, exceeds -40mV' % pg.siFormat(data.data.max(), suffix='V')) for k in failures.keys()]
     elif post_rec.clamp_mode == 'vc':
         data = post_rec['primary'].time_slice(window[0], window[1])
         base = post_rec['command'].time_slice(window[0], window[1]).median()
         if data.std() > 15e-12:
-            return False, False
+            [failures[k].append('STD of response window, %s, exceeds 15pA' % pg.siFormat(data.std(), suffix='A')) for k in failures.keys()]
     else:
         raise TypeError('Unsupported clamp mode %s' % post_rec.clamp_mode)
 
     # Check timing of adjacent spikes
     if any([abs(t) < 8e-3 for t in adjacent_pulses]):
-        return False, False
+        [failures[k].append('Spikes detected within 8ms of the response window') for k in failures.keys()]
 
     # Check holding potential is appropriate for each sign
-    limits = [[-85e-3, -45e-3], [-60e-3, -45e-3]]
+    ex_limits = [-85e-3, -45e-3]
+    in_limits = [-60e-3, -45e-3]
     # check both baseline_potential (which is measured over all baseline regions in the recording)
     # and *base*, which is just the median value over the response window
     base2 = post_rec.baseline_potential
-    qc_pass = tuple([((bmin < base < bmax) and (bmin < base2 < bmax)) for bmin, bmax in limits])
-
-    return qc_pass
+    
+    if (ex_limits[0] < base < ex_limits[1]) and (ex_limits[0] < base2 < ex_limits[1]) is False:
+        failures['ex'].append('Overall baseline potential of %s and response window baseline of %s are outside of bounds [-85mV, -45mV]' 
+            % (pg.siFormat(base2, suffix='V'), pg.siFormat(base, suffix='V')))
+    if (in_limits[0] < base < in_limits[1]) and (in_limits[0] < base2 < in_limits[1]) is False:
+        failures['in'].append('Overall baseline potential of %s and response window baseline of %s are outside of bounds [-85mV, -45mV]' 
+            % (pg.siFormat(base2, suffix='V'), pg.siFormat(base, suffix='V')))
+    
+    ex_qc_pass = len(failures['ex'])==0 
+    in_qc_pass = len(failures['in'])==0
+    
+    return ex_qc_pass, in_qc_pass, failures
 
 def spike_qc(n_spikes, post_qc):
     """If there is not exactly 1 presynaptic spike, qc Fail spike and postsynaptic response
