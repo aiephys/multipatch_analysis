@@ -429,8 +429,8 @@ class PairAnalysis(object):
         }
 
         self.fit_precision = {
-            'amp': {'vc': 10, 'ic': 6},
-            'exp_amp': {'vc': 14, 'ic': 6},
+            'amp': {'vc': 14, 'ic': 8},
+            'exp_amp': {'vc': 14, 'ic': 8},
             'decay_tau': {'vc': 8, 'ic': 8},
             'nrmse': {'vc': 2, 'ic': 2},
             'rise_time': {'vc': 7, 'ic': 6},
@@ -533,7 +533,7 @@ class PairAnalysis(object):
         self.fit_params['initial'].update(self.initial_fit_parameters)
         self.fit_params['fit'].update(self.output_fit_parameters)
         self.ctrl_panel.update_fit_params(self.fit_params['fit'])
-        self.generate_warnings()   
+        self.generate_warnings() 
 
     def generate_warnings(self):
         self.warnings = []
@@ -593,7 +593,6 @@ class PairAnalysis(object):
         expt_id = '%0.3f' % self.pair.experiment.acq_timestamp
         pre_cell_id = str(self.pair.pre_cell.ext_id)   
         post_cell_id = str(self.pair.post_cell.ext_id)
-
         meta = {
             'expt_id': expt_id,
             'pre_cell_id': pre_cell_id,
@@ -605,14 +604,13 @@ class PairAnalysis(object):
             'fit_warnings': self.warnings,
             'comments': self.ctrl_panel.params['Comments', ''],
         }
-
+        
         fields = {
             'expt_id': expt_id,
             'pre_cell_id': pre_cell_id,
             'post_cell_id': post_cell_id, 
             'notes': meta,
         }
-
         s = notes_db.db.session(readonly=False)
         q = pair_notes_query(s, self.pair)
         rec = q.all()
@@ -644,9 +642,10 @@ class PairAnalysis(object):
         s.close()
 
     def print_pair_notes(self, meta, saved_rec):
-        current_fit = {k:v for k, v in meta['fit_parameters']['fit'].items()}
+        meta_copy = copy.deepcopy(meta)
+        current_fit = {k:v for k, v in meta_copy['fit_parameters']['fit'].items()}
         saved_fit = {k:v for k, v in saved_rec.notes['fit_parameters']['fit'].items()}
-
+        
         for mode in modes:
             for holding in holdings:
                 current_fit[mode][holding] = {k:round(v, self.fit_precision[k][mode]) for k, v in current_fit[mode][holding].items()}
@@ -656,7 +655,7 @@ class PairAnalysis(object):
         self.fit_compare.trees[0].setHeaderLabels(['Current Fit Parameters', 'type', 'value'])
         self.fit_compare.trees[1].setHeaderLabels(['Saved Fit Parameters', 'type', 'value'])
 
-        current_meta = {k:v for k, v in meta.items() if k != 'fit_parameters'} 
+        current_meta = {k:v for k, v in meta_copy.items() if k != 'fit_parameters'} 
         saved_meta = {k:v for k, v in saved_rec.notes.items() if k != 'fit_parameters'} 
         saved_meta.update({k:str(saved_meta[k]) for k in ['comments', 'expt_id', 'pre_cell_id', 'post_cell_id']})
 
