@@ -98,9 +98,9 @@ def pulse_response_qc_pass(post_rec, window, n_spikes, adjacent_pulses):
     failures = {'ex': [], 'in': []}
 
     # Require the postsynaptic recording to pass basic QC
-    recording_pass_qc, _ = recording_qc_pass(post_rec)
+    recording_pass_qc, recording_qc_failures = recording_qc_pass(post_rec)
     if recording_pass_qc is False:
-        [failures[k].append('postsynaptic recording failed QC') for k in failures.keys()]
+        [failures[k].append('postsynaptic recording failed QC: %s' % ', and '.join(recording_qc_failures)) for k in failures.keys()]
 
     # require at least 1 presynaptic spike
     if n_spikes == 0:
@@ -133,12 +133,15 @@ def pulse_response_qc_pass(post_rec, window, n_spikes, adjacent_pulses):
     # and *base*, which is just the median value over the response window
     base2 = post_rec.baseline_potential
     
-    if (ex_limits[0] < base < ex_limits[1]) and (ex_limits[0] < base2 < ex_limits[1]) is False:
-        failures['ex'].append('Overall baseline potential of %s and response window baseline of %s are outside of bounds [-85mV, -45mV]' 
-            % (pg.siFormat(base2, suffix='V'), pg.siFormat(base, suffix='V')))
-    if (in_limits[0] < base < in_limits[1]) and (in_limits[0] < base2 < in_limits[1]) is False:
-        failures['in'].append('Overall baseline potential of %s and response window baseline of %s are outside of bounds [-85mV, -45mV]' 
-            % (pg.siFormat(base2, suffix='V'), pg.siFormat(base, suffix='V')))
+    if not (ex_limits[0] < base < ex_limits[1]): 
+        failures['ex'].append('Response window baseline of %s is outside of bounds [-85mV, -45mV]' % pg.siFormat(base, suffix='V'))
+    if not (ex_limits[0] < base2 < ex_limits[1]):
+        failures['ex'].append('Recording baseline of %s is outside of bounds [-85mV, -45mV]' % pg.siFormat(base2, suffix='V'))
+    if not (in_limits[0] < base < in_limits[1]): 
+        failures['in'].append('Response window baseline of %s is outside of bounds [-60mV, -45mV]' % pg.siFormat(base, suffix='V'))
+    if not (in_limits[0] < base2 < in_limits[1]):
+        failures['in'].append('Recording baseline of %s is outside of bounds [-60mV, -45mV]' % pg.siFormat(base2, suffix='V'))
+    
     
     ex_qc_pass = len(failures['ex'])==0 
     in_qc_pass = len(failures['in'])==0

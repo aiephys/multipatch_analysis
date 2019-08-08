@@ -77,7 +77,7 @@ class DatasetPipelineModule(DatabasePipelineModule):
                     baseline_current=rec.baseline_current,
                     baseline_rms_noise=rec.baseline_rms_noise,
                     qc_pass=qc_pass,
-                    meta={'qc_failures': qc_failures},
+                    meta=None if len(qc_failures) == 0 else {'qc_failures': qc_failures},
                 )
                 session.add(pcrec_entry)
 
@@ -196,7 +196,7 @@ class DatasetPipelineModule(DatabasePipelineModule):
                             data_start_time=resampled.t0,
                             ex_qc_pass=resp['ex_qc_pass'],
                             in_qc_pass=resp['in_qc_pass'],
-                            meta={'qc_failures': resp['qc_failures']},
+                            meta=None if resp['ex_qc_pass'] and resp['in_qc_pass'] else {'qc_failures': resp['qc_failures']},
                         )
                         session.add(resp_entry)
                         
@@ -221,7 +221,7 @@ class DatasetPipelineModule(DatabasePipelineModule):
                         mode=float_mode(data),
                         ex_qc_pass=ex_qc_pass,
                         in_qc_pass=in_qc_pass,
-                        meta={'qc_failures': qc_failures},
+                        meta=None if ex_qc_pass is True and in_qc_pass is True else {'qc_failures': qc_failures},
                     )
                     session.add(base_entry)
         
