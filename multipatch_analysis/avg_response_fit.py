@@ -33,6 +33,7 @@ def get_pair_avg_fits(pair, session, notes_session=None, ui=None):
             'fit_params',
             'initial_latency',
             'fit_qc_pass',
+            'expected_fit_params',
             }, 
         }
     
@@ -82,15 +83,31 @@ def get_pair_avg_fits(pair, session, notes_session=None, ui=None):
         fit_result, avg_response = fit_avg_pulse_response(responses['qc_pass'], latency_window, sign)
         prof('fit avg')
 
+        # load up expected fit results and compare to manually-verified
+        # results
+        if notes is None:
+            qc_pass = False
+            reasons = ['no data notes entry']
+            expected_fit_params = None
+        elif notes['fit_pass'][clamp_mode][str(holding)] is not True:
+            qc_pass = False
+            reasons = ['data notes fit failed qc']
+            expected_fit_params = None
+        else:
+            expected_fit_params = notes['fit_parameters']['fit'][clamp_mode][str(holding)]
+            qc_pass, reasons = check_fit_qc_pass(fit_result, expected_fit_params, clamp_mode)
+
         if ui is not None:
-            ui.show_fit_results(clamp_mode, holding, fit_result, avg_response)
+            ui.show_fit_results(clamp_mode, holding, fit_result, avg_response, qc_pass)
 
         results[clamp_mode, holding] = {
             'responses': responses,
             'average': avg_response,
             'initial_latency': init_latency,
             'fit_result': fit_result,
-            'fit_qc_pass': check_fit_qc_pass(fit_result, notes),
+            'fit_qc_pass': qc_pass,
+            'fit_qc_pass_reasons': reasons,
+            'expected_fit_params': expected_fit_params,
         }
 
     return results
@@ -142,19 +159,25 @@ def sort_responses(pulse_responses):
     return sorted_responses
 
 
-def check_fit_qc_pass(fit_result, notes_record):
-    if notes_record is None:
-        return False
-    raise Exception("check notes structure")
-    if notes_record['qc_pass'] is not True:
-        return False
-    expected_params = notes_record['fit_result']
+def check_fit_qc_pass(fit_result, expected_params, clamp_mode):
+    failures = []
     fit_params = fit_result.best_values
-    for k,v1 in fit_params.items():
-        v2 = expected_params[k]
-        if abs(v1-v2) / v2 > 0.1:
-            return False
-    if abs(fit_params['xoffset'] - expected_params['xoffset']) > 100e-6:
-        return False
 
-    return True
+    # decide on relative and absolute thresholds to use for comparing each parameter
+    abs_amp_threshold = 40e-6 if clamp_mode == 'ic' else 1e-12
+    if fit_result.nrmse() < expected_params['nrmse']:
+        # if the new fit improves NRMSE, then we can be a little more forgiving about not matching the previous fit.
+        thresholds = {'amp': (0.3, abs_amp_threshold*1.5), 'rise_time': (1.0, 1e-3), 'decay_tau': (3.0, 5e-3), 'xoffset': (1.0, 150e-6)}
+    else:
+        thresholds = {'amp': (0.2, abs_amp_threshold), 'rise_time': (0.5, 1e-3), 'decay_tau': (2.0, 5e-3), 'xoffset': (1.0, 150e-6)}
+
+    # compare parameters
+    for k, (error_threshold, abs_threshold) in thresholds.items():
+        v1 = fit_params[k]
+        v2 = expected_params[k]
+        error = abs(v1-v2) / v2
+        if (error > error_threshold) and (abs(v1 - v2) > abs_threshold):
+            failures.append('%s error too large (%s != %s)' % (k, v1, v2))
+
+    print('; '.join(failures))
+    return len(failures) == 0, failures

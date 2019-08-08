@@ -46,7 +46,7 @@ def fit_avg_pulse_response(pulse_response_list, latency_window, sign, ui=None):
     
     # boost weight around PSP onset
     onset_start_idx = average.index_at(latency_window[0])
-    onset_stop_idx = average.index_at(latency_window[1] + 2e-3) 
+    onset_stop_idx = average.index_at(latency_window[1] + 4e-3) 
     weight[onset_start_idx:onset_stop_idx] = 3.0
     
     # decide whether to mask out crosstalk artifact
@@ -57,73 +57,74 @@ def fit_avg_pulse_response(pulse_response_list, latency_window, sign, ui=None):
         pass
     prof('weights')
 
-    fit = fit_psp(average, search_window=latency_window, clamp_mode=clamp_mode, sign=sign, fit_kws={'weights': weight})
+    fit = fit_psp(average, search_window=latency_window, clamp_mode=clamp_mode, sign=sign, baseline_like_psp=True, fit_kws={'weights': weight})
     prof('fit')
     
     return fit, average
     
 
-def fit_avg_response(traces, mode, latency, sign):
-        output_fit_parameters = {}
+# def fit_avg_response(traces, mode, latency, sign):
+#         output_fit_parameters = {}
 
-        if latency is None:
-            x_offset = 1e-3
-            x_offset_win = [-1e-3, 6e-3]
-        else:
-            x_offset = latency
-            x_offset_win = [-0.1e-3, 0.1e-3]
+#         if latency is None:
+#             x_offset = 1e-3
+#             x_offset_win = [-1e-3, 6e-3]
+#         else:
+#             x_offset = latency
+#             x_offset_win = [-0.1e-3, 0.1e-3]
         
-        if len(traces) == 0:
-            return output_fit_parameters, x_offset, None
+#         if len(traces) == 0:
+#             return output_fit_parameters, x_offset, None
         
-        grand_trace = TSeriesList(traces).mean()
+#         grand_trace = TSeriesList(traces).mean()
 
-        weight = np.ones(len(grand_trace.data))*10.  #set everything to ten initially
-        weight[int(1e-3/db.default_sample_rate):int(3e-3/db.default_sample_rate)] = 30.  #area around steep PSP rise 
-        ic_weight = weight
-        ic_weight[0:int(1e-3/db.default_sample_rate)] = 0.   #area around stim artifact
+#         weight = np.ones(len(grand_trace.data))*10.  #set everything to ten initially
+#         weight[int(1e-3/db.default_sample_rate):int(3e-3/db.default_sample_rate)] = 30.  #area around steep PSP rise 
+#         ic_weight = weight
+#         ic_weight[0:int(1e-3/db.default_sample_rate)] = 0.   #area around stim artifact
 
-        mode_params = {
-            'vc': {
-                'stacked': False,
-                'initial_rise': 1e-3,
-                'rise_bounds': [0.1e-3, 6e-3],
-                'weight': weight
-            },
-            'ic': {
-                'stacked': True,
-                'initial_rise': 5e-3,
-                'rise_bounds': [1e-3, 30e-3],
-                'weight': ic_weight
-            }
-        }
+#         mode_params = {
+#             'vc': {
+#                 'stacked': False,
+#                 'initial_rise': 1e-3,
+#                 'rise_bounds': [0.1e-3, 6e-3],
+#                 'weight': weight
+#             },
+#             'ic': {
+#                 'stacked': True,
+#                 'initial_rise': 5e-3,
+#                 'rise_bounds': [1e-3, 30e-3],
+#                 'weight': ic_weight
+#             }
+#         }
         
-        stacked = mode_params[mode]['stacked']
-        initial_rise = mode_params[mode]['initial_rise']
-        rise_bounds = mode_params[mode]['rise_bounds']
-        weight = mode_params[mode]['weight']
+#         stacked = mode_params[mode]['stacked']
+#         initial_rise = mode_params[mode]['initial_rise']
+#         rise_bounds = mode_params[mode]['rise_bounds']
+#         weight = mode_params[mode]['weight']
         
-        rise_times = list(initial_rise*2.**np.arange(-2, 3, 1))
-        x_win = [x_offset + x_offset_win[0], x_offset + x_offset_win[1]]
-        x_range = list(np.linspace(x_win[0], x_win[1], 4))
+#         rise_times = list(initial_rise*2.**np.arange(-2, 3, 1))
+#         x_win = [x_offset + x_offset_win[0], x_offset + x_offset_win[1]]
+#         x_range = list(np.linspace(x_win[0], x_win[1], 4))
 
-        try:
-            fit = fit_psp(grand_trace, 
-                mode=mode, 
-                sign=sign,
-                xoffset=(x_range, x_win[0], x_win[1]),
-                rise_time=(rise_times, rise_bounds[0], rise_bounds[1]),
-                stacked=stacked,
-                fit_kws={'tol': 0.01, 'maxiter': 50},
+#         try:
+#             fit = fit_psp(grand_trace, 
+#                 mode=mode, 
+#                 sign=sign,
+#                 xoffset=(x_range, x_win[0], x_win[1]),
+#                 rise_time=(rise_times, rise_bounds[0], rise_bounds[1]),
+#                 exp_tau='decay_tau',
+#                 stacked=stacked,
+#                 fit_kws={'tol': 0.01, 'maxiter': 20},
                 
-            )
-            for param, val in fit.best_values.items():
-                output_fit_parameters[param] = val
-            output_fit_parameters['yoffset'] = fit.best_values['yoffset']
-            output_fit_parameters['nrmse'] = fit.nrmse()
-        except:
-            print("Error in PSP fit:")
-            sys.excepthook(*sys.exc_info())
-            return output_fit_parameters, x_offset, None
+#             )
+#             for param, val in fit.best_values.items():
+#                 output_fit_parameters[param] = val
+#             output_fit_parameters['yoffset'] = fit.best_values['yoffset']
+#             output_fit_parameters['nrmse'] = fit.nrmse()
+#         except:
+#             print("Error in PSP fit:")
+#             sys.excepthook(*sys.exc_info())
+#             return output_fit_parameters, x_offset, None
 
-        return output_fit_parameters, x_offset, fit.best_fit, grand_trace
+#         return output_fit_parameters, x_offset, fit.best_fit, grand_trace

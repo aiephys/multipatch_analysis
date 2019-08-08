@@ -1,5 +1,7 @@
+import numpy as np
 import pyqtgraph as pg
 from neuroanalysis.ui.plot_grid import PlotGrid
+from neuroanalysis.fitting import StackedPsp
 from multipatch_analysis.data import PulseResponseList
 
 
@@ -22,11 +24,18 @@ class AvgResponseFitUi(object):
         if notes is None:
             return
         for (clamp_mode, holding), plot in self.plots.items():
-            plot.show_data_notes(notes[clamp_mode, holding])
+            params = notes['fit_parameters']['fit'][clamp_mode][str(holding)].copy()
+            if len(params) == 0:
+                continue
+            params.pop('nrmse')
+            params.setdefault('exp_tau', params['decay_tau'])
+            params.setdefault('exp_amp', 0)
+            qc_pass = notes['fit_pass'][clamp_mode][str(holding)]
+            plot.show_expected_fit(params, qc_pass)
 
-    def show_fit_results(self, clamp_mode, holding, results, average):
+    def show_fit_results(self, clamp_mode, holding, results, average, qc_pass):
         plot = self.plots[clamp_mode, holding]
-        plot.show_fit_results(results, average)
+        plot.show_fit_results(results, average, qc_pass)
 
 
 class PulseResponsePlot(object):
@@ -70,11 +79,21 @@ class PulseResponsePlot(object):
 
         self.response_plot.autoRange()
 
-    def show_data_notes(self, notes):
-        pass
+    def show_expected_fit(self, fit_params, qc_pass):
+        psp = StackedPsp()
+        t = np.linspace(-10e-3, 20e-3, 1000)
+        v = psp.eval(x=t, **fit_params)
+        pen = {'color': (0, 150, 0) if qc_pass else (255, 100, 0), 'dash': [5, 5]} 
+        self.response_plot.plot(t, v, pen=pen, zValue=10)
 
-    def show_fit_results(self, results, average):
-        pass
+    def show_fit_results(self, results, average, qc_pass):
+        self.response_plot.plot(average.time_values, average.data, pen='b')
+
+        psp = StackedPsp()
+        t = average.time_values
+        v = psp.eval(x=t, **results.best_values)
+        pen = {'color':  (0, 150, 0) if qc_pass else (255, 100, 0), 'width': 2}
+        self.response_plot.plot(t, v, pen=pen)
 
     def plot_fit(self, trace, fit, holding, fit_pass=False):
         if holding == '-55':
