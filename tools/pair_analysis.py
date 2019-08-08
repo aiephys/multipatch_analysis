@@ -472,7 +472,6 @@ class PairAnalysis(object):
 
         with pg.BusyCursor():
             self.pair = pair
-            self.reset_display()
             print ('loading responses...')
             q = response_query(default_session, pair)
             self.pulse_responses = q.all()
