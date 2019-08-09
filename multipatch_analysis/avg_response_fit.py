@@ -38,7 +38,7 @@ def get_pair_avg_fits(pair, session, notes_session=None, ui=None):
         }
     
     """
-    prof = pg.debug.Profiler(disabled=False, delayed=False)
+    prof = pg.debug.Profiler(disabled=True, delayed=False)
     prof(str(pair))
     results = {}
     
@@ -176,6 +176,8 @@ def check_fit_qc_pass(fit_result, expected_params, clamp_mode):
         v1 = fit_params[k]
         v2 = expected_params[k]
         error = abs(v1-v2) / v2
+        # We expect large relative errors when the values are small relative to noise,
+        # and large absolute errors otherwise.
         if (error > error_threshold) and (abs(v1 - v2) > abs_threshold):
             failures.append('%s error too large (%s != %s)' % (k, v1, v2))
 

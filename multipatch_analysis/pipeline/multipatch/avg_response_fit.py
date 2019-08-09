@@ -39,6 +39,9 @@ class AvgResponseFitPipelineModule(DatabasePipelineModule):
                     initial_xoffset=fit['initial_latency'],
                     manual_qc_pass=fit['fit_qc_pass'],
                 )
+                reasons = fit['fit_qc_pass_reasons']
+                if len(reasons) > 0:
+                    rec.meta = {'fit_qc_pass_reasons': reasons}
 
                 for k in ['xoffset', 'yoffset', 'amp', 'rise_time', 'decay_tau', 'exp_amp', 'exp_tau']:
                     setattr(rec, 'fit_'+k, fit['fit_result'].best_values[k])
