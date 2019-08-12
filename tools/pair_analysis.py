@@ -471,6 +471,7 @@ class PairAnalysis(object):
         self.fit_params = {'initial': self.initial_fit_parameters, 'fit': self.output_fit_parameters}
 
         with pg.BusyCursor():
+            self.reset_display()
             self.pair = pair
             print ('loading responses...')
             q = response_query(default_session, pair)
