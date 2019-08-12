@@ -27,7 +27,10 @@ comment_hashtag = [
     '#badqc',
     '#risetime',
     '#baseline',
-    '#nodatatofit'
+    '#nodatatofit',
+    '#polysynaptic',
+    '#doublechecked',
+    '#syncretypmismatch',
 ]
 
 comment_hashtag.sort(key=lambda x:x[1])
