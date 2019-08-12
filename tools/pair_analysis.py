@@ -63,7 +63,8 @@ class MainWindow(pg.QtGui.QWidget):
         self.hash_ptree = ptree.ParameterTree(showHeader=False)
         self.hash_select = Parameter.create(name='Select Hashtags', type='group', children=
             [{'name': 'With multiple selected:', 'type': 'list', 'values': ['Include if any appear', 'Include if all appear'], 'value': 'Include if any appear'}]+
-            [{'name': ht, 'type': 'bool'} for ht in comment_hashtag])
+            [{'name': '#', 'type': 'bool'}] +
+            [{'name': ht, 'type': 'bool'} for ht in comment_hashtag[1:]])
         self.hash_ptree.addParameters(self.hash_select)
         self.experiment_browser = self.pair_analyzer.experiment_browser
         self.v_splitter = pg.QtGui.QSplitter()
@@ -114,8 +115,19 @@ class MainWindow(pg.QtGui.QWidget):
         note_pairs.sort(key=lambda p: p.expt_id)
         for p in note_pairs:
             comments = p.notes['comments']    
-            hashtag_present = [ht in comments for ht in selected_hashtags]
+            if len(selected_hashtags) == 1:
+                hashtag = selected_hashtags[0]
+                if hashtag == '#':
+                    if hashtag in comments and all([ht not in comments for ht in comment_hashtag[1:]]):
+                        print(p.expt_id, p.pre_cell_id, p.post_cell_id, comments)
+                        pairs_to_include.append(p)
+                else:
+                    if hashtag in comments:
+                        print(p.expt_id, p.pre_cell_id, p.post_cell_id, comments)
+                        pairs_to_include.append(p)
+                
             if len(selected_hashtags) > 1:
+                hashtag_present = [ht in comments for ht in selected_hashtags]
                 or_expts = self.hash_select['With multiple selected:'] == 'Include if any appear'
                 and_expts = self.hash_select['With multiple selected:'] == 'Include if all appear'
                 if or_expts and any(hashtag_present):
@@ -124,11 +136,7 @@ class MainWindow(pg.QtGui.QWidget):
                 if and_expts and all(hashtag_present):
                     print(p.expt_id, p.pre_cell_id, p.post_cell_id, comments)
                     pairs_to_include.append(p)
-            else:
-                hashtag = selected_hashtags[0]
-                if hashtag in comments:
-                    print(p.expt_id, p.pre_cell_id, p.post_cell_id, comments)
-                    pairs_to_include.append(p)
+
         timestamps = set([pair.expt_id for pair in pairs_to_include])
         q2 = self.default_session.query(db.Experiment).filter(db.Experiment.acq_timestamp.in_(timestamps))
         expts = q2.all()
