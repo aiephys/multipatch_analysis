@@ -4,6 +4,7 @@ QC functions meant to ensure consistent filtering across different analyses
 """
 import numpy as np
 import pyqtgraph as pg
+from neuroanalysis.util.data_test import DataTestCase
 
 
 def recording_qc_pass(rec):
@@ -156,3 +157,12 @@ def spike_qc(n_spikes, post_qc):
     trace_qc_pass = False if spike_qc_pass is False else post_qc
 
     return spike_qc_pass, trace_qc_pass
+
+class PulseResponseQCTestCase(DataTestCase):
+    def __init__(self):
+        DataTestCase.__init__(self, pulse_response_qc_pass)
+
+    @property
+    def name(self):
+        meta = self.meta
+        return "%s_%s_%s_%0.3f" % (meta['expt_id'], meta['sweep_id'], meta['post_cell_id'], self.input_args['window'][0])
