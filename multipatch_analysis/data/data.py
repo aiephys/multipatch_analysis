@@ -288,7 +288,7 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
                 adj_pulse_times.append(prev_pulse - this_pulse)
             if next_pulse is not None:
                 adj_pulse_times.append(next_pulse - this_pulse)
-            pulse['ex_qc_pass'], pulse['in_qc_pass'] = qc.pulse_response_qc_pass(post_rec=post_rec, window=pulse_window, n_spikes=n_spikes, adjacent_pulses=adj_pulse_times)
+            pulse['ex_qc_pass'], pulse['in_qc_pass'], pulse['qc_failures'] = qc.pulse_response_qc_pass(post_rec=post_rec, window=pulse_window, n_spikes=n_spikes, adjacent_pulses=adj_pulse_times)
 
             assert len(pulse['baseline']) > 0
 

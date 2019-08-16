@@ -10,7 +10,7 @@ from ..pipeline_module import DatabasePipelineModule
 from .experiment import ExperimentPipelineModule
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.data import PatchClampRecording
-from ...data import MultiPatchDataset, MultiPatchProbe, PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
+from ...data import Experiment, MultiPatchDataset, MultiPatchProbe, PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
 
 
 class DatasetPipelineModule(DatabasePipelineModule):
@@ -68,7 +68,7 @@ class DatasetPipelineModule(DatabasePipelineModule):
                 # import patch clamp recording information
                 if not isinstance(rec, PatchClampRecording):
                     continue
-                qc_pass = qc.recording_qc_pass(rec)
+                qc_pass, qc_failures = qc.recording_qc_pass(rec)
                 pcrec_entry = db.PatchClampRecording(
                     recording=rec_entry,
                     clamp_mode=rec.clamp_mode,
@@ -78,6 +78,7 @@ class DatasetPipelineModule(DatabasePipelineModule):
                     baseline_current=rec.baseline_current,
                     baseline_rms_noise=rec.baseline_rms_noise,
                     qc_pass=qc_pass,
+                    meta=None if len(qc_failures) == 0 else {'qc_failures': qc_failures},
                 )
                 session.add(pcrec_entry)
 
@@ -196,6 +197,7 @@ class DatasetPipelineModule(DatabasePipelineModule):
                             data_start_time=resampled.t0,
                             ex_qc_pass=resp['ex_qc_pass'],
                             in_qc_pass=resp['in_qc_pass'],
+                            meta=None if resp['ex_qc_pass'] and resp['in_qc_pass'] else {'qc_failures': resp['qc_failures']},
                         )
                         session.add(resp_entry)
                         
@@ -211,7 +213,7 @@ class DatasetPipelineModule(DatabasePipelineModule):
                     start, stop = base
                     data = rec['primary'].time_slice(start, stop).resample(sample_rate=20000).data
 
-                    ex_qc_pass, in_qc_pass = qc.pulse_response_qc_pass(rec, [start, stop], None, [])
+                    ex_qc_pass, in_qc_pass, qc_failures = qc.pulse_response_qc_pass(rec, [start, stop], None, [])
 
                     base_entry = db.Baseline(
                         recording=rec_entries[dev],
@@ -220,6 +222,7 @@ class DatasetPipelineModule(DatabasePipelineModule):
                         mode=float_mode(data),
                         ex_qc_pass=ex_qc_pass,
                         in_qc_pass=in_qc_pass,
+                        meta=None if ex_qc_pass is True and in_qc_pass is True else {'qc_failures': qc_failures},
                     )
                     session.add(base_entry)
         

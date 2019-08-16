@@ -27,7 +27,10 @@ comment_hashtag = [
     '#badqc',
     '#risetime',
     '#baseline',
-    '#nodatatofit'
+    '#nodatatofit',
+    '#polysynaptic',
+    '#doublechecked',
+    '#syncretypmismatch',
 ]
 
 comment_hashtag.sort(key=lambda x:x[1])
@@ -60,7 +63,8 @@ class MainWindow(pg.QtGui.QWidget):
         self.hash_ptree = ptree.ParameterTree(showHeader=False)
         self.hash_select = Parameter.create(name='Select Hashtags', type='group', children=
             [{'name': 'With multiple selected:', 'type': 'list', 'values': ['Include if any appear', 'Include if all appear'], 'value': 'Include if any appear'}]+
-            [{'name': ht, 'type': 'bool'} for ht in comment_hashtag])
+            [{'name': '#', 'type': 'bool'}] +
+            [{'name': ht, 'type': 'bool'} for ht in comment_hashtag[1:]])
         self.hash_ptree.addParameters(self.hash_select)
         self.experiment_browser = self.pair_analyzer.experiment_browser
         self.v_splitter = pg.QtGui.QSplitter()
@@ -111,8 +115,19 @@ class MainWindow(pg.QtGui.QWidget):
         note_pairs.sort(key=lambda p: p.expt_id)
         for p in note_pairs:
             comments = p.notes['comments']    
-            hashtag_present = [ht in comments for ht in selected_hashtags]
+            if len(selected_hashtags) == 1:
+                hashtag = selected_hashtags[0]
+                if hashtag == '#':
+                    if hashtag in comments and all([ht not in comments for ht in comment_hashtag[1:]]):
+                        print(p.expt_id, p.pre_cell_id, p.post_cell_id, comments)
+                        pairs_to_include.append(p)
+                else:
+                    if hashtag in comments:
+                        print(p.expt_id, p.pre_cell_id, p.post_cell_id, comments)
+                        pairs_to_include.append(p)
+                
             if len(selected_hashtags) > 1:
+                hashtag_present = [ht in comments for ht in selected_hashtags]
                 or_expts = self.hash_select['With multiple selected:'] == 'Include if any appear'
                 and_expts = self.hash_select['With multiple selected:'] == 'Include if all appear'
                 if or_expts and any(hashtag_present):
@@ -121,11 +136,7 @@ class MainWindow(pg.QtGui.QWidget):
                 if and_expts and all(hashtag_present):
                     print(p.expt_id, p.pre_cell_id, p.post_cell_id, comments)
                     pairs_to_include.append(p)
-            else:
-                hashtag = selected_hashtags[0]
-                if hashtag in comments:
-                    print(p.expt_id, p.pre_cell_id, p.post_cell_id, comments)
-                    pairs_to_include.append(p)
+
         timestamps = set([pair.expt_id for pair in pairs_to_include])
         q2 = self.default_session.query(db.Experiment).filter(db.Experiment.acq_timestamp.in_(timestamps))
         expts = q2.all()
@@ -436,8 +447,8 @@ class PairAnalysis(object):
         }
 
         self.fit_precision = {
-            'amp': {'vc': 10, 'ic': 6},
-            'exp_amp': {'vc': 14, 'ic': 6},
+            'amp': {'vc': 14, 'ic': 8},
+            'exp_amp': {'vc': 14, 'ic': 8},
             'decay_tau': {'vc': 8, 'ic': 8},
             'nrmse': {'vc': 2, 'ic': 2},
             'rise_time': {'vc': 7, 'ic': 6},
@@ -478,8 +489,8 @@ class PairAnalysis(object):
         self.fit_params = {'initial': self.initial_fit_parameters, 'fit': self.output_fit_parameters}
 
         with pg.BusyCursor():
-            self.pair = pair
             self.reset_display()
+            self.pair = pair
             print ('loading responses...')
             q = response_query(default_session, pair)
             self.pulse_responses = q.all()
@@ -540,7 +551,7 @@ class PairAnalysis(object):
         self.fit_params['initial'].update(self.initial_fit_parameters)
         self.fit_params['fit'].update(self.output_fit_parameters)
         self.ctrl_panel.update_fit_params(self.fit_params['fit'])
-        self.generate_warnings()   
+        self.generate_warnings() 
 
     def generate_warnings(self):
         self.warnings = []
@@ -600,7 +611,6 @@ class PairAnalysis(object):
         expt_id = '%0.3f' % self.pair.experiment.acq_timestamp
         pre_cell_id = str(self.pair.pre_cell.ext_id)   
         post_cell_id = str(self.pair.post_cell.ext_id)
-
         meta = {
             'expt_id': expt_id,
             'pre_cell_id': pre_cell_id,
@@ -612,14 +622,13 @@ class PairAnalysis(object):
             'fit_warnings': self.warnings,
             'comments': self.ctrl_panel.params['Comments', ''],
         }
-
+        
         fields = {
             'expt_id': expt_id,
             'pre_cell_id': pre_cell_id,
             'post_cell_id': post_cell_id, 
             'notes': meta,
         }
-
         s = notes_db.db.session(readonly=False)
         q = pair_notes_query(s, self.pair)
         rec = q.all()
@@ -651,9 +660,10 @@ class PairAnalysis(object):
         s.close()
 
     def print_pair_notes(self, meta, saved_rec):
-        current_fit = {k:v for k, v in meta['fit_parameters']['fit'].items()}
+        meta_copy = copy.deepcopy(meta)
+        current_fit = {k:v for k, v in meta_copy['fit_parameters']['fit'].items()}
         saved_fit = {k:v for k, v in saved_rec.notes['fit_parameters']['fit'].items()}
-
+        
         for mode in modes:
             for holding in holdings:
                 current_fit[mode][holding] = {k:round(v, self.fit_precision[k][mode]) for k, v in current_fit[mode][holding].items()}
@@ -663,7 +673,7 @@ class PairAnalysis(object):
         self.fit_compare.trees[0].setHeaderLabels(['Current Fit Parameters', 'type', 'value'])
         self.fit_compare.trees[1].setHeaderLabels(['Saved Fit Parameters', 'type', 'value'])
 
-        current_meta = {k:v for k, v in meta.items() if k != 'fit_parameters'} 
+        current_meta = {k:v for k, v in meta_copy.items() if k != 'fit_parameters'} 
         saved_meta = {k:v for k, v in saved_rec.notes.items() if k != 'fit_parameters'} 
         saved_meta.update({k:str(saved_meta[k]) for k in ['comments', 'expt_id', 'pre_cell_id', 'post_cell_id']})
 
@@ -723,6 +733,7 @@ if __name__ == '__main__':
     parser.add_argument('--user', type=int)
     parser.add_argument('--check', action='store_true')
     parser.add_argument('--hashtag', action='store_true')
+    parser.add_argument('--timestamps', type=float, nargs='*')
 
     args = parser.parse_args(sys.argv[1:])
     user = args.user
@@ -730,8 +741,9 @@ if __name__ == '__main__':
 
     default_session = db.session()
     notes_session = notes_db.db.session()
-    synapses = default_session.query(db.Pair).filter(db.Pair.synapse==True).all()
-    timestamps = set([pair.experiment.acq_timestamp for pair in synapses])
+    # synapses = default_session.query(db.Pair).filter(db.Pair.synapse==True).all()
+    # timestamps = set([pair.experiment.acq_timestamp for pair in synapses])
+    timestamps = [r.acq_timestamp for r in db.query(db.Experiment.acq_timestamp).all()]
     
     mw = MainWindow(default_session, notes_session)
     if user is not None:
@@ -755,11 +767,8 @@ if __name__ == '__main__':
         print('%d pairs not in notes db' % len(pair_not_in_notes))
         print('%d pairs mysteriously missing' % (len(ghost_pair)))
         print('%d/%d pairs accounted for' % (sum([len(pair_in_notes), len(pair_not_in_notes), len(ghost_pair)]), len(synapses)))   
-    else:
-        seed(0)
-        timestamps = list(timestamps)
-        shuffle(timestamps)
-        timestamps = timestamps[:10]
+    elif args.timestamps is not None:
+        timestamps = args.timestamps   
     
     q = default_session.query(db.Experiment).filter(db.Experiment.acq_timestamp.in_(timestamps))
     expts = q.all()
