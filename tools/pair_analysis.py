@@ -723,8 +723,9 @@ if __name__ == '__main__':
 
     default_session = db.session()
     notes_session = notes_db.db.session()
-    synapses = default_session.query(db.Pair).filter(db.Pair.synapse==True).all()
-    timestamps = set([pair.experiment.acq_timestamp for pair in synapses])
+    # synapses = default_session.query(db.Pair).filter(db.Pair.synapse==True).all()
+    # timestamps = set([pair.experiment.acq_timestamp for pair in synapses])
+    timestamps = [r.acq_timestamp for r in db.query(db.Experiment.acq_timestamp).all()]
     
     mw = MainWindow(default_session, notes_session)
     if user is not None:
@@ -748,11 +749,6 @@ if __name__ == '__main__':
         print('%d pairs not in notes db' % len(pair_not_in_notes))
         print('%d pairs mysteriously missing' % (len(ghost_pair)))
         print('%d/%d pairs accounted for' % (sum([len(pair_in_notes), len(pair_not_in_notes), len(ghost_pair)]), len(synapses)))   
-    else:
-        seed(0)
-        timestamps = list(timestamps)
-        shuffle(timestamps)
-        timestamps = timestamps[:10]
     
     q = default_session.query(db.Experiment).filter(db.Experiment.acq_timestamp.in_(timestamps))
     expts = q.all()
