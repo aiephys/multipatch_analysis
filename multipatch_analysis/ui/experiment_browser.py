@@ -11,11 +11,14 @@ class ExperimentBrowser(pg.TreeWidget):
     # TODO: add filtering options, cell info, context menu of actions, etc.
     
     def __init__(self):
+        self.all_columns = ['date', 'timestamp', 'rig', 'organism', 'project', 'region', 'genotype', 'acsf']
+        self.visible_columns = self.all_columns[:]
+        
         pg.TreeWidget.__init__(self)
-        self.setColumnCount(7)
-        self.setHeaderLabels(['date', 'timestamp', 'rig', 'organism', 'project', 'region', 'genotype', 'acsf'])
+        
+        self.setColumnCount(len(self.all_columns))
+        self.setHeaderLabels(self.all_columns)
         self.setDragDropMode(self.NoDragDrop)
-        # self.populate(experiments=experiments)
         self._last_expanded = None
         
     def populate(self, experiments=None):
@@ -40,7 +43,7 @@ class ExperimentBrowser(pg.TreeWidget):
             for pair in expt.pair_list:
                 # if pair.n_ex_test_spikes == 0 and pair.n_in_test_spikes == 0:
                 #     continue
-                cells = '%d => %d' % (pair.pre_cell.ext_id, pair.post_cell.ext_id)
+                cells = '%s => %s' % (pair.pre_cell.ext_id, pair.post_cell.ext_id)
                 conn = {True:"syn", False:"-", None:"?"}[pair.synapse]
                 types = 'L%s %s => L%s %s' % (pair.pre_cell.target_layer or "?", pair.pre_cell.cre_type, pair.post_cell.target_layer or "?", pair.post_cell.cre_type)
                 pair_item = pg.TreeWidgetItem([cells, conn, types])

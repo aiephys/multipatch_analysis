@@ -67,6 +67,7 @@ def get_pair_avg_fits(pair, session, notes_session=None, ui=None):
             init_latency = None
             latency_window = (0.5e-3, 8e-3)
         else:
+            notes = notes.notes
             init_latency = notes['fit_parameters']['initial'][clamp_mode][str(holding)]['xoffset']
             latency_window = (init_latency - 100e-6, init_latency + 100e-6)
             

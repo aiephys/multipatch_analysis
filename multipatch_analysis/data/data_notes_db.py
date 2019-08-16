@@ -41,4 +41,4 @@ def get_pair_notes(expt_id, pre_cell_id, post_cell_id, session=None):
         return None
     elif len(recs) > 1:
         raise Exception("Multiple records found in pair_notes for pair %s %s %s!" % (expt_id, pre_cell_id, post_cell_id))
-    return recs[0].notes
+    return recs[0]

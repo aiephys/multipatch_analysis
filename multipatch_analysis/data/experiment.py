@@ -171,8 +171,8 @@ class Experiment(object):
                     # anything found in pipettes.yml
                     pair_notes = data_notes_db.get_pair_notes(self.uid, pre_cell.cell_id, post_cell.cell_id)
                     if pair_notes is not None:
-                        electrical = pair_notes['gap_junction']
-                        synapse_type = pair_notes['synapse_type']
+                        electrical = pair_notes.notes['gap_junction']
+                        synapse_type = pair_notes.notes['synapse_type']
                         synapse = synapse_type in ('ex', 'in')
                     
                     pair = Pair(
