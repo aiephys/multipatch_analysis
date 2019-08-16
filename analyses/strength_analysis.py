@@ -1053,22 +1053,28 @@ if __name__ == '__main__':
     fp_mask = (recs['confidence'] < 0.2) & (recs['synapse'] == True)
     for mask, name in [(fn_mask, 'negatives'), (fp_mask, 'positives')]:
         print("\n================ Possible false %s: ==============\n" % name)
-        for rec in recs[mask]:
+        masked = recs[mask]
+        masked.sort(order=['confidence'])
+        for rec in masked:
             pid = int(rec['pair_id'])
             pair = session.query(db.Pair).filter(db.Pair.id==pid).all()[0]
             pre_cell = pair.pre_cell
             post_cell = pair.post_cell
 
-            # just select excitatory for now
-            if pre_cell.cre_type not in constants.EXCITATORY_CRE_TYPES and pre_cell.morphology.pyramidal is not True:
-                continue
-            if post_cell.cre_type not in constants.EXCITATORY_CRE_TYPES and post_cell.morphology.pyramidal is not True:
-                continue
-            
-            print("{:s} {:0.3f} {:d} {:d} {:15s} {:20s}  (L{:<3s} {:7s} {:6s}) (L{:<3s} {:7s} {:6s})".format(
-                pair.experiment.rig_name, pair.experiment.acq_timestamp, pre_cell.ext_id, post_cell.ext_id, pair.experiment.internal, pair.experiment.acsf,
-                pre_cell.target_layer, pre_cell.cre_type, {True: 'pyr', None: '?', False: 'nonpyr'}[pre_cell.morphology.pyramidal], 
-                post_cell.target_layer, post_cell.cre_type, {True: 'pyr', None: '?', False: 'nonpyr'}[post_cell.morphology.pyramidal]
+            print("{:0.3f} {:d} {:d} {:0.2f} {:s} {:15s} {:20s}  (L{:<3s} {:7s} {:6s}) (L{:<3s} {:7s} {:6s})".format(
+                pair.experiment.acq_timestamp, 
+                pre_cell.ext_id, 
+                post_cell.ext_id, 
+                rec['confidence'],
+                pair.experiment.rig_name, 
+                pair.experiment.internal, 
+                pair.experiment.acsf,
+                pre_cell.target_layer, 
+                pre_cell.cre_type, 
+                {True: 'pyr', None: '?', False: 'nonpyr'}[pre_cell.morphology.pyramidal], 
+                post_cell.target_layer, 
+                post_cell.cre_type, 
+                {True: 'pyr', None: '?', False: 'nonpyr'}[post_cell.morphology.pyramidal],
             ))
 
 
