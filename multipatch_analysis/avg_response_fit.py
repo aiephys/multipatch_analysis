@@ -63,21 +63,19 @@ def get_pair_avg_fits(pair, session, notes_session=None, ui=None):
             continue
             
         if notes is None:
+            sign = 0
             init_latency = None
             latency_window = (0.5e-3, 8e-3)
-            sign = 0
         else:
             init_latency = notes['fit_parameters']['initial'][clamp_mode][str(holding)]['xoffset']
             latency_window = (init_latency - 100e-6, init_latency + 100e-6)
             
             # Expected response sign depends on synapse type, clamp mode, and holding:
+            sign = 0
             if notes['synapse_type'] == 'ex':
                 sign = -1 if clamp_mode == 'vc' else 1
-            elif notes['synapse_type'] == 'in':
-                if holding == -70:
-                    sign = 0
-                else:
-                    sign = 1 if clamp_mode == 'vc' else -1
+            elif notes['synapse_type'] == 'in' and holding == -55:
+                sign = 1 if clamp_mode == 'vc' else -1
 
         prof('prepare %s %s' % (clamp_mode, holding))
         fit_result, avg_response = fit_avg_pulse_response(responses['qc_pass'], latency_window, sign)
