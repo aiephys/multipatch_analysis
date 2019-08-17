@@ -27,11 +27,11 @@ db = Database(config.synphys_db_host, config.synphys_db_host_rw, "data_notes", D
 db.create_tables()
 
 
-def get_pair_notes(expt_id, pre_cell_id, post_cell_id, session=None):
+def get_pair_notes_record(expt_id, pre_cell_id, post_cell_id, session=None):
     if session is None:
         session = db.session()
 
-    q = db.query(PairNotes.notes)
+    q = session.query(PairNotes)
     q = q.filter(PairNotes.expt_id==expt_id)
     q = q.filter(PairNotes.pre_cell_id==pre_cell_id)
     q = q.filter(PairNotes.post_cell_id==post_cell_id)
