@@ -12,7 +12,7 @@ from .slice import *
 from .experiment import *
 from .morphology import *
 from .dataset import *
-from .avg_response_fit import *
+from .synapse import *
 from .pulse_response_strength import *
 from .dynamics import *
 from .connection_strength import *

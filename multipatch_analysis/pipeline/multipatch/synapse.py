@@ -12,7 +12,7 @@ from .pulse_response import PulseResponsePipelineModule
 from ...avg_response_fit import get_pair_avg_fits
 
 
-class AvgResponseFitPipelineModule(DatabasePipelineModule):
+class SynapsePipelineModule(DatabasePipelineModule):
     """Generate fit to response average for all pairs per experiment
     """
     name = 'avg_response_fit'

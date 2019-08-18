@@ -4,7 +4,7 @@ from .slice import SlicePipelineModule
 from .experiment import ExperimentPipelineModule
 from .dataset import DatasetPipelineModule
 from .morphology import MorphologyPipelineModule
-from .avg_response_fit import AvgResponseFitPipelineModule
+from .synapse import SynapsePipelineModule
 from .pulse_response import PulseResponsePipelineModule
 from .dynamics import DynamicsPipelineModule
 from .connection_strength import ConnectionStrengthPipelineModule
@@ -22,7 +22,7 @@ class MultipatchPipeline(Pipeline):
         ExperimentPipelineModule,
         DatasetPipelineModule,
         MorphologyPipelineModule,
-        AvgResponseFitPipelineModule,
+        SynapsePipelineModule,
         PulseResponsePipelineModule,
         DynamicsPipelineModule,
         ConnectionStrengthPipelineModule,
