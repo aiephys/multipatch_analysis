@@ -5,6 +5,21 @@ from .experiment import Pair
 
 __all__ = ['AvgResponseFit']
 
+
+Synapse = make_table(
+    name='synapse',
+    comment="Kinetic properties measured from synaptic responses.",
+    columns=[
+        ('pair_id', 'pair.id', 'The ID of the entry in the pair table to which these results apply', {'index': True}),
+        ('latency', 'float', 'Latency in seconds from spike max slope until synaptic response onset.', {'index': True}),
+        ('psp_rise_time', 'float', 'Rise time in seconds measured from averaged PSPs.'),
+        ('psp_decay_tau', 'float', 'decay time constant in seconds measured from averaged PSPs.'),
+        ('psc_rise_time', 'float', 'Rise time in seconds measured from averaged PSCs.'),
+        ('psc_decay_tau', 'float', 'decay time constant in seconds measured from averaged PSCs.'),
+    ]
+)
+
+
 AvgResponseFit = make_table(
     name='avg_response_fit',
     comment="Fit to average post synaptic response for a given pair. Each pair may have fits for VC and IC recordings, held at -70 and -55 mV.",
@@ -26,5 +41,10 @@ AvgResponseFit = make_table(
     ]
 )
 
+Pair.synapse = relationship(Synapse, back_populates="pair", cascade="delete", single_parent=True, uselist=False)
+Synapse.pair = relationship(Pair, back_populates="synapse", single_parent=True)
+
 Pair.avg_response_fits = relationship(AvgResponseFit, back_populates="pair", cascade="delete", single_parent=True, uselist=True)
 AvgResponseFit.pair = relationship(Pair, back_populates="avg_response_fits", single_parent=True)
+
+
