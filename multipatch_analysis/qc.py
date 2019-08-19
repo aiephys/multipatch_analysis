@@ -58,7 +58,7 @@ def recording_qc_pass(rec):
     return qc_pass, failures
 
 
-def pulse_response_qc_pass(post_rec, window, n_spikes, adjacent_pulses):
+def pulse_response_qc_pass(post_rec, window, n_spikes, adjacent_pulses, ui=None):
     """Apply QC criteria for pulse-response recordings:
 
     * Postsynaptic recording passes recording_qc_pass()
@@ -111,14 +111,19 @@ def pulse_response_qc_pass(post_rec, window, n_spikes, adjacent_pulses):
     if post_rec.clamp_mode == 'ic':
         data = post_rec['primary'].time_slice(window[0], window[1])
         base = data.median()
-        if data.std() > 1.5e-3:
+        base_std = data.time_slice(window[0], window[0] + 5e-3)
+        max_amp = data - base
+        if base_std.std() > 1.5e-3:
             [failures[k].append('STD of response window, %s, exceeds 1.5mV' % pg.siFormat(data.std(), suffix='V')) for k in failures.keys()]
         if data.data.max() > -40e-3:
             [failures[k].append('Max in response window, %s, exceeds -40mV' % pg.siFormat(data.data.max(), suffix='V')) for k in failures.keys()]
+        if abs(max_amp.data.max()) > 10e-3:
+            [failures[k].append('Max response amplitude, %s, exceeds 10mV' % pg.siFormat(abs(max_amp.data.max()), suffix='V')) for k in failures.keys()]
     elif post_rec.clamp_mode == 'vc':
         data = post_rec['primary'].time_slice(window[0], window[1])
         base = post_rec['command'].time_slice(window[0], window[1]).median()
-        if data.std() > 15e-12:
+        base_std = data.time_slice(window[0], window[0] + 5e-3)
+        if base_std.std() > 15e-12:
             [failures[k].append('STD of response window, %s, exceeds 15pA' % pg.siFormat(data.std(), suffix='A')) for k in failures.keys()]
     else:
         raise TypeError('Unsupported clamp mode %s' % post_rec.clamp_mode)

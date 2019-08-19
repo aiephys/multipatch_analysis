@@ -1,8 +1,8 @@
 import os, glob, pickle
 import pytest
-import neuroanalysis
-from ..qc import PulseResponseQCTestCase
-from ..ui.pulse_response_qc 
+import multipatch_analysis
+from multipatch_analysis.qc import PulseResponseQCTestCase
+from multipatch_analysis.ui.pulse_response_qc import PulseResponseQCTestUi
 
 path = os.path.join(os.path.dirname(multipatch_analysis.__file__), '..', 'test_data', 'pulse_response_qc', '*.pkl')
 pulse_response_files = sorted(glob.glob(path))
