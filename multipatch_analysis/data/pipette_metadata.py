@@ -31,8 +31,8 @@ class PipetteMetadata(object):
         self.pipettes = OrderedDict()
         for k,v in pipettes.items():
             self.pipettes[str(k)] = v
-            if v['synapse_to'] is not None:
+            if v.get('synapse_to') is not None:
                 v['synapse_to'] = [str(x) for x in v['synapse_to']]
-            if v['gap_to'] is not None:
+            if v.get('gap_to') is not None:
                 v['gap_to'] = [str(x) for x in v['gap_to']]
             

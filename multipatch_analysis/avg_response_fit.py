@@ -34,6 +34,7 @@ def get_pair_avg_fits(pair, session, notes_session=None, ui=None):
             'initial_latency',
             'fit_qc_pass',
             'expected_fit_params',
+            'avg_baseline_noise',
             }, 
         }
     
@@ -49,12 +50,12 @@ def get_pair_avg_fits(pair, session, notes_session=None, ui=None):
     sorted_responses = sort_responses(pulse_responses)
     prof('sort prs')
 
-    notes = notes_db.get_pair_notes(pair.experiment.ext_id, pair.pre_cell.ext_id, pair.post_cell.ext_id, session=notes_session)
+    notes_rec = notes_db.get_pair_notes_record(pair.experiment.ext_id, pair.pre_cell.ext_id, pair.post_cell.ext_id, session=notes_session)
     prof('get pair notes')
 
     if ui is not None:
         ui.show_pulse_responses(sorted_responses)
-        ui.show_data_notes(notes)
+        ui.show_data_notes(notes_rec)
         prof('update ui')
 
     for (clamp_mode, holding), responses in sorted_responses.items():
@@ -62,12 +63,13 @@ def get_pair_avg_fits(pair, session, notes_session=None, ui=None):
             results[clamp_mode, holding] = None
             continue
             
-        if notes is None:
+        if notes_rec is None:
+            notes = None
             sign = 0
             init_latency = None
             latency_window = (0.5e-3, 8e-3)
         else:
-            notes = notes.notes
+            notes = notes_rec.notes
             init_latency = notes['fit_parameters']['initial'][clamp_mode][str(holding)]['xoffset']
             latency_window = (init_latency - 100e-6, init_latency + 100e-6)
             
@@ -81,6 +83,9 @@ def get_pair_avg_fits(pair, session, notes_session=None, ui=None):
         prof('prepare %s %s' % (clamp_mode, holding))
         fit_result, avg_response = fit_avg_pulse_response(responses['qc_pass'], latency_window, sign)
         prof('fit avg')
+
+        # measure baseline noise
+        avg_baseline_noise = avg_response.time_slice(avg_response.t0, avg_response.t0+7e-3).data.std()
 
         # load up expected fit results and compare to manually-verified
         # results
@@ -107,6 +112,7 @@ def get_pair_avg_fits(pair, session, notes_session=None, ui=None):
             'fit_qc_pass': qc_pass,
             'fit_qc_pass_reasons': reasons,
             'expected_fit_params': expected_fit_params,
+            'avg_baseline_noise': avg_baseline_noise,
         }
 
     return results

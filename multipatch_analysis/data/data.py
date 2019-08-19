@@ -1,3 +1,4 @@
+import sys
 import numpy as np
 
 from neuroanalysis.miesnwb import MiesNwb, MiesSyncRecording, MiesRecording
@@ -45,7 +46,13 @@ class MultiPatchSyncRecording(MiesSyncRecording):
             settle_size = int(settling_time / dt)
             for rec in self.recordings:
                 pa = PulseStimAnalyzer.get(rec)
-                for pulse in pa.pulses():
+                try:
+                    pulses = pa.pulses()
+                except Exception:
+                    print("Ignore recording baseline regions:", rec)
+                    sys.excepthook(*sys.exc_info())
+                    continue
+                for pulse in pulses:
                     start = pri.index_at(pulse[0])
                     stop = pri.index_at(pulse[1])
                     mask[start:stop + settle_size] = True

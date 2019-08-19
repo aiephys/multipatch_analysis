@@ -41,7 +41,9 @@ def recording_qc_pass(rec):
         elif rec.baseline_potential < -85e-3 or rec.baseline_potential > -45e-3:
             failures.append('baseline potential of %s is outside of bounds [-85mV, -45mV]' % pg.siFormat(rec.baseline_potential, suffix='V'))
         
-        if rec.baseline_rms_noise > 5e-3:
+        if rec.baseline_rms_noise is None:
+            failures.append('no baseline_rms_noise for this recording')
+        elif rec.baseline_rms_noise > 5e-3:
             failures.append('baseline rms noise of %s exceeds 5mV' % pg.siFormat(rec.baseline_rms_noise, suffix='V'))
         
     elif rec.clamp_mode == 'vc':

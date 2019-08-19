@@ -29,7 +29,7 @@ db.create_tables()
 
 def get_pair_notes_record(expt_id, pre_cell_id, post_cell_id, session=None):
     if session is None:
-        session = db.session()
+        session = db.default_session
 
     q = session.query(PairNotes)
     q = q.filter(PairNotes.expt_id==expt_id)

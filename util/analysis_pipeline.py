@@ -42,7 +42,7 @@ if __name__ == '__main__':
             try:
                 if mod.startswith(':'):
                     i = list(all_modules.keys()).index(mod[1:])
-                    modules.extend(list(all_modules.values())[:i])
+                    modules.extend(list(all_modules.values())[:i+1])
                 elif mod.endswith(':'):
                     i = list(all_modules.keys()).index(mod[:-1])
                     modules.extend(list(all_modules.values())[i:])
@@ -57,7 +57,7 @@ if __name__ == '__main__':
     
     if args.rebuild:
         mod_names = ', '.join([module.name for module in modules])
-        if six.moves.input("Rebuild modules: %s? (y/n) " % mod_names) != 'y':
+        if six.moves.input("Rebuild modules in %s: %s? (y/n) " % (str(db), mod_names)) != 'y':
             print("  Nuts.")
             sys.exit(-1)
 

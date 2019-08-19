@@ -169,10 +169,10 @@ class Experiment(object):
 
                     # If this pair has a record in the data notes DB, then it overrides
                     # anything found in pipettes.yml
-                    pair_notes = data_notes_db.get_pair_notes(self.uid, pre_cell.cell_id, post_cell.cell_id)
-                    if pair_notes is not None:
-                        electrical = pair_notes.notes['gap_junction']
-                        synapse_type = pair_notes.notes['synapse_type']
+                    pair_notes_rec = data_notes_db.get_pair_notes_record(self.uid, pre_cell.cell_id, post_cell.cell_id)
+                    if pair_notes_rec is not None:
+                        electrical = pair_notes_rec.notes['gap_junction']
+                        synapse_type = pair_notes_rec.notes['synapse_type']
                         synapse = synapse_type in ('ex', 'in')
                     
                     pair = Pair(

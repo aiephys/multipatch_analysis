@@ -3,14 +3,15 @@ from . import make_table
 from .experiment import Pair
 
 
-__all__ = ['AvgResponseFit']
+__all__ = ['Synapse', 'AvgResponseFit']
 
 
 Synapse = make_table(
     name='synapse',
-    comment="Kinetic properties measured from synaptic responses.",
+    comment="Chemical synapse properties",
     columns=[
         ('pair_id', 'pair.id', 'The ID of the entry in the pair table to which these results apply', {'index': True}),
+        ('synapse_type', 'str', '"ex" or "in" indicating whether the synapse is excitatory or inhibitory', {'index': True}),
         ('latency', 'float', 'Latency in seconds from spike max slope until synaptic response onset.', {'index': True}),
         ('psp_rise_time', 'float', 'Rise time in seconds measured from averaged PSPs.'),
         ('psp_decay_tau', 'float', 'decay time constant in seconds measured from averaged PSPs.'),
@@ -38,8 +39,13 @@ AvgResponseFit = make_table(
         ('nrmse', 'float', 'Normalized RMS error of the fit residual'),
         ('initial_xoffset', 'float', 'Initial latency supplied to fitting algorithm'),
         ('manual_qc_pass', 'bool', 'If true, this fit passes manual verification QC'),
+        ('avg_data', 'array', 'Averaged PSP/PSC that was fit.'),
+        ('avg_data_start_time', 'float', 'Starting time of avg_data, relative to the presynaptic spike'),
+        ('n_averaged_responses', 'int', 'Number of postsynaptic responses that were averaged in avg_data'),
+        ('avg_baseline_noise', 'float', 'Standard deviation of avg_data before the presynaptic stimulus'),
     ]
 )
+
 
 Pair.synapse = relationship(Synapse, back_populates="pair", cascade="delete", single_parent=True, uselist=False)
 Synapse.pair = relationship(Pair, back_populates="synapse", single_parent=True)
