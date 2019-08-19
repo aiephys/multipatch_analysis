@@ -58,7 +58,7 @@ def recording_qc_pass(rec):
     return qc_pass, failures
 
 
-def pulse_response_qc_pass(post_rec, window, n_spikes, adjacent_pulses, ui=None):
+def pulse_response_qc_pass(post_rec, window, n_spikes, adjacent_pulses):
     """Apply QC criteria for pulse-response recordings:
 
     * Postsynaptic recording passes recording_qc_pass()
