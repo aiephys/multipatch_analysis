@@ -58,7 +58,7 @@ class MainWindow(pg.QtGui.QWidget):
         self.ptree.addParameters(self.pair_param)
         self.ptree.addParameters(self.user_params, showTop=False)
         self.fit_ptree = ptree.ParameterTree(showHeader=False)
-        self.fit_ptree.addParameters(self.output_params)
+        self.fit_ptree.addParameters(self.output_params, showTop=False)
         self.save_btn = pg.FeedbackButton('Save Analysis')
         self.expt_btn = pg.QtGui.QPushButton('Set Experiments with Hashtags')
         self.fit_btn = pg.QtGui.QPushButton('Fit Responses')
