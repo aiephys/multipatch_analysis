@@ -381,7 +381,6 @@ class SuperLine(pg.QtCore.QObject):
     def line_sync(self, moved_line):
         for line in self.lines:
             with pg.SignalBlock(line.sigPositionChanged, self.line_sync):
-                # with pg.SignalBlock(line.sigPositionChangeFinished, self.move_finished):
                 line.setValue(moved_line.value())
         self.sigPositionChanged.emit(self)
 
@@ -399,7 +398,6 @@ class SuperLine(pg.QtCore.QObject):
     def set_value(self, value, block_fit=False):
         for line in self.lines:
             with pg.SignalBlock(line.sigPositionChanged, self.line_sync):
-                # with pg.SignalBlock(line.sigPositionChangeFinished, self.move_finished):
                 line.setValue(value)
         self.sigPositionChanged.emit(self)
         if block_fit is False:
@@ -416,7 +414,7 @@ class PairAnalysis(object):
         
         self.latency_superline = SuperLine()
         self.latency_superline.sigPositionChanged.connect(self.ctrl_panel.set_latency)
-        # self.latency_superline.sigPositionChangeFinished.connect(self.fit_response_update)
+       
         self.ic_plot = TSeriesPlot('Current Clamp', 'V')
         for plot in self.ic_plot.trace_plots:
             plot.addItem(self.latency_superline.new_line(default_latency))
