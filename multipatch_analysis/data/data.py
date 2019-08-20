@@ -280,12 +280,13 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
             pulse['pre_rec'] = pre_rec.time_slice(pulse['rec_start'], pulse['rec_stop'])
 
             # select baseline region between 8th and 9th pulses
-            baseline_dur = 100e-3
-            stop = spikes[8]['pulse_start']
-            start = stop - baseline_dur
-            pulse['baseline'] = post_rec['primary'].time_slice(start, stop)
-            pulse['baseline_start'] = start
-            pulse['baseline_stop'] = stop
+            if len(spikes) > 8:
+                baseline_dur = 100e-3
+                stop = spikes[8]['pulse_start']
+                start = stop - baseline_dur
+                pulse['baseline'] = post_rec['primary'].time_slice(start, stop)
+                pulse['baseline_start'] = start
+                pulse['baseline_stop'] = stop
 
             # Add minimal QC metrics for excitatory and inhibitory measurements
             pulse_window = [pulse['rec_start'], pulse['rec_stop']]
@@ -296,8 +297,6 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
             if next_pulse is not None:
                 adj_pulse_times.append(next_pulse - this_pulse)
             pulse['ex_qc_pass'], pulse['in_qc_pass'], pulse['qc_failures'] = qc.pulse_response_qc_pass(post_rec=post_rec, window=pulse_window, n_spikes=n_spikes, adjacent_pulses=adj_pulse_times)
-
-            assert len(pulse['baseline']) > 0
 
             result.append(pulse)
         

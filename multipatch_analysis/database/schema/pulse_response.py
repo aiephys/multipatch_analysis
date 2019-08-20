@@ -11,6 +11,12 @@ PulseResponseStrength = make_table(
     comment="Measurements of membrane potential or current deflection following each evoked presynaptic spike.",
     columns=[
         ('pulse_response_id', 'pulse_response.id', '', {'index': True, 'unique': True}),
+        
+        ('amplitude', 'float', 'The estimated amplitude of the synaptic event (if any) in response to this stimulus.'),
+        ('dec_fit_amp', 'float', 'Amplitude of gaussian fit to the deconvolved response.'),
+        ('dec_fit_latency', 'float', 'Latency (relative to spike max slope) of gaussian fit to the deconvolved response.'),
+        ('dec_fit_sigma', 'float', 'Sigma of gaussian fit to the deconvolved response.'),
+        
         ('pos_amp', 'float', 'max-median offset from baseline to pulse response window'),
         ('neg_amp', 'float', 'min-median offset from baseline to pulse response window'),
         ('pos_dec_amp', 'float', 'max-median offset from baseline to pulse response window from devonvolved trace'),

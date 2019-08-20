@@ -33,8 +33,10 @@ def recording_qc_pass(rec):
     """
     failures = []
 
-    if rec.baseline_current < -800e-12 or rec.baseline_current > 800e-12:
-       failures.append('basline current of %s is outside of bounds [-800pA, 800pA]' % pg.siFormat(rec.baseline_current, suffix='A'))
+    if rec.baseline_current is None:
+       failures.append('unknown baseline current')
+    elif rec.baseline_current < -800e-12 or rec.baseline_current > 800e-12:
+       failures.append('baseline current of %s is outside of bounds [-800pA, 800pA]' % pg.siFormat(rec.baseline_current, suffix='A'))
     
     if rec.clamp_mode == 'ic':
         if rec.baseline_potential is None:
@@ -48,7 +50,9 @@ def recording_qc_pass(rec):
             failures.append('baseline rms noise of %s exceeds 5mV' % pg.siFormat(rec.baseline_rms_noise, suffix='V'))
         
     elif rec.clamp_mode == 'vc':
-        if rec.baseline_rms_noise > 200e-12:
+        if rec.baseline_rms_noise is None:
+            failures.append('no baseline_rms_noise for this recording')
+        elif rec.baseline_rms_noise > 200e-12:
            failures.append('baseline rms noise of %s exceeds 200pA' % pg.siFormat(rec.baseline_rms_noise, suffix='A'))
        
         
@@ -139,16 +143,21 @@ def pulse_response_qc_pass(post_rec, window, n_spikes, adjacent_pulses):
     in_limits = [-60e-3, -45e-3]
     # check both baseline_potential (which is measured over all baseline regions in the recording)
     # and *base*, which is just the median value over the response window
-    base2 = post_rec.baseline_potential
     
     if not (ex_limits[0] < base < ex_limits[1]): 
         failures['ex'].append('Response window baseline of %s is outside of bounds [-85mV, -45mV]' % pg.siFormat(base, suffix='V'))
-    if not (ex_limits[0] < base2 < ex_limits[1]):
-        failures['ex'].append('Recording baseline of %s is outside of bounds [-85mV, -45mV]' % pg.siFormat(base2, suffix='V'))
     if not (in_limits[0] < base < in_limits[1]): 
         failures['in'].append('Response window baseline of %s is outside of bounds [-60mV, -45mV]' % pg.siFormat(base, suffix='V'))
-    if not (in_limits[0] < base2 < in_limits[1]):
-        failures['in'].append('Recording baseline of %s is outside of bounds [-60mV, -45mV]' % pg.siFormat(base2, suffix='V'))
+    
+    base2 = post_rec.baseline_potential
+    if base2 is None:
+        failures['ex'].append('Unknown baseline potential for this recording')
+        failures['in'].append('Unknown baseline potential for this recording')
+    else:
+        if not (ex_limits[0] < base2 < ex_limits[1]):
+            failures['ex'].append('Recording baseline of %s is outside of bounds [-85mV, -45mV]' % pg.siFormat(base2, suffix='V'))
+        if not (in_limits[0] < base2 < in_limits[1]):
+            failures['in'].append('Recording baseline of %s is outside of bounds [-60mV, -45mV]' % pg.siFormat(base2, suffix='V'))
     
     
     ex_qc_pass = len(failures['ex'])==0 

@@ -191,3 +191,14 @@ def analyze_response_strength(rec, source, remove_artifacts=False, deconvolve=Tr
     results['neg_dec_amp'], results['neg_dec_latency'] = measure_peak(dec_data, '-', spike_time, pulse_times)
     
     return results
+
+
+def measure_response(rec, source):
+    """Make a best estimate of response strength to a presynaptic stimulus.
+    
+    1. Exponential deconvolve response
+    2. Gaussian fit to detect response using known latency for this synapse
+    3. Reconvolve with baseline removed and measure original amplitude
+    """
+    
+    

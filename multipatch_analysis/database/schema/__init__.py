@@ -13,7 +13,7 @@ from .experiment import *
 from .morphology import *
 from .dataset import *
 from .synapse import *
-from .pulse_response_strength import *
+from .pulse_response import *
 from .dynamics import *
 from .connection_strength import *
 from .avg_first_pulse_fit import *

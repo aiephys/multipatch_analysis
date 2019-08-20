@@ -6,7 +6,7 @@ import pyqtgraph as pg
 from ... import config
 from ..pipeline_module import DatabasePipelineModule
 from .dataset import DatasetPipelineModule
-from ...pulse_response_strength import baseline_query, response_query, analyze_response_strength
+from ...pulse_response_strength import baseline_query, response_query, measure_response, analyze_response_strength
 
 
 class PulseResponsePipelineModule(DatabasePipelineModule):
@@ -68,8 +68,15 @@ def _compute_strength(source, expt_id, session, db):
     new_recs = []
 
     for rec in recs:
-        result = analyze_response_strength(rec, source)
         new_rec = {'%s_id'%source: rec.response_id}
+        
+        # best estimate of response amplitude using known latency for this synapse
+        result = measure_response(rec, source)
+        for k in ['amplitude', 'dec_fit_amp', 'dec_fit_latency', 'dec_fit_sigma']:
+            new_rec[k] = result[k]
+        
+        # "unbiased" response analysis used to predict connectivity
+        result = analyze_response_strength(rec, source)
         # copy a subset of results over to new record
         for k in ['pos_amp', 'neg_amp', 'pos_dec_amp', 'neg_dec_amp', 'pos_dec_latency', 'neg_dec_latency', 'crosstalk']:
             new_rec[k] = result[k]
@@ -82,14 +89,10 @@ def _compute_strength(source, expt_id, session, db):
     #     session.bulk_insert_mappings(PulseResponseStrength, new_recs)
     # else:
     #     session.bulk_insert_mappings(BaselineResponseStrength, new_recs)
-    if source == 'pulse_response':
-        for rec in new_recs:
-            prs = db.PulseResponseStrength(**rec)
-            session.add(prs)
-    else:
-        for rec in new_recs:
-            brs = db.BaselineResponseStrength(**rec)
-            session.add(brs)
+    
+    rec_type = db.PulseResponseStrength if source == 'pulse_response' else db.BaselineResponseStrength
+    for rec in new_recs:
+        session.add(rec_type(**rec))
 
     # just to collect error messages here in case we have made a mistake:
     session.flush()
