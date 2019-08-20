@@ -151,4 +151,4 @@ class Cell(object):
         return ((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2 + (p1[2]-p2[2])**2)**0.5
 
     def __repr__(self):
-        return "<Cell %s:%d>" % (self.expt.source_id, self.cell_id)
+        return "<Cell %s:%s>" % (self.expt.source_id, self.cell_id)
