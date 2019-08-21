@@ -66,59 +66,6 @@ def measure_response(rec, baseline_rec):
     return response_fit, baseline_fit
 
 
-def measure_response_1(rec):
-    """Make a best estimate of response strength to a presynaptic stimulus.
-    
-    1. Exponential deconvolve response
-    2. Gaussian fit to detect response using known latency/kinetics for this synapse
-    3. Reconvolve with baseline removed and measure original amplitude
-    """
-    if rec.clamp_mode == 'ic':
-        rise_time = rec.psp_rise_time
-        decay_tau = rec.psp_decay_tau
-    else:
-        rise_time = rec.psc_rise_time
-        decay_tau = rec.psc_decay_tau
-                
-    # make sure all parameters are available
-    for v in [rec.spike_time, rec.latency, rise_time, decay_tau]:
-        if v is None or rec.latency is None or not np.isfinite(v):
-            return {'amplitude': None, 'baseline_amplitude': None}    
-    
-    data = TSeries(rec.data, t0=rec.rec_start, sample_rate=db.default_sample_rate)
-
-    # exponential deconvolution
-    tau = 15e-3 if rec.clamp_mode == 'ic' else 5e-3
-    deconv = exp_deconvolve(data, tau)
-    
-    # subtract baseline
-    base_slice = deconv.time_slice(None, rec.pulse_start)
-    baseline = base_slice.median()
-    bsub = deconv - baseline
-    
-    # clip and reconvolve response 
-    clipped = bsub.time_slice(rec.spike_time + rec.latency, None)
-    reconv = exp_reconvolve(clipped, tau)
-        
-    # fit
-        
-    psp = Psp()
-    fit = psp.fit(reconv.data, x=reconv.time_values, params=dict(
-        amp=0, 
-        rise_time=(rise_time, 'fixed'), 
-        decay_tau=(decay_tau, 'fixed'), 
-        rise_power=2, 
-        xoffset=(rec.latency, 'fixed'), 
-        yoffset=(0, 'fixed')
-    ))
-    
-    raise Exception()
-    return {
-        'amplitude': fit.best_values['amp'],
-        'baseline_amplitude': None,
-    }
-
-    
 def measure_peak(trace, sign, spike_time, pulse_times, spike_delay=1e-3, response_window=4e-3):
     # Start measuring response after the pulse has finished, and no earlier than 1 ms after spike onset
     # response_start = max(spike_time + spike_delay, pulse_times[1])
