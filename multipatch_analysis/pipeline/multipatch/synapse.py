@@ -9,7 +9,6 @@ from ... import config
 from ..pipeline_module import DatabasePipelineModule
 from .experiment import ExperimentPipelineModule
 from .dataset import DatasetPipelineModule
-from .pulse_response import PulseResponsePipelineModule
 from ...avg_response_fit import get_pair_avg_fits
 
 
@@ -118,3 +117,5 @@ class SynapsePipelineModule(DatabasePipelineModule):
         recs.extend(q.all())
 
         return recs
+        
+    
