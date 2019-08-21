@@ -30,7 +30,7 @@ class DynamicsPipelineModule(DatabasePipelineModule):
         # Load experiment from DB
         expt = db.experiment_from_timestamp(job_id, session=session)
         for pair in expt.pairs.values():
-            if pair.synapse is False:
+            if pair.has_synapse is False:
                 continue
             recs = session.query(db.Recording).join(db.PulseResponse).join(db.Pair).filter(db.Pair.id==pair.id).all()
             pulse_amps = {}
@@ -56,7 +56,7 @@ class DynamicsPipelineModule(DatabasePipelineModule):
                     if delay_dist > 5:
                         rec_delay_rounded = None
                 pulse_amps.setdefault(ind_freq, {})
-                sign = pair.connection_strength.synapse_type
+                sign = pair.synapse.synapse_type
                 qc = sign+'_qc_pass'
                 # make sure all 12 pulses pass qc before moving on
                 qc_check = [getattr(r.pulse_response, qc) for r in results]

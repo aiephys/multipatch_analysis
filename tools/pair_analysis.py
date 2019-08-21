@@ -501,11 +501,11 @@ class PairAnalysis(object):
             self.pulse_responses = [q.pulse_response for q in q.all()]
             print('got %d pulse responses' % len(self.pulse_responses))
                 
-            if pair.synapse is True:
-                synapse_type = pair.synapse_type
+            if pair.has_synapse is True:
+                synapse_type = pair.synapse.synapse_type
             else:
                 synapse_type = None
-            pair_params = {'Synapse call': synapse_type, 'Gap junction call': pair.electrical}
+            pair_params = {'Synapse call': synapse_type, 'Gap junction call': pair.has_electrical}
             self.ctrl_panel.update_params(**pair_params)
 
     def analyze_responses(self):
@@ -763,8 +763,6 @@ if __name__ == '__main__':
 
     default_session = db.session()
     notes_session = notes_db.db.session()
-    # synapses = default_session.query(db.Pair).filter(db.Pair.synapse==True).all()
-    # timestamps = set([pair.experiment.acq_timestamp for pair in synapses])
     timestamps = [r.acq_timestamp for r in db.query(db.Experiment.acq_timestamp).all()]
     
     mw = MainWindow(default_session, notes_session)

@@ -15,20 +15,17 @@ class Pair(object):
         Presynaptic cell
     post_cell : Cell instance
         Postsynaptic cell
-    synapse : bool | None
+    has_synapse : bool | None
         Whether a chemical synapse connects pre_cell to post_cell
-    synapse_type : str | None
-        'ex' or 'in' indicating whether the synapse is excitatory or inhibitory
-    electrical : bool | None
+    has_electrical : bool | None
         Whether an electrical synapse connects pre_cell to post_cell
     """
-    def __init__(self, experiment, pre_cell, post_cell, synapse=None, synapse_type=None, electrical=None):
+    def __init__(self, experiment, pre_cell, post_cell, has_synapse=None, synapse_type=None, has_electrical=None):
         self.experiment = experiment
         self.pre_cell = pre_cell
         self.post_cell = post_cell
-        self.synapse = synapse
-        self.synapse_type = synapse_type
-        self.electrical = electrical
+        self.has_synapse = has_synapse
+        self.has_electrical = has_electrical
 
     @property
     def distance(self):

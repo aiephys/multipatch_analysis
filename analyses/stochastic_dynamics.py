@@ -422,7 +422,7 @@ if __name__ == '__main__':
     expt = db.experiment_from_timestamp(expt_id, session=session)
     pair = expt.pairs[(pre_cell_id, post_cell_id)]
 
-    syn_type = pair.connection_strength.synapse_type
+    syn_type = pair.synapse.synapse_type
 
 
     # 1. Get a list of all presynaptic spike times and the amplitudes of postsynaptic responses

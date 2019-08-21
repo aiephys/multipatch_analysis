@@ -121,10 +121,10 @@ class SynphysDatabase(Database):
             query = post_class.filter_query(query, post_cell)
 
         if synapse is not None:
-            query = query.filter(self.Pair.synapse==synapse)
+            query = query.filter(self.Pair.has_synapse==synapse)
 
         if electrical is not None:
-            query = query.filter(self.Pair.electrical==electrical)
+            query = query.filter(self.Pair.has_electrical==electrical)
 
         if project_name is not None:
             if isinstance(project_name, str):

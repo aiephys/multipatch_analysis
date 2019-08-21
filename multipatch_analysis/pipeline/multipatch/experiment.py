@@ -108,8 +108,8 @@ class ExperimentPipelineModule(DatabasePipelineModule):
                 experiment=expt_entry,
                 pre_cell=pre_cell_entry,
                 post_cell=post_cell_entry,
-                has_synapse=pair.synapse,
-                has_electrical=pair.electrical,
+                has_synapse=pair.has_synapse,
+                has_electrical=pair.has_electrical,
                 n_ex_test_spikes=0,  # will be counted later
                 n_in_test_spikes=0,
                 distance=pair.distance,

@@ -12,7 +12,8 @@ import sys
 
 
 class AverageFirstPulseFitPipelineModule(DatabasePipelineModule):
-    """Analyze synaptic connection strength for all pairs per experiment
+    """Measure the "resting state" amplitude of a synapse by averaging together only responses 
+    that have no prior stimuli in a certain window. 
     """
     name = 'avg_first_pulse_fit'
     dependencies = [ConnectionStrengthPipelineModule]
