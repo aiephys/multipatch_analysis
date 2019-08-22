@@ -179,11 +179,11 @@ class PipelineModule(object):
             if raise_exceptions:
                 raise
             else:
-                print("Error processing %s %d/%d  %s:" % (cls.name, job_index+1, n_jobs, job_id))
+                print("Error processing %s %d/%d  %s:" % (cls.name, job_n+1, n_jobs, job_id))
                 sys.excepthook(*sys.exc_info())
                 return {'job_id': job_id, 'error': str(exc)}
         else:
-            print("Finished %s %d/%d  %s  (%0.2f sec)" % (cls.name, job_index+1, n_jobs, job_id, time.time()-start))
+            print("Finished %s %d/%d  %s  (%0.2f sec)" % (cls.name, job_n+1, n_jobs, job_id, time.time()-start))
             return {'job_id': job_id, 'error': None}
    
     @classmethod 
