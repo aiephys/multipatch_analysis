@@ -88,7 +88,7 @@ Experiment = make_table(
         ('target_temperature', 'float', 'The intended temperature of the experiment (but actual recording temperature is stored elsewhere)'),
         ('date', 'datetime', 'The date of this experiment'),
         ('lims_specimen_id', 'int', 'ID of LIMS "CellCluster" specimen.'),
-        #('ext_id', 'str', 'Unique external identifier string for the experiment.')
+        ('ext_id', 'str', 'Unique external identifier string for the experiment.')
     ]
 )
 
