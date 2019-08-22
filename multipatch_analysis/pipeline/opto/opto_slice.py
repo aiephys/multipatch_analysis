@@ -32,27 +32,21 @@ class OptoSlicePipelineModule(DatabasePipelineModule):
         # pull some metadata from LIMS
         #sid = self.find_specimen_name(dh)
         sids = data_model.find_lims_specimen_ids(dh)
+        print('sids:', sids)
         if len(sids) == 0:
             limsdata = {}
         elif len(sids) == 1:
-            limsdata = lims.specimen_info(sids[0])
-        elif len(sids) > 0:
+            limsdata = lims.specimen_info(specimen_id=sids[0])
+        elif len(sids) > 1:
             data = []
             for i in sids:
-                data.append(lims.specimen_info(i))
+                data.append(lims.specimen_info(specimen_id=i))
             limsdata = {}
             for key in ['organism', 'date_of_birth', 'age', 'sex', 'plane_of_section', 'exposed_surface', 'hemisphere', 'specimen_name', 'genotype']:
                 vals = set([d[key] for d in data])
                 if len(vals) == 1:
                     limsdata[key] = vals[0]
 
-
-
-        sid = info.get('specimen_ID', '').strip()
-        if len(sid) > 0:
-            limsdata = lims.specimen_info(sid)
-        else:
-            limsdata = {}
 
         quality = info.get('slice quality', None)
         try:
