@@ -33,6 +33,7 @@ class NDArray(TypeDecorator):
     """For marshalling arrays in/out of binary DB fields.
     """
     impl = LargeBinary
+    hashable = False
     
     def process_bind_param(self, value, dialect):
         if value is None:
@@ -52,6 +53,7 @@ class JSONObject(TypeDecorator):
     """For marshalling objects in/out of json-encoded text.
     """
     impl = String
+    hashable = False
     
     def process_bind_param(self, value, dialect):
         return json.dumps(value)
