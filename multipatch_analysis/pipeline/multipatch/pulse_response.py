@@ -72,6 +72,14 @@ class PulseResponsePipelineModule(DatabasePipelineModule):
         This method is used by drop_jobs to delete records for specific job IDs.
         """
         db = self.database
+        
+        q = session.query(db.PulseResponseFit)
+        q = q.filter(db.PulseResponseFit.pulse_response_id==db.PulseResponse.id)
+        q = q.filter(db.PulseResponse.pair_id==db.Pair.id)
+        q = q.filter(db.Pair.experiment_id==db.Experiment.id)
+        q = q.filter(db.Experiment.ext_id.in_(job_ids))
+        fits = q.all()
+        
         q = session.query(db.PulseResponseStrength)
         q = q.filter(db.PulseResponseStrength.pulse_response_id==db.PulseResponse.id)
         q = q.filter(db.PulseResponse.pair_id==db.Pair.id)
@@ -87,7 +95,7 @@ class PulseResponsePipelineModule(DatabasePipelineModule):
         q = q.filter(db.Experiment.ext_id.in_(job_ids))
         brs = q.all()
         
-        return prs+brs
+        return fits+prs+brs
 
 
 def _compute_strength(source, recs, session, db):
