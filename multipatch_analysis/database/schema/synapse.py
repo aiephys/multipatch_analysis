@@ -39,7 +39,7 @@ AvgResponseFit = make_table(
         ('nrmse', 'float', 'Normalized RMS error of the fit residual'),
         ('initial_xoffset', 'float', 'Initial latency supplied to fitting algorithm'),
         ('manual_qc_pass', 'bool', 'If true, this fit passes manual verification QC'),
-        ('avg_data', 'array', 'Averaged PSP/PSC that was fit.'),
+        ('avg_data', 'array', 'Averaged PSP/PSC that was fit.', {'deferred': True}),
         ('avg_data_start_time', 'float', 'Starting time of avg_data, relative to the presynaptic spike'),
         ('n_averaged_responses', 'int', 'Number of postsynaptic responses that were averaged in avg_data'),
         ('avg_baseline_noise', 'float', 'Standard deviation of avg_data before the presynaptic stimulus'),

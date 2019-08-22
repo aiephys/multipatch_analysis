@@ -87,7 +87,7 @@ def check():
         host = host or "[None]"
         name = name or '???'
         count = counts[user]
-        print("{:10s}{:15s}".format(name, ip))
+        print("{:10s}{:15s}".format(str(name), str(ip)))
         
         for con in connects:
             if con['client_addr'] != ip:
