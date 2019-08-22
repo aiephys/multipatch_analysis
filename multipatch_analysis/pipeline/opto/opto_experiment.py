@@ -40,6 +40,10 @@ class OptoExperimentPipelineModule(DatabasePipelineModule):
                 print('create_db_entries for:', entry['site_path'], "job_id:", job_id)
                 expt = Experiment(site_path=entry['site_path'], loading_library=opto, meta_info=entry)
 
+            # look up slice record in DB
+            ts = expt.slice_timestamp
+            slice_entry = db.slice_from_timestamp(ts, session=session)
+
             expt_info = expt.expt_info
             if expt_info is None:
                 expt_info = {}
@@ -58,7 +62,7 @@ class OptoExperimentPipelineModule(DatabasePipelineModule):
             }
 
             expt_entry = db.Experiment(**fields)
-            #expt_entry.slice = slice_entry
+            expt_entry.slice = slice_entry
             session.add(expt_entry)
 
             cell_entries = {}
