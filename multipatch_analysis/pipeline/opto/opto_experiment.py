@@ -110,7 +110,7 @@ class OptoExperimentPipelineModule(DatabasePipelineModule):
                 )
                 session.add(pair_entry)
 
-            session.commit()
+            #session.commit()
 
         except:
             session.rollback()
