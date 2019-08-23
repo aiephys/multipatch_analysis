@@ -146,8 +146,9 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         Checks that markers are loaded into the canvas
         Gets timestamp
         Creates dictionary of cell locations and enables the save button
+        If the cluster is unmappable (no stained cells, damage, etc.) the json will submit cell_map_no_go to specimen tags
         """
-
+            
         items = self.mosaic_editor.canvas.items
         image_20 = lims.specimen_20x_image(self.specimen_name, treatment='Biocytin')
 
@@ -244,7 +245,6 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
 
             if ret == QtGui.QMessageBox.Cancel:
                 raise Exception ('Submission Cancelled')
-
         
     def save_json_and_trigger(self):
         """
@@ -321,9 +321,7 @@ class VoltageImagingAnalysisModule(Module):
         self.ui.show()
         
         self.load_from_dm_btn = QtGui.QPushButton("load from data manager")
-        self.load_from_dm_btn.setParent(self.ui)
-        self.load_from_dm_btn.resize(160, 30)
-        self.load_from_dm_btn.show()
+        self.ui.layout.addWidget(self.load_from_dm_btn, self.ui.layout.rowCount(), 0)
         self.load_from_dm_btn.clicked.connect(self.load_from_dm_clicked)
         
     def load_from_dm_clicked(self):

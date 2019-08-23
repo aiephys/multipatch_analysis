@@ -8,7 +8,7 @@ import sys
 import datetime
 import re
 from multipatch_analysis.synaptic_dynamics import DynamicsAnalyzer
-from neuroanalysis.data import Trace, TraceList
+from neuroanalysis.data import TSeries, TSeriesList
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.event_detection import exp_deconvolve
 from neuroanalysis.filter import bessel_filter
@@ -90,7 +90,7 @@ def format_responses(responses):
             stim_params = responses['stim_param'][trial]
             if stim_params not in response:
                 response[stim_params] = []
-            response[stim_params].append(Trace(data=responses['data'][trial], dt=responses['dt'][trial],
+            response[stim_params].append(TSeries(data=responses['data'][trial], dt=responses['dt'][trial],
                                     stim_param=[responses['stim_param'][trial]]))
     return response
 
@@ -114,8 +114,8 @@ def get_amplitude(response_list):
     """
     Parameters
     ----------
-    response_list : list of neuroanalysis.data.TraceView objects
-        neuroanalysis.data.TraceView object contains waveform data. 
+    response_list : list of neuroanalysis.data.TSeriesView objects
+        neuroanalysis.data.TSeriesView object contains waveform data. 
     """
     
     if len(response_list) == 1:
@@ -149,41 +149,41 @@ def trace_avg(response_list):
 #    """
 #    Parameters
 #    ----------
-#    response_list : list of neuroanalysis.data.TraceView objects
-#        neuroanalysis.data.TraceView object contains waveform data. 
+#    response_list : list of neuroanalysis.data.TSeriesView objects
+#        neuroanalysis.data.TSeriesView object contains waveform data. 
 #        
 #    Returns
 #    -------
-#    bsub_mean : neuroanalysis.data.Trace object
+#    bsub_mean : neuroanalysis.data.TSeries object
 #        averages and baseline subtracts the ephys waveform data in the 
-#        input response_list TraceView objects and replaces the .t0 value with 0. 
+#        input response_list TSeriesView objects and replaces the .t0 value with 0. 
 #    
 #    """
     for trace in response_list: 
-        trace.t0 = 0  #align traces for the use of TraceList().mean() funtion
-    avg_trace = TraceList(response_list).mean() #returns the average of the wave form in a of a neuroanalysis.data.Trace object 
+        trace.t0 = 0  #align traces for the use of TSeriesList().mean() funtion
+    avg_trace = TSeriesList(response_list).mean() #returns the average of the wave form in a of a neuroanalysis.data.TSeries object 
     bsub_mean = bsub(avg_trace) #returns a copy of avg_trace but replaces the ephys waveform in .data with the base_line subtracted wave_form
     
     return bsub_mean
 
 def bsub(trace):
-    """Returns a copy of the neuroanalysis.data.Trace object 
+    """Returns a copy of the neuroanalysis.data.TSeries object 
     where the ephys data waveform is replaced with a baseline 
     subtracted ephys data waveform.  
     
     Parameters
     ----------
-    trace : neuroanalysis.data.Trace object  
+    trace : neuroanalysis.data.TSeries object  
         
     Returns
     -------
-    bsub_trace : neuroanalysis.data.Trace object
+    bsub_trace : neuroanalysis.data.TSeries object
        Ephys data waveform is replaced with a baseline subtracted ephys data waveform
     """
     data = trace.data # actual numpy array of time series ephys waveform
     dt = trace.dt # time step of the data
     base = float_mode(data[:int(10e-3 / dt)]) # baseline value for trace 
-    bsub_trace = trace.copy(data=data - base) # new neuroanalysis.data.Trace object for baseline subtracted data
+    bsub_trace = trace.copy(data=data - base) # new neuroanalysis.data.TSeries object for baseline subtracted data
     return bsub_trace
 
 def response_filter(response, freq_range=None, holding_range=None, pulse=False, train=None, delta_t=None):
@@ -335,8 +335,8 @@ def pulse_qc(responses, baseline=None, pulse=None, plot=None):
     """
     Parameters
     ----------
-    responses : list of neuroanalysis.data.TraceView objects
-        neuroanalysis.data.TraceView object contains waveform data. 
+    responses : list of neuroanalysis.data.TSeriesView objects
+        neuroanalysis.data.TSeriesView object contains waveform data. 
     base_line : float
         Factor by which to multiply the standard deviation of the baseline current.
     pulse : float
@@ -431,7 +431,7 @@ def summary_plot_pulse(feature_list, labels, titles, i, median=False, grand_trac
         iterator to place groups along x-axis
     median : boolean
         to calculate median (True) vs mean (False), default is False
-    grand_trace : neuroanalysis.data.TraceView object
+    grand_trace : neuroanalysis.data.TSeriesView object
         option to plot response trace alongside scatter plot, default is None
     plot : pyqtgraph.PlotItem
         If not None, plot the data on the referenced pyqtgraph object.

@@ -1,251 +1,33 @@
 """
-Accumulate all experiment data into a set of linked tables.
+Low-level relational database / sqlalchemy interaction.
+
+The actual schemas for database tables are implemented in other files in this subpackage.
 """
-import os, io, time
+from __future__ import division, print_function
+
+import os, sys, io, time, json, threading, gc, re, weakref
 from datetime import datetime
+from collections import OrderedDict
 import numpy as np
+try:
+    import queue
+except ImportError:
+    import Queue as queue
 
 import sqlalchemy
 from distutils.version import LooseVersion
 if LooseVersion(sqlalchemy.__version__) < '1.2':
     raise Exception('requires at least sqlalchemy 1.2')
 
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, Float, Date, DateTime, LargeBinary, ForeignKey, or_, and_
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, Float, Date, DateTime, LargeBinary, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import relationship, deferred, sessionmaker, aliased
+from sqlalchemy.orm import relationship, deferred, sessionmaker, reconstructor
 from sqlalchemy.types import TypeDecorator
 from sqlalchemy.sql.expression import func
 
 from .. import config
 
-# database version should be incremented whenever the schema has changed
-db_version = 11
-db_name = '{database}_{version}'.format(database=config.synphys_db, version=db_version)
-db_address_ro = '{host}/{database}'.format(host=config.synphys_db_host, database=db_name)
-if config.synphys_db_host_rw is None:
-    db_address_rw = None
-else:
-    db_address_rw = '{host}/{database}'.format(host=config.synphys_db_host_rw, database=db_name)
-
-default_sample_rate = 20000
-
-
-_sample_rate_str = '%dkHz' % (default_sample_rate // 1000)
-
-table_schemas = {
-    'slice': [
-        "All brain slices on which an experiment was attempted.",
-        ('acq_timestamp', 'float', 'Creation timestamp for slice data acquisition folder.', {'unique': True}),
-        ('species', 'str', 'Human | mouse (from LIMS)'),
-        ('age', 'int', 'Specimen age (in days) at time of dissection (from LIMS)'),
-        ('sex', 'str', 'Specimen sex ("M", "F", or "unknown"; from LIMS)'),
-        ('weight', 'str', 'Specimen weight (from LIMS)'),
-        ('genotype', 'str', 'Specimen donor genotype (from LIMS)'),
-        ('orientation', 'str', 'Orientation of the slice plane (eg "sagittal"; from LIMS specimen name)'),
-        ('surface', 'str', 'The surface of the slice exposed during the experiment (eg "left"; from LIMS specimen name)'),
-        ('hemisphere', 'str', 'The brain hemisphere from which the slice originated. (from LIMS specimen name)'),
-        ('quality', 'int', 'Experimenter subjective slice quality assessment (0-5)'),
-        ('slice_time', 'datetime', 'Time when this specimen was sliced'),
-        ('slice_conditions', 'object', 'JSON containing solutions, perfusion, incubation time, etc.'),
-        ('lims_specimen_name', 'str', 'Name of LIMS "slice" specimen'),
-        ('storage_path', 'str', 'Location of data within server or cache storage'),
-    ],
-    'experiment': [
-        "A group of cells patched simultaneously in the same slice.",
-        ('original_path', 'str', 'Original location of raw data on rig.'),
-        ('storage_path', 'str', 'Location of data within server or cache storage.'),
-        ('ephys_file', 'str', 'Name of ephys NWB file relative to storage_path.'),
-        ('rig_name', 'str', 'Identifier for the rig that generated these results.'),
-        ('project_name', 'str', 'Name of the project to which this experiment belongs.'),
-        ('acq_timestamp', 'float', 'Creation timestamp for site data acquisition folder.', {'unique': True, 'index': True}),
-        ('slice_id', 'slice.id', 'ID of the slice used for this experiment'),
-        ('target_region', 'str', 'The intended brain region for this experiment'),
-        ('internal', 'str', 'The name of the internal solution used in this experiment '
-                            '(or "mixed" if more than one solution was used). '
-                            'The solution should be described in the pycsf database.'),
-        ('acsf', 'str', 'The name of the ACSF solution used in this experiment. '
-                        'The solution should be described in the pycsf database.'),
-        ('target_temperature', 'float', 'The intended temperature of the experiment (but actual recording temperature is stored elsewhere)'),
-        ('date', 'datetime', 'The date of this experiment'),
-        ('lims_specimen_id', 'int', 'ID of LIMS "CellCluster" specimen.'),
-    ],
-    'electrode': [
-        "Each electrode records a patch attempt, whether or not it resulted in a "
-        "successful cell recording.",
-        ('experiment_id', 'experiment.id', '', {'index': True}),
-        ('patch_status', 'str', 'Status of the patch attempt: no seal, low seal, GOhm seal, tech fail, or no attempt'),
-        ('start_time', 'datetime', 'The time when recording began for this electrode.'),
-        ('stop_time', 'datetime', 'The time when recording ended for this electrode.'),
-        ('device_id', 'int', 'External identifier for the device attached to this electrode (usually the MIES A/D channel)'),
-        ('internal', 'str', 'The name of the internal solution used in this electrode.'),
-        ('initial_resistance', 'float'),
-        ('initial_current', 'float'),
-        ('pipette_offset', 'float'),
-        ('final_resistance', 'float'),
-        ('final_current', 'float'),
-        ('notes', 'str'),
-        ('ext_id', 'int', 'Electrode ID (usually 1-8) referenced in external metadata records'),
-    ],
-    'cell': [
-        "Each row represents a single patched cell.",
-        ('electrode_id', 'electrode.id'),
-        ('cre_type', 'str', 'Comma-separated list of cre drivers apparently expressed by this cell'),
-        ('target_layer', 'str', 'The intended cortical layer for this cell (used as a placeholder until the actual layer call is made)'),
-        ('is_excitatory', 'bool', 'True if the cell is determined to be excitatory by synaptic current, cre type, or morphology'),
-        ('synapse_sign', 'int', 'The sign of synaptic potentials produced by this cell: excitatory=+1, inhibitory=-1, mixed=0'),
-        ('patch_start', 'float', 'Time at which this cell was first patched'),
-        ('patch_stop', 'float', 'Time at which the electrode was detached from the cell'),
-        ('seal_resistance', 'float', 'The seal resistance recorded for this cell immediately before membrane rupture'),
-        ('has_biocytin', 'bool', 'If true, then the soma was seen to be darkly stained with biocytin (this indicates a good reseal, but does may not indicate a high-quality fill)'),
-        ('has_dye_fill', 'bool', 'Indicates whether the cell was filled with fluorescent dye during the experiment'),
-        ('depth', 'float', 'Depth of the cell (in m) from the cut surface of the slice.'),
-        ('position', 'object', '3D location of this cell in the arbitrary coordinate system of the experiment'),
-        ('ext_id', 'int', 'Cell ID (usually 1-8) referenced in external metadata records'),
-    ],
-    'pair': [
-        "All possible putative synaptic connections. Each pair represents a pre- and postsynaptic cell that were recorded from simultaneously.",
-        ('experiment_id', 'experiment.id', '', {'index': True}),
-        ('pre_cell_id', 'cell.id', 'ID of the presynaptic cell', {'index': True}),
-        ('post_cell_id', 'cell.id', 'ID of the postsynaptic cell', {'index': True}),
-        ('synapse', 'bool', 'Whether the experimenter thinks there is a synapse', {'index': True}),
-        ('electrical', 'bool', 'Whether the experimenter thinks there is a gap junction', {'index': True}),
-        ('crosstalk_artifact', 'float', 'Amplitude of crosstalk artifact measured in current clamp'),
-        ('n_ex_test_spikes', 'int', 'Number of QC-passed spike-responses recorded for this pair at excitatory holding potential'),
-        ('n_in_test_spikes', 'int', 'Number of QC-passed spike-responses recorded for this pair at inhibitory holding potential'),
-        ('synapse_sign', 'int', 'Sign of synaptic current amplitude (+1 for excitatory, -1 for inhibitory'),
-        ('distance', 'float', 'Distance between somas (in m)'),
-    ],
-    'sync_rec': [
-        """A synchronous recording represents a "sweep" -- multiple recordings that were made simultaneously
-        on different electrodes.""",
-        ('experiment_id', 'experiment.id', '', {'index': True}),
-        ('ext_id', 'object', 'External ID of the SyncRecording'),
-        ('temperature', 'float', 'Bath temperature during this recording'),
-    ],
-    'recording': [
-        """A recording represents a single contiguous sweep recorded from a single electrode. 
-        """,
-        ('sync_rec_id', 'sync_rec.id', 'References the synchronous recording to which this recording belongs.', {'index': True}),
-        ('electrode_id', 'electrode.id', 'Identifies the electrode that generated this recording', {'index': True}),
-        ('start_time', 'datetime', 'The clock time at the start of this recording'),
-        ('sample_rate', 'int', 'Sample rate for this recording'),
-    ],
-    'patch_clamp_recording': [
-        "Extra data for recordings made with a patch clamp amplifier",
-        ('recording_id', 'recording.id', '', {'index': True, 'unique': True}),
-        ('clamp_mode', 'str', 'The mode used by the patch clamp amplifier: "ic" or "vc"', {'index': True}),
-        ('patch_mode', 'str', "The state of the membrane patch. E.g. 'whole cell', 'cell attached', 'loose seal', 'bath', 'inside out', 'outside out'"),
-        ('stim_name', 'str', "The name of the stimulus protocol"),
-        ('baseline_potential', 'float', 'Median steady-state potential (recorded for IC or commanded for VC) during the recording'),
-        ('baseline_current', 'float', 'Median steady-state current (recorded for VC or commanded for IC) during the recording'),
-        ('baseline_rms_noise', 'float', 'RMS noise of the steady-state part of the recording'),
-        ('nearest_test_pulse_id', 'test_pulse.id', 'ID of the test pulse that was recorded closest to this recording (and possibly embedded within the recording)'),
-        ('qc_pass', 'bool', 'Indicates whether this recording passes a minimal ephys QC'),
-    ],
-    'multi_patch_probe': [
-        "Extra data for multipatch recordings intended to test synaptic dynamics.",
-        ('patch_clamp_recording_id', 'patch_clamp_recording.id', '', {'index': True, 'unique': True}),
-        ('induction_frequency', 'float', 'The induction frequency (Hz) of presynaptic pulses', {'index': True}),
-        ('recovery_delay', 'float', 'The recovery delay (s) inserted between presynaptic pulses', {'index': True}),
-        ('n_spikes_evoked', 'int', 'The number of presynaptic spikes evoked'),
-    ],
-    'test_pulse': [
-        """A short, usually hyperpolarizing pulse used to test the resistance of pipette, cell access, or cell membrane.
-        """,
-        ('start_index', 'int'),
-        ('stop_index', 'int'),
-        ('baseline_current', 'float'),
-        ('baseline_potential', 'float'),
-        ('access_resistance', 'float'),
-        ('input_resistance', 'float'),
-        ('capacitance', 'float'),
-        ('time_constant', 'float'),
-    ],
-    'stim_pulse': [
-        "A pulse stimulus intended to evoke an action potential",
-        ('recording_id', 'recording.id', '', {'index': True}),
-        ('pulse_number', 'int', 'The ordinal position of this pulse within a train of pulses.', {'index': True}),
-        ('onset_time', 'float', 'The starting time of the pulse, relative to the beginning of the recording'),
-        ('next_pulse_time', 'float', 'Time of the next pulse on any channel in the sync rec'),
-        ('amplitude', 'float', 'Amplitude of the presynaptic pulse'),
-        ('duration', 'float', 'Length of the pulse in seconds'),
-        ('n_spikes', 'int', 'Number of spikes evoked by this pulse'),
-        # ('first_spike', 'stim_spike.id', 'The ID of the first spike evoked by this pulse'),
-        ('data', 'array', 'Numpy array of presynaptic recording sampled at '+_sample_rate_str, {'deferred': True}),
-        ('data_start_time', 'float', "Starting time of the data chunk, relative to the beginning of the recording"),
-    ],
-    'stim_spike': [
-        "An action potential evoked by a stimulus pulse",
-        ('stim_pulse_id', 'stim_pulse.id', '', {'index': True}),
-        ('peak_time', 'float', "The time of the peak of the spike, relative to the beginning of the recording."),
-        ('peak_diff', 'float', 'Amplitude of the spike peak, relative to baseline'),
-        ('peak_val', 'float', 'Absolute value of the spike peak'),
-        ('max_dvdt_time', 'float', "The time of the max dv/dt of the spike, relative to the beginning of the recording."),
-        ('max_dvdt', 'float', 'Maximum slope of the presynaptic spike'),
-    ],
-    'baseline': [
-        "A snippet of baseline data, matched to a postsynaptic recording",
-        ('recording_id', 'recording.id', 'The recording from which this baseline snippet was extracted.', {'index': True}),
-        ('start_time', 'float', "Starting time of this chunk of the recording in seconds, relative to the beginning of the recording"),
-        ('data', 'array', 'numpy array of baseline data sampled at '+_sample_rate_str, {'deferred': True}),
-        ('mode', 'float', 'most common value in the baseline snippet'),
-        ('ex_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for excitatory synapse probing'),
-        ('in_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for inhibitory synapse probing'),
-    ],
-    'pulse_response': [
-        "A chunk of postsynaptic recording taken during a presynaptic pulse stimulus",
-        ('recording_id', 'recording.id', 'The full recording from which this pulse was extracted', {'index': True}),
-        ('stim_pulse_id', 'stim_pulse.id', 'The presynaptic pulse', {'index': True}),
-        ('pair_id', 'pair.id', 'The pre-post cell pair involved in this pulse response', {'index': True}),
-        ('start_time', 'float', 'Starting time of this chunk of the recording in seconds, relative to the beginning of the recording'),
-        ('data', 'array', 'numpy array of response data sampled at '+_sample_rate_str, {'deferred': True}),
-        ('ex_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for excitatory synapse probing'),
-        ('in_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for inhibitory synapse probing'),
-        ('baseline_id', 'baseline.id'),
-    ],
-}
-
-
-class TableGroup(object):
-    """Class used to manage a group of tables that act as a single unit--tables in a group
-    are always created and deleted together.
-    """
-    def __init__(self):
-        self.mappings = {}
-        self.create_mappings()
-
-    def __getitem__(self, item):
-        return self.mappings[item]
-
-    def create_mappings(self):
-        for k,schema in self.schemas.items():
-            self.mappings[k] = generate_mapping(k, schema)
-
-    def drop_tables(self):
-        global engine_rw
-        for k in self.schemas:
-            if k in engine_rw.table_names():
-                self[k].__table__.drop(bind=engine_rw)
-
-    def create_tables(self):
-        global engine_rw, engine_ro
-        if engine_rw is None:
-            for k in self.schemas:
-                if k not in engine_ro.table_names():
-                    raise Exception("Table %s not found in database %s" % (k, db_address_ro))
-            return
-        for k in self.schemas:
-            if k not in engine_rw.table_names():
-                self[k].__table__.create(bind=engine_rw)
-
-
-
-
-
-#----------- define ORM classes -------------
-
-ORMBase = declarative_base()
 
 class NDArray(TypeDecorator):
     """For marshalling arrays in/out of binary DB fields.
@@ -266,6 +48,18 @@ class NDArray(TypeDecorator):
         return np.load(buf, allow_pickle=False)
 
 
+class JSONObject(TypeDecorator):
+    """For marshalling objects in/out of json-encoded text.
+    """
+    impl = String
+    
+    def process_bind_param(self, value, dialect):
+        return json.dumps(value)
+        
+    def process_result_value(self, value, dialect):
+        return json.loads(value)
+
+
 class FloatType(TypeDecorator):
     """For marshalling float types (including numpy).
     """
@@ -281,7 +75,7 @@ class FloatType(TypeDecorator):
         #return np.load(buf, allow_pickle=False)
 
 
-_coltypes = {
+column_data_types = {
     'int': Integer,
     'float': FloatType,
     'bool': Boolean,
@@ -289,349 +83,578 @@ _coltypes = {
     'date': Date,
     'datetime': DateTime,
     'array': NDArray,
-    'object': JSONB,
+#    'object': JSONB,  # provides support for postges jsonb, but conflicts with sqlite
+    'object': JSONObject,
 }
 
 
-def generate_mapping(table, schema, base=None):
-    """Generate an ORM mapping class from an entry in table_schemas.
+
+def make_table(ormbase, name, columns, base=None, **table_args):
+    """Generate an ORM mapping class from a simplified schema format.
+
+    Columns named 'id' (int) and 'meta' (object) are added automatically.
+
+    Parameters
+    ----------
+    ormbase : ORMBase instance
+        The sqlalchemy ORM base on which to create this table.
+    name : str
+        Name of the table, used to set __tablename__ in the new class
+    base : class or None
+        Base class on which to build the new table class
+    table_args : keyword arguments
+        Extra keyword arguments are used to set __table_args__ in the new class
+    columns : list of tuple
+        List of column specifications. Each column is given as a tuple:
+        ``(col_name, data_type, comment, {options})``. Where *col_name* and *comment* 
+        are strings, *data_type* is a key in the column_data_types global, and
+        *options* is a dict providing extra initialization arguments to the sqlalchemy
+        Column (for example: 'index', 'unique'). Optionally, *data_type* may be a 'tablename.id'
+        string indicating that this column is a foreign key referencing another table.
     """
-    name = table.capitalize()
-    table_args = {}
-    if isinstance(schema[0], str):
-        table_args['comment'] = schema[0]
-        schema = schema[1:]
-    
     props = {
-        '__tablename__': table,
+        '__tablename__': name,
         '__table_args__': table_args,
         'id': Column(Integer, primary_key=True),
     }
-    for column in schema:
+
+    for column in columns:
         colname, coltype = column[:2]
         kwds = {} if len(column) < 4 else column[3]
         kwds['comment'] = None if len(column) < 3 else column[2]
         defer_col = kwds.pop('deferred', False)
+        ondelete = kwds.pop('ondelete', None)
 
-        if coltype not in _coltypes:
+        if coltype not in column_data_types:
             if not coltype.endswith('.id'):
                 raise ValueError("Unrecognized column type %s" % coltype)
-            props[colname] = Column(Integer, ForeignKey(coltype), **kwds)
+            props[colname] = Column(Integer, ForeignKey(coltype, ondelete=ondelete), **kwds)
         else:
-            ctyp = _coltypes[coltype]
+            ctyp = column_data_types[coltype]
             props[colname] = Column(ctyp, **kwds)
 
         if defer_col:
             props[colname] = deferred(props[colname])
 
-    props['time_created'] = Column(DateTime, default=func.now())
-    props['time_modified'] = Column(DateTime, onupdate=func.current_timestamp())
-    props['meta'] = Column(JSONB)
+    props['meta'] = Column(column_data_types['object'])
 
     if base is None:
-        return type(name, (ORMBase,), props)
+        new_table = type(name, (ormbase,), props)
     else:
-        def init(self, *args, **kwds):
-            base.__init__(self)
-            ORMBase.__init__(self, *args, **kwds)
-        props['__init__'] = init  # doesn't work?
-        return type(name, (base,ORMBase), props)
+        # need to jump through a hoop to allow __init__ on table classes;
+        # see: https://docs.sqlalchemy.org/en/latest/orm/constructors.html
+        if hasattr(base, '_init_on_load'):
+            @reconstructor
+            def _init_on_load(self, *args, **kwds):
+                base._init_on_load(self)
+            props['_init_on_load'] = _init_on_load
+        new_table = type(name, (base, ormbase), props)
+
+    return new_table
 
 
-def _generate_mapping(table, base=None):
-    return generate_mapping(table, table_schemas[table], base=base)
+class Database(object):
+    """Methods for doing relational database maintenance via sqlalchemy.
+    
+    Supported backends: postgres, sqlite.
+    
+    Features:
+    - Automatically build/dispose ro and rw engines (especially after fork)
+    - Generate ro/rw sessions on demand
+    - Methods for creating / dropping databases
+    """
+    _all_dbs = weakref.WeakSet()
+    default_app_name = ('mp_a:' + ' '.join(sys.argv))[:60]
 
-
-def create_all_mappings():
-    global Slice, Experiment, Electrode, Cell, Pair, SyncRec, Recording, PatchClampRecording, MultiPatchProbe
-    global TestPulse, StimPulse, StimSpike, PulseResponse, Baseline
-
-    # Generate ORM mapping classes
-
-    class ExperimentBase(object):
-        def __getitem__(self, item):
-            # Easy cell/pair getters.
-            # They're inefficient, but meh.
-            if isinstance(item, int):
-                for cell in self.cells:
-                    if cell.ext_id == item:
-                        return cell
-            elif isinstance(item, tuple):
-                for pair in self.pair_lists:
-                    if item == (pair.pre_cell.ext_id, pair.post_cell.ext_id):
-                        return pair
+    def __init__(self, ro_host, rw_host, db_name, ormbase):
+        self.ormbase = ormbase
+        self._mappings = {}
         
-        @property
-        def cells(self):
-            return {elec.cell.ext_id: elec.cell for elec in self.electrodes if elec.cell is not None}
+        self.ro_host = ro_host
+        self.rw_host = rw_host
+        self.db_name = db_name
+        self._ro_engine = None
+        self._rw_engine = None
+        self._maint_engine = None
+        self._engine_pid = None  # pid of process that created these engines.
+        self._ro_sessionmaker = None
+        self._rw_sessionmaker = None
 
-        @property
-        def pairs(self):
-            return {(pair.pre_cell.ext_id, pair.post_cell.ext_id): pair for pair in self.pair_list}
+        self.ro_address = self.db_address(ro_host, db_name)
+        self.rw_address = None if rw_host is None else self.db_address(rw_host, db_name)
+        self._all_dbs.add(self)
+        
+        self._default_session = None
 
-        @property
-        def nwb_file(self):
-            return os.path.join(config.synphys_data, self.storage_path, self.ephys_file)
+    @property
+    def default_session(self):
+        if self._default_session is None:
+            self._default_session = self.session(readonly=True)
+        return self._default_session
 
-        @property
-        def nwb_cache_file(self):
-            from ..synphys_cache import SynPhysCache
-            return SynPhysCache().get_cache(self.nwb_file)
+    def query(self, *args, **kwds):
+        return self.default_session.query(*args, **kwds)
 
-        @property
-        def data(self):
-            """Data object from NWB file. 
+    @staticmethod
+    def dataframe(query):
+        """Return a pandas dataframe containing the results of a sqlalchemy query.
+        """
+        import pandas
+        return pandas.read_sql(query.statement, query.session.bind)
+
+    # def use_default_session(self, fn):
+    #     """Decorator used to auto-fill `session` keyword arguments
+    #     with a global default Session instance.
+        
+    #     If the global session is used, then it will be rolled back after 
+    #     the decorated function returns (to prevent idle-in-transaction timeouts).
+    #     """
+    #     def wrap_with_session(*args, **kwds):
+    #         used_default_session = False
+    #         if kwds.get('session', None) is None:
+    #             kwds['session'] = self.default_session
+    #             used_default_session = True
+    #         try:
+    #             ret = fn(*args, **kwds)
+    #             return ret
+    #         finally:
+    #             if used_default_session:
+    #                 self.default_session.rollback()
+    #     return wrap_with_session    
+
+    def _find_mappings(self):
+        mappings = {cls.__tablename__:cls for cls in self.ormbase.__subclasses__()}
+        order = [t.name for t in self.ormbase.metadata.sorted_tables]
+        self._mappings = OrderedDict([(t, mappings[t]) for t in order if t in mappings])
+
+    def __getattr__(self, attr):
+        try:
+            # pretty sure I'll regret this later:  I want to be able to ask for db.TableName
+            # and return the ORM object for a table.
             
-            Contains all ephys recordings.
-            """
+            # convert CamelCase to snake_case  (credit: https://stackoverflow.com/a/12867228/643629)
+            table = re.sub(r'((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))', r'_\1', attr).lower()
+            if table not in self._mappings:
+                self._find_mappings()
+            return self._mappings[table]
+        except Exception:
+            return object.__getattribute__(self, attr)
 
-            if not hasattr(self, '_data'):
-                from ..data import MultiPatchExperiment
-                try:
-                    self._data = MultiPatchExperiment(self.nwb_cache_file)
-                except IOError:
-                    os.remove(self.nwb_cache_file)
-                    self._data = MultiPatchExperiment(self.nwb_cache_file)
-            return self._data
+    def __repr__(self):
+        return "<Database %s (%s)>" % (self.ro_address, 'ro' if self.rw_address is None else 'rw')
 
-        @property
-        def source_experiment(self):
-            """Return the original Experiment object that was used to import
-            data into the DB, if available.
-            """
-            from ..experiment_list import cached_experiments
-            return cached_experiments()[self.acq_timestamp]
-    
-        def __repr__(self):
-            return "<%s %0.3f>" % (self.__class__.__name__, self.acq_timestamp)
+    def __str__(self):
+        # str(engine) does a nice job of masking passwords
+        s = str(self.ro_engine)[7:]
+        s.rstrip(')')
+        s = s.partition('?')[0]
+        return s
 
-    class PairBase(object):
-        def __repr__(self):
-            return "<%s %0.3f %d %d>" % (self.__class__.__name__, self.experiment.acq_timestamp, self.pre_cell.ext_id, self.post_cell.ext_id)
+    @property
+    def backend(self):
+        """Return the backend used by this database (sqlite, postgres, etc.)
+        """
+        # maybe ro_engine.name instead?
+        return self.ro_host.partition(':')[0]
 
+    @classmethod
+    def db_address(cls, host, db_name=None, app_name=None):
+        """Return a complete address for DB access given a host (like postgres://user:pw@host) and database name.
 
-    Slice = _generate_mapping('slice')
-    Experiment = _generate_mapping('experiment', base=ExperimentBase)
-    Electrode = _generate_mapping('electrode')
-    Cell = _generate_mapping('cell')
-    Pair = _generate_mapping('pair', base=PairBase)
-    SyncRec = _generate_mapping('sync_rec')
-    Recording = _generate_mapping('recording')
-    PatchClampRecording = _generate_mapping('patch_clamp_recording')
-    MultiPatchProbe = _generate_mapping('multi_patch_probe')
-    TestPulse = _generate_mapping('test_pulse')
-    StimPulse = _generate_mapping('stim_pulse')
-    StimSpike = _generate_mapping('stim_spike')
-    PulseResponse = _generate_mapping('pulse_response')
-    Baseline = _generate_mapping('baseline')
-
-    # Set up relationships
-    Slice.experiments = relationship("Experiment", order_by=Experiment.id, back_populates="slice")
-    Experiment.slice = relationship("Slice", back_populates="experiments")
-
-    Experiment.sync_recs = relationship(SyncRec, order_by=SyncRec.id, back_populates="experiment", cascade='delete', single_parent=True)
-    SyncRec.experiment = relationship(Experiment, back_populates='sync_recs')
-
-    Experiment.electrodes = relationship(Electrode, order_by=Electrode.id, back_populates="experiment", cascade="delete", single_parent=True)
-    Electrode.experiment = relationship(Experiment, back_populates="electrodes")
-
-    Electrode.cell = relationship(Cell, back_populates="electrode", cascade="delete", single_parent=True, uselist=False)
-    Cell.electrode = relationship(Electrode, back_populates="cell", single_parent=True)
-
-    Experiment.pair_list = relationship(Pair, back_populates="experiment", cascade="delete", single_parent=True)
-    Pair.experiment = relationship(Experiment, back_populates="pair_list")
-
-    Pair.pre_cell = relationship(Cell, foreign_keys=[Pair.pre_cell_id])
-    #Cell.pre_pairs = relationship(Pair, back_populates="pre_cell", single_parent=True, foreign_keys=[Pair.pre_cell])
-
-    Pair.post_cell = relationship(Cell, foreign_keys=[Pair.post_cell_id])
-    #Cell.post_pairs = relationship(Pair, back_populates="post_cell", single_parent=True, foreign_keys=[Pair.post_cell])
-
-    Electrode.recordings = relationship(Recording, back_populates="electrode", cascade="delete", single_parent=True)
-    Recording.electrode = relationship(Electrode, back_populates="recordings")
-
-    SyncRec.recordings = relationship(Recording, order_by=Recording.id, back_populates="sync_rec", cascade="delete", single_parent=True)
-    Recording.sync_rec = relationship(SyncRec, back_populates="recordings")
-
-    Recording.patch_clamp_recording = relationship(PatchClampRecording, back_populates="recording", cascade="delete", single_parent=True, uselist=False)
-    PatchClampRecording.recording = relationship(Recording, back_populates="patch_clamp_recording", single_parent=True)
-
-    PatchClampRecording.multi_patch_probe = relationship(MultiPatchProbe, back_populates="patch_clamp_recording", cascade="delete", single_parent=True)
-    MultiPatchProbe.patch_clamp_recording = relationship(PatchClampRecording, back_populates="multi_patch_probe")
-
-    PatchClampRecording.nearest_test_pulse = relationship(TestPulse, cascade="delete", single_parent=True, foreign_keys=[PatchClampRecording.nearest_test_pulse_id])
-    #TestPulse.patch_clamp_recording = relationship(PatchClampRecording)
-
-    Recording.stim_pulses = relationship(StimPulse, back_populates="recording", cascade="delete", single_parent=True)
-    StimPulse.recording = relationship(Recording, back_populates="stim_pulses")
-
-    StimSpike.pulse = relationship(StimPulse, back_populates="spikes")
-    StimPulse.spikes = relationship(StimSpike, back_populates="pulse", single_parent=True)
-
-    Recording.baselines = relationship(Baseline, back_populates="recording", cascade="delete", single_parent=True)
-    Baseline.recording = relationship(Recording, back_populates="baselines")
-
-    PulseResponse.recording = relationship(Recording)
-    PulseResponse.stim_pulse = relationship(StimPulse)
-    Pair.pulse_responses = relationship(PulseResponse, back_populates='pair', single_parent=True)
-    PulseResponse.pair = relationship(Pair, back_populates='pulse_responses')
-    PulseResponse.baseline = relationship(Baseline)
-
-
-#-------------- initial DB access ----------------
-engine_ro = None
-engine_rw = None
-engine_pid = None  # pid of process that created this engine. 
-def init_engine():
-    global engine_ro, engine_rw, engine_pid
-    dispose_engines()
-    
-    engine_ro = create_engine(db_address_ro, pool_size=10, max_overflow=40, isolation_level='AUTOCOMMIT')
-    if db_address_rw is not None:
-        engine_rw = create_engine(db_address_rw, pool_size=10, max_overflow=40)
-    engine_pid = os.getpid()
-
-
-def dispose_engines():
-    global engine_ro, engine_rw, engine_pid
-    if engine_ro is not None:
-        engine_ro.dispose()
-        engine_ro = None
-    if engine_rw is not None:
-        engine_rw.dispose()
-        engine_rw = None
-    engine_pid = None    
-
-init_engine()
-
-
-_sessionmaker_ro = None
-_sessionmaker_rw = None
-# external users should create sessions from here.
-def Session(readonly=True):
-    """Create and return a new database Session instance.
-    
-    If readonly is True, then the session is created using read-only credentials and has autocommit enabled.
-    This prevents idle-in-transaction timeouts that occur when GUI analysis tools would otherwise leave transactions
-    open after each request.
-    """
-    global _sessionmaker_ro, _sessionmaker_rw, engine_ro, engine_rw, engine_pid
-    if os.getpid() != engine_pid:
-        # In forked processes, we need to re-initialize the engine before
-        # creating a new session, otherwise child processes will
-        # inherit and muck with the same connections. See:
-        # http://docs.sqlalchemy.org/en/rel_1_0/faq/connections.html#how-do-i-use-engines-connections-sessions-with-python-multiprocessing-or-os-fork
-        if engine_pid is not None:
-            print("Making new session for subprocess %d != %d" % (os.getpid(), engine_pid))
-        init_engine()
-        _sessionmaker_ro = None
-    
-    if _sessionmaker_ro is None:
-        _sessionmaker_ro = sessionmaker(bind=engine_ro)
-    if _sessionmaker_rw is None and engine_rw is not None:    
-        _sessionmaker_rw = sessionmaker(bind=engine_rw)
-        
-    if readonly:
-        return _sessionmaker_ro()
-    else:
-        return _sessionmaker_rw()
-
-
-create_all_mappings()
-
-
-
-def reset_db():
-    """Drop the existing synphys database and initialize a new one.
-    """
-    global engine_rw
-    
-    pg_engine = create_engine(config.synphys_db_host_rw + '/postgres')
-    with pg_engine.begin() as conn:
-        conn.connection.set_isolation_level(0)
-        try:
-            conn.execute('drop database %s' % db_name)
-        except sqlalchemy.exc.ProgrammingError as err:
-            if 'does not exist' not in err.message:
-                raise
-
-        conn.execute('create database %s' % db_name)
-
-    # reconnect to DB
-    init_engine()
-
-    # Grant readonly permissions
-    ro_user = config.synphys_db_readonly_user
-    if ro_user is not None:
-        with engine_rw.begin() as conn:
-            conn.execute('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO %s;' % ro_user)
-            # should only be needed if there are already tables present
-            #conn.execute('GRANT SELECT ON ALL TABLES IN SCHEMA public TO %s;' % ro_user)
-    
-    # Create all tables
-    global ORMBase
-    ORMBase = declarative_base()
-    create_all_mappings()
-    ORMBase.metadata.create_all(engine_rw)
-
-
-def vacuum(tables=None):
-    """Cleans up database and analyzes table statistics in order to improve query planning.
-    Should be run after any significant changes to the database.
-    """
-    global engine_rw
-    with engine_rw.begin() as conn:
-        conn.connection.set_isolation_level(0)
-        if tables is None:
-            conn.execute('vacuum analyze')
+        Appends an app name to postgres addresses.
+        """
+        if host.startswith('postgres'):
+            app_name = app_name or cls.default_app_name
+            return "{host}/{db_name}?application_name={app_name}".format(host=host, db_name=db_name, app_name=app_name)
         else:
-            for table in tables:
-                conn.execute('vacuum analyze %s' % table)
+            # for sqlite, db_name is the file path
+            return "{host}/{db_name}".format(host=host, db_name=db_name)
 
-
-def default_session(fn):
-    def wrap_with_session(*args, **kwds):
-        close = False
-        if kwds.get('session', None) is None:
-            kwds['session'] = Session(readonly=True)
-            close = True
-        try:
-            ret = fn(*args, **kwds)
-            return ret
-        finally:
-            if close:
-                kwds['session'].close()
-    return wrap_with_session    
-
-
-@default_session
-def slice_from_timestamp(ts, session=None):
-    slices = session.query(Slice).filter(Slice.acq_timestamp==ts).all()
-    if len(slices) == 0:
-        raise KeyError("No slice found for timestamp %0.3f" % ts)
-    elif len(slices) > 1:
-        raise KeyError("Multiple slices found for timestamp %0.3f" % ts)
-    
-    return slices[0]
-
-
-@default_session
-def experiment_from_timestamp(ts, session=None):
-    expts = session.query(Experiment).filter(Experiment.acq_timestamp==ts).all()
-    if len(expts) == 0:
-        # For backward compatibility, check for timestamp truncated to 2 decimal places
-        for expt in session.query(Experiment).all():
-            if abs((expt.acq_timestamp - ts)) < 0.01:
-                return expt
+    def get_database(self, db_name):
+        """Return a new Database object with the same hosts and orm base, but different db name
+        """
+        return Database(self.ro_host, self.rw_host, db_name, self.ormbase)
         
-        raise KeyError("No experiment found for timestamp %0.3f" % ts)
-    elif len(expts) > 1:
-        raise RuntimeError("Multiple experiments found for timestamp %0.3f" % ts)
+    def dispose_engines(self):
+        """Dispose any existing DB engines. This is necessary when forking to avoid accessing the same DB
+        connection simultaneously from two processes.
+        """
+        if self._ro_engine is not None:
+            self._ro_engine.dispose()
+        if self._rw_engine is not None:
+            self._rw_engine.dispose()
+        if self._maint_engine is not None:
+            self._maint_engine.dispose()
+        self._ro_engine = None
+        self._ro_sessionmaker = None
+        self._rw_engine = None
+        self._rw_sessionmaker = None
+        self._maint_engine = None
+        self._engine_pid = None    
+            
+        # collect now or else we might try to collect engine-related garbage in forked processes,
+        # which can lead to "OperationalError: server closed the connection unexpectedly"
+        # Note: if this turns out to be flaky as well, we can just disable connection pooling.
+        gc.collect()
+
+    @classmethod
+    def dispose_all_engines(cls):
+        """Dispose engines on all Database instances.
+        """
+        for db in cls._all_dbs:
+            db.dispose_engines()
+
+    def _check_engines(self):
+        """Dispose engines if they were built for a different PID
+        """
+        if os.getpid() != self._engine_pid:
+            # In forked processes, we need to re-initialize the engine before
+            # creating a new session, otherwise child processes will
+            # inherit and muck with the same connections. See:
+            # https://docs.sqlalchemy.org/en/latest/faq/connections.html#how-do-i-use-engines-connections-sessions-with-python-multiprocessing-or-os-fork
+            if self._engine_pid is not None:
+                print("Making new session for subprocess %d != %d" % (os.getpid(), self._engine_pid))
+            self.dispose_engines()
+
+    @property
+    def ro_engine(self):
+        """The read-only database engine.
+        """
+        self._check_engines()
+        if self._ro_engine is None:
+            if self.backend == 'postgresql':
+                opts = {'pool_size': 10, 'max_overflow': 40, 'isolation_level': 'AUTOCOMMIT'}
+            else:
+                opts = {}        
+            self._ro_engine = create_engine(self.ro_address, **opts)
+            self._engine_pid = os.getpid()
+        return self._ro_engine
     
-    return expts[0]
+    @property
+    def rw_engine(self):
+        """The read-write database engine.
+        """
+        self._check_engines()
+        if self._rw_engine is None:
+            if self.rw_address is None:
+                return None
+            if self.backend == 'postgresql':
+                opts = {'pool_size': 10, 'max_overflow': 40}
+            else:
+                opts = {}        
+            self._rw_engine = create_engine(self.rw_address, **opts)
+            self._engine_pid = os.getpid()
+        return self._rw_engine
+    
+    @property
+    def maint_engine(self):
+        """The maintenance engine.
+        
+        For postgres DBs, this connects to the "postgres" database.
+        """
+        self._check_engines()
+        if self._maint_engine is None:
+            if self.backend == 'postgresql':
+                opts = {'pool_size': 10, 'max_overflow': 40}
+            else:
+                # maybe just return rw engine for postgres?
+                raise Exception("no maintenance connection for DB %s" % self)
+            maint_addr = self.db_address(self.rw_host, 'postgres')
+            self._maint_engine = create_engine(maint_addr, **opts)
+            self._engine_pid = os.getpid()
+        return self._maint_engine
+
+    # external users should create sessions from here.
+    def session(self, readonly=True):
+        """Create and return a new database Session instance.
+        
+        If readonly is True, then the session is created using read-only credentials and has autocommit enabled.
+        This prevents idle-in-transaction timeouts that occur when GUI analysis tools would otherwise leave transactions
+        open after each request.
+        """
+        if readonly:
+            if self._ro_sessionmaker is None:
+                self._ro_sessionmaker = sessionmaker(bind=self.ro_engine)
+            return self._ro_sessionmaker()
+        else:
+            if self.rw_engine is None:
+                raise RuntimeError("Cannot start read-write DB session; no write access engine is defined (see config.synphys_db_host_rw)")
+            if self._rw_sessionmaker is None:
+                self._rw_sessionmaker = sessionmaker(bind=self.rw_engine)
+            return self._rw_sessionmaker()
+
+    def reset_db(self):
+        """Drop the existing database and initialize a new one.
+        """
+        self.dispose_engines()
+        
+        self.drop_database()
+        self.create_database()
+        
+        self.create_tables()
+        self.grant_readonly_permission()
+
+    def list_databases(self):
+        engine = self.maint_engine
+        with engine.begin() as conn:
+            conn.connection.set_isolation_level(0)
+            return [rec[0] for rec in conn.execute('SELECT datname FROM pg_catalog.pg_database;')]
+
+    @property
+    def exists(self):
+        """Bool indicating whether this DB exists yet.
+        """
+        if self.backend == 'sqlite':
+            return os.path.isfile(self.db_name)
+        else:
+            return self.db_name in self.list_databases()
+
+    def drop_database(self):
+        if self.backend == 'sqlite':
+            if os.path.isfile(self.db_name):
+                os.remove(self.db_name)
+        elif self.backend == 'postgresql':
+            engine = self.maint_engine
+            with engine.begin() as conn:
+                conn.connection.set_isolation_level(0)
+                try:
+                    conn.execute('drop database %s' % self.db_name)
+                except sqlalchemy.exc.ProgrammingError as err:
+                    if 'does not exist' not in err.message:
+                        raise
+        else:
+            raise TypeError("Unsupported database backend %s" % self.backend)
+
+    def create_database(self):
+        if self.backend == 'sqlite':
+            return
+        elif self.backend == 'postgresql':
+            # connect to postgres db just so we can create the new DB
+            engine = self.maint_engine
+            with engine.begin() as conn:
+                conn.connection.set_isolation_level(0)
+                conn.execute('create database %s' % self.db_name)
+                # conn.execute('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO %s;' % ro_user)
+        else:
+            raise TypeError("Unsupported database backend %s" % self.backend)
+
+    def grant_readonly_permission(self):
+        if self.backend == 'sqlite':
+            return
+        elif self.backend == 'postgresql':
+            ro_user = config.synphys_db_readonly_user
+
+            # grant readonly permissions
+            with self.rw_engine.begin() as conn:
+                conn.connection.set_isolation_level(0)
+                for cmd in [
+                    ('GRANT CONNECT ON DATABASE %s TO %s' % (self.db_name, ro_user)),
+                    ('GRANT USAGE ON SCHEMA public TO %s' % ro_user),
+                    ('GRANT SELECT ON ALL TABLES IN SCHEMA public to %s' % ro_user)]:
+                    conn.execute(cmd)
+        else:
+            raise TypeError("Unsupported database backend %s" % self.backend)
+
+    def orm_tables(self):
+        """Return a dependency-sorted of ORM mapping objectstables that are described by the ORM base for this database.
+        """
+        # need to re-run every time because we can't tell when a new mapping has been added.
+        self._find_mappings()
+        return self._mappings
+
+    def metadata_tables(self):
+        """Return an ordered dictionary (dependency-sorted) of {name:Table} pairs, one for 
+        each table in the sqlalchemy metadata for this database.
+        """
+        return OrderedDict([(t.name, t) for t in self.ormbase.metadata.sorted_tables])
+
+    def table_names(self):
+        """Return a list of the names of tables in this database.
+        
+        May contain names that are not present in metadata_tables or orm_tables.
+        """
+        return self.ro_engine.table_names()
+
+    def create_tables(self, tables=None):
+        """Create tables in the database from the ORM base specification.
+        
+        A list of the names of *tables* may be optionally specified to 
+        create a subset of known tables.
+        """
+        # Create all tables
+        meta_tables = self.metadata_tables()
+        if tables is not None:
+            tables = [meta_tables[t] for t in tables]
+        self.ormbase.metadata.create_all(bind=self.rw_engine, tables=tables)
+        self.grant_readonly_permission()
+
+    def drop_tables(self, tables=None):
+        """Drop a list of tables (or all ORM-defined tables, if no list is given) from this database.
+        """
+        drops = []
+        meta_tables = self.metadata_tables()
+        db_tables = self.table_names()
+        for k in meta_tables:
+            if tables is not None and k not in tables:
+                continue
+            if k in db_tables:
+                drops.append(k)
+        if len(drops) == 0:
+            return
+            
+        if self.backend == 'sqlite':
+            self.rw_engine.execute('drop table %s' % (','.join(drops)))
+        else:
+            self.rw_engine.execute('drop table %s cascade' % (','.join(drops)))
+
+    # Seems to be not working correctly        
+    # def enable_triggers(self, enable):
+    #     """Enable or disable triggers for all tables in this group.
+    #    
+    #     This can be used to temporarily disable constraint checking on tables that are under development,
+    #     allowing the rest of the pipeline to continue operating (for example, if removing an object from 
+    #     the pipeline would violate a foreign key constraint, disabling triggers will allow this constraint
+    #     to go unchecked).
+    #     """
+    #     s = Session(readonly=False)
+    #     enable = 'enable' if enable else 'disable'
+    #     for table in self.tables.keys():
+    #         s.execute("alter table %s %s trigger all;" % (table, enable))
+    #     s.commit()
+
+    def vacuum(self, tables=None):
+        """Cleans up database and analyzes table statistics in order to improve query planning.
+        Should be run after any significant changes to the database.
+        """
+        with self.rw_engine.begin() as conn:
+            if self.backend == 'postgresql':
+                conn.connection.set_isolation_level(0)
+                if tables is None:
+                    conn.execute('vacuum analyze')
+                else:
+                    for table in tables:
+                        conn.execute('vacuum analyze %s' % table)
+            else:
+                conn.execute('vacuum')
+
+    def bake_sqlite(self, sqlite_file, **kwds):
+        """Dump a copy of this database to an sqlite file.
+        """
+        sqlite_db = Database(ro_host="sqlite://", rw_host="sqlite://", db_name=sqlite_file, ormbase=self.ormbase)
+        sqlite_db.create_tables()
+        
+        last_size = 0
+        for table in self.iter_copy_tables(self, sqlite_db, **kwds):
+            size = os.stat(sqlite_file).st_size
+            diff = size - last_size
+            last_size = size
+            print("   sqlite file size:  %0.2fGB  (+%0.2fGB for %s)" % (size*1e-9, diff*1e-9, table))
+
+    def clone_database(self, dest_db_name=None, dest_db=None, overwrite=False, **kwds):
+        """Copy this database to a new one.
+        """
+        if dest_db_name is not None:
+            assert isinstance(dest_db_name, str), "Destination DB name bust be a string"
+            assert dest_db is None, "Only specify one of dest_db_name or dest_db, not both"
+            dest_db = Database(self.ro_host, self.rw_host, dest_db_name, self.ormbase)    
+        
+        if dest_db.exists:
+            if overwrite:
+                dest_db.drop_database()
+            else:
+                raise Exception("Destination database %s already exists." % dest_db)
+
+        dest_db.create_database()
+        dest_db.create_tables()
+        
+        for table in self.iter_copy_tables(self, dest_db, **kwds):
+            pass
+
+    @staticmethod
+    def iter_copy_tables(source_db, dest_db, tables=None, skip_tables=(), skip_errors=False, vacuum=True):
+        """Iterator that copies all tables from one database to another.
+        
+        Yields each table name as it is completed.
+        
+        This function does not create tables in dest_db; use db.create_tables if needed.
+        """
+        read_session = source_db.session(readonly=True)
+        write_session = dest_db.session(readonly=False)
+        
+        for table_name, table in source_db.metadata_tables().items():
+            if (table_name in skip_tables) or (tables is not None and table_name not in tables):
+                print("Skipping %s.." % table_name)
+                continue
+            print("Cloning %s.." % table_name)
+            
+            # read from table in background thread, write to table in main thread.
+            reader = TableReadThread(source_db, table)
+            i = 0
+            for i,rec in enumerate(reader):
+                try:
+                    write_session.execute(table.insert(rec))
+                except Exception:
+                    if skip_errors:
+                        print("Skip record %d:" % i)
+                        sys.excepthook(*sys.exc_info())
+                    else:
+                        raise
+                if i%200 == 0:
+                    print("%d/%d   %0.2f%%\r" % (i, reader.max_id, (100.0*(i+1.0)/reader.max_id)), end="")
+                    sys.stdout.flush()
+                
+            print("   committing %d rows..                    " % i)
+            write_session.commit()
+            read_session.rollback()
+            
+            yield table_name
+
+        if vacuum:
+            print("Optimizing database..")
+            dest_db.vacuum()
+        print("All finished!")
 
 
-@default_session
-def list_experiments(session=None):
-    return session.query(Experiment).all()
-
+class TableReadThread(threading.Thread):
+    """Iterator that yields records (all columns) from a table.
+    
+    Records are queried chunkwise and queued in a background thread to enable more efficient streaming.
+    """
+    def __init__(self, db, table, chunksize=1000):
+        threading.Thread.__init__(self)
+        self.daemon = True
+        
+        self.db = db
+        self.table = table
+        self.chunksize = chunksize
+        self.queue = queue.Queue(maxsize=5)
+        self.max_id = db.session().query(func.max(table.columns['id'])).all()[0][0] or 0
+        self.start()
+        
+    def run(self):
+        try:
+            session = self.db.session()
+            table = self.table
+            chunksize = self.chunksize
+            all_columns = table.columns
+            for i in range(0, self.max_id, chunksize):
+                query = session.query(*all_columns).filter((table.columns['id'] >= i) & (table.columns['id'] < i+chunksize))
+                records = query.all()
+                self.queue.put(records)
+            self.queue.put(None)
+            session.rollback()
+            session.close()
+        except Exception as exc:
+            sys.excepthook(*sys.exc_info())
+            self.queue.put(exc)
+            raise
+    
+    def __iter__(self):
+        while True:
+            recs = self.queue.get()
+            if recs is None:
+                break
+            if isinstance(recs, Exception):
+                raise recs
+            for rec in recs:
+                yield rec

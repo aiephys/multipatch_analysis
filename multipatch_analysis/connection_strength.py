@@ -6,229 +6,43 @@ Analyses that measure the strength of synaptic connections.
 from __future__ import print_function, division
 
 import sys, multiprocessing, time
-
 import numpy as np
 import pandas
 import scipy.stats
-
-from neuroanalysis.data import Trace, TraceList
+from sqlalchemy.orm import aliased
+from neuroanalysis.data import TSeries, TSeriesList
 from neuroanalysis.baseline import float_mode
-
-from .database import database as db
-from .pulse_response_strength import PulseResponseStrength, BaselineResponseStrength
-from .connection_detection import fit_psp
-from .database import TableGroup
-
-
-class ConnectionStrengthTableGroup(TableGroup):
-    schemas = {
-        'connection_strength': [
-            """Describes the statistics of per-pair properties aggregated from the pulse_response_strength table.
-            """,
-            ('pair_id', 'pair.id', 'The ID of the entry in the pair table to which these results apply', {'index': True}),
-            ('synapse_type', 'str', 'String "ex" or "in", indicating whether this analysis chose to treat the pair as excitatory or inhibitory'),
-
-            # current clamp metrics
-            ('ic_n_samples', 'int', "Number of samples (pulse responses) that were pooled from current clamp recordings"),
-            ('ic_crosstalk_mean', 'float'),
-            ('ic_base_crosstalk_mean', 'float'),
-            # amplitude,
-            ('ic_amp_mean', 'float'),
-            ('ic_amp_stdev', 'float'),
-            ('ic_base_amp_mean', 'float'),
-            ('ic_base_amp_stdev', 'float'),
-            ('ic_amp_ttest', 'float'),
-            ('ic_amp_ks2samp', 'float'),
-            # deconvolved amplitide
-            ('ic_deconv_amp_mean', 'float'),
-            ('ic_deconv_amp_stdev', 'float'),
-            ('ic_base_deconv_amp_mean', 'float'),
-            ('ic_base_deconv_amp_stdev', 'float'),
-            ('ic_deconv_amp_ttest', 'float'),
-            ('ic_deconv_amp_ks2samp', 'float'),
-            # latency
-            ('ic_latency_mean', 'float'),
-            ('ic_latency_stdev', 'float'),
-            ('ic_base_latency_mean', 'float'),
-            ('ic_base_latency_stdev', 'float'),
-            ('ic_latency_ttest', 'float'),
-            ('ic_latency_ks2samp', 'float'),
-            
-            # voltage clamp metrics
-            ('vc_n_samples', 'int'),
-            ('vc_crosstalk_mean', 'float'),
-            ('vc_base_crosstalk_mean', 'float'),
-            # amplitude,
-            ('vc_amp_mean', 'float'),
-            ('vc_amp_stdev', 'float'),
-            ('vc_base_amp_mean', 'float'),
-            ('vc_base_amp_stdev', 'float'),
-            ('vc_amp_ttest', 'float'),
-            ('vc_amp_ks2samp', 'float'),
-            # deconvolved amplitide
-            ('vc_deconv_amp_mean', 'float'),
-            ('vc_deconv_amp_stdev', 'float'),
-            ('vc_base_deconv_amp_mean', 'float'),
-            ('vc_base_deconv_amp_stdev', 'float'),
-            ('vc_deconv_amp_ttest', 'float'),
-            ('vc_deconv_amp_ks2samp', 'float'),
-            # latency
-            ('vc_latency_mean', 'float'),
-            ('vc_latency_stdev', 'float'),
-            ('vc_base_latency_mean', 'float'),
-            ('vc_base_latency_stdev', 'float'),
-            ('vc_latency_ttest', 'float'),
-            ('vc_latency_ks2samp', 'float'),
-
-            # Average pulse responses
-            ('ic_average_response', 'array'),
-            ('ic_average_response_t0', 'float'),
-            ('ic_average_base_stdev', 'float'),
-            ('vc_average_response', 'array'),
-            ('vc_average_response_t0', 'float'),
-            ('vc_average_base_stdev', 'float'),
-
-            # PSP fit parameters
-            ('ic_fit_amp', 'float'),
-            ('ic_fit_xoffset', 'float'),
-            ('ic_fit_yoffset', 'float'),
-            ('ic_fit_rise_time', 'float'),
-            ('ic_fit_rise_power', 'float'),
-            ('ic_fit_decay_tau', 'float'),
-            ('ic_fit_exp_amp', 'float'),
-            ('ic_fit_nrmse', 'float'),
-
-            ('vc_fit_amp', 'float'),
-            ('vc_fit_xoffset', 'float'),
-            ('vc_fit_yoffset', 'float'),
-            ('vc_fit_rise_time', 'float'),
-            ('vc_fit_rise_power', 'float'),
-            ('vc_fit_decay_tau', 'float'),
-            ('vc_fit_exp_amp', 'float'),
-            ('vc_fit_nrmse', 'float'),
-
-        ],
-    }
-
-    def create_mappings(self):
-        TableGroup.create_mappings(self)
-        
-        ConnectionStrength = self['connection_strength']
-        
-        db.Pair.connection_strength = db.relationship(ConnectionStrength, back_populates="pair", cascade="delete", single_parent=True, uselist=False)
-        ConnectionStrength.pair = db.relationship(db.Pair, back_populates="connection_strength", single_parent=True)
-
-
-connection_strength_tables = ConnectionStrengthTableGroup()
-
-
-def init_tables():
-    global ConnectionStrength
-    connection_strength_tables.create_tables()
-
-    ConnectionStrength = connection_strength_tables['connection_strength']
-
-
-# create tables in database and add global variables for ORM classes
-init_tables()
-
-
-
-@db.default_session
-def update_connection_strength(limit=0, expts=None, parallel=True, workers=6, raise_exceptions=False, session=None):
-    """Update connection strength table for all experiments
-    """
-    if expts is None:
-        expts_ready = session.query(db.Experiment.acq_timestamp).join(db.SyncRec).join(db.Recording).join(db.PulseResponse).join(PulseResponseStrength).distinct().all()
-        expts_done = session.query(db.Experiment.acq_timestamp).join(db.Pair).join(ConnectionStrength).distinct().all()
-
-        print("Skipping %d already complete experiments" % (len(expts_done)))
-        experiments = [e for e in expts_ready if e not in set(expts_done)]
-
-        if limit > 0:
-            np.random.shuffle(experiments)
-            experiments = experiments[:limit]
-
-        jobs = [(record.acq_timestamp, index, len(experiments)) for index, record in enumerate(experiments)]
-    else:
-        jobs = [(expt, i, len(expts)) for i, expt in enumerate(expts)]
-
-    if parallel:
-        pool = multiprocessing.Pool(processes=workers)
-        pool.map(compute_connection_strength, jobs)
-    else:
-        for job in jobs:
-            compute_connection_strength(job, raise_exceptions=raise_exceptions)
-
-
-def compute_connection_strength(job_info, raise_exceptions=False):
-    session = db.Session(readonly=False)
-    
-    try:
-        expt_id, index, n_jobs = job_info
-        print("Analyzing connection strength (expt_id=%f): %d/%d" % (expt_id, index, n_jobs))
-
-        expt = db.experiment_from_timestamp(expt_id, session=session)
-
-        for pair in expt.pair_list:
-            # Query all pulse amplitude records for each clamp mode
-            amps = {}
-            for clamp_mode in ('ic', 'vc'):
-                clamp_mode_fg = get_amps(session, pair, clamp_mode=clamp_mode, get_data=True)
-                clamp_mode_bg = get_baseline_amps(session, pair, amps=clamp_mode_fg, clamp_mode=clamp_mode, get_data=False)
-                amps[clamp_mode, 'fg'] = clamp_mode_fg
-                amps[clamp_mode, 'bg'] = clamp_mode_bg
-            
-            if all([len(a) == 0 for a in amps]):
-                # nothing to analyze here.
-                continue
-
-            # Generate summary results for this pair
-            results = analyze_pair_connectivity(amps)
-
-            # Write new record to DB
-            conn = ConnectionStrength(pair_id=pair.id, **results)
-            session.add(conn)
-
-        expt.meta = expt.meta.copy()  # required by sqlalchemy to flag as modified
-        expt.meta['connection_strength_timestamp'] = time.time()
-
-        session.commit()
-    except:
-        session.rollback()
-        print("Error in experiment: %f" % expt_id)
-        if raise_exceptions:
-            raise
-        else:
-            sys.excepthook(*sys.exc_info())
+from .fitting import fit_psp
+from .database import default_db as db
 
 
 def get_amps(session, pair, clamp_mode='ic', get_data=False):
     """Select records from pulse_response_strength table
     """
     cols = [
-        PulseResponseStrength.id,
-        PulseResponseStrength.pos_amp,
-        PulseResponseStrength.neg_amp,
-        PulseResponseStrength.pos_dec_amp,
-        PulseResponseStrength.neg_dec_amp,
-        PulseResponseStrength.pos_dec_latency,
-        PulseResponseStrength.neg_dec_latency,
-        PulseResponseStrength.crosstalk,
+        db.PulseResponseStrength.id,
+        db.PulseResponseStrength.pos_amp,
+        db.PulseResponseStrength.neg_amp,
+        db.PulseResponseStrength.pos_dec_amp,
+        db.PulseResponseStrength.neg_dec_amp,
+        db.PulseResponseStrength.pos_dec_latency,
+        db.PulseResponseStrength.neg_dec_latency,
+        db.PulseResponseStrength.crosstalk,
         db.PulseResponse.ex_qc_pass,
         db.PulseResponse.in_qc_pass,
+        db.PatchClampRecording.qc_pass,
         db.PatchClampRecording.clamp_mode,
         db.PatchClampRecording.baseline_potential,
         db.PatchClampRecording.baseline_current,
         db.StimPulse.pulse_number,
-        db.StimSpike.max_dvdt_time,
-        db.PulseResponse.start_time.label('response_start_time'),
+        db.StimSpike.max_slope_time,
+        db.PulseResponse.data_start_time.label('response_start_time'),
     ]
     if get_data:
         cols.append(db.PulseResponse.data)
 
     q = session.query(*cols)
-    q = q.join(db.PulseResponse)
+    q = q.join(db.PulseResponse, db.PulseResponseStrength.pulse_response)
     
     q, pre_rec, post_rec = join_pulse_response_to_expt(q)
     q = q.join(db.StimSpike)
@@ -238,7 +52,9 @@ def get_amps(session, pair, clamp_mode='ic', get_data=False):
         (pre_rec.electrode==pair.pre_cell.electrode,),
         (post_rec.electrode==pair.post_cell.electrode,),
         (db.PatchClampRecording.clamp_mode==clamp_mode,),
-        (db.PatchClampRecording.qc_pass==True,),
+        # Return all results, regardless of QC -- we want to see what is being excluded later on.
+        # Also note that the ex_qc_pass and in_qc_pass fields returned above already take p_c_recording.qc_pass into account.
+        # (db.PatchClampRecording.qc_pass==True,),
     ]
     for filter_args in filters:
         q = q.filter(*filter_args)
@@ -258,32 +74,37 @@ def get_baseline_amps(session, pair, clamp_mode='ic', amps=None, get_data=True):
     sweeps as the responses.
     """
     cols = [
-        BaselineResponseStrength.id,
-        BaselineResponseStrength.pos_amp,
-        BaselineResponseStrength.neg_amp,
-        BaselineResponseStrength.pos_dec_amp,
-        BaselineResponseStrength.neg_dec_amp,
-        BaselineResponseStrength.pos_dec_latency,
-        BaselineResponseStrength.neg_dec_latency,
-        BaselineResponseStrength.crosstalk,
+        db.BaselineResponseStrength.id,
+        db.BaselineResponseStrength.pos_amp,
+        db.BaselineResponseStrength.neg_amp,
+        db.BaselineResponseStrength.pos_dec_amp,
+        db.BaselineResponseStrength.neg_dec_amp,
+        db.BaselineResponseStrength.pos_dec_latency,
+        db.BaselineResponseStrength.neg_dec_latency,
+        db.BaselineResponseStrength.crosstalk,
         db.Baseline.ex_qc_pass,
         db.Baseline.in_qc_pass,
+        db.PatchClampRecording.qc_pass,
         db.PatchClampRecording.clamp_mode,
         db.PatchClampRecording.baseline_potential,
         db.PatchClampRecording.baseline_current,
         db.Recording.start_time.label('rec_start_time'),
-        db.Baseline.start_time.label('response_start_time'),
+        db.Baseline.data_start_time.label('response_start_time'),
     ]
     if get_data:
         cols.append(db.Baseline.data)
         
     q = session.query(*cols)
-    q = q.join(db.Baseline).join(db.Recording).join(db.PatchClampRecording).join(db.SyncRec).join(db.Experiment)
+    q = q.join(db.Baseline, db.BaselineResponseStrength.baseline)
+    q = q.join(db.Recording)
+    q = q.join(db.PatchClampRecording)
+    q = q.join(db.SyncRec)
+    q = q.join(db.Experiment)
     
     filters = [
         (db.Recording.electrode==pair.post_cell.electrode,),
         (db.PatchClampRecording.clamp_mode==clamp_mode,),
-        (db.PatchClampRecording.qc_pass==True,),
+        # (db.PatchClampRecording.qc_pass==True,),
     ]
     for filter_args in filters:
         q = q.filter(*filter_args)
@@ -315,8 +136,8 @@ def get_baseline_amps(session, pair, clamp_mode='ic', amps=None, get_data=True):
 
 
 def join_pulse_response_to_expt(query):
-    pre_rec = db.aliased(db.Recording)
-    post_rec = db.aliased(db.Recording)
+    pre_rec = aliased(db.Recording)
+    post_rec = aliased(db.Recording)
     joins = [
         (post_rec, db.PulseResponse.recording),
         (db.PatchClampRecording,),
@@ -379,6 +200,15 @@ def analyze_pair_connectivity(amps, sign=None):
        and background distributions for amplitude, deconvolved amplitude, and
        deconvolved latency    
     """
+    # Filter by QC
+    for k,v in amps.items():
+        mask = v['qc_pass'].astype(bool)
+        amps[k] = v[mask]
+    
+    # See if any data remains
+    if all([len(a) == 0 for a in amps]):
+        return None
+
     requested_sign = sign
     fields = {}  # used to fill the new DB record
     
@@ -475,11 +305,13 @@ def analyze_pair_connectivity(amps, sign=None):
         ### generate the average response and psp fit
         
         # collect all bg and fg traces
-        # bg_traces = TraceList([Trace(data, sample_rate=db.default_sample_rate) for data in amps[clamp_mode, 'bg']['data']])
-        fg_traces = TraceList()
+        # bg_traces = TSeriesList([TSeries(data, sample_rate=db.default_sample_rate) for data in amps[clamp_mode, 'bg']['data']])
+        fg_traces = TSeriesList()
         for rec in fg:
-            t0 = rec['response_start_time'] - rec['max_dvdt_time']   # time-align to presynaptic spike
-            trace = Trace(rec['data'], sample_rate=db.default_sample_rate, t0=t0)
+            if not np.isfinite(rec['max_slope_time']) or rec['max_slope_time'] is None:
+                continue
+            t0 = rec['response_start_time'] - rec['max_slope_time']   # time-align to presynaptic spike
+            trace = TSeries(rec['data'], sample_rate=db.default_sample_rate, t0=t0)
             fg_traces.append(trace)
         
         # get averages

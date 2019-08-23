@@ -3,19 +3,33 @@ from acq4.pyqtgraph.Qt import QtGui, QtCore
 import acq4.pyqtgraph as pg
 import numpy as np
 import scipy.ndimage as ndimage
+import scipy.stats as stats
 
 
-class VImagingAnalyzer(QtGui.QWidget):
+class VImagingAnalyzer(QtGui.QSplitter):
     def __init__(self):
-        QtGui.QWidget.__init__(self)
+        QtGui.QSplitter.__init__(self, QtCore.Qt.Horizontal)
         self.resize(800, 1000)
+            
+        self.params = pg.parametertree.Parameter(name='params', type='group', children=[
+            dict(name='sequence', type='group', children=[
+                dict(name='analysis', type='list', values=['dF / F', 'SNR', 'noise']),
+            ]),
+        ])
+        self.ptree = pg.parametertree.ParameterTree()
+        self.ptree.setParameters(self.params)
+        self.params.child('sequence').sigTreeStateChanged.connect(self.update_sequence_analysis)        
         
+        self.leftPanel = QtGui.QWidget()
+        self.addWidget(self.leftPanel)
         self.layout = QtGui.QGridLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
-        self.setLayout(self.layout)
+        self.leftPanel.setLayout(self.layout)
+        
+        self.layout.addWidget(self.ptree, 0, 0)
 
         self.gw = pg.GraphicsLayoutWidget()
-        self.layout.addWidget(self.gw)
+        self.addWidget(self.gw)
         
         self.vb1 = self.gw.addViewBox()
         self.img1 = pg.ImageItem()
@@ -33,7 +47,7 @@ class VImagingAnalyzer(QtGui.QWidget):
         self.plt1.setLabels(bottom=('time', 's'))
         self.plt1_items = []
         
-        self.rois = [pg.RectROI([0, 0], [10, 10], pen=(i,4)) for i in range(2)]
+        self.rois = [pg.EllipseROI([0, 0], [10, 10], pen=(i,4)) for i in range(2)]
         for roi in self.rois:
             self.vb1.addItem(roi)
             roi.sigRegionChangeFinished.connect(self.roi_changed)
@@ -43,9 +57,10 @@ class VImagingAnalyzer(QtGui.QWidget):
         self.plt2.setXLink(self.plt1)
         self.plt2.setLabels(bottom=('time', 's'))
             
-        self.base_time_rgn = pg.LinearRegionItem([0.0, 0.1])
-        self.test_time_rgn = pg.LinearRegionItem([0.1, 0.11])
-        for time_rgn in (self.base_time_rgn, self.test_time_rgn):
+        self.noise_time_rgn = pg.LinearRegionItem([0.01, 0.02], brush=(255, 0, 0, 30))
+        self.base_time_rgn = pg.LinearRegionItem([0.025, 0.95], brush=(0, 255, 0, 30))
+        self.test_time_rgn = pg.LinearRegionItem([0.1, 0.11], brush=(0, 0, 255, 30))
+        for time_rgn in (self.base_time_rgn, self.test_time_rgn, self.noise_time_rgn):
             self.plt1.addItem(time_rgn)
             time_rgn.sigRegionChangeFinished.connect(self.time_rgn_changed)
             time_rgn.sigRegionChangeFinished.connect(self.update_sequence_analysis)
@@ -199,10 +214,18 @@ class VImagingAnalyzer(QtGui.QWidget):
         self.update_sequence_analysis()
         
     def time_rgn_changed(self, rgn):
+        # make sure noise and test regions have the same width
+        nr = self.noise_time_rgn.getRegion()
+        tr = self.test_time_rgn.getRegion()
+        if rgn is self.test_time_rgn:
+            self.noise_time_rgn.setRegion([nr[0], nr[0] + tr[1]-tr[0]])
+        elif rgn is self.noise_time_rgn:
+            self.test_time_rgn.setRegion([tr[0], tr[0] + nr[1]-nr[0]])
+            
         img_data = self.img_arrays[-1]
         img_t = self.img_data[-1][0].xvals('Time')
         
-        base_starti, base_stopi, test_starti, test_stopi = self.time_indices(img_t)
+        base_starti, base_stopi, test_starti, test_stopi = self.time_indices(img_t)[:4]
 
         base = img_data[:, base_starti:base_stopi].mean(axis=0).mean(axis=0)
         test = img_data[:, test_starti:test_stopi].mean(axis=0).mean(axis=0)
@@ -219,57 +242,88 @@ class VImagingAnalyzer(QtGui.QWidget):
         test_starti = np.argwhere(time_vals >= test_start)[0,0]
         test_stopi = np.argwhere(time_vals >= test_stop)[0,0]
         
-        return base_starti, base_stopi, test_starti, test_stopi
+        noise_start, noise_stop = self.noise_time_rgn.getRegion()
+        noise_starti = np.argwhere(time_vals >= noise_start)[0,0]
+        noise_stopi = np.argwhere(time_vals >= noise_stop)[0,0]
+        
+        return base_starti, base_stopi, test_starti, test_stopi, noise_starti, noise_stopi
 
     def update_sequence_analysis(self):
+        analysis = self.params['sequence', 'analysis']
         xvals = []
         yvals = []
+        noise = []
         brushes = []
         avg_x = []
         avg_y = []
-
-        noise_values = []
+        avg_noise = []
 
         for i in range(len(self.img_data)):
 
             img_data = self.img_arrays[i]
             img_t = self.img_data[i][0].xvals('Time')
-            base_starti, base_stopi, test_starti, test_stopi = self.time_indices(img_t)
+            base_starti, base_stopi, test_starti, test_stopi, noise_starti, noise_stopi = self.time_indices(img_t)
+            dff = self.measure_dff(img_data, img_t, (base_starti, base_stopi, test_starti, test_stopi))
             
-            base = img_data[:, base_starti:base_stopi]
-            base_mean = base.mean(axis=1)
-            test = img_data[:, test_starti:test_stopi]
-            test_mean = test.mean(axis=1)
-            
-            roi1, roi2 = self.rois   # roi1 is signal, roi2 is background
-            base_rgn1 = roi1.getArrayRegion(base_mean, self.img1, axes=(1, 2))
-            base_rgn2 = roi2.getArrayRegion(base_mean, self.img1, axes=(1, 2))
-            test_rgn1 = roi1.getArrayRegion(test_mean, self.img1, axes=(1, 2))
-            test_rgn2 = roi2.getArrayRegion(test_mean, self.img1, axes=(1, 2))
-
-            # Use the temporal profile in roi2 in order to remove changes in LED brightness over time
-            # Then use the difference between baseline and test time regions to determine change in fluorescence
-            baseline1 = base_rgn1.mean(axis=1).mean(axis=1)
-            signal1 = test_rgn1.mean(axis=1).mean(axis=1)
-            baseline2 = base_rgn2.mean(axis=1).mean(axis=1)
-            signal2 = test_rgn2.mean(axis=1).mean(axis=1)
-            dff = ((signal1-signal2) - (baseline1-baseline2)) / (baseline1-baseline2)
-
             x = self.seqParams[0][1][i]
             xvals.extend([x] * len(dff))
+            
             yvals.extend(list(dff))
+            
+            if analysis in ('SNR', 'noise'):
+                noise_dff = self.measure_dff(img_data, img_t, (base_starti, base_stopi, noise_starti, noise_stopi))
+                noise.extend(list(noise_dff))
+                avg_noise.append(noise_dff.mean())
+            
             color = pg.mkColor(self.seqColors[i])
             color.setAlpha(50)
             brushes.extend([pg.mkBrush(color)] * len(dff))
             avg_x.append(x)
             avg_y.append(dff.mean())
 
+        if analysis == 'SNR':
+            noise = np.std(noise)
+            yvals = np.array(yvals) / noise
+            avg_y = np.array(avg_y) / noise
+        elif analysis == 'noise':
+            yvals = noise
+            avg_y = avg_noise
+
+
         self.plt3.clear()
+        self.plt3.setLabels(left=analysis)
         if self.seqParams[0][0] is None:
             self.plt3.plot(range(len(xvals)), yvals, pen='w')
         else:
             self.plt3.plot(xvals, yvals, symbol='o', pen=None, symbolBrush=brushes, symbolPen=None)
             self.plt3.plot(avg_x, avg_y, pen='w', antialias=True)
+            
+            lin = stats.linregress(avg_x, avg_y)
+            self.plt3.setTitle("slope: %0.2g" % lin[0])
+    
+    def measure_dff(self, img_data, img_t, time_indices):
+        base_starti, base_stopi, test_starti, test_stopi = time_indices
+        
+        base = img_data[:, base_starti:base_stopi]
+        base_mean = base.mean(axis=1)
+        test = img_data[:, test_starti:test_stopi]
+        test_mean = test.mean(axis=1)
+        
+        roi1, roi2 = self.rois   # roi1 is signal, roi2 is background
+        base_rgn1 = roi1.getArrayRegion(base_mean, self.img1, axes=(1, 2))
+        base_rgn2 = roi2.getArrayRegion(base_mean, self.img1, axes=(1, 2))
+        test_rgn1 = roi1.getArrayRegion(test_mean, self.img1, axes=(1, 2))
+        test_rgn2 = roi2.getArrayRegion(test_mean, self.img1, axes=(1, 2))
+
+        # Use the temporal profile in roi2 in order to remove changes in LED brightness over time
+        # Then use the difference between baseline and test time regions to determine change in fluorescence
+        baseline1 = base_rgn1.mean(axis=1).mean(axis=1)
+        signal1 = test_rgn1.mean(axis=1).mean(axis=1)
+        baseline2 = base_rgn2.mean(axis=1).mean(axis=1)
+        signal2 = test_rgn2.mean(axis=1).mean(axis=1)
+        dff = ((signal1-signal2) - (baseline1-baseline2)) / (baseline1-baseline2)
+
+        return dff
     
     def closeEvent(self, ev):
         self.img_data = None

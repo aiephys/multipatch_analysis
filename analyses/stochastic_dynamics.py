@@ -416,7 +416,7 @@ if __name__ == '__main__':
     # post_cell_id = int(sys.argv[3])
 
 
-    session = db.Session()
+    session = db.session()
 
 
     expt = db.experiment_from_timestamp(expt_id, session=session)

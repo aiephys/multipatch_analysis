@@ -19,79 +19,26 @@ from sqlalchemy.orm import aliased
 import sklearn.svm, sklearn.preprocessing, sklearn.ensemble
 
 import pyqtgraph as pg
+import pyqtgraph.dockarea
 from pyqtgraph.Qt import QtGui, QtCore
 
 from neuroanalysis.ui.plot_grid import PlotGrid
-from neuroanalysis.data import Trace, TraceList
+from neuroanalysis.data import TSeries, TSeriesList
 from neuroanalysis import filter
 from neuroanalysis.event_detection import exp_deconvolve
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.fitting import Psp
 
-from multipatch_analysis.database import database as db
+from multipatch_analysis.database import default_db as db
 from multipatch_analysis.ui.multipatch_nwb_viewer import MultipatchNwbViewer
-from multipatch_analysis.pulse_response_strength import (
-    PulseResponseStrength, BaselineResponseStrength, response_query,
-    baseline_query, analyze_response_strength, pulse_response_strength_tables,
-)
-from multipatch_analysis.connection_strength import ConnectionStrength, get_amps, get_baseline_amps
-import multipatch_analysis.morphology  # just to initialize ORM
+from multipatch_analysis.ui.experiment_browser import ExperimentBrowser
+from multipatch_analysis.pulse_response_strength import response_query, baseline_query, analyze_response_strength
+from multipatch_analysis.connection_strength import get_amps, get_baseline_amps
 from multipatch_analysis import constants
 
 
-class ExperimentBrowser(pg.TreeWidget):
-    def __init__(self):
-        pg.TreeWidget.__init__(self)
-        self.setColumnCount(7)
-        self.setHeaderLabels(['date', 'timestamp', 'rig', 'organism', 'region', 'genotype', 'acsf'])
-        self.setDragDropMode(self.NoDragDrop)
-        self.populate()
-        self._last_expanded = None
-        
-    def populate(self):
-        self.items_by_pair_id = {}
-        
-        self.session = db.Session()
-        db_expts = db.list_experiments(session=self.session)
-        db_expts.sort(key=lambda e: e.acq_timestamp)
-        for expt in db_expts:
-            date = expt.acq_timestamp
-            date_str = datetime.fromtimestamp(date).strftime('%Y-%m-%d')
-            slice = expt.slice
-            expt_item = pg.TreeWidgetItem(map(str, [date_str, '%0.3f'%expt.acq_timestamp, expt.rig_name, slice.species, expt.target_region, slice.genotype, expt.acsf]))
-            expt_item.expt = expt
-            self.addTopLevelItem(expt_item)
-
-            for pair in expt.pair_list:
-                if pair.n_ex_test_spikes == 0 and pair.n_in_test_spikes == 0:
-                    continue
-                cells = '%d => %d' % (pair.pre_cell.ext_id, pair.post_cell.ext_id)
-                conn = {True:"syn", False:"-", None:"?"}[pair.synapse]
-                types = 'L%s %s => L%s %s' % (pair.pre_cell.target_layer or "?", pair.pre_cell.cre_type, pair.post_cell.target_layer or "?", pair.post_cell.cre_type)
-                pair_item = pg.TreeWidgetItem([cells, conn, types])
-                expt_item.addChild(pair_item)
-                pair_item.pair = pair
-                pair_item.expt = expt
-                self.items_by_pair_id[pair.id] = pair_item
-                
-    def select_pair(self, pair_id):
-        """Select a specific pair from the list
-        """
-        if self._last_expanded is not None:
-            self._last_expanded.setExpanded(False)
-        item = self.items_by_pair_id[pair_id]
-        self.clearSelection()
-        item.setSelected(True)
-        parent = item.parent()
-        if not parent.isExpanded():
-            parent.setExpanded(True)
-            self._last_expanded = parent
-        else:
-            self._last_expanded = None
-        self.scrollToItem(item)
-
-
-
+ui_file = os.path.join(os.path.dirname(__file__), 'strength_analysis_ctrl.ui')
+StrengthAnalysisCtrl, _ = pg.Qt.loadUiType(ui_file)
 
 
 class ResponseStrengthPlots(pg.dockarea.DockArea):
@@ -169,52 +116,69 @@ class ResponseStrengthAnalyzer(object):
         self.fg_trace_plot.setXRange(0, 20e-3)
 
         self.ctrl = QtGui.QWidget()
+        self.ui = StrengthAnalysisCtrl()
+        self.ui.setupUi(self.ctrl)        
         self.layout.addWidget(self.ctrl, 1, 0)
-        self.ctrl_layout = QtGui.QGridLayout()
-        self.ctrl.setLayout(self.ctrl_layout)
-        self.ctrl_layout.setContentsMargins(0, 0, 0, 0)
+        # self.ctrl_layout = QtGui.QGridLayout()
+        # self.ctrl.setLayout(self.ctrl_layout)
+        # self.ctrl_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.field_combo = QtGui.QComboBox()
+        # self.h
+        # self.ui.field_combo = QtGui.QComboBox()
         for field in ['dec_amp', 'amp', 'dec_latency', 'crosstalk']:
-            self.field_combo.addItem(field)
-        self.ctrl_layout.addWidget(self.field_combo, 0, 0)
-        self.field_combo.currentIndexChanged.connect(self.update_scatter_plots)
+            self.ui.field_combo.addItem(field)
+        # self.ctrl_layout.addWidget(self.ui.field_combo, 0, 0)
+        self.ui.field_combo.currentIndexChanged.connect(self.update_scatter_plots)
+        
+        # self.ui.qc_check = QtGui.QCheckBox('QC filter')
+        # self.ui.qc_check.setChecked(True)
+        # self.ctrl_layout.addWidget(self.ui.qc_check, 0, 1)
+        self.ui.qc_check.toggled.connect(self.replot_all)
+        
+        # self.ui.bg_radio = QtGui.QRadioButton('bg noise')
+        # self.ui.bg_radio.setChecked(True)
+        # self.ctrl_layout.addWidget(self.ui.bg_radio, 0, 2)
+        self.ui.bg_radio.toggled.connect(self.replot_all)
+        
+        # self.pre_radio = QtGui.QRadioButton('presyn')
+        # self.pre_radio.setChecked(False)
+        # self.ctrl_layout.addWidget(self.pre_radio, 0, 3)        
 
-        self.deconv_check = QtGui.QCheckBox('deconvolve')
-        self.deconv_check.setChecked(True)
-        self.ctrl_layout.addWidget(self.deconv_check, 1, 0)
-        self.deconv_check.toggled.connect(self.replot_all)
+        # self.ui.deconv_check = QtGui.QCheckBox('deconvolve')
+        # self.ui.deconv_check.setChecked(False)
+        # self.ctrl_layout.addWidget(self.ui.deconv_check, 1, 0)
+        self.ui.deconv_check.toggled.connect(self.replot_all)
 
-        self.bsub_check = QtGui.QCheckBox('bsub')
-        self.bsub_check.setChecked(True)
-        self.ctrl_layout.addWidget(self.bsub_check, 1, 1)
-        self.bsub_check.toggled.connect(self.replot_all)
+        # self.ui.bsub_check = QtGui.QCheckBox('bsub')
+        # self.ui.bsub_check.setChecked(True)
+        # self.ctrl_layout.addWidget(self.ui.bsub_check, 1, 1)
+        self.ui.bsub_check.toggled.connect(self.replot_all)
 
-        self.lpf_check = QtGui.QCheckBox('lpf')
-        self.lpf_check.setChecked(True)
-        self.ctrl_layout.addWidget(self.lpf_check, 1, 2)
-        self.lpf_check.toggled.connect(self.replot_all)
+        # self.ui.lpf_check = QtGui.QCheckBox('lpf')
+        # self.ui.lpf_check.setChecked(False)
+        # self.ctrl_layout.addWidget(self.ui.lpf_check, 1, 2)
+        self.ui.lpf_check.toggled.connect(self.replot_all)
 
-        self.ar_check = QtGui.QCheckBox('crosstalk')
-        self.ar_check.setChecked(True)
-        self.ctrl_layout.addWidget(self.ar_check, 1, 3)
-        self.ar_check.toggled.connect(self.replot_all)
+        # self.ui.ar_check = QtGui.QCheckBox('crosstalk')
+        # self.ui.ar_check.setChecked(False)
+        # self.ctrl_layout.addWidget(self.ui.ar_check, 1, 3)
+        self.ui.ar_check.toggled.connect(self.replot_all)
 
-        self.align_check = QtGui.QCheckBox('align')
-        self.align_check.setChecked(True)
-        self.ctrl_layout.addWidget(self.align_check, 1, 4)
-        self.align_check.toggled.connect(self.replot_all)
+        # self.ui.align_check = QtGui.QCheckBox('align')
+        # self.ui.align_check.setChecked(True)
+        # self.ctrl_layout.addWidget(self.ui.align_check, 1, 4)
+        self.ui.align_check.toggled.connect(self.replot_all)
 
-        self.pulse_ctrl = QtGui.QWidget()
-        self.ctrl_layout.addWidget(self.pulse_ctrl, 2, 0, 1, 5)
+        # self.pulse_ctrl = QtGui.QWidget()
+        # self.ctrl_layout.addWidget(self.pulse_ctrl, 2, 0, 1, 5)
         self.pulse_layout = QtGui.QHBoxLayout()
-        self.pulse_ctrl.setLayout(self.pulse_layout)
+        self.ui.pulse_ctrl.setLayout(self.pulse_layout)
         self.pulse_layout.setContentsMargins(0, 0, 0, 0)
         self.pulse_layout.setSpacing(0)
 
-        self.color_by_pulse_check = QtGui.QCheckBox('color pulse n')
-        self.pulse_layout.addWidget(self.color_by_pulse_check)
-        self.color_by_pulse_check.toggled.connect(self.update_scatter_plots)
+        # self.color_by_pulse_check = QtGui.QCheckBox('color pulse n')
+        # self.pulse_layout.addWidget(self.color_by_pulse_check)
+        # self.color_by_pulse_check.toggled.connect(self.update_scatter_plots)
 
         self.pulse_checks = []
         for i in range(12):
@@ -239,10 +203,10 @@ class ResponseStrengthAnalyzer(object):
         """
         ids = [p.data()['id'] for p in points]
         self._clicked_fg_ids = ids
-        self.plot_prd_ids(ids, 'fg', trace_list=self.clicked_fg_traces, pen='y')
+        self.plot_prd_ids(ids, 'fg', trace_list=self.clicked_fg_traces, pen='y', qc_filter=False)
 
         global selected_response
-        selected_response = self.session.query(PulseResponseStrength).filter(PulseResponseStrength.id==ids[0]).first()
+        selected_response = self.session.query(db.PulseResponseStrength).filter(db.PulseResponseStrength.id==ids[0]).first()
         prs_qc()
 
     def bg_scatter_clicked(self, sp, points):
@@ -250,10 +214,10 @@ class ResponseStrengthAnalyzer(object):
         """
         ids = [p.data()['id'] for p in points]
         self._clicked_bg_ids = ids
-        self.plot_prd_ids(ids, 'bg', trace_list=self.clicked_bg_traces, pen='y')
+        self.plot_prd_ids(ids, 'bg', trace_list=self.clicked_bg_traces, pen='y', qc_filter=False)
 
         global selected_response
-        selected_response = self.session.query(BaselineResponseStrength).filter(BaselineResponseStrength.id==ids[0]).first()
+        selected_response = self.session.query(db.BaselineResponseStrength).filter(db.BaselineResponseStrength.id==ids[0]).first()
         prs_qc()
 
     def load_conn(self, pair):
@@ -272,7 +236,7 @@ class ResponseStrengthAnalyzer(object):
         fg_data = amp_recs
         bg_data = base_recs[:len(fg_data)]
         
-        data_field = str(self.field_combo.currentText())
+        data_field = str(self.ui.field_combo.currentText())
         if data_field != 'crosstalk':
             data_field = self.analysis[0] + '_' + data_field
         
@@ -282,8 +246,8 @@ class ResponseStrengthAnalyzer(object):
             qc_field = 'in_qc_pass' if self.analysis[1] == 'ic' else 'ex_qc_pass'
         fg_x = fg_data[data_field]
         bg_x = bg_data[data_field]
-        fg_qc = fg_data[qc_field].copy()
-        bg_qc = bg_data[qc_field].copy()
+        fg_qc = fg_data[qc_field] == True
+        bg_qc = bg_data[qc_field] == True
 
         # record data for later use
         self.fg_x = fg_x
@@ -313,7 +277,7 @@ class ResponseStrengthAnalyzer(object):
                 continue
 
             # Otherwise, we can color by pulse number if requested
-            if self.color_by_pulse_check.isChecked():
+            if self.ui.color_by_pulse_check.isChecked():
                 g = pulse_n * 255/7.
                 b = 255 - g
                 if pulse_n > 7:
@@ -402,16 +366,16 @@ class ResponseStrengthAnalyzer(object):
         ids = list(map(int, ids))
         if source == 'fg':
             q = response_query(self.session)
-            q = q.join(PulseResponseStrength)
-            q = q.filter(PulseResponseStrength.id.in_(ids))
-            q = q.add_column(db.PulseResponse.start_time)
+            q = q.join(db.PulseResponseStrength)
+            q = q.filter(db.PulseResponseStrength.id.in_(ids))
+            q = q.add_column(db.PulseResponse.data_start_time)
             traces = self.selected_fg_traces
             plot = self.fg_trace_plot
         else:
             q = baseline_query(self.session)
-            q = q.join(BaselineResponseStrength)
-            q = q.filter(BaselineResponseStrength.id.in_(ids))
-            q = q.add_column(db.Baseline.start_time)
+            q = q.join(db.BaselineResponseStrength)
+            q = q.filter(db.BaselineResponseStrength.id.in_(ids))
+            q = q.add_column(db.Baseline.data_start_time)
             traces = self.selected_bg_traces
             plot = self.bg_trace_plot
         
@@ -419,10 +383,13 @@ class ResponseStrengthAnalyzer(object):
         recs = q.all()
         return recs
 
-    def plot_prd_ids(self, ids, source, pen=None, trace_list=None, avg=False):
+    def plot_prd_ids(self, ids, source, pen=None, trace_list=None, avg=False, qc_filter=None):
         """Plot raw or decolvolved PulseResponse data, given IDs of records in
-        a PulseResponseStrength table.
+        a db.PulseResponseStrength table.
         """
+        if qc_filter is None:
+            qc_filter = self.ui.qc_check.isChecked()
+        
         with pg.BusyCursor():
             recs = self.get_pulse_recs(ids, source)
             if len(recs) == 0:
@@ -443,39 +410,44 @@ class ResponseStrengthAnalyzer(object):
                 alpha = np.clip(1000 / len(recs), 30, 255)
                 pen = (255, 255, 255, alpha)
                 
+            pen = pg.mkPen(pen)
+            # qc-failed traces are tinted red
+            fail_color = pen.color()
+            fail_color.setBlue(fail_color.blue() // 2)
+            fail_color.setGreen(fail_color.green() // 2)
+            qc_fail_pen = pg.mkPen(fail_color)
+                
             traces = []
             spike_times = []
             spike_values = []
             for rec in recs:
                 # Filter by QC unless we selected just a single record
-                if len(recs) > 0 and getattr(rec, self.qc_field) is False:
+                qc_pass = getattr(rec, self.qc_field) is True
+                if qc_filter is True and not qc_pass:
                     continue
 
                 s = {'fg': 'pulse_response', 'bg': 'baseline'}[source]
-                result = analyze_response_strength(rec, source=s, lpf=self.lpf_check.isChecked(), 
-                                                   remove_artifacts=self.ar_check.isChecked(), bsub=self.bsub_check.isChecked())
-
-                if self.deconv_check.isChecked():
-                    trace = result['dec_trace']
-                else:
-                    trace = result['raw_trace']
-                    if self.bsub_check.isChecked():
-                        trace = trace - np.median(trace.time_slice(0, 9e-3).data)
-                    if self.lpf_check.isChecked():
-                        trace = filter.bessel_filter(trace, 500)
+                filter_opts = dict(
+                    deconvolve=self.ui.deconv_check.isChecked(),
+                    lpf=self.ui.lpf_check.isChecked(),
+                    remove_artifacts=self.ui.ar_check.isChecked(),
+                    bsub=self.ui.bsub_check.isChecked(),
+                )
+                result = analyze_response_strength(rec, source=s, **filter_opts)
+                trace = result['dec_trace']
                 
                 spike_values.append(trace.value_at([result['spike_time']])[0])
-                if self.align_check.isChecked():
+                if self.ui.align_check.isChecked():
                     trace.t0 = -result['spike_time']
                     spike_times.append(0)
                 else:
                     spike_times.append(result['spike_time'])
 
                 traces.append(trace)
-                trace_list.append(plot.plot(trace.time_values, trace.data, pen=pen))
+                trace_list.append(plot.plot(trace.time_values, trace.data, pen=(pen if qc_pass else qc_fail_pen)))
 
-            if avg:
-                mean = TraceList(traces).mean()
+            if avg and len(traces) > 0:
+                mean = TSeriesList(traces).mean()
                 trace_list.append(plot.plot(mean.time_values, mean.data, pen='g'))
                 trace_list[-1].setZValue(10)
 
@@ -541,7 +513,7 @@ def query_all_pairs(classifier=None):
         joins=" ".join(joins),
     )
 
-    session = db.Session()
+    session = db.session()
     df = pandas.read_sql(query, session.bind)
 
     recs = df.to_records()
@@ -564,17 +536,13 @@ def get_pair_classifier(**kwds):
     return pair_classifier
     
 
-def datetime_to_timestamp(d):
-    return time.mktime(d.timetuple()) + d.microsecond * 1e-6
-
-
 def prs_qc():
     """Convenience function for debugging QC: returns (recording, window) arguments
     used for pulse response QC
     """
     global selected_response
     sr = selected_response
-    if isinstance(sr, PulseResponseStrength):
+    if isinstance(sr, db.PulseResponseStrength):
         resp = sr.pulse_response
     else:
         resp = sr.baseline
@@ -654,6 +622,8 @@ class PairClassifier(object):
 
         # Random seed used when shuffling training/test inputs
         self.seed = seed
+        
+        self.scaler = None
 
     def fit(self, recs):
         ids = recs['id']
@@ -757,9 +727,12 @@ class PairClassifier(object):
         result = np.empty(len(features), dtype=[('prediction', float), ('confidence', float)])
         result[:] = np.nan
 
+        if self.scaler is None:
+            return result
+
         # mask out inf/nan records
         mask = np.all(np.isfinite(features), axis=1)
-
+           
         # scale masked records
         norm_features = self.scaler.transform(features[mask])
 
@@ -881,7 +854,7 @@ class PairView(pg.QtCore.QObject):
         pg.QtCore.QObject.__init__(self)
 
         # global session for querying from DB
-        self.session = db.Session()
+        self.session = db.session()
 
         win = pg.QtGui.QSplitter()
         win.setOrientation(pg.QtCore.Qt.Horizontal)
@@ -889,6 +862,7 @@ class PairView(pg.QtCore.QObject):
         win.show()
         
         b = ExperimentBrowser()
+        b.populate()
         win.addWidget(b)
         
         rs_plots = ResponseStrengthPlots(self.session)
@@ -927,15 +901,10 @@ class PairView(pg.QtCore.QObject):
             self.rs_plots.load_conn(pair)
 
         sec = sel.expt.acq_timestamp
-        src = sel.expt.source_experiment
+
         print("======================================")
-        if src.entry is not None:
-            src.entry.print_tree()
-        else:
-            print(open(src.source_id[0], 'rb').read())
-        print("------------------------------")
-        print("Original path:", src)
-        print("Server path:", sel.expt.original_path)
+        print("Original path:", sel.expt.original_path)
+        print("Server path:", sel.expt.storage_path)
         if hasattr(sel, 'pair'):
             print("ID: %.3f  %d->%d" % (sec, pair.pre_cell.ext_id, pair.post_cell.ext_id))
             conn = pair.connection_strength
@@ -966,7 +935,7 @@ def str_analysis_result_table(results, recs):
         ('in_qc_pass', bool),
         ('clamp_mode', object),
         ('pulse_number', int),
-        ('max_dvdt_time', float),
+        ('max_slope_time', float),
         ('response_start_time', float),
         ('data', object),
         ('rec_start_time', float),
@@ -980,7 +949,7 @@ def str_analysis_result_table(results, recs):
         for key,val in result.items():
             if key in table.dtype.names:
                 table[i][key] = val
-        table[i]['max_dvdt_time'] = 10e-3
+        table[i]['max_slope_time'] = 10e-3
         table[i]['response_start_time'] = 0
     return table
 
@@ -1017,7 +986,7 @@ def simulate_response(fg_recs, bg_results, amp, rtime, seed=None):
         fg_result = analyze_response_strength(rec, 'baseline')
         fg_results.append(fg_result)
 
-        traces.append(Trace(rec.data, sample_rate=db.default_sample_rate))
+        traces.append(TSeries(rec.data, sample_rate=db.default_sample_rate))
         traces[-1].amp = r_amps[k]
     fg_results = str_analysis_result_table(fg_results, fg_recs)
     conn_result = analyze_pair_connectivity({('ic', 'fg'): fg_results, ('ic', 'bg'): bg_results, ('vc', 'fg'): [], ('vc', 'bg'): []}, sign=1)
@@ -1054,49 +1023,58 @@ def simulate_connection(fg_recs, bg_results, classifier, amp, rtime, n_trials=8)
 
 
 if __name__ == '__main__':
-    import user
-
     parser = argparse.ArgumentParser()
-    parser.add_argument('--seed', type=int, default=0, help="Seed used to randomize classifier inputs")
+    parser.add_argument('--seed', type=int, default=0, help="Seed used to randomize classifier inputs")    
+    parser.add_argument('--pairview', default=False, action='store_true', help="Only display experiment browser ui")
     args = parser.parse_args(sys.argv[1:])
 
     pg.dbg()
 
+    # add window for analyzing selected pairs
+    pair_view = PairView()
+
+    if args.pairview:
+        if sys.flags.interactive == 0:
+            pg.mkQApp().exec_()
+        sys.exit(0)
+    
     # Load records on all pairs and train a classifier to predict connections
     classifier = get_pair_classifier(seed=None if args.seed < 0 else args.seed)
     recs = query_all_pairs(classifier)
 
     # show all records in scatter plot
     spw = PairScatterPlot(recs)
-
-    # add another window for analyzing selected pairs
-    pair_view = PairView()
     spw.pair_clicked.connect(pair_view.select_pair)
 
-
     # Print a little report about synapses that may have been misclassified
-    session = db.Session()
+    session = db.session()
 
     fn_mask = (recs['confidence'] > 0.2) & (recs['synapse'] == False)
     fp_mask = (recs['confidence'] < 0.2) & (recs['synapse'] == True)
     for mask, name in [(fn_mask, 'negatives'), (fp_mask, 'positives')]:
         print("\n================ Possible false %s: ==============\n" % name)
-        for rec in recs[mask]:
+        masked = recs[mask]
+        masked.sort(order=['confidence'])
+        for rec in masked:
             pid = int(rec['pair_id'])
             pair = session.query(db.Pair).filter(db.Pair.id==pid).all()[0]
             pre_cell = pair.pre_cell
             post_cell = pair.post_cell
 
-            # just select excitatory for now
-            if pre_cell.cre_type not in constants.EXCITATORY_CRE_TYPES and pre_cell.morphology.pyramidal is not True:
-                continue
-            if post_cell.cre_type not in constants.EXCITATORY_CRE_TYPES and post_cell.morphology.pyramidal is not True:
-                continue
-            
-            print("{:s} {:0.3f} {:d} {:d} {:15s} {:20s}  (L{:<3s} {:7s} {:6s}) (L{:<3s} {:7s} {:6s})".format(
-                pair.experiment.rig_name, pair.experiment.acq_timestamp, pre_cell.ext_id, post_cell.ext_id, pair.experiment.internal, pair.experiment.acsf,
-                pre_cell.target_layer, pre_cell.cre_type, {True: 'pyr', None: '?', False: 'nonpyr'}[pre_cell.morphology.pyramidal], 
-                post_cell.target_layer, post_cell.cre_type, {True: 'pyr', None: '?', False: 'nonpyr'}[post_cell.morphology.pyramidal]
+            print("{:0.3f} {:d} {:d} {:0.2f} {:s} {:15s} {:20s}  (L{:<3s} {:7s} {:6s}) (L{:<3s} {:7s} {:6s})".format(
+                pair.experiment.acq_timestamp, 
+                pre_cell.ext_id, 
+                post_cell.ext_id, 
+                rec['confidence'],
+                pair.experiment.rig_name, 
+                pair.experiment.internal, 
+                pair.experiment.acsf,
+                pre_cell.target_layer, 
+                pre_cell.cre_type, 
+                {True: 'pyr', None: '?', False: 'nonpyr'}[pre_cell.morphology.pyramidal], 
+                post_cell.target_layer, 
+                post_cell.cre_type, 
+                {True: 'pyr', None: '?', False: 'nonpyr'}[post_cell.morphology.pyramidal],
             ))
 
 

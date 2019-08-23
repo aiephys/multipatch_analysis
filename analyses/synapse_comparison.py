@@ -20,14 +20,14 @@ import re
 from multipatch_analysis.synaptic_dynamics import DynamicsAnalyzer
 from multipatch_analysis.experiment_list import cached_experiments
 from neuroanalysis.baseline import float_mode
-from neuroanalysis.data import Trace, TraceList
+from neuroanalysis.data import TSeries, TSeriesList
 from neuroanalysis.filter import bessel_filter
 from neuroanalysis.event_detection import exp_deconvolve
 from scipy import stats
 
 from multipatch_analysis.constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
 from manuscript_figures import get_response, get_amplitude, response_filter, train_amp, write_cache
-from multipatch_analysis.connection_detection import fit_psp
+from multipatch_analysis.fitting import fit_psp
 from manuscript_figures import arg_to_date, load_cache, summary_plot_pulse, get_expts
 
 
@@ -75,7 +75,7 @@ def first_pulse_plot(expt_list, name=None, summary_plot=None, color=None, scatte
 
     if len(grand_response) != 0:
         print(name + ' n = %d' % len(grand_response))
-        grand_mean = TraceList(grand_response).mean()
+        grand_mean = TSeriesList(grand_response).mean()
         grand_amp = np.mean(np.array(avg_amps['amp']))
         grand_amp_sem = stats.sem(np.array(avg_amps['amp']))
         amp_plots.addLegend()
@@ -95,7 +95,7 @@ def first_pulse_plot(expt_list, name=None, summary_plot=None, color=None, scatte
                                                grand_trace=grand_mean, plot=summary_plot, color=color, name=legend)
             return avg_amps, summary_plots
     else:
-        print ("No Traces")
+        print ("No TSeries")
         return avg_amps, None
 
 def train_response_plot(expt_list, name=None, summary_plots=[None, None], color=None):
@@ -117,8 +117,8 @@ def train_response_plot(expt_list, name=None, summary_plots=[None, None], color=
                 pulse_offsets = response_filter(train_responses['pulse_offsets'], freq_range=[50, 50], train=0, delta_t=250)
 
                 if len(train_filter[0]) > 5:
-                    ind_avg = TraceList(train_filter[0]).mean()
-                    rec_avg = TraceList(train_filter[1]).mean()
+                    ind_avg = TSeriesList(train_filter[0]).mean()
+                    rec_avg = TSeriesList(train_filter[1]).mean()
                     rec_avg.t0 = 0.3
                     grand_train[0].append(ind_avg)
                     grand_train[1].append(rec_avg)
@@ -127,8 +127,8 @@ def train_response_plot(expt_list, name=None, summary_plots=[None, None], color=
                     app.processEvents()
     if len(grand_train[0]) != 0:
         print (name + ' n = %d' % len(grand_train[0]))
-        ind_grand_mean = TraceList(grand_train[0]).mean()
-        rec_grand_mean = TraceList(grand_train[1]).mean()
+        ind_grand_mean = TSeriesList(grand_train[0]).mean()
+        rec_grand_mean = TSeriesList(grand_train[1]).mean()
         ind_grand_mean_dec = bessel_filter(exp_deconvolve(ind_grand_mean, tau), lp)
         train_plots.addLegend()
         train_plots.plot(ind_grand_mean.time_values, ind_grand_mean.data, pen={'color': 'g', 'width': 3}, name=name)
@@ -142,7 +142,7 @@ def train_response_plot(expt_list, name=None, summary_plots=[None, None], color=
                                               name=(legend + ' 50 Hz induction'))
             return train_plots, train_plots2, train_amps
     else:
-        print ("No Traces")
+        print ("No TSeries")
         return None
 
 def summary_plot_train(ind_grand_mean, plot=None, color=None, name=None):
@@ -163,7 +163,7 @@ if __name__ == '__main__':
     parser.add_argument('--age', type=str, help='Enter age ranges separated by ",". Ex 40-50,60-70.'
                                                 '' 'cre-type must also be specified')
     parser.add_argument('--recip', action='store_true', default=False, dest='recip',
-                        help='Traces from reciprocal connections are red instead of gray')
+                        help='TSeries from reciprocal connections are red instead of gray')
     parser.add_argument('--start', type=arg_to_date)
     parser.add_argument('--stop', type=arg_to_date)
     parser.add_argument('--trains', action='store_true', default=False, dest='trains',

@@ -10,9 +10,11 @@ import os, yaml
 
 synphys_db_host = None
 synphys_db_host_rw = None
+synphys_db_sqlite = "synphys.sqlite"
 synphys_db = "synphys"
 synphys_db_readonly_user = "readonly"
 synphys_data = None
+lims_address = None
 cache_path = "cache"
 grow_cache = False
 rig_name = None
@@ -27,6 +29,7 @@ template = r"""
 # synphys database
 synphys_db_host: "postgresql://readonly:readonly@10.128.36.109"
 synphys_db: "synphys"
+synphys_db_sqlite: "synphys.sqlite"
 # optional DB access with write privileges
 synphys_db_host_rw: null
 synphys_db_readonly_user: "readonly"
@@ -70,7 +73,12 @@ configfile = os.path.join(os.path.dirname(__file__), '..', 'config.yml')
 if not os.path.isfile(configfile):
     open(configfile, 'wb').write(template)
 
-config = yaml.load(open(configfile, 'rb'))
+if hasattr(yaml, 'FullLoader'):
+    # pyyaml new API
+    config = yaml.load(open(configfile, 'rb'), Loader=yaml.FullLoader)
+else:
+    # pyyaml old API
+    config = yaml.load(open(configfile, 'rb'))
 
 for k,v in config.items():
     locals()[k] = v

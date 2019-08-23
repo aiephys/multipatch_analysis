@@ -33,8 +33,15 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
     header_color : str | tuple
         Color of header text
     """
+    class SignalHandler(pg.QtCore.QObject):
+        """Because we can't subclass from both QObject and QGraphicsRectItem at the same time
+        """
+        sigClicked = pg.QtCore.Signal(object, object, object, object) # self, event, row, col
+
     def __init__(self, text, fgcolor, bgcolor, rows, cols, size=50, border_color='k', header_color='w'):
         pg.QtGui.QGraphicsItemGroup.__init__(self)
+        self._signalHandler = MatrixItem.SignalHandler()
+        self.sigClicked = self._signalHandler.sigClicked
         self.cell_size = size
         self.header_color = header_color
 
@@ -51,15 +58,19 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
             for j,col in enumerate(cols):
                 x = j * size
                 y = i * size
-                rect = pg.QtGui.QGraphicsRectItem(0, 0, size, size, parent=self)
+                rect = MatrixElementItem(size, parent=self)
                 rect.setPos(x, y)
                 rect.setBrush(pg.mkBrush(bgcolor[i][j]))
                 rect.setPen(pg.mkPen(border_color[i][j]))
                 rect.setZValue(-10)
+                rect.row = i
+                rect.col = j
+                rect.sigClicked.connect(self.element_clicked)
                 self.cells[-1].append(rect)
 
                 txt = pg.QtGui.QGraphicsTextItem(text[i][j], parent=self)
                 br = txt.boundingRect()
+                txt.setTextWidth(br.width())
                 txt.setPos(x + size/2 - br.center().x(), y + size/2 - br.center().y())
                 txt.setDefaultTextColor(pg.mkColor(fgcolor[i][j]))
                 self.cell_labels[-1].append(txt)
@@ -69,8 +80,27 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
             br = br.united(self.mapRectFromItem(item, item.boundingRect()))
         self._bounding_rect = br
 
+        font_size = size / 2
+        for i in ('Presynaptic', 'Postsynaptic'):
+            html = '<span style="font-size: %dpx; font-weight: bold">%s</span>' % (font_size, i)
+            item = pg.QtGui.QGraphicsTextItem("", parent=self)
+            item.setHtml(html)
+            if i == 'Presynaptic':
+                item.rotate(-90)
+                x = self.boundingRect().left() - item.boundingRect().height()
+                y = item.boundingRect().width() + ((self.boundingRect().bottom() - item.boundingRect().width()) / 2)
+            elif i == 'Postsynaptic':
+                x = (self.boundingRect().right() - item.boundingRect().width()) / 2
+                y = self.boundingRect().top() - item.boundingRect().height()
+
+            item.setPos(x, y)
+
+    def element_clicked(self, rect, event):
+        self.sigClicked.emit(self, event, rect.row, rect.col)  
+
+
     def _make_header(self, labels, side):
-        padding = 10
+        padding = 5
         if isinstance(labels[0], tuple):
             # draw groups first
             grp_labels, labels = zip(*labels)
@@ -92,21 +122,36 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
             self._make_header_groups(grps, side, width)
             padding = 3
 
-    def _make_header_text(self, txt, i, side, padding=10, font_size=None):
+    def _make_header_text(self, txt, rowcol, side, padding=5, font_size=None):
         size = self.cell_size
         if font_size is None:
             font_size = size / 3.
-        align = {'top': 'left', 'left': 'right'}[side]
-        html = '<span style="font-size: %dpx; text-align: %s; line-height: 70%%">%s</span>' % (font_size, align, str(txt).replace('\n', '<br>'))
+        small_font_size = font_size * 0.7
+        align = pg.QtCore.Qt.AlignLeft if side == 'top' else pg.QtCore.Qt.AlignRight
+        lines = str(txt).split('\n')
+        html = '<div style="line-height: 70%%">'
+        for i,line in enumerate(lines):
+            fs = font_size if i == 0 else small_font_size
+            if i > 0:
+                html += '<br>'
+            html += '<span style="font-size: %dpx;">%s</span>' % (fs, line)
+        html += '</div>'
         item = pg.QtGui.QGraphicsTextItem("", parent=self)
         item.setHtml(html)
+        item.setTextWidth(item.boundingRect().width())
+
+        doc = item.document()
+        opts = doc.defaultTextOption()
+        opts.setAlignment(align)
+        doc.setDefaultTextOption(opts)
+
         if side == 'top':
             item.rotate(-90)
         br = item.mapRectToParent(item.boundingRect())
         if side == 'top':
-            item.setPos(i * size + size/2 - br.center().x(), -br.bottom() - padding)
+            item.setPos(rowcol * size + size/2 - br.center().x(), -br.bottom() - padding)
         elif side == 'left':
-            item.setPos(-br.right() - padding, i * size + size/2. - br.center().y())
+            item.setPos(-br.right() - padding, rowcol * size + size/2. - br.center().y())
         else:
             raise ValueError("side must be top or left")
         item.setDefaultTextColor(pg.mkColor(self.header_color))
@@ -147,9 +192,22 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
 
     def boundingRect(self):
         return self._bounding_rect
+
+class MatrixElementItem(pg.QtGui.QGraphicsRectItem):
+    class SignalHandler(pg.QtCore.QObject):
+        """Because we can't subclass from both QObject and QGraphicsRectItem at the same time
+        """
+        sigClicked = pg.QtCore.Signal(object, object) # self, event
+
+    def __init__(self, size, parent):
+        self._signalHandler = MatrixElementItem.SignalHandler()
+        self.sigClicked = self._signalHandler.sigClicked
+        pg.QtGui.QGraphicsRectItem.__init__(self, 0, 0, size, size, parent=parent)
+
+    def mouseClickEvent(self, event):
+        self.sigClicked.emit(self, event)    
     
-    
-def distance_plot(connected, distance, plots=None, color=(100, 100, 255), window=40e-6, spacing=None, name=None, fill_alpha=30):
+def distance_plot(connected, distance, plots=None, color=(100, 100, 255), size=10, window=40e-6, spacing=None, name=None, fill_alpha=30):
     """Draw connectivity vs distance profiles with confidence intervals.
     
     Parameters
@@ -163,6 +221,8 @@ def distance_plot(connected, distance, plots=None, color=(100, 100, 255), window
     color : tuple
         (R, G, B) color values for line and confidence interval. The confidence interval
         will be drawn with alpha=100
+    size: int
+        size of scatter plot symbol
     window : float
         Width of distance window over which proportions are calculated for each point on
         the profile line.
@@ -176,23 +236,6 @@ def distance_plot(connected, distance, plots=None, color=(100, 100, 255), window
     color = pg.colorTuple(pg.mkColor(color))[:3]
     connected = np.array(connected).astype(float)
     distance = np.array(distance)
-    pts = np.vstack([distance, connected]).T
-    
-    # scatter points a bit
-    conn = pts[:,1] == 1
-    unconn = pts[:,1] == 0
-    if np.any(conn):
-        cscat = pg.pseudoScatter(pts[:,0][conn], spacing=10e-6, bidir=False)
-        mx = abs(cscat).max()
-        if mx != 0:
-            cscat = cscat * 0.2# / mx
-        pts[:,1][conn] = -5e-5 - cscat
-    if np.any(unconn):
-        uscat = pg.pseudoScatter(pts[:,0][unconn], spacing=10e-6, bidir=False)
-        mx = abs(uscat).max()
-        if mx != 0:
-            uscat = uscat * 0.2# / mx
-        pts[:,1][unconn] = uscat
 
     # scatter plot connections probed
     if plots is None:
@@ -207,12 +250,29 @@ def distance_plot(connected, distance, plots=None, color=(100, 100, 255), window
         plots[0].setLabels(bottom=('distance', 'm'), left='connection probability')
 
     if plots[1] is not None:
+         # scatter points a bit
+        pts = np.vstack([distance, connected]).T
+        conn = pts[:,1] == 1
+        unconn = pts[:,1] == 0
+        if np.any(conn):
+            cscat = pg.pseudoScatter(pts[:,0][conn], spacing=10e-6, bidir=False)
+            mx = abs(cscat).max()
+            if mx != 0:
+                cscat = cscat * 0.2# / mx
+            pts[:,1][conn] = -5e-5 - cscat
+        if np.any(unconn):
+            uscat = pg.pseudoScatter(pts[:,0][unconn], spacing=10e-6, bidir=False)
+            mx = abs(uscat).max()
+            if mx != 0:
+                uscat = uscat * 0.2# / mx
+            pts[:,1][unconn] = uscat
+        
         plots[1].setXLink(plots[0])
         plots[1].hideAxis('bottom')
         plots[1].hideAxis('left')
 
         color2 = color + (100,)
-        scatter = plots[1].plot(pts[:,0], pts[:,1], pen=None, symbol='o', labels={'bottom': ('distance', 'm')}, symbolBrush=color2, symbolPen=None, name=name)
+        scatter = plots[1].plot(pts[:,0], pts[:,1], pen=None, symbol='o', labels={'bottom': ('distance', 'm')}, size=size, symbolBrush=color2, symbolPen=None, name=name)
         scatter.scatter.opts['compositionMode'] = pg.QtGui.QPainter.CompositionMode_Plus
 
     # use a sliding window to plot the proportion of connections found along with a 95% confidence interval
@@ -257,3 +317,6 @@ def distance_plot(connected, distance, plots=None, color=(100, 100, 255), window
     plots[0].addItem(fill, ignoreBounds=True)
     
     return plots, ci_xvals, prop, upper, lower
+
+
+        

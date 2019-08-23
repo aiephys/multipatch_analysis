@@ -1,5 +1,5 @@
 from __future__ import print_function
-import os, sys, time, datetime, logging.handlers, re
+import os, sys, time, datetime, logging.handlers, re, importlib
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -12,6 +12,38 @@ logger.addHandler(stderr_log_handler)
 
 def datetime_to_timestamp(d):
     return time.mktime(d.timetuple()) + d.microsecond * 1e-6
+    
+def timestamp_to_datetime(ts):
+    return datetime.datetime.fromtimestamp(ts)
+
+
+def dir_timestamp(path):
+    """Get the timestamp from an index file.
+
+    This is just a very lightweight version of the same functionality provided by ACQ4's DirHandle.info()['__timestamp__'].
+    We'd prefer not to duplicate this functionality, but acq4 has UI dependencies that make automated scripting more difficult.
+    """
+    index_file = os.path.join(path, '.index')
+    in_dir = False
+    search_indent = None
+    for line in open(index_file, 'rb').readlines():
+        if line.startswith('.:'):
+            in_dir = True
+            continue
+        if line[0] != ' ':
+            if in_dir is True:
+                return None
+        if not in_dir:
+            continue
+        indent = len(line) - len(line.lstrip(' '))
+        if search_indent is None:
+            search_indent = indent
+        if indent != search_indent:
+            continue
+        line = line.lstrip()
+        key = '__timestamp__:'
+        if line.startswith(key):
+            return float(line[len(key):])
 
 
 def sync_dir(source_path, dest_path, test=False, log_file=None, depth=0, archive_deleted=False):
@@ -242,3 +274,20 @@ def mkdir(path, test=False):
         if root != '':
             mkdir(root)
         os.mkdir(path)
+
+
+def optional_import(module):
+    """Try importing a module, but if that fails, wait until the first time it is
+    accessed before raising the ImportError.
+    """
+    try:
+        return importlib.import_module(module)
+    except ImportError as exc:
+        return OptionalImportError(exc)
+
+
+class OptionalImportError(object):
+    def __init__(self, exc):
+        self.exc = exc
+    def __getattr__(self, attr):
+        raise self.exc
