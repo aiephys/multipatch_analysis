@@ -544,7 +544,7 @@ class PairAnalysis(object):
             for mode in c_modes:
                 for holding in holdings:
                     self.fit_pass = False
-                    sign = self.signs[mode][holding].get(self.ctrl_panel.params['Synapse call'], 'any')
+                    sign = self.signs[mode][holding].get(self.ctrl_panel.params['Synapse call'], 0)
                     
                     # ofp, x_offset, best_fit = fit_avg_response(self.traces, mode, holding, latency, sign)
                     prs = self.sorted_responses[mode, holding]['qc_pass']
@@ -731,6 +731,8 @@ class PairAnalysis(object):
                         
                     # make a list of spike-aligned postsynaptic tseries
                     tsl = PulseResponseList(self.sorted_responses[mode, holding]['qc_pass']).post_tseries(align='spike', bsub=True)
+                    if len(tsl) == 0:
+                        continue
                     
                     # average all together
                     avg = tsl.mean()
