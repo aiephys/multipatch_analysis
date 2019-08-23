@@ -9,6 +9,7 @@ from ... import config
 from ..pipeline_module import DatabasePipelineModule
 from .experiment import ExperimentPipelineModule
 from .dataset import DatasetPipelineModule
+import multipatch_analysis.data.data_notes_db as notes_db
 from ...avg_response_fit import get_pair_avg_fits
 
 
@@ -71,9 +72,13 @@ class SynapsePipelineModule(DatabasePipelineModule):
 
                 session.add(rec)
 
+            # look up synapse type from notes db
+            notes_rec = notes_db.get_pair_notes_record(pair.experiment.ext_id, pair.pre_cell.ext_id, pair.post_cell.ext_id)
+            
             # create a DB record for this synapse
             syn = db.Synapse(
                 pair_id=pair.id,
+                synapse_type=notes_rec.notes['synapse_type'],
             )
             print("add synapse:", pair, pair.id)
 
