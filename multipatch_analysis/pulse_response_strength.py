@@ -39,11 +39,24 @@ def measure_response(rec, baseline_rec):
     
     data = TSeries(rec.data, t0=rec.rec_start-rec.spike_time, sample_rate=db.default_sample_rate)
 
+    # decide whether/how to constrain the sign of the fit
+    if rec.synapse_type == 'ex':
+        sign = 1
+    elif rec.synapse_type == 'in':
+        if rec.baseline_potential > -60e-3:
+            sign = -1
+        else:
+            sign = 0
+    else:
+        sign = 0
+    if rec.clamp_mode == 'vc':
+        sign = -sign
+
     # fit response region
     response_fit = fit_psp(data, 
         search_window=rec.latency + np.array([-100e-6, 100e-6]), 
         clamp_mode=rec.clamp_mode, 
-        sign=0, 
+        sign=sign,
         baseline_like_psp=True, 
         init_params={'rise_time': rise_time, 'decay_tau': decay_tau},
         refine=False,
@@ -57,7 +70,7 @@ def measure_response(rec, baseline_rec):
         baseline_fit = fit_psp(baseline, 
             search_window=rec.latency + np.array([-100e-6, 100e-6]), 
             clamp_mode=rec.clamp_mode, 
-            sign=0, 
+            sign=sign, 
             baseline_like_psp=True, 
             init_params={'rise_time': rise_time, 'decay_tau': decay_tau},
             refine=False,
@@ -147,6 +160,7 @@ def response_query(session):
         db.StimPulse.duration.label('pulse_dur'),
         db.StimPulse.first_spike_time.label('spike_time'),
         db.PatchClampRecording.clamp_mode,
+        db.PatchClampRecording.baseline_potential,
         db.PulseResponse.ex_qc_pass,
         db.PulseResponse.in_qc_pass,
         db.Pair.has_synapse,
@@ -155,6 +169,7 @@ def response_query(session):
         db.Synapse.psp_decay_tau,
         db.Synapse.psc_rise_time,
         db.Synapse.psc_decay_tau,
+        db.Synapse.synapse_type,
         db.Recording.id.label('recording_id'),
     )
     q = q.join(db.StimPulse, db.PulseResponse.stim_pulse)
