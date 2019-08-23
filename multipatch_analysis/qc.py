@@ -4,6 +4,7 @@ QC functions meant to ensure consistent filtering across different analyses
 """
 import numpy as np
 import pyqtgraph as pg
+from neuroanalysis.util.data_test import DataTestCase
 
 
 def recording_qc_pass(rec):
@@ -110,14 +111,19 @@ def pulse_response_qc_pass(post_rec, window, n_spikes, adjacent_pulses):
     if post_rec.clamp_mode == 'ic':
         data = post_rec['primary'].time_slice(window[0], window[1])
         base = data.median()
-        if data.std() > 1.5e-3:
+        base_std = data.time_slice(window[0], window[0] + 5e-3)
+        max_amp = data - base
+        if base_std.std() > 1.5e-3:
             [failures[k].append('STD of response window, %s, exceeds 1.5mV' % pg.siFormat(data.std(), suffix='V')) for k in failures.keys()]
         if data.data.max() > -40e-3:
             [failures[k].append('Max in response window, %s, exceeds -40mV' % pg.siFormat(data.data.max(), suffix='V')) for k in failures.keys()]
+        if abs(max_amp.data.max()) > 10e-3:
+            [failures[k].append('Max response amplitude, %s, exceeds 10mV' % pg.siFormat(abs(max_amp.data.max()), suffix='V')) for k in failures.keys()]
     elif post_rec.clamp_mode == 'vc':
         data = post_rec['primary'].time_slice(window[0], window[1])
         base = post_rec['command'].time_slice(window[0], window[1]).median()
-        if data.std() > 15e-12:
+        base_std = data.time_slice(window[0], window[0] + 5e-3)
+        if base_std.std() > 15e-12:
             [failures[k].append('STD of response window, %s, exceeds 15pA' % pg.siFormat(data.std(), suffix='A')) for k in failures.keys()]
     else:
         raise TypeError('Unsupported clamp mode %s' % post_rec.clamp_mode)
@@ -156,3 +162,12 @@ def spike_qc(n_spikes, post_qc):
     trace_qc_pass = False if spike_qc_pass is False else post_qc
 
     return spike_qc_pass, trace_qc_pass
+
+class PulseResponseQCTestCase(DataTestCase):
+    def __init__(self):
+        DataTestCase.__init__(self, pulse_response_qc_pass)
+
+    @property
+    def name(self):
+        meta = self.meta
+        return "%s_%s_%s_%0.3f" % (meta['expt_id'], meta['sweep_id'], meta['post_cell_id'], self.input_args['window'][0])
