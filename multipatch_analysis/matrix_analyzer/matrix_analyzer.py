@@ -203,13 +203,13 @@ class MatrixAnalyzer(object):
                     continue
                 self.field_map[field[0]] = analyzer
 
-        self.output_fields = get_all_output_fields(self.analyzers)
+        self.output_fields, self.text_fields = get_all_output_fields(self.analyzers)
         self.element_scatter = self.scatter_tab.element_scatter
         self.pair_scatter = self.scatter_tab.pair_scatter
         self.experiment_filter = ExperimentFilter()
         self.cell_class_groups = cell_class_groups
         self.cell_class_filter = CellClassFilter(self.cell_class_groups)
-        self.matrix_display = MatrixDisplay(self.main_window, self.output_fields, self.field_map)
+        self.matrix_display = MatrixDisplay(self.main_window, self.output_fields, self.text_fields, self.field_map)
         self.matrix_display_filter = self.matrix_display.matrix_display_filter
         self.element_scatter.set_fields(self.output_fields)
         pair_fields = [f for f in self.output_fields if f[0] not in ['connection_probability', 'gap_junction_probability', 'matrix_completeness']]

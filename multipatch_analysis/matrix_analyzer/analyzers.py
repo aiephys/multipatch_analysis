@@ -66,6 +66,24 @@ class FormattableNumber(float):
             formatted_value = ("%0.2f ms" % value)
         return formatted_value
 
+    @property
+    def us(self):
+        if np.isnan(self):
+            formatted_value = ''
+        else:
+            value = self*1e6
+            formatted_value = ("%0.2f μs" % value)
+        return formatted_value
+
+    @property
+    def mm(self):
+        if np.isnan(self):
+            formatted_value = ''
+        else:
+            value = self*1e3
+            formatted_value = ("%0.2f mm" % value)
+        return formatted_value
+
 class Analyzer(pg.QtCore.QObject):
 
     sigOutputChanged = pg.QtCore.Signal(object)
@@ -169,6 +187,16 @@ class ConnectivityAnalyzer(Analyzer):
             ('gap_junction', 'metric_summary'):int,
         }
 
+        self.text = {
+            'probed': '{probed}',
+            'connected': '{connected}',
+            'gap_junction': '{gap_junction}',
+            'connection_probability': '{connected}/{probed}',
+            'gap_junction_probability': '{gap_junction}/{probed}',
+            'matrix_completeness': '{connected}/{probed}',
+            'distance': '{distance.mm}',
+        }
+
     def metric_summary(self, x): 
         if x.name == 'conn_no_data':
             return all(x)
@@ -228,8 +256,8 @@ class ConnectivityAnalyzer(Analyzer):
                 if probed is False:
                     no_data = True
 
-                connected = pair.synapse if probed is True else False
-                gap = pair.electrical if probed is True else False
+                connected = pair.has_synapse if probed is True else False
+                gap = pair.has_electrical if probed is True else False
                 distance = pair.distance if probed is True else float('nan')
                 
 
@@ -250,13 +278,6 @@ class ConnectivityAnalyzer(Analyzer):
         self.results = pd.DataFrame.from_dict(results, orient='index')
 
         return self.results
-
-    # def group_result(self, pair_groups):
-    #     if self.group_results is not None:
-    #         return self.group_results
-
-    #     self.group_results = self.results.groupby(['pre_class', 'post_class']).agg(self.summary_stat)
-    #     return self.group_results
 
     def output_fields(self):
 
@@ -287,13 +308,21 @@ class ConnectivityAnalyzer(Analyzer):
         point_data = []
         connections = element[element['connected'] == True].index.tolist()
         for pair in connections:
-            cs = pair.connection_strength
-            trace = cs.ic_average_response
-            if trace is not None:
-                x_offset = cs.ic_fit_xoffset
-                trace = format_trace(trace, baseline_window, x_offset, align='psp')
-                trace_plt.plot(trace.time_values, trace.data)
-                traces.append(trace)
+            arfs = pair.avg_response_fits
+            s_type = pair.synapse.synapse_type
+            for arf in arfs:
+                trace = None
+                if arf.manual_qc_pass is False or arf.clamp_mode == 'vc':
+                    continue
+                if s_type == 'ex' and arf.holding == -70:
+                    trace = arf.avg_data
+                if s_type == 'in' and arf.holding == -55:
+                    trace = arf.avg_data
+                if trace is not None:
+                    latency = arf.latency
+                    trace = format_trace(trace, baseline_window, latency, align='psp')
+                    trace_plt.plot(trace.time_values, trace.data)
+                    traces.append(trace)
         grand_trace = TSeriesList(traces).mean()
         name = ('%s->%s, n=%d' % (pre_class, post_class, len(traces)))
         trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3}, name=name)
@@ -328,22 +357,13 @@ class StrengthAnalyzer(Analyzer):
         #self.sigOutputChanged = self._signalHandler.sigOutputChanged
 
         self.summary_stat = {
-        'ic_fit_amp_all': [self.metric_summary, self.metric_conf],
-        'ic_fit_xoffset_all': [self.metric_summary, self.metric_conf],
-        'ic_fit_rise_time_all': [self.metric_summary, self.metric_conf],
-        'ic_fit_decay_tau_all': [self.metric_summary, self.metric_conf],
-        'vc_fit_amp_all': [self.metric_summary, self.metric_conf],
-        'vc_fit_xoffset_all': [self.metric_summary, self.metric_conf],
-        'vc_fit_rise_time_all': [self.metric_summary, self.metric_conf],
-        'vc_fit_decay_tau_all': [self.metric_summary, self.metric_conf],
-        'ic_amp_first_pulse': [self.metric_summary, self.metric_conf],
-        'ic_latency_first_pulse': [self.metric_summary, self.metric_conf],
-        'ic_rise_time_first_pulse': [self.metric_summary, self.metric_conf],
-        'ic_decay_tau_first_pulse': [self.metric_summary, self.metric_conf],
-        'vc_amp_first_pulse': [self.metric_summary, self.metric_conf],
-        'vc_latency_first_pulse': [self.metric_summary, self.metric_conf],
-        'vc_rise_time_first_pulse': [self.metric_summary, self.metric_conf],
-        'vc_decay_tau_first_pulse': [self.metric_summary, self.metric_conf],
+        'psp_amp': [self.metric_summary, self.metric_conf],
+        'latency': [self.metric_summary, self.metric_conf],
+        'psp_rise_time': [self.metric_summary, self.metric_conf],
+        'psp_decay_tau': [self.metric_summary, self.metric_conf],
+        'psc_amp': [self.metric_summary, self.metric_conf],
+        'psc_rise_time': [self.metric_summary, self.metric_conf],
+        'psc_decay_tau': [self.metric_summary, self.metric_conf],
         'strength_no_data': self.metric_summary,
         }
         self.summary_dtypes = {} ## dict to specify how we want to cast different summary measures
@@ -352,93 +372,54 @@ class StrengthAnalyzer(Analyzer):
         self.fields = [
             ('None',{}),
             # all pulses
-            ('ic_fit_amp_all', {'mode': 'range', 'units': 'V', 'defaults': {
+            ('psp_amp', {'mode': 'range', 'units': 'V', 'defaults': {
                 'Min': -1e-3, 
                 'Max': 1e-3, 
                 'colormap': pg.ColorMap(
                 [0, 0.5, 1.0],
                 [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
             )}}),
-            ('vc_fit_amp_all', {'mode': 'range', 'units': 'A', 'defaults': {
+            ('psc_amp', {'mode': 'range', 'units': 'A', 'defaults': {
                 'Min': -20e-12, 
                 'Max': 20e-12, 
                 'colormap': pg.ColorMap(
                 [0, 0.5, 1.0],
                 [(255, 0, 0, 255), (255, 255, 255, 255), (0, 0, 255, 255)],
             )}}),
-            ('ic_fit_xoffset_all', {'mode': 'range', 'units': 's', 'defaults': {
+            ('latency', {'mode': 'range', 'units': 's', 'defaults': {
                 'Min': 0.5e-3, 
                 'Max': 4e-3,
                 'colormap': thermal_colormap,
             }}),
-            ('vc_fit_xoffset_all', {'mode': 'range', 'units': 's', 'defaults': {
-                'Min': 0.5e-3, 
-                'Max': 4e-3,
-                'colormap': thermal_colormap,
-            }}),
-            ('ic_fit_rise_time_all', {'mode': 'range', 'units': 's', 'defaults': {
+            ('psp_rise_time', {'mode': 'range', 'units': 's', 'defaults': {
                 'Min': 1e-3, 
                 'Max': 10e-3,
                 'colormap': thermal_colormap,
             }}),
-            ('vc_fit_rise_time_all', {'mode': 'range', 'units': 's', 'defaults': {
+            ('psc_rise_time', {'mode': 'range', 'units': 's', 'defaults': {
                 'Min': 0.5e-3, 
                 'Max': 5e-3,
                 'colormap': thermal_colormap,
             }}),
-            ('ic_fit_decay_tau_all', {'mode': 'range', 'units': 's', 'defaults': {
+            ('psp_decay_tau', {'mode': 'range', 'units': 's', 'defaults': {
                 'Max': 500e-3,
                 'colormap': thermal_colormap,
             }}),
-            ('vc_fit_decay_tau_all', {'mode': 'range', 'units': 's', 'defaults': {
-                'Max': 20e-3,
-                'colormap': thermal_colormap,
-            }}),
-            ## first pulse
-            ('ic_amp_first_pulse', {'mode': 'range', 'units': 'V', 'defaults': {
-                'Min': -1e-3, 
-                'Max': 1e-3, 
-                'colormap': pg.ColorMap(
-                [0, 0.5, 1.0],
-                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
-            )}}),
-            ('vc_amp_first_pulse', {'mode': 'range', 'units': 'A', 'defaults': {
-                'Min': -20e-12, 
-                'Max': 20e-12, 
-                'colormap': pg.ColorMap(
-                [0, 0.5, 1.0],
-                [(255, 0, 0, 255), (255, 255, 255, 255), (0, 0, 255, 255)],
-            )}}),
-            ('ic_latency_first_pulse', {'mode': 'range', 'units': 's', 'defaults': {
-                'Min': 0.5e-3, 
-                'Max': 4e-3,
-                'colormap': thermal_colormap,
-            }}),
-            ('vc_latency_first_pulse', {'mode': 'range', 'units': 's', 'defaults': {
-                'Min': 0.5e-3, 
-                'Max': 4e-3,
-                'colormap': thermal_colormap,
-            }}),
-            ('ic_rise_time_first_pulse', {'mode': 'range', 'units': 's', 'defaults': {
-                'Min': 1e-3, 
-                'Max': 10e-3,
-                'colormap': thermal_colormap,
-            }}),
-            ('vc_rise_time_first_pulse', {'mode': 'range', 'units': 's', 'defaults': {
-                'Min': 0.5e-3, 
-                'Max': 5e-3,
-                'colormap': thermal_colormap,
-            }}),
-            ('ic_decay_tau_first_pulse', {'mode': 'range', 'units': 's', 'defaults': {
-                'Max': 500e-3,
-                'colormap': thermal_colormap,
-            }}),
-            ('vc_decay_tau_first_pulse', {'mode': 'range', 'units': 's', 'defaults': {
+            ('psc_decay_tau', {'mode': 'range', 'units': 's', 'defaults': {
                 'Max': 20e-3,
                 'colormap': thermal_colormap,
             }}),
         ]
-        
+
+        self.text = {
+            'psp_amp': '{psp_amp.mV}',
+            'psc_amp': '{psc_amp.pA}',
+            'latency': '{latency.ms}',
+            'psp_rise_time': '{psp_rise_time.ms}',
+            'psp_decay_tau': '{psp_decay_tau.ms}',
+            'psc_rise_time': '{psc_rise_time.ms}',
+            'psc_decay_tau': '{psc_decay_tau.ms}',
+        }
 
     def invalidate_output(self):
         self.results = None
@@ -458,47 +439,63 @@ class StrengthAnalyzer(Analyzer):
             pre_class, post_class = key
 
             for pair in class_pairs:
-                if pair.synapse is not True:
+                if pair.has_synapse is not True:
                     no_data = True
-                    cs = None
-                    fpf = None
-                elif pair.synapse is True:
+                elif pair.has_synapse is True:
                     no_data = False
-                    cs = pair.connection_strength
-                    fpf = pair.avg_first_pulse_fit
+                    arfs = pair.avg_response_fits
+                    synapse = pair.synapse
+                    if synapse is None:
+                        no_data = True
+                        s_type = None
+                    else:
+                        s_type = synapse.synapse_type
+                        psp_decay_tau = synapse.psp_decay_tau
+                        psp_rise_time = synapse.psp_rise_time
+                        psc_rise_time = synapse.psc_rise_time
+                        psc_decay_tau = synapse.psc_decay_tau
+                        latency = synapse.latency
+                    for arf in arfs:
+                        psp_amp = float('nan')
+                        psc_amp = float('nan')
+                        avg_psp = float('nan')
+                        avg_psc = float('nan')
+                        # if arf.manual_qc_pass is False:
+                        #     no_data = True
+                        if s_type == 'ex' and (arf.holding == -70 or arf.holding == -55):
+                            if arf.clamp_mode == 'ic':
+                                psp_amp = arf.fit_amp
+                                avg_psp = arf.avg_data
+                            if arf.clamp_mode == 'vc':
+                                psc_amp = arf.fit_amp 
+                                avg_psc = arf.avg_data
+                        if s_type == 'in' and arf.holding == -55:
+                            if arf.clamp_mode == 'ic':
+                                psp_amp = arf.fit_amp
+                                avg_psp = arf.avg_data
+                            if arf.clamp_mode == 'vc':
+                                psc_amp = arf.fit_amp 
+                                avg_psc = arf.avg_data
+
 
                 results[pair] = {
                 'strength_no_data': no_data,
                 'pre_class': pre_class,
                 'post_class': post_class,
-                'ic_fit_amp_all': cs.ic_fit_amp if cs is not None else float('nan'),
-                'ic_fit_xoffset_all': cs.ic_fit_xoffset if cs is not None else float('nan'),
-                'ic_fit_rise_time_all': cs.ic_fit_rise_time if cs is not None else float('nan'),
-                'ic_fit_decay_tau_all': cs.ic_fit_decay_tau if cs is not None else float('nan'),
-                'vc_fit_amp_all': cs.vc_fit_amp if cs is not None else float('nan'),
-                'vc_fit_xoffset_all': cs.vc_fit_xoffset if cs is not None else float('nan'),
-                'vc_fit_rise_time_all': cs.vc_fit_rise_time if cs is not None else float('nan'),
-                'vc_fit_decay_tau_all': cs.vc_fit_decay_tau if cs is not None else float('nan'),
-                'ic_amp_first_pulse': fpf.ic_amp if fpf is not None else float('nan'),
-                'ic_latency_first_pulse': fpf.ic_latency if fpf is not None else float('nan'),
-                'ic_rise_time_first_pulse': fpf.ic_rise_time if fpf is not None else float('nan'),
-                'ic_decay_tau_first_pulse': fpf.ic_decay_tau if fpf is not None else float('nan'),
-                'vc_amp_first_pulse': fpf.vc_amp if fpf is not None else float('nan'),
-                'vc_latency_first_pulse': fpf.vc_latency if fpf is not None else float('nan'),
-                'vc_rise_time_first_pulse': fpf.vc_rise_time if fpf is not None else float('nan'),
-                'vc_decay_tau_first_pulse': fpf.vc_decay_tau if fpf is not None else float('nan'),
+                'psp_amp': psp_amp if no_data is False else float('nan'),
+                'psp_rise_time': psp_rise_time if no_data is False else float('nan'),
+                'psp_decay_tau': psp_decay_tau if no_data is False else float('nan'),
+                'psc_amp': psc_amp if no_data is False else float('nan'),
+                'psc_rise_time': psc_rise_time if no_data is False else float('nan'),
+                'psc_decay_tau': psc_decay_tau if no_data is False else float('nan'),
+                'latency': latency if no_data is False else float('nan'),
+                'avg_psp': avg_psp if no_data is False else float('nan'),
+                'avg_psc': avg_psc if no_data is False else float('nan'),
                 }
 
         self.results = pd.DataFrame.from_dict(results, orient='index')
 
         return self.results
-
-    # def group_result(self):
-    #     if self.group_results is not None:
-    #         return self.group_results
-
-    #     self.group_results = self.results.groupby(['pre_class', 'post_class']).agg(self.summary_stat)
-    #     return self.group_results
 
     def output_fields(self):
 
@@ -515,14 +512,13 @@ class StrengthAnalyzer(Analyzer):
 
     def print_element_info(self, pre_class, post_class, element, field_name=None):
         if field_name is not None:
-            fn = field_name.split('_all')[0] if field_name.endswith('all') else field_name.split('_first_pulse')[0]
             units = [field[1].get('units', '') for field in self.fields if field[0] == field_name][0] 
             print ("Connection type: %s -> %s" % (pre_class, post_class))    
             print ("\t Grand Average %s = %s" % (field_name, pg.siFormat(element[field_name].mean(), suffix=units)))
             print ("Connected Pairs:")
             no_qc_data = []
             for pair, value in element[field_name].iteritems():
-                if pair.synapse is not True:
+                if pair.has_synapse is not True:
                     continue
                 if np.isnan(value):
                     no_qc_data.append(pair)
@@ -534,7 +530,6 @@ class StrengthAnalyzer(Analyzer):
                 print ("\t\t %s" % (pair))
 
     def plot_element_data(self, pre_class, post_class, element, field_name, color='g', trace_plt=None):
-        fn = field_name.split('_all')[0] if field_name.endswith('all') else field_name.split('_first_pulse')[0]
         val = element[field_name].mean()
         line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
         scatter = None
@@ -543,24 +538,16 @@ class StrengthAnalyzer(Analyzer):
         traces = []
         point_data = []
         for pair, value in element[field_name].iteritems():
-            if pair.synapse is not True:
+            if pair.has_synapse is not True:
                 continue
             if np.isnan(value):
                 continue
-            if field_name.endswith('all'):
-                cs = pair.connection_strength
-                trace = cs.ic_average_response if field_name.startswith('ic') else cs.vc_average_response
-                x_offset = cs.ic_fit_xoffset if field_name.startswith('ic') else cs.vc_fit_xoffset
-            elif field_name.endswith('first_pulse'):
-                fpf = pair.avg_first_pulse_fit
-                if fpf is None:
-                    continue
-                trace = fpf.ic_avg_psp_data if field_name.startswith('ic') else fpf.vc_avg_psp_data
-                x_offset = fpf.ic_latency if field_name.startswith('ic') else fpf.vc_latency
+            trace = self.results.avg_psc if field_name.startswith('psc') else self.results.avg_psp
+            latency = self.results.latency
             if trace is None:
                 continue
             values.append(value)
-            trace = format_trace(trace, baseline_window, x_offset, align='psp')
+            trace = format_trace(trace, baseline_window, latency, align='psp')
             trace_item = trace_plt.plot(trace.time_values, trace.data)
             point_data.append(pair)
             trace_item.pair = pair
@@ -602,8 +589,6 @@ class StrengthAnalyzer(Analyzer):
         print('')
 
 class DynamicsAnalyzer(Analyzer):
-
-
     def __init__(self):
         Analyzer.__init__(self)
         self.name = 'dynamics'
@@ -725,6 +710,8 @@ class DynamicsAnalyzer(Analyzer):
                 [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
             )}}),
             ]
+
+        self.text = {}
 
     def invalidate_output(self):
         self.results = None
@@ -856,12 +843,14 @@ def format_trace(trace, baseline_win, x_offset, align='spike'):
 
 def get_all_output_fields(analyzer_list):
     data_fields = []
+    text_fields = {}
     # confidence_fields = []
     for analyzer in analyzer_list:
         data_fields.extend(analyzer.output_fields())
+        text_fields.update(analyzer.text)
         # confidence_fields.extend(analyzer.output_fields()['show_confidence'])
 
-    return data_fields
+    return data_fields, text_fields
 
 def results_scatter(results, field_name, field, plt):
     vals = [result[field_name] for result in results.values() if np.isfinite(result[field_name])]
