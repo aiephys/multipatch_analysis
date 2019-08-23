@@ -1,7 +1,7 @@
 from multipatch_analysis.database import default_db as db
 import multipatch_analysis.data_notes_db as notes_db
 import pyqtgraph as pg
-import sys, copy, argparse
+import sys, copy, argparse, datetime
 import numpy as np
 from pyqtgraph import parametertree as ptree
 from pyqtgraph.parametertree import Parameter
@@ -635,6 +635,7 @@ class PairAnalysis(object):
 
         if hash(self.record) == record_check:
             entry = notes_db.PairNotes(**fields)
+            entry.modification_time = datetime.datetime.now()
             s.add(entry)
             s.commit()
         else:
@@ -647,6 +648,7 @@ class PairAnalysis(object):
                 saved_rec.pre_cell_id = pre_cell_id
                 saved_rec.post_cell_id = post_cell_id
                 saved_rec.notes = meta
+                saved_rec.modification_time = datetime.datetime.now()
                 s.commit() 
             else:
                 raise Exception('Save Cancelled')
