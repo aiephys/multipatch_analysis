@@ -1,4 +1,4 @@
-import sys
+import sys, argparse
 import pyqtgraph as pg
 from multipatch_analysis.database import default_db as db
 from multipatch_analysis.matrix_analyzer import MatrixAnalyzer
@@ -11,8 +11,12 @@ if __name__ == '__main__':
     # pg.setConfigOption('background', 'w')
     # pg.setConfigOption('foreground', 'k')
 
-    session = db.session()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--mode', type=str)
+    args = parser.parse_args(sys.argv[1:])
+    analyzer_mode = args.mode if args.mode is not None else 'internal'
 
+    session = db.session()
     
     # Define cell classes
     cell_class_groups = OrderedDict([
@@ -140,8 +144,11 @@ if __name__ == '__main__':
             {'cre_type':'scnn1a'}])
     ])
 
+    if analyzer_mode == 'external':
+        groups = ['Mouse All Cre-types by layer', 'Mouse Inhibitory Cre-types', 'Mouse Excitatory Cre-types', 'Mouse E-I Cre-types by layer', 'Pyramidal by layer', 'All cells by layer']
+        cell_class_groups = {g:cell_class_groups[g] for g in groups}
 
-    maz = MatrixAnalyzer(session=session, cell_class_groups=cell_class_groups, default_preset='None', preset_file='matrix_analyzer_presets.json')
+    maz = MatrixAnalyzer(session=session, cell_class_groups=cell_class_groups, default_preset='None', preset_file='matrix_analyzer_presets.json', analyzer_mode=analyzer_mode)
 
     if sys.flags.interactive == 0:
         app.exec_()

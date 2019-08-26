@@ -67,22 +67,39 @@ class Tabs(pg.QtGui.QTabWidget):
 
 
 class ExperimentFilter(object):
-    def __init__(self):  
+    def __init__(self, analyzer_mode):  
         s = db.session()
         self._signalHandler = SignalHandler()
         self.sigOutputChanged = self._signalHandler.sigOutputChanged
+        self.analyzer_mode = analyzer_mode
         self.pairs = None
         self.acsf = None
         projects = s.query(db.Experiment.project_name).distinct().all()
-        project_list = [{'name': str(record[0]), 'type': 'bool'} for record in projects]
-        acsf = s.query(db.Experiment.acsf).distinct().all()
-        acsf_list = [{'name': str(record[0]), 'type': 'bool'} for record in acsf]
-        internal = s.query(db.Experiment.internal).distinct().all()
-        internal_list = [{'name': str(record[0]), 'type': 'bool'} for record in internal]
+        projects = [project[0] for project in projects if project[0] is not None or '']
+        acsfs = s.query(db.Experiment.acsf).distinct().all()
+        acsfs = [acsf[0] for acsf in acsfs if acsf[0] is not None or '']
+        self.acsf_keys = {'1.3mM': ['1.3mM Ca & 1mM Mg'], '2mM': ['2mM Ca & Mg']}
+        acsfs = self.acsf_keys.keys()
+        acsf_exdpand = False
+        internals = s.query(db.Experiment.internal).distinct().all()
+        internals = [internal[0] for internal in internals if internal[0] is not None or '']
+        internal_expand = False
+        if self.analyzer_mode == 'external':
+            self.project_keys = {'Mouse': ['mouse V1 pre-production', 'mouse V1 coarse matrix'], 'Human': ['human coarse matrix']}
+            projects = self.project_keys.keys()
+            self.internal_keys = {'0.3mM EGTA': ['Standard K-Gluc'], 
+            '1mM EGTA': ['K-Gluc 1uM EGTA', ' K-Gluc 1uM EGTA'],
+            'No EGTA': ['K-Gluc -EGTA']}
+            internals = self.internal_keys.keys()
+            acsf_expand = True
+            internal_expand = True
+        project_list = [{'name': str(project), 'type': 'bool'} for project in projects]
+        acsf_list = [{'name': str(acsf), 'type': 'bool'} for acsf in acsfs]
+        internal_list = [{'name': str(internal), 'type': 'bool'} for internal in internals]
         self.params = Parameter.create(name='Data Filters', type='group', children=[
             {'name': 'Projects', 'type': 'group', 'children':project_list},
-            {'name': 'ACSF', 'type': 'group', 'children':acsf_list, 'expanded': False},
-            {'name': 'Internal', 'type': 'group', 'children': internal_list, 'expanded': False},
+            {'name': 'ACSF [Ca2+]', 'type': 'group', 'children':acsf_list, 'expanded': acsf_expand},
+            {'name': 'Internal [EGTA]', 'type': 'group', 'children': internal_list, 'expanded': internal_expand},
         ])
         self.params.sigTreeStateChanged.connect(self.invalidate_output)
 
@@ -91,12 +108,23 @@ class ExperimentFilter(object):
         Internally uses multipatch_analysis.db.pair_query.
         """
         if self.pairs is None:
-            project_names = [child.name() for child in self.params.child('Projects').children() if child.value() is True]
-            project_names = project_names if len(project_names) > 0 else None 
-            acsf_recipes = [child.name() for child in self.params.child('ACSF').children() if child.value() is True]
-            acsf_recipes = acsf_recipes if len(acsf_recipes) > 0 else None 
-            internal_recipes = [child.name() for child in self.params.child('Internal').children() if child.value() is True]
-            internal_recipes = internal_recipes if len(internal_recipes) > 0 else None 
+            selected_projects = [child.name() for child in self.params.child('Projects').children() if child.value() is True]
+            selected_acsf = [child.name() for child in self.params.child('ACSF [Ca2+]').children() if child.value() is True]
+            selected_internal = [child.name() for child in self.params.child('Internal [EGTA]').children() if child.value() is True]
+            project_names = selected_projects if len(selected_projects) > 0 else None 
+            if len(selected_acsf) > 0:
+                acsf_recipes = []
+                [acsf_recipes.extend(self.acsf_keys[acsf]) for acsf in selected_acsf]
+            else:
+                acsf_recipes = None
+            internal_recipes = selected_internal if len(selected_internal) > 0 else None
+            if self.analyzer_mode == 'external':
+                if project_names is not None:
+                    project_names = []
+                    [project_names.extend(self.project_keys[project]) for project in selected_projects]
+                if internal_recipes is not None:
+                    internal_recipes = []
+                    [internal_recipes.extend(self.internal_keys[internal]) for internal in selected_internal]
             self.pairs = db.pair_query(project_name=project_names, acsf=acsf_recipes, session=session, internal=internal_recipes).all()
         return self.pairs
 
@@ -106,18 +134,21 @@ class ExperimentFilter(object):
 
 
 class CellClassFilter(object):
-    def __init__(self, cell_class_groups):
+    def __init__(self, cell_class_groups, analyzer_mode):
         self.cell_groups = None
         self.cell_classes = None
         self._signalHandler = SignalHandler()
         self.sigOutputChanged = self._signalHandler.sigOutputChanged
-        self.experiment_filter = ExperimentFilter() 
+        self.analyzer_mode = analyzer_mode
 
         self.cell_class_groups = cell_class_groups
         combo_def = {'name': 'pre/post', 'type':'list', 'value':'both', 'values':['both', 'presynaptic', 'postsynaptic']}
         cell_group_list = [{'name': group, 'type': 'bool', 'children':[combo_def], 'expanded':False} for group in self.cell_class_groups.keys()]
         layer = [{'name': 'Define layer by:', 'type': 'list', 'values': ['target layer', 'annotated layer'], 'value': 'target layer'}]
-        children = layer + cell_group_list
+        if analyzer_mode == 'internal':
+            children = layer + cell_group_list
+        else:
+            children = cell_group_list
         self.params = Parameter.create(name="Cell Classes", type="group", children=children)
         for p in self.params.children():
             p.sigValueChanged.connect(self.expand_param)
@@ -141,7 +172,10 @@ class CellClassFilter(object):
         return self.cell_groups, self.cell_classes
 
     def layer_call(self):
-        layer_def = self.params['Define layer by:']
+        if self.analyzer_mode == 'external':
+            layer_def = 'target_layer'
+        else:
+            layer_def = self.params['Define layer by:']
         if layer_def == 'target layer':
             for c in self.cell_classes:
                 if c.get('cortical_layer') is not None:
@@ -165,7 +199,7 @@ class CellClassFilter(object):
         return classes
 
     def expand_param(self, param, value):
-        if isinstance(value, bool):
+        if isinstance(value, bool) and self.analyzer_mode == 'internal':
             list(param.items.keys())[0].setExpanded(value)
 
     def invalidate_output(self):
@@ -176,7 +210,7 @@ class CellClassFilter(object):
 
 class MatrixAnalyzer(object):
     sigClicked = pg.QtCore.Signal(object, object, object, object, object) # self, matrix_item, row, col
-    def __init__(self, session, cell_class_groups=None, default_preset=None, preset_file=None):
+    def __init__(self, session, cell_class_groups=None, default_preset=None, preset_file=None, analyzer_mode='internal'):
         
         self.main_window = MainWindow()
         self.main_window.setGeometry(280, 130, 1500, 900)
@@ -195,6 +229,7 @@ class MatrixAnalyzer(object):
         self.analyzers = [ConnectivityAnalyzer(), StrengthAnalyzer(), DynamicsAnalyzer()]
         self.active_analyzers = []
         self.preset_file = preset_file
+        self.analyzer_mode = analyzer_mode
 
         self.field_map = {}
         for analyzer in self.analyzers:
@@ -206,9 +241,9 @@ class MatrixAnalyzer(object):
         self.output_fields, self.text_fields = get_all_output_fields(self.analyzers)
         self.element_scatter = self.scatter_tab.element_scatter
         self.pair_scatter = self.scatter_tab.pair_scatter
-        self.experiment_filter = ExperimentFilter()
+        self.experiment_filter = ExperimentFilter(self.analyzer_mode)
         self.cell_class_groups = cell_class_groups
-        self.cell_class_filter = CellClassFilter(self.cell_class_groups)
+        self.cell_class_filter = CellClassFilter(self.cell_class_groups, self.analyzer_mode)
         self.matrix_display = MatrixDisplay(self.main_window, self.output_fields, self.text_fields, self.field_map)
         self.matrix_display_filter = self.matrix_display.matrix_display_filter
         self.element_scatter.set_fields(self.output_fields)
