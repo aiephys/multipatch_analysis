@@ -65,6 +65,35 @@ SynapsePrediction = make_table(
         ('vc_base_latency_stdev', 'float'),
         ('vc_latency_ttest', 'float'),
         ('vc_latency_ks2samp', 'float'),
+        
+        # Average pulse responses
+        ('ic_average_response', 'array'),
+        ('ic_average_response_t0', 'float'),
+        ('ic_average_base_stdev', 'float'),
+        ('vc_average_response', 'array'),
+        ('vc_average_response_t0', 'float'),
+        ('vc_average_base_stdev', 'float'),
+
+        # PSP fit parameters
+        ('ic_fit_amp', 'float'),
+        ('ic_fit_xoffset', 'float'),
+        ('ic_fit_yoffset', 'float'),
+        ('ic_fit_rise_time', 'float'),
+        ('ic_fit_rise_power', 'float'),
+        ('ic_fit_decay_tau', 'float'),
+        ('ic_fit_exp_amp', 'float'),
+        ('ic_fit_exp_tau', 'float'),
+        ('ic_fit_nrmse', 'float'),
+
+        ('vc_fit_amp', 'float'),
+        ('vc_fit_xoffset', 'float'),
+        ('vc_fit_yoffset', 'float'),
+        ('vc_fit_rise_time', 'float'),
+        ('vc_fit_rise_power', 'float'),
+        ('vc_fit_decay_tau', 'float'),
+        ('vc_fit_exp_amp', 'float'),
+        ('vc_fit_exp_tau', 'float'),
+        ('vc_fit_nrmse', 'float'),
     ]
 )
 
