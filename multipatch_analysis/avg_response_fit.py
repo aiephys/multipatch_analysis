@@ -70,8 +70,12 @@ def get_pair_avg_fits(pair, session, notes_session=None, ui=None):
             latency_window = (0.5e-3, 8e-3)
         else:
             notes = notes_rec.notes
-            init_latency = notes['fit_parameters']['initial'][clamp_mode][str(holding)]['xoffset']
-            latency_window = (init_latency - 100e-6, init_latency + 100e-6)
+            if notes.get('fit_parameters') is None:
+                init_latency = None
+                latency_window = (0.5e-3, 8e-3)
+            else:
+                init_latency = notes['fit_parameters']['initial'][clamp_mode][str(holding)]['xoffset']
+                latency_window = (init_latency - 100e-6, init_latency + 100e-6)
             
             # Expected response sign depends on synapse type, clamp mode, and holding:
             sign = 0
@@ -93,6 +97,12 @@ def get_pair_avg_fits(pair, session, notes_session=None, ui=None):
             qc_pass = False
             reasons = ['no data notes entry']
             expected_fit_params = None
+        elif 'fit_pass' not in notes:
+            print("=============================")
+            print(pair)
+            print(pair.has_synapse)
+            print(notes)
+            raise Exception("WTF")
         elif notes['fit_pass'][clamp_mode][str(holding)] is not True:
             qc_pass = False
             reasons = ['data notes fit failed qc']
@@ -138,8 +148,8 @@ def response_query(session, pair, max_ind_freq=50):
 
 
 def sort_responses(pulse_responses):
-    ex_limits = [-80e-3, -63e-3]
-    in_limits = [-63e-3, -45e-3]
+    ex_limits = [-80e-3, -60e-3]
+    in_limits = [-60e-3, -45e-3]
     
     sorted_responses = {
         ('ic', -70): {'qc_pass': [], 'qc_fail': []},

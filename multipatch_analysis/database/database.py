@@ -191,6 +191,7 @@ class Database(object):
 
     @property
     def default_session(self):
+        self._check_engines()
         if self._default_session is None:
             self._default_session = self.session(readonly=True)
         return self._default_session
@@ -276,6 +277,7 @@ class Database(object):
         self._rw_sessionmaker = None
         self._maint_engine = None
         self._engine_pid = None    
+        self._default_session = None
             
         # collect now or else we might try to collect engine-related garbage in forked processes,
         # which can lead to "OperationalError: server closed the connection unexpectedly"

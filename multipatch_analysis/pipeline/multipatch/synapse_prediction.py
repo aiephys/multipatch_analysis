@@ -8,15 +8,15 @@ from ..pipeline_module import DatabasePipelineModule
 from .experiment import ExperimentPipelineModule
 from .dataset import DatasetPipelineModule
 from .pulse_response import PulseResponsePipelineModule
-from ...connection_strength import get_amps, get_baseline_amps, analyze_pair_connectivity
+from ...synapse_prediction import get_amps, get_baseline_amps, analyze_pair_connectivity
 
 
-class ConnectionStrengthPipelineModule(DatabasePipelineModule):
+class SynapsePredictionPipelineModule(DatabasePipelineModule):
     """Analyze synaptic connection strength for all pairs per experiment
     """
-    name = 'connection_strength'
+    name = 'synapse_prediction'
     dependencies = [ExperimentPipelineModule, DatasetPipelineModule, PulseResponsePipelineModule]
-    table_group = ['connection_strength']
+    table_group = ['synapse_prediction']
     
     @classmethod
     def create_db_entries(cls, job, session):
@@ -42,7 +42,7 @@ class ConnectionStrengthPipelineModule(DatabasePipelineModule):
                 continue
 
             # Write new record to DB
-            conn = db.ConnectionStrength(pair_id=pair.id, **results)
+            conn = db.SynapsePrediction(pair_id=pair.id, **results)
             session.add(conn)
         
     def job_records(self, job_ids, session):
@@ -51,8 +51,8 @@ class ConnectionStrengthPipelineModule(DatabasePipelineModule):
         This method is used by drop_jobs to delete records for specific job IDs.
         """
         db = self.database
-        q = session.query(db.ConnectionStrength)
-        q = q.filter(db.ConnectionStrength.pair_id==db.Pair.id)
+        q = session.query(db.SynapsePrediction)
+        q = q.filter(db.SynapsePrediction.pair_id==db.Pair.id)
         q = q.filter(db.Pair.experiment_id==db.Experiment.id)
         q = q.filter(db.Experiment.ext_id.in_(job_ids))
         return q.all()
