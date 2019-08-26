@@ -37,11 +37,20 @@ class OptoExperimentPipelineModule(DatabasePipelineModule):
 
                 entry = all_expts['expt_list'][indices[0]]
                 entry['distances'] = [e for e in all_expts['distances'] if e['exp_id']==job_id]
-                print('create_db_entries for:', entry['site_path'], "job_id:", job_id)
-                expt = Experiment(site_path=entry['site_path'], loading_library=opto, meta_info=entry)
+                #print('create_db_entries for:', entry['site_path'], "job_id:", job_id)
+                if entry['site_path'] != '':
+                    expt = Experiment(site_path=entry['site_path'], loading_library=opto, meta_info=entry)
+                else:
+                    cnx_json = os.path.join(config.connections_dir, entry['experiment'])
+                    expt = Experiment(load_file=cnx_json, loading_library=opto, meta_info=entry)
 
             # look up slice record in DB
-            ts = expt.slice_timestamp
+            try:
+                ts = expt.slice_timestamp
+            except KeyError:
+                ts = 0.0
+                
+
             slice_entry = db.slice_from_timestamp(ts, session=session)
 
             expt_info = expt.expt_info
@@ -156,24 +165,34 @@ class OptoExperimentPipelineModule(DatabasePipelineModule):
             site_path = os.path.join(config.synphys_data, expt['site_path'])
             slice_path = getDirHandle(os.path.split(site_path)[0]).name(relativeTo=getDirHandle(config.synphys_data))
             #print slice_paths
-            if not slice_path in slice_paths:
-                #print("Did not find slice path for %s"%slice_path)
-                n_no_slice += 1
-                continue
+            #if not slice_path in slice_paths:
+            #    #print("Did not find slice path for %s"%slice_path)
+            #    n_no_slice += 1
+            #    continue
             try:
-                expt = Experiment(site_path=site_path, loading_library=opto)
-                raw_data_mtime = expt.last_modification_time
-                slice_ts = expt.slice_timestamp
+                if expt['site_path'] == '':
+                    cnx_json = os.path.join(config.connections_dir, expt['experiment'])
+                    ex = Experiment(load_file=cnx_json, loading_library=opto, meta_info=expt)
+                else:
+                    ex = Experiment(site_path=site_path, loading_library=opto)
+
+                raw_data_mtime = ex.last_modification_time
+                try:
+                    slice_ts = ex.slice_timestamp
+                except KeyError:
+                    slice_ts = 0.0
                 slice_mtime, slice_success = finished_slices.get('%.3f'%slice_ts, (None, None))
-                print('found expt for path:', site_path)
+                #print('found expt for path:', site_path)
             except Exception:
                 raise
                 n_errors += 1
                 continue
             if slice_mtime is None or slice_success is False:
+            #    slice_mtime = 0
                 n_no_slice += 1
                 continue
-            ready[expt.uid] = max(raw_data_mtime, slice_mtime)
+
+            ready[ex.uid] = max(raw_data_mtime, slice_mtime)
         
         print("Found %d experiments; %d are able to be processed, %d were skipped due to errors, %d were skipped due to missing or failed slice entries." % (len(expts), len(ready), n_errors, n_no_slice))
         return ready

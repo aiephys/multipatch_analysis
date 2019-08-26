@@ -25,6 +25,12 @@ class OptoSlicePipelineModule(DatabasePipelineModule):
 
         slices = all_slices()
         path = slices[job_id]
+
+        if path == 'place_holder':
+            sl = db.Slice(storage_path='place_holder', acq_timestamp=0.0)
+            session.add(sl)
+            return
+
         dh = getDirHandle(path)
         info = dh.info()
         parent_info = dh.parent().info()
@@ -111,12 +117,15 @@ class OptoSlicePipelineModule(DatabasePipelineModule):
         slices = all_slices()
         ready = OrderedDict()
         for ts, path in slices.items():
-            mtime = os.stat(os.path.join(path, '.index')).st_mtime
-            # test file updates:
-            # import random
-            # if random.random() > 0.8:
-            #     mtime *= 2
-            ready[ts] = timestamp_to_datetime(mtime)
+            if path == 'place_holder':
+                ready['%.3f'%0.0] = os.stat(config.experiment_csv).st_mtime
+            else:
+                mtime = os.stat(os.path.join(path, '.index')).st_mtime
+                # test file updates:
+                # import random
+                # if random.random() > 0.8:
+                #     mtime *= 2
+                ready[ts] = timestamp_to_datetime(mtime)
         return ready
 
 
@@ -158,7 +167,8 @@ def all_slices():
         dh = getDirHandle(path)
         ts = dh.info().get('__timestamp__')
         if ts is None:
-            print("MISSING TIMESTAMP: %s" % path)
+            #print("MISSING TIMESTAMP: %s" % path)
+            _all_slices.update([('%.3f'%0.0, 'place_holder')])
             continue
         ts = '%0.3f'%ts ## convert timestamp to string here, make sure it has 3 decimal places
         _all_slices[ts] = path
