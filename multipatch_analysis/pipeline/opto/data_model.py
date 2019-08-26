@@ -26,7 +26,7 @@ def find_lims_specimen_ids(slice_dh):
             slice_id = '0'+slice_id
         sid = animal_id + '.' + slice_id
 
-    print('sid:', sid)
+    #print('sid:', sid)
     ids = lims.find_specimen_ids_matching_name(sid)
     if len(ids) == 1:
         return ids

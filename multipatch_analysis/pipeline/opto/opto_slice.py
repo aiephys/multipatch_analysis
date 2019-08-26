@@ -32,7 +32,7 @@ class OptoSlicePipelineModule(DatabasePipelineModule):
         # pull some metadata from LIMS
         #sid = self.find_specimen_name(dh)
         sids = data_model.find_lims_specimen_ids(dh)
-        print('sids:', sids)
+        #print('sids:', sids)
         if len(sids) == 0:
             limsdata = {}
         elif len(sids) == 1:
