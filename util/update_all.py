@@ -37,7 +37,7 @@ if __name__ == '__main__':
         ('sync',                    ('python util/sync_rigs_to_server.py', 'sync raw data to server')),
         ('pipeline',                ('python util/analysis_pipeline.py multipatch all', 'run analysis pipeline')),
         ('vacuum',                  ('python util/database.py --vacuum', 'vacuum database')),
-        ('bake',                    ('python util/database.py --bake=synphys_current.sqlite --overwrite', 'bake sqlite')),
+        ('bake sqlite',             ('python util/bake_sqlite.py', 'bake sqlite')),
     ])
 
     skip = [] if args.skip == '' else args.skip.split(',')

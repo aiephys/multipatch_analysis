@@ -13,6 +13,7 @@ parser.add_argument('--bake', type=str, default=None, help="Bake current databas
 parser.add_argument('--clone', type=str, default=None, help="Clone current database into a new database with the given name.")
 parser.add_argument('--tables', type=str, default=None, help="Comma-separated list of tables to include while baking.")
 parser.add_argument('--skip-tables', type=str, default="", help="Comma-separated list of tables to skip while baking.", dest="skip_tables")
+parser.add_argument('--skip-columns', type=str, default="", help="Comma-separated list of table.column names to skip while baking.", dest="skip_columns")
 parser.add_argument('--overwrite', action='store_true', default=False, help="Overwrite existing sqlite file.")
 parser.add_argument('--update', action='store_true', default=False, help="Update existing sqlite file.")
 parser.add_argument('--drop', type=str, default=None, help="Drop database with the given name.")
@@ -50,7 +51,11 @@ if args.bake is not None:
             print("sqlite database file %s already exists" % args.bake)
             sys.exit(0)
         
-    db.bake_sqlite(args.bake, tables=tables, skip_tables=args.skip_tables.split(','))
+    skip_cols = {}
+    for colname in args.skip_columns.split(','):
+        table, col = colname.split('.')
+        skip_cols.setdefault(table, []).append(col)
+    db.bake_sqlite(args.bake, tables=tables, skip_tables=args.skip_tables.split(','), skip_columns=skip_cols)
 
 
 if args.clone is not None:
