@@ -8,8 +8,7 @@ from .synapse import SynapsePipelineModule
 from .pulse_response import PulseResponsePipelineModule
 from .dynamics import DynamicsPipelineModule
 from .synapse_prediction import SynapsePredictionPipelineModule
-from .first_pulse_fit import AverageFirstPulseFitPipelineModule
-from .first_pulse_fit import SingleFirstPulseFitPipelineModule
+from .resting_state import RestingStatePipelineModule
 
 
 
@@ -26,8 +25,7 @@ class MultipatchPipeline(Pipeline):
         PulseResponsePipelineModule,
         DynamicsPipelineModule,
         SynapsePredictionPipelineModule,
-        AverageFirstPulseFitPipelineModule,
-        SingleFirstPulseFitPipelineModule,
+        RestingStatePipelineModule,
     ]
     
     def __init__(self, database, config):

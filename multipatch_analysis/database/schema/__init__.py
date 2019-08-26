@@ -16,6 +16,5 @@ from .synapse import *
 from .pulse_response import *
 from .dynamics import *
 from .synapse_prediction import *
-from .avg_first_pulse_fit import *
-from .single_first_pulse_fit import *
+from .resting_state_fit import *
 from .gap_junction import *
