@@ -72,13 +72,13 @@ def extract_first_pulse_info_from_Pair_object(pair, desired_clamp='ic'):
         the stimulation frequency corresponding to the *pulse_responses* 
     """
 
-    if pair.connection_strength is None:
-        # print ("\t\tSKIPPING: pair_id %s, is not yielding pair.connection_strength" % pair.id)
+    if pair.synapse_prediction is None:
+        # print ("\t\tSKIPPING: pair_id %s, is not yielding pair.synapse_prediction" % pair.id)
         return [], [], [], []
-    if pair.connection_strength.synapse_type is None:
-        # print ("\t\tSKIPPING: pair_id %s, is not yielding pair.connection_strength.synapse_type" % pair.id)
+    if pair.synapse_prediction.synapse_type is None:
+        # print ("\t\tSKIPPING: pair_id %s, is not yielding pair.synapse_prediction.synapse_type" % pair.id)
         return [], [], [], []
-    synapse_type = pair.connection_strength.synapse_type
+    synapse_type = pair.synapse_prediction.synapse_type
     pulse_responses = []
     psp_amps_measured = []
     pulse_ids = []
@@ -263,13 +263,13 @@ def fit_trace(waveform, excitation, clamp_mode='ic', weight=None, latency=None, 
 def fit_average_first_pulses(pair):
     # get response latency from average of all pulse responses
     message = None #initialize error message 
-    xoffset = pair.connection_strength.ic_fit_xoffset
+    xoffset = pair.synapse_prediction.ic_fit_xoffset
     if not xoffset:
         # too much noise:
-        # return {'error': 'no ic_fit_offset from connection_strength'}
+        # return {'error': 'no ic_fit_offset from synapse_prediction'}
         return {'error': None}
     # excitatory or inhibitory?
-    excitation = pair.connection_strength.synapse_type
+    excitation = pair.synapse_prediction.synapse_type
 
     # -----------fit current clamp data---------------------        
     # get pulses
@@ -369,9 +369,9 @@ def fit_single_first_pulse(pr, pair):
     #TODO: HAS THE APPROPRIATE QC HAPPENED?
     message = None #initialize error message for downstream processing 
     # excitatory or inhibitory?
-    excitation = pair.connection_strength.synapse_type
+    excitation = pair.synapse_prediction.synapse_type
     if not excitation:
-        raise Exception('there is no synapse_type in connection_strength')
+        raise Exception('there is no synapse_type in synapse_prediction')
 
     if excitation == 'in':
         if not pr.in_qc_pass:

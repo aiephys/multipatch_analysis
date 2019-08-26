@@ -11,14 +11,14 @@ from collections import OrderedDict
 from ...util import timestamp_to_datetime
 from ..pipeline_module import DatabasePipelineModule
 from .pulse_response import PulseResponsePipelineModule
-from .connection_strength import ConnectionStrengthPipelineModule
+from .synapse_prediction import SynapsePredictionPipelineModule
 
 
 class DynamicsPipelineModule(DatabasePipelineModule):
     """Generates dynamics analysis for each pair
     """
     name = 'dynamics'
-    dependencies = [PulseResponsePipelineModule, ConnectionStrengthPipelineModule]
+    dependencies = [PulseResponsePipelineModule, SynapsePredictionPipelineModule]
     table_group = ['dynamics']
     
     @classmethod

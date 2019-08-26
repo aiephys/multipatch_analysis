@@ -104,7 +104,7 @@ class SynphysDatabase(Database):
             # pre_morphology,
             # post_morphology,
             # Experiment,
-            # ConnectionStrength,
+            # SynapsePrediction,
         )
         query = query.join(pre_cell, pre_cell.id==self.Pair.pre_cell_id)
         query = query.join(post_cell, post_cell.id==self.Pair.post_cell_id)
@@ -112,7 +112,7 @@ class SynphysDatabase(Database):
         query = query.outerjoin(post_morphology, post_morphology.cell_id==post_cell.id)
         query = query.join(self.Experiment, self.Pair.experiment_id==self.Experiment.id)
         query = query.outerjoin(self.Slice, self.Experiment.slice_id==self.Slice.id) ## don't want to drop all pairs if we don't have slice or connection strength entries
-        query = query.outerjoin(self.ConnectionStrength)
+        query = query.outerjoin(self.SynapsePrediction)
 
         if pre_class is not None:
             query = pre_class.filter_query(query, pre_cell)

@@ -96,10 +96,10 @@ def first_pulse_features(pair, pulse_responses, pulse_response_amps):
     avg_psp_bsub = avg_psp.copy(data=avg_psp.data - avg_psp_baseline)
     lower_bound = -float('inf')
     upper_bound = float('inf')
-    xoffset = pair.connection_strength.ic_fit_xoffset
+    xoffset = pair.synapse_prediction.ic_fit_xoffset
     if xoffset is None:
         xoffset = 14*10e-3
-    synapse_type = pair.connection_strength.synapse_type
+    synapse_type = pair.synapse_prediction.synapse_type
     if synapse_type == 'ex':
         amp_sign = '+'
     elif synapse_type == 'in':
@@ -149,7 +149,7 @@ def filter_pulse_responses(pair):
     # for filter_arg in filters:
     #     q = q.filter(*filter_arg)
 
-    synapse_type = pair.connection_strength.synapse_type
+    synapse_type = pair.synapse_prediction.synapse_type
     pulse_responses = []
     pulse_response_amps = []
     pulse_ids = []

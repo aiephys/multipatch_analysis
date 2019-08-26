@@ -33,7 +33,7 @@ from multipatch_analysis.database import default_db as db
 from multipatch_analysis.ui.multipatch_nwb_viewer import MultipatchNwbViewer
 from multipatch_analysis.ui.experiment_browser import ExperimentBrowser
 from multipatch_analysis.pulse_response_strength import response_query, baseline_query, analyze_response_strength
-from multipatch_analysis.connection_strength import get_amps, get_baseline_amps
+from multipatch_analysis.synapse_prediction import get_amps, get_baseline_amps
 from multipatch_analysis import constants
 
 
@@ -459,7 +459,7 @@ class ResponseStrengthAnalyzer(object):
 
 def query_all_pairs(classifier=None):
     columns = [
-        "connection_strength.*",
+        "synapse_prediction.*",
         "experiment.id as experiment_id",
         "experiment.acq_timestamp as acq_timestamp",
         "experiment.rig_name",
@@ -489,7 +489,7 @@ def query_all_pairs(classifier=None):
     # ])
 
     joins = [
-        "join pair on connection_strength.pair_id=pair.id",
+        "join pair on synapse_prediction.pair_id=pair.id",
         "join cell pre_cell on pair.pre_cell_id=pre_cell.id",
         "join cell post_cell on pair.post_cell_id=post_cell.id",
         "join morphology pre_morphology on pre_morphology.cell_id=pre_cell.id",
@@ -505,7 +505,7 @@ def query_all_pairs(classifier=None):
     query = ("""
     select 
     {columns}
-    from connection_strength
+    from synapse_prediction
     {joins}
     order by acq_timestamp
     """).format(
@@ -907,7 +907,7 @@ class PairView(pg.QtCore.QObject):
         print("Server path:", sel.expt.storage_path)
         if hasattr(sel, 'pair'):
             print("ID: %.3f  %d->%d" % (sec, pair.pre_cell.ext_id, pair.post_cell.ext_id))
-            conn = pair.connection_strength
+            conn = pair.synapse_prediction
             cls = get_pair_classifier()
             f = {k: getattr(conn, k) for k in cls.features}
             print(f)

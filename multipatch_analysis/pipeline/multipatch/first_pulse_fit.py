@@ -5,7 +5,7 @@ import os
 from sqlalchemy.orm import aliased
 from ... import config
 from ..pipeline_module import DatabasePipelineModule
-from .connection_strength import ConnectionStrengthPipelineModule
+from .synapse_prediction import SynapsePredictionPipelineModule
 from ...fit_average_first_pulse import fit_average_first_pulses, fit_single_first_pulse
 import traceback
 import sys
@@ -16,7 +16,7 @@ class AverageFirstPulseFitPipelineModule(DatabasePipelineModule):
     that have no prior stimuli in a certain window. 
     """
     name = 'avg_first_pulse_fit'
-    dependencies = [ConnectionStrengthPipelineModule]
+    dependencies = [SynapsePredictionPipelineModule]
     table_group = ['avg_first_pulse_fit']
     
     @classmethod
@@ -134,7 +134,7 @@ class SingleFirstPulseFitPipelineModule(DatabasePipelineModule):
     """Analyze synaptic connection strength for all pairs per experiment
     """
     name = 'single_first_pulse_fit'
-    dependencies = [ConnectionStrengthPipelineModule]
+    dependencies = [SynapsePredictionPipelineModule]
     table_group = ['single_first_pulse_fit']
     
     @classmethod

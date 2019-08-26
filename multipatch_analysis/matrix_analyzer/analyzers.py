@@ -287,7 +287,7 @@ class ConnectivityAnalyzer(Analyzer):
         point_data = []
         connections = element[element['connected'] == True].index.tolist()
         for pair in connections:
-            cs = pair.connection_strength
+            cs = pair.synapse_prediction
             trace = cs.ic_average_response
             if trace is not None:
                 x_offset = cs.ic_fit_xoffset
@@ -464,7 +464,7 @@ class StrengthAnalyzer(Analyzer):
                     fpf = None
                 elif pair.synapse is True:
                     no_data = False
-                    cs = pair.connection_strength
+                    cs = pair.synapse_prediction
                     fpf = pair.avg_first_pulse_fit
 
                 results[pair] = {
@@ -548,7 +548,7 @@ class StrengthAnalyzer(Analyzer):
             if np.isnan(value):
                 continue
             if field_name.endswith('all'):
-                cs = pair.connection_strength
+                cs = pair.synapse_prediction
                 trace = cs.ic_average_response if field_name.startswith('ic') else cs.vc_average_response
                 x_offset = cs.ic_fit_xoffset if field_name.startswith('ic') else cs.vc_fit_xoffset
             elif field_name.endswith('first_pulse'):
