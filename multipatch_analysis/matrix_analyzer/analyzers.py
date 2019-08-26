@@ -477,7 +477,6 @@ class StrengthAnalyzer(Analyzer):
                                 psc_amp = arf.fit_amp 
                                 avg_psc = arf.avg_data
 
-
                 results[pair] = {
                 'strength_no_data': no_data,
                 'pre_class': pre_class,

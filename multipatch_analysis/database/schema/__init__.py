@@ -15,7 +15,7 @@ from .dataset import *
 from .synapse import *
 from .pulse_response import *
 from .dynamics import *
-from .connection_strength import *
+from .synapse_prediction import *
 from .avg_first_pulse_fit import *
 from .single_first_pulse_fit import *
 from .gap_junction import *

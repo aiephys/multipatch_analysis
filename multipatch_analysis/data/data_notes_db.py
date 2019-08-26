@@ -17,6 +17,7 @@ PairNotes = make_table(
         ('pre_cell_id', 'str', 'external id of presynaptic cell'),
         ('post_cell_id', 'str', 'external id of postsynaptic cell'),
         ('notes','object', 'pair data dict which includes synapse call, initial fit parameters, output fit parameters, comments, etc'),
+        ('modification_time', 'datetime', 'Last modification time for each record.'),
     ],
     ormbase=DataNotesORMBase,
 )

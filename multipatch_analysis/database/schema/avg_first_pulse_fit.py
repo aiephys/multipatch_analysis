@@ -10,7 +10,7 @@ AvgFirstPulseFit = make_table(
     comment="""Contains results of psp_fit on spike aligned, average first pulse PSP for each
             connection that passed qc in current clamp. The latency is forced
             to be within +/-.5 ms to the found fitting all of the pulses in the train (available in the 
-            connection_strength.ic_fit_xoffset). The heavily weighted section (meant to 
+            synapse_prediction.ic_fit_xoffset). The heavily weighted section (meant to 
             place more importance of the wave form during the rise time) is shifted to 
             begin at the latency. Created via fit_average_first_pulse.py. 
 

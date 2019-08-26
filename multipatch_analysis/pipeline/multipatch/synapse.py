@@ -9,6 +9,7 @@ from ... import config
 from ..pipeline_module import DatabasePipelineModule
 from .experiment import ExperimentPipelineModule
 from .dataset import DatasetPipelineModule
+import multipatch_analysis.data.data_notes_db as notes_db
 from ...avg_response_fit import get_pair_avg_fits
 
 
@@ -26,10 +27,22 @@ class SynapsePipelineModule(DatabasePipelineModule):
         
         expt = db.experiment_from_ext_id(expt_id, session=session)
 
-        synapses = [p for p in expt.pair_list if p.has_synapse]
-        print("Processing %d synapses.." % len(synapses))
-        
-        for pair in synapses:
+        for pair in expt.pair_list:
+
+            # look up synapse type from notes db
+            notes_rec = notes_db.get_pair_notes_record(pair.experiment.ext_id, pair.pre_cell.ext_id, pair.post_cell.ext_id)
+            if notes_rec is None:
+                continue
+            
+            # update upstream pair record
+            pair.has_synapse = notes_rec.notes['synapse_type'] in ('ex', 'in')
+            pair.has_electrical = notes_rec.notes['gap_junction']
+
+            # only proceed if we have a synapse here            
+            if not pair.has_synapse:
+                continue
+            
+            print(pair, notes_rec.notes)
             
             # fit PSP shape against averaged PSPs/PCSs at -70 and -55 mV
             fits = get_pair_avg_fits(pair, session)
@@ -70,31 +83,37 @@ class SynapsePipelineModule(DatabasePipelineModule):
                     setattr(rec, 'fit_'+k, fit['fit_result'].best_values[k])
 
                 session.add(rec)
-
+            
             # create a DB record for this synapse
             syn = db.Synapse(
                 pair_id=pair.id,
+                synapse_type=notes_rec.notes['synapse_type'],
             )
             print("add synapse:", pair, pair.id)
 
             # compute weighted average of latency values
             lvals = np.array([lv[0] for lv in latency_vals])
             nvals = np.array([lv[1] for lv in latency_vals])
-            latency = (lvals * nvals).sum() / nvals.sum()
-            dist = np.abs(lvals - latency)
-            # only set latency if the averaged values agree
-            if np.all(dist < 150e-6):
-                syn.latency = latency
+            if nvals.sum() != 0:
+                latency = (lvals * nvals).sum() / nvals.sum()
+                dist = np.abs(lvals - latency)
+                # only set latency if the averaged values agree
+                if np.all(dist < 150e-6):
+                    syn.latency = latency
             
             # compute weighted averages of kinetic parameters
             for mode, pfx in [('ic', 'psp_'), ('vc', 'psc_')]:
                 for param, fit_vals in [('rise_time', rise_vals[mode]), ('decay_tau', decay_vals[mode])]:
                     vals = np.array([v[0] for v in fit_vals])
                     nvals = np.array([v[1] for v in fit_vals])
-                    avg = (vals * nvals).sum() / nvals.sum()
+                    if nvals.sum() == 0:
+                        avg = None
+                    else:
+                        avg = (vals * nvals).sum() / nvals.sum()
                     setattr(syn, pfx+param, avg)
             
             session.add(syn)
+
             # session.flush()
         
     def job_records(self, job_ids, session):
@@ -117,5 +136,25 @@ class SynapsePipelineModule(DatabasePipelineModule):
         recs.extend(q.all())
 
         return recs
-        
-    
+
+    def ready_jobs(self):
+        """Return an ordered dict of all jobs that are ready to be processed (all dependencies are present)
+        and the dates that dependencies were created.
+        """
+        dataset_module = self.pipeline.get_module('dataset')
+        finished_datasets = dataset_module.finished_jobs()
+
+        # find most recent modification time listed for each experiment
+        notes_recs = notes_db.db.query(notes_db.PairNotes.expt_id, notes_db.PairNotes.modification_time)
+        mod_times = {}
+        for rec in notes_recs:
+            mod_times[rec.expt_id] = max(rec.modification_time, mod_times.get(rec.expt_id, rec.modification_time))
+
+        # combine update times from pair_notes and finished_datasets
+        ready = OrderedDict()
+        for job, (mtime, success) in finished_datasets.items():
+            if job in mod_times:
+                mtime = max(mtime, mod_times[job])
+            ready[job] = mtime
+            
+        return ready

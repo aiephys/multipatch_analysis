@@ -20,9 +20,10 @@ class AvgResponseFitUi(object):
         for (clamp_mode, holding), plot in self.plots.items():
             plot.show_pulse_responses(prs[clamp_mode, holding]['qc_pass'], prs[clamp_mode, holding]['qc_fail'])
 
-    def show_data_notes(self, notes):
-        if notes is None:
+    def show_data_notes(self, notes_rec):
+        if notes_rec is None:
             return
+        notes = notes_rec.notes
         for (clamp_mode, holding), plot in self.plots.items():
             params = notes['fit_parameters']['fit'][clamp_mode][str(holding)].copy()
             if len(params) == 0:

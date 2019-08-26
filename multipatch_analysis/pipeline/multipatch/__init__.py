@@ -7,7 +7,7 @@ from .morphology import MorphologyPipelineModule
 from .synapse import SynapsePipelineModule
 from .pulse_response import PulseResponsePipelineModule
 from .dynamics import DynamicsPipelineModule
-from .connection_strength import ConnectionStrengthPipelineModule
+from .synapse_prediction import SynapsePredictionPipelineModule
 from .first_pulse_fit import AverageFirstPulseFitPipelineModule
 from .first_pulse_fit import SingleFirstPulseFitPipelineModule
 
@@ -25,7 +25,7 @@ class MultipatchPipeline(Pipeline):
         SynapsePipelineModule,
         PulseResponsePipelineModule,
         DynamicsPipelineModule,
-        ConnectionStrengthPipelineModule,
+        SynapsePredictionPipelineModule,
         AverageFirstPulseFitPipelineModule,
         SingleFirstPulseFitPipelineModule,
     ]
