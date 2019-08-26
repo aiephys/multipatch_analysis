@@ -72,7 +72,7 @@ def sync_experiment(site_dir):
 def log(msg):
     print(msg)
     with open(os.path.join(config.synphys_data, 'sync_log'), 'ab') as log_fh:
-        log_fh.write(msg+'\n')
+        log_fh.write((msg+'\n').encode('utf8'))
 
 
 def _sync_paths(source, target, changes):
@@ -86,7 +86,7 @@ def _sync_paths(source, target, changes):
         changes.append(('mkdir', source, target))
 
     # Leave a note about the source of this data
-    open(os.path.join(target, 'sync_source'), 'wb').write(source)
+    open(os.path.join(target, 'sync_source'), 'wb').write(source.encode('utf8'))
 
     for fname in os.listdir(source):
         src_path = os.path.join(source, fname)
