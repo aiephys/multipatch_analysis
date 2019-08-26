@@ -601,6 +601,15 @@ def cell_layer(cell):
         raise Exception ('Incorrect number of layers for cell %d' % cell)
     return recs[0][0]
 
+def get_cell_specimen_ids(cell_cluster):
+    cell_specimens = child_specimens(cell_cluster)
+    if len(cell_specimens) != 0:
+        lims_cells = cluster_cells(cell_cluster)
+        cell_id_map = {(lims_cell.external_specimen_name): lims_cell.id for lims_cell in lims_cells if lims_cell is not None}
+        return cell_id_map
+    else:
+        return None
+
 if __name__ == '__main__':
     # testing specimen
     spec_name = "Ntsr1-Cre_GN220;Ai14-349905.03.06"
