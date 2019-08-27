@@ -166,7 +166,7 @@ class ConnectivityAnalyzer(Analyzer):
             ]
 
         if analyzer_mode == 'internal':
-            self.fields.update(
+            self.fields.append(
                 ('matrix_completeness', {'mode': 'range', 'defaults': {
                 'colormap': pg.ColorMap(
                     [0, 0.25, 0.5, 0.75, 1.0],
