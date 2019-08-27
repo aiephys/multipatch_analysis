@@ -7,7 +7,7 @@ from neuroanalysis.fitting import StackedPsp, Psp, fit_psp
 from multipatch_analysis.data import PulseResponseList
 
 
-def fit_avg_pulse_response(pulse_response_list, latency_window, sign, ui=None):
+def fit_avg_pulse_response(pulse_response_list, latency_window, sign, init_params=None, ui=None):
     """Generate PSP fit parameters for a list of pulse responses, possibly correcting
     for crosstalk artifacts and gap junctional current during the presynaptic stimulus.
     
@@ -57,7 +57,7 @@ def fit_avg_pulse_response(pulse_response_list, latency_window, sign, ui=None):
         pass
     prof('weights')
 
-    fit = fit_psp(average, search_window=latency_window, clamp_mode=clamp_mode, sign=sign, baseline_like_psp=True, fit_kws={'weights': weight})
+    fit = fit_psp(average, search_window=latency_window, clamp_mode=clamp_mode, sign=sign, baseline_like_psp=True, init_params=init_params, fit_kws={'weights': weight})
     prof('fit')
     
     return fit, average

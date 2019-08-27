@@ -129,3 +129,6 @@ if __name__ == '__main__':
         win.browser.select_pair(pair.id)
     else:
         win.browser.populate()
+
+    if sys.flags.interactive == 0:
+        app.exec_()

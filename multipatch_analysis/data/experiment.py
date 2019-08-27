@@ -79,6 +79,8 @@ class Experiment(object):
         # make sure all cells have information for all labels
         for cell in self.cells.values():
             for label in self.labels:
+                if label == 'biocytin':
+                    continue
                 if label not in cell.labels:
                     raise Exception("Cell %s is missing label %s" % (cell, label))
             for cre in self.cre_types:

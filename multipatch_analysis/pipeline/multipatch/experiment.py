@@ -32,14 +32,15 @@ class ExperimentPipelineModule(DatabasePipelineModule):
         slice_entry = db.slice_from_ext_id(expt.slice_id, session=session)
         
         expt_info = expt.expt_info
-        expt_lims_id = lims.expt_cluster_ids(slice_entry.lims_specimen_name, expt.timestamp)
+        lims_cell_cluster_id = lims.expt_cluster_ids(slice_entry.lims_specimen_name, expt.timestamp)
 
-        if len(expt_lims_id) == 1:
-            expt_lims_id = expt_lims_id[0]
-        elif len(expt_lims_id) == 0:
-            expt_lims_id = None
+        if len(lims_cell_cluster_id) == 1:
+            lims_cell_cluster_id = lims_cell_cluster_id[0]
+        elif len(lims_cell_cluster_id) == 0:
+            lims_cell_cluster_id = None
         else:
-            raise Exception ('Too many LIMS specimens %d' % len(expt_lims_id))
+            raise Exception ('Too many LIMS specimens %d' % len(lims_cell_cluster_id))
+        
         fields = {
             'ext_id': expt.uid,
             'storage_path': expt.server_path,
@@ -50,7 +51,7 @@ class ExperimentPipelineModule(DatabasePipelineModule):
             'internal': expt_info.get('internal'),
             'acsf': expt_info.get('solution'),
             'target_temperature': expt.target_temperature,
-            'lims_specimen_id': expt_lims_id,
+            'lims_specimen_id': lims_cell_cluster_id,
             'rig_name': expt.rig_name,
             'operator_name': expt.rig_operator,
             'acq_timestamp': expt.timestamp,
@@ -63,6 +64,10 @@ class ExperimentPipelineModule(DatabasePipelineModule):
 
         # create pipette and cell entries
         cell_entries = {}
+        if lims_cell_cluster_id is not None:
+            lims_cell_ids = lims.cell_specimen_ids(lims_cell_cluster_id)
+        else:
+            lims_cell_ids = {}
             
         for e_id, elec in expt.electrodes.items():
             elec_entry = db.Electrode(experiment=expt_entry, ext_id=elec.electrode_id, device_id=elec.device_id)
@@ -75,16 +80,8 @@ class ExperimentPipelineModule(DatabasePipelineModule):
 
             if elec.cell is not None:
                 cell = elec.cell
-                cell_meta = {}
-                if expt_lims_id is not None:
-                    cell_specimens = lims.child_specimens(expt_lims_id)
-                    if len(cell_specimens) != 0:
-                        lims_cells = lims.cluster_cells(expt_lims_id)
-                        cell_id_map = {(lims_cell.external_specimen_name): lims_cell.id for lims_cell in lims_cells if lims_cell is not None}
-                        cell_lims_id = cell_id_map.get(cell.cell_id)
-                        cell_meta['lims_specimen_id'] = cell_lims_id
-                    else:
-                        cell_meta['lims_specimen_id'] = None
+                cell_meta = {'lims_specimen_id': lims_cell_ids.get(cell.cell_id)}
+
                 cell_entry = db.Cell(
                     experiment=expt_entry,
                     electrode=elec_entry,

@@ -190,6 +190,8 @@ def check_fit_qc_pass(fit_result, expected_params, clamp_mode):
     for k, (error_threshold, abs_threshold) in thresholds.items():
         v1 = fit_params[k]
         v2 = expected_params[k]
+        if v2 == 0:
+            continue
         error = abs(v1-v2) / v2
         # We expect large relative errors when the values are small relative to noise,
         # and large absolute errors otherwise.

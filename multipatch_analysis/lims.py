@@ -561,12 +561,23 @@ def cluster_cells(cluster):
     
     q = """select child.id, child.name, child.x_coord, child.y_coord, child.external_specimen_name, child.ephys_qc_result
     from specimens parent 
-    left join specimens child on child.parent_id=parent.id
+    inner join specimens child on child.parent_id=parent.id
     where parent.id=%d
     """ % cluster
 
     recs = query(q)
     return recs
+
+
+def cell_specimen_ids(cell_cluster):
+    """Return a dictionary mapping {cell_ext_id: lims_specimen_id} for all cells in a cluster.
+    """
+    if not isinstance(cell_cluster, int):
+        cell_cluster = specimen_id_from_name(cell_cluster)
+        
+    lims_cells = cluster_cells(cell_cluster)
+    return {(lims_cell.external_specimen_name): lims_cell.id for lims_cell in lims_cells if lims_cell is not None}
+
 
 def cell_polygon(cell):
     """ Return polygon id for cell specimen
@@ -581,6 +592,7 @@ def cell_polygon(cell):
 
     recs = query(q)
     return recs
+
 
 def cell_layer(cell):
     """ Return layer call for Cell specimen
@@ -601,14 +613,6 @@ def cell_layer(cell):
         raise Exception ('Incorrect number of layers for cell %d' % cell)
     return recs[0][0]
 
-def get_cell_specimen_ids(cell_cluster):
-    cell_specimens = child_specimens(cell_cluster)
-    if len(cell_specimens) != 0:
-        lims_cells = cluster_cells(cell_cluster)
-        cell_id_map = {(lims_cell.external_specimen_name): lims_cell.id for lims_cell in lims_cells if lims_cell is not None}
-        return cell_id_map
-    else:
-        return None
 
 if __name__ == '__main__':
     # testing specimen

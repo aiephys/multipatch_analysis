@@ -13,8 +13,10 @@ Synapse = make_table(
         ('pair_id', 'pair.id', 'The ID of the entry in the pair table to which these results apply', {'index': True}),
         ('synapse_type', 'str', '"ex" or "in" indicating whether the synapse is excitatory or inhibitory', {'index': True}),
         ('latency', 'float', 'Latency in seconds from spike max slope until synaptic response onset.', {'index': True}),
+        ('psp_amplitude', 'float', 'Amplitude of resting-state PSPs in Volts.'),
         ('psp_rise_time', 'float', 'Rise time in seconds measured from averaged PSPs.'),
         ('psp_decay_tau', 'float', 'decay time constant in seconds measured from averaged PSPs.'),
+        ('psc_amplitude', 'float', 'Amplitude of resting-state PSCs in Amperes.'),
         ('psc_rise_time', 'float', 'Rise time in seconds measured from averaged PSCs.'),
         ('psc_decay_tau', 'float', 'decay time constant in seconds measured from averaged PSCs.'),
     ]
