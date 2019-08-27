@@ -334,7 +334,7 @@ class MatrixAnalyzer(object):
         return loaded_presets
 
     def write_presets(self):
-        json.dump(self.presets, open(self.preset_file + '.new', 'wb'), indent=4)
+        json.dump(self.presets, open(self.preset_file + '.new', 'w'), indent=4)
         if os.path.exists(self.preset_file):
             os.remove(self.preset_file)
         os.rename(self.preset_file + '.new', self.preset_file)
