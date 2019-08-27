@@ -49,6 +49,7 @@ class RestingStatePipelineModule(DatabasePipelineModule):
                     setattr(fit_rec, mode + '_' + k, v)
                 setattr(fit_rec, mode + '_nrmse', fit.nrmse())
                 setattr(fit_rec, mode + '_avg_data', result[mode]['average'].data)
+                setattr(fit_rec, mode + '_avg_data_start_time', result[mode]['average'].t0)
                 
                 # list IDs of pulses that went into this average
                 pr_ids = np.array([pr.id for pr in result[mode]['responses']]),
