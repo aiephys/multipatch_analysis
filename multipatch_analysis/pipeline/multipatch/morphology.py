@@ -133,6 +133,7 @@ class MorphologyPipelineModule(DatabasePipelineModule):
                 continue
 
             expt = session.query(db.Experiment).filter(db.Experiment.ext_id==expt_id).all()[0]
+            ready[expt_id] = expt_mtime
             cluster = expt.lims_specimen_id
             if cluster is None:
                 continue
@@ -151,8 +152,8 @@ class MorphologyPipelineModule(DatabasePipelineModule):
                 else:
                     cell_hash_compare.append(False)
             if all(cell_hash_compare) is False:
-                ready[expt.ext_id] = datetime.datetime.now()
-    
+                ready[expt_id] = datetime.datetime.now()
+        
         return ready
 
 
