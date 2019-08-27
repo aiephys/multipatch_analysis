@@ -31,11 +31,13 @@ if __name__ == '__main__':
     if not args.now:
         delay()
 
+    date = datetime.today().strftime("%Y-%m-%d")
     stages = OrderedDict([
+        ('backup_notes',            ('pg_dump -d data_notes -h 10.128.36.109 -U postgres  > data_notes_%s.pgsql'%date, 'backup data notes DB')),
         ('sync',                    ('python util/sync_rigs_to_server.py', 'sync raw data to server')),
         ('pipeline',                ('python util/analysis_pipeline.py multipatch all', 'run analysis pipeline')),
         ('vacuum',                  ('python util/database.py --vacuum', 'vacuum database')),
-        ('bake',                    ('python util/database.py --bake=synphys_current.sqlite --overwrite', 'bake sqlite')),
+        ('bake sqlite',             ('python util/bake_sqlite.py', 'bake sqlite')),
     ])
 
     skip = [] if args.skip == '' else args.skip.split(',')

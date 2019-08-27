@@ -528,7 +528,7 @@ class Database(object):
     def bake_sqlite(self, sqlite_file, **kwds):
         """Dump a copy of this database to an sqlite file.
         """
-        sqlite_db = Database(ro_host="sqlite://", rw_host="sqlite://", db_name=sqlite_file, ormbase=self.ormbase)
+        sqlite_db = Database(ro_host="sqlite:///", rw_host="sqlite:///", db_name=sqlite_file, ormbase=self.ormbase)
         sqlite_db.create_tables()
         
         last_size = 0
@@ -559,7 +559,7 @@ class Database(object):
             pass
 
     @staticmethod
-    def iter_copy_tables(source_db, dest_db, tables=None, skip_tables=(), skip_errors=False, vacuum=True):
+    def iter_copy_tables(source_db, dest_db, tables=None, skip_tables=(), skip_columns={}, skip_errors=False, vacuum=True):
         """Iterator that copies all tables from one database to another.
         
         Yields each table name as it is completed.
@@ -576,7 +576,8 @@ class Database(object):
             print("Cloning %s.." % table_name)
             
             # read from table in background thread, write to table in main thread.
-            reader = TableReadThread(source_db, table)
+            skip_cols = skip_columns.get(table, [])
+            reader = TableReadThread(source_db, table, skip_columns=skip_cols)
             i = 0
             for i,rec in enumerate(reader):
                 try:
@@ -608,13 +609,14 @@ class TableReadThread(threading.Thread):
     
     Records are queried chunkwise and queued in a background thread to enable more efficient streaming.
     """
-    def __init__(self, db, table, chunksize=1000):
+    def __init__(self, db, table, chunksize=1000, skip_columns=()):
         threading.Thread.__init__(self)
         self.daemon = True
         
         self.db = db
         self.table = table
         self.chunksize = chunksize
+        self.skip_columns = skip_columns
         self.queue = queue.Queue(maxsize=5)
         self.max_id = db.session().query(func.max(table.columns['id'])).all()[0][0] or 0
         self.start()
@@ -624,7 +626,7 @@ class TableReadThread(threading.Thread):
             session = self.db.session()
             table = self.table
             chunksize = self.chunksize
-            all_columns = table.columns
+            all_columns = [col for col in table.columns if col not in self.skip_columns]
             for i in range(0, self.max_id, chunksize):
                 query = session.query(*all_columns).filter((table.columns['id'] >= i) & (table.columns['id'] < i+chunksize))
                 records = query.all()
