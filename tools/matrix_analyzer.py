@@ -74,9 +74,9 @@ if __name__ == '__main__':
         ]),
 
         ('Inhibitory Classes',[
-            {'cre_type': 'pvalb', 'display_names': ('pv')},
-            {'cre_type': 'sst'},
-            {'cre_type': 'vip'},
+            {'cre_type': 'pvalb', 'display_names': ('', 'Pv')},
+            {'cre_type': 'sst', 'display_names': ('', 'Sst')},
+            {'cre_type': 'vip', 'display_names': ('', 'Vip')},
         ]),
  
         ('Excitatory Classes', [
