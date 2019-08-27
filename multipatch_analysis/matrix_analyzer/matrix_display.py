@@ -40,7 +40,7 @@ class MatrixDisplayFilter(object):
         self.params = Parameter.create(name='Matrix Display', type='group', children=[
             self.colorMap,
             {'name': 'Text format', 'type': 'str'},
-            {'name': 'Show Confidence', 'type': 'list', 'values': [field[0] for field in self.data_fields]},
+            {'name': 'Show Confidence', 'type': 'list', 'values': [field[0] for field in self.data_fields], 'value': 'None'},
             {'name': 'log_scale', 'type': 'bool'},
         ])
     

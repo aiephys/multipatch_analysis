@@ -7,7 +7,7 @@ Prototype code for analyzing connectivity and synaptic properties between cell c
 """
 from __future__ import print_function, division
 
-import re, cProfile, os, json, sys, copy
+import re, cProfile, os, json, sys, copy, operator
 from collections import OrderedDict
 import numpy as np
 import pandas as pd
@@ -80,7 +80,7 @@ class ExperimentFilter(object):
         acsfs = [acsf[0] for acsf in acsfs if acsf[0] is not None or '']
         self.acsf_keys = {'1.3mM': ['1.3mM Ca & 1mM Mg'], '2mM': ['2mM Ca & Mg']}
         acsfs = self.acsf_keys.keys()
-        acsf_exdpand = False
+        acsf_expand = False
         internals = s.query(db.Experiment.internal).distinct().all()
         internals = [internal[0] for internal in internals if internal[0] is not None or '']
         internal_expand = False
@@ -145,10 +145,10 @@ class CellClassFilter(object):
         combo_def = {'name': 'pre/post', 'type':'list', 'value':'both', 'values':['both', 'presynaptic', 'postsynaptic']}
         cell_group_list = [{'name': group, 'type': 'bool', 'children':[combo_def], 'expanded':False} for group in self.cell_class_groups.keys()]
         layer = [{'name': 'Define layer by:', 'type': 'list', 'values': ['target layer', 'annotated layer'], 'value': 'target layer'}]
-        if analyzer_mode == 'internal':
-            children = layer + cell_group_list
-        else:
-            children = cell_group_list
+        # if analyzer_mode == 'internal':
+        children = layer + cell_group_list
+        # else:
+        #     children = cell_group_list
         self.params = Parameter.create(name="Cell Classes", type="group", children=children)
         for p in self.params.children():
             p.sigValueChanged.connect(self.expand_param)
@@ -166,16 +166,16 @@ class CellClassFilter(object):
             for group in self.params.children()[1:]:
                 if group.value() is True:
                     self.cell_classes.extend(ccg[group.name()])
-            self.cell_classes = self.layer_call() 
+            self.cell_classes = self.layer_call()
             self.cell_classes = [CellClass(**c) for c in self.cell_classes]
             self.cell_groups = classify_cells(self.cell_classes, pairs=pairs)
         return self.cell_groups, self.cell_classes
 
     def layer_call(self):
-        if self.analyzer_mode == 'external':
-            layer_def = 'target_layer'
-        else:
-            layer_def = self.params['Define layer by:']
+        # if self.analyzer_mode == 'external':
+        #     layer_def = 'target layer'
+        # else:
+        layer_def = self.params['Define layer by:']
         if layer_def == 'target layer':
             for c in self.cell_classes:
                 if c.get('cortical_layer') is not None:
@@ -226,10 +226,10 @@ class MatrixAnalyzer(object):
         self.selected = 0
         self.colors = [(0, 255, 0), (255, 0, 0), (0, 0, 255), (254, 169, 0), (170, 0, 127), (0, 230, 230)]
         
-        self.analyzers = [ConnectivityAnalyzer(), StrengthAnalyzer(), DynamicsAnalyzer()]
+        self.analyzer_mode = analyzer_mode
+        self.analyzers = [ConnectivityAnalyzer(self.analyzer_mode), StrengthAnalyzer(), DynamicsAnalyzer()]
         self.active_analyzers = []
         self.preset_file = preset_file
-        self.analyzer_mode = analyzer_mode
 
         self.field_map = {}
         for analyzer in self.analyzers:
@@ -381,7 +381,7 @@ class MatrixAnalyzer(object):
     
     def analyzers_needed(self):
         ## go through all of the visualizers
-        data_needed = set(['connected', 'distance'])
+        data_needed = set(['Synapse', 'Distance'])
         for metric in self.matrix_display_filter.colorMap.children():
             data_needed.add(metric.name())
         text_fields = re.findall('\{(.*?)\}', self.matrix_display_filter.params['Text format'])

@@ -92,7 +92,8 @@ class CellClass(object):
                             return False
                     break
             if not found_attr:
-                raise Exception('Cannot use "%s" for cell typing; attribute not found on cell or cell.morphology' % k)
+                return False
+                # raise Exception('Cannot use "%s" for cell typing; attribute not found on cell or cell.morphology' % k)
         return True
 
     def __hash__(self):

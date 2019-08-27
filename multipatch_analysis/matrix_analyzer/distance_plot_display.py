@@ -53,11 +53,11 @@ class DistancePlot(object):
         self.params.sigTreeStateChanged.connect(self.update_plot)
 
     def plot_distance(self, results, color, name, size=10, suppress_scatter=False):
-        """Results needs to be a DataFrame or Series object with 'connected' and 'distance' as columns
+        """Results needs to be a DataFrame or Series object with 'Synapse' and 'Distance' as columns
 
         """
-        connected = results['connected']
-        distance = results['distance'] 
+        connected = results['Synapse']
+        distance = results['Distance'] 
         dist_win = self.params.value()
         if self.results is None:
             self.name = name
