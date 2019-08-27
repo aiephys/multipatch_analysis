@@ -24,7 +24,7 @@ class SignalHandler(pg.QtCore.QObject):
 
 
 class MatrixDisplayFilter(object):
-    def __init__(self, view_box, data_fields):
+    def __init__(self, view_box, data_fields, text_fields):
         self.output = None
         self._signalHandler = SignalHandler()
         self.sigOutputChanged = self._signalHandler.sigOutputChanged
@@ -32,6 +32,7 @@ class MatrixDisplayFilter(object):
         self.legend = None
         self.colorMap = ColorMapParameter()
         self.data_fields = data_fields
+        self.text_fields = text_fields
         self.field_names = [field[0] for field in self.data_fields]
 
         self.colorMap.setFields(self.data_fields)
@@ -39,11 +40,17 @@ class MatrixDisplayFilter(object):
         self.params = Parameter.create(name='Matrix Display', type='group', children=[
             self.colorMap,
             {'name': 'Text format', 'type': 'str'},
-            {'name': 'Show Confidence', 'type': 'list', 'values': [field[0] for field in self.data_fields]},
+            {'name': 'Show Confidence', 'type': 'list', 'values': [field[0] for field in self.data_fields], 'value': 'None'},
             {'name': 'log_scale', 'type': 'bool'},
         ])
     
         self.params.sigTreeStateChanged.connect(self.invalidate_output)
+        self.colorMap.sigColorMapChanged.connect(self.set_default_text)
+
+    def set_default_text(self):
+        map_field = self.get_colormap_field()
+        default_text = self.text_fields.get(map_field, '')
+        self.params.child('Text format').setValue(default_text)
 
     def element_display_output(self, result, default_bgcolor):
         colormap = self.colorMap
@@ -109,7 +116,9 @@ class MatrixDisplayFilter(object):
 
     def get_colormap_field(self):
         color_map_fields = self.colorMap.children()
-        if len(color_map_fields) > 1:
+        if len(color_map_fields) == 0:
+           field_name = ''
+        elif len(color_map_fields) > 1:
             field_name = [field.name() for field in color_map_fields if field['Enabled'] is True][0]
         else:
             field_name = color_map_fields[0].name()
@@ -147,10 +156,10 @@ class MatrixWidget(pg.GraphicsLayoutWidget):
 
 class MatrixDisplay(object):
     sigClicked = pg.QtCore.Signal(object, object, object, object, object) # self, matrix_item, event, row, col
-    def __init__(self, window, output_fields, field_map):
+    def __init__(self, window, output_fields, text_fields, field_map):
         self.main_window = window
         self.matrix_widget = self.main_window.matrix_widget
-        self.matrix_display_filter = MatrixDisplayFilter(self.matrix_widget.view_box, output_fields)
+        self.matrix_display_filter = MatrixDisplayFilter(self.matrix_widget.view_box, output_fields, text_fields)
         self.field_map = field_map
         self.element = None
 

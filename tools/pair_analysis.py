@@ -126,7 +126,9 @@ class MainWindow(pg.QtGui.QWidget):
         note_pairs = q.all()
         note_pairs.sort(key=lambda p: p.expt_id)
         for p in note_pairs:
-            comments = p.notes['comments']    
+            comments = p.notes.get('comments')
+            if comments is None:
+                continue    
             if len(selected_hashtags) == 1:
                 hashtag = selected_hashtags[0]
                 if hashtag == '#':

@@ -66,6 +66,24 @@ class FormattableNumber(float):
             formatted_value = ("%0.2f ms" % value)
         return formatted_value
 
+    @property
+    def us(self):
+        if np.isnan(self):
+            formatted_value = ''
+        else:
+            value = self*1e6
+            formatted_value = ("%0.2f μs" % value)
+        return formatted_value
+
+    @property
+    def mm(self):
+        if np.isnan(self):
+            formatted_value = ''
+        else:
+            value = self*1e3
+            formatted_value = ("%0.2f mm" % value)
+        return formatted_value
+
 class Analyzer(pg.QtCore.QObject):
 
     sigOutputChanged = pg.QtCore.Signal(object)
@@ -115,7 +133,7 @@ class Analyzer(pg.QtCore.QObject):
 
 class ConnectivityAnalyzer(Analyzer):
 
-    def __init__(self):
+    def __init__(self, analyzer_mode):
         Analyzer.__init__(self)
         self.name = 'connectivity'
         self.results = None
@@ -124,57 +142,70 @@ class ConnectivityAnalyzer(Analyzer):
         #self.sigOutputChanged = self._signalHandler.sigOutputChanged
 
         self.fields = [
-            ('None', {}),
-            ('probed', {}),
-            ('connected', {}),
-            ('gap_junction', {}),
-            ('distance', {'mode': 'range', 'units': 'm', 'defaults': {
+            ('Probed Connection', {}),
+            ('Synapse', {}),
+            ('Gap Junction', {}),
+            ('Distance', {'mode': 'range', 'units': 'm', 'defaults': {
                 'Max': 200e-6,
                 'colormap': pg.ColorMap(
                     [0, 0.25, 0.5, 0.75, 1.0],
                     [(255,255,100,255), (255,100,0,255), (0,0,100,255), (140,0,0,255), (80,0,80,255)],
             )}}),
-            ('connection_probability', {'mode': 'range', 'defaults': {
+            ('Synapse Probability', {'mode': 'range', 'defaults': {
                 'Operation': 'Add', 
                 'colormap': pg.ColorMap(
                 [0, 0.01, 0.03, 0.1, 0.3, 1.0],
                 [(0,0,100, 255), (80,0,80, 255), (140,0,0, 255), (255,100,0, 255), (255,255,100, 255), (255,255,255, 255)],
             )}}),
-            ('matrix_completeness', {'mode': 'range', 'defaults': {
-                'colormap': pg.ColorMap(
-                    [0, 0.25, 0.5, 0.75, 1.0],
-                    [(0,0,100,255), (80,0,80,255), (140,0,0,255), (255,100,0,255), (255,255,100,255)],
-            )}}),
-            ('gap_junction_probability', {'mode': 'range', 'defaults': {
+            ('Gap Junction Probability', {'mode': 'range', 'defaults': {
                 'colormap': pg.ColorMap(
                    [0, 0.01, 0.03, 0.1, 0.3, 1.0],
                     [(0,0,100, 255), (80,0,80, 255), (140,0,0, 255), (255,100,0, 255), (255,255,100, 255), (255,255,255, 255)],
             )}}),
+            ('None', {}),
             ]
+
+        if analyzer_mode == 'internal':
+            self.fields.update(
+                ('matrix_completeness', {'mode': 'range', 'defaults': {
+                'colormap': pg.ColorMap(
+                    [0, 0.25, 0.5, 0.75, 1.0],
+                    [(0,0,100,255), (80,0,80,255), (140,0,0,255), (255,100,0,255), (255,255,100,255)],
+            )}}))
 
         self.summary_stat = {
             'conn_no_data': self.metric_summary,
-            'probed': self.metric_summary,
-            'connected': self.metric_summary,
-            'gap_junction': [self.metric_summary, self.metric_conf],
-            'connection_probability': [self.metric_summary, self.metric_conf],
-            'gap_junction_probability': [self.metric_summary, self.metric_conf],
+            'Probed Connection': self.metric_summary,
+            'Synapse': self.metric_summary,
+            'Gap Junction': [self.metric_summary, self.metric_conf],
+            'Synapse Probability': [self.metric_summary, self.metric_conf],
+            'Gap Junction Probability': [self.metric_summary, self.metric_conf],
             'matrix_completeness': [self.metric_summary, self.metric_conf],
-            'distance': [self.metric_summary, self.metric_conf],
+            'Distance': [self.metric_summary, self.metric_conf],
         }
         self.summary_dtypes = {
             ('conn_no_data', 'metric_summary'): bool,
-            ('probed', 'metric_summary'): int,
-            ('connected', 'metric_summary'): int,
-            ('gap_junction', 'metric_summary'):int,
+            ('Probed Connection', 'metric_summary'): int,
+            ('Synapse', 'metric_summary'): int,
+            ('Gap Junction', 'metric_summary'):int,
+        }
+
+        self.text = {
+            'Probed Connection': '{Probed Connection}',
+            'Synapse': '{Synapse}',
+            'Gap Junction': '{Gap Junction}',
+            'Synapse Probability': '{Synapse}/{Probed Connection}',
+            'Gap Junction Probability': '{Gap Junction}/{Probed Connection}',
+            'matrix_completeness': '{Synapse}/{Probed Connection}',
+            'Distance': '{Distance.mm}',
         }
 
     def metric_summary(self, x): 
         if x.name == 'conn_no_data':
             return all(x)
-        if x.name == 'distance':
+        if x.name == 'Distance':
             return np.nanmean(x)
-        if x.name in ['connected', 'probed', 'gap_junction']:
+        if x.name in ['Synapse', 'Probed Connection', 'Gap Junction']:
             #print("+++ metric_summary: ", x.name)
             #print(x)
             #print(type(x))
@@ -189,20 +220,20 @@ class ConnectivityAnalyzer(Analyzer):
                 probed_progress = probed/80
                 connected_progress = connected/6
                 return np.clip(np.where(probed_progress > connected_progress, probed_progress, connected_progress), 0, 1)
-            elif x.name.endswith('probability'):
+            elif x.name.endswith('Probability'):
                 if probed == 0.:
                     return float('nan')
                 else:
                     return connected/probed       
 
     def metric_conf(self, x):
-        if x.name.endswith('probability'):
+        if x.name.endswith('Probability'):
             p = x.apply(pd.Series)
             p1 = p.sum()
             connected = float(p1[0])
             probed = float(p1[1])
             return connection_probability_ci(connected, probed)
-        if x.name == 'distance':
+        if x.name == 'Distance':
             return [-np.nanstd(x), np.nanstd(x)]
         else:
             return float('nan')
@@ -228,8 +259,8 @@ class ConnectivityAnalyzer(Analyzer):
                 if probed is False:
                     no_data = True
 
-                connected = pair.synapse if probed is True else False
-                gap = pair.electrical if probed is True else False
+                connected = pair.has_synapse if probed is True else False
+                gap = pair.has_electrical if probed is True else False
                 distance = pair.distance if probed is True else float('nan')
                 
 
@@ -237,12 +268,12 @@ class ConnectivityAnalyzer(Analyzer):
                 'conn_no_data': no_data,
                 'pre_class': pre_class,
                 'post_class': post_class,
-                'probed': probed,
-                'connected': connected,
-                'gap_junction': gap,
-                'distance': distance,
-                'connection_probability': [int(connected) if connected is not None else 0, int(probed) if probed is not None else 0],
-                'gap_junction_probability': [int(gap) if gap is not None else 0, int(probed) if probed is not None else 0],
+                'Probed Connection': probed,
+                'Synapse': connected,
+                'Gap Junction': gap,
+                'Distance': distance,
+                'Synapse Probability': [int(connected) if connected is not None else 0, int(probed) if probed is not None else 0],
+                'Gap Junction Probability': [int(gap) if gap is not None else 0, int(probed) if probed is not None else 0],
                 'matrix_completeness': [int(connected) if connected is not None else 0, int(probed) if probed is not None else 0],
                 
                 }
@@ -251,28 +282,21 @@ class ConnectivityAnalyzer(Analyzer):
 
         return self.results
 
-    # def group_result(self, pair_groups):
-    #     if self.group_results is not None:
-    #         return self.group_results
-
-    #     self.group_results = self.results.groupby(['pre_class', 'post_class']).agg(self.summary_stat)
-    #     return self.group_results
-
     def output_fields(self):
 
         return self.fields
 
     def print_element_info(self, pre_class, post_class, element, field_name):
-        connections = element[element['connected'] == True].index.tolist()
+        connections = element[element['Synapse'] == True].index.tolist()
         print ("Connection type: %s -> %s" % (pre_class, post_class))
-        print ("Connected Pairs:")
+        print ("Synaptically Connected Pairs:")
         for connection in connections:
             print ("\t %s" % (connection))
-        gap_junctions = element[element['gap_junction'] == True].index.tolist()
+        gap_junctions = element[element['Gap Junction'] == True].index.tolist()
         print ("Gap Junctions:")
         for gap in gap_junctions:
             print ("\t %s" % (gap))
-        probed_pairs = element[element['probed'] == True].index.tolist()
+        probed_pairs = element[element['Probed Connection'] == True].index.tolist()
         print ("Probed Pairs:")
         for probed in probed_pairs:
             print ("\t %s" % (probed))
@@ -285,25 +309,29 @@ class ConnectivityAnalyzer(Analyzer):
         baseline_window = int(db.default_sample_rate * 5e-3)
         traces = []
         point_data = []
-        connections = element[element['connected'] == True].index.tolist()
+        connections = element[element['Synapse'] == True].index.tolist()
         for pair in connections:
-            cs = pair.synapse_prediction
-            trace = cs.ic_average_response
-            if trace is not None:
-                x_offset = cs.ic_fit_xoffset
-                trace = format_trace(trace, baseline_window, x_offset, align='psp')
-                trace_plt.plot(trace.time_values, trace.data)
-                traces.append(trace)
-        grand_trace = TSeriesList(traces).mean()
-        name = ('%s->%s, n=%d' % (pre_class, post_class, len(traces)))
-        trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3}, name=name)
-        trace_plt.setXRange(0, 20e-3)
-        trace_plt.setLabels(left=('', 'V'), bottom=('Time from stimulus', 's'))
+            rsf = pair.resting_state_fit
+            if rsf is not None:
+                trace = rsf.ic_avg_data
+                start_time = rsf.ic_avg_data_start_time
+                latency = pair.synapse.latency
+                if latency is not None and start_time is not None:
+                    xoffset = start_time - latency
+                    trace = format_trace(trace, baseline_window, x_offset=xoffset, align='psp')
+                    trace_plt.plot(trace.time_values, trace.data)
+                    traces.append(trace)
+        if len(traces) > 0:
+            grand_trace = TSeriesList(traces).mean()
+            name = ('%s->%s, n=%d' % (pre_class, post_class, len(traces)))
+            trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3}, name=name)
+            trace_plt.setXRange(-5e-3, 20e-3)
+            trace_plt.setLabels(left=('', 'V'), bottom=('Time from stimulus', 's'))
         return line, scatter
 
     def summary(self, ):
-        total_connected = self.results['connected'].sum()
-        total_probed = self.results['probed'].sum()
+        total_connected = self.results['Synapse'].sum()
+        total_probed = self.results['Probed Connection'].sum()
         print ("Total connected / probed\t %d / %d" % (total_connected, total_probed))
 
         # if metric == 'matrix_completeness':
@@ -328,117 +356,69 @@ class StrengthAnalyzer(Analyzer):
         #self.sigOutputChanged = self._signalHandler.sigOutputChanged
 
         self.summary_stat = {
-        'ic_fit_amp_all': [self.metric_summary, self.metric_conf],
-        'ic_fit_xoffset_all': [self.metric_summary, self.metric_conf],
-        'ic_fit_rise_time_all': [self.metric_summary, self.metric_conf],
-        'ic_fit_decay_tau_all': [self.metric_summary, self.metric_conf],
-        'vc_fit_amp_all': [self.metric_summary, self.metric_conf],
-        'vc_fit_xoffset_all': [self.metric_summary, self.metric_conf],
-        'vc_fit_rise_time_all': [self.metric_summary, self.metric_conf],
-        'vc_fit_decay_tau_all': [self.metric_summary, self.metric_conf],
-        'ic_amp_first_pulse': [self.metric_summary, self.metric_conf],
-        'ic_latency_first_pulse': [self.metric_summary, self.metric_conf],
-        'ic_rise_time_first_pulse': [self.metric_summary, self.metric_conf],
-        'ic_decay_tau_first_pulse': [self.metric_summary, self.metric_conf],
-        'vc_amp_first_pulse': [self.metric_summary, self.metric_conf],
-        'vc_latency_first_pulse': [self.metric_summary, self.metric_conf],
-        'vc_rise_time_first_pulse': [self.metric_summary, self.metric_conf],
-        'vc_decay_tau_first_pulse': [self.metric_summary, self.metric_conf],
+        'PSP Amplitude': [self.metric_summary, self.metric_conf],
+        'Latency': [self.metric_summary, self.metric_conf],
+        'PSP Rise Time': [self.metric_summary, self.metric_conf],
+        'PSP Decay Tau': [self.metric_summary, self.metric_conf],
+        'PSC Amplitude': [self.metric_summary, self.metric_conf],
+        'PSC Rise Time': [self.metric_summary, self.metric_conf],
+        'PSC Decay Tau': [self.metric_summary, self.metric_conf],
         'strength_no_data': self.metric_summary,
         }
         self.summary_dtypes = {} ## dict to specify how we want to cast different summary measures
         ## looks like {('ic_fit_amp_all', 'metric_summary'):float}
 
         self.fields = [
-            ('None',{}),
             # all pulses
-            ('ic_fit_amp_all', {'mode': 'range', 'units': 'V', 'defaults': {
+            ('PSP Amplitude', {'mode': 'range', 'units': 'V', 'defaults': {
                 'Min': -1e-3, 
                 'Max': 1e-3, 
                 'colormap': pg.ColorMap(
                 [0, 0.5, 1.0],
                 [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
             )}}),
-            ('vc_fit_amp_all', {'mode': 'range', 'units': 'A', 'defaults': {
+            ('PSC Amplitude', {'mode': 'range', 'units': 'A', 'defaults': {
                 'Min': -20e-12, 
                 'Max': 20e-12, 
                 'colormap': pg.ColorMap(
                 [0, 0.5, 1.0],
                 [(255, 0, 0, 255), (255, 255, 255, 255), (0, 0, 255, 255)],
             )}}),
-            ('ic_fit_xoffset_all', {'mode': 'range', 'units': 's', 'defaults': {
-                'Min': 0.5e-3, 
-                'Max': 4e-3,
-                'colormap': thermal_colormap,
-            }}),
-            ('vc_fit_xoffset_all', {'mode': 'range', 'units': 's', 'defaults': {
-                'Min': 0.5e-3, 
-                'Max': 4e-3,
-                'colormap': thermal_colormap,
-            }}),
-            ('ic_fit_rise_time_all', {'mode': 'range', 'units': 's', 'defaults': {
+            ('PSP Rise Time', {'mode': 'range', 'units': 's', 'defaults': {
                 'Min': 1e-3, 
                 'Max': 10e-3,
                 'colormap': thermal_colormap,
             }}),
-            ('vc_fit_rise_time_all', {'mode': 'range', 'units': 's', 'defaults': {
+            ('PSC Rise Time', {'mode': 'range', 'units': 's', 'defaults': {
                 'Min': 0.5e-3, 
                 'Max': 5e-3,
                 'colormap': thermal_colormap,
             }}),
-            ('ic_fit_decay_tau_all', {'mode': 'range', 'units': 's', 'defaults': {
+            ('PSP Decay Tau', {'mode': 'range', 'units': 's', 'defaults': {
                 'Max': 500e-3,
                 'colormap': thermal_colormap,
             }}),
-            ('vc_fit_decay_tau_all', {'mode': 'range', 'units': 's', 'defaults': {
+            ('PSC Decay Tau', {'mode': 'range', 'units': 's', 'defaults': {
                 'Max': 20e-3,
                 'colormap': thermal_colormap,
             }}),
-            ## first pulse
-            ('ic_amp_first_pulse', {'mode': 'range', 'units': 'V', 'defaults': {
-                'Min': -1e-3, 
-                'Max': 1e-3, 
-                'colormap': pg.ColorMap(
-                [0, 0.5, 1.0],
-                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
-            )}}),
-            ('vc_amp_first_pulse', {'mode': 'range', 'units': 'A', 'defaults': {
-                'Min': -20e-12, 
-                'Max': 20e-12, 
-                'colormap': pg.ColorMap(
-                [0, 0.5, 1.0],
-                [(255, 0, 0, 255), (255, 255, 255, 255), (0, 0, 255, 255)],
-            )}}),
-            ('ic_latency_first_pulse', {'mode': 'range', 'units': 's', 'defaults': {
+            ('Latency', {'mode': 'range', 'units': 's', 'defaults': {
                 'Min': 0.5e-3, 
                 'Max': 4e-3,
                 'colormap': thermal_colormap,
             }}),
-            ('vc_latency_first_pulse', {'mode': 'range', 'units': 's', 'defaults': {
-                'Min': 0.5e-3, 
-                'Max': 4e-3,
-                'colormap': thermal_colormap,
-            }}),
-            ('ic_rise_time_first_pulse', {'mode': 'range', 'units': 's', 'defaults': {
-                'Min': 1e-3, 
-                'Max': 10e-3,
-                'colormap': thermal_colormap,
-            }}),
-            ('vc_rise_time_first_pulse', {'mode': 'range', 'units': 's', 'defaults': {
-                'Min': 0.5e-3, 
-                'Max': 5e-3,
-                'colormap': thermal_colormap,
-            }}),
-            ('ic_decay_tau_first_pulse', {'mode': 'range', 'units': 's', 'defaults': {
-                'Max': 500e-3,
-                'colormap': thermal_colormap,
-            }}),
-            ('vc_decay_tau_first_pulse', {'mode': 'range', 'units': 's', 'defaults': {
-                'Max': 20e-3,
-                'colormap': thermal_colormap,
-            }}),
+            ('None',{}),
         ]
-        
+
+        self.text = {
+            'PSP Amplitude': '{PSP Amplitude.mV}',
+            'PSC Amplitude': '{PSC Amplitude.pA}',
+            'Latency': '{Latency.ms}',
+            'PSP Rise Time': '{PSP Rise Time.ms}',
+            'PSP Decay Tau': '{PSP Decay Tau.ms}',
+            'PSC Rise Time': '{PSC Rise Time.ms}',
+            'PSC Decay Tau': '{PSC Decay Tau.ms}',
+        }
 
     def invalidate_output(self):
         self.results = None
@@ -458,47 +438,40 @@ class StrengthAnalyzer(Analyzer):
             pre_class, post_class = key
 
             for pair in class_pairs:
-                if pair.synapse is not True:
+                if pair.has_synapse is not True:
                     no_data = True
-                    cs = None
-                    fpf = None
-                elif pair.synapse is True:
+                elif pair.has_synapse is True:
                     no_data = False
-                    cs = pair.synapse_prediction
-                    fpf = pair.avg_first_pulse_fit
+                    synapse = pair.synapse
+                    if synapse is None:
+                        no_data = True
+                    else:
+                        psp_amp = synapse.psp_amplitude
+                        psp_decay_tau = synapse.psp_decay_tau
+                        psp_rise_time = synapse.psp_rise_time 
+                        psc_amp = synapse.psc_amplitude
+                        psc_rise_time = synapse.psc_rise_time
+                        psc_decay_tau = synapse.psc_decay_tau
+                        latency = synapse.latency
+
+                    
 
                 results[pair] = {
                 'strength_no_data': no_data,
                 'pre_class': pre_class,
                 'post_class': post_class,
-                'ic_fit_amp_all': cs.ic_fit_amp if cs is not None else float('nan'),
-                'ic_fit_xoffset_all': cs.ic_fit_xoffset if cs is not None else float('nan'),
-                'ic_fit_rise_time_all': cs.ic_fit_rise_time if cs is not None else float('nan'),
-                'ic_fit_decay_tau_all': cs.ic_fit_decay_tau if cs is not None else float('nan'),
-                'vc_fit_amp_all': cs.vc_fit_amp if cs is not None else float('nan'),
-                'vc_fit_xoffset_all': cs.vc_fit_xoffset if cs is not None else float('nan'),
-                'vc_fit_rise_time_all': cs.vc_fit_rise_time if cs is not None else float('nan'),
-                'vc_fit_decay_tau_all': cs.vc_fit_decay_tau if cs is not None else float('nan'),
-                'ic_amp_first_pulse': fpf.ic_amp if fpf is not None else float('nan'),
-                'ic_latency_first_pulse': fpf.ic_latency if fpf is not None else float('nan'),
-                'ic_rise_time_first_pulse': fpf.ic_rise_time if fpf is not None else float('nan'),
-                'ic_decay_tau_first_pulse': fpf.ic_decay_tau if fpf is not None else float('nan'),
-                'vc_amp_first_pulse': fpf.vc_amp if fpf is not None else float('nan'),
-                'vc_latency_first_pulse': fpf.vc_latency if fpf is not None else float('nan'),
-                'vc_rise_time_first_pulse': fpf.vc_rise_time if fpf is not None else float('nan'),
-                'vc_decay_tau_first_pulse': fpf.vc_decay_tau if fpf is not None else float('nan'),
+                'PSP Amplitude': psp_amp if no_data is False else float('nan'),
+                'PSP Rise Time': psp_rise_time if no_data is False else float('nan'),
+                'PSP Decay Tau': psp_decay_tau if no_data is False else float('nan'),
+                'PSC Amplitude': psc_amp if no_data is False else float('nan'),
+                'PSC Rise Time': psc_rise_time if no_data is False else float('nan'),
+                'PSC Decay Tau': psc_decay_tau if no_data is False else float('nan'),
+                'Latency': latency if no_data is False else float('nan'),
                 }
 
         self.results = pd.DataFrame.from_dict(results, orient='index')
 
         return self.results
-
-    # def group_result(self):
-    #     if self.group_results is not None:
-    #         return self.group_results
-
-    #     self.group_results = self.results.groupby(['pre_class', 'post_class']).agg(self.summary_stat)
-    #     return self.group_results
 
     def output_fields(self):
 
@@ -515,14 +488,13 @@ class StrengthAnalyzer(Analyzer):
 
     def print_element_info(self, pre_class, post_class, element, field_name=None):
         if field_name is not None:
-            fn = field_name.split('_all')[0] if field_name.endswith('all') else field_name.split('_first_pulse')[0]
             units = [field[1].get('units', '') for field in self.fields if field[0] == field_name][0] 
             print ("Connection type: %s -> %s" % (pre_class, post_class))    
             print ("\t Grand Average %s = %s" % (field_name, pg.siFormat(element[field_name].mean(), suffix=units)))
             print ("Connected Pairs:")
             no_qc_data = []
             for pair, value in element[field_name].iteritems():
-                if pair.synapse is not True:
+                if pair.has_synapse is not True:
                     continue
                 if np.isnan(value):
                     no_qc_data.append(pair)
@@ -534,7 +506,6 @@ class StrengthAnalyzer(Analyzer):
                 print ("\t\t %s" % (pair))
 
     def plot_element_data(self, pre_class, post_class, element, field_name, color='g', trace_plt=None):
-        fn = field_name.split('_all')[0] if field_name.endswith('all') else field_name.split('_first_pulse')[0]
         val = element[field_name].mean()
         line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
         scatter = None
@@ -543,24 +514,23 @@ class StrengthAnalyzer(Analyzer):
         traces = []
         point_data = []
         for pair, value in element[field_name].iteritems():
-            if pair.synapse is not True:
+            if pair.has_synapse is not True:
                 continue
             if np.isnan(value):
                 continue
-            if field_name.endswith('all'):
-                cs = pair.synapse_prediction
-                trace = cs.ic_average_response if field_name.startswith('ic') else cs.vc_average_response
-                x_offset = cs.ic_fit_xoffset if field_name.startswith('ic') else cs.vc_fit_xoffset
-            elif field_name.endswith('first_pulse'):
-                fpf = pair.avg_first_pulse_fit
-                if fpf is None:
-                    continue
-                trace = fpf.ic_avg_psp_data if field_name.startswith('ic') else fpf.vc_avg_psp_data
-                x_offset = fpf.ic_latency if field_name.startswith('ic') else fpf.vc_latency
+            rsf = pair.resting_state_fit
+            if rsf is not None:
+                trace = rsf.ic_avg_data if field_name.startswith('PSP') else rsf.vc_avg_data
+                start_time = rsf.ic_avg_data_start_time if field_name.startswith('PSP') else rsf.vc_avg_data_start_time
+                latency = self.results.loc[pair]['Latency']
+                if latency is None or start_time is None:
+                    trace = None
+                else:
+                    xoffset = start_time - latency
             if trace is None:
                 continue
             values.append(value)
-            trace = format_trace(trace, baseline_window, x_offset, align='psp')
+            trace = format_trace(trace, baseline_window, x_offset=xoffset, align='psp')
             trace_item = trace_plt.plot(trace.time_values, trace.data)
             point_data.append(pair)
             trace_item.pair = pair
@@ -575,12 +545,13 @@ class StrengthAnalyzer(Analyzer):
             pair_id = point.data().id
             self.pair_items[pair_id].append(point)
         scatter.sigClicked.connect(self.scatter_plot_clicked)
-        grand_trace = TSeriesList(traces).mean()
-        name = ('%s->%s, n=%d' % (pre_class, post_class, len(traces)))
-        trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3}, name=name)
-        units = 'V' if field_name.startswith('ic') else 'A'
-        trace_plt.setXRange(0, 20e-3)
-        trace_plt.setLabels(left=('', units), bottom=('Time from stimulus', 's'))
+        if len(traces) > 0:
+            grand_trace = TSeriesList(traces).mean()
+            name = ('%s->%s, n=%d' % (pre_class, post_class, len(traces)))
+            trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3}, name=name)
+            units = 'V' if field_name.startswith('PSP') else 'A'
+            trace_plt.setXRange(-5e-3, 20e-3)
+            trace_plt.setLabels(left=('', units), bottom=('Time from stimulus', 's'))
         return line, scatter
 
     def scatter_plot_clicked(self, scatterplt, points):
@@ -602,8 +573,6 @@ class StrengthAnalyzer(Analyzer):
         print('')
 
 class DynamicsAnalyzer(Analyzer):
-
-
     def __init__(self):
         Analyzer.__init__(self)
         self.name = 'dynamics'
@@ -614,117 +583,38 @@ class DynamicsAnalyzer(Analyzer):
 
         self.summary_stat = {
             'dynamics_no_data': self.metric_summary,
-            'pulse_ratio_8_1_50hz': [self.metric_summary, self.metric_conf],
-            'pulse_ratio_2_1_50hz': [self.metric_summary, self.metric_conf],
-            'pulse_ratio_5_1_50hz': [self.metric_summary, self.metric_conf],
-            'pulse_ratio_9_1_125ms': [self.metric_summary, self.metric_conf],
-            'pulse_ratio_9_1_250ms': [self.metric_summary, self.metric_conf],
-            'pulse_ratio_9_1_500ms': [self.metric_summary, self.metric_conf],
-            'pulse_ratio_9_1_1000ms': [self.metric_summary, self.metric_conf],
-            'pulse_ratio_9_1_2000ms': [self.metric_summary, self.metric_conf],
-            'pulse_ratio_9_1_4000ms': [self.metric_summary, self.metric_conf],
-            'pulse_ratio_8_1_10hz': [self.metric_summary, self.metric_conf],
-            'pulse_ratio_8_1_20hz': [self.metric_summary, self.metric_conf],
-            'pulse_ratio_8_1_100hz': [self.metric_summary, self.metric_conf],
-            'pulse_ratio_8_1_200hz': [self.metric_summary, self.metric_conf],
+            'Steady state plasticity': [self.metric_summary, self.metric_conf],
+            'Paird pulse ratio': [self.metric_summary, self.metric_conf],
+            'Recovery': [self.metric_summary, self.metric_conf],
         }
         self.summary_dtypes = {} ## dict to specify how we want to cast different summary measures
         ## looks like {('pulse_ratio_8_1_50hz', 'metric_summary'):float}
         
         self.fields = [
+            ('Steady state plasticity', {'mode': 'range', 'defaults': {
+                'Min': 0, 
+                'Max': 2, 
+                'colormap': pg.ColorMap(
+                [0, 0.5, 1.0],
+                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
+            )}}),
+            ('Paired pulse ratio', {'mode': 'range', 'defaults': {
+                'Min': 0, 
+                'Max': 2, 
+                'colormap': pg.ColorMap(
+                [0, 0.5, 1.0],
+                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
+            )}}),
+            ('Recovery', {'mode': 'range', 'defaults': {
+                'Min': 0, 
+                'Max': 2, 
+                'colormap': pg.ColorMap(
+                [0, 0.5, 1.0],
+                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
+            )}}),
             ('None', {}),
-            ('pulse_ratio_8_1_50hz', {'mode': 'range', 'defaults': {
-                'Min': 0, 
-                'Max': 2, 
-                'colormap': pg.ColorMap(
-                [0, 0.5, 1.0],
-                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
-            )}}),
-            ('pulse_ratio_2_1_50hz', {'mode': 'range', 'defaults': {
-                'Min': 0, 
-                'Max': 2, 
-                'colormap': pg.ColorMap(
-                [0, 0.5, 1.0],
-                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
-            )}}),
-            ('pulse_ratio_5_1_50hz', {'mode': 'range', 'defaults': {
-                'Min': 0, 
-                'Max': 2, 
-                'colormap': pg.ColorMap(
-                [0, 0.5, 1.0],
-                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
-            )}}),
-            ('pulse_ratio_8_1_10hz', {'mode': 'range', 'defaults': {
-                'Min': 0, 
-                'Max': 2, 
-                'colormap': pg.ColorMap(
-                [0, 0.5, 1.0],
-                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
-            )}}),
-            ('pulse_ratio_8_1_20hz', {'mode': 'range', 'defaults': {
-                'Min': 0, 
-                'Max': 2, 
-                'colormap': pg.ColorMap(
-                [0, 0.5, 1.0],
-                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
-            )}}),
-            ('pulse_ratio_8_1_100hz', {'mode': 'range', 'defaults': {
-                'Min': 0, 
-                'Max': 2, 
-                'colormap': pg.ColorMap(
-                [0, 0.5, 1.0],
-                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
-            )}}),
-            ('pulse_ratio_8_1_200hz', {'mode': 'range', 'defaults': {
-                'Min': 0, 
-                'Max': 2, 
-                'colormap': pg.ColorMap(
-                [0, 0.5, 1.0],
-                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
-            )}}),
-             ('pulse_ratio_9_1_125ms', {'mode': 'range', 'defaults': {
-                'Min': 0, 
-                'Max': 2, 
-                'colormap': pg.ColorMap(
-                [0, 0.5, 1.0],
-                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
-            )}}),
-             ('pulse_ratio_9_1_250ms', {'mode': 'range', 'defaults': {
-                'Min': 0, 
-                'Max': 2, 
-                'colormap': pg.ColorMap(
-                [0, 0.5, 1.0],
-                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
-            )}}),
-             ('pulse_ratio_9_1_500ms', {'mode': 'range', 'defaults': {
-                'Min': 0, 
-                'Max': 2, 
-                'colormap': pg.ColorMap(
-                [0, 0.5, 1.0],
-                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
-            )}}),
-             ('pulse_ratio_9_1_1000ms', {'mode': 'range', 'defaults': {
-                'Min': 0, 
-                'Max': 2, 
-                'colormap': pg.ColorMap(
-                [0, 0.5, 1.0],
-                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
-            )}}),
-             ('pulse_ratio_9_1_2000ms', {'mode': 'range', 'defaults': {
-                'Min': 0, 
-                'Max': 2, 
-                'colormap': pg.ColorMap(
-                [0, 0.5, 1.0],
-                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
-            )}}),
-             ('pulse_ratio_9_1_4000ms', {'mode': 'range', 'defaults': {
-                'Min': 0, 
-                'Max': 2, 
-                'colormap': pg.ColorMap(
-                [0, 0.5, 1.0],
-                [(0, 0, 255, 255), (255, 255, 255, 255), (255, 0, 0, 255)],
-            )}}),
             ]
+        self.text = {}
 
     def invalidate_output(self):
         self.results = None
@@ -762,19 +652,9 @@ class DynamicsAnalyzer(Analyzer):
                 'dynamics_no_data': no_data,
                 'pre_class': pre_class,
                 'post_class': post_class,
-                'pulse_ratio_8_1_50hz': dynamics.pulse_ratio_8_1_50hz if dynamics is not None else float('nan'),
-                'pulse_ratio_2_1_50hz': dynamics.pulse_ratio_2_1_50hz if dynamics is not None else float('nan'),
-                'pulse_ratio_5_1_50hz': dynamics.pulse_ratio_5_1_50hz if dynamics is not None else float('nan'),
-                'pulse_ratio_9_1_125ms': dynamics.pulse_ratio_9_1_125ms if dynamics is not None else float('nan'),
-                'pulse_ratio_9_1_250ms': dynamics.pulse_ratio_9_1_250ms if dynamics is not None else float('nan'),
-                'pulse_ratio_9_1_500ms': dynamics.pulse_ratio_9_1_500ms if dynamics is not None else float('nan'),
-                'pulse_ratio_9_1_1000ms': dynamics.pulse_ratio_9_1_1000ms if dynamics is not None else float('nan'),
-                'pulse_ratio_9_1_2000ms': dynamics.pulse_ratio_9_1_2000ms if dynamics is not None else float('nan'),
-                'pulse_ratio_9_1_4000ms': dynamics.pulse_ratio_9_1_4000ms if dynamics is not None else float('nan'),
-                'pulse_ratio_8_1_10hz': dynamics.pulse_ratio_8_1_10hz if dynamics is not None else float('nan'),
-                'pulse_ratio_8_1_20hz': dynamics.pulse_ratio_8_1_20hz if dynamics is not None else float('nan'),
-                'pulse_ratio_8_1_100hz': dynamics.pulse_ratio_8_1_100hz if dynamics is not None else float('nan'),
-                'pulse_ratio_8_1_200hz': dynamics.pulse_ratio_8_1_200hz if dynamics is not None else float('nan'),
+                'Steady state plasticity': dynamics.pulse_ratio_8_1_50hz if dynamics is not None else float('nan'),
+                'Paired pulse ratio': dynamics.pulse_ratio_2_1_50hz if dynamics is not None else float('nan'),
+                'Recovery': dynamics.pulse_ratio_9_1_250ms if dynamics is not None else float('nan'),
                 }
 
         
@@ -825,11 +705,15 @@ class DynamicsAnalyzer(Analyzer):
                 continue
             traces = []
             if trace_plt is not None:
-                trace = cs.ic_average_response if field_name.startswith('ic') else cs.vc_average_response
-                x_offset = cs.ic_fit_latency if field_name.startswith('ic') else cs.vc_fit_latency
-                trace = format_trace(trace, baseline_window, x_offset, align='psp')
-                trace_plt.plot(trace.time_values, trace.data)
-                traces.append(trace)
+                if rsf is not None:
+                    trace = rsf.ic_avg_data
+                    start_time = rsf.ic_avg_data_start_time
+                    latency = pair.synapse.latency
+                    if latency is not None and start_time is not None:
+                        xoffset = start_time - latency
+                        trace = format_trace(trace, baseline_window, x_offset=xoffset, align='psp')
+                        trace_plt.plot(trace.time_values, trace.data)
+                        traces.append(trace)
             values.append(value)
             y_values = pg.pseudoScatter(np.asarray(values, dtype=float), spacing=1)
             scatter = pg.ScatterPlotItem(symbol='o', brush=(color + (150,)), pen='w', size=12)
@@ -846,22 +730,24 @@ class DynamicsAnalyzer(Analyzer):
         print('')
 
 
-def format_trace(trace, baseline_win, x_offset, align='spike'):
+def format_trace(trace, baseline_win, x_offset=1e-3, align='spike'):
     # align can be to the pre-synaptic spike (default) or the onset of the PSP ('psp')
     baseline = float_mode(trace[0:baseline_win])
     trace = TSeries(data=(trace-baseline), sample_rate=db.default_sample_rate)
     if align == 'psp':
-        trace.t0 = -x_offset
+        trace.t0 = x_offset
     return trace
 
 def get_all_output_fields(analyzer_list):
     data_fields = []
+    text_fields = {}
     # confidence_fields = []
     for analyzer in analyzer_list:
         data_fields.extend(analyzer.output_fields())
+        text_fields.update(analyzer.text)
         # confidence_fields.extend(analyzer.output_fields()['show_confidence'])
 
-    return data_fields
+    return data_fields, text_fields
 
 def results_scatter(results, field_name, field, plt):
     vals = [result[field_name] for result in results.values() if np.isfinite(result[field_name])]
