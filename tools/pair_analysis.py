@@ -591,7 +591,7 @@ class PairAnalysis(object):
             warning = 'Latency across modes differs by %s' % pg.siFormat(latency_diff, suffix='s')
             self.warnings.append(warning)
 
-        if np.min(latency_mode) < 0.4e-3 and self.ctrl_panel.params['Gap junction call'] is False:
+        if np.min(latency_mode) < 0.4e-3 and self.ctrl_panel.user_params['Gap junction call'] is False:
             self.warnings.append("Short latency; is this a gap junction?")
 
         guess_sign = []

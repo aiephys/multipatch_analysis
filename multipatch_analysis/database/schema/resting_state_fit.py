@@ -18,7 +18,8 @@ RestingStateFit = make_table(
         ('ic_decay_tau', 'float', 'fit decay of psp of current clamp data'),
         ('ic_exp_amp', 'float', 'fit amplitude of exponential baseline'),
         ('ic_exp_tau', 'float', 'fit tau of exponential baseline'),
-        ('ic_avg_data', 'array', 'array of the data voltage waveform used in fitting; starts 10 ms before pre-synaptic spike'),
+        ('ic_avg_data', 'array', 'array of the data voltage waveform used in fitting'),
+        ('ic_avg_data_start_time', 'float', 'time value of the first sample in ic_avg_data, relative to the presynaptic spike'),
         ('ic_pulse_ids', 'array', 'data base pulse ids included in the current clamp fit'),
         ('ic_nrmse', 'float', 'error of fit of current clamp fit'),
 
@@ -29,7 +30,8 @@ RestingStateFit = make_table(
         ('vc_decay_tau', 'float', 'fit decay of psp measured in voltage clamp'),
         ('vc_exp_amp', 'float', 'fit amplitude of exponential baseline'),
         ('vc_exp_tau', 'float', 'fit tau of exponential baseline'),
-        ('vc_avg_data', 'array', 'array of the data current waveform used in fitting; starts 10 ms before pre-synaptic spike'),            
+        ('vc_avg_data', 'array', 'array of the data current waveform used in fitting'),
+        ('vc_avg_data_start_time', 'float', 'time value of the first sample in vc_avg_data, relative to the presynaptic spike'),
         ('vc_pulse_ids', 'array', 'data base pulse ids included in the voltage clamp fit'),
         ('vc_nrmse', 'float', 'error of fit of voltage clamp fit'),
     ]

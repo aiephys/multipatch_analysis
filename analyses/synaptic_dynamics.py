@@ -19,15 +19,16 @@ class DynamicsWindow(pg.QtGui.QSplitter):
         self.browser.itemSelectionChanged.connect(self.browser_item_selected)
 
     def browser_item_selected(self):
-        selected = self.browser.selectedItems()
-        if len(selected) != 1:
-            return
-        item = selected[0]
-        if not hasattr(item, 'pair'):
-            return
-        pair = item.pair
+        with pg.BusyCursor():
+            selected = self.browser.selectedItems()
+            if len(selected) != 1:
+                return
+            item = selected[0]
+            if not hasattr(item, 'pair'):
+                return
+            pair = item.pair
 
-        self.load_pair(pair)
+            self.load_pair(pair)
         
     def load_pair(self, pair):
         print("Loading:", pair)
@@ -116,7 +117,7 @@ if __name__ == '__main__':
     import sys
         
     app = pg.mkQApp()
-    pg.dbg()
+    # pg.dbg()
     
     win = DynamicsWindow()
     win.show()
