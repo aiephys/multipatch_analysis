@@ -28,7 +28,7 @@ class RestingStatePipelineModule(DatabasePipelineModule):
         db = job['database']
         expt_id = job['job_id']
 
-        expt = db.experiment_from_timestamp(expt_id, session=session)
+        expt = db.experiment_from_ext_id(expt_id, session=session)
        
         for pair in expt.pairs.values():
             if pair.has_synapse is not True:
@@ -56,7 +56,11 @@ class RestingStatePipelineModule(DatabasePipelineModule):
                 
             session.add(fit_rec)
             
-            raise Exception()
+            # update synapse record
+            if result['ic']['fit'] is not None:
+                pair.synapse.psp_amplitude = result['ic']['fit'].best_values['amp']
+            if result['vc']['fit'] is not None:
+                pair.synapse.psc_amplitude = result['vc']['fit'].best_values['amp']
         
     def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.

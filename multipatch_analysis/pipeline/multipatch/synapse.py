@@ -42,8 +42,6 @@ class SynapsePipelineModule(DatabasePipelineModule):
             if not pair.has_synapse:
                 continue
             
-            print(pair, notes_rec.notes)
-            
             # fit PSP shape against averaged PSPs/PCSs at -70 and -55 mV
             fits = get_pair_avg_fits(pair, session)
             

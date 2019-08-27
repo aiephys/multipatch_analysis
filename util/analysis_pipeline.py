@@ -13,7 +13,7 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description="Process analysis pipeline jobs")
     parser.add_argument('pipeline', type=str, help="The name of the pipeline to run: %s" % ', '.join(list(all_pipelines.keys())))
-    parser.add_argument('modules', type=str, nargs='+', help="The name of the analysis module(s) to run")
+    parser.add_argument('modules', type=str, nargs='*', help="The name of the analysis module(s) to run")
     parser.add_argument('--rebuild', action='store_true', default=False, help="Remove and rebuild tables for this analysis")
     parser.add_argument('--retry', action='store_true', default=False, help="Retry processing jobs that previously failed")
     parser.add_argument('--workers', type=int, default=None, help="Set the number of concurrent processes during update")

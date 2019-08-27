@@ -46,11 +46,16 @@ def resting_state_response_fits(pair, rest_duration):
     fits = {}
     for mode, pr_list in rest_prs.items():
         sign = fit_signs[syn_typ, mode]
+        if mode == 'ic':
+            init_params = {'rise_time': pair.synapse.psp_rise_time, 'decay_tau': pair.synapse.psp_decay_tau}
+        else:
+            init_params = {'rise_time': pair.synapse.psc_rise_time, 'decay_tau': pair.synapse.psc_decay_tau}
+        init_params = {k:v for k,v in init_params.items() if v is not None}
 
         if len(pr_list) == 0:
             fit, avg = None, None
         else:
-            fit, avg = fit_avg_pulse_response(pr_list, latency_window=latency_window, sign=sign)
+            fit, avg = fit_avg_pulse_response(pr_list, latency_window=latency_window, sign=sign, init_params=init_params)
 
         fits[mode] = {
             'fit': fit,
@@ -61,7 +66,7 @@ def resting_state_response_fits(pair, rest_duration):
     return fits
 
 
-def get_resting_state_responses(pair, rest_duration):
+def get_resting_state_responses(pair, rest_duration, response_duration=10e-3):
     """Return {'ic': PulseResponseList(), 'vc': PulseResponseList()} containing
     all qc-passed, resting-state pulse responses for *pair*.
     """
@@ -72,17 +77,23 @@ def get_resting_state_responses(pair, rest_duration):
     q = q.join(db.Recording, db.PulseResponse.recording)
     q = q.join(db.PatchClampRecording, db.PatchClampRecording.recording_id==db.Recording.id)
     q = q.filter(db.PulseResponse.pair_id==pair.id)
-    q.order_by(db.Recording.start_time, db.StimPulse.onset_time)
+    q = q.order_by(db.Recording.start_time, db.StimPulse.onset_time)
     recs = q.all()
     
     rest_prs = {'ic': [], 'vc': []}
-    stim_time = None
+    stim_times = [datetime_to_timestamp(rec.recording.start_time) + rec.stim_pulse.onset_time for rec in recs]
     for i,rec in enumerate(recs):
-        last_stim_time = stim_time
-        stim_time = datetime_to_timestamp(rec.recording.start_time) + rec.stim_pulse.onset_time
-        if last_stim_time is not None and stim_time - last_stim_time < rest_duration:
-            # not a resting state pulse, skip
-            continue
+        stim_time = stim_times[i]
+        if i > 0:
+            last_stim_time = stim_times[i-1]
+            if stim_time - last_stim_time < rest_duration:
+                # not a resting state pulse, skip
+                continue
+        if i < len(recs) - 1:
+            next_stim_time = stim_times[i+1]
+            if next_stim_time - stim_time < response_duration:
+                # not enough response time; skip
+                continue
         
         qc_pass = getattr(rec.pulse_response, syn_typ + '_qc_pass')
         if qc_pass is not True:
