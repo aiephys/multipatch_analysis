@@ -626,7 +626,7 @@ class TableReadThread(threading.Thread):
             session = self.db.session()
             table = self.table
             chunksize = self.chunksize
-            all_columns = [col for col in table.columns if col not in self.skip_columns]
+            all_columns = [col for col in table.columns if col.name not in self.skip_columns]
             print(all_columns)
             for i in range(0, self.max_id, chunksize):
                 query = session.query(*all_columns).filter((table.columns['id'] >= i) & (table.columns['id'] < i+chunksize))
