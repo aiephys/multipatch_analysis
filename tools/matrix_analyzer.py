@@ -7,14 +7,14 @@ from collections import OrderedDict
 if __name__ == '__main__':
 
     app = pg.mkQApp()
-    pg.dbg()
+    # pg.dbg()
     # pg.setConfigOption('background', 'w')
     # pg.setConfigOption('foreground', 'k')
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--mode', type=str)
+    parser.add_argument('--mode', type=str, default='external')
     args = parser.parse_args(sys.argv[1:])
-    analyzer_mode = args.mode if args.mode is not None else 'internal'
+    analyzer_mode = args.mode
 
     session = db.session()
     
