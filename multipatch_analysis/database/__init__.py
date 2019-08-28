@@ -2,8 +2,10 @@ from .. import config
 from .database import Database
 from .synphys_database import SynphysDatabase
 
-    
-default_db_name = '{database}_{version}'.format(database=config.synphys_db, version=SynphysDatabase.db_version)
+if config.synphys_db_host.startswith('postgres'):
+    default_db_name = '{database}_{version}'.format(database=config.synphys_db, version=SynphysDatabase.db_version)
+else:
+    default_db_name = config.synphys_db
 default_db = SynphysDatabase(config.synphys_db_host, config.synphys_db_host_rw, default_db_name)
 
 
