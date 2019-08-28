@@ -536,7 +536,7 @@ class Database(object):
             size = os.stat(sqlite_file).st_size
             diff = size - last_size
             last_size = size
-            print("   sqlite file size:  %0.2fGB  (+%0.2fGB for %s)" % (size*1e-9, diff*1e-9, table))
+            print("   sqlite file size:  %0.4fGB  (+%0.4fGB for %s)" % (size*1e-9, diff*1e-9, table))
 
     def clone_database(self, dest_db_name=None, dest_db=None, overwrite=False, **kwds):
         """Copy this database to a new one.
@@ -576,7 +576,7 @@ class Database(object):
             print("Cloning %s.." % table_name)
             
             # read from table in background thread, write to table in main thread.
-            skip_cols = skip_columns.get(table, [])
+            skip_cols = skip_columns.get(table_name, [])
             reader = TableReadThread(source_db, table, skip_columns=skip_cols)
             i = 0
             for i,rec in enumerate(reader):
@@ -588,7 +588,7 @@ class Database(object):
                         sys.excepthook(*sys.exc_info())
                     else:
                         raise
-                if i%200 == 0:
+                if i%1000 == 0:
                     print("%d/%d   %0.2f%%\r" % (i, reader.max_id, (100.0*(i+1.0)/reader.max_id)), end="")
                     sys.stdout.flush()
                 
@@ -627,6 +627,7 @@ class TableReadThread(threading.Thread):
             table = self.table
             chunksize = self.chunksize
             all_columns = [col for col in table.columns if col not in self.skip_columns]
+            print(all_columns)
             for i in range(0, self.max_id, chunksize):
                 query = session.query(*all_columns).filter((table.columns['id'] >= i) & (table.columns['id'] < i+chunksize))
                 records = query.all()
