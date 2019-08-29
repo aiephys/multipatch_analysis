@@ -1,16 +1,18 @@
-import os, datetime
+import os, sys, datetime
 from multipatch_analysis.database import default_db as db
 
-medium_table_skips = [
-]
+date = datetime.datetime.today().strftime("%Y-%m-%d")
 
-medium_column_skips = {
-    'pulse_response': ['data'],
-    'baseline': ['data'],
-    'stim_pulse': ['data'],
+db_files = {
+    'small': "synphys_%s_small.sqlite" % date,
+    'medium': "synphys_current_medium.sqlite",
+    'full': "synphys_current_full.sqlite",
 }
 
-small_table_skips = medium_table_skips + [
+skip_tables = {}
+skip_tables['full'] = []
+skip_tables['medium'] = skip_tables['full'] + []
+skip_tables['small'] = skip_tables['medium'] + [
     'synapse_prediction',
     'pulse_response_strength',
     'baseline_response_strength',
@@ -24,32 +26,29 @@ small_table_skips = medium_table_skips + [
     'patch_clamp_recording',
     'multi_patch_probe',
     'test_pulse',
-    'sync_rec',
+    'sync_rec',    
 ]
 
-small_column_skips = medium_column_skips.copy()
-small_column_skips.update({
-    
+skip_columns = {}
+skip_columns['full'] = {}
+skip_columns['medium'] = skip_columns['full'].copy()
+skip_columns['medium'].update({
+    'pulse_response': ['data'],
+    'baseline': ['data'],
+    'stim_pulse': ['data'],
 })
-
-date = datetime.datetime.today().strftime("%Y-%m-%d")
-
-small_file = "synphys_%s_small.sqlite" % date
-print("========== Cloning small DB %s =============" % small_file)
-if os.path.exists(small_file):
-    os.remove(small_file)
-db.bake_sqlite(small_file, skip_tables=small_table_skips, skip_columns=small_column_skips)
-
-med_file = "synphys_current_medium.sqlite"
-print("========== Cloning medium DB %s =============" % med_file)
-if os.path.exists(med_file):
-    os.remove(med_file)
-db.bake_sqlite(med_file, skip_tables=medium_table_skips, skip_columns=medium_column_skips)
-
-full_file = "synphys_current_full.sqlite"
-print("========== Cloning full DB %s =============" % full_file)
-if os.path.exists(full_file):
-    os.remove(full_file)
-db.bake_sqlite(full_file)
+skip_columns['small'] = skip_columns['medium'].copy()
 
 
+versions = sys.argv[1:]
+
+if len(versions) == 0:
+    versions = list(db_files.keys())
+
+
+for version in versions:
+    filename = db_files[version]
+    print("========== Cloning %s DB %s =============" % (version, filename))
+    if os.path.exists(filename):
+        os.remove(filename)
+    db.bake_sqlite(filename, skip_tables=skip_tables[version], skip_columns=skip_columns[version])

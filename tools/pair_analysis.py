@@ -539,6 +539,7 @@ class PairAnalysis(object):
             latency_window = [latency-100e-6, latency+100e-6]
 
         with pg.ProgressDialog("curve fitting..", maximum=len(modes)*len(holdings)) as dlg:
+            self.last_fit = {}
             for mode in modes:
                 for holding in holdings:
                     self.fit_pass = False
@@ -552,6 +553,7 @@ class PairAnalysis(object):
                     
                     fit, avg = fit_avg_pulse_response(prs, latency_window=latency_window, sign=sign)
                     fit_ts = avg.copy(data=fit.best_fit)
+                    self.last_fit[mode, holding] = fit
                     
                     self.initial_fit_parameters[mode][str(holding)]['xoffset'] = latency
                     self.output_fit_parameters[mode][str(holding)].update(fit.best_values)

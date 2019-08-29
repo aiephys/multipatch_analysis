@@ -257,7 +257,7 @@ class MatrixAnalyzer(object):
         self.cell_classes = None
 
         self.presets = self.analyzer_presets()
-        preset_list = [p for p in self.presets.keys()]
+        preset_list = [''] + [p for p in self.presets.keys()]
         self.preset_params = Parameter.create(name='Presets', type='group', children=[
             {'name': 'Analyzer Presets', 'type': 'list', 'values': preset_list, 'value': 'None'},
             {'name': 'Save as Preset', 'type': 'action', 'expanded': True, 'children': [
@@ -371,6 +371,8 @@ class MatrixAnalyzer(object):
         self.matrix_display_filter.params.child('log_scale').setValue(False)
 
     def set_preset_selections(self, selected):
+        if selected == '':
+            return
         preset_state = self.presets[selected]
         self.params.child('Data Filters').restoreState(preset_state['data filters'])
         self.params.child('Cell Classes').restoreState(preset_state['cell classes'])

@@ -97,7 +97,7 @@ def specimen_info(specimen_name=None, specimen_id=None):
     rec = dict(r[0])
     
     # convert thickness to unscaled
-    rec['thickness'] = rec['thickness'] or (rec['thickness'] * 1e-6)
+    rec['thickness'] = None if rec['thickness'] is None else (rec['thickness'] * 1e-6)
     # convert organism to more easily searchable form
     rec['organism'] = {'Mus musculus': 'mouse', 'Homo Sapiens': 'human'}[rec['organism']]
     # convert flipped to bool

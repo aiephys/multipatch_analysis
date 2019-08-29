@@ -192,5 +192,358 @@
         "log scale": {
             "value": true
         }
+    },
+    "Mouse PSP Ampitude": {
+        "data filters": {
+            "value": null,
+            "children": {
+                "Projects": {
+                    "value": null,
+                    "children": {
+                        "Mouse": {
+                            "value": true
+                        },
+                        "Human": {
+                            "value": false
+                        }
+                    }
+                },
+                "ACSF [Ca2+]": {
+                    "value": null,
+                    "children": {
+                        "1.3mM": {
+                            "value": true
+                        },
+                        "2mM": {
+                            "value": false
+                        }
+                    }
+                },
+                "Internal [EGTA]": {
+                    "value": null,
+                    "children": {
+                        "0.3mM EGTA": {
+                            "value": true
+                        },
+                        "1mM EGTA": {
+                            "value": false
+                        },
+                        "No EGTA": {
+                            "value": false
+                        }
+                    }
+                }
+            }
+        },
+        "cell classes": {
+            "value": null,
+            "children": {
+                "Define layer by:": {
+                    "value": "target layer"
+                },
+                "All Classes by Layer": {
+                    "value": true,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Inhibitory Classes": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Excitatory Classes": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Inhibitory Classes by Layer": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Pyramidal Cells by Layer": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                }
+            }
+        },
+        "matrix colormap": {
+            "items": {
+                "PSP Amplitude": {
+                    "value": {
+                        "pos": [
+                            0.0,
+                            0.5,
+                            1.0
+                        ],
+                        "color": [
+                            [
+                                0,
+                                0,
+                                255,
+                                255
+                            ],
+                            [
+                                56,
+                                0,
+                                87,
+                                255
+                            ],
+                            [
+                                255,
+                                0,
+                                0,
+                                255
+                            ]
+                        ]
+                    },
+                    "children": {
+                        "Min": {
+                            "value": -0.001
+                        },
+                        "Max": {
+                            "value": 0.001
+                        },
+                        "Operation": {
+                            "value": "Overlay"
+                        },
+                        "Channels..": {
+                            "value": null,
+                            "children": {
+                                "Red": {
+                                    "value": true
+                                },
+                                "Green": {
+                                    "value": true
+                                },
+                                "Blue": {
+                                    "value": true
+                                },
+                                "Alpha": {
+                                    "value": true
+                                }
+                            }
+                        },
+                        "Enabled": {
+                            "value": true
+                        },
+                        "NaN": {
+                            "value": [
+                                128,
+                                128,
+                                128,
+                                255
+                            ]
+                        }
+                    },
+                    "field": "PSP Amplitude"
+                }
+            }
+        },
+        "text format": {
+            "value": "{PSP Amplitude.mV}"
+        },
+        "show confidence": {
+            "value": "Synapse Probability"
+        },
+        "log scale": {
+            "value": true
+        }
+    },
+    "Mouse Latency": {
+        "data filters": {
+            "value": null,
+            "children": {
+                "Projects": {
+                    "value": null,
+                    "children": {
+                        "Mouse": {
+                            "value": true
+                        },
+                        "Human": {
+                            "value": false
+                        }
+                    }
+                },
+                "ACSF [Ca2+]": {
+                    "value": null,
+                    "children": {
+                        "1.3mM": {
+                            "value": true
+                        },
+                        "2mM": {
+                            "value": false
+                        }
+                    }
+                },
+                "Internal [EGTA]": {
+                    "value": null,
+                    "children": {
+                        "0.3mM EGTA": {
+                            "value": true
+                        },
+                        "1mM EGTA": {
+                            "value": false
+                        },
+                        "No EGTA": {
+                            "value": false
+                        }
+                    }
+                }
+            }
+        },
+        "cell classes": {
+            "value": null,
+            "children": {
+                "Define layer by:": {
+                    "value": "target layer"
+                },
+                "All Classes by Layer": {
+                    "value": true,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Inhibitory Classes": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Excitatory Classes": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Inhibitory Classes by Layer": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Pyramidal Cells by Layer": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                }
+            }
+        },
+        "matrix colormap": {
+            "items": {
+                "Latency": {
+                    "value": {
+                        "pos": [
+                            0.0,
+                            0.16133684210526314,
+                            0.3490894736842105,
+                            1.0
+                        ],
+                        "color": [
+                            [
+                                255,
+                                255,
+                                0,
+                                255
+                            ],
+                            [
+                                0,
+                                206,
+                                151,
+                                255
+                            ],
+                            [
+                                0,
+                                119,
+                                178,
+                                255
+                            ],
+                            [
+                                99,
+                                0,
+                                148,
+                                255
+                            ]
+                        ]
+                    },
+                    "children": {
+                        "Min": {
+                            "value": 0.0005
+                        },
+                        "Max": {
+                            "value": 0.004
+                        },
+                        "Operation": {
+                            "value": "Overlay"
+                        },
+                        "Channels..": {
+                            "value": null,
+                            "children": {
+                                "Red": {
+                                    "value": true
+                                },
+                                "Green": {
+                                    "value": true
+                                },
+                                "Blue": {
+                                    "value": true
+                                },
+                                "Alpha": {
+                                    "value": true
+                                }
+                            }
+                        },
+                        "Enabled": {
+                            "value": true
+                        },
+                        "NaN": {
+                            "value": [
+                                128,
+                                128,
+                                128,
+                                255
+                            ]
+                        }
+                    },
+                    "field": "Latency"
+                }
+            }
+        },
+        "text format": {
+            "value": "{Latency.ms}"
+        },
+        "show confidence": {
+            "value": "Synapse Probability"
+        },
+        "log scale": {
+            "value": true
+        }
     }
 }

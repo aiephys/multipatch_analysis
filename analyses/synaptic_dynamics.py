@@ -4,6 +4,7 @@ from neuroanalysis.data import TSeries
 from neuroanalysis.fitting import StackedPsp
 from multipatch_analysis.database import default_db as db
 from multipatch_analysis.ui.experiment_browser import ExperimentBrowser
+from multipatch_analysis.dynamics import get_sorted_pulse_responses
 
 
 class DynamicsWindow(pg.QtGui.QSplitter):
@@ -33,28 +34,7 @@ class DynamicsWindow(pg.QtGui.QSplitter):
     def load_pair(self, pair):
         print("Loading:", pair)
         
-        q = db.query(db.PulseResponse, db.PulseResponseFit, db.StimPulse, db.PatchClampRecording, db.MultiPatchProbe, db.Synapse, db.PulseResponse.data)
-        q = q.join(db.PulseResponseFit, db.PulseResponse.pulse_response_fit)
-        q = q.join(db.StimPulse, db.PulseResponse.stim_pulse)
-        q = q.join(db.Recording, db.PulseResponse.recording)
-        q = q.join(db.PatchClampRecording, db.PatchClampRecording.recording_id==db.Recording.id)
-        q = q.join(db.MultiPatchProbe, db.MultiPatchProbe.patch_clamp_recording_id==db.PatchClampRecording.id)
-        q = q.join(db.Synapse, db.Synapse.pair_id==db.PulseResponse.pair_id)
-        q = q.filter(db.PulseResponse.pair_id==pair.id)
-
-        self.pair = pair
-        self.pr_recs = q.all()
-
-        # group records by (clamp mode, ind_freq, rec_delay), and then by pulse number
-        sorted_recs = {}
-        for rec in self.pr_recs:
-            stim_key = (rec.patch_clamp_recording.clamp_mode, rec.multi_patch_probe.induction_frequency, rec.multi_patch_probe.recovery_delay)
-            sorted_recs.setdefault(stim_key, {})
-            pn = rec.stim_pulse.pulse_number
-            sorted_recs[stim_key].setdefault(pn, [])
-            sorted_recs[stim_key][pn].append(rec)
-            
-        self.sorted_recs = sorted_recs
+        self.sorted_recs = get_sorted_pulse_responses(pair)
         
         self.plot_all()
         
