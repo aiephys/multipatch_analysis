@@ -128,13 +128,13 @@ if __name__ == '__main__':
             {'pyramidal': True, 'target_layer': '6'},
         ]),
 
-        ('All cells by layer', [
-            {'target_layer': '2'},
-            {'target_layer': '2/3'},
-            {'target_layer': '3'},
-            {'target_layer': '4'},
-            {'target_layer': '5'},
-            {'target_layer': '6'},
+        ('All Cells by Layer', [
+            {'target_layer': '2', 'cortical_layer': '2'},
+            {'target_layer': '2/3', 'cortical_layer': '2/3'},
+            {'target_layer': '3', 'cortical_layer': '3'},
+            {'target_layer': '4', 'cortical_layer': '4'},
+            {'target_layer': '5', 'cortical_layer': '5'},
+            {'target_layer': '6', 'cortical_layer': '6'},
         ]),
 
         ('2P-Opto cre types', [
@@ -147,7 +147,7 @@ if __name__ == '__main__':
     ])
 
     if analyzer_mode == 'external':
-        groups = ['All Classes by Layer', 'Inhibitory Classes', 'Excitatory Classes', 'Inhibitory Classes by Layer', 'Pyramidal Cells by Layer']
+        groups = ['All Classes by Layer', 'Inhibitory Classes', 'Excitatory Classes', 'Inhibitory Classes by Layer', 'Pyramidal Cells by Layer', 'All Cells by Layer']
         cell_class_groups = {g:cell_class_groups[g] for g in groups}
 
     maz = MatrixAnalyzer(session=session, cell_class_groups=cell_class_groups, default_preset='None', preset_file='matrix_analyzer_presets.json', analyzer_mode=analyzer_mode)

@@ -69,6 +69,7 @@ class MatrixDisplayFilter(object):
         #     self.output['text'] = ''
         # else:
         result_vals = result.loc[:, 'metric_summary']
+        result_vals.replace(np.nan, '')
         mappable_result = {k:v for k,v in result_vals.iteritems() if np.isscalar(v)}
 
         color = colormap.map(mappable_result)[0]
@@ -82,6 +83,8 @@ class MatrixDisplayFilter(object):
         self.output['fgcolor'] = 'w' if sum(color[:3]) < 384 else 'k'
         text_result = {k:FormattableNumber(v) if isinstance(v, float) else v for k, v in result_vals.iteritems()}
         self.output['text'] = text_format.format(**text_result)
+        if self.output['text'] == 'nan':
+            self.output['text'] = ''
         self.output['bgcolor'] = tuple(color)
 
         return self.output

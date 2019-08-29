@@ -24,7 +24,7 @@ thermal_colormap = pg.ColorMap(
             )
 
 class FormattableNumber(float):
-    
+
     @property
     def si_format(self):
         return pg.siFormat(self)
@@ -520,8 +520,8 @@ class StrengthAnalyzer(Analyzer):
                 continue
             rsf = pair.resting_state_fit
             if rsf is not None:
-                trace = rsf.ic_avg_data if field_name.startswith('PSP') else rsf.vc_avg_data
-                start_time = rsf.ic_avg_data_start_time if field_name.startswith('PSP') else rsf.vc_avg_data_start_time
+                trace = rsf.vc_avg_data if field_name.startswith('PSC') else rsf.ic_avg_data
+                start_time = rsf.vc_avg_data_start_time if field_name.startswith('PSC') else rsf.ic_avg_data_start_time
                 latency = self.results.loc[pair]['Latency']
                 if latency is None or start_time is None:
                     trace = None
@@ -584,7 +584,7 @@ class DynamicsAnalyzer(Analyzer):
         self.summary_stat = {
             'dynamics_no_data': self.metric_summary,
             'Steady state plasticity': [self.metric_summary, self.metric_conf],
-            'Paird pulse ratio': [self.metric_summary, self.metric_conf],
+            'Paired pulse ratio': [self.metric_summary, self.metric_conf],
             'Recovery': [self.metric_summary, self.metric_conf],
         }
         self.summary_dtypes = {} ## dict to specify how we want to cast different summary measures
@@ -614,7 +614,9 @@ class DynamicsAnalyzer(Analyzer):
             )}}),
             ('None', {}),
             ]
-        self.text = {}
+        self.text = {'Steady state plasticity': '{Steady state plasticity:0.2f}',
+            'Paired pulse ratio': '{Paired pulse ratio:0.2f}',
+            'Recovery': '{Recovery:0.2f}'}
 
     def invalidate_output(self):
         self.results = None
@@ -641,10 +643,10 @@ class DynamicsAnalyzer(Analyzer):
             pre_class, post_class = key
             
             for pair in class_pairs:
-                if pair.synapse is False:
+                if pair.has_synapse is False:
                     no_data = True
                     dynamics = None
-                elif pair.synapse is True:
+                elif pair.has_synapse is True:
                     no_data = False
                     dynamics = pair.dynamics
 
@@ -680,7 +682,7 @@ class DynamicsAnalyzer(Analyzer):
             print ("Connected Pairs:")
             no_qc_data = []
             for pair, value in element[field_name].iteritems():
-                if pair.synapse is not True:
+                if pair.has_synapse is not True:
                     continue
                 if np.isnan(value):
                     no_qc_data.append(pair)
