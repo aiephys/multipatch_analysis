@@ -1,0 +1,21 @@
+dependencies:
+  - python=3
+  - pyqt
+  - pip
+  - h5py
+  - pillow
+  - psycopg2
+  - sqlalchemy
+  - matplotlib
+  - pandas
+  - scipy
+  - pyyaml
+  - scikit-image
+  - scikit-learn
+  - statsmodels
+  - pip:
+    - lmfit
+    - git+https://github.com/pyqtgraph/pyqtgraph
+    - git+https://github.com/alleninstitute/neuroanalysis
+    
+    

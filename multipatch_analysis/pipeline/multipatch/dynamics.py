@@ -32,18 +32,29 @@ class DynamicsPipelineModule(DatabasePipelineModule):
         for pair in expt.pairs.values():
             if pair.has_synapse is False:
                 continue
+                
             recs = session.query(db.Recording).join(db.PulseResponse).join(db.Pair).filter(db.Pair.id==pair.id).all()
             pulse_amps = {}
             for rec in recs:
-                q = session.query(db.PulseResponseStrength, db.PulseResponse, db.StimPulse.pulse_number, db.MultiPatchProbe.induction_frequency, db.MultiPatchProbe.recovery_delay)
-                q = q.join(db.PulseResponse, db.PulseResponseStrength.pulse_response)
+                q = session.query(db.PulseResponseFit, db.PulseResponse, db.StimPulse.pulse_number, db.MultiPatchProbe.induction_frequency, db.MultiPatchProbe.recovery_delay)
+                q = q.join(db.PulseResponse, db.PulseResponseFit.pulse_response)
                 q = q.join(db.StimPulse, db.PulseResponse.stim_pulse)
                 q = q.join(db.PatchClampRecording, db.PatchClampRecording.recording_id==db.PulseResponse.recording_id)
                 q = q.join(db.MultiPatchProbe)
                 q = q.filter(db.PulseResponse.pair_id==pair.id).filter(db.PatchClampRecording.clamp_mode=='ic').filter(db.PulseResponse.recording_id==rec.id)
                 results = q.all()
-                if len(results) == 0:
+                
+                if len(results) != 12:
                     continue
+
+                sign = pair.synapse.synapse_type
+                qc = sign+'_qc_pass'
+                amp_field = 'fit_amp'
+                # make sure all 12 pulses pass qc before moving on
+                qc_check = [getattr(r.pulse_response, qc) and getattr(r.pulse_response_fit, amp_field) is not None for r in results]
+                if all(qc_check) is False:
+                    continue
+
                 ind_freq = results[0].induction_frequency
                 rec_delay = results[0].recovery_delay
                 # round measured recovery delay to known delays defined in experiments, if the rounded value differs by more than 5ms ignore
@@ -55,21 +66,15 @@ class DynamicsPipelineModule(DatabasePipelineModule):
                     pulse_amps.setdefault(rec_delay_rounded, {})
                     if delay_dist > 5:
                         rec_delay_rounded = None
+                        
                 pulse_amps.setdefault(ind_freq, {})
-                sign = pair.synapse.synapse_type
-                qc = sign+'_qc_pass'
-                # make sure all 12 pulses pass qc before moving on
-                qc_check = [getattr(r.pulse_response, qc) for r in results]
-                if all(qc_check) is False:
-                    continue
-                amp_field = 'pos_dec_amp' if sign == 'ex' else 'neg_dec_amp'
                 for result in results:
                     pulse_number = result.pulse_number
                     if ind_freq == 50 and rec_delay_rounded is not None:
                         pulse_amps[rec_delay_rounded].setdefault(pulse_number, [])
-                        pulse_amps[rec_delay_rounded][pulse_number].append(getattr(result.pulse_response_strength, amp_field))
+                        pulse_amps[rec_delay_rounded][pulse_number].append(getattr(result.pulse_response_fit, amp_field))
                     pulse_amps[ind_freq].setdefault(pulse_number, [])
-                    pulse_amps[ind_freq][pulse_number].append(getattr(result.pulse_response_strength, amp_field))
+                    pulse_amps[ind_freq][pulse_number].append(getattr(result.pulse_response_fit, amp_field))
             if any(pulse_amps):
                 ## pulse amps is a nested dictionary with floats for keys {induction_frequency (ex 50): {pulse_number (ex 1): [list of pulse amps], 2: [pulse_amps]...}}
                 pulse_ratio_8_1_50hz = np.nanmean(pulse_amps.get(50, {}).get(8, np.nan)) / np.nanmean(pulse_amps.get(50, {}).get(1, np.nan))
