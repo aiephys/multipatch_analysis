@@ -10,18 +10,6 @@ __all__ = ['Experiment', 'Electrode', 'Cell', 'Pair']
 
 
 class ExperimentBase(object):
-    def __getitem__(self, item):
-        # Easy cell/pair getters.
-        # They're inefficient, but meh.
-        if isinstance(item, int):
-            for cell in self.cells:
-                if cell.ext_id == item:
-                    return cell
-        elif isinstance(item, tuple):
-            for pair in self.pair_lists:
-                if item == (pair.pre_cell.ext_id, pair.post_cell.ext_id):
-                    return pair
-    
     @property
     def cells(self):
         #return {elec.cell.ext_id: elec.cell for elec in self.electrodes if elec.cell is not None}
@@ -65,11 +53,9 @@ Experiment = make_table(
     comment= "A group of cells patched simultaneously in the same slice.", 
     columns=[
         ('ext_id', 'str', 'Unique external identifier string for the experiment.', {'unique': True, 'index': True}),
-        ('storage_path', 'str', 'Location of data within server or cache storage.'),
-        ('ephys_file', 'str', 'Name of ephys NWB file relative to storage_path.'),
+        ('slice_id', 'slice.id', 'ID of the slice used for this experiment', {'index': True}),
         ('project_name', 'str', 'Name of the project to which this experiment belongs.', {'index': True}),
         ('date', 'datetime', 'The date of this experiment'),
-        ('slice_id', 'slice.id', 'ID of the slice used for this experiment', {'index': True}),
         ('target_region', 'str', 'The intended brain region for this experiment'),
         ('internal', 'str', 'The name of the internal solution used in this experiment '
                             '(or "mixed" if more than one solution was used). '
@@ -77,9 +63,10 @@ Experiment = make_table(
         ('acsf', 'str', 'The name of the ACSF solution used in this experiment. '
                         'The solution should be described in the pycsf database.', {'index': True}),
         ('target_temperature', 'float', 'The intended temperature of the experiment (measured temperature per-recording is stored elsewhere)'),
-        ('lims_specimen_id', 'int', 'ID of LIMS "CellCluster" specimen.'),
         ('rig_name', 'str', 'Identifier for the rig that generated these results.'),
         ('operator_name', 'str', 'Opertator that generated these results.'),
+        ('storage_path', 'str', 'Location of data within server or cache storage.'),
+        ('ephys_file', 'str', 'Name of ephys NWB file relative to storage_path.'),
         ('acq_timestamp', 'float', 'Creation timestamp for site data acquisition folder.', {'unique': True, 'index': True}),
     ]
 )
@@ -93,18 +80,18 @@ Electrode = make_table(
     comment="Each electrode records a patch attempt, whether or not it resulted in a successful cell recording.",
     columns=[
         ('experiment_id', 'experiment.id', '', {'index': True}),
+        ('ext_id', 'str', 'Electrode ID (usually 1-8) referenced in external metadata records'),
         ('patch_status', 'str', 'Status of the patch attempt: no seal, low seal, GOhm seal, tech fail, or no attempt'),
         ('start_time', 'datetime', 'The time when recording began for this electrode.'),
         ('stop_time', 'datetime', 'The time when recording ended for this electrode.'),
         ('device_id', 'int', 'External identifier for the device attached to this electrode (usually the MIES A/D channel)'),
-        ('internal', 'str', 'The name of the internal solution used in this electrode.'),
-        ('initial_resistance', 'float'),
-        ('initial_current', 'float'),
-        ('pipette_offset', 'float'),
-        ('final_resistance', 'float'),
-        ('final_current', 'float'),
-        ('notes', 'str'),
-        ('ext_id', 'str', 'Electrode ID (usually 1-8) referenced in external metadata records'),
+        # ('internal', 'str', 'The name of the internal solution used in this electrode.'),
+        # ('initial_resistance', 'float'),
+        # ('initial_current', 'float'),
+        # ('pipette_offset', 'float'),
+        # ('final_resistance', 'float'),
+        # ('final_current', 'float'),
+        # ('notes', 'str'),
     ]
 )
 
@@ -124,11 +111,11 @@ Cell = make_table(
         ('position', 'object', '3D location of this cell in the arbitrary coordinate system of the experiment'),
         ('depth', 'float', 'Depth of the cell (in m) from the cut surface of the slice.'),
         ('is_excitatory', 'bool', 'True if the cell is determined to be excitatory by synaptic current, cre type, or morphology', {'index': True}),
-        ('patch_start', 'float', 'Time at which this cell was first patched'),
-        ('patch_stop', 'float', 'Time at which the electrode was detached from the cell'),
-        ('seal_resistance', 'float', 'The seal resistance recorded for this cell immediately before membrane rupture'),
-        ('has_biocytin', 'bool', 'If true, then the soma was seen to be darkly stained with biocytin (this indicates a good reseal, but does may not indicate a high-quality fill)'),
-        ('has_dye_fill', 'bool', 'Indicates whether the cell was filled with fluorescent dye during the experiment'),
+        # ('patch_start', 'float', 'Time at which this cell was first patched'),
+        # ('patch_stop', 'float', 'Time at which the electrode was detached from the cell'),
+        # ('seal_resistance', 'float', 'The seal resistance recorded for this cell immediately before membrane rupture'),
+        # ('has_biocytin', 'bool', 'If true, then the soma was seen to be darkly stained with biocytin (this indicates a good reseal, but does may not indicate a high-quality fill)'),
+        # ('has_dye_fill', 'bool', 'Indicates whether the cell was filled with fluorescent dye during the experiment'),
     ]
 )
 
