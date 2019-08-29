@@ -524,7 +524,8 @@ class PollThread(QtCore.QThread):
                     expt = ExperimentMetadata(path=expt_path)
                     ts = expt.timestamp
                 except:
-                    print ('Error loading %s, ignoring and moving on...' % expt_path)    
+                    print ('Error loading %s, ignoring and moving on...' % expt_path)
+                    sys.excepthook(*sys.exc_info())
                     continue
                 # Couldn't get timestamp; show an error message
                 if ts is None:
@@ -559,12 +560,12 @@ class ExptCheckerThread(QtCore.QThread):
 
     def stop(self):
         self._stop = True
-        self.expt_queue.put(('stop', None))
+        self.expt_queue.put((-float('inf'), 'stop'))
 
     def run(self, block=True):
         while True:
             ts, expt = self.expt_queue.get(block=block)
-            if self._stop or ts == 'stop':
+            if self._stop or expt == 'stop':
                 return
             rec = expt.check()
             self.update.emit(rec)
@@ -838,7 +839,7 @@ class ExperimentMetadata(Experiment):
                 else:
                     sync_file = None
                 if sync_file is not None and os.path.isfile(sync_file):
-                    path = open(sync_file, 'rb').read()
+                    path = open(sync_file, 'r').read()
                 else:
                     path = self.site_dh.name()
                 m = re.search(r'(/|\\)(mp\d)(/|\\)', path)
@@ -860,7 +861,7 @@ class ExperimentMetadata(Experiment):
 
     @property
     def db_status(self):
-        jobs = database.query(database.Pipeline).filter(database.Pipeline.job_id==self.timestamp).all()
+        jobs = database.query(database.Pipeline).filter(database.Pipeline.job_id==self.uid).all()
         has_run = len(jobs) > 0
         success = {j.module_name:j.success for j in jobs}
         errors = {j.module_name:j.error for j in jobs}
