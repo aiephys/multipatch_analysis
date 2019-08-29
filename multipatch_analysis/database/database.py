@@ -581,6 +581,11 @@ class Database(object):
             i = 0
             for i,rec in enumerate(reader):
                 try:
+                    # Note: it is allowed to write `rec` directly back to the db, but
+                    # in some cases (json columns) we run into a sqlalchemy bug. Converting
+                    # to dict first is a workaround.
+                    rec = {k:getattr(rec, k) for k in rec.keys()}
+                    
                     write_session.execute(table.insert(rec))
                 except Exception:
                     if skip_errors:
@@ -627,7 +632,6 @@ class TableReadThread(threading.Thread):
             table = self.table
             chunksize = self.chunksize
             all_columns = [col for col in table.columns if col.name not in self.skip_columns]
-            print(all_columns)
             for i in range(0, self.max_id, chunksize):
                 query = session.query(*all_columns).filter((table.columns['id'] >= i) & (table.columns['id'] < i+chunksize))
                 records = query.all()
