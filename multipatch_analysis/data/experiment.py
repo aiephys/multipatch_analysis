@@ -1097,10 +1097,10 @@ class Experiment(object):
             mplog = self.multipatch_log
         except TypeError:
             return None
-        lines = [l for l in open(mplog, 'rb').readlines() if b'surface_depth_changed' in l]
+        lines = [l for l in open(mplog, 'r').readlines() if 'surface_depth_changed' in l]
         if len(lines) == 0:
             return None
-        line = lines[-1].rstrip(b',\r\n')
+        line = lines[-1].rstrip(',\r\n')
         return json.loads(line)['surface_depth']
 
     @property
