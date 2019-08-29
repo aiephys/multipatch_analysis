@@ -301,6 +301,7 @@ class ConnectivityAnalyzer(Analyzer):
         for probed in probed_pairs:
             print ("\t %s" % (probed))
         
+        
     def plot_element_data(self, pre_class, post_class, element, field_name, color='g', trace_plt=None):
         summary = element.agg(self.summary_stat)  
         val = summary[field_name]['metric_summary']
@@ -643,7 +644,7 @@ class DynamicsAnalyzer(Analyzer):
             pre_class, post_class = key
             
             for pair in class_pairs:
-                if pair.has_synapse is False:
+                if pair.has_synapse is not True:
                     no_data = True
                     dynamics = None
                 elif pair.has_synapse is True:
