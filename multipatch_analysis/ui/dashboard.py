@@ -712,10 +712,10 @@ class ExperimentMetadata(Experiment):
                             layers = [lims.cell_layer(cell) for cell in cell_specimens]
                             layers_drawn = [layer is not None for layer in layers]
                             rec['layers drawn'] = all(layers_drawn)
-                            morpho = database.query(database.Morphology).all()
-                            cell_morpho = [cell.morpho_db_hash for cell in morpho if cell.cell.meta.get('lims_specimen_id') in cell_specimens]
-                            has_morpho = [True for cell in cell_morpho if cell != hash(None)]
-                            rec['morphology'] = any(has_morpho)
+                            # morpho = database.query(database.Morphology).all()
+                            # cell_morpho = [cell.morpho_db_hash for cell in morpho if cell.cell.meta.get('lims_specimen_id') in cell_specimens]
+                            # has_morpho = [True for cell in cell_morpho if cell != hash(None)]
+                            # rec['morphology'] = any(has_morpho)
                         else:
                             rec['layers drawn'] = '-'
                             rec['morphology'] = '-'
