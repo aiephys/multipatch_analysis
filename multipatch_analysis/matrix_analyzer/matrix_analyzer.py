@@ -228,7 +228,7 @@ class MatrixAnalyzer(object):
         
         self.analyzer_mode = analyzer_mode
         self.analyzers = [ConnectivityAnalyzer(self.analyzer_mode), StrengthAnalyzer(), DynamicsAnalyzer()]
-        self.active_analyzers = []
+        self.active_analyzers = self.analyzers #[]
         self.preset_file = preset_file
 
         self.field_map = {}
@@ -463,7 +463,7 @@ class MatrixAnalyzer(object):
         p = cProfile.Profile()
         p.enable()
         with pg.BusyCursor():
-            self.analyzers_needed()
+            # self.analyzers_needed()
             self.update_results()
             pre_cell_classes = self.cell_class_filter.get_pre_or_post_classes('presynaptic')
             post_cell_classes = self.cell_class_filter.get_pre_or_post_classes('postsynaptic')
