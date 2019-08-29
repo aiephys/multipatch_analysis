@@ -328,12 +328,13 @@ class TSeriesPlot(pg.GraphicsLayoutWidget):
 
     def plot_spikes(self, pulse_responses):
         for i, holding in enumerate(pulse_responses.keys()):
-            for qc, prs in pulse_responses[holding].items():
+            for prs in pulse_responses[holding].values():
                 if len(prs) == 0:
                     continue
                 prl = PulseResponseList(prs)
                 pre_ts = prl.pre_tseries(align='spike', bsub=True)
-                for spike in pre_ts:
+                for pr, spike in zip(prl, pre_ts):
+                    qc = 'qc_pass' if pr.stim_pulse.n_spikes == 1 else 'qc_fail'
                     item = self.spike_plots[i].plot(spike.time_values, spike.data, pen=self.qc_color[qc])
                     if qc == 'qc_fail':
                         item.setZValue(-10)

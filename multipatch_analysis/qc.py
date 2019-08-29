@@ -120,7 +120,7 @@ def pulse_response_qc_pass(post_rec, window, n_spikes, adjacent_pulses):
         base_std = data.time_slice(window[0], window[0] + 5e-3)
         max_amp = data - base
         if base_std.std() > 1.5e-3:
-            [failures[k].append('STD of response window, %s, exceeds 1.5mV' % pg.siFormat(data.std(), suffix='V')) for k in failures.keys()]
+            [failures[k].append('STD of response window, %s, exceeds 1.5mV' % pg.siFormat(base_std.std(), suffix='V')) for k in failures.keys()]
         if data.data.max() > -40e-3:
             [failures[k].append('Max in response window, %s, exceeds -40mV' % pg.siFormat(data.data.max(), suffix='V')) for k in failures.keys()]
         if abs(max_amp.data.max()) > 10e-3:
@@ -130,7 +130,7 @@ def pulse_response_qc_pass(post_rec, window, n_spikes, adjacent_pulses):
         base = post_rec['command'].time_slice(window[0], window[1]).median()
         base_std = data.time_slice(window[0], window[0] + 5e-3)
         if base_std.std() > 15e-12:
-            [failures[k].append('STD of response window, %s, exceeds 15pA' % pg.siFormat(data.std(), suffix='A')) for k in failures.keys()]
+            [failures[k].append('STD of response window, %s, exceeds 15pA' % pg.siFormat(base_std.std(), suffix='A')) for k in failures.keys()]
     else:
         raise TypeError('Unsupported clamp mode %s' % post_rec.clamp_mode)
 
