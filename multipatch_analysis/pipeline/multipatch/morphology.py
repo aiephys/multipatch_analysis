@@ -134,7 +134,7 @@ class MorphologyPipelineModule(DatabasePipelineModule):
 
             expt = session.query(db.Experiment).filter(db.Experiment.ext_id==expt_id).all()[0]
             ready[expt_id] = expt_mtime
-            cluster = expt.lims_specimen_id
+            cluster = expt.meta.get('lims_cell_cluster_id')
             if cluster is None:
                 continue
             cluster_cells = lims.cluster_cells(cluster)
