@@ -33,8 +33,9 @@ class PulseResponseQCUI(object):
 
     def show_result(self, pulse_response, clamp_mode, ex_pass, in_pass, failures):
         pr = pulse_response['primary']
-        base = pr.median()
-        base_std = pr.time_slice(pr.t0, pr.t0 + 5e-3).std()
+        pre_pulse = pr.time_slice(pr.t0, pr.t0 + 5e-3)
+        base = pre_pulse.median()
+        base_std = pre_pulse.std()
         pen = pg.mkPen('y', style=pg.QtCore.Qt.DotLine)
         for plt, qc_pass in zip([self.in_plt, self.ex_plt], [in_pass, ex_pass]):
             color = self.trace_color[qc_pass]

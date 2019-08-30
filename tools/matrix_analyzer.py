@@ -103,7 +103,7 @@ if __name__ == '__main__':
             # {'cre_type': 'tlx3', 'target_layer': '5'},
             {'cre_type': ('pvalb', 'sst', 'vip'), 'target_layer': '5', 'display_names': ('L5', 'Inhibitory\npv, sst, vip'), 'cortical_layer': '5'},
             # {'cre_type': 'ntsr1', 'target_layer': '6'},
-            {'cre_type': ('pvalb', 'sst', 'vip'), 'target_layer': '6', 'display_names': ('L6', 'Inhibitory\npv, sst, vip'), 'cortical_layer': '6'},     
+            {'cre_type': ('pvalb', 'sst', 'vip'), 'target_layer': '6', 'display_names': ('L6', 'Inhibitory\npv, sst, vip'), 'cortical_layer': ('6a', '6b')},     
         ]),
 
         ('Pyramidal / Nonpyramidal by layer', [
