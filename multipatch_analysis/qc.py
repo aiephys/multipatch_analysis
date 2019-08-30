@@ -114,23 +114,24 @@ def pulse_response_qc_pass(post_rec, window, n_spikes, adjacent_pulses):
         [failures[k].append('%d spikes detected in presynaptic recording' % n_spikes) for k in failures.keys()]
 
     # Check for noise in response window
+    data = post_rec['primary'].time_slice(window[0], window[1])
+    pre_pulse = data.time_slice(window[0], window[0] + 5e-3)
+    base = pre_pulse.median()
+    max_amp = np.abs((data - base).data).max()
     if post_rec.clamp_mode == 'ic':
-        data = post_rec['primary'].time_slice(window[0], window[1])
-        base = data.median()
-        base_std = data.time_slice(window[0], window[0] + 5e-3)
-        max_amp = data - base
-        if base_std.std() > 1.5e-3:
-            [failures[k].append('STD of response window, %s, exceeds 1.5mV' % pg.siFormat(base_std.std(), suffix='V')) for k in failures.keys()]
+        base_potential = base
+        if pre_pulse.std() > 1.5e-3:
+            [failures[k].append('STD of response window, %s, exceeds 1.5mV' % pg.siFormat(pre_pulse.std(), suffix='V')) for k in failures.keys()]
         if data.data.max() > -40e-3:
             [failures[k].append('Max in response window, %s, exceeds -40mV' % pg.siFormat(data.data.max(), suffix='V')) for k in failures.keys()]
-        if abs(max_amp.data.max()) > 10e-3:
-            [failures[k].append('Max response amplitude, %s, exceeds 10mV' % pg.siFormat(abs(max_amp.data.max()), suffix='V')) for k in failures.keys()]
+        if max_amp > 10e-3:
+            [failures[k].append('Max response amplitude, %s, exceeds 10mV' % pg.siFormat(max_amp, suffix='V')) for k in failures.keys()]
     elif post_rec.clamp_mode == 'vc':
-        data = post_rec['primary'].time_slice(window[0], window[1])
-        base = post_rec['command'].time_slice(window[0], window[1]).median()
-        base_std = data.time_slice(window[0], window[0] + 5e-3)
-        if base_std.std() > 15e-12:
-            [failures[k].append('STD of response window, %s, exceeds 15pA' % pg.siFormat(base_std.std(), suffix='A')) for k in failures.keys()]
+        base_potential = post_rec['command'].time_slice(window[0], window[1]).median()
+        if pre_pulse.std() > 15e-12:
+            [failures[k].append('STD of response window, %s, exceeds 15pA' % pg.siFormat(pre_pulse.std(), suffix='A')) for k in failures.keys()]
+        if max_amp > 500e-12:
+            [failures[k].append('Max response amplitude, %s, exceeds 500pA' % pg.siFormat(max_amp, suffix='A')) for k in failures.keys()]
     else:
         raise TypeError('Unsupported clamp mode %s' % post_rec.clamp_mode)
 
@@ -142,12 +143,12 @@ def pulse_response_qc_pass(post_rec, window, n_spikes, adjacent_pulses):
     ex_limits = [-85e-3, -45e-3]
     in_limits = [-60e-3, -45e-3]
     # check both baseline_potential (which is measured over all baseline regions in the recording)
-    # and *base*, which is just the median value over the response window
+    # and *base_potential*, which is just the median value over the IC pre_pulse window or VC command
     
-    if not (ex_limits[0] < base < ex_limits[1]): 
-        failures['ex'].append('Response window baseline of %s is outside of bounds [-85mV, -45mV]' % pg.siFormat(base, suffix='V'))
-    if not (in_limits[0] < base < in_limits[1]): 
-        failures['in'].append('Response window baseline of %s is outside of bounds [-60mV, -45mV]' % pg.siFormat(base, suffix='V'))
+    if not (ex_limits[0] < base_potential < ex_limits[1]): 
+        failures['ex'].append('Response window baseline of %s is outside of bounds [-85mV, -45mV]' % pg.siFormat(base_potential, suffix='V'))
+    if not (in_limits[0] < base_potential < in_limits[1]): 
+        failures['in'].append('Response window baseline of %s is outside of bounds [-60mV, -45mV]' % pg.siFormat(base_potential, suffix='V'))
     
     base2 = post_rec.baseline_potential
     if base2 is None:
