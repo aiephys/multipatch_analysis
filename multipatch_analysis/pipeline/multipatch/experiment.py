@@ -33,19 +33,25 @@ class ExperimentPipelineModule(DatabasePipelineModule):
         
         expt_info = expt.expt_info
         lims_cell_cluster_id = lims.expt_cluster_ids(slice_entry.lims_specimen_name, expt.timestamp)
-        try:
-            lims_ephys_result_id = lims.cluster_ephys_roi_result(lims_cell_cluster_id)
-        except Exception:
-            lims_ephys_result_id = None
-            print("Error getting ephys result ID from LIMS (but continuing anyway):")
-            sys.excepthook(*sys.exc_info())
 
+        # make sure we have only 1 cluster ID
         if len(lims_cell_cluster_id) == 1:
             lims_cell_cluster_id = lims_cell_cluster_id[0]
         elif len(lims_cell_cluster_id) == 0:
             lims_cell_cluster_id = None
         else:
             raise Exception ('Too many LIMS specimens %d' % len(lims_cell_cluster_id))
+
+        # look up LIMS ephys result ID (needed for data download from warehouse)
+        if lims_cell_cluster_id is None:
+            lims_ephys_result_id = None
+        else:
+            try:
+                lims_ephys_result_id = lims.cluster_ephys_roi_result(lims_cell_cluster_id)
+            except Exception:
+                lims_ephys_result_id = None
+                print("Error getting ephys result ID from LIMS (but continuing anyway):")
+                sys.excepthook(*sys.exc_info())
 
         meta = {
             'lims_cell_cluster_id': lims_cell_cluster_id,

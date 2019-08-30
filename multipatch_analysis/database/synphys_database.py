@@ -16,8 +16,10 @@ class SynphysDatabase(Database):
         from .schema import ORMBase
         Database.__init__(self, ro_host, rw_host, db_name, ORMBase)
         
-    def create_tables(self):
-        Database.create_tables(self)
+    def create_tables(self, tables=None):
+        Database.create_tables(self, tables=tables)
+        
+        # initialize or verify db version
         mrec = self.metadata_record()
         if mrec is None:
             mrec = self.Metadata(meta={
