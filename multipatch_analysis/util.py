@@ -1,5 +1,10 @@
 from __future__ import print_function
-import os, sys, time, datetime, logging.handlers, re, importlib
+import os, sys, time, datetime, logging.handlers, re, importlib, urllib, hashlib
+try:
+    from urllib.request import Request, urlopen
+except ImportError:
+    from urllib2 import Request, urlopen
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -292,3 +297,73 @@ class OptionalImportError(object):
         self.exc = exc
     def __getattr__(self, attr):
         raise self.exc
+
+
+def iter_md5_hash(file_path, chunksize=1000000):
+    m = hashlib.md5()
+    size = os.stat(file_path).st_size
+    tot = 0
+    with open(file_path, 'rb') as f:
+        while True:
+            chunk = f.read(chunksize)
+            if not chunk:
+                break
+            m.update(chunk)
+            tot += len(chunk)
+            yield (tot, size)
+            
+    yield m.hexdigest()
+
+
+def iter_download_with_resume(url, file_path, timeout=10, chunksize=1000000):
+    """
+    Performs a HTTP(S) download that can be restarted if prematurely terminated.
+    The HTTP server must support byte ranges.
+    
+    Credit: https://gist.github.com/mjohnsullivan/9322154
+
+    Parameters
+    ----------
+    url : str
+        The URL to download
+    file_path : str
+        The path to the file to write to disk
+        
+    """
+    if os.path.exists(file_path):
+        raise Exception("Destination file already exists: %s" % file_path)
+    
+    file_size = int(urlopen(url).info().get('Content-Length', None))
+    if file_size is None:
+        raise Exception('Error getting Content-Length from server: %s' % url)
+    logger.debug('File size is %s' % file_size)
+    
+    tmp_file_path = file_path + '.part_%d'%file_size
+    first_byte = os.path.getsize(tmp_file_path) if os.path.exists(tmp_file_path) else 0
+    logger.debug('Starting download at %.1fMB' % (first_byte / 1e6))
+    
+    
+    while True:
+        last_byte = min(file_size, first_byte + chunksize)
+        logger.debug('Downloading byte range %d - %d' % (first_byte, last_byte))
+        
+        # create the request and set the byte range in the header
+        req = Request(url)
+        req.headers['Range'] = 'bytes=%s-%s' % (first_byte, last_byte-1)
+        data_chunk = urlopen(req, timeout=timeout).read()
+        
+        # Read the data from the URL and write it to the file
+        with open(tmp_file_path, 'ab') as fh:
+            fh.write(data_chunk)
+        
+        first_byte = last_byte
+        yield (last_byte, file_size)
+        
+        if first_byte >= file_size:
+            break
+    
+    tmp_size = os.path.getsize(tmp_file_path)
+    if tmp_size != file_size:
+        raise Exception("Downloaded file %s size %s is not the expected size %s" % (tmp_file_path, tmp_size, file_size))
+        
+    os.rename(tmp_file_path, file_path)
