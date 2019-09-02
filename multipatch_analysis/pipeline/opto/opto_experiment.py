@@ -27,22 +27,23 @@ class OptoExperimentPipelineModule(DatabasePipelineModule):
 
         try:
             if expt is None:
-            #    raise Exception("Please pass an Experiment (data model) object. Looking up job_ids is not yet implemented.")
-                all_expts = read_expt_csvs()
-                indices = [i for i, e in enumerate(all_expts['expt_list']) if job_id in e['experiment']]
-                if len(indices) > 1:
-                    raise Exception("Cannot resolve job_id: %s. Found %s" % (job_id, [all_expts['expt_list'][i]['experiment'] for i in indices]))
-                elif len(indices) == 0:
-                    raise Exception("Could not find csv entry for %s"%job_id)
+                expt = load_experiment(job_id)
+            # #    raise Exception("Please pass an Experiment (data model) object. Looking up job_ids is not yet implemented.")
+            #     all_expts = read_expt_csvs()
+            #     indices = [i for i, e in enumerate(all_expts['expt_list']) if job_id in e['experiment']]
+            #     if len(indices) > 1:
+            #         raise Exception("Cannot resolve job_id: %s. Found %s" % (job_id, [all_expts['expt_list'][i]['experiment'] for i in indices]))
+            #     elif len(indices) == 0:
+            #         raise Exception("Could not find csv entry for %s"%job_id)
 
-                entry = all_expts['expt_list'][indices[0]]
-                entry['distances'] = [e for e in all_expts['distances'] if e['exp_id']==job_id]
-                #print('create_db_entries for:', entry['site_path'], "job_id:", job_id)
-                if entry['site_path'] != '':
-                    expt = Experiment(site_path=entry['site_path'], loading_library=opto, meta_info=entry)
-                else:
-                    cnx_json = os.path.join(config.connections_dir, entry['experiment'])
-                    expt = Experiment(load_file=cnx_json, loading_library=opto, meta_info=entry)
+            #     entry = all_expts['expt_list'][indices[0]]
+            #     entry['distances'] = [e for e in all_expts['distances'] if e['exp_id']==job_id]
+            #     #print('create_db_entries for:', entry['site_path'], "job_id:", job_id)
+            #     if entry['site_path'] != '':
+            #         expt = Experiment(site_path=entry['site_path'], loading_library=opto, meta_info=entry)
+            #     else:
+            #         cnx_json = os.path.join(config.connections_dir, entry['experiment'])
+            #         expt = Experiment(load_file=cnx_json, loading_library=opto, meta_info=entry)
 
             # look up slice record in DB
             try:
@@ -237,4 +238,23 @@ def read_expt_csvs():
                 _csv_data['distances'].append(row)
 
     return _csv_data
+
+def load_experiment(job_id):
+    all_expts = read_expt_csvs()
+    indices = [i for i, e in enumerate(all_expts['expt_list']) if job_id in e['experiment']]
+    if len(indices) > 1:
+        raise Exception("Cannot resolve job_id: %s. Found %s" % (job_id, [all_expts['expt_list'][i]['experiment'] for i in indices]))
+    elif len(indices) == 0:
+        raise Exception("Could not find csv entry for %s"%job_id)
+
+    entry = all_expts['expt_list'][indices[0]]
+    entry['distances'] = [e for e in all_expts['distances'] if e['exp_id']==job_id]
+    #print('create_db_entries for:', entry['site_path'], "job_id:", job_id)
+    if entry['site_path'] != '':
+        expt = Experiment(site_path=entry['site_path'], loading_library=opto, meta_info=entry)
+    else:
+        cnx_json = os.path.join(config.connections_dir, entry['experiment'])
+        expt = Experiment(load_file=cnx_json, loading_library=opto, meta_info=entry)
+
+    return expt
 
