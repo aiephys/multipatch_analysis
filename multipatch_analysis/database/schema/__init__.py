@@ -18,3 +18,4 @@ from .connection_strength import *
 from .avg_first_pulse_fit import *
 from .single_first_pulse_fit import *
 from .gap_junction import *
+from .cortical_location import *

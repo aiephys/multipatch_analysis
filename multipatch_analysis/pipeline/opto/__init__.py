@@ -3,6 +3,7 @@ from ..pipeline import Pipeline
 from .opto_slice import OptoSlicePipelineModule
 from .opto_experiment import OptoExperimentPipelineModule
 from .opto_morphology import OptoMorphologyPipelineModule
+from .opto_cortical_location import OptoCortexLocationPipelineModule
 
 class OptoPipeline(Pipeline):
     
@@ -10,6 +11,7 @@ class OptoPipeline(Pipeline):
     module_classes = [
         OptoSlicePipelineModule,
         OptoExperimentPipelineModule,
+        OptoCortexLocationPipelineModule
         #DatasetPipelineModule,
         #OptoMorphologyPipelineModule,
         #PulseResponsePipelineModule,
