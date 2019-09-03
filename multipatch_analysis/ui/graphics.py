@@ -2,10 +2,8 @@
 from __future__ import print_function, division
 import numpy as np
 import pyqtgraph as pg
-from neuroanalysis.stats import binomial_ci
 from neuroanalysis.ui.plot_grid import PlotGrid
-from statsmodels.stats.proportion import proportion_confint
-
+from ..connectivity import connectivity_profile
 
 
 class MatrixItem(pg.QtGui.QGraphicsItemGroup):
@@ -97,7 +95,6 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
 
     def element_clicked(self, rect, event):
         self.sigClicked.emit(self, event, rect.row, rect.col)  
-
 
     def _make_header(self, labels, side):
         padding = 5
@@ -193,6 +190,7 @@ class MatrixItem(pg.QtGui.QGraphicsItemGroup):
     def boundingRect(self):
         return self._bounding_rect
 
+
 class MatrixElementItem(pg.QtGui.QGraphicsRectItem):
     class SignalHandler(pg.QtCore.QObject):
         """Because we can't subclass from both QObject and QGraphicsRectItem at the same time
@@ -206,7 +204,8 @@ class MatrixElementItem(pg.QtGui.QGraphicsRectItem):
 
     def mouseClickEvent(self, event):
         self.sigClicked.emit(self, event)    
-    
+
+
 def distance_plot(connected, distance, plots=None, color=(100, 100, 255), size=10, window=40e-6, spacing=None, name=None, fill_alpha=30):
     """Draw connectivity vs distance profiles with confidence intervals.
     
@@ -277,32 +276,7 @@ def distance_plot(connected, distance, plots=None, color=(100, 100, 255), size=1
 
     # use a sliding window to plot the proportion of connections found along with a 95% confidence interval
     # for connection probability
-
-    if spacing is None:
-        spacing = window / 4.0
-        
-    xvals = np.arange(window / 2.0, 500e-6, spacing)
-    upper = []
-    lower = []
-    prop = []
-    ci_xvals = []
-    for x in xvals:
-        minx = x - window / 2.0
-        maxx = x + window / 2.0
-        # select points inside this window
-        mask = (distance >= minx) & (distance <= maxx)
-        pts_in_window = connected[mask]
-        # compute stats for window
-        n_probed = pts_in_window.shape[0]
-        n_conn = pts_in_window.sum()
-        if n_probed == 0:
-            prop.append(np.nan)
-        else:
-            prop.append(n_conn / n_probed)
-            ci = proportion_confint(n_conn, n_probed, method='beta')
-            lower.append(ci[0])
-            upper.append(ci[1])
-            ci_xvals.append(x)
+    xvals, prop, lower, upper = connectivity_profile(connected, distance, window=window, spacing=spacing)
 
     # plot connection probability and confidence intervals
     color2 = [c / 3.0 for c in color]
