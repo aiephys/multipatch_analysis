@@ -145,7 +145,7 @@ def specimen_info(specimen_name=None, specimen_id=None):
     # Human format is:
     #   Haa.bb.ccc.dd.ee.ff
     elif rec['organism'] == 'human':
-        m = re.match(r'H(\d+)\.(\d+)\.(\d+)\.(\d+)\.(\d+)(\.(\d+))?$', spec_name)
+        m = re.match(r'H(\d+)\.(\d+)\.(\d+)\.(\d+)(A?)\.(\d+)(\.(\d+))?$', spec_name)
         if m is None:
             raise Exception('Could not parse human specimen name: "%s"' % spec_name)
         rec['hemisphere'] = None
@@ -155,7 +155,8 @@ def specimen_info(specimen_name=None, specimen_id=None):
         rec['human_donor_number'] = int(m.groups()[2])
         rec['block_number'] = int(m.groups()[3])
         rec['section_number'] = int(m.groups()[4])
-        rec['subsection_number'] = None if m.groups()[6] is None else int(m.groups()[6])
+        rec['section_letter'] = m.groups()[5]
+        rec['subsection_number'] = None if m.groups()[7] is None else int(m.groups()[7])
         
         
     else:
