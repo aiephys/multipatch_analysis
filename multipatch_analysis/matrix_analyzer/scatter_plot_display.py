@@ -86,3 +86,34 @@ class PairScatterPlot(ScatterPlots):
 
         self.fields['pair_class']['values'] = list(data.pair_class)
         self.setData(rec_data)
+
+    def filter_selected_element(self, pre_class, post_class):
+        pair_name = '-'.join([pre_class.name, post_class.name])
+        try:
+            pair_filter = self.filter.child('pair_class')
+        except KeyError:
+            pair_filter = self.filter.addNew('pair_class')
+            for child in pair_filter.children():
+                child.setValue(False)
+        pair_filter.child(pair_name).setValue(True)
+
+    def reset_element_filter(self):
+        try:
+            pair_class_filter = self.filter.child('pair_class')
+            self.filter.removeChild(pair_class_filter)
+        except:
+            return
+
+    def plotClicked(self, plot, points):
+        for pt in points:
+            data = pt.data()
+            pair = data.index
+            print('Clicked:' '%s' % pair)
+            fields = self.fieldList.selectedItems()
+            for field in fields:
+                field_name = field.text()
+                value = data[field_name]
+                print('%s: %s' % (field_name, pg.siFormat(value)))
+            pt.setBrush(pg.mkBrush('y'))
+            pt.setSize(15)
+        self.sigScatterPlotClicked.emit(self, points)

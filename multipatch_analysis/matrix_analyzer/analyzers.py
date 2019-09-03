@@ -84,6 +84,15 @@ class FormattableNumber(float):
             formatted_value = ("%0.2f mm" % value)
         return formatted_value
 
+    @property
+    def um(self):
+        if np.isnan(self):
+            formatted_value = ''
+        else:
+            value = self*1e6
+            formatted_value = ("%d μm" % value)
+        return formatted_value
+
 class Analyzer(pg.QtCore.QObject):
 
     sigOutputChanged = pg.QtCore.Signal(object)
@@ -138,20 +147,22 @@ class ConnectivityAnalyzer(Analyzer):
         self.name = 'connectivity'
         self.results = None
         self.group_results = None
+        self.pair_items = {}
         #self._signalHandler = ConnectivityAnalyzer.SignalHandler()
         #self.sigOutputChanged = self._signalHandler.sigOutputChanged
 
         self.fields = [
             ('Probed Connection', {}),
-            ('Synapse', {}),
+            ('Connected', {}),
             ('Gap Junction', {}),
             ('Distance', {'mode': 'range', 'units': 'm', 'defaults': {
-                'Max': 200e-6,
+                'Min': 0e-6,
+                'Max': 300e-6,
                 'colormap': pg.ColorMap(
                     [0, 0.25, 0.5, 0.75, 1.0],
                     [(255,255,100,255), (255,100,0,255), (0,0,100,255), (140,0,0,255), (80,0,80,255)],
             )}}),
-            ('Synapse Probability', {'mode': 'range', 'defaults': {
+            ('Connection Probability', {'mode': 'range', 'defaults': {
                 'Operation': 'Add', 
                 'colormap': pg.ColorMap(
                 [0, 0.01, 0.03, 0.1, 0.3, 1.0],
@@ -176,9 +187,9 @@ class ConnectivityAnalyzer(Analyzer):
         self.summary_stat = {
             'conn_no_data': self.metric_summary,
             'Probed Connection': self.metric_summary,
-            'Synapse': self.metric_summary,
+            'Connected': self.metric_summary,
             'Gap Junction': [self.metric_summary, self.metric_conf],
-            'Synapse Probability': [self.metric_summary, self.metric_conf],
+            'Connection Probability': [self.metric_summary, self.metric_conf],
             'Gap Junction Probability': [self.metric_summary, self.metric_conf],
             'matrix_completeness': [self.metric_summary, self.metric_conf],
             'Distance': [self.metric_summary, self.metric_conf],
@@ -186,18 +197,18 @@ class ConnectivityAnalyzer(Analyzer):
         self.summary_dtypes = {
             ('conn_no_data', 'metric_summary'): bool,
             ('Probed Connection', 'metric_summary'): int,
-            ('Synapse', 'metric_summary'): int,
+            ('Connected', 'metric_summary'): int,
             ('Gap Junction', 'metric_summary'):int,
         }
 
         self.text = {
             'Probed Connection': '{Probed Connection}',
-            'Synapse': '{Synapse}',
+            'Connected': '{Connected}',
             'Gap Junction': '{Gap Junction}',
-            'Synapse Probability': '{Synapse}/{Probed Connection}',
+            'Connection Probability': '{Connected}/{Probed Connection}',
             'Gap Junction Probability': '{Gap Junction}/{Probed Connection}',
-            'matrix_completeness': '{Synapse}/{Probed Connection}',
-            'Distance': '{Distance.mm}',
+            'matrix_completeness': '{Connected}/{Probed Connection}',
+            'Distance': '{Distance.um}',
         }
 
     def metric_summary(self, x): 
@@ -205,7 +216,7 @@ class ConnectivityAnalyzer(Analyzer):
             return all(x)
         if x.name == 'Distance':
             return np.nanmean(x)
-        if x.name in ['Synapse', 'Probed Connection', 'Gap Junction']:
+        if x.name in ['Connected', 'Probed Connection', 'Gap Junction']:
             #print("+++ metric_summary: ", x.name)
             #print(x)
             #print(type(x))
@@ -269,10 +280,10 @@ class ConnectivityAnalyzer(Analyzer):
                 'pre_class': pre_class,
                 'post_class': post_class,
                 'Probed Connection': probed,
-                'Synapse': connected,
+                'Connected': connected,
                 'Gap Junction': gap,
                 'Distance': distance,
-                'Synapse Probability': [int(connected) if connected is not None else 0, int(probed) if probed is not None else 0],
+                'Connection Probability': [int(connected) if connected is not None else 0, int(probed) if probed is not None else 0],
                 'Gap Junction Probability': [int(gap) if gap is not None else 0, int(probed) if probed is not None else 0],
                 'matrix_completeness': [int(connected) if connected is not None else 0, int(probed) if probed is not None else 0],
                 
@@ -287,9 +298,9 @@ class ConnectivityAnalyzer(Analyzer):
         return self.fields
 
     def print_element_info(self, pre_class, post_class, element, field_name):
-        connections = element[element['Synapse'] == True].index.tolist()
+        connections = element[element['Connected'] == True].index.tolist()
         print ("Connection type: %s -> %s" % (pre_class, post_class))
-        print ("Synaptically Connected Pairs:")
+        print ("Connected Pairs:")
         for connection in connections:
             print ("\t %s" % (connection))
         gap_junctions = element[element['Gap Junction'] == True].index.tolist()
@@ -309,8 +320,7 @@ class ConnectivityAnalyzer(Analyzer):
         scatter = None
         baseline_window = int(db.default_sample_rate * 5e-3)
         traces = []
-        point_data = []
-        connections = element[element['Synapse'] == True].index.tolist()
+        connections = element[element['Connected'] == True].index.tolist()
         for pair in connections:
             rsf = pair.resting_state_fit
             if rsf is not None:
@@ -327,11 +337,11 @@ class ConnectivityAnalyzer(Analyzer):
             name = ('%s->%s, n=%d' % (pre_class, post_class, len(traces)))
             trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3}, name=name)
             trace_plt.setXRange(-5e-3, 20e-3)
-            trace_plt.setLabels(left=('', 'V'), bottom=('Time from stimulus', 's'))
+            trace_plt.setLabels(left=('', 'V'), bottom=('Response Onset', 's'))
         return line, scatter
 
     def summary(self, ):
-        total_connected = self.results['Synapse'].sum()
+        total_connected = self.results['Connected'].sum()
         total_probed = self.results['Probed Connection'].sum()
         print ("Total connected / probed\t %d / %d" % (total_connected, total_probed))
 
@@ -343,6 +353,20 @@ class ConnectivityAnalyzer(Analyzer):
 
         #     print ("Total progress\t %0.1f%%, %d elements" % (100*total_progress/n_elements, n_elements))
 
+    def scatter_plot_clicked(self, scatterplt, points):
+        pair = points[0].data()
+        self.select_pair(pair)
+
+    def trace_plot_clicked(self, trace):
+        pair = trace.pair
+        self.select_pair(pair)
+
+    def select_pair(self, pair):
+        trace, point = self.pair_items[pair.id]
+        point.setBrush(pg.mkBrush('y'))
+        point.setSize(15)
+        trace.setPen('y', width=2)
+        print('Clicked:' '%s' % pair)
 
 
 class StrengthAnalyzer(Analyzer):
@@ -552,7 +576,7 @@ class StrengthAnalyzer(Analyzer):
             trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3}, name=name)
             units = 'V' if field_name.startswith('PSP') else 'A'
             trace_plt.setXRange(-5e-3, 20e-3)
-            trace_plt.setLabels(left=('', units), bottom=('Time from stimulus', 's'))
+            trace_plt.setLabels(left=('', units), bottom=('Response Onset', 's'))
         return line, scatter
 
     def scatter_plot_clicked(self, scatterplt, points):

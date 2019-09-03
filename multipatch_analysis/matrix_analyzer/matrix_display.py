@@ -41,7 +41,7 @@ class MatrixDisplayFilter(object):
             self.colorMap,
             {'name': 'Text format', 'type': 'str'},
             {'name': 'Show Confidence', 'type': 'list', 'values': [field[0] for field in self.data_fields], 'value': 'None'},
-            {'name': 'log_scale', 'type': 'bool'},
+            # {'name': 'log_scale', 'type': 'bool'},
         ])
     
         self.params.sigTreeStateChanged.connect(self.invalidate_output)
@@ -95,14 +95,20 @@ class MatrixDisplayFilter(object):
         if len(self.colorMap.children()) == 0:
             raise Exception("No color maps are selected.")
         cmap_item = [cmap for cmap in self.colorMap.children() if cmap['Enabled'] is True][0]
-        log_scale = self.params.child('log_scale').value()
+        # log_scale = self.params.child('log_scale').value()
         colors = cmap_item.value().color
         x_min = cmap_item['Min']
         x_max = cmap_item['Max']
         x = np.linspace(x_min, x_max, len(colors))
         name = cmap_item.name()
+        if name.endswith('Probability'):
+            log_scale = True
+        else:
+            log_scale = False
         # units = self.colorMap.fields[name].get('units', None)
-        scale, prefix = pg.siScale(x_min)
+        min_scale, _ = pg.siScale(x_min)
+        max_scale, _= pg.siScale(x_max)
+        scale = min_scale if (1/min_scale) < (1/max_scale) else max_scale
         # if units is not None:
         #     units = scale + units
         # else:
