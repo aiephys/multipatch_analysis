@@ -250,7 +250,7 @@ def load_experiment(job_id):
     entry['distances'] = [e for e in all_expts['distances'] if e['exp_id']==job_id]
     #print('create_db_entries for:', entry['site_path'], "job_id:", job_id)
     if entry['site_path'] != '':
-        expt = Experiment(site_path=entry['site_path'], loading_library=opto, meta_info=entry)
+        expt = Experiment(site_path=os.path.join(config.synphys_data, entry['site_path']), loading_library=opto, meta_info=entry)
     else:
         cnx_json = os.path.join(config.connections_dir, entry['experiment'])
         expt = Experiment(load_file=cnx_json, loading_library=opto, meta_info=entry)
