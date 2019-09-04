@@ -6,7 +6,7 @@ from __future__ import print_function, division
 from ..pipeline_module import DatabasePipelineModule
 from .opto_experiment import OptoExperimentPipelineModule, load_experiment
 from collections import OrderedDict
-import datetime
+import datetime, os
 
 
 class OptoCortexLocationPipelineModule(DatabasePipelineModule):
@@ -94,6 +94,11 @@ class OptoCortexLocationPipelineModule(DatabasePipelineModule):
         for expt_id, (expt_mtime, success) in expts.items():
             if success is not True:
                 continue
-            ready[expt_id] = datetime.datetime.now()
+            expt = load_experiment(expt_id)
+            if expt.connections_file_version <= 3:
+                mtime = datetime.datetime.fromtimestamp(os.path.getmtime(expt.connections_file))
+            else:
+                mtime = datetime.datetime.fromtimestamp(os.path.getmtime(config.distance_csv))
+            ready[expt_id] = mtime
     
         return ready
