@@ -84,6 +84,7 @@ class OptoSlicePipelineModule(DatabasePipelineModule):
 
 
         fields = {
+            'ext_id':'%.3f'%info['__timestamp__'],
             'acq_timestamp': info['__timestamp__'],
             'species': limsdata.get('organism'),
             'date_of_birth': limsdata.get('date_of_birth'),
@@ -108,7 +109,7 @@ class OptoSlicePipelineModule(DatabasePipelineModule):
         """Return a list of records associated with a list of job IDs.
         """
         db = self.database
-        return session.query(db.Slice).filter(db.Slice.acq_timestamp.in_(job_ids)).all()
+        return session.query(db.Slice).filter(db.Slice.ext_id.in_(job_ids)).all()
 
     def ready_jobs(self):
         """Return an ordered dict of all jobs that are ready to be processed (all dependencies are present)
