@@ -14,19 +14,21 @@ def find_lims_specimen_ids(slice_dh):
     parent_info = slice_dh.parent().info()
 
     sid = info.get('specimen_ID', '').strip()
-    #raise Exception('stop')
     if sid == '':
-        animal_id = parent_info.get('animal_id', '').strip()
-        if len(animal_id) == 0:
-            animal_id = parent_info.get('animal_ID', '').strip()
-            if len(animal_id) == 0:
-                return []
         slice_id = info.get('slice_number').strip()
-        if len(slice_id) == 1:
-            slice_id = '0'+slice_id
-        sid = animal_id + '.' + slice_id
+        if len(slice_id) > 2:
+            sid = slice_id
+        else:
+            animal_id = parent_info.get('animal_id', '').strip()
+            if len(animal_id) == 0:
+                animal_id = parent_info.get('animal_ID', '').strip()
+                if len(animal_id) == 0:
+                    return []
+            if len(slice_id) == 1:
+                slice_id = '0'+slice_id
+            sid = animal_id + '.' + slice_id
 
-    #print('sid:', sid)
+    print('sid:', sid)
     ids = lims.find_specimen_ids_matching_name(sid)
     if len(ids) == 1:
         return ids

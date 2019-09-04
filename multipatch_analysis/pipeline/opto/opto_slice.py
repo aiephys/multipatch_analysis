@@ -1,5 +1,5 @@
 from multipatch_analysis.pipeline.pipeline_module import DatabasePipelineModule
-from optoanalysis import data_model
+from . import data_model
 #from multipatch_analysis.database import slice_tables
 import os, glob, re, pickle, time, csv
 from multipatch_analysis import config, lims, constants
