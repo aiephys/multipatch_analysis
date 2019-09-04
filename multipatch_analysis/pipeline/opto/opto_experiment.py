@@ -195,7 +195,7 @@ class OptoExperimentPipelineModule(DatabasePipelineModule):
 
             ready[ex.uid] = max(raw_data_mtime, slice_mtime)
         
-        print("Found %d experiments; %d are able to be processed, %d were skipped due to errors, %d were skipped due to missing or failed slice entries." % (len(expts), len(ready), n_errors, n_no_slice))
+        print("Found %d experiments; %d are able to be processed, %d were skipped due to errors, %d were skipped due to missing or failed slice entries." % (len(expts['expt_list']), len(ready), n_errors, n_no_slice))
         return ready
 
     def dependent_job_ids(self, module, job_ids):
