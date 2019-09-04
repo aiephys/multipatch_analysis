@@ -27,6 +27,10 @@ def connectivity_profile(connected, distance, window=40e-6, spacing=None):
     if spacing is None:
         spacing = window / 4.0
         
+    mask = np.isfinite(connected) & np.isfinite(distance)
+    connected = connected[mask]
+    distance = distance[mask]
+
     xvals = np.arange(window / 2.0, 500e-6, spacing)
     upper = []
     lower = []
