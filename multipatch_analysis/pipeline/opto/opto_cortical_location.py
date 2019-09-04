@@ -42,7 +42,7 @@ class OptoCortexLocationPipelineModule(DatabasePipelineModule):
                     )
 
             site_entry.slice = slice_entry
-            site_entry.experiment = db.experiment_from_uid(expt.uid, session=session)
+            site_entry.experiment = db.experiment_from_ext_id(expt.uid, session=session)
             session.add(site_entry)
 
 

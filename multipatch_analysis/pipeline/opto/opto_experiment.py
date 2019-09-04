@@ -58,8 +58,7 @@ class OptoExperimentPipelineModule(DatabasePipelineModule):
             if expt_info is None:
                 expt_info = {}
             fields = {
-                'original_path': expt.original_path, 
-                #'storage_path': expt.server_path,
+                'storage_path': expt.original_path, 
                 'ephys_file': None if expt.ephys_file is None else os.path.relpath(expt.ephys_file, expt.path),
                 #'rig_name': expt.rig_name,
                 #'project_name': expt.project_name,
@@ -111,12 +110,12 @@ class OptoExperimentPipelineModule(DatabasePipelineModule):
                     experiment=expt_entry,
                     pre_cell=cell_entries[pair.preCell],
                     post_cell=cell_entries[pair.postCell],
-                    synapse=pair.isSynapse(),
-                    electrical=None,
+                    has_synapse=pair.isSynapse(),
+                    has_electrical=None,
                     n_ex_test_spikes=13,  # spoof these for now because we need them for connectivity analysis and don't have them without filepaths
                     n_in_test_spikes=13,
                     distance=pair.distance,
-                    synapse_sign = sign
+                    #synapse_sign = sign
                 )
                 session.add(pair_entry)
 
