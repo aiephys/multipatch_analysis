@@ -8,9 +8,9 @@ from multipatch_analysis.database import default_db as db
 
 pg.dbg()
 
-expt_id = float(sys.argv[1])
-pre_cell_id = int(sys.argv[2])
-post_cell_id = int(sys.argv[3])
+expt_id = sys.argv[1]
+pre_cell_id = sys.argv[2]
+post_cell_id = sys.argv[3]
 
 ui = PulseResponseQCUI()
 skip_btn = pg.QtGui.QPushButton('skip')

@@ -13,14 +13,14 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description="Process analysis pipeline jobs")
     parser.add_argument('pipeline', type=str, help="The name of the pipeline to run: %s" % ', '.join(list(all_pipelines.keys())))
-    parser.add_argument('modules', type=str, nargs='+', help="The name of the analysis module(s) to run")
+    parser.add_argument('modules', type=str, nargs='*', help="The name of the analysis module(s) to run")
     parser.add_argument('--rebuild', action='store_true', default=False, help="Remove and rebuild tables for this analysis")
     parser.add_argument('--retry', action='store_true', default=False, help="Retry processing jobs that previously failed")
     parser.add_argument('--workers', type=int, default=None, help="Set the number of concurrent processes during update")
     parser.add_argument('--local', action='store_true', default=False, help="Disable concurrent processing to make debugging easier")
     parser.add_argument('--raise-exc', action='store_true', default=False, help="Disable catching exceptions encountered during processing", dest='raise_exc')
     parser.add_argument('--limit', type=int, default=None, help="Limit the number of experiments to process")
-    parser.add_argument('--uids', type=lambda s: [float(x) for x in s.split(',')], default=None, help="Select specific IDs to analyze (or drop)", )
+    parser.add_argument('--uids', type=lambda s: s.split(','), default=None, help="Select specific IDs to analyze (or drop)", )
     parser.add_argument('--drop', action='store_true', default=False, help="Drop selected analysis results (do not run updates)", )
     parser.add_argument('--vacuum', action='store_true', default=False, help="Run VACUUM ANALYZE on the database to optimize its query planner", )
     parser.add_argument('--bake', action='store_true', default=False, help="Bake an sqlite file after the pipeline update completes", )
@@ -46,7 +46,7 @@ if __name__ == '__main__':
             try:
                 if mod.startswith(':'):
                     i = list(all_modules.keys()).index(mod[1:])
-                    modules.extend(list(all_modules.values())[:i])
+                    modules.extend(list(all_modules.values())[:i+1])
                 elif mod.endswith(':'):
                     i = list(all_modules.keys()).index(mod[:-1])
                     modules.extend(list(all_modules.values())[i:])
@@ -61,7 +61,7 @@ if __name__ == '__main__':
     
     if args.rebuild:
         mod_names = ', '.join([module.name for module in modules])
-        if six.moves.input("Rebuild modules: %s? (y/n) " % mod_names) != 'y':
+        if six.moves.input("Rebuild modules in %s: %s? (y/n) " % (str(db), mod_names)) != 'y':
             print("  Nuts.")
             sys.exit(-1)
 

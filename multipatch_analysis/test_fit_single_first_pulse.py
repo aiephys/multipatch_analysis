@@ -1,5 +1,5 @@
 from multipatch_analysis.database import default_db as db
-import multipatch_analysis.connection_strength as cs 
+import multipatch_analysis.synapse_prediction as cs 
 from sqlalchemy.orm import aliased
 from multipatch_analysis.database.database import TableGroup
 import pandas

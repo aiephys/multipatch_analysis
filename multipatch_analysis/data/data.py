@@ -1,9 +1,11 @@
+import sys
 import numpy as np
 
 from neuroanalysis.miesnwb import MiesNwb, MiesSyncRecording, MiesRecording
 from neuroanalysis.stimuli import find_square_pulses
 from neuroanalysis.spike_detection import detect_evoked_spikes
 from neuroanalysis.data import TSeries, TSeriesList
+from neuroanalysis.baseline import float_mode
 
 from .. import qc
 
@@ -44,7 +46,13 @@ class MultiPatchSyncRecording(MiesSyncRecording):
             settle_size = int(settling_time / dt)
             for rec in self.recordings:
                 pa = PulseStimAnalyzer.get(rec)
-                for pulse in pa.pulses():
+                try:
+                    pulses = pa.pulses()
+                except Exception:
+                    print("Ignore recording baseline regions:", rec)
+                    sys.excepthook(*sys.exc_info())
+                    continue
+                for pulse in pulses:
                     start = pri.index_at(pulse[0])
                     stop = pri.index_at(pulse[1])
                     mask[start:stop + settle_size] = True
@@ -272,12 +280,13 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
             pulse['pre_rec'] = pre_rec.time_slice(pulse['rec_start'], pulse['rec_stop'])
 
             # select baseline region between 8th and 9th pulses
-            baseline_dur = 100e-3
-            stop = spikes[8]['pulse_start']
-            start = stop - baseline_dur
-            pulse['baseline'] = post_rec['primary'].time_slice(start, stop)
-            pulse['baseline_start'] = start
-            pulse['baseline_stop'] = stop
+            if len(spikes) > 8:
+                baseline_dur = 100e-3
+                stop = spikes[8]['pulse_start']
+                start = stop - baseline_dur
+                pulse['baseline'] = post_rec['primary'].time_slice(start, stop)
+                pulse['baseline_start'] = start
+                pulse['baseline_stop'] = stop
 
             # Add minimal QC metrics for excitatory and inhibitory measurements
             pulse_window = [pulse['rec_start'], pulse['rec_stop']]
@@ -288,8 +297,6 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
             if next_pulse is not None:
                 adj_pulse_times.append(next_pulse - this_pulse)
             pulse['ex_qc_pass'], pulse['in_qc_pass'], pulse['qc_failures'] = qc.pulse_response_qc_pass(post_rec=post_rec, window=pulse_window, n_spikes=n_spikes, adjacent_pulses=adj_pulse_times)
-
-            assert len(pulse['baseline']) > 0
 
             result.append(pulse)
         
@@ -374,81 +381,6 @@ class BaselineDistributor(Analyzer):
                 self.baselines.pop(0)
 
 
-class EvokedResponseGroup(object):
-    """A group of similar synaptic responses.
-
-    This is intended to be used as a container for many repeated responses evoked from
-    a single pre/postsynaptic pair. It provides methods for computing the average,
-    baseline-subtracted response and for fitting the average to a curve.
-    """
-    def __init__(self, pre_id=None, post_id=None, **kwds):
-        self.pre_id = pre_id
-        self.post_id = post_id
-        self.kwds = kwds
-        self.responses = []
-        self.baselines = []
-        self.spikes = []
-        self.commands = []
-        self._bsub_mean = None
-
-    def add(self, response, baseline, pre_spike=None, stim_command=None):
-        self.responses.append(response)
-        self.baselines.append(baseline)
-        self.spikes.append(pre_spike)
-        self.commands.append(stim_command)
-        self._bsub_mean = None
-
-    def __len__(self):
-        return len(self.responses)
-
-    def bsub_mean(self):
-        """Return a baseline-subtracted, average evoked response trace between two cells.
-
-        All traces are downsampled to the minimum sample rate in the set.
-        """
-        if len(self) == 0:
-            return None
-
-        if self._bsub_mean is None:
-            responses = self.responses
-            baselines = self.baselines
-            
-            # downsample all traces to the same rate
-            # yarg: how does this change SNR?
-
-            avg = TSeriesList([r.copy(t0=0) for r in responses]).mean()
-            avg_baseline = TSeriesList([b.copy(t0=0) for b in baselines]).mean().data
-
-            # subtract baseline
-            baseline = np.median(avg_baseline)
-            bsub = avg.data - baseline
-            result = avg.copy(data=bsub)
-            assert len(result.time_values) == len(result)
-
-            # Attach some extra metadata to the result:
-            result.meta['baseline'] = avg_baseline
-            result.meta['baseline_med'] = baseline
-            if len(avg_baseline) == 0:
-                result.meta['baseline_std'] = None
-            else:
-                result.meta['baseline_std'] = scipy.signal.detrend(avg_baseline).std()
-
-            self._bsub_mean = result
-
-        return self._bsub_mean
-
-    def mean(self):
-        if len(self) == 0:
-            return None
-        return TSeriesList(self.responses).mean()
-
-    def fit_psp(self, **kwds):
-        response = self.bsub_mean()
-        if response is None:
-            return None
-        return fit_psp(response, **kwds)
-
-
 class PulseResponse(object):
     """Represents a chunk of postsynaptic recording taken during a presynaptic pulse stimulus.
 
@@ -476,6 +408,69 @@ class PulseResponse(object):
     def stim_tseries(self):
         return self.stim_pulse.stimulus_tseries
     
+
+class PulseResponseList(object):
+    """A list of pulse responses with methods for time-aligning and baseline
+    subtracting recordings.
+
+    Parameters
+    ----------
+    prs : list
+        A list of PulseResponse instances
+    """
+    def __init__(self, prs):
+        self.prs = prs
+
+    def __len__(self):
+        return len(self.prs)
+
+    def __getitem__(self, item):
+        return self.prs[item]
+
+    def __iter__(self):
+        for pr in self.prs:
+            yield pr
+
+    def post_tseries(self, align=None, bsub=False):
+        """Return a TSeriesList of all postsynaptic recordings.
+        """
+        return self._get_tserieslist('post_tseries', align, bsub)
+
+    def pre_tseries(self, align=None, bsub=False):
+        """Return a TSeriesList of all presynaptic recordings.
+        """
+        return self._get_tserieslist('pre_tseries', align, bsub)
+
+    def _get_tserieslist(self, ts_name, align, bsub):
+        tsl = []
+        for pr in self.prs:
+            ts = getattr(pr, ts_name)
+            stim_time = pr.stim_pulse.onset_time
+
+            if bsub is True:
+                start_time = max(ts.t0, stim_time-5e-3)
+                baseline_data = ts.time_slice(start_time, stim_time).data
+                if len(baseline_data) == 0:
+                    baseline = ts.data[0]
+                else:
+                    baseline = float_mode(baseline_data)
+                ts = ts - baseline
+            
+            if align is not None:
+                if align == 'spike':
+                    align_t = pr.stim_pulse.first_spike_time
+                    # ignore PRs with no known spike time
+                    if align_t is None:
+                        continue
+                elif align == 'pulse':
+                    align_t = stim_time
+                else:
+                    raise ValueError("align must be None, 'spike', or 'pulse'.")
+                ts = ts.copy(t0=ts.t0 - align_t)
+
+            tsl.append(ts)
+        return TSeriesList(tsl)
+
 
 class StimPulse(object):
     """Represents a single stimiulus pulse intended to evoke a synaptic response.

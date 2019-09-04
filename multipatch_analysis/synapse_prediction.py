@@ -323,10 +323,10 @@ def analyze_pair_connectivity(amps, sign=None):
         fields[clamp_mode + '_average_response_t0'] = fg_avg.t0
         fields[clamp_mode + '_average_base_stdev'] = base_rgn.std()
 
-        sign = {'pos':'+', 'neg':'-'}[signs[clamp_mode]]
+        sign = {'pos':1, 'neg':-1}[signs[clamp_mode]]
         fg_bsub = fg_avg.copy(data=fg_avg.data - base)  # remove base to help fitting
         try:
-            fit = fit_psp(fg_bsub, mode=clamp_mode, sign=sign, xoffset=(1e-3, 0, 6e-3), yoffset=(0, None, None), rise_time_mult_factor=4)              
+            fit = fit_psp(fg_bsub, clamp_mode=clamp_mode, sign=sign, search_window=[0, 6e-3])
             for param, val in fit.best_values.items():
                 fields['%s_fit_%s' % (clamp_mode, param)] = val
             fields[clamp_mode + '_fit_yoffset'] = fit.best_values['yoffset'] + base

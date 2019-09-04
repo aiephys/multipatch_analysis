@@ -4,11 +4,11 @@ from .slice import SlicePipelineModule
 from .experiment import ExperimentPipelineModule
 from .dataset import DatasetPipelineModule
 from .morphology import MorphologyPipelineModule
+from .synapse import SynapsePipelineModule
 from .pulse_response import PulseResponsePipelineModule
 from .dynamics import DynamicsPipelineModule
-from .connection_strength import ConnectionStrengthPipelineModule
-from .first_pulse_fit import AverageFirstPulseFitPipelineModule
-from .first_pulse_fit import SingleFirstPulseFitPipelineModule
+from .synapse_prediction import SynapsePredictionPipelineModule
+from .resting_state import RestingStatePipelineModule
 
 
 
@@ -21,11 +21,11 @@ class MultipatchPipeline(Pipeline):
         ExperimentPipelineModule,
         DatasetPipelineModule,
         MorphologyPipelineModule,
+        SynapsePipelineModule,
         PulseResponsePipelineModule,
         DynamicsPipelineModule,
-        ConnectionStrengthPipelineModule,
-        AverageFirstPulseFitPipelineModule,
-        SingleFirstPulseFitPipelineModule,
+        SynapsePredictionPipelineModule,
+        RestingStatePipelineModule,
     ]
     
     def __init__(self, database, config):

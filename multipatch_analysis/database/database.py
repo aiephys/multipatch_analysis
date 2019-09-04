@@ -33,6 +33,7 @@ class NDArray(TypeDecorator):
     """For marshalling arrays in/out of binary DB fields.
     """
     impl = LargeBinary
+    hashable = False
     
     def process_bind_param(self, value, dialect):
         if value is None:
@@ -52,6 +53,7 @@ class JSONObject(TypeDecorator):
     """For marshalling objects in/out of json-encoded text.
     """
     impl = String
+    hashable = False
     
     def process_bind_param(self, value, dialect):
         return json.dumps(value)
@@ -162,6 +164,7 @@ class Database(object):
     - Automatically build/dispose ro and rw engines (especially after fork)
     - Generate ro/rw sessions on demand
     - Methods for creating / dropping databases
+    - Clone databases across backends
     """
     _all_dbs = weakref.WeakSet()
     default_app_name = ('mp_a:' + ' '.join(sys.argv))[:60]
@@ -188,6 +191,7 @@ class Database(object):
 
     @property
     def default_session(self):
+        self._check_engines()
         if self._default_session is None:
             self._default_session = self.session(readonly=True)
         return self._default_session
@@ -201,26 +205,6 @@ class Database(object):
         """
         import pandas
         return pandas.read_sql(query.statement, query.session.bind)
-
-    # def use_default_session(self, fn):
-    #     """Decorator used to auto-fill `session` keyword arguments
-    #     with a global default Session instance.
-        
-    #     If the global session is used, then it will be rolled back after 
-    #     the decorated function returns (to prevent idle-in-transaction timeouts).
-    #     """
-    #     def wrap_with_session(*args, **kwds):
-    #         used_default_session = False
-    #         if kwds.get('session', None) is None:
-    #             kwds['session'] = self.default_session
-    #             used_default_session = True
-    #         try:
-    #             ret = fn(*args, **kwds)
-    #             return ret
-    #         finally:
-    #             if used_default_session:
-    #                 self.default_session.rollback()
-    #     return wrap_with_session    
 
     def _find_mappings(self):
         mappings = {cls.__tablename__:cls for cls in self.ormbase.__subclasses__()}
@@ -246,7 +230,7 @@ class Database(object):
     def __str__(self):
         # str(engine) does a nice job of masking passwords
         s = str(self.ro_engine)[7:]
-        s.rstrip(')')
+        s = s.rstrip(')')
         s = s.partition('?')[0]
         return s
 
@@ -268,7 +252,9 @@ class Database(object):
             return "{host}/{db_name}?application_name={app_name}".format(host=host, db_name=db_name, app_name=app_name)
         else:
             # for sqlite, db_name is the file path
-            return "{host}/{db_name}".format(host=host, db_name=db_name)
+            if not host.endswith('/'):
+                host = host + '/'
+            return host + db_name
 
     def get_database(self, db_name):
         """Return a new Database object with the same hosts and orm base, but different db name
@@ -291,6 +277,7 @@ class Database(object):
         self._rw_sessionmaker = None
         self._maint_engine = None
         self._engine_pid = None    
+        self._default_session = None
             
         # collect now or else we might try to collect engine-related garbage in forked processes,
         # which can lead to "OperationalError: server closed the connection unexpectedly"
@@ -420,7 +407,7 @@ class Database(object):
                 try:
                     conn.execute('drop database %s' % self.db_name)
                 except sqlalchemy.exc.ProgrammingError as err:
-                    if 'does not exist' not in err.message:
+                    if 'does not exist' not in err.args[0]:
                         raise
         else:
             raise TypeError("Unsupported database backend %s" % self.backend)
@@ -503,7 +490,8 @@ class Database(object):
             return
             
         if self.backend == 'sqlite':
-            self.rw_engine.execute('drop table %s' % (','.join(drops)))
+            for table in drops:
+                self.rw_engine.execute('drop table %s' % table)
         else:
             self.rw_engine.execute('drop table %s cascade' % (','.join(drops)))
 
@@ -540,7 +528,7 @@ class Database(object):
     def bake_sqlite(self, sqlite_file, **kwds):
         """Dump a copy of this database to an sqlite file.
         """
-        sqlite_db = Database(ro_host="sqlite://", rw_host="sqlite://", db_name=sqlite_file, ormbase=self.ormbase)
+        sqlite_db = Database(ro_host="sqlite:///", rw_host="sqlite:///", db_name=sqlite_file, ormbase=self.ormbase)
         sqlite_db.create_tables()
         
         last_size = 0
@@ -548,7 +536,7 @@ class Database(object):
             size = os.stat(sqlite_file).st_size
             diff = size - last_size
             last_size = size
-            print("   sqlite file size:  %0.2fGB  (+%0.2fGB for %s)" % (size*1e-9, diff*1e-9, table))
+            print("   sqlite file size:  %0.4fGB  (+%0.4fGB for %s)" % (size*1e-9, diff*1e-9, table))
 
     def clone_database(self, dest_db_name=None, dest_db=None, overwrite=False, **kwds):
         """Copy this database to a new one.
@@ -571,7 +559,7 @@ class Database(object):
             pass
 
     @staticmethod
-    def iter_copy_tables(source_db, dest_db, tables=None, skip_tables=(), skip_errors=False, vacuum=True):
+    def iter_copy_tables(source_db, dest_db, tables=None, skip_tables=(), skip_columns={}, skip_errors=False, vacuum=True):
         """Iterator that copies all tables from one database to another.
         
         Yields each table name as it is completed.
@@ -588,7 +576,8 @@ class Database(object):
             print("Cloning %s.." % table_name)
             
             # read from table in background thread, write to table in main thread.
-            reader = TableReadThread(source_db, table)
+            skip_cols = skip_columns.get(table_name, [])
+            reader = TableReadThread(source_db, table, skip_columns=skip_cols)
             i = 0
             for i,rec in enumerate(reader):
                 try:
@@ -599,7 +588,7 @@ class Database(object):
                         sys.excepthook(*sys.exc_info())
                     else:
                         raise
-                if i%200 == 0:
+                if i%1000 == 0:
                     print("%d/%d   %0.2f%%\r" % (i, reader.max_id, (100.0*(i+1.0)/reader.max_id)), end="")
                     sys.stdout.flush()
                 
@@ -620,13 +609,14 @@ class TableReadThread(threading.Thread):
     
     Records are queried chunkwise and queued in a background thread to enable more efficient streaming.
     """
-    def __init__(self, db, table, chunksize=1000):
+    def __init__(self, db, table, chunksize=1000, skip_columns=()):
         threading.Thread.__init__(self)
         self.daemon = True
         
         self.db = db
         self.table = table
         self.chunksize = chunksize
+        self.skip_columns = skip_columns
         self.queue = queue.Queue(maxsize=5)
         self.max_id = db.session().query(func.max(table.columns['id'])).all()[0][0] or 0
         self.start()
@@ -636,7 +626,8 @@ class TableReadThread(threading.Thread):
             session = self.db.session()
             table = self.table
             chunksize = self.chunksize
-            all_columns = table.columns
+            all_columns = [col for col in table.columns if col.name not in self.skip_columns]
+            print(all_columns)
             for i in range(0, self.max_id, chunksize):
                 query = session.query(*all_columns).filter((table.columns['id'] >= i) & (table.columns['id'] < i+chunksize))
                 records = query.all()

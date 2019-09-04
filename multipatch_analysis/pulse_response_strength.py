@@ -12,10 +12,71 @@ import pyqtgraph as pg
 
 from neuroanalysis.data import TSeries
 from neuroanalysis import filter
-from neuroanalysis.event_detection import exp_deconvolve
+from neuroanalysis.event_detection import exp_deconvolve, exp_reconvolve
+from neuroanalysis.fitting import fit_psp
 from neuroanalysis.baseline import float_mode
 
 from .database import default_db as db
+
+
+def measure_response(rec, baseline_rec):
+    """Curve fit a single pulse response to measure its amplitude / kinetics.
+    
+    Uses the known latency and kinetics of the synapse to seed the fit.
+    Optionally fit a baseline at the same time for noise measurement.
+    """
+    if rec.clamp_mode == 'ic':
+        rise_time = rec.psp_rise_time
+        decay_tau = rec.psp_decay_tau
+    else:
+        rise_time = rec.psc_rise_time
+        decay_tau = rec.psc_decay_tau
+                
+    # make sure all parameters are available
+    for v in [rec.spike_time, rec.latency, rise_time, decay_tau]:
+        if v is None or rec.latency is None or not np.isfinite(v):
+            return None, None
+    
+    data = TSeries(rec.data, t0=rec.rec_start-rec.spike_time, sample_rate=db.default_sample_rate)
+
+    # decide whether/how to constrain the sign of the fit
+    if rec.synapse_type == 'ex':
+        sign = 1
+    elif rec.synapse_type == 'in':
+        if rec.baseline_potential > -60e-3:
+            sign = -1
+        else:
+            sign = 0
+    else:
+        sign = 0
+    if rec.clamp_mode == 'vc':
+        sign = -sign
+
+    # fit response region
+    response_fit = fit_psp(data, 
+        search_window=rec.latency + np.array([-100e-6, 100e-6]), 
+        clamp_mode=rec.clamp_mode, 
+        sign=sign,
+        baseline_like_psp=True, 
+        init_params={'rise_time': rise_time, 'decay_tau': decay_tau},
+        refine=False,
+    )
+        
+    # fit baseline region
+    if baseline_rec is None:
+        baseline_fit = None
+    else:
+        baseline = TSeries(baseline_rec.data, t0=data.t0, sample_rate=db.default_sample_rate)
+        baseline_fit = fit_psp(baseline, 
+            search_window=rec.latency + np.array([-100e-6, 100e-6]), 
+            clamp_mode=rec.clamp_mode, 
+            sign=sign, 
+            baseline_like_psp=True, 
+            init_params={'rise_time': rise_time, 'decay_tau': decay_tau},
+            refine=False,
+        )
+
+    return response_fit, baseline_fit
 
 
 def measure_peak(trace, sign, spike_time, pulse_times, spike_delay=1e-3, response_window=4e-3):
@@ -92,22 +153,30 @@ def response_query(session):
     Build a query to get all pulse responses along with presynaptic pulse and spike timing
     """
     q = session.query(
-        db.PulseResponse.id.label('response_id'),
+        db.PulseResponse.id.label('response_id'),        
         db.PulseResponse.data,
         db.PulseResponse.data_start_time.label('rec_start'),
         db.StimPulse.onset_time.label('pulse_start'),
         db.StimPulse.duration.label('pulse_dur'),
         db.StimPulse.first_spike_time.label('spike_time'),
         db.PatchClampRecording.clamp_mode,
+        db.PatchClampRecording.baseline_potential,
         db.PulseResponse.ex_qc_pass,
         db.PulseResponse.in_qc_pass,
+        db.Pair.has_synapse,
+        db.Synapse.latency,
+        db.Synapse.psp_rise_time,
+        db.Synapse.psp_decay_tau,
+        db.Synapse.psc_rise_time,
+        db.Synapse.psc_decay_tau,
+        db.Synapse.synapse_type,
+        db.Recording.id.label('recording_id'),
     )
     q = q.join(db.StimPulse, db.PulseResponse.stim_pulse)
     q = q.join(db.Recording, db.PulseResponse.recording)
     q = q.join(db.PatchClampRecording)
-
-    # return qc-failed records as well so we can verify qc is working
-    #q = q.filter(((db.PulseResponse.ex_qc_pass==True) | (db.PulseResponse.in_qc_pass==True)))
+    q = q.join(db.Pair, db.PulseResponse.pair)
+    q = q.join(db.Synapse, db.Pair.synapse)
 
     return q
 
@@ -122,6 +191,7 @@ def baseline_query(session):
         db.PatchClampRecording.clamp_mode,
         db.Baseline.ex_qc_pass,
         db.Baseline.in_qc_pass,
+        db.Recording.id.label('recording_id'),
     )
     q = q.join(db.Recording, db.Baseline.recording)
     q = q.join(db.PatchClampRecording, db.PatchClampRecording.recording_id==db.Recording.id)

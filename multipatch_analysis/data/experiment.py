@@ -21,9 +21,11 @@ from ..genotypes import Genotype
 from ..synphys_cache import SynPhysCache
 from ..util import timestamp_to_datetime
 from .cell import Cell
+from .pair import Pair
 from .electrode import Electrode
 from .data import MultiPatchDataset
 from .pipette_metadata import PipetteMetadata
+from . import data_notes_db
 
 
 class Experiment(object):
@@ -32,6 +34,7 @@ class Experiment(object):
         self.source_id = (None, None)
         self._electrodes = None
         self._cells = None
+        self._pairs = None
         self._connections = None
         self._gaps = None
         self._region = None
@@ -76,6 +79,8 @@ class Experiment(object):
         # make sure all cells have information for all labels
         for cell in self.cells.values():
             for label in self.labels:
+                if label == 'biocytin':
+                    continue
                 if label not in cell.labels:
                     raise Exception("Cell %s is missing label %s" % (cell, label))
             for cre in self.cre_types:
@@ -146,6 +151,43 @@ class Experiment(object):
             mtime = max(mtime, os.stat(file).st_mtime)
         
         return timestamp_to_datetime(mtime)
+
+    @property
+    def pairs(self):
+        if self._pairs is None:
+            self._pairs = {}
+            for i, pre_cell in self.cells.items():
+                for j, post_cell in self.cells.items():
+                    if i == j:
+                        continue
+                        
+                    # check to see if i,j is in manual connection calls
+                    # (do not use expt.connections, which excludes some connections based on QC)
+                    syn_calls = self.connection_calls
+                    synapse = None if syn_calls is None else ((i, j) in syn_calls)
+                    gap_calls = self.gap_calls
+                    electrical = None if gap_calls is None else ((i, j) in gap_calls)
+                    synapse_type = None
+
+                    # If this pair has a record in the data notes DB, then it overrides
+                    # anything found in pipettes.yml
+                    # pair_notes_rec = data_notes_db.get_pair_notes_record(self.uid, pre_cell.cell_id, post_cell.cell_id)
+                    # if pair_notes_rec is not None:
+                    #     electrical = pair_notes_rec.notes['gap_junction']
+                    #     synapse_type = pair_notes_rec.notes['synapse_type']
+                    #     synapse = synapse_type in ('ex', 'in')
+                    
+                    pair = Pair(
+                        experiment=self,
+                        pre_cell=pre_cell,
+                        post_cell=post_cell,
+                        has_synapse=synapse,
+                        synapse_type=synapse_type,
+                        has_electrical=electrical,
+                    )
+                    self._pairs[pre_cell.cell_id, post_cell.cell_id] = pair
+            
+        return self._pairs
 
     @property
     def connections(self):
@@ -421,7 +463,7 @@ class Experiment(object):
                         if m is None:
                             post_id = None  # triggers ValueError below
                         else:
-                            post_id = int(m.groups()[0])
+                            post_id = m.groups()[0]
                         if m.groups()[1] == '?':
                             # ignore questionable connections for now
                             continue
@@ -759,9 +801,11 @@ class Experiment(object):
         cells = marker_items[0]['markers']
         for name, pos in cells:
             m = re.match("\D+(\d+)", name)
-            cid = int(m.group(1))
+            cid = str(int(m.group(1)))
             if cid in self.cells:
                 self.cells[cid].position = pos
+            else:
+                print("warning: ignoring position for cell %r" % cid)
 
     @property
     def mosaic_file(self):
@@ -847,8 +891,10 @@ class Experiment(object):
         return self._slice_info
 
     @property
-    def slice_timestamp(self):
-        return self.slice_info['__timestamp__']
+    def slice_id(self):
+        """Unique string ID for this experiment's slice
+        """
+        return "%0.3f" % self.slice_info['__timestamp__']
 
     @property
     def slice_path(self):
@@ -1051,7 +1097,7 @@ class Experiment(object):
             mplog = self.multipatch_log
         except TypeError:
             return None
-        lines = [l for l in open(mplog, 'rb').readlines() if 'surface_depth_changed' in l]
+        lines = [l for l in open(mplog, 'r').readlines() if 'surface_depth_changed' in l]
         if len(lines) == 0:
             return None
         line = lines[-1].rstrip(',\r\n')
@@ -1083,7 +1129,7 @@ class Experiment(object):
         """
         ss = os.path.join(self.path, 'sync_source')
         if os.path.isfile(ss):
-            return open(ss, 'rb').read()
+            return open(ss, 'rb').read().decode('latin1')
         else:
             return self.path
 

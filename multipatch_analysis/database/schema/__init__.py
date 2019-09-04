@@ -12,10 +12,10 @@ from .slice import *
 from .experiment import *
 from .morphology import *
 from .dataset import *
-from .pulse_response_strength import *
+from .synapse import *
+from .pulse_response import *
 from .dynamics import *
-from .connection_strength import *
-from .avg_first_pulse_fit import *
-from .single_first_pulse_fit import *
+from .synapse_prediction import *
+from .resting_state_fit import *
 from .gap_junction import *
 from .cortical_location import *

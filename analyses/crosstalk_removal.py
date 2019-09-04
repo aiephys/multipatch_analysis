@@ -11,7 +11,7 @@ from sqlalchemy.orm import aliased
 from neuroanalysis.data import TSeriesList
 from neuroanalysis import filter
 from multipatch_analysis.ui.experiment_browser import ExperimentBrowser
-from multipatch_analysis.connection_strength import get_amps, get_baseline_amps
+from multipatch_analysis.synapse_prediction import get_amps, get_baseline_amps
 from multipatch_analysis.database import default_db as db
 from multipatch_analysis import data
 

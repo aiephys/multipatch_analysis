@@ -1,15 +1,15 @@
 from sqlalchemy.orm import relationship
 from . import make_table
-from .pulse_response_strength import PulseResponseStrength, BaselineResponseStrength
+from .pulse_response import PulseResponseStrength, BaselineResponseStrength
 from .experiment import Pair
 
 
-__all__ = ['ConnectionStrength']
+__all__ = ['SynapsePrediction']
 
 
-ConnectionStrength = make_table(
-    name='connection_strength',
-    comment= "Describes the statistics of per-pair properties aggregated from the pulse_response_strength table.",
+SynapsePrediction = make_table(
+    name='synapse_prediction',
+    comment= "Unbiased metrics used for automated synapse detection.",
     columns=[
         ('pair_id', 'pair.id', 'The ID of the entry in the pair table to which these results apply', {'index': True}),
         ('synapse_type', 'str', 'String "ex" or "in", indicating whether this analysis chose to treat the pair as excitatory or inhibitory'),
@@ -65,7 +65,7 @@ ConnectionStrength = make_table(
         ('vc_base_latency_stdev', 'float'),
         ('vc_latency_ttest', 'float'),
         ('vc_latency_ks2samp', 'float'),
-
+        
         # Average pulse responses
         ('ic_average_response', 'array'),
         ('ic_average_response_t0', 'float'),
@@ -82,6 +82,7 @@ ConnectionStrength = make_table(
         ('ic_fit_rise_power', 'float'),
         ('ic_fit_decay_tau', 'float'),
         ('ic_fit_exp_amp', 'float'),
+        ('ic_fit_exp_tau', 'float'),
         ('ic_fit_nrmse', 'float'),
 
         ('vc_fit_amp', 'float'),
@@ -91,10 +92,11 @@ ConnectionStrength = make_table(
         ('vc_fit_rise_power', 'float'),
         ('vc_fit_decay_tau', 'float'),
         ('vc_fit_exp_amp', 'float'),
+        ('vc_fit_exp_tau', 'float'),
         ('vc_fit_nrmse', 'float'),
     ]
 )
 
-Pair.connection_strength = relationship(ConnectionStrength, back_populates="pair", cascade="delete", single_parent=True, uselist=False)
-ConnectionStrength.pair = relationship(Pair, back_populates="connection_strength", single_parent=True)
+Pair.synapse_prediction = relationship(SynapsePrediction, back_populates="pair", cascade="delete", single_parent=True, uselist=False)
+SynapsePrediction.pair = relationship(Pair, back_populates="synapse_prediction", single_parent=True)
 

@@ -1,5 +1,6 @@
 from __future__ import print_function
 import os, re, json
+import six
 from . import config
 import sqlalchemy
 
@@ -96,7 +97,7 @@ def specimen_info(specimen_name=None, specimen_id=None):
     rec = dict(r[0])
     
     # convert thickness to unscaled
-    rec['thickness'] = rec['thickness'] or (rec['thickness'] * 1e-6)
+    rec['thickness'] = None if rec['thickness'] is None else (rec['thickness'] * 1e-6)
     # convert organism to more easily searchable form
     rec['organism'] = {'Mus musculus': 'mouse', 'Homo Sapiens': 'human'}[rec['organism']]
     # convert flipped to bool
@@ -144,7 +145,7 @@ def specimen_info(specimen_name=None, specimen_id=None):
     # Human format is:
     #   Haa.bb.ccc.dd.ee.ff
     elif rec['organism'] == 'human':
-        m = re.match(r'H(\d+)\.(\d+)\.(\d+)\.(\d+)\.(\d+)(\.(\d+))?$', spec_name)
+        m = re.match(r'H(\d+)\.(\d+)\.(\d+)\.(\d+)(A?)\.(\d+)(\.(\d+))?$', spec_name)
         if m is None:
             raise Exception('Could not parse human specimen name: "%s"' % spec_name)
         rec['hemisphere'] = None
@@ -154,7 +155,8 @@ def specimen_info(specimen_name=None, specimen_id=None):
         rec['human_donor_number'] = int(m.groups()[2])
         rec['block_number'] = int(m.groups()[3])
         rec['section_number'] = int(m.groups()[4])
-        rec['subsection_number'] = None if m.groups()[6] is None else int(m.groups()[6])
+        rec['section_letter'] = m.groups()[5]
+        rec['subsection_number'] = None if m.groups()[7] is None else int(m.groups()[7])
         
         
     else:
@@ -385,7 +387,7 @@ def specimen_metadata(specimen):
     if meta == '':
         return None
 
-    if isinstance(meta, basestring):
+    if isinstance(meta, six.string_types):
         meta = json.loads(meta)  # unserialization corrects for a LIMS bug; we can remove this later.
     return meta
 
@@ -560,12 +562,23 @@ def cluster_cells(cluster):
     
     q = """select child.id, child.name, child.x_coord, child.y_coord, child.external_specimen_name, child.ephys_qc_result
     from specimens parent 
-    left join specimens child on child.parent_id=parent.id
+    inner join specimens child on child.parent_id=parent.id
     where parent.id=%d
     """ % cluster
 
     recs = query(q)
     return recs
+
+
+def cell_specimen_ids(cell_cluster):
+    """Return a dictionary mapping {cell_ext_id: lims_specimen_id} for all cells in a cluster.
+    """
+    if not isinstance(cell_cluster, int):
+        cell_cluster = specimen_id_from_name(cell_cluster)
+        
+    lims_cells = cluster_cells(cell_cluster)
+    return {(lims_cell.external_specimen_name): lims_cell.id for lims_cell in lims_cells if lims_cell is not None}
+
 
 def cell_polygon(cell):
     """ Return polygon id for cell specimen
@@ -580,6 +593,7 @@ def cell_polygon(cell):
 
     recs = query(q)
     return recs
+
 
 def cell_layer(cell):
     """ Return layer call for Cell specimen
@@ -599,6 +613,7 @@ def cell_layer(cell):
     if len(recs) != 1:
         raise Exception ('Incorrect number of layers for cell %d' % cell)
     return recs[0][0]
+
 
 if __name__ == '__main__':
     # testing specimen

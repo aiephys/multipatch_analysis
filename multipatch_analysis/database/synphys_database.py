@@ -6,7 +6,7 @@ class SynphysDatabase(Database):
     """Augments the Database class with convenience methods for querying the synphys database.
     """
     # database version should be incremented whenever the schema has changed
-    db_version = 13
+    db_version = 14
     
     default_sample_rate = 20000
     _sample_rate_str = '%dkHz' % (default_sample_rate // 1000)
@@ -40,15 +40,25 @@ class SynphysDatabase(Database):
         
         return expts[0]
 
-    def experiment_from_uid(self, uid, session=None):
+    def experiment_from_ext_id(self, ext_id, session=None):
         session = session or self.default_session
-        expts = session.query(self.Experiment).filter(self.Experiment.ext_id==uid).all()
+        expts = session.query(self.Experiment).filter(self.Experiment.ext_id==ext_id).all()
         if len(expts) == 0:
-            raise KeyError('No experiment found for uid %s' %uid)
+            raise KeyError('No experiment found for ext_id %s' %ext_id)
         elif len(expts) > 1:
-            raise RuntimeError("Multiple experiments found for uid %s" %uid)
+            raise RuntimeError("Multiple experiments found for ext_id %s" %ext_id)
 
         return expts[0]
+
+    def slice_from_ext_id(self, ext_id, session=None):
+        session = session or self.default_session
+        slices = session.query(self.Slice).filter(self.Slice.ext_id==ext_id).all()
+        if len(slices) == 0:
+            raise KeyError("No slice found for ext_id %0.3f" % ext_id)
+        elif len(slices) > 1:
+            raise KeyError("Multiple slices found for ext_id %0.3f" % ext_id)
+        
+        return slices[0]
 
     def list_experiments(self, session=None):
         session = session or self.default_session
@@ -94,7 +104,7 @@ class SynphysDatabase(Database):
             # pre_morphology,
             # post_morphology,
             # Experiment,
-            # ConnectionStrength,
+            # SynapsePrediction,
         )
         query = query.join(pre_cell, pre_cell.id==self.Pair.pre_cell_id)
         query = query.join(post_cell, post_cell.id==self.Pair.post_cell_id)
@@ -102,7 +112,7 @@ class SynphysDatabase(Database):
         query = query.outerjoin(post_morphology, post_morphology.cell_id==post_cell.id)
         query = query.join(self.Experiment, self.Pair.experiment_id==self.Experiment.id)
         query = query.outerjoin(self.Slice, self.Experiment.slice_id==self.Slice.id) ## don't want to drop all pairs if we don't have slice or connection strength entries
-        query = query.outerjoin(self.ConnectionStrength)
+        query = query.outerjoin(self.SynapsePrediction)
 
         if pre_class is not None:
             query = pre_class.filter_query(query, pre_cell)
@@ -111,10 +121,10 @@ class SynphysDatabase(Database):
             query = post_class.filter_query(query, post_cell)
 
         if synapse is not None:
-            query = query.filter(self.Pair.synapse==synapse)
+            query = query.filter(self.Pair.has_synapse==synapse)
 
         if electrical is not None:
-            query = query.filter(self.Pair.electrical==electrical)
+            query = query.filter(self.Pair.has_electrical==electrical)
 
         if project_name is not None:
             if isinstance(project_name, str):

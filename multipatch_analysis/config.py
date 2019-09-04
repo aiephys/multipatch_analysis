@@ -5,12 +5,11 @@ Local variables in this module are overwritten by the contents of config.yml
 
 """
 
-import os, yaml
+import os, sys, yaml
 
 
 synphys_db_host = None
 synphys_db_host_rw = None
-synphys_db_sqlite = "synphys.sqlite"
 synphys_db = "synphys"
 synphys_db_readonly_user = "readonly"
 synphys_data = None
@@ -24,54 +23,21 @@ rig_data_paths = {}
 known_addrs = {}
 import_old_data_on_submission = False
 
-
 template = r"""
-# synphys database
-synphys_db_host: "postgresql://readonly:readonly@10.128.36.109"
+synphys_db_host: "sqlite:///"
 synphys_db: "synphys"
-synphys_db_sqlite: "synphys.sqlite"
-# optional DB access with write privileges
-synphys_db_host_rw: null
-synphys_db_readonly_user: "readonly"
-
-# path to synphys network storage
-synphys_data: "N:\\"
 
 cache_path: "E:\\multipatch_analysis_cache"
 grow_cache: true
-rig_name: 'MP_'
-n_headstages: 8
 
 editor_command: '"C:\\Program Files\\Sublime Text 2\\sublime_text.exe" "{file}"'
 browser_command: '"C:\\Program Files (x86)\\Mozilla Firefox\\firefox.exe" {url}'
-
-# local paths to data sources
-rig_data_paths:
-    mp1:
-        - primary: /path/to/mp1/primary_data_1
-          archive: /path/to/mp1/data_1_archive
-          backup:  /path/to/mp1/data_1_backup
-        - primary: /path/to/mp1/primary_data_2
-          archive: /path/to/mp1/data_2_archive
-          backup:  /path/to/mp1/data_2_backup
-
-
-# directories to be synchronized nightly
-backup_paths:
-    rig_data:
-        source: "D:\\"
-        dest: "E:\\archive"
-        archive_deleted: false
-    system_drive:
-        source: "C:\\"
-        dest: "E:\\C_backup"
-        archive_deleted: true
         
 """
 
 configfile = os.path.join(os.path.dirname(__file__), '..', 'config.yml')
 if not os.path.isfile(configfile):
-    open(configfile, 'wb').write(template)
+    open(configfile, 'wb').write(template.encode('utf8'))
 
 if hasattr(yaml, 'FullLoader'):
     # pyyaml new API
@@ -83,5 +49,16 @@ else:
 for k,v in config.items():
     locals()[k] = v
 
+
+# intercept specific command line args
+ignored_args = [sys.argv[0]]
+for arg in sys.argv[1:]:
+    if arg.startswith('--database='):
+        synphys_db = arg[11:]
+    elif arg.startswith('--db-host='):
+        synphys_db_host = arg[10:]
+    else:
+        ignored_args.append(arg)
+sys.argv = ignored_args        
 
 

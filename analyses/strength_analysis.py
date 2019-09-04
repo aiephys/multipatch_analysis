@@ -33,7 +33,7 @@ from multipatch_analysis.database import default_db as db
 from multipatch_analysis.ui.multipatch_nwb_viewer import MultipatchNwbViewer
 from multipatch_analysis.ui.experiment_browser import ExperimentBrowser
 from multipatch_analysis.pulse_response_strength import response_query, baseline_query, analyze_response_strength
-from multipatch_analysis.connection_strength import get_amps, get_baseline_amps
+from multipatch_analysis.synapse_prediction import get_amps, get_baseline_amps
 from multipatch_analysis import constants
 
 
@@ -459,7 +459,7 @@ class ResponseStrengthAnalyzer(object):
 
 def query_all_pairs(classifier=None):
     columns = [
-        "connection_strength.*",
+        "synapse_prediction.*",
         "experiment.id as experiment_id",
         "experiment.acq_timestamp as acq_timestamp",
         "experiment.rig_name",
@@ -479,17 +479,17 @@ def query_all_pairs(classifier=None):
         "post_cell.cre_type as post_cre_type",
         "post_cell.target_layer as post_target_layer",
         "post_morphology.pyramidal as post_pyramidal",
-        "pair.synapse",
+        "pair.has_synapse",
         "pair.distance",
         "pair.crosstalk_artifact",
-        "abs(post_cell.ext_id - pre_cell.ext_id) as electrode_distance",
+        # "abs(post_cell.ext_id - pre_cell.ext_id) as electrode_distance",
     ]
     # columns.extend([
     #     "detection_limit.minimum_amplitude",
     # ])
 
     joins = [
-        "join pair on connection_strength.pair_id=pair.id",
+        "join pair on synapse_prediction.pair_id=pair.id",
         "join cell pre_cell on pair.pre_cell_id=pre_cell.id",
         "join cell post_cell on pair.post_cell_id=post_cell.id",
         "join morphology pre_morphology on pre_morphology.cell_id=pre_cell.id",
@@ -505,7 +505,7 @@ def query_all_pairs(classifier=None):
     query = ("""
     select 
     {columns}
-    from connection_strength
+    from synapse_prediction
     {joins}
     order by acq_timestamp
     """).format(
@@ -635,7 +635,7 @@ class PairClassifier(object):
         mask = (recs['ic_n_samples'] > 100) & (recs['ic_crosstalk_mean'] < 60e-6)
 
         x = features[mask]
-        y = recs['synapse'][mask].astype(bool)
+        y = recs['has_synapse'][mask].astype(bool)
         ids = ids[mask]
 
         # shuffle
@@ -781,7 +781,7 @@ class PairScatterPlot(pg.QtCore.QObject):
         spw.show()
 
         fields = [
-            ('synapse', {'mode': 'enum', 'values': [True, False, None]}),
+            ('has_synapse', {'mode': 'enum', 'values': [True, False, None]}),
             ('synapse_type', {'mode': 'enum', 'values': ['in', 'ex']}),
             ('prediction', {'mode': 'enum', 'values': [True, False, None]}),
             ('confidence', {}),
@@ -797,7 +797,7 @@ class PairScatterPlot(pg.QtCore.QObject):
             ('acsf', {'mode': 'enum', 'values': list(set(recs['acsf']))}),
             ('acq_timestamp', {}),
             ('crosstalk_artifact', {'units': 'V'}),
-            ('electrode_distance', {}),
+            # ('electrode_distance', {}),
             ('slice_quality', {'mode': 'enum', 'values': list(range(1,6))}),
         ]
         fnames = [f[0] for f in fields]
@@ -821,12 +821,12 @@ class PairScatterPlot(pg.QtCore.QObject):
 
         # Set up scatter plot widget defaults
         spw.setSelectedFields('ic_base_deconv_amp_mean', 'ic_deconv_amp_mean')
-        spw.filter.addNew('synapse')
+        spw.filter.addNew('has_synapse')
         ch = spw.filter.addNew('ic_crosstalk_mean')
         ch['Min'] = -1
         ch['Max'] = 60e-6
         ch = spw.filter.addNew('rig_name')
-        ch = spw.colorMap.addNew('synapse')
+        ch = spw.colorMap.addNew('has_synapse')
         ch['Values', 'True'] = pg.mkColor('y')
         ch['Values', 'False'] = pg.mkColor(200, 200, 200, 150)
         ch['Values', 'None'] = pg.mkColor(200, 100, 100)
@@ -907,7 +907,7 @@ class PairView(pg.QtCore.QObject):
         print("Server path:", sel.expt.storage_path)
         if hasattr(sel, 'pair'):
             print("ID: %.3f  %d->%d" % (sec, pair.pre_cell.ext_id, pair.post_cell.ext_id))
-            conn = pair.connection_strength
+            conn = pair.synapse_prediction
             cls = get_pair_classifier()
             f = {k: getattr(conn, k) for k in cls.features}
             print(f)
@@ -1049,8 +1049,8 @@ if __name__ == '__main__':
     # Print a little report about synapses that may have been misclassified
     session = db.session()
 
-    fn_mask = (recs['confidence'] > 0.2) & (recs['synapse'] == False)
-    fp_mask = (recs['confidence'] < 0.2) & (recs['synapse'] == True)
+    fn_mask = (recs['confidence'] > 0.2) & (recs['has_synapse'] == False)
+    fp_mask = (recs['confidence'] < 0.2) & (recs['has_synapse'] == True)
     for mask, name in [(fn_mask, 'negatives'), (fp_mask, 'positives')]:
         print("\n================ Possible false %s: ==============\n" % name)
         masked = recs[mask]

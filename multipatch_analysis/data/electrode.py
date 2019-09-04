@@ -5,7 +5,7 @@ class Electrode(object):
 
     Parameters
     ----------
-    electrode_id : int
+    electrode_id : str
         ID that identifies this electrode uniquely amongst all other electrodes used in the same experiment
     start_time : datetime
         Beginning time of electrode use

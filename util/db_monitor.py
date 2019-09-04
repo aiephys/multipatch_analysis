@@ -66,7 +66,7 @@ def hostname(ip):
     if ip in _known_hostnames:
         return _known_hostnames[ip]
     try:
-        host = subprocess.check_output(['host', ip]).partition('pointer ')[2].rstrip('.\n')
+        host = subprocess.check_output(['host', ip]).decode('utf8').partition('pointer ')[2].rstrip('.\n')
     except subprocess.CalledProcessError:
         host = "hostname not found"
     _known_hostnames[ip] = host
@@ -87,7 +87,7 @@ def check():
         host = host or "[None]"
         name = name or '???'
         count = counts[user]
-        print("{:10s}{:15s}".format(name, ip))
+        print("{:10s}{:15s}".format(str(name), str(ip)))
         
         for con in connects:
             if con['client_addr'] != ip:

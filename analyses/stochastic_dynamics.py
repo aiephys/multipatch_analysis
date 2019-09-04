@@ -10,7 +10,7 @@ from pyqtgraph.Qt import QtGui, QtCore
 import scipy.stats as stats
 from multipatch_analysis.database import database as db
 from multipatch_analysis.pulse_response_strength import PulseResponseStrength
-from multipatch_analysis.connection_strength import ConnectionStrength, get_amps, get_baseline_amps
+from multipatch_analysis.synapse_prediction import SynapsePrediction, get_amps, get_baseline_amps
 from multipatch_analysis.ui.ndslicer import NDSlicer
 from neuroanalysis.synaptic_release import ReleaseModel
 
@@ -422,7 +422,7 @@ if __name__ == '__main__':
     expt = db.experiment_from_timestamp(expt_id, session=session)
     pair = expt.pairs[(pre_cell_id, post_cell_id)]
 
-    syn_type = pair.connection_strength.synapse_type
+    syn_type = pair.synapse.synapse_type
 
 
     # 1. Get a list of all presynaptic spike times and the amplitudes of postsynaptic responses

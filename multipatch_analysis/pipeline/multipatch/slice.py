@@ -63,6 +63,7 @@ class SlicePipelineModule(DatabasePipelineModule):
             genotype = ';'.join(genotype.split(';') + [constants.INJECTIONS[inj]])
 
         fields = {
+            'ext_id': job_id,
             'acq_timestamp': info['__timestamp__'],
             'species': limsdata.get('organism'),
             'date_of_birth': limsdata.get('date_of_birth'),
@@ -121,9 +122,10 @@ def all_slices():
         age = time.time() - os.stat(cachefile).st_mtime
         if age < 4 * 3600:
             print("Loaded slice timestamps from cache (%0.1f hours old)" % (age/3600.))
-            return pickle.load(open(cachefile, 'r'))
+            return pickle.load(open(cachefile, 'rb'))
     
     slice_dirs = sorted(glob.glob(os.path.join(config.synphys_data, '*', 'slice_*')))
+    print(slice_dirs)
     _all_slices = OrderedDict()
     for path in slice_dirs:
         dh = getDirHandle(path)
@@ -131,11 +133,11 @@ def all_slices():
         if ts is None:
             print("MISSING TIMESTAMP: %s" % path)
             continue
-        _all_slices[ts] = path
+        _all_slices["%0.3f"%ts] = path
         
     try:
         tmpfile = cachefile+'.tmp'
-        pickle.dump(_all_slices, open(tmpfile, 'w'))
+        pickle.dump(_all_slices, open(tmpfile, 'wb'))
         os.rename(tmpfile, cachefile)
     except:
         if os.path.exists(tmpfile):
