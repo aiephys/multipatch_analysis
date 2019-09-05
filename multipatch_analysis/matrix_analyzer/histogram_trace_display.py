@@ -36,7 +36,7 @@ class MatrixHistogramPlot(pg.GraphicsLayoutWidget):
         self.hist_plot = None
         self.line = None
         self.scatter = None
-        self.trace_plot = None
+        self.trace_plots = None
         self.trace_plot_list = []
 
     def matrix_histogram(self, results, group_results, colormap, field_map):
@@ -51,9 +51,11 @@ class MatrixHistogramPlot(pg.GraphicsLayoutWidget):
             self.removeItem(self.hist_plot)
         self.hist_plot = self.addPlot()
         if field_map[self.field_name].name == 'connectivity':
-            vals = group_results[group_results[self.field_name]['metric_summary'].notnull()][self.field_name]['metric_summary'] 
+            vals = group_results[group_results[self.field_name]['metric_summary'].notnull()][self.field_name]['metric_summary']
+            y_label = 'Number of Elements' 
         else:
             vals = results[results[self.field_name].notnull()][self.field_name]
+            y_label = 'Number of Pairs'
         neg = vals[vals < 0].min()
         pos = vals[vals > 0].max()
         if pos is np.nan or neg is np.nan:
@@ -69,22 +71,33 @@ class MatrixHistogramPlot(pg.GraphicsLayoutWidget):
         line = pg.InfiniteLine(0, pen={'color': 'w', 'width': 1, 'style': pg.QtCore.Qt.DotLine}, movable=False)
         self.hist_plot.addItem(line)
         units = field.get('units', '')
-        self.hist_plot.setLabels(left='Count', bottom=(self.field_name, units))
+        self.hist_plot.setLabels(left=y_label, bottom=(self.field_name, units))
 
         return self.hist_plot
 
     def plot_element_data(self, element, analyzer, color, trace_panel):
+        self.analyzer = analyzer
         self.trace_panel = trace_panel
         pre_class = element['pre_class'][0].name
         post_class = element['post_class'][0].name
-        self.trace_plot = self.trace_panel.addPlot()
-        self.trace_plot_list.append(self.trace_plot)
-        self.line, self.scatter = analyzer.plot_element_data(pre_class, post_class, element, self.field_name, color=color, trace_plt=self.trace_plot)
+        self.trace_pltA = self.trace_panel.addPlot()
+        self.trace_pltB = self.trace_panel.addPlot()
+        self.trace_pltB.setXLink(self.trace_pltA)
+        self.trace_pltB.hideAxis('left')
+        if self.analyzer.name == 'strength' and self.field_name != 'Latency':
+            self.trace_plots = [self.trace_pltA]
+        else:
+            self.trace_plots = [self.trace_pltA, self.trace_pltB]
+        if self.analyzer.name == 'dynamics':
+            self.trace_pltB.setYLink(self.trace_pltA) 
+        self.trace_plot_list.append(self.trace_plots)
+        self.line, self.scatter = analyzer.plot_element_data(pre_class, post_class, element, self.field_name, color=color, trace_plt=self.trace_plots)
         if len(self.trace_plot_list) > 1:
-            first_plot = self.trace_plot_list[0]
-            for plot in self.trace_plot_list[1:]:
-                plot.setYLink(first_plot)
-                plot.setXLink(first_plot)
+            first_plot = self.trace_plot_list[0][0]
+            for grid in self.trace_plot_list[1:]:
+                for plot in grid:
+                    plot.setYLink(first_plot)
+                    plot.setXLink(first_plot)
         self.hist_plot.addItem(self.line)
         if self.scatter is not None:
             self.hist_plot.addItem(self.scatter)
@@ -93,9 +106,10 @@ class MatrixHistogramPlot(pg.GraphicsLayoutWidget):
         self.selected = 0
         if self.hist_plot is not None:
             [self.hist_plot.removeItem(item) for item in self.hist_plot.items[2:]]
-        if self.trace_plot is not None:
+        if self.trace_plots is not None:
            self.trace_panel.clear()
            self.trace_plot = None
+           self.analyzer.pair_items = {}
         self.trace_plot_list = []
 
     def invalidate_output(self):

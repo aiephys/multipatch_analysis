@@ -70,6 +70,20 @@ class ElementScatterPlot(ScatterPlots):
         self.fields['pair_class']['values'] = list(field_data.pair_class)
         self.setData(rec_data)
 
+    def plotClicked(self, plot, points):
+        for pt in points:
+            data = pt.data()
+            element = ('%s -> %s ' % (data.pre_class.name, data.post_class.name))
+            print('Clicked:' '%s' % element)
+            fields = self.fieldList.selectedItems()
+            for field in fields:
+                field_name = field.text()
+                value = data[field_name]
+                print('%s: %s' % (field_name, pg.siFormat(value)))
+            pt.setBrush(pg.mkBrush('y'))
+            pt.setSize(15)
+        self.sigScatterPlotClicked.emit(self, points)
+
 class PairScatterPlot(ScatterPlots):
     def __init__(self):
         ScatterPlots.__init__(self)

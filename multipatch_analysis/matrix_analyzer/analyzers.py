@@ -23,6 +23,8 @@ thermal_colormap = pg.ColorMap(
                     [(255, 255, 0, 255), (0, 206, 151, 255), (0, 119, 178, 255), (99, 0, 148, 255)],
             )
 
+syn_typ_holding = {'ex': [-70], 'in': [-55]}
+
 class FormattableNumber(float):
 
     @property
@@ -148,6 +150,7 @@ class ConnectivityAnalyzer(Analyzer):
         self.results = None
         self.group_results = None
         self.pair_items = {}
+        self.analyzer_mode = analyzer_mode
         #self._signalHandler = ConnectivityAnalyzer.SignalHandler()
         #self.sigOutputChanged = self._signalHandler.sigOutputChanged
 
@@ -176,14 +179,6 @@ class ConnectivityAnalyzer(Analyzer):
             ('None', {}),
             ]
 
-        if analyzer_mode == 'internal':
-            self.fields.append(
-                ('matrix_completeness', {'mode': 'range', 'defaults': {
-                'colormap': pg.ColorMap(
-                    [0, 0.25, 0.5, 0.75, 1.0],
-                    [(0,0,100,255), (80,0,80,255), (140,0,0,255), (255,100,0,255), (255,255,100,255)],
-            )}}))
-
         self.summary_stat = {
             'conn_no_data': self.metric_summary,
             'Probed Connection': self.metric_summary,
@@ -191,9 +186,19 @@ class ConnectivityAnalyzer(Analyzer):
             'Gap Junction': [self.metric_summary, self.metric_conf],
             'Connection Probability': [self.metric_summary, self.metric_conf],
             'Gap Junction Probability': [self.metric_summary, self.metric_conf],
-            'matrix_completeness': [self.metric_summary, self.metric_conf],
             'Distance': [self.metric_summary, self.metric_conf],
         }
+
+        if self.analyzer_mode == 'internal':
+            self.fields.append(
+                ('matrix_completeness', {'mode': 'range', 'defaults': {
+                'colormap': pg.ColorMap(
+                    [0, 0.25, 0.5, 0.75, 1.0],
+                    [(0,0,100,255), (80,0,80,255), (140,0,0,255), (255,100,0,255), (255,255,100,255)],
+            )}}))
+
+            self.summary_stat['matrix_completeness'] = [self.metric_summary, self.metric_conf]
+
         self.summary_dtypes = {
             ('conn_no_data', 'metric_summary'): bool,
             ('Probed Connection', 'metric_summary'): int,
@@ -289,6 +294,9 @@ class ConnectivityAnalyzer(Analyzer):
                 
                 }
 
+                if self.analyzer_mode == 'external':
+                    del(results[pair]['matrix_completeness'])
+
         self.results = pd.DataFrame.from_dict(results, orient='index')
 
         return self.results
@@ -318,26 +326,73 @@ class ConnectivityAnalyzer(Analyzer):
         val = summary[field_name]['metric_summary']
         line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
         scatter = None
-        baseline_window = int(db.default_sample_rate * 5e-3)
-        traces = []
+        tracesA = []
+        tracesB = []
         connections = element[element['Connected'] == True].index.tolist()
         for pair in connections:
-            rsf = pair.resting_state_fit
-            if rsf is not None:
-                trace = rsf.ic_avg_data
-                start_time = rsf.ic_avg_data_start_time
-                latency = pair.synapse.latency
-                if latency is not None and start_time is not None:
-                    xoffset = start_time - latency
-                    trace = format_trace(trace, baseline_window, x_offset=xoffset, align='psp')
-                    trace_plt.plot(trace.time_values, trace.data)
-                    traces.append(trace)
-        if len(traces) > 0:
-            grand_trace = TSeriesList(traces).mean()
-            name = ('%s->%s, n=%d' % (pre_class, post_class, len(traces)))
-            trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3}, name=name)
-            trace_plt.setXRange(-5e-3, 20e-3)
-            trace_plt.setLabels(left=('', 'V'), bottom=('Response Onset', 's'))
+            # rsf = pair.resting_state_fit
+            arfs = pair.avg_response_fits
+            latency = pair.synapse.latency
+            syn_typ = pair.synapse.synapse_type
+            self.pair_items[pair.id] = []
+            trace_itemA = None
+            trace_itemB = None
+            # if rsf is not None:
+            #     traceA = TSeries(data=rsf.ic_avg_data, sample_rate=db.default_sample_rate)
+            #     start_time = rsf.ic_avg_data_start_time
+            #     if latency is not None and start_time is not None:
+            #         xoffset = start_time - latency
+            #         baseline_window = [abs(xoffset)-1e-3, abs(xoffset)]
+            #         traceA = format_trace(traceA, baseline_window, x_offset=xoffset, align='psp')
+            #         trace_itemA = trace_plt[0].plot(traceA.time_values, traceA.data)
+            #         trace_itemA.pair = pair
+            #         trace_itemA.curve.setClickable(True)
+            #         trace_itemA.sigClicked.connect(self.trace_plot_clicked)
+            #         self.pair_items[pair.id].append(trace_itemA)
+            #         tracesA.append(traceA)
+            if arfs is not None:
+                for arf in arfs:
+                    if arf.holding in syn_typ_holding[syn_typ] and arf.manual_qc_pass is True and latency is not None:
+                        if arf.clamp_mode == 'vc' and trace_itemA is None:
+                            traceA = TSeries(data=arf.avg_data, sample_rate=db.default_sample_rate)
+                            start_time = arf.avg_data_start_time
+                            if start_time is not None:
+                                xoffset = start_time - latency
+                                baseline_window = [abs(xoffset)-1e-3, abs(xoffset)]
+                                traceA = format_trace(traceA, baseline_window, x_offset=xoffset, align='psp')
+                                trace_itemA = trace_plt[0].plot(traceA.time_values, traceA.data)
+                                trace_itemA.pair = pair
+                                trace_itemA.curve.setClickable(True)
+                                trace_itemA.sigClicked.connect(self.trace_plot_clicked)
+                                self.pair_items[pair.id].append(trace_itemA)
+                                tracesA.append(traceA)
+                        if arf.clamp_mode == 'ic' and trace_itemB is None:
+                            traceB = TSeries(data=arf.avg_data, sample_rate=db.default_sample_rate)
+                            start_time = arf.avg_data_start_time
+                            if latency is not None and start_time is not None:
+                                xoffset = start_time - latency
+                                baseline_window = [abs(xoffset)-1e-3, abs(xoffset)]
+                                traceB = format_trace(traceB, baseline_window, x_offset=xoffset, align='psp')
+                                trace_itemB = trace_plt[1].plot(traceB.time_values, traceB.data)
+                                trace_itemB.pair = pair
+                                trace_itemB.curve.setClickable(True)
+                                trace_itemB.sigClicked.connect(self.trace_plot_clicked)
+                                tracesB.append(traceB)
+            self.pair_items[pair.id] = [trace_itemA, trace_itemB]
+
+        if len(tracesA) > 0:
+            grand_trace = TSeriesList(tracesA).mean()
+            name = ('%s->%s' % (pre_class, post_class))
+            # trace_plt[0].addLegend()
+            trace_plt[0].plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3}, name=name)
+            trace_plt[0].setXRange(-5e-3, 20e-3)
+            trace_plt[0].setLabels(left=('', 'A'), bottom=('Response Onset', 's'))
+            trace_plt[0].setTitle('Voltage Clamp')
+        if len(tracesB) > 0:
+            grand_trace = TSeriesList(tracesB).mean()
+            trace_plt[1].plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3})
+            trace_plt[1].setLabels(right=('', 'V'), bottom=('Response Onset', 's'))
+            trace_plt[1].setTitle('Current Clamp')
         return line, scatter
 
     def summary(self, ):
@@ -359,14 +414,27 @@ class ConnectivityAnalyzer(Analyzer):
 
     def trace_plot_clicked(self, trace):
         pair = trace.pair
+        self.deselect_pairs()
         self.select_pair(pair)
 
     def select_pair(self, pair):
-        trace, point = self.pair_items[pair.id]
-        point.setBrush(pg.mkBrush('y'))
-        point.setSize(15)
-        trace.setPen('y', width=2)
+        traceA, traceB = self.pair_items[pair.id]
+        if traceA is not None:
+            traceA.setPen('y', width=3)
+            traceA.setZValue(10) 
+        if traceB is not None:
+            traceB.setPen('y', width=3)
+            traceB.setZValue(10) 
         print('Clicked:' '%s' % pair)
+        print(self.results.loc[pair])
+
+    def deselect_pairs(self):
+        for (traceA, traceB) in self.pair_items.values():
+            if traceA is not None:
+                traceA.setPen('w', width=1)
+            if traceB is not None:
+                traceB.setPen('w', width=1)
+
 
 
 class StrengthAnalyzer(Analyzer):
@@ -536,63 +604,102 @@ class StrengthAnalyzer(Analyzer):
         scatter = None
         baseline_window = int(db.default_sample_rate * 5e-3)
         values = []
-        traces = []
+        tracesA = []
+        tracesB = []
         point_data = []
         for pair, value in element[field_name].iteritems():
+            latency = self.results.loc[pair]['Latency']
+            trace_itemA = None
+            trace_itemB = None
             if pair.has_synapse is not True:
                 continue
             if np.isnan(value):
                 continue
+            syn_typ = pair.synapse.synapse_type
             rsf = pair.resting_state_fit
             if rsf is not None:
-                trace = rsf.vc_avg_data if field_name.startswith('PSC') else rsf.ic_avg_data
+                nrmse = rsf.vc_nrmse if field_name.startswith('PSC') else rsf.ic_nrmse
+                if nrmse is None or nrmse > 0.8:
+                    continue
+                data = rsf.vc_avg_data if field_name.startswith('PSC') else rsf.ic_avg_data
+                traceA = TSeries(data=data, sample_rate=db.default_sample_rate)
                 start_time = rsf.vc_avg_data_start_time if field_name.startswith('PSC') else rsf.ic_avg_data_start_time
-                latency = self.results.loc[pair]['Latency']
-                if latency is None or start_time is None:
-                    trace = None
-                else:
+                if latency is not None and start_time is not None:
                     xoffset = start_time - latency
-            if trace is None:
-                continue
-            values.append(value)
-            trace = format_trace(trace, baseline_window, x_offset=xoffset, align='psp')
-            trace_item = trace_plt.plot(trace.time_values, trace.data)
-            point_data.append(pair)
-            trace_item.pair = pair
-            trace_item.curve.setClickable(True)
-            trace_item.sigClicked.connect(self.trace_plot_clicked)
-            traces.append(trace)
-            self.pair_items[pair.id] = [trace_item]
+                    baseline_window = [abs(xoffset)-1e-3, abs(xoffset)]
+                    traceA = format_trace(traceA, baseline_window, x_offset=xoffset, align='psp')
+                    trace_itemA = trace_plt[0].plot(traceA.time_values, traceA.data)
+                    trace_itemA.pair = pair
+                    trace_itemA.curve.setClickable(True)
+                    trace_itemA.sigClicked.connect(self.trace_plot_clicked)
+                    tracesA.append(traceA)
+                if field_name == 'Latency' and rsf.vc_nrmse is not None and rsf.vc_nrmse < 0.8:
+                    traceB = TSeries(data=rsf.vc_avg_data, sample_rate=db.default_sample_rate)
+                    start_time = rsf.vc_avg_data_start_time
+                    if latency is not None and start_time is not None:
+                        xoffset = start_time - latency
+                        baseline_window = [abs(xoffset)-1e-3, abs(xoffset)]
+                        traceB = format_trace(traceB, baseline_window, x_offset=xoffset, align='psp')
+                        trace_itemB = trace_plt[1].plot(traceB.time_values, traceB.data)
+                        trace_itemB.pair = pair
+                        trace_itemB.curve.setClickable(True)
+                        trace_itemB.sigClicked.connect(self.trace_plot_clicked)
+                        tracesB.append(traceB)
+            self.pair_items[pair.id] = [trace_itemA, trace_itemB]
+            if trace_itemA is not None:
+                values.append(value)
+                point_data.append(pair)
         y_values = pg.pseudoScatter(np.asarray(values, dtype=float), spacing=1)
         scatter = pg.ScatterPlotItem(symbol='o', brush=(color + (150,)), pen='w', size=12)
         scatter.setData(values, y_values + 10., data=point_data)
         for point in scatter.points():
             pair_id = point.data().id
-            self.pair_items[pair_id].append(point)
+            self.pair_items[pair_id].extend([point, color])
         scatter.sigClicked.connect(self.scatter_plot_clicked)
-        if len(traces) > 0:
-            grand_trace = TSeriesList(traces).mean()
-            name = ('%s->%s, n=%d' % (pre_class, post_class, len(traces)))
-            trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3}, name=name)
+        if len(tracesA) > 0:
+            grand_trace = TSeriesList(tracesA).mean()
+            name = ('%s->%s, n=%d' % (pre_class, post_class, len(tracesA)))
+            trace_plt[0].plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3}, name=name)
             units = 'V' if field_name.startswith('PSP') else 'A'
-            trace_plt.setXRange(-5e-3, 20e-3)
-            trace_plt.setLabels(left=('', units), bottom=('Response Onset', 's'))
+            trace_plt[0].setXRange(-5e-3, 20e-3)
+            trace_plt[0].setLabels(left=('', units), bottom=('Response Onset', 's'))
+        if len(tracesB) > 0:
+            grand_trace = TSeriesList(tracesB).mean()
+            trace_plt[1].plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3})
+            trace_plt[1].setLabels(right=('', 'A'),bottom=('Response Onset', 's'))
         return line, scatter
 
     def scatter_plot_clicked(self, scatterplt, points):
         pair = points[0].data()
+        self.deselect_pairs()
         self.select_pair(pair)
 
     def trace_plot_clicked(self, trace):
         pair = trace.pair
+        self.deselect_pairs()
         self.select_pair(pair)
 
     def select_pair(self, pair):
-        trace, point = self.pair_items[pair.id]
+        traceA, traceB, point, _ = self.pair_items[pair.id]
         point.setBrush(pg.mkBrush('y'))
         point.setSize(15)
-        trace.setPen('y', width=2)
+        if traceA is not None:
+            traceA.setPen('y', width=3)
+            traceA.setZValue(10)
+        if traceB is not None:
+            traceB.setPen('y', width=3)
+            traceB.setZValue(10)
         print('Clicked:' '%s' % pair)
+        print(self.results.loc[pair])
+
+    def deselect_pairs(self):
+        for (traceA, traceB, point, color) in self.pair_items.values():
+            point.setBrush(color + (150,))
+            point.setSize(12)
+            if traceA is not None:
+                traceA.setPen('w', width=1)
+            if traceB is not None:
+                traceB.setPen('w', width=1)
 
     def summary(self, results, metric):
         print('')
@@ -759,8 +866,8 @@ class DynamicsAnalyzer(Analyzer):
 
 def format_trace(trace, baseline_win, x_offset=1e-3, align='spike'):
     # align can be to the pre-synaptic spike (default) or the onset of the PSP ('psp')
-    baseline = float_mode(trace[0:baseline_win])
-    trace = TSeries(data=(trace-baseline), sample_rate=db.default_sample_rate)
+    baseline = float_mode(trace.time_slice(baseline_win[0],baseline_win[1]).data)
+    trace = TSeries(data=(trace.data-baseline), sample_rate=db.default_sample_rate)
     if align == 'psp':
         trace.t0 = x_offset
     return trace
