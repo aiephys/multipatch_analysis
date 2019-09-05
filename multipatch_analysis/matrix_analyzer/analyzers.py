@@ -625,7 +625,10 @@ class StrengthAnalyzer(Analyzer):
                 traceA = TSeries(data=data, sample_rate=db.default_sample_rate)
                 start_time = rsf.vc_avg_data_start_time if field_name.startswith('PSC') else rsf.ic_avg_data_start_time
                 if latency is not None and start_time is not None:
-                    xoffset = start_time - latency
+                    if field_name == 'Latency':
+                        xoffset = start_time + latency
+                    else:
+                        xoffset = start_time - latency
                     baseline_window = [abs(xoffset)-1e-3, abs(xoffset)]
                     traceA = format_trace(traceA, baseline_window, x_offset=xoffset, align='psp')
                     trace_itemA = trace_plt[0].plot(traceA.time_values, traceA.data)
@@ -637,7 +640,7 @@ class StrengthAnalyzer(Analyzer):
                     traceB = TSeries(data=rsf.vc_avg_data, sample_rate=db.default_sample_rate)
                     start_time = rsf.vc_avg_data_start_time
                     if latency is not None and start_time is not None:
-                        xoffset = start_time - latency
+                        xoffset = start_time + latency
                         baseline_window = [abs(xoffset)-1e-3, abs(xoffset)]
                         traceB = format_trace(traceB, baseline_window, x_offset=xoffset, align='psp')
                         trace_itemB = trace_plt[1].plot(traceB.time_values, traceB.data)
@@ -657,16 +660,24 @@ class StrengthAnalyzer(Analyzer):
             self.pair_items[pair_id].extend([point, color])
         scatter.sigClicked.connect(self.scatter_plot_clicked)
         if len(tracesA) > 0:
+            if field_name == 'Latency':     
+                spike_line = pg.InfiniteLine(0, pen={'color': 'w', 'width': 1, 'style': pg.QtCore.Qt.DotLine}, movable=False)
+                trace_plt[0].addItem(spike_line)
+                x_label = 'Time from presynaptic spike'
+            else:
+                x_label = 'Response Onset'
             grand_trace = TSeriesList(tracesA).mean()
             name = ('%s->%s, n=%d' % (pre_class, post_class, len(tracesA)))
             trace_plt[0].plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3}, name=name)
             units = 'V' if field_name.startswith('PSP') else 'A'
             trace_plt[0].setXRange(-5e-3, 20e-3)
-            trace_plt[0].setLabels(left=('', units), bottom=('Response Onset', 's'))
+            trace_plt[0].setLabels(left=('', units), bottom=(x_label, 's'))
         if len(tracesB) > 0:
+            spike_line = pg.InfiniteLine(0, pen={'color': 'w', 'width': 1, 'style': pg.QtCore.Qt.DotLine}, movable=False)
+            trace_plt[1].addItem(spike_line)
             grand_trace = TSeriesList(tracesB).mean()
             trace_plt[1].plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3})
-            trace_plt[1].setLabels(right=('', 'A'),bottom=('Response Onset', 's'))
+            trace_plt[1].setLabels(right=('', 'A'), bottom=('Time from presynaptic spike', 's'))
         return line, scatter
 
     def scatter_plot_clicked(self, scatterplt, points):

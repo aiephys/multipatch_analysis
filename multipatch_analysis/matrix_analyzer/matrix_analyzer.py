@@ -166,25 +166,27 @@ class CellClassFilter(object):
             for group in self.params.children()[1:]:
                 if group.value() is True:
                     self.cell_classes.extend(ccg[group.name()])
-            self.cell_classes = self.layer_call()
+            self.cell_classes = self.layer_call(self.cell_classes)
             self.cell_classes = [CellClass(**c) for c in self.cell_classes]
             self.cell_groups = classify_cells(self.cell_classes, pairs=pairs)
         return self.cell_groups, self.cell_classes
 
-    def layer_call(self):
+    def layer_call(self, classes):
         # if self.analyzer_mode == 'external':
         #     layer_def = 'target layer'
         # else:
         layer_def = self.params['Define layer by:']
         if layer_def == 'target layer':
-            for c in self.cell_classes:
+            for c in classes:
                 if c.get('cortical_layer') is not None:
                     del c['cortical_layer']
-        elif layer_def == 'annotated layer':
-            for c in self.cell_classes:
+            classes = sorted(classes, key=lambda i: i['target_layer'])
+        elif layer_def == 'annotated layer':    
+            for c in classes:
                 if c.get('target_layer') is not None:
                     del c['target_layer']
-        return self.cell_classes
+            classes = sorted(classes, key=lambda i: i['cortical_layer'])
+        return classes
 
     def get_pre_or_post_classes(self, key):
         """Return a list of postsynaptic cell_classes. This will be a subset of self.cell_classes."""
@@ -195,6 +197,7 @@ class CellClassFilter(object):
             if group.value() is True:
                 if group['pre/post'] in ['both', key]:
                     classes.extend(self.cell_class_groups[group.name()])
+        classes = self.layer_call(classes)
         classes = [CellClass(**c) for c in classes]
         return classes
 
