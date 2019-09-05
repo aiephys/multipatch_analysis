@@ -432,8 +432,10 @@ class ConnectivityAnalyzer(Analyzer):
         for (traceA, traceB) in self.pair_items.values():
             if traceA is not None:
                 traceA.setPen('w', width=1)
+                traceA.setZValue(-10)
             if traceB is not None:
                 traceB.setPen('w', width=1)
+                traceA.setZValue(-10)
 
 
 
@@ -709,8 +711,10 @@ class StrengthAnalyzer(Analyzer):
             point.setSize(12)
             if traceA is not None:
                 traceA.setPen('w', width=1)
+                traceA.setZValue(-10)
             if traceB is not None:
                 traceB.setPen('w', width=1)
+                traceB.setZValue(-10)
 
     def summary(self, results, metric):
         print('')
