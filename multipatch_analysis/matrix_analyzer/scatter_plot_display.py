@@ -57,6 +57,7 @@ class ElementScatterPlot(ScatterPlots):
         header = pg.QtGui.QLabel()
         header.setText('<span style="font-weight: bold">Element-wise Scatter Plot</span>')
         self.ctrlPanel.insertWidget(0, header)
+        self.selected_points = []
 
     def set_data(self, data):
         field_data = data.xs('metric_summary', axis='columns', level=1, drop_level=True)
@@ -71,7 +72,16 @@ class ElementScatterPlot(ScatterPlots):
         self.setData(rec_data)
 
     def plotClicked(self, plot, points):
+        if len(self.selected_points) > 0:
+            for pt, style in self.selected_points:
+                brush, pen, size = style
+                pt.setBrush(brush)
+                pt.setPen(pen)
+                pt.setSize(size)
+        self.selected_points = []
         for pt in points:
+            style = (pt.brush(), pt.pen(), pt.size())
+            self.selected_points.append([pt, style])
             data = pt.data()
             element = ('%s -> %s ' % (data.pre_class.name, data.post_class.name))
             print('Clicked:' '%s' % element)
@@ -91,6 +101,7 @@ class PairScatterPlot(ScatterPlots):
         header = pg.QtGui.QLabel()
         header.setText('<span style="font-weight: bold">Pair-wise Scatter Plot</span>')
         self.ctrlPanel.insertWidget(0, header)
+        self.selected_points = []
 
     def set_data(self, data):
         data['pair_class'] = data.apply(lambda row: '-'.join([row.pre_class.name, row.post_class.name]), axis=1)
@@ -119,7 +130,16 @@ class PairScatterPlot(ScatterPlots):
             return
 
     def plotClicked(self, plot, points):
+        if len(self.selected_points) > 0:
+            for pt, style in self.selected_points:
+                brush, pen, size = style
+                pt.setBrush(brush)
+                pt.setPen(pen)
+                pt.setSize(size)
+        self.selected_points = []
         for pt in points:
+            style = (pt.brush(), pt.pen(), pt.size())
+            self.selected_points.append([pt, style])
             data = pt.data()
             pair = data.index
             print('Clicked:' '%s' % pair)
