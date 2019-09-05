@@ -119,7 +119,7 @@ class OptoSlicePipelineModule(DatabasePipelineModule):
         ready = OrderedDict()
         for ts, path in slices.items():
             if path == 'place_holder':
-                ready['%.3f'%0.0] = timestamp_to_datetime(os.stat(config.experiment_csv).st_mtime)
+                ready['%.3f'%0.0] = timestamp_to_datetime(0.0)
             else:
                 mtime = os.stat(os.path.join(path, '.index')).st_mtime
                 # test file updates:
