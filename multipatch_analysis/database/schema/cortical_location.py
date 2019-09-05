@@ -39,6 +39,6 @@ CorticalSite = make_table(
 Slice.site = relationship(CorticalSite, back_populates="slice", cascade="delete", single_parent=True)
 CorticalSite.slice = relationship(Slice, back_populates='site', single_parent=True)
 CellLocation.site = relationship(CorticalSite, back_populates='cell')
-CorticalSite.cell = relationship(CellLocation, back_populates='site')
+CorticalSite.cell = relationship(CellLocation, back_populates='site', cascade='delete')
 CorticalSite.experiment = relationship(Experiment, back_populates='site', single_parent=True)
 Experiment.site = relationship(CorticalSite, back_populates='experiment', cascade="delete", single_parent=True)
