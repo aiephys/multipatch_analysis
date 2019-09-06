@@ -435,7 +435,7 @@ class ConnectivityAnalyzer(Analyzer):
                 traceA.setZValue(-10)
             if traceB is not None:
                 traceB.setPen('w', width=1)
-                traceA.setZValue(-10)
+                traceB.setZValue(-10)
 
 
 

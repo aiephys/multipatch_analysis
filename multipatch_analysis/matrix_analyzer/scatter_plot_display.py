@@ -75,9 +75,12 @@ class ElementScatterPlot(ScatterPlots):
         if len(self.selected_points) > 0:
             for pt, style in self.selected_points:
                 brush, pen, size = style
-                pt.setBrush(brush)
-                pt.setPen(pen)
-                pt.setSize(size)
+                try:
+                    pt.setBrush(brush)
+                    pt.setPen(pen)
+                    pt.setSize(size)
+                except AttributeError:
+                    pass
         self.selected_points = []
         for pt in points:
             style = (pt.brush(), pt.pen(), pt.size())
@@ -133,9 +136,12 @@ class PairScatterPlot(ScatterPlots):
         if len(self.selected_points) > 0:
             for pt, style in self.selected_points:
                 brush, pen, size = style
-                pt.setBrush(brush)
-                pt.setPen(pen)
-                pt.setSize(size)
+                try:
+                    pt.setBrush(brush)
+                    pt.setPen(pen)
+                    pt.setSize(size)
+                except AttributeError:
+                    pass
         self.selected_points = []
         for pt in points:
             style = (pt.brush(), pt.pen(), pt.size())

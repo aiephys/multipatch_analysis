@@ -185,18 +185,19 @@ class CellClassFilter(object):
             for c in classes:
                 if c.get('target_layer') is not None:
                     del c['target_layer']
-            classes = sorted(classes, key=lambda i: i['cortical_layer'])
+            # classes = sorted(classes, key=lambda i: i['cortical_layer'])
         return classes
 
     def get_pre_or_post_classes(self, key):
         """Return a list of postsynaptic cell_classes. This will be a subset of self.cell_classes."""
         # if self.cell_classes is None:
         #     return []
+        ccg = copy.deepcopy(self.cell_class_groups)
         classes = []
         for group in self.params.children():
             if group.value() is True:
                 if group['pre/post'] in ['both', key]:
-                    classes.extend(self.cell_class_groups[group.name()])
+                    classes.extend(ccg[group.name()])
         classes = self.layer_call(classes)
         classes = [CellClass(**c) for c in classes]
         return classes
