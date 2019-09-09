@@ -331,6 +331,9 @@ class ConnectivityAnalyzer(Analyzer):
         connections = element[element['Connected'] == True].index.tolist()
         for pair in connections:
             # rsf = pair.resting_state_fit
+            synapse = pair.synapse
+            if synapse is None:
+                continue
             arfs = pair.avg_response_fits
             latency = pair.synapse.latency
             syn_typ = pair.synapse.synapse_type
@@ -621,8 +624,8 @@ class StrengthAnalyzer(Analyzer):
             rsf = pair.resting_state_fit
             if rsf is not None:
                 nrmse = rsf.vc_nrmse if field_name.startswith('PSC') else rsf.ic_nrmse
-                if nrmse is None or nrmse > 0.8:
-                    continue
+                # if nrmse is None or nrmse > 0.8:
+                #     continue
                 data = rsf.vc_avg_data if field_name.startswith('PSC') else rsf.ic_avg_data
                 traceA = TSeries(data=data, sample_rate=db.default_sample_rate)
                 start_time = rsf.vc_avg_data_start_time if field_name.startswith('PSC') else rsf.ic_avg_data_start_time
@@ -638,7 +641,7 @@ class StrengthAnalyzer(Analyzer):
                     trace_itemA.curve.setClickable(True)
                     trace_itemA.sigClicked.connect(self.trace_plot_clicked)
                     tracesA.append(traceA)
-                if field_name == 'Latency' and rsf.vc_nrmse is not None and rsf.vc_nrmse < 0.8:
+                if field_name == 'Latency' and rsf.vc_nrmse is not None: #and rsf.vc_nrmse < 0.8:
                     traceB = TSeries(data=rsf.vc_avg_data, sample_rate=db.default_sample_rate)
                     start_time = rsf.vc_avg_data_start_time
                     if latency is not None and start_time is not None:
