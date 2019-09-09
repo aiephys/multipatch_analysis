@@ -180,7 +180,7 @@ class MainWindow(pg.QtGui.QWidget):
         if record is None:
             self.pair_analyzer.load_pair(pair, self.default_session)
             self.pair_analyzer.analyze_responses()
-            self.pair_analyzer.fit_responses()
+            # self.pair_analyzer.fit_responses()
         else:
             msg = pg.QtGui.QMessageBox.question(self, "Pair Analysis", 
                 "Pair %s %s->%s has already been analyzed. \n Would you like to load the results?" % (expt_id, pre_cell_id, post_cell_id),

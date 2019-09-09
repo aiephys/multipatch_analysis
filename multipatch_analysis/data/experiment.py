@@ -804,8 +804,6 @@ class Experiment(object):
             cid = str(int(m.group(1)))
             if cid in self.cells:
                 self.cells[cid].position = pos
-            else:
-                print("warning: ignoring position for cell %r" % cid)
 
     @property
     def mosaic_file(self):
