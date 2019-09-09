@@ -105,12 +105,9 @@
         },
         "show confidence": {
             "value": "None"
-        },
-        "log scale": {
-            "value": false
         }
     },
-    "Mouse Synapse Probability ": {
+    "Mouse Connection Probability": {
         "data filters": {
             "value": null,
             "children": {
@@ -210,7 +207,7 @@
         },
         "matrix colormap": {
             "items": {
-                "Synapse Probability": {
+                "Connection Probability": {
                     "value": {
                         "pos": [
                             0.0,
@@ -298,220 +295,15 @@
                             ]
                         }
                     },
-                    "field": "Synapse Probability"
+                    "field": "Connection Probability"
                 }
             }
         },
         "text format": {
-            "value": "{Synapse}/{Probed Connection}"
+            "value": "{Connected}/{Probed Connection}"
         },
         "show confidence": {
-            "value": "Synapse Probability"
-        },
-        "log scale": {
-            "value": true
-        }
-    },
-    "Human Synapse Probability": {
-        "data filters": {
-            "value": null,
-            "children": {
-                "Projects": {
-                    "value": null,
-                    "children": {
-                        "Mouse": {
-                            "value": false
-                        },
-                        "Human": {
-                            "value": true
-                        }
-                    }
-                },
-                "ACSF [Ca2+]": {
-                    "value": null,
-                    "children": {
-                        "1.3mM": {
-                            "value": true
-                        },
-                        "2mM": {
-                            "value": false
-                        }
-                    }
-                },
-                "Internal [EGTA]": {
-                    "value": null,
-                    "children": {
-                        "0.3mM EGTA": {
-                            "value": true
-                        },
-                        "1mM EGTA": {
-                            "value": false
-                        },
-                        "No EGTA": {
-                            "value": true
-                        }
-                    }
-                }
-            }
-        },
-        "cell classes": {
-            "value": null,
-            "children": {
-                "Define layer by:": {
-                    "value": "target layer"
-                },
-                "All Transgenic Classes": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "Excitatory Transgenic Classes": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "Inhibitory Transgenic Classes": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "All Cells": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "Pyramidal Cells": {
-                    "value": true,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "Non-Pyramidal Cells": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                }
-            }
-        },
-        "matrix colormap": {
-            "items": {
-                "Synapse Probability": {
-                    "value": {
-                        "pos": [
-                            0.0,
-                            0.01,
-                            0.03,
-                            0.1,
-                            0.3,
-                            1.0
-                        ],
-                        "color": [
-                            [
-                                0,
-                                0,
-                                100,
-                                255
-                            ],
-                            [
-                                80,
-                                0,
-                                80,
-                                255
-                            ],
-                            [
-                                140,
-                                0,
-                                0,
-                                255
-                            ],
-                            [
-                                255,
-                                100,
-                                0,
-                                255
-                            ],
-                            [
-                                255,
-                                255,
-                                100,
-                                255
-                            ],
-                            [
-                                255,
-                                255,
-                                255,
-                                255
-                            ]
-                        ]
-                    },
-                    "children": {
-                        "Min": {
-                            "value": 0.0
-                        },
-                        "Max": {
-                            "value": 1.0
-                        },
-                        "Operation": {
-                            "value": "Add"
-                        },
-                        "Channels..": {
-                            "value": null,
-                            "children": {
-                                "Red": {
-                                    "value": true
-                                },
-                                "Green": {
-                                    "value": true
-                                },
-                                "Blue": {
-                                    "value": true
-                                },
-                                "Alpha": {
-                                    "value": true
-                                }
-                            }
-                        },
-                        "Enabled": {
-                            "value": true
-                        },
-                        "NaN": {
-                            "value": [
-                                128,
-                                128,
-                                128,
-                                255
-                            ]
-                        }
-                    },
-                    "field": "Synapse Probability"
-                }
-            }
-        },
-        "text format": {
-            "value": "{Synapse}/{Probed Connection}"
-        },
-        "show confidence": {
-            "value": "Synapse Probability"
-        },
-        "log scale": {
-            "value": true
+            "value": "Connection Probability"
         }
     },
     "Mouse PSP Amplitude": {
@@ -690,378 +482,6 @@
         },
         "show confidence": {
             "value": "None"
-        },
-        "log scale": {
-            "value": false
-        }
-    },
-    "Mouse Latency": {
-        "data filters": {
-            "value": null,
-            "children": {
-                "Projects": {
-                    "value": null,
-                    "children": {
-                        "Mouse": {
-                            "value": true
-                        },
-                        "Human": {
-                            "value": false
-                        }
-                    }
-                },
-                "ACSF [Ca2+]": {
-                    "value": null,
-                    "children": {
-                        "1.3mM": {
-                            "value": true
-                        },
-                        "2mM": {
-                            "value": false
-                        }
-                    }
-                },
-                "Internal [EGTA]": {
-                    "value": null,
-                    "children": {
-                        "0.3mM EGTA": {
-                            "value": true
-                        },
-                        "1mM EGTA": {
-                            "value": false
-                        },
-                        "No EGTA": {
-                            "value": false
-                        }
-                    }
-                }
-            }
-        },
-        "cell classes": {
-            "value": null,
-            "children": {
-                "Define layer by:": {
-                    "value": "target layer"
-                },
-                "All Transgenic Classes": {
-                    "value": true,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "Excitatory Transgenic Classes": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "Inhibitory Transgenic Classes": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "All Cells": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "Pyramidal Cells": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "Non-Pyramidal Cells": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                }
-            }
-        },
-        "matrix colormap": {
-            "items": {
-                "Latency": {
-                    "value": {
-                        "pos": [
-                            0.0,
-                            0.1613,
-                            0.3491,
-                            1.0
-                        ],
-                        "color": [
-                            [
-                                255,
-                                255,
-                                0,
-                                255
-                            ],
-                            [
-                                0,
-                                206,
-                                151,
-                                255
-                            ],
-                            [
-                                0,
-                                119,
-                                178,
-                                255
-                            ],
-                            [
-                                99,
-                                0,
-                                148,
-                                255
-                            ]
-                        ]
-                    },
-                    "children": {
-                        "Min": {
-                            "value": 0.0005
-                        },
-                        "Max": {
-                            "value": 0.004
-                        },
-                        "Operation": {
-                            "value": "Overlay"
-                        },
-                        "Channels..": {
-                            "value": null,
-                            "children": {
-                                "Red": {
-                                    "value": true
-                                },
-                                "Green": {
-                                    "value": true
-                                },
-                                "Blue": {
-                                    "value": true
-                                },
-                                "Alpha": {
-                                    "value": true
-                                }
-                            }
-                        },
-                        "Enabled": {
-                            "value": true
-                        },
-                        "NaN": {
-                            "value": [
-                                128,
-                                128,
-                                128,
-                                255
-                            ]
-                        }
-                    },
-                    "field": "Latency"
-                }
-            }
-        },
-        "text format": {
-            "value": "{Latency.ms}"
-        },
-        "show confidence": {
-            "value": "None"
-        },
-        "log scale": {
-            "value": false
-        }
-    },
-    "Human Excitatory Amplitude": {
-        "data filters": {
-            "value": null,
-            "children": {
-                "Projects": {
-                    "value": null,
-                    "children": {
-                        "Mouse": {
-                            "value": false
-                        },
-                        "Human": {
-                            "value": true
-                        }
-                    }
-                },
-                "ACSF [Ca2+]": {
-                    "value": null,
-                    "children": {
-                        "1.3mM": {
-                            "value": true
-                        },
-                        "2mM": {
-                            "value": false
-                        }
-                    }
-                },
-                "Internal [EGTA]": {
-                    "value": null,
-                    "children": {
-                        "0.3mM EGTA": {
-                            "value": true
-                        },
-                        "1mM EGTA": {
-                            "value": false
-                        },
-                        "No EGTA": {
-                            "value": true
-                        }
-                    }
-                }
-            }
-        },
-        "cell classes": {
-            "value": null,
-            "children": {
-                "Define layer by:": {
-                    "value": "target layer"
-                },
-                "All Transgenic Classes": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "Excitatory Transgenic Classes": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "Inhibitory Transgenic Classes": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "All Cells": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "Pyramidal Cells": {
-                    "value": true,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "Non-Pyramidal Cells": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                }
-            }
-        },
-        "matrix colormap": {
-            "items": {
-                "PSP Amplitude": {
-                    "value": {
-                        "pos": [
-                            0.0,
-                            0.5,
-                            1.0
-                        ],
-                        "color": [
-                            [
-                                0,
-                                0,
-                                255,
-                                255
-                            ],
-                            [
-                                56,
-                                0,
-                                87,
-                                255
-                            ],
-                            [
-                                255,
-                                0,
-                                0,
-                                255
-                            ]
-                        ]
-                    },
-                    "children": {
-                        "Min": {
-                            "value": -0.001
-                        },
-                        "Max": {
-                            "value": 0.001
-                        },
-                        "Operation": {
-                            "value": "Overlay"
-                        },
-                        "Channels..": {
-                            "value": null,
-                            "children": {
-                                "Red": {
-                                    "value": true
-                                },
-                                "Green": {
-                                    "value": true
-                                },
-                                "Blue": {
-                                    "value": true
-                                },
-                                "Alpha": {
-                                    "value": true
-                                }
-                            }
-                        },
-                        "Enabled": {
-                            "value": true
-                        },
-                        "NaN": {
-                            "value": [
-                                128,
-                                128,
-                                128,
-                                255
-                            ]
-                        }
-                    },
-                    "field": "PSP Amplitude"
-                }
-            }
-        },
-        "text format": {
-            "value": "{PSP Amplitude.mV}"
-        },
-        "show confidence": {
-            "value": "None"
-        },
-        "log scale": {
-            "value": false
         }
     },
     "Mouse Short Term Plasticity": {
@@ -1240,9 +660,383 @@
         },
         "show confidence": {
             "value": "None"
+        }
+    },
+    "Human Connection Probability": {
+        "data filters": {
+            "value": null,
+            "children": {
+                "Projects": {
+                    "value": null,
+                    "children": {
+                        "Mouse": {
+                            "value": false
+                        },
+                        "Human": {
+                            "value": true
+                        }
+                    }
+                },
+                "ACSF [Ca2+]": {
+                    "value": null,
+                    "children": {
+                        "1.3mM": {
+                            "value": true
+                        },
+                        "2mM": {
+                            "value": false
+                        }
+                    }
+                },
+                "Internal [EGTA]": {
+                    "value": null,
+                    "children": {
+                        "0.3mM EGTA": {
+                            "value": false
+                        },
+                        "1mM EGTA": {
+                            "value": false
+                        },
+                        "No EGTA": {
+                            "value": true
+                        }
+                    }
+                }
+            }
         },
-        "log scale": {
-            "value": false
+        "cell classes": {
+            "value": null,
+            "children": {
+                "Define layer by:": {
+                    "value": "target layer"
+                },
+                "All Transgenic Classes": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Excitatory Transgenic Classes": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Inhibitory Transgenic Classes": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "All Cells": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Pyramidal Cells": {
+                    "value": true,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Non-Pyramidal Cells": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                }
+            }
+        },
+        "matrix colormap": {
+            "items": {
+                "Connection Probability": {
+                    "value": {
+                        "pos": [
+                            0.0,
+                            0.01,
+                            0.03,
+                            0.1,
+                            0.3,
+                            1.0
+                        ],
+                        "color": [
+                            [
+                                0,
+                                0,
+                                100,
+                                255
+                            ],
+                            [
+                                80,
+                                0,
+                                80,
+                                255
+                            ],
+                            [
+                                140,
+                                0,
+                                0,
+                                255
+                            ],
+                            [
+                                255,
+                                100,
+                                0,
+                                255
+                            ],
+                            [
+                                255,
+                                255,
+                                100,
+                                255
+                            ],
+                            [
+                                255,
+                                255,
+                                255,
+                                255
+                            ]
+                        ]
+                    },
+                    "children": {
+                        "Min": {
+                            "value": 0.0
+                        },
+                        "Max": {
+                            "value": 1.0
+                        },
+                        "Operation": {
+                            "value": "Add"
+                        },
+                        "Channels..": {
+                            "value": null,
+                            "children": {
+                                "Red": {
+                                    "value": true
+                                },
+                                "Green": {
+                                    "value": true
+                                },
+                                "Blue": {
+                                    "value": true
+                                },
+                                "Alpha": {
+                                    "value": true
+                                }
+                            }
+                        },
+                        "Enabled": {
+                            "value": true
+                        },
+                        "NaN": {
+                            "value": [
+                                128,
+                                128,
+                                128,
+                                255
+                            ]
+                        }
+                    },
+                    "field": "Connection Probability"
+                }
+            }
+        },
+        "text format": {
+            "value": "{Connected}/{Probed Connection}"
+        },
+        "show confidence": {
+            "value": "Connection Probability"
+        }
+    },
+    "Human PSP Amplitude": {
+        "data filters": {
+            "value": null,
+            "children": {
+                "Projects": {
+                    "value": null,
+                    "children": {
+                        "Mouse": {
+                            "value": false
+                        },
+                        "Human": {
+                            "value": true
+                        }
+                    }
+                },
+                "ACSF [Ca2+]": {
+                    "value": null,
+                    "children": {
+                        "1.3mM": {
+                            "value": true
+                        },
+                        "2mM": {
+                            "value": false
+                        }
+                    }
+                },
+                "Internal [EGTA]": {
+                    "value": null,
+                    "children": {
+                        "0.3mM EGTA": {
+                            "value": false
+                        },
+                        "1mM EGTA": {
+                            "value": false
+                        },
+                        "No EGTA": {
+                            "value": true
+                        }
+                    }
+                }
+            }
+        },
+        "cell classes": {
+            "value": null,
+            "children": {
+                "Define layer by:": {
+                    "value": "target layer"
+                },
+                "All Transgenic Classes": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Excitatory Transgenic Classes": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Inhibitory Transgenic Classes": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "All Cells": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Pyramidal Cells": {
+                    "value": true,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Non-Pyramidal Cells": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                }
+            }
+        },
+        "matrix colormap": {
+            "items": {
+                "PSP Amplitude": {
+                    "value": {
+                        "pos": [
+                            0.0,
+                            0.5,
+                            1.0
+                        ],
+                        "color": [
+                            [
+                                0,
+                                0,
+                                255,
+                                255
+                            ],
+                            [
+                                56,
+                                0,
+                                87,
+                                255
+                            ],
+                            [
+                                255,
+                                0,
+                                0,
+                                255
+                            ]
+                        ]
+                    },
+                    "children": {
+                        "Min": {
+                            "value": -0.001
+                        },
+                        "Max": {
+                            "value": 0.001
+                        },
+                        "Operation": {
+                            "value": "Overlay"
+                        },
+                        "Channels..": {
+                            "value": null,
+                            "children": {
+                                "Red": {
+                                    "value": true
+                                },
+                                "Green": {
+                                    "value": true
+                                },
+                                "Blue": {
+                                    "value": true
+                                },
+                                "Alpha": {
+                                    "value": true
+                                }
+                            }
+                        },
+                        "Enabled": {
+                            "value": true
+                        },
+                        "NaN": {
+                            "value": [
+                                128,
+                                128,
+                                128,
+                                255
+                            ]
+                        }
+                    },
+                    "field": "PSP Amplitude"
+                }
+            }
+        },
+        "text format": {
+            "value": "{PSP Amplitude.mV}"
+        },
+        "show confidence": {
+            "value": "None"
         }
     },
     "Human Short Term Plasticity": {
@@ -1275,7 +1069,7 @@
                     "value": null,
                     "children": {
                         "0.3mM EGTA": {
-                            "value": true
+                            "value": false
                         },
                         "1mM EGTA": {
                             "value": false
@@ -1421,9 +1215,6 @@
         },
         "show confidence": {
             "value": "None"
-        },
-        "log scale": {
-            "value": false
         }
     }
 }
