@@ -10,6 +10,7 @@ from pyqtgraph.widgets.DataFilterWidget import DataFilterParameter
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.data import TSeriesList
 from neuroanalysis.fitting import Psp, StackedPsp
+from neuroanalysis.ui.fitting import FitExplorer
 
 from multipatch_analysis.ui.experiment_browser import ExperimentBrowser
 from multipatch_analysis.avg_response_fit import get_pair_avg_fits, response_query, sort_responses
@@ -55,6 +56,7 @@ class MainWindow(pg.QtGui.QWidget):
         self.h_splitter = pg.QtGui.QSplitter()
         self.h_splitter.setOrientation(pg.QtCore.Qt.Horizontal)
         self.pair_analyzer = PairAnalysis()
+        self.fit_explorer = None
         self.ctrl_panel = self.pair_analyzer.ctrl_panel
         self.user_params = self.ctrl_panel.user_params
         self.output_params = self.ctrl_panel.output_params
@@ -189,6 +191,11 @@ class MainWindow(pg.QtGui.QWidget):
                 self.pair_analyzer.load_pair(pair, self.default_session, record=record)
                 self.pair_analyzer.analyze_responses()
                 self.pair_analyzer.load_saved_fit(record)
+
+    def explore_fit(self, mode, holding):
+        fit = self.pair_analyzer.last_fit[mode, holding]
+        self.fit_explorer = FitExplorer(fit)
+        self.fit_explorer.show()
 
 
 class ControlPanel(object):
@@ -768,16 +775,18 @@ class PairAnalysis(object):
 
 if __name__ == '__main__':
     app = pg.mkQApp()
-    pg.dbg()
     parser = argparse.ArgumentParser()
     parser.add_argument('--check', action='store_true')
     parser.add_argument('--timestamps', type=str, nargs='*')
+    parser.add_argument('--dbg', default=False, action='store_true')
     parser.add_argument('expt_id', type=str, nargs='?', default=None)
     parser.add_argument('pre_cell_id', type=str, nargs='?', default=None)
     parser.add_argument('post_cell_id', type=str, nargs='?', default=None)
 
     args = parser.parse_args(sys.argv[1:])
-    n_users = 10
+
+    if args.dbg:
+        pg.dbg()
 
     default_session = db.session()
     notes_session = notes_db.db.session()
