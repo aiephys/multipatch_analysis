@@ -184,7 +184,6 @@ class OptoExperimentPipelineModule(DatabasePipelineModule):
                 slice_mtime, slice_success = finished_slices.get('%.3f'%slice_ts, (None, None))
                 #print('found expt for path:', site_path)
             except Exception:
-                raise
                 n_errors += 1
                 continue
             if slice_mtime is None or slice_success is False:
