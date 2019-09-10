@@ -57,6 +57,7 @@ class ElementScatterPlot(ScatterPlots):
         header = pg.QtGui.QLabel()
         header.setText('<span style="font-weight: bold">Element-wise Scatter Plot</span>')
         self.ctrlPanel.insertWidget(0, header)
+        self.selected_points = []
 
     def set_data(self, data):
         field_data = data.xs('metric_summary', axis='columns', level=1, drop_level=True)
@@ -70,6 +71,32 @@ class ElementScatterPlot(ScatterPlots):
         self.fields['pair_class']['values'] = list(field_data.pair_class)
         self.setData(rec_data)
 
+    def plotClicked(self, plot, points):
+        if len(self.selected_points) > 0:
+            for pt, style in self.selected_points:
+                brush, pen, size = style
+                try:
+                    pt.setBrush(brush)
+                    pt.setPen(pen)
+                    pt.setSize(size)
+                except AttributeError:
+                    pass
+        self.selected_points = []
+        for pt in points:
+            style = (pt.brush(), pt.pen(), pt.size())
+            self.selected_points.append([pt, style])
+            data = pt.data()
+            element = ('%s -> %s ' % (data.pre_class.name, data.post_class.name))
+            print('Clicked:' '%s' % element)
+            fields = self.fieldList.selectedItems()
+            for field in fields:
+                field_name = field.text()
+                value = data[field_name]
+                print('%s: %s' % (field_name, pg.siFormat(value)))
+            pt.setBrush(pg.mkBrush('y'))
+            pt.setSize(15)
+        self.sigScatterPlotClicked.emit(self, points)
+
 class PairScatterPlot(ScatterPlots):
     def __init__(self):
         ScatterPlots.__init__(self)
@@ -77,6 +104,7 @@ class PairScatterPlot(ScatterPlots):
         header = pg.QtGui.QLabel()
         header.setText('<span style="font-weight: bold">Pair-wise Scatter Plot</span>')
         self.ctrlPanel.insertWidget(0, header)
+        self.selected_points = []
 
     def set_data(self, data):
         data['pair_class'] = data.apply(lambda row: '-'.join([row.pre_class.name, row.post_class.name]), axis=1)
@@ -86,3 +114,46 @@ class PairScatterPlot(ScatterPlots):
 
         self.fields['pair_class']['values'] = list(data.pair_class)
         self.setData(rec_data)
+
+    def filter_selected_element(self, pre_class, post_class):
+        pair_name = '-'.join([pre_class.name, post_class.name])
+        try:
+            pair_filter = self.filter.child('pair_class')
+        except KeyError:
+            pair_filter = self.filter.addNew('pair_class')
+            for child in pair_filter.children():
+                child.setValue(False)
+        pair_filter.child(pair_name).setValue(True)
+
+    def reset_element_filter(self):
+        try:
+            pair_class_filter = self.filter.child('pair_class')
+            self.filter.removeChild(pair_class_filter)
+        except:
+            return
+
+    def plotClicked(self, plot, points):
+        if len(self.selected_points) > 0:
+            for pt, style in self.selected_points:
+                brush, pen, size = style
+                try:
+                    pt.setBrush(brush)
+                    pt.setPen(pen)
+                    pt.setSize(size)
+                except AttributeError:
+                    pass
+        self.selected_points = []
+        for pt in points:
+            style = (pt.brush(), pt.pen(), pt.size())
+            self.selected_points.append([pt, style])
+            data = pt.data()
+            pair = data.index
+            print('Clicked:' '%s' % pair)
+            fields = self.fieldList.selectedItems()
+            for field in fields:
+                field_name = field.text()
+                value = data[field_name]
+                print('%s: %s' % (field_name, pg.siFormat(value)))
+            pt.setBrush(pg.mkBrush('y'))
+            pt.setSize(15)
+        self.sigScatterPlotClicked.emit(self, points)

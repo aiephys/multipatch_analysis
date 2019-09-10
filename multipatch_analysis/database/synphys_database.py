@@ -1,3 +1,4 @@
+import datetime
 from sqlalchemy.orm import aliased
 from .database import Database
 
@@ -6,7 +7,7 @@ class SynphysDatabase(Database):
     """Augments the Database class with convenience methods for querying the synphys database.
     """
     # database version should be incremented whenever the schema has changed
-    db_version = 14
+    db_version = "15"
     
     default_sample_rate = 20000
     _sample_rate_str = '%dkHz' % (default_sample_rate // 1000)
@@ -14,6 +15,33 @@ class SynphysDatabase(Database):
     def __init__(self, ro_host, rw_host, db_name):
         from .schema import ORMBase
         Database.__init__(self, ro_host, rw_host, db_name, ORMBase)
+        
+    def create_tables(self, tables=None):
+        Database.create_tables(self, tables=tables)
+        
+        # initialize or verify db version
+        mrec = self.metadata_record()
+        if mrec is None:
+            mrec = self.Metadata(meta={
+                'db_version': self.db_version,
+                'creation_date': datetime.datetime.now().strftime('%Y-%m-%d'),
+                'origin': "Allen Institute for Brain Science / Synaptic Physiology",
+            })
+            s = self.session(readonly=False)
+            s.add(mrec)
+            s.commit()
+        else:
+            ver = mrec.meta['db_version']
+            assert ver == self.db_version, "Database has unsupported version %s (expected %s)"%(ver, self.db_version)
+        
+    def metadata_record(self, session=None):
+        session = session or self.default_session
+        recs = session.query(self.Metadata).all()
+        if len(recs) == 0:
+            return None
+        elif len(recs) > 1:
+            raise Exception("Multiple metadata records found.")
+        return recs[0]
         
     def slice_from_timestamp(self, ts, session=None):
         session = session or self.default_session

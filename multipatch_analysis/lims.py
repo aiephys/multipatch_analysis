@@ -24,7 +24,6 @@ def query(query_str):
     return result
 
 
-
 def specimen_info(specimen_name=None, specimen_id=None):
     """Return a dictionary of information about a slice specimen queried from LIMS.
     
@@ -568,6 +567,24 @@ def cluster_cells(cluster):
 
     recs = query(q)
     return recs
+
+
+def cluster_ephys_roi_result(specimen):
+    """Return ID of ephys roi result associated with a cell cluster *specimen*.
+    """
+    if not isinstance(specimen, int):
+        specimen = specimen_id_from_name(specimen)
+    recs = query("""
+        select ephys_roi_results.id
+        from specimens 
+        join ephys_roi_results on ephys_roi_results.id=specimens.ephys_roi_result_id
+        where specimens.id=%d
+    """ % specimen)
+    if len(recs) == 0:
+        return None
+    if len(recs) > 1:
+        raise Exception("Multiple ephys results for specimen %s" % specimen)
+    return recs[0]['id']
 
 
 def cell_specimen_ids(cell_cluster):

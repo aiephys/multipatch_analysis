@@ -56,8 +56,8 @@ class DistancePlot(object):
         """Results needs to be a DataFrame or Series object with 'Synapse' and 'Distance' as columns
 
         """
-        connected = results['Synapse']
-        distance = results['Distance'] 
+        connected = results[~results['Distance'].isnull()]['Connected']
+        distance = results[~results['Distance'].isnull()]['Distance'] 
         dist_win = self.params.value()
         if self.results is None:
             self.name = name

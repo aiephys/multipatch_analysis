@@ -7,6 +7,7 @@ def make_table(*args, **kwds):
     kwds['ormbase'] = ORMBase
     return orig_make_table(*args, **kwds)
 
+from .meta import *
 from .pipeline import *
 from .slice import *
 from .experiment import *

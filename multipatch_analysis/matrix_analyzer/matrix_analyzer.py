@@ -166,35 +166,39 @@ class CellClassFilter(object):
             for group in self.params.children()[1:]:
                 if group.value() is True:
                     self.cell_classes.extend(ccg[group.name()])
-            self.cell_classes = self.layer_call()
+            self.cell_classes = self.layer_call(self.cell_classes)
             self.cell_classes = [CellClass(**c) for c in self.cell_classes]
             self.cell_groups = classify_cells(self.cell_classes, pairs=pairs)
         return self.cell_groups, self.cell_classes
 
-    def layer_call(self):
+    def layer_call(self, classes):
         # if self.analyzer_mode == 'external':
         #     layer_def = 'target layer'
         # else:
         layer_def = self.params['Define layer by:']
         if layer_def == 'target layer':
-            for c in self.cell_classes:
+            for c in classes:
                 if c.get('cortical_layer') is not None:
                     del c['cortical_layer']
-        elif layer_def == 'annotated layer':
-            for c in self.cell_classes:
+            classes = sorted(classes, key=lambda i: i['target_layer'])
+        elif layer_def == 'annotated layer':    
+            for c in classes:
                 if c.get('target_layer') is not None:
                     del c['target_layer']
-        return self.cell_classes
+            # classes = sorted(classes, key=lambda i: i['cortical_layer'])
+        return classes
 
     def get_pre_or_post_classes(self, key):
         """Return a list of postsynaptic cell_classes. This will be a subset of self.cell_classes."""
         # if self.cell_classes is None:
         #     return []
+        ccg = copy.deepcopy(self.cell_class_groups)
         classes = []
         for group in self.params.children():
             if group.value() is True:
                 if group['pre/post'] in ['both', key]:
-                    classes.extend(self.cell_class_groups[group.name()])
+                    classes.extend(ccg[group.name()])
+        classes = self.layer_call(classes)
         classes = [CellClass(**c) for c in classes]
         return classes
 
@@ -300,7 +304,6 @@ class MatrixAnalyzer(object):
                 'matrix colormap': cm_state,
                 'text format': self.params.child('Matrix Display', 'Text format').saveState(filter='user'),
                 'show confidence': self.params.child('Matrix Display', 'Show Confidence').saveState(filter='user'),
-                'log scale': self.params.child('Matrix Display', 'log_scale').saveState(filter='user')
                 }}
             self.presets.update(new_preset)
             self.write_presets()
@@ -368,7 +371,6 @@ class MatrixAnalyzer(object):
         self.matrix_display_filter.params.child('Color Map').clearChildren()
         self.matrix_display_filter.params.child('Text format').setValue('')
         self.matrix_display_filter.params.child('Show Confidence').setValue('None')
-        self.matrix_display_filter.params.child('log_scale').setValue(False)
 
     def set_preset_selections(self, selected):
         if selected == '':
@@ -379,7 +381,6 @@ class MatrixAnalyzer(object):
         self.params.child('Matrix Display', 'Color Map').restoreState(preset_state['matrix colormap'])
         self.params.child('Matrix Display', 'Text format').restoreState(preset_state['text format'])
         self.params.child('Matrix Display', 'Show Confidence').restoreState(preset_state['show confidence'])
-        self.params.child('Matrix Display', 'log_scale').restoreState(preset_state['log scale'])
     
     def analyzers_needed(self):
         ## go through all of the visualizers
@@ -442,6 +443,7 @@ class MatrixAnalyzer(object):
             self.distance_plot.element_distance(element, color)
             self.element_scatter.color_selected_element(color, pre_class, post_class)
             self.pair_scatter.color_selected_element(color, pre_class, post_class)
+            # self.pair_scatter.filter_selected_element(pre_class, post_class)
         else:
             self.display_matrix_element_reset() 
             color = self.colors[self.selected]
@@ -450,6 +452,7 @@ class MatrixAnalyzer(object):
             self.distance_plot.element_distance(element, color)
             self.element_scatter.color_selected_element(color, pre_class, post_class)
             self.pair_scatter.color_selected_element(color, pre_class, post_class)
+            # self.pair_scatter.filter_selected_element(pre_class, post_class)
 
     def display_matrix_element_reset(self):
         self.selected = 0
@@ -458,6 +461,7 @@ class MatrixAnalyzer(object):
         self.distance_plot.element_distance_reset(self.results, color=(128, 128, 128), name='All Connections', suppress_scatter=True)
         self.element_scatter.reset_element_color()
         self.pair_scatter.reset_element_color()
+        # self.pair_scatter.reset_element_filter()
 
     def update_clicked(self):
         p = cProfile.Profile()
