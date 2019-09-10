@@ -49,7 +49,7 @@ class OptoSlicePipelineModule(DatabasePipelineModule):
                 data.append(lims.specimen_info(specimen_id=i))
             limsdata = {}
             for key in ['organism', 'date_of_birth', 'age', 'sex', 'plane_of_section', 'exposed_surface', 'hemisphere', 'specimen_name', 'genotype']:
-                vals = set([d[key] for d in data])
+                vals = list(set([d[key] for d in data]))
                 if len(vals) == 1:
                     limsdata[key] = vals[0]
 
