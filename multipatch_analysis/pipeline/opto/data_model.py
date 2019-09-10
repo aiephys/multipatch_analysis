@@ -15,7 +15,7 @@ def find_lims_specimen_ids(slice_dh):
 
     sid = info.get('specimen_ID', '').strip()
     if sid == '':
-        slice_id = info.get('slice_number').strip()
+        slice_id = info.get('slice_number', '').strip()
         if len(slice_id) > 2:
             sid = slice_id
         else:
