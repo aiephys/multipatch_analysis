@@ -22,7 +22,7 @@ if __name__ == '__main__':
     cell_class_groups = OrderedDict([
         ('All Transgenic Classes', [
             # {'cre_type': 'unknown', 'target_layer': '2/3','cortical_layer': '2/3'},
-            {'dendrite_type': 'spiny', 'target_layer': '2/3', 'cortical_layer': '2/3','display_names': ('L2/3', 'Pyr\nspiny dendrite')},
+            {'excitatory': {'pyramidal': True, 'dendrite_type': 'spiny'}, 'target_layer': '2/3', 'cortical_layer': '2/3','display_names': ('L2/3', 'Pyr\nspiny dendrite')},
             {'cre_type': 'pvalb', 'target_layer': '2/3', 'cortical_layer': '2/3', 'display_names': ('L2/3', 'Pv')},
             {'cre_type': 'sst', 'target_layer': '2/3', 'cortical_layer': '2/3', 'display_names': ('L2/3', 'Sst')},
             {'cre_type': 'vip', 'target_layer': '2/3', 'cortical_layer': '2/3', 'display_names': ('L2/3', 'Vip')},
@@ -80,7 +80,7 @@ if __name__ == '__main__':
         # ]),
  
         ('Excitatory Transgenic Classes', [
-            {'dendrite_type': 'spiny', 'target_layer': '2/3', 'cortical_layer': '2/3', 'display_names': ('L2/3', 'Pyr\nspiny dendrite')},
+            {'excitatory': {'pyramidal': True, 'dendrite_type': 'spiny'}, 'target_layer': '2/3', 'cortical_layer': '2/3', 'display_names': ('L2/3', 'Pyr\nspiny dendrite')},
             # {'cre_type': 'unknown', 'target_layer': '2/3'},
             {'cre_type': 'nr5a1', 'target_layer': '4', 'cortical_layer': '4', 'display_names': ('L4', 'Pyr\nnr5a1')},
             {'cre_type': ('sim1', 'fam84b'), 'target_layer': '5', 'display_names': ('L5', 'Pyr ET\nsim1, fam84b'), 'cortical_layer': '5'},
