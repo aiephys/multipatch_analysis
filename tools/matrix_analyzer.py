@@ -7,7 +7,7 @@ from collections import OrderedDict
 if __name__ == '__main__':
 
     app = pg.mkQApp()
-    # pg.dbg()
+    pg.dbg()
     # pg.setConfigOption('background', 'w')
     # pg.setConfigOption('foreground', 'k')
 
