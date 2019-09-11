@@ -10,6 +10,7 @@ from pyqtgraph.widgets.DataFilterWidget import DataFilterParameter
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.data import TSeriesList
 from neuroanalysis.fitting import Psp, StackedPsp
+from neuroanalysis.ui.fitting import FitExplorer
 
 from multipatch_analysis.ui.experiment_browser import ExperimentBrowser
 from multipatch_analysis.avg_response_fit import get_pair_avg_fits, response_query, sort_responses
@@ -55,6 +56,7 @@ class MainWindow(pg.QtGui.QWidget):
         self.h_splitter = pg.QtGui.QSplitter()
         self.h_splitter.setOrientation(pg.QtCore.Qt.Horizontal)
         self.pair_analyzer = PairAnalysis()
+        self.fit_explorer = None
         self.ctrl_panel = self.pair_analyzer.ctrl_panel
         self.user_params = self.ctrl_panel.user_params
         self.output_params = self.ctrl_panel.output_params
@@ -189,6 +191,11 @@ class MainWindow(pg.QtGui.QWidget):
                 self.pair_analyzer.load_pair(pair, self.default_session, record=record)
                 self.pair_analyzer.analyze_responses()
                 self.pair_analyzer.load_saved_fit(record)
+
+    def explore_fit(self, mode, holding):
+        fit = self.pair_analyzer.last_fit[mode, holding]
+        self.fit_explorer = FitExplorer(fit)
+        self.fit_explorer.show()
 
 
 class ControlPanel(object):
@@ -697,11 +704,16 @@ class PairAnalysis(object):
         data = record.notes        
         pair_params = {'Synapse call': data['synapse_type'], 'Gap junction call': data['gap_junction']}
         self.ctrl_panel.update_user_params(**pair_params)
-        self.ctrl_panel.update_fit_params(data['fit_parameters']['fit'])
-        self.warnings = data['fit_warnings']
+        self.warnings = data.get('fit_warnings', [])
         self.ctrl_panel.output_params.child('Warnings').setValue('\n'.join(self.warnings))
-        self.ctrl_panel.output_params.child('Comments', '').setValue(data['comments'])
+        self.ctrl_panel.output_params.child('Comments', '').setValue(data.get('comments', ''))
+
+        # some records may be stored with no fit if a synapse is not present.
+        if 'fit_parameters' not in data:
+            return
+            
         self.fit_params = data['fit_parameters']
+        self.ctrl_panel.update_fit_params(data['fit_parameters']['fit'])
         self.output_fit_parameters = data['fit_parameters']['fit']
         self.initial_fit_parameters = data['fit_parameters']['initial']
 
@@ -728,8 +740,6 @@ class PairAnalysis(object):
                 self.latency_superline.set_value(initial_ic_latency, block_fit=True)
             else:
                 self.latency_superline.set_value(initial_vc_latency, block_fit=True)
-
-
 
         for mode in modes:
             for holding in holdings:
@@ -764,29 +774,26 @@ class PairAnalysis(object):
 
 
 if __name__ == '__main__':
-    from sqlalchemy import or_
-
     app = pg.mkQApp()
-    pg.dbg()
     parser = argparse.ArgumentParser()
-    parser.add_argument('--user', type=int)
     parser.add_argument('--check', action='store_true')
-    parser.add_argument('--hashtag', action='store_true')
-    parser.add_argument('--timestamps', type=float, nargs='*')
+    parser.add_argument('--timestamps', type=str, nargs='*')
+    parser.add_argument('--dbg', default=False, action='store_true')
+    parser.add_argument('expt_id', type=str, nargs='?', default=None)
+    parser.add_argument('pre_cell_id', type=str, nargs='?', default=None)
+    parser.add_argument('post_cell_id', type=str, nargs='?', default=None)
 
     args = parser.parse_args(sys.argv[1:])
-    user = args.user
-    n_users = 10
+
+    if args.dbg:
+        pg.dbg()
 
     default_session = db.session()
     notes_session = notes_db.db.session()
     timestamps = [r.acq_timestamp for r in db.query(db.Experiment.acq_timestamp).all()]
     
     mw = MainWindow(default_session, notes_session)
-    if user is not None:
-        user_nums = [(ts, int(ts*1000) % n_users) for ts in timestamps]
-        timestamps = [un[0] for un in user_nums if un[1] == args.user]
-    elif args.check is True:
+    if args.check is True:
         pair_in_notes = []
         pair_not_in_notes = []
         ghost_pair = []
@@ -805,12 +812,18 @@ if __name__ == '__main__':
         print('%d pairs mysteriously missing' % (len(ghost_pair)))
         print('%d/%d pairs accounted for' % (sum([len(pair_in_notes), len(pair_not_in_notes), len(ghost_pair)]), len(synapses)))   
     elif args.timestamps is not None:
-        timestamps = args.timestamps   
+        timestamps = args.timestamps
+    elif args.expt_id is not None:
+        timestamps = [args.expt_id]
     
     q = default_session.query(db.Experiment).filter(db.Experiment.acq_timestamp.in_(timestamps))
     expts = q.all()
     mw.set_expts(expts)
 
+    if None not in (args.expt_id, args.pre_cell_id, args.post_cell_id):
+        expt = db.experiment_from_ext_id(args.expt_id)
+        pair = expt.pairs[args.pre_cell_id, args.post_cell_id]
+        mw.experiment_browser.select_pair(pair.id)
 
     if sys.flags.interactive == 0:
         app.exec_()
