@@ -6,7 +6,7 @@ from multipatch_analysis.avg_response_fit import get_pair_avg_fits
 from multipatch_analysis.ui.avg_response_fit import AvgResponseFitUi
 
 
-pg.mkQApp()
+app = pg.mkQApp()
 pg.dbg()
 
 session = db.session()
@@ -24,3 +24,6 @@ ui.widget.show()
 fe = FitExplorer(fits['vc', -55]['fit_result'])
 fe.show()
 
+
+if sys.flags.interactive == 0:
+    app.exec_()
