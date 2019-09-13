@@ -153,10 +153,9 @@ def specimen_info(specimen_name=None, specimen_id=None):
         rec['human_donor_site'] = int(m.groups()[1])
         rec['human_donor_number'] = int(m.groups()[2])
         rec['block_number'] = int(m.groups()[3])
-        rec['section_number'] = int(m.groups()[4])
-        rec['section_letter'] = m.groups()[5]
-        rec['subsection_number'] = None if m.groups()[7] is None else int(m.groups()[7])
-        
+        rec['block_letter'] = m.groups()[4]
+        rec['section_number'] = int(m.groups()[5])
+        rec['subsection_number'] = None if m.groups()[7] is None else int(m.groups()[7])   
         
     else:
         raise Exception('Unsupported organism: "%s"' % rec['organism'])

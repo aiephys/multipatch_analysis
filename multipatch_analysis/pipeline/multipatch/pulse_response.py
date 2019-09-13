@@ -40,12 +40,12 @@ class PulseResponsePipelineModule(DatabasePipelineModule):
         
         baselines = []
         for r in response_recs:
-            b = baselines_by_recording.get(r.response_id, [])
+            b = baselines_by_recording.get(r.recording_id, [])
             if len(b) == 0:
                 baselines.append(None)
             else:
                 baselines.append(b.pop())
-
+        
         # best estimate of response amplitude using known latency for this synapse
         for rec,baseline_rec in zip(response_recs, baselines):
             if not rec.has_synapse:

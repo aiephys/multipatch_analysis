@@ -19,7 +19,7 @@ from distutils.version import LooseVersion
 if LooseVersion(sqlalchemy.__version__) < '1.2':
     raise Exception('requires at least sqlalchemy 1.2')
 
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, Float, Date, DateTime, LargeBinary, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, BigInteger, String, Boolean, Float, Date, DateTime, LargeBinary, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship, deferred, sessionmaker, reconstructor
@@ -79,6 +79,7 @@ class FloatType(TypeDecorator):
 
 column_data_types = {
     'int': Integer,
+    'bigint': BigInteger,
     'float': FloatType,
     'bool': Boolean,
     'str': String,

@@ -163,31 +163,28 @@ class MainWindow(pg.QtGui.QWidget):
         self.experiment_browser.populate(experiments=expts)
 
     def selected_pair(self):
-        self.fit_compare.hide()
-        self.meta_compare.hide()
-        selected = self.experiment_browser.selectedItems()
-        if len(selected) != 1:
-            return
-        item = selected[0]
-        if hasattr(item, 'pair') is False:
-            return
-        pair = item.pair
-        ## check to see if the pair has already been analyzed
-        expt_id = pair.experiment.ext_id
-        pre_cell_id = pair.pre_cell.ext_id
-        post_cell_id = pair.post_cell.ext_id
-        record = notes_db.get_pair_notes_record(expt_id, pre_cell_id, post_cell_id, session=self.notes_session)
-        
-        self.pair_param.setValue(pair)
-        if record is None:
-            self.pair_analyzer.load_pair(pair, self.default_session)
-            self.pair_analyzer.analyze_responses()
-            # self.pair_analyzer.fit_responses()
-        else:
-            msg = pg.QtGui.QMessageBox.question(self, "Pair Analysis", 
-                "Pair %s %s->%s has already been analyzed. \n Would you like to load the results?" % (expt_id, pre_cell_id, post_cell_id),
-                pg.QtGui.QMessageBox.Yes | pg.QtGui.QMessageBox.No)
-            if msg == pg.QtGui.QMessageBox.Yes:
+        with pg.BusyCursor():
+            self.fit_compare.hide()
+            self.meta_compare.hide()
+            selected = self.experiment_browser.selectedItems()
+            if len(selected) != 1:
+                return
+            item = selected[0]
+            if hasattr(item, 'pair') is False:
+                return
+            pair = item.pair
+            ## check to see if the pair has already been analyzed
+            expt_id = pair.experiment.ext_id
+            pre_cell_id = pair.pre_cell.ext_id
+            post_cell_id = pair.post_cell.ext_id
+            record = notes_db.get_pair_notes_record(expt_id, pre_cell_id, post_cell_id, session=self.notes_session)
+            
+            self.pair_param.setValue(pair)
+            if record is None:
+                self.pair_analyzer.load_pair(pair, self.default_session)
+                self.pair_analyzer.analyze_responses()
+                # self.pair_analyzer.fit_responses()
+            else:
                 self.pair_analyzer.load_pair(pair, self.default_session, record=record)
                 self.pair_analyzer.analyze_responses()
                 self.pair_analyzer.load_saved_fit(record)
