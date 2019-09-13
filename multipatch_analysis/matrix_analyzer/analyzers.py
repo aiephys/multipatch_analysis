@@ -733,29 +733,29 @@ class DynamicsAnalyzer(Analyzer):
 
         self.summary_stat = {
             'dynamics_no_data': self.metric_summary,
-            'Steady state plasticity': [self.metric_summary, self.metric_conf],
-            'Paired pulse ratio': [self.metric_summary, self.metric_conf],
-            'Recovery': [self.metric_summary, self.metric_conf],
+            'Paired pulse STP': [self.metric_summary, self.metric_conf],
+            'Train-induced STP': [self.metric_summary, self.metric_conf],
+            'STP recovery': [self.metric_summary, self.metric_conf],
         }
         self.summary_dtypes = {} ## dict to specify how we want to cast different summary measures
         ## looks like {('pulse_ratio_8_1_50hz', 'metric_summary'):float}
         
         self.fields = [
-            ('Steady state plasticity', {'mode': 'range', 'defaults': {
+            ('Paired pulse STP', {'mode': 'range', 'defaults': {
                 'Min': 0, 
                 'Max': 2, 
                 'colormap': pg.ColorMap(
                 [0, 0.5, 1.0],
                 [(0, 0, 255, 255), (56, 0, 87, 255), (255, 0, 0, 255)],
             )}}),
-            ('Paired pulse ratio', {'mode': 'range', 'defaults': {
+            ('Train-induced STP', {'mode': 'range', 'defaults': {
                 'Min': 0, 
                 'Max': 2, 
                 'colormap': pg.ColorMap(
                 [0, 0.5, 1.0],
                 [(0, 0, 255, 255), (56, 0, 87, 255), (255, 0, 0, 255)],
             )}}),
-            ('Recovery', {'mode': 'range', 'defaults': {
+            ('STP recovery', {'mode': 'range', 'defaults': {
                 'Min': 0, 
                 'Max': 2, 
                 'colormap': pg.ColorMap(
@@ -763,10 +763,13 @@ class DynamicsAnalyzer(Analyzer):
                 [(0, 0, 255, 255), (56, 0, 87, 255), (255, 0, 0, 255)],
             )}}),
             ('None', {}),
-            ]
-        self.text = {'Steady state plasticity': '{Steady state plasticity:0.2f}',
-            'Paired pulse ratio': '{Paired pulse ratio:0.2f}',
-            'Recovery': '{Recovery:0.2f}'}
+        ]
+        
+        self.text = {
+            'Paired pulse STP': '{Paired pulse STP:0.2f}',
+            'Train-induced STP': '{Train-induced STP:0.2f}',
+            'STP recovery': '{STP recovery:0.2f}',
+        }
 
     def invalidate_output(self):
         self.results = None
@@ -804,9 +807,9 @@ class DynamicsAnalyzer(Analyzer):
                 'dynamics_no_data': no_data,
                 'pre_class': pre_class,
                 'post_class': post_class,
-                'Steady state plasticity': dynamics.pulse_ratio_8_1_50hz if dynamics is not None else float('nan'),
-                'Paired pulse ratio': dynamics.pulse_ratio_2_1_50hz if dynamics is not None else float('nan'),
-                'Recovery': dynamics.pulse_ratio_9_1_250ms if dynamics is not None else float('nan'),
+                'Paired pulse STP': dynamics.stp_initial_50hz if dynamics is not None else float('nan'),
+                'Train-induced STP': dynamics.stp_induction_50hz if dynamics is not None else float('nan'),
+                'STP recovery': dynamics.stp_recovery_250ms if dynamics is not None else float('nan'),
                 }
 
         
