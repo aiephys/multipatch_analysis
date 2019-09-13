@@ -416,7 +416,7 @@ class SubmitWindow(QtGui.QWidget):
 
 
 def submit(data):
-    print "Submitting ", data
+    print("Submitting ", data)
     session = Session()
     
 
