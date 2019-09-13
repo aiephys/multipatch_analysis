@@ -24,11 +24,12 @@ class SignalHandler(pg.QtCore.QObject):
 
 
 class MatrixDisplayFilter(object):
-    def __init__(self, view_box, data_fields, text_fields):
+    def __init__(self, main_window, data_fields, text_fields):
         self.output = None
         self._signalHandler = SignalHandler()
         self.sigOutputChanged = self._signalHandler.sigOutputChanged
-        self.view_box = view_box
+        self.view_box = main_window.matrix_widget.view_box
+        self.main_window = main_window
         self.legend = None
         self.colorMap = ColorMapParameter()
         self.data_fields = data_fields
@@ -93,6 +94,7 @@ class MatrixDisplayFilter(object):
         if self.legend is not None:
             self.view_box.removeItem(self.legend)
         if len(self.colorMap.children()) == 0:
+            pg.QtGui.QMessageBox.information(self.main_window,'', "No Analysis ColorMap is selected, please add one and Update Results", pg.QtGui.QMessageBox.Ok)
             raise Exception("No color maps are selected.")
         cmap_item = [cmap for cmap in self.colorMap.children() if cmap['Enabled'] is True][0]
         # log_scale = self.params.child('log_scale').value()
@@ -168,7 +170,7 @@ class MatrixDisplay(object):
     def __init__(self, window, output_fields, text_fields, field_map):
         self.main_window = window
         self.matrix_widget = self.main_window.matrix_widget
-        self.matrix_display_filter = MatrixDisplayFilter(self.matrix_widget.view_box, output_fields, text_fields)
+        self.matrix_display_filter = MatrixDisplayFilter(self.main_window, output_fields, text_fields)
         self.field_map = field_map
         self.element = None
 
