@@ -20,12 +20,12 @@ class MultipatchPipeline(Pipeline):
         SlicePipelineModule,
         ExperimentPipelineModule,
         DatasetPipelineModule,
-        MorphologyPipelineModule,
+        # MorphologyPipelineModule,
         SynapsePipelineModule,
         PulseResponsePipelineModule,
-        DynamicsPipelineModule,
         SynapsePredictionPipelineModule,
         RestingStatePipelineModule,
+        DynamicsPipelineModule,
     ]
     
     def __init__(self, database, config):

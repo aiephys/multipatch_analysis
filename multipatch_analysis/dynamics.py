@@ -80,7 +80,7 @@ def generate_pair_dynamics(pair, db, session):
     amp_90p = scipy.stats.scoreatpercentile(amps, percentile)
 
     # load all baseline amplitudes to determine the noise level
-    noise_amps = [rec.pulse_response_fit.baseline_fit_amp for rec in pr_recs]
+    noise_amps = [rec.pulse_response_fit.baseline_fit_amp for rec in pr_recs if rec.pulse_response_fit.baseline_fit_amp is not None]
     noise_90p = scipy.stats.scoreatpercentile(noise_amps, percentile)
 
     # start new DB record
@@ -106,7 +106,8 @@ def generate_pair_dynamics(pair, db, session):
                 continue
             amps = {k:r.pulse_response_fit.fit_amp for k,r in pulses.items()}
             metrics['stp_initial_50hz'].append((amps[2] - amps[1]) / amp_90p)
-            paired_pulse_ratio.append(amps[2] / amps[1])
+            if amps[1] != 0:
+                paired_pulse_ratio.append(amps[2] / amps[1])
 
             if any([k not in pulses for k in [1,6,7,8]]):
                 continue

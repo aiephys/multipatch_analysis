@@ -20,7 +20,7 @@ class DynamicsPipelineModule(DatabasePipelineModule):
     """Generates dynamics analysis for each pair
     """
     name = 'dynamics'
-    dependencies = [PulseResponsePipelineModule, SynapsePredictionPipelineModule]
+    dependencies = [PulseResponsePipelineModule]
     table_group = ['dynamics']
     
     @classmethod
