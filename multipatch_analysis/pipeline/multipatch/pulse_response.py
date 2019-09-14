@@ -60,6 +60,9 @@ class PulseResponsePipelineModule(DatabasePipelineModule):
                 setattr(new_rec, prefix+'latency', fit.best_values['xoffset'])
                 setattr(new_rec, prefix+'nrmse', fit.nrmse())
             session.add(new_rec)
+            
+            # keepalive; this loop can take a long time
+            session.query(db.Slice).count()
         
 
         # "unbiased" response analysis used to predict connectivity
