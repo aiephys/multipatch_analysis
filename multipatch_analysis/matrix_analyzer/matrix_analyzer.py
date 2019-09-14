@@ -78,8 +78,6 @@ class ExperimentFilter(object):
         projects = [project[0] for project in projects if project[0] is not None or '']
         acsfs = s.query(db.Experiment.acsf).distinct().all()
         acsfs = [acsf[0] for acsf in acsfs if acsf[0] is not None or '']
-        self.acsf_keys = {'1.3mM': ['1.3mM Ca & 1mM Mg'], '2mM': ['2mM Ca & Mg']}
-        acsfs = self.acsf_keys.keys()
         acsf_expand = False
         internals = s.query(db.Experiment.internal).distinct().all()
         internals = [internal[0] for internal in internals if internal[0] is not None or '']
@@ -91,6 +89,8 @@ class ExperimentFilter(object):
             '1mM EGTA': ['K-Gluc 1uM EGTA', ' K-Gluc 1uM EGTA'],
             'No EGTA': ['K-Gluc -EGTA']}
             internals = self.internal_keys.keys()
+            self.acsf_keys = {'1.3mM': ['1.3mM Ca & 1mM Mg'], '2mM': ['2mM Ca & Mg']}
+            acsfs = self.acsf_keys.keys()
             acsf_expand = True
             internal_expand = True
         project_list = [{'name': str(project), 'type': 'bool'} for project in projects]
@@ -112,12 +112,8 @@ class ExperimentFilter(object):
             selected_acsf = [child.name() for child in self.params.child('ACSF [Ca2+]').children() if child.value() is True]
             selected_internal = [child.name() for child in self.params.child('Internal [EGTA]').children() if child.value() is True]
             project_names = selected_projects if len(selected_projects) > 0 else None 
-            if len(selected_acsf) > 0:
-                acsf_recipes = []
-                [acsf_recipes.extend(self.acsf_keys[acsf]) for acsf in selected_acsf]
-            else:
-                acsf_recipes = None
             internal_recipes = selected_internal if len(selected_internal) > 0 else None
+            acsf_recipes = selected_acsf if len(selected_acsf) > 0 else None
             if self.analyzer_mode == 'external':
                 if project_names is not None:
                     project_names = []
@@ -125,6 +121,9 @@ class ExperimentFilter(object):
                 if internal_recipes is not None:
                     internal_recipes = []
                     [internal_recipes.extend(self.internal_keys[internal]) for internal in selected_internal]
+                if acsf_recipes is not None:
+                    acsf_recipes = []
+                    [acsf_recipes.extend(self.acsf_keys[acsf]) for acsf in selected_acsf]
             self.pairs = db.pair_query(project_name=project_names, acsf=acsf_recipes, session=session, internal=internal_recipes).all()
         return self.pairs
 
@@ -175,12 +174,12 @@ class CellClassFilter(object):
         # if self.analyzer_mode == 'external':
         #     layer_def = 'target layer'
         # else:
+        classes = sorted(classes, key=lambda i: i['target_layer'])
         layer_def = self.params['Define layer by:']
         if layer_def == 'target layer':
             for c in classes:
                 if c.get('cortical_layer') is not None:
                     del c['cortical_layer']
-            classes = sorted(classes, key=lambda i: i['target_layer'])
         elif layer_def == 'annotated layer':    
             for c in classes:
                 if c.get('target_layer') is not None:
@@ -261,9 +260,10 @@ class MatrixAnalyzer(object):
         self.cell_classes = None
 
         self.presets = self.analyzer_presets()
-        preset_list = [''] + [p for p in self.presets.keys()]
+        preset_list = sorted([p for p in self.presets.keys()])
         self.preset_params = Parameter.create(name='Presets', type='group', children=[
             {'name': 'Analyzer Presets', 'type': 'list', 'values': preset_list, 'value': 'None'},
+            {'name': 'Delete Selected Preset', 'type': 'action'},
             {'name': 'Save as Preset', 'type': 'action', 'expanded': True, 'children': [
                 {'name': 'Preset Name', 'type': 'text', 'expanded': False}],
             }])
@@ -276,6 +276,7 @@ class MatrixAnalyzer(object):
 
         self.main_window.ptree.setParameters(self.params, showTop=False)
         self.params.child('Presets', 'Save as Preset').sigActivated.connect(self.save_preset)
+        self.params.child('Presets', 'Delete Selected Preset').sigActivated.connect(self.delete_preset)
         
         self.main_window.update_button.clicked.connect(self.update_clicked)
         self.matrix_display.matrix_widget.sigClicked.connect(self.display_matrix_element_data)
@@ -307,11 +308,21 @@ class MatrixAnalyzer(object):
                 }}
             self.presets.update(new_preset)
             self.write_presets()
-            new_preset_list = [p for p in self.presets.keys()]
-            self.params.child('Presets', 'Analyzer Presets').sigValueChanged.disconnect(self.presetChanged)
-            self.params.child('Presets', 'Analyzer Presets').setLimits(new_preset_list)
-            self.params.child('Presets', 'Analyzer Presets').sigValueChanged.connect(self.presetChanged)
-            self.presets = self.analyzer_presets()
+            self.update_preset_list()
+
+    def delete_preset(self):
+        self.presets = self.load_presets()
+        selected_preset = self.params['Presets', 'Analyzer Presets']
+        del(self.presets[selected_preset])
+        self.write_presets()
+        self.update_preset_list()
+
+    def update_preset_list(self):
+        new_preset_list = sorted([p for p in self.presets.keys()])
+        self.params.child('Presets', 'Analyzer Presets').sigValueChanged.disconnect(self.presetChanged)
+        self.params.child('Presets', 'Analyzer Presets').setLimits(new_preset_list)
+        self.params.child('Presets', 'Analyzer Presets').sigValueChanged.connect(self.presetChanged)
+        self.presets = self.analyzer_presets()
 
     def colormap_to_json(self):
         cm_state = self.params.child('Matrix Display', 'Color Map').saveState()
@@ -420,39 +431,40 @@ class MatrixAnalyzer(object):
         return self.active_analyzers
 
     def display_matrix_element_data(self, matrix_item, event, row, col):
-        field_name = self.matrix_display.matrix_display_filter.get_colormap_field()
-        pre_class, post_class = [k for k, v in self.matrix_display.matrix_map.items() if v==[row, col]][0]
+        with pg.BusyCursor():
+            field_name = self.matrix_display.matrix_display_filter.get_colormap_field()
+            pre_class, post_class = [k for k, v in self.matrix_display.matrix_map.items() if v==[row, col]][0]
 
-        #element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class))
-        element = self.results.loc[self.pair_groups[(pre_class, post_class)]]
-        if len(element) == 0:
-            print ('%s->%s has no data, please select another element' % (pre_class, post_class))
-            return
-        analyzer = self.field_map[field_name]
-        analyzer.print_element_info(pre_class, post_class, element, field_name)
-        # from here row and col are tuples (row, pre_class) and (col, post_class) respectively
-        row = (row, pre_class)
-        col = (col, post_class)
-        if int(event.modifiers() & pg.QtCore.Qt.ControlModifier)>0:
-            self.selected += 1
-            if self.selected >= len(self.colors):
-                self.selected = 0
-            color = self.colors[self.selected]
-            self.matrix_display.color_element(row, col, color)
-            self.hist_plot.plot_element_data(element, analyzer, color, self.trace_panel)
-            self.distance_plot.element_distance(element, color)
-            self.element_scatter.color_selected_element(color, pre_class, post_class)
-            self.pair_scatter.color_selected_element(color, pre_class, post_class)
-            # self.pair_scatter.filter_selected_element(pre_class, post_class)
-        else:
-            self.display_matrix_element_reset() 
-            color = self.colors[self.selected]
-            self.matrix_display.color_element(row, col, color)
-            self.hist_plot.plot_element_data(element, analyzer, color, self.trace_panel)
-            self.distance_plot.element_distance(element, color)
-            self.element_scatter.color_selected_element(color, pre_class, post_class)
-            self.pair_scatter.color_selected_element(color, pre_class, post_class)
-            # self.pair_scatter.filter_selected_element(pre_class, post_class)
+            #element = self.results.groupby(['pre_class', 'post_class']).get_group((pre_class, post_class))
+            element = self.results.loc[self.pair_groups[(pre_class, post_class)]]
+            if len(element) == 0:
+                print ('%s->%s has no data, please select another element' % (pre_class, post_class))
+                return
+            analyzer = self.field_map[field_name]
+            analyzer.print_element_info(pre_class, post_class, element, field_name)
+            # from here row and col are tuples (row, pre_class) and (col, post_class) respectively
+            row = (row, pre_class)
+            col = (col, post_class)
+            if int(event.modifiers() & pg.QtCore.Qt.ControlModifier)>0:
+                self.selected += 1
+                if self.selected >= len(self.colors):
+                    self.selected = 0
+                color = self.colors[self.selected]
+                self.matrix_display.color_element(row, col, color)
+                self.hist_plot.plot_element_data(element, analyzer, color, self.trace_panel)
+                self.distance_plot.element_distance(element, color)
+                self.element_scatter.color_selected_element(color, pre_class, post_class)
+                self.pair_scatter.color_selected_element(color, pre_class, post_class)
+                # self.pair_scatter.filter_selected_element(pre_class, post_class)
+            else:
+                self.display_matrix_element_reset() 
+                color = self.colors[self.selected]
+                self.matrix_display.color_element(row, col, color)
+                self.hist_plot.plot_element_data(element, analyzer, color, self.trace_panel)
+                self.distance_plot.element_distance(element, color)
+                self.element_scatter.color_selected_element(color, pre_class, post_class)
+                self.pair_scatter.color_selected_element(color, pre_class, post_class)
+                # self.pair_scatter.filter_selected_element(pre_class, post_class)
 
     def display_matrix_element_reset(self):
         self.selected = 0
@@ -484,6 +496,7 @@ class MatrixAnalyzer(object):
     def update_results(self):
         # Select pairs 
         self.pairs = self.experiment_filter.get_pair_list(self.session)
+        
 
         # Group all cells by selected classes
         self.cell_groups, self.cell_classes = self.cell_class_filter.get_cell_groups(self.pairs)
@@ -498,7 +511,11 @@ class MatrixAnalyzer(object):
             group_results = analysis.group_result(self.pair_groups)
             if a == 0:
                 self.results = results
-                self.group_results = group_results
+                try:
+                    self.group_results = group_results
+                except AttributeError:
+                    pg.QtGui.QMessageBox.information(self.main_window, '', 'The set of filters you have selected yielded no results, please try something else',
+                        pg.QtGui.QMessageBox.Ok)
             else:
                 merge_results = pd.concat([self.results, results], axis=1)
                 self.results = merge_results.loc[:, ~merge_results.columns.duplicated(keep='first')]

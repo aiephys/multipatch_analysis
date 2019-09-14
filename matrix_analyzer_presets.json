@@ -1,112 +1,4 @@
 {
-    " ": {
-        "data filters": {
-            "value": null,
-            "children": {
-                "Projects": {
-                    "value": null,
-                    "children": {
-                        "Mouse": {
-                            "value": false
-                        },
-                        "Human": {
-                            "value": false
-                        }
-                    }
-                },
-                "ACSF [Ca2+]": {
-                    "value": null,
-                    "children": {
-                        "1.3mM": {
-                            "value": false
-                        },
-                        "2mM": {
-                            "value": false
-                        }
-                    }
-                },
-                "Internal [EGTA]": {
-                    "value": null,
-                    "children": {
-                        "0.3mM EGTA": {
-                            "value": false
-                        },
-                        "1mM EGTA": {
-                            "value": false
-                        },
-                        "No EGTA": {
-                            "value": false
-                        }
-                    }
-                }
-            }
-        },
-        "cell classes": {
-            "value": null,
-            "children": {
-                "Define layer by:": {
-                    "value": "target layer"
-                },
-                "All Transgenic Classes": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "Excitatory Transgenic Classes": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "Inhibitory Transgenic Classes": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "All Cells": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "Pyramidal Cells": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "Non-Pyramidal Cells": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                }
-            }
-        },
-        "matrix colormap": {
-            "items": {}
-        },
-        "text format": {
-            "value": ""
-        },
-        "show confidence": {
-            "value": "None"
-        }
-    },
     "Mouse Connection Probability": {
         "data filters": {
             "value": null,
@@ -129,7 +21,7 @@
                             "value": true
                         },
                         "2mM": {
-                            "value": false
+                            "value": true
                         }
                     }
                 },
@@ -140,10 +32,10 @@
                             "value": true
                         },
                         "1mM EGTA": {
-                            "value": false
+                            "value": true
                         },
                         "No EGTA": {
-                            "value": false
+                            "value": true
                         }
                     }
                 }
@@ -328,7 +220,7 @@
                             "value": true
                         },
                         "2mM": {
-                            "value": false
+                            "value": true
                         }
                     }
                 },
@@ -339,10 +231,10 @@
                             "value": true
                         },
                         "1mM EGTA": {
-                            "value": false
+                            "value": true
                         },
                         "No EGTA": {
-                            "value": false
+                            "value": true
                         }
                     }
                 }
@@ -684,7 +576,7 @@
                             "value": true
                         },
                         "2mM": {
-                            "value": false
+                            "value": true
                         }
                     }
                 },
@@ -692,10 +584,10 @@
                     "value": null,
                     "children": {
                         "0.3mM EGTA": {
-                            "value": false
+                            "value": true
                         },
                         "1mM EGTA": {
-                            "value": false
+                            "value": true
                         },
                         "No EGTA": {
                             "value": true
@@ -883,7 +775,7 @@
                             "value": true
                         },
                         "2mM": {
-                            "value": false
+                            "value": true
                         }
                     }
                 },
@@ -891,10 +783,10 @@
                     "value": null,
                     "children": {
                         "0.3mM EGTA": {
-                            "value": false
+                            "value": true
                         },
                         "1mM EGTA": {
-                            "value": false
+                            "value": true
                         },
                         "No EGTA": {
                             "value": true
@@ -1061,7 +953,7 @@
                             "value": true
                         },
                         "2mM": {
-                            "value": false
+                            "value": true
                         }
                     }
                 },
@@ -1069,10 +961,10 @@
                     "value": null,
                     "children": {
                         "0.3mM EGTA": {
-                            "value": false
+                            "value": true
                         },
                         "1mM EGTA": {
-                            "value": false
+                            "value": true
                         },
                         "No EGTA": {
                             "value": true
@@ -1212,6 +1104,854 @@
         },
         "text format": {
             "value": "{Steady state plasticity:0.2f}"
+        },
+        "show confidence": {
+            "value": "None"
+        }
+    },
+    "Mouse Latency": {
+        "data filters": {
+            "value": null,
+            "children": {
+                "Projects": {
+                    "value": null,
+                    "children": {
+                        "Mouse": {
+                            "value": true
+                        },
+                        "Human": {
+                            "value": false
+                        }
+                    }
+                },
+                "ACSF [Ca2+]": {
+                    "value": null,
+                    "children": {
+                        "1.3mM": {
+                            "value": true
+                        },
+                        "2mM": {
+                            "value": true
+                        }
+                    }
+                },
+                "Internal [EGTA]": {
+                    "value": null,
+                    "children": {
+                        "0.3mM EGTA": {
+                            "value": true
+                        },
+                        "1mM EGTA": {
+                            "value": true
+                        },
+                        "No EGTA": {
+                            "value": true
+                        }
+                    }
+                }
+            }
+        },
+        "cell classes": {
+            "value": null,
+            "children": {
+                "Define layer by:": {
+                    "value": "target layer"
+                },
+                "All Transgenic Classes": {
+                    "value": true,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Excitatory Transgenic Classes": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Inhibitory Transgenic Classes": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "All Cells": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Pyramidal Cells": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Non-Pyramidal Cells": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                }
+            }
+        },
+        "matrix colormap": {
+            "items": {
+                "Latency": {
+                    "value": {
+                        "pos": [
+                            0.0,
+                            0.1613,
+                            0.3491,
+                            1.0
+                        ],
+                        "color": [
+                            [
+                                255,
+                                255,
+                                0,
+                                255
+                            ],
+                            [
+                                0,
+                                206,
+                                151,
+                                255
+                            ],
+                            [
+                                0,
+                                119,
+                                178,
+                                255
+                            ],
+                            [
+                                99,
+                                0,
+                                148,
+                                255
+                            ]
+                        ]
+                    },
+                    "children": {
+                        "Min": {
+                            "value": 0.0005
+                        },
+                        "Max": {
+                            "value": 0.004
+                        },
+                        "Operation": {
+                            "value": "Overlay"
+                        },
+                        "Channels..": {
+                            "value": null,
+                            "children": {
+                                "Red": {
+                                    "value": true
+                                },
+                                "Green": {
+                                    "value": true
+                                },
+                                "Blue": {
+                                    "value": true
+                                },
+                                "Alpha": {
+                                    "value": true
+                                }
+                            }
+                        },
+                        "Enabled": {
+                            "value": true
+                        },
+                        "NaN": {
+                            "value": [
+                                128,
+                                128,
+                                128,
+                                255
+                            ]
+                        }
+                    },
+                    "field": "Latency"
+                }
+            }
+        },
+        "text format": {
+            "value": "{Latency.ms}"
+        },
+        "show confidence": {
+            "value": "None"
+        }
+    },
+    "Mouse PSP Rise Time": {
+        "data filters": {
+            "value": null,
+            "children": {
+                "Projects": {
+                    "value": null,
+                    "children": {
+                        "Mouse": {
+                            "value": true
+                        },
+                        "Human": {
+                            "value": false
+                        }
+                    }
+                },
+                "ACSF [Ca2+]": {
+                    "value": null,
+                    "children": {
+                        "1.3mM": {
+                            "value": true
+                        },
+                        "2mM": {
+                            "value": true
+                        }
+                    }
+                },
+                "Internal [EGTA]": {
+                    "value": null,
+                    "children": {
+                        "0.3mM EGTA": {
+                            "value": true
+                        },
+                        "1mM EGTA": {
+                            "value": true
+                        },
+                        "No EGTA": {
+                            "value": true
+                        }
+                    }
+                }
+            }
+        },
+        "cell classes": {
+            "value": null,
+            "children": {
+                "Define layer by:": {
+                    "value": "target layer"
+                },
+                "All Transgenic Classes": {
+                    "value": true,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Excitatory Transgenic Classes": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Inhibitory Transgenic Classes": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "All Cells": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Pyramidal Cells": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Non-Pyramidal Cells": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                }
+            }
+        },
+        "matrix colormap": {
+            "items": {
+                "PSP Rise Time": {
+                    "value": {
+                        "pos": [
+                            0.0,
+                            0.1613,
+                            0.3491,
+                            1.0
+                        ],
+                        "color": [
+                            [
+                                255,
+                                255,
+                                0,
+                                255
+                            ],
+                            [
+                                0,
+                                206,
+                                151,
+                                255
+                            ],
+                            [
+                                0,
+                                119,
+                                178,
+                                255
+                            ],
+                            [
+                                99,
+                                0,
+                                148,
+                                255
+                            ]
+                        ]
+                    },
+                    "children": {
+                        "Min": {
+                            "value": 0.001
+                        },
+                        "Max": {
+                            "value": 0.01
+                        },
+                        "Operation": {
+                            "value": "Overlay"
+                        },
+                        "Channels..": {
+                            "value": null,
+                            "children": {
+                                "Red": {
+                                    "value": true
+                                },
+                                "Green": {
+                                    "value": true
+                                },
+                                "Blue": {
+                                    "value": true
+                                },
+                                "Alpha": {
+                                    "value": true
+                                }
+                            }
+                        },
+                        "Enabled": {
+                            "value": true
+                        },
+                        "NaN": {
+                            "value": [
+                                128,
+                                128,
+                                128,
+                                255
+                            ]
+                        }
+                    },
+                    "field": "PSP Rise Time"
+                }
+            }
+        },
+        "text format": {
+            "value": "{PSP Rise Time.ms}"
+        },
+        "show confidence": {
+            "value": "None"
+        }
+    },
+    "Human Latency": {
+        "data filters": {
+            "value": null,
+            "children": {
+                "Projects": {
+                    "value": null,
+                    "children": {
+                        "Mouse": {
+                            "value": false
+                        },
+                        "Human": {
+                            "value": true
+                        }
+                    }
+                },
+                "ACSF [Ca2+]": {
+                    "value": null,
+                    "children": {
+                        "1.3mM": {
+                            "value": true
+                        },
+                        "2mM": {
+                            "value": true
+                        }
+                    }
+                },
+                "Internal [EGTA]": {
+                    "value": null,
+                    "children": {
+                        "0.3mM EGTA": {
+                            "value": true
+                        },
+                        "1mM EGTA": {
+                            "value": true
+                        },
+                        "No EGTA": {
+                            "value": true
+                        }
+                    }
+                }
+            }
+        },
+        "cell classes": {
+            "value": null,
+            "children": {
+                "Define layer by:": {
+                    "value": "target layer"
+                },
+                "All Transgenic Classes": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Excitatory Transgenic Classes": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Inhibitory Transgenic Classes": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "All Cells": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Pyramidal Cells": {
+                    "value": true,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Non-Pyramidal Cells": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                }
+            }
+        },
+        "matrix colormap": {
+            "items": {
+                "Latency": {
+                    "value": {
+                        "pos": [
+                            0.0,
+                            0.1613,
+                            0.3491,
+                            1.0
+                        ],
+                        "color": [
+                            [
+                                255,
+                                255,
+                                0,
+                                255
+                            ],
+                            [
+                                0,
+                                206,
+                                151,
+                                255
+                            ],
+                            [
+                                0,
+                                119,
+                                178,
+                                255
+                            ],
+                            [
+                                99,
+                                0,
+                                148,
+                                255
+                            ]
+                        ]
+                    },
+                    "children": {
+                        "Min": {
+                            "value": 0.0005
+                        },
+                        "Max": {
+                            "value": 0.004
+                        },
+                        "Operation": {
+                            "value": "Overlay"
+                        },
+                        "Channels..": {
+                            "value": null,
+                            "children": {
+                                "Red": {
+                                    "value": true
+                                },
+                                "Green": {
+                                    "value": true
+                                },
+                                "Blue": {
+                                    "value": true
+                                },
+                                "Alpha": {
+                                    "value": true
+                                }
+                            }
+                        },
+                        "Enabled": {
+                            "value": true
+                        },
+                        "NaN": {
+                            "value": [
+                                128,
+                                128,
+                                128,
+                                255
+                            ]
+                        }
+                    },
+                    "field": "Latency"
+                }
+            }
+        },
+        "text format": {
+            "value": "{Latency.ms}"
+        },
+        "show confidence": {
+            "value": "Connection Probability"
+        }
+    },
+    "Human PSP Rise Time": {
+        "data filters": {
+            "value": null,
+            "children": {
+                "Projects": {
+                    "value": null,
+                    "children": {
+                        "Mouse": {
+                            "value": false
+                        },
+                        "Human": {
+                            "value": true
+                        }
+                    }
+                },
+                "ACSF [Ca2+]": {
+                    "value": null,
+                    "children": {
+                        "1.3mM": {
+                            "value": true
+                        },
+                        "2mM": {
+                            "value": true
+                        }
+                    }
+                },
+                "Internal [EGTA]": {
+                    "value": null,
+                    "children": {
+                        "0.3mM EGTA": {
+                            "value": true
+                        },
+                        "1mM EGTA": {
+                            "value": true
+                        },
+                        "No EGTA": {
+                            "value": true
+                        }
+                    }
+                }
+            }
+        },
+        "cell classes": {
+            "value": null,
+            "children": {
+                "Define layer by:": {
+                    "value": "target layer"
+                },
+                "All Transgenic Classes": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Excitatory Transgenic Classes": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Inhibitory Transgenic Classes": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "All Cells": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Pyramidal Cells": {
+                    "value": true,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Non-Pyramidal Cells": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                }
+            }
+        },
+        "matrix colormap": {
+            "items": {
+                "PSP Rise Time": {
+                    "value": {
+                        "pos": [
+                            0.0,
+                            0.1613,
+                            0.3491,
+                            1.0
+                        ],
+                        "color": [
+                            [
+                                255,
+                                255,
+                                0,
+                                255
+                            ],
+                            [
+                                0,
+                                206,
+                                151,
+                                255
+                            ],
+                            [
+                                0,
+                                119,
+                                178,
+                                255
+                            ],
+                            [
+                                99,
+                                0,
+                                148,
+                                255
+                            ]
+                        ]
+                    },
+                    "children": {
+                        "Min": {
+                            "value": 0.001
+                        },
+                        "Max": {
+                            "value": 0.01
+                        },
+                        "Operation": {
+                            "value": "Overlay"
+                        },
+                        "Channels..": {
+                            "value": null,
+                            "children": {
+                                "Red": {
+                                    "value": true
+                                },
+                                "Green": {
+                                    "value": true
+                                },
+                                "Blue": {
+                                    "value": true
+                                },
+                                "Alpha": {
+                                    "value": true
+                                }
+                            }
+                        },
+                        "Enabled": {
+                            "value": true
+                        },
+                        "NaN": {
+                            "value": [
+                                128,
+                                128,
+                                128,
+                                255
+                            ]
+                        }
+                    },
+                    "field": "PSP Rise Time"
+                }
+            }
+        },
+        "text format": {
+            "value": "{PSP Rise Time.ms}"
+        },
+        "show confidence": {
+            "value": "Connection Probability"
+        }
+    },
+    " ": {
+        "data filters": {
+            "value": null,
+            "children": {
+                "Projects": {
+                    "value": null,
+                    "children": {
+                        "Mouse": {
+                            "value": false
+                        },
+                        "Human": {
+                            "value": false
+                        }
+                    }
+                },
+                "ACSF [Ca2+]": {
+                    "value": null,
+                    "children": {
+                        "1.3mM": {
+                            "value": false
+                        },
+                        "2mM": {
+                            "value": false
+                        }
+                    }
+                },
+                "Internal [EGTA]": {
+                    "value": null,
+                    "children": {
+                        "0.3mM EGTA": {
+                            "value": false
+                        },
+                        "1mM EGTA": {
+                            "value": false
+                        },
+                        "No EGTA": {
+                            "value": false
+                        }
+                    }
+                }
+            }
+        },
+        "cell classes": {
+            "value": null,
+            "children": {
+                "Define layer by:": {
+                    "value": "target layer"
+                },
+                "All Transgenic Classes": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Excitatory Transgenic Classes": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Inhibitory Transgenic Classes": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "All Cells": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Pyramidal Cells": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Non-Pyramidal Cells": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                }
+            }
+        },
+        "matrix colormap": {
+            "items": {}
+        },
+        "text format": {
+            "value": ""
         },
         "show confidence": {
             "value": "None"

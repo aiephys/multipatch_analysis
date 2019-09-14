@@ -16,6 +16,7 @@ from multipatch_analysis.database import default_db as db
 # from first_pulse_deconvolved_amps import get_deconvolved_first_pulse_amps
 from neuroanalysis.data import TSeries, TSeriesList
 from neuroanalysis.baseline import float_mode
+from neuroanalysis.filter import bessel_filter
 
 
 thermal_colormap = pg.ColorMap(
@@ -358,6 +359,7 @@ class ConnectivityAnalyzer(Analyzer):
                     if arf.holding in syn_typ_holding[syn_typ] and arf.manual_qc_pass is True and latency is not None:
                         if arf.clamp_mode == 'vc' and trace_itemA is None:
                             traceA = TSeries(data=arf.avg_data, sample_rate=db.default_sample_rate)
+                            traceA = bessel_filter(traceA, 5000, btype='low', bidir=True)
                             start_time = arf.avg_data_start_time
                             if start_time is not None:
                                 xoffset = start_time - latency
@@ -628,6 +630,9 @@ class StrengthAnalyzer(Analyzer):
                 #     continue
                 data = rsf.vc_avg_data if field_name.startswith('PSC') else rsf.ic_avg_data
                 traceA = TSeries(data=data, sample_rate=db.default_sample_rate)
+                if field_name.startswith('PSC'):
+                    traceA = bessel_filter(traceA, 5000, btype='low', bidir=True)
+                bessel_filter(traceA, 5000, btype='low', bidir=True)
                 start_time = rsf.vc_avg_data_start_time if field_name.startswith('PSC') else rsf.ic_avg_data_start_time
                 if latency is not None and start_time is not None:
                     if field_name == 'Latency':
@@ -636,19 +641,20 @@ class StrengthAnalyzer(Analyzer):
                         xoffset = start_time - latency
                     baseline_window = [abs(xoffset)-1e-3, abs(xoffset)]
                     traceA = format_trace(traceA, baseline_window, x_offset=xoffset, align='psp')
-                    trace_itemA = trace_plt[0].plot(traceA.time_values, traceA.data)
+                    trace_itemA = trace_plt[1].plot(traceA.time_values, traceA.data)
                     trace_itemA.pair = pair
                     trace_itemA.curve.setClickable(True)
                     trace_itemA.sigClicked.connect(self.trace_plot_clicked)
                     tracesA.append(traceA)
                 if field_name == 'Latency' and rsf.vc_nrmse is not None: #and rsf.vc_nrmse < 0.8:
                     traceB = TSeries(data=rsf.vc_avg_data, sample_rate=db.default_sample_rate)
+                    traceB = bessel_filter(traceB, 5000, btype='low', bidir=True)
                     start_time = rsf.vc_avg_data_start_time
                     if latency is not None and start_time is not None:
                         xoffset = start_time + latency
                         baseline_window = [abs(xoffset)-1e-3, abs(xoffset)]
                         traceB = format_trace(traceB, baseline_window, x_offset=xoffset, align='psp')
-                        trace_itemB = trace_plt[1].plot(traceB.time_values, traceB.data)
+                        trace_itemB = trace_plt[0].plot(traceB.time_values, traceB.data)
                         trace_itemB.pair = pair
                         trace_itemB.curve.setClickable(True)
                         trace_itemB.sigClicked.connect(self.trace_plot_clicked)
@@ -673,16 +679,22 @@ class StrengthAnalyzer(Analyzer):
                 x_label = 'Response Onset'
             grand_trace = TSeriesList(tracesA).mean()
             name = ('%s->%s, n=%d' % (pre_class, post_class, len(tracesA)))
-            trace_plt[0].plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3}, name=name)
-            units = 'V' if field_name.startswith('PSP') else 'A'
-            trace_plt[0].setXRange(-5e-3, 20e-3)
-            trace_plt[0].setLabels(left=('', units), bottom=(x_label, 's'))
+            trace_plt[1].plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3}, name=name)
+            units = 'A' if field_name.startswith('PSC') else 'V'
+            title = 'Voltage Clamp' if field_name.startswith('PSC') else 'Current Clamp'
+            trace_plt[1].setXRange(-5e-3, 20e-3)
+            trace_plt[1].setLabels(left=('', units), bottom=(x_label, 's'))
+            trace_plt[1].setTitle(title)
         if len(tracesB) > 0:
+            trace_plt[1].setLabels(right=('', units))
+            trace_plt[1].hideAxis('left')
             spike_line = pg.InfiniteLine(0, pen={'color': 'w', 'width': 1, 'style': pg.QtCore.Qt.DotLine}, movable=False)
-            trace_plt[1].addItem(spike_line)
+            trace_plt[0].addItem(spike_line)
             grand_trace = TSeriesList(tracesB).mean()
-            trace_plt[1].plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3})
-            trace_plt[1].setLabels(right=('', 'A'), bottom=('Time from presynaptic spike', 's'))
+            trace_plt[0].plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3})
+            trace_plt[0].setXRange(-5e-3, 20e-3)
+            trace_plt[0].setLabels(left=('', 'A'), bottom=('Time from presynaptic spike', 's'))
+            trace_plt[0].setTitle('Voltage Clamp')
         return line, scatter
 
     def scatter_plot_clicked(self, scatterplt, points):
@@ -873,13 +885,40 @@ class DynamicsAnalyzer(Analyzer):
             y_values = pg.pseudoScatter(np.asarray(values, dtype=float), spacing=1)
             scatter = pg.ScatterPlotItem(symbol='o', brush=(color + (150,)), pen='w', size=12)
             scatter.setData(values, y_values + 10.)
-            if trace_plt is not None:
-                grand_trace = TSeriesList(traces).mean()
-                trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3})
-                units = 'V' if field_name.startswith('ic') else 'A'
-                trace_plt.setXRange(0, 20e-3)
-                trace_plt.setLabels(left=('', units), bottom=('Time from stimulus', 's'))
+        for point in scatter.points():
+            pair_id = point.data().id
+            self.pair_items[pair_id].extend([point, color])
+        scatter.sigClicked.connect(self.scatter_plot_clicked)
+        if len(traces) > 0:
+            grand_trace = TSeriesList(traces).mean()
+            trace_plt.plot(grand_trace.time_values, grand_trace.data, pen={'color': color, 'width': 3})
+            units = 'V' if field_name.startswith('ic') else 'A'
+            trace_plt.setXRange(0, 20e-3)
+            trace_plt.setLabels(left=('', units), bottom=('Time from stimulus', 's'))
         return line, scatter
+
+    def scatter_plot_clicked(self, scatterplt, points):
+        pair = points[0].data()
+        self.deselect_pairs()
+        self.select_pair(pair)
+
+    def trace_plot_clicked(self, trace):
+        pair = trace.pair
+        self.deselect_pairs()
+        self.select_pair(pair)
+
+    def select_pair(self, pair):
+        point= self.pair_items[pair.id]
+        point.setBrush(pg.mkBrush('y'))
+        point.setSize(15)
+        # if traceA is not None:
+        #     traceA.setPen('y', width=3)
+        #     traceA.setZValue(10)
+        # if traceB is not None:
+        #     traceB.setPen('y', width=3)
+        #     traceB.setZValue(10)
+        print('Clicked:' '%s' % pair)
+        print(self.results.loc[pair])
 
     def summary(self, results, metric):
         print('')

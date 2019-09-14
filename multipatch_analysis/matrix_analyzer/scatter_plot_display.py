@@ -104,7 +104,7 @@ class PairScatterPlot(ScatterPlots):
         header = pg.QtGui.QLabel()
         header.setText('<span style="font-weight: bold">Pair-wise Scatter Plot</span>')
         self.ctrlPanel.insertWidget(0, header)
-        self.selected_points = []
+        self.top_plot = None
 
     def set_data(self, data):
         data['pair_class'] = data.apply(lambda row: '-'.join([row.pre_class.name, row.post_class.name]), axis=1)
@@ -133,19 +133,22 @@ class PairScatterPlot(ScatterPlots):
             return
 
     def plotClicked(self, plot, points):
-        if len(self.selected_points) > 0:
-            for pt, style in self.selected_points:
-                brush, pen, size = style
-                try:
-                    pt.setBrush(brush)
-                    pt.setPen(pen)
-                    pt.setSize(size)
-                except AttributeError:
-                    pass
-        self.selected_points = []
+        if self.top_plot is not None:
+            self.plot.removeItem(self.top_plot)
+        #     for pt, style in self.selected_points:
+        #         brush, pen, size = style
+        #         try:
+        #             pt.setBrush(brush)
+        #             pt.setPen(pen)
+        #             pt.setSize(size)
+        #         except AttributeError:
+        #             pass
+        selected_points = [[], []]
         for pt in points:
-            style = (pt.brush(), pt.pen(), pt.size())
-            self.selected_points.append([pt, style])
+            # style = (pt.brush(), pt.pen(), pt.size())
+            x, y = pt.pos()
+            selected_points[0].append(x)
+            selected_points[1].append(y)
             data = pt.data()
             pair = data.index
             print('Clicked:' '%s' % pair)
@@ -154,6 +157,8 @@ class PairScatterPlot(ScatterPlots):
                 field_name = field.text()
                 value = data[field_name]
                 print('%s: %s' % (field_name, pg.siFormat(value)))
-            pt.setBrush(pg.mkBrush('y'))
-            pt.setSize(15)
+            # pt.setBrush(pg.mkBrush('y'))
+            # pt.setSize(15)
+        self.top_plot = self.plot.plot(selected_points[0], selected_points[1], pen=None, symbol='o', symbolBrush='y', symbolSize=15)
         self.sigScatterPlotClicked.emit(self, points)
+
