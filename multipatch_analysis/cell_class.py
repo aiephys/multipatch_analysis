@@ -3,7 +3,7 @@ from __future__ import print_function, division
 
 from sqlalchemy.orm import aliased
 from collections import OrderedDict
-from . import database as db
+from .database import default_db
 from . import constants
 
 
@@ -130,10 +130,12 @@ class CellClass(object):
     def __str__(self):
         return self.name
         
-    def filter_query(self, query, cell_table):
+    def filter_query(self, query, cell_table, db=None):
         """Return a modified query (sqlalchemy) that filters results to include only those in
         this cell class.
         """
+        if db is None:
+            db = default_db
         morpho = aliased(db.Morphology)
         query = query.join(morpho, morpho.cell_id==cell_table.id)
         tables = [cell_table, morpho]
@@ -155,7 +157,7 @@ class CellClass(object):
             
 
 
-def classify_cells(cell_classes, cells=None, pairs=None, session=None):
+def classify_cells(cell_classes, cells=None, pairs=None, session=None, db=None):
     """Given cell class definitions and a list of cells, return a dict indicating which cells
     are members of each class.
 
@@ -192,6 +194,8 @@ def classify_cells(cell_classes, cells=None, pairs=None, session=None):
         sst_cells = grouped_cells[sst_cell_class]    
 
     """
+    if db is None:
+        db = default_db
     if pairs is not None:
         assert cells is None, "cells and pairs arguments are mutually exclusive"
         assert session is None, "session and pairs arguments are mutually exclusive"

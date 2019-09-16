@@ -143,10 +143,10 @@ class SynphysDatabase(Database):
         query = query.outerjoin(self.SynapsePrediction)
 
         if pre_class is not None:
-            query = pre_class.filter_query(query, pre_cell)
+            query = pre_class.filter_query(query, pre_cell, db=self)
 
         if post_class is not None:
-            query = post_class.filter_query(query, post_cell)
+            query = post_class.filter_query(query, post_cell, db=self)
 
         if synapse is not None:
             query = query.filter(self.Pair.has_synapse==synapse)
