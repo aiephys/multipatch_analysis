@@ -1,0 +1,3 @@
+#!/bin/bash
+
+wget http://luke.campagnola.me/tmp/synphys_current_small.sqlite
