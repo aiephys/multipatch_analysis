@@ -277,8 +277,8 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         trigger_path = '//' + trigger_path.lstrip('/')
         
         trigger_save_path = os.path.join(trigger_path, trigger_file)
-        print trigger_save_path
-        print incoming_json_save_path
+        print(trigger_save_path)
+        print(incoming_json_save_path)
         with open(trigger_save_path, 'w') as the_file:
             the_file.write("specimen_id: {}\n".format(self.cluster_id))     
             the_file.write("cells_info: '{}'\n".format(incoming_json_save_path))

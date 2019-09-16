@@ -82,17 +82,17 @@ class MatrixHistogramPlot(pg.GraphicsLayoutWidget):
         post_class = element['post_class'][0].name
         self.trace_pltA = self.trace_panel.addPlot()
         self.trace_pltB = self.trace_panel.addPlot()
-        self.trace_pltB.setXLink(self.trace_pltA)
-        self.trace_pltB.hideAxis('left')
-        if self.analyzer.name == 'strength' and self.field_name != 'Latency':
-            self.trace_plots = [self.trace_pltA]
-            self.trace_panel.removeItem(self.trace_pltB)
-        else:
-            self.trace_plots = [self.trace_pltA, self.trace_pltB]
+        self.trace_plots = [self.trace_pltA, self.trace_pltB]
+        
         if self.analyzer.name == 'dynamics':
             self.trace_pltB.setYLink(self.trace_pltA) 
         self.trace_plot_list.append(self.trace_plots)
         self.line, self.scatter = analyzer.plot_element_data(pre_class, post_class, element, self.field_name, color=color, trace_plt=self.trace_plots)
+        if self.analyzer.name == 'strength' and self.field_name != 'Latency':
+            self.trace_panel.removeItem(self.trace_pltA)
+        else:
+            self.trace_pltB.setXLink(self.trace_pltA)
+            self.trace_pltB.hideAxis('left')
         if len(self.trace_plot_list) > 1:
             first_plot = self.trace_plot_list[0][0]
             for grid in self.trace_plot_list[1:]:

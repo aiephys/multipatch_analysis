@@ -81,16 +81,26 @@ class CellClass(object):
         objs = [cell, morpho]
         for k, v in self.criteria.items():
             found_attr = False
-            for obj in objs:
-                if hasattr(obj, k):
-                    found_attr = True
-                    if isinstance(v, tuple):
-                        if getattr(obj, k) not in v:
-                            return False
-                    else:
-                        if getattr(obj, k) != v:
-                            return False
-                    break
+            if isinstance(v, dict):
+                or_attr = []
+                for k2, v2 in v.items():
+                    for obj in objs:
+                        if hasattr(obj, k2):
+                            found_attr = True
+                            or_attr.append(getattr(obj, k2) == v2)
+                if not any(or_attr):
+                    return False
+            else:
+                for obj in objs:
+                    if hasattr(obj, k):
+                        found_attr = True
+                        if isinstance(v, tuple):
+                            if getattr(obj, k) not in v:
+                                return False
+                        else:
+                            if getattr(obj, k) != v:
+                                return False
+                        break
             if not found_attr:
                 return False
                 # raise Exception('Cannot use "%s" for cell typing; attribute not found on cell or cell.morphology' % k)

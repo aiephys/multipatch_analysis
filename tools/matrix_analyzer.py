@@ -7,7 +7,7 @@ from collections import OrderedDict
 if __name__ == '__main__':
 
     app = pg.mkQApp()
-    # pg.dbg()
+    pg.dbg()
     # pg.setConfigOption('background', 'w')
     # pg.setConfigOption('foreground', 'k')
 
@@ -26,7 +26,7 @@ if __name__ == '__main__':
     cell_class_groups = OrderedDict([
         ('All Transgenic Classes', [
             # {'cre_type': 'unknown', 'target_layer': '2/3','cortical_layer': '2/3'},
-            {'dendrite_type': 'spiny', 'target_layer': '2/3', 'cortical_layer': '2/3','display_names': ('L2/3', 'Pyr\nspiny dendrite')},
+            {'dendrite_type': 'spiny', 'target_layer': '2/3', 'cortical_layer': '2/3','display_names': ('L2/3', 'Pyr\nspiny')},
             {'cre_type': 'pvalb', 'target_layer': '2/3', 'cortical_layer': '2/3', 'display_names': ('L2/3', 'Pv')},
             {'cre_type': 'sst', 'target_layer': '2/3', 'cortical_layer': '2/3', 'display_names': ('L2/3', 'Sst')},
             {'cre_type': 'vip', 'target_layer': '2/3', 'cortical_layer': '2/3', 'display_names': ('L2/3', 'Vip')},
@@ -84,7 +84,7 @@ if __name__ == '__main__':
         # ]),
  
         ('Excitatory Transgenic Classes', [
-            {'dendrite_type': 'spiny', 'target_layer': '2/3', 'cortical_layer': '2/3', 'display_names': ('L2/3', 'Pyr\nspiny dendrite')},
+            {'dendrite_type': 'spiny', 'target_layer': '2/3', 'cortical_layer': '2/3', 'display_names': ('L2/3', 'Pyr\nspiny')},
             # {'cre_type': 'unknown', 'target_layer': '2/3'},
             {'cre_type': 'nr5a1', 'target_layer': '4', 'cortical_layer': '4', 'display_names': ('L4', 'Pyr\nnr5a1')},
             {'cre_type': ('sim1', 'fam84b'), 'target_layer': '5', 'display_names': ('L5', 'Pyr ET\nsim1, fam84b'), 'cortical_layer': '5'},
@@ -124,21 +124,21 @@ if __name__ == '__main__':
         ]),
 
         ('Pyramidal Cells', [
-            {'dendrite_type': 'spiny', 'target_layer': '2', 'cortical_layer': '2', 'display_names': ('L2', 'Pyr\nspiny dendrite')},
-            {'dendrite_type': 'spiny', 'target_layer': '2/3', 'cortical_layer': '2/3', 'display_names': ('L2/3', 'Pyr\nspiny dendrite')}, 
-            {'dendrite_type': 'spiny', 'target_layer': '3', 'cortical_layer': '3', 'display_names': ('L3', 'Pyr\nspiny dendrite')},
-            {'dendrite_type': 'spiny', 'target_layer': '4', 'cortical_layer': '4', 'display_names': ('L4', 'Pyr\nspiny dendrite')},
-            {'dendrite_type': 'spiny', 'target_layer': '5', 'cortical_layer': '5', 'display_names': ('L5', 'Pyr\nspiny dendrite')},
-            {'dendrite_type': 'spiny', 'target_layer': '6','cortical_layer': ('6','6a', '6b'), 'display_names': ('L6', 'Pyr\nspiny dendrite')},
+            {'dendrite_type': 'spiny', 'target_layer': '2', 'cortical_layer': '2', 'display_names': ('L2', 'Pyr\nspiny')},
+            {'dendrite_type': 'spiny', 'target_layer': '2/3', 'cortical_layer': '2/3', 'display_names': ('L2/3', 'Pyr\nspiny')}, 
+            {'dendrite_type': 'spiny', 'target_layer': '3', 'cortical_layer': '3', 'display_names': ('L3', 'Pyr\nspiny')},
+            {'dendrite_type': 'spiny', 'target_layer': '4', 'cortical_layer': '4', 'display_names': ('L4', 'Pyr\nspiny')},
+            {'dendrite_type': 'spiny', 'target_layer': '5', 'cortical_layer': '5', 'display_names': ('L5', 'Pyr\nspiny')},
+            {'dendrite_type': 'spiny', 'target_layer': '6','cortical_layer': ('6','6a', '6b'), 'display_names': ('L6', 'Pyr\nspiny')},
         ]),
 
         ('Non-Pyramidal Cells', [
-            {'dendrite_type': 'aspiny', 'target_layer': '2', 'cortical_layer': '2', 'display_names': ('L2', 'Non-Pyr\naspiny dendrite')},
-            {'dendrite_type': 'aspiny', 'target_layer': '2/3', 'cortical_layer': '2/3', 'display_names': ('L2/3', 'Non-Pyr\naspiny dendrite')}, 
-            {'dendrite_type': 'aspiny', 'target_layer': '3', 'cortical_layer': '3', 'display_names': ('L3', 'Non-Pyr\naspiny dendrite')},
-            {'dendrite_type': 'aspiny', 'target_layer': '4', 'cortical_layer': '4', 'display_names': ('L4', 'Non-Pyr\naspiny dendrite')},
-            {'dendrite_type': 'aspiny', 'target_layer': '5', 'cortical_layer': '5', 'display_names': ('L5', 'Non-Pyr\naspiny dendrite')},
-            {'dendrite_type': 'aspiny', 'target_layer': '6','cortical_layer': ('6', '6a', '6b'), 'display_names': ('L6', 'Non-Pyr\naspiny dendrite')},
+            {'dendrite_type': 'aspiny', 'target_layer': '2', 'cortical_layer': '2', 'display_names': ('L2', 'Non-Pyr\naspiny')},
+            {'dendrite_type': 'aspiny', 'target_layer': '2/3', 'cortical_layer': '2/3', 'display_names': ('L2/3', 'Non-Pyr\naspiny')}, 
+            {'dendrite_type': 'aspiny', 'target_layer': '3', 'cortical_layer': '3', 'display_names': ('L3', 'Non-Pyr\naspiny')},
+            {'dendrite_type': 'aspiny', 'target_layer': '4', 'cortical_layer': '4', 'display_names': ('L4', 'Non-Pyr\naspiny')},
+            {'dendrite_type': 'aspiny', 'target_layer': '5', 'cortical_layer': '5', 'display_names': ('L5', 'Non-Pyr\naspiny')},
+            {'dendrite_type': 'aspiny', 'target_layer': '6','cortical_layer': ('6', '6a', '6b'), 'display_names': ('L6', 'Non-Pyr\naspiny')},
         ]),
 
         ('All Cells', [
