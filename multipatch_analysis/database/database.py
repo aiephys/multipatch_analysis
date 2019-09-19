@@ -200,13 +200,6 @@ class Database(object):
     def query(self, *args, **kwds):
         return self.default_session.query(*args, **kwds)
 
-    @staticmethod
-    def dataframe(query):
-        """Return a pandas dataframe containing the results of a sqlalchemy query.
-        """
-        import pandas
-        return pandas.read_sql(query.statement, query.session.bind)
-
     def _find_mappings(self):
         mappings = {cls.__tablename__:cls for cls in self.ormbase.__subclasses__()}
         order = [t.name for t in self.ormbase.metadata.sorted_tables]
@@ -362,13 +355,13 @@ class Database(object):
         """
         if readonly:
             if self._ro_sessionmaker is None:
-                self._ro_sessionmaker = sessionmaker(bind=self.ro_engine)
+                self._ro_sessionmaker = sessionmaker(bind=self.ro_engine, query_cls=DBQuery)
             return self._ro_sessionmaker()
         else:
             if self.rw_engine is None:
                 raise RuntimeError("Cannot start read-write DB session; no write access engine is defined (see config.synphys_db_host_rw)")
             if self._rw_sessionmaker is None:
-                self._rw_sessionmaker = sessionmaker(bind=self.rw_engine)
+                self._rw_sessionmaker = sessionmaker(bind=self.rw_engine, query_cls=DBQuery)
             return self._rw_sessionmaker()
 
     def reset_db(self):
@@ -609,6 +602,14 @@ class Database(object):
             dest_db.vacuum()
         print("All finished!")
 
+
+class DBQuery(sqlalchemy.orm.Query):
+    def dataframe(self):
+        """Return a pandas dataframe constructed from the results of this query.
+        """
+        import pandas
+        return pandas.read_sql(self.statement, self.session.bind)
+        
 
 class TableReadThread(threading.Thread):
     """Iterator that yields records (all columns) from a table.

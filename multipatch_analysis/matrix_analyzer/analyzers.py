@@ -17,6 +17,7 @@ from multipatch_analysis.database import default_db as db
 from neuroanalysis.data import TSeries, TSeriesList
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.filter import bessel_filter
+from multipatch_analysis.connectivity import pair_was_probed, connection_probability_ci
 
 
 thermal_colormap = pg.ColorMap(
@@ -272,7 +273,7 @@ class ConnectivityAnalyzer(Analyzer):
             pre_class, post_class = key
             for pair in class_pairs:
                 no_data = False
-                probed = pair_was_probed(pair, pre_class.is_excitatory)
+                probed = pair_was_probed(pair, pre_class.output_synapse_type)
                 if probed is False:
                     no_data = True
 
@@ -949,16 +950,3 @@ def results_scatter(results, field_name, field, plt):
     plt.plot(x, y, stepMode=True, fillLevel=0, brush=(255,255,255,150))
     units = field.get('units', '')
     plt.setLabels(left='Count', bottom=(field_name, units))
-
-def connection_probability_ci(n_connected, n_probed):
-    # make sure we are consistent about how we measure connectivity confidence intervals
-    return proportion_confint(n_connected, n_probed, method='beta')
-
-
-def pair_was_probed(pair, excitatory):
-    qc_field = 'n_%s_test_spikes' % ('ex' if excitatory else 'in')
-
-    # arbitrary limit: we need at least N presynaptic spikes in order to consider
-    # the pair "probed" for connection. Decreasing this value will decrease the number
-    # of experiments included, but increase sensitivity for weaker connections
-    return getattr(pair, qc_field) > 10

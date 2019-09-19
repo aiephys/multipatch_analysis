@@ -92,7 +92,7 @@ class SynphysDatabase(Database):
         session = session or self.default_session
         return session.query(self.Experiment).all()
 
-    def pair_query(self, pre_class=None, post_class=None, synapse=None, electrical=None, project_name=None, acsf=None, age=None, species=None, distance=None, internal=None, session=None):
+    def pair_query(self, pre_class=None, post_class=None, synapse=None, synapse_type=None, electrical=None, project_name=None, acsf=None, age=None, species=None, distance=None, internal=None, session=None):
         """Generate a query for selecting pairs from the database.
 
         Parameters
@@ -103,6 +103,8 @@ class SynphysDatabase(Database):
             Filter for pairs where the postsynaptic cell belongs to this class
         synapse : bool | None
             Include only pairs that are (or are not) connected by a chemical synapse
+        synapse_type : str | None
+            Include only synapses of a particular type ('ex' or 'in')
         electrical : bool | None
             Include only pairs that are (or are not) connected by an electrical synapse (gap junction)
         project_name : str | list | None
@@ -141,6 +143,8 @@ class SynphysDatabase(Database):
         query = query.join(self.Experiment, self.Pair.experiment_id==self.Experiment.id)
         query = query.outerjoin(self.Slice, self.Experiment.slice_id==self.Slice.id) ## don't want to drop all pairs if we don't have slice or connection strength entries
         query = query.outerjoin(self.SynapsePrediction)
+        query = query.join(self.Synapse)
+        query = query.join(self.Dynamics)
 
         if pre_class is not None:
             query = pre_class.filter_query(query, pre_cell, db=self)
@@ -150,6 +154,9 @@ class SynphysDatabase(Database):
 
         if synapse is not None:
             query = query.filter(self.Pair.has_synapse==synapse)
+
+        if synapse_type is not None:
+            query = query.filter(self.Synapse.synapse_type==synapse_type)
 
         if electrical is not None:
             query = query.filter(self.Pair.has_electrical==electrical)

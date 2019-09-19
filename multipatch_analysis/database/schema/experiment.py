@@ -126,6 +126,12 @@ Cell.electrode = relationship(Electrode, back_populates="cell", single_parent=Tr
 
 
 class PairBase(object):
+    @property
+    def reciprocal(self):
+        """The pair that is reciprocal to this one (with pre/post cells in the opposite order)
+        """
+        return self.experiment.pairs.get((self.post_cell.ext_id, self.pre_cell.ext_id))
+        
     def __repr__(self):
         uid = getattr(self.experiment, 'ext_id', None)
         if uid is None or uid == '':
