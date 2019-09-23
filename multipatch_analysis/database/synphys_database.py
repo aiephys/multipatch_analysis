@@ -143,8 +143,8 @@ class SynphysDatabase(Database):
         query = query.join(self.Experiment, self.Pair.experiment_id==self.Experiment.id)
         query = query.outerjoin(self.Slice, self.Experiment.slice_id==self.Slice.id) ## don't want to drop all pairs if we don't have slice or connection strength entries
         query = query.outerjoin(self.SynapsePrediction)
-        query = query.join(self.Synapse)
-        query = query.join(self.Dynamics)
+        query = query.outerjoin(self.Synapse)
+        query = query.outerjoin(self.Dynamics)
 
         if pre_class is not None:
             query = pre_class.filter_query(query, pre_cell, db=self)
