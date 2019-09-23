@@ -1,0 +1,14 @@
+#!/bin/bash
+
+cd ~
+git clone https://github.com/AllenInstitute/neuroanalysis
+cd neuroanalysis
+python setup.py develop
+
+cd ~
+git clone https://github.com/AllenInstitute/multipatch_analysis
+cd multipatch_analysis
+python setup.py develop
+
+
+exec "$@"
