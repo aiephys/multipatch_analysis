@@ -1,7 +1,7 @@
 import os, sys, glob
 from collections import OrderedDict
 from . import config
-from .util import sync_file, dir_timestamp
+from .util import sync_file, dir_timestamp, interactive_download
 
 
 _cache = None
@@ -74,3 +74,30 @@ class SynPhysCache(object):
                 self._mkdir(root)
             os.mkdir(path)
 
+
+def list_db_versions():
+    """Return a dictionary listing database versions that are available for download.
+    """
+    return {
+        'synphys_r1.0_2019-08-29_small.sqlite': {'url': 'http://iwarehouse/api/v2/well_known_file_download/937779595'},
+        'synphys_r1.0_2019-08-29_medium.sqlite': {'url': 'http://iwarehouse/api/v2/well_known_file_download/937780246'},
+        'synphys_r1.0_2019-08-29_full.sqlite': {'url': 'http://iwarehouse/api/v2/well_known_file_download/937780286'},
+    }
+
+
+def get_db_path(db_version):
+    """Return the filesystem path of a known database file.
+    
+    If the file does not exist locally, then it will be downloaded before returning
+    the path.
+    """
+    cache_path = os.path.join(config.cache_path, 'database')
+    cache_file = os.path.join(cache_path, db_version)
+    
+    if not os.path.exists(cache_path):
+        os.makedirs(cache_path)
+    if not os.path.exists(cache_file):
+        url = list_db_versions()[db_version]['url']
+        interactive_download(url, cache_file)
+        
+    return cache_file
