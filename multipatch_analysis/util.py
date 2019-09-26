@@ -389,13 +389,14 @@ def interactive_download(url, file_path, **kwds):
     
     Will attempt to resume downloading partial files.
     """
-    # get size first just to verify server is listening and the file exists
-    size = get_url_download_size(url)
-    size_str = si_format(size, suffix='B')
 
-    message = "Downloading %s (%s) =>\n  %s" % (url, size_str, file_path)
+    message = "Downloading %s =>\n  %s" % (url, file_path)
         
-    with ProgressBar(message, size) as prg_bar:
+    with ProgressBar(message, 1) as prg_bar:
+        # get size first just to verify server is listening and the file exists
+        size = get_url_download_size(url)
+        size_str = si_format(size, suffix='B')
+        prg_bar.maximum = size
 
         last_update = time.time()
         last_size = None

@@ -7,14 +7,15 @@ Local variables in this module are overwritten by the contents of config.yml
 
 import os, sys, yaml
 
+# default cache path in user's home dir
+cache_path = os.path.join(os.path.expanduser('~'), 'ai_synphys_cache')
 
-synphys_db_host = None
+synphys_db_host = "sqlite:///"
 synphys_db_host_rw = None
 synphys_db = "synphys"
 synphys_db_readonly_user = "readonly"
 synphys_data = None
 lims_address = None
-cache_path = "cache"
 grow_cache = False
 rig_name = None
 n_headstages = 8
@@ -24,15 +25,11 @@ known_addrs = {}
 import_old_data_on_submission = False
 
 template = r"""
-synphys_db_host: "sqlite:///"
-synphys_db: "synphys"
+# Location used to cache data files
+# cache_path = "C:\\Users\\myusername\\ai_synphys_cache"
 
-cache_path: "E:\\multipatch_analysis_cache"
-grow_cache: true
-
-editor_command: '"C:\\Program Files\\Sublime Text 2\\sublime_text.exe" "{file}"'
-browser_command: '"C:\\Program Files (x86)\\Mozilla Firefox\\firefox.exe" {url}'
-        
+# Path to default database to use:
+# synphys_db = "C:\\Users\\myusername\\ai_sunphys_cache\\synphys_r1.0_2019-08-19_small.sqlite"
 """
 
 configfile = os.path.join(os.path.dirname(__file__), '..', 'config.yml')

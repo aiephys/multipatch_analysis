@@ -1,16 +1,38 @@
 import datetime
 from sqlalchemy.orm import aliased
 from .database import Database
+from .schema import schema_version, default_sample_rate
+from ..synphys_cache import get_db_path, list_db_versions
 
 
 class SynphysDatabase(Database):
     """Augments the Database class with convenience methods for querying the synphys database.
     """
-    # database version should be incremented whenever the schema has changed
-    db_version = "15"
+    default_sample_rate = default_sample_rate
+    schema_version = schema_version
+
+    @classmethod
+    def load_sqlite(cls, sqlite_file, readonly=True):
+        """Return a SynphysDatabase instance connected to an existing sqlite file.
+        """
+        ro_host = 'sqlite:///'
+        rw_host = None if readonly else ro_host
+        return cls(ro_host, rw_host, db_name=sqlite_file)
     
-    default_sample_rate = 20000
-    _sample_rate_str = '%dkHz' % (default_sample_rate // 1000)
+    @classmethod
+    def list_versions(cls):
+        """Return a list of the available database versions.
+        """
+        return list(list_db_versions().keys())
+    
+    @classmethod
+    def load_version(cls, db_version):
+        """Load a named database version.
+        
+        The database file will be downloaded and cached, if an existing cache file is not found.
+        """
+        db_file = get_db_path(db_version)
+        return SynphysDatabase.load_sqlite(db_file)
 
     def __init__(self, ro_host, rw_host, db_name):
         from .schema import ORMBase
@@ -23,7 +45,7 @@ class SynphysDatabase(Database):
         mrec = self.metadata_record()
         if mrec is None:
             mrec = self.Metadata(meta={
-                'db_version': self.db_version,
+                'db_version': schema_version,
                 'creation_date': datetime.datetime.now().strftime('%Y-%m-%d'),
                 'origin': "Allen Institute for Brain Science / Synaptic Physiology",
             })
@@ -32,7 +54,11 @@ class SynphysDatabase(Database):
             s.commit()
         else:
             ver = mrec.meta['db_version']
-            assert ver == self.db_version, "Database has unsupported version %s (expected %s)"%(ver, self.db_version)
+            assert ver == schema_version, "Database has unsupported schema version %s (expected %s)"%(ver, schema_version)
+    
+    @property
+    def metadata(self):
+        return self.metadata_record.meta.copy()
         
     def metadata_record(self, session=None):
         session = session or self.default_session

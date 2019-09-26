@@ -1,6 +1,14 @@
 from sqlalchemy.ext.declarative import declarative_base
 from ..database import make_table as orig_make_table
 
+# schema version should be incremented whenever the schema has changed
+schema_version = "15"
+
+# all time series data are downsampled to this rate in the DB
+default_sample_rate = 20000
+sample_rate_str = '%dkHz' % (default_sample_rate // 1000)
+
+
 ORMBase = declarative_base()
 
 def make_table(*args, **kwds):
