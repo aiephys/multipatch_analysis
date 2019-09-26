@@ -390,7 +390,7 @@ def interactive_download(url, file_path, **kwds):
     Will attempt to resume downloading partial files.
     """
 
-    message = "Downloading %s =>\n  %s" % (url, file_path)
+    message = "Downloading %s =>\n  %s" % (url, os.path.abspath(file_path))
         
     with ProgressBar(message, 1) as prg_bar:
         # get size first just to verify server is listening and the file exists
