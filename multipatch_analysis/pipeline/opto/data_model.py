@@ -2,6 +2,16 @@ from multipatch_analysis import lims
 import re
 
 
+serial_number_to_rig = {
+    4284: 'Wayne', # prairie
+    831400: 'Wayne', # amplifier 1
+    837041: 'Wayne', # amplifier 2
+    4352: 'Garth', # prairie
+    830774: 'Garth', # amplifier 1
+    830775: 'Garth' # amplifier 2
+}
+
+
 def find_lims_specimen_ids(slice_dh):
     """Return a list of lims specimen_ids that match the metainfo in the day and slice .index files.
     Search order:
@@ -44,3 +54,18 @@ def find_lims_specimen_ids(slice_dh):
             possible_ids.append(n)
 
     return possible_ids
+
+
+def get_rig_name_from_serial_number(sn):
+    """Get a rig name from a given serial number. Serial number must be in the serial_number_to_rig dict."""
+
+    global serial_number_to_rig
+    rig = serial_number_to_rig.get(int(sn), None)
+
+    if rig is None:
+        raise Exception('No registry for serial number: %i' % int(sn))
+
+    return rig
+
+
+

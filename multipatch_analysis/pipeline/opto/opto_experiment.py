@@ -7,6 +7,7 @@ import csv, codecs, glob, os
 from acq4.util.DataManager import getDirHandle
 from neuroanalysis.data.experiment import Experiment
 from neuroanalysis.data.libraries import opto
+from . import data_model
 
 ##### TODO: GO BACK TO EXPERIEMENT BEING DEPENDENT ON SLICE -- IN ALL SLICES USE EXPERIMENTS.CSV TO COME UP WITH SLICE LIST
 
@@ -57,10 +58,35 @@ class OptoExperimentPipelineModule(DatabasePipelineModule):
             expt_info = expt.expt_info
             if expt_info is None:
                 expt_info = {}
+
+            # dig to find out which rig this was recorded on
+            rig = expt_info.get('rig_name', None)
+            if rig is None:
+                ## serial number is recorded in many places, make sure they converge on one rig
+                sns = []
+                for sweeps in expt.data.notebook().values():
+                    for channel in sweeps:
+                        sn = channel.get('Serial Number', None)
+                        if sn is not None:
+                            sns.append(sn)
+                unique_sns = list(set(sns))
+                rigs = []
+                for sn in unique_sns:
+                    rigs.append(data_model.get_rig_name_from_serial_number(sn))
+                unique_rigs = list(set(rigs))
+                if len(unique_rigs) != 1:
+                    raise Exception("Could not resolve rig for experiment %s. Found %s" %(expt.uid, unique_rigs))
+                rig = unique_rigs[0]
+
+                #serial_number = expt.nwb.notebook()[0][0]['Serial Number']
+                #rig = data_model.get_rig_name_from_serial_number(serial_number)
+
+
+
             fields = {
                 'storage_path': expt.original_path, 
                 'ephys_file': None if expt.ephys_file is None else os.path.relpath(expt.ephys_file, expt.path),
-                #'rig_name': expt.rig_name,
+                'rig_name': rig,
                 #'project_name': expt.project_name,
                 'acq_timestamp': expt.timestamp,
                 #'target_region': expt_info.get('region'),
