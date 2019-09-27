@@ -35,11 +35,11 @@ if os.path.isfile(configfile):
         # pyyaml old API
         config = yaml.load(open(configfile, 'rb'))
 
-if config is None:
-    config = {}
+    if config is None:
+        config = {}
 
-for k,v in config.items():
-    locals()[k] = v
+    for k,v in config.items():
+        locals()[k] = v
 
 
 # intercept specific command line args
