@@ -24,24 +24,19 @@ rig_data_paths = {}
 known_addrs = {}
 import_old_data_on_submission = False
 
-template = r"""
-# Location used to cache data files
-# cache_path = "C:\\Users\\myusername\\ai_synphys_cache"
-
-# Path to default database to use:
-# synphys_db = "C:\\Users\\myusername\\ai_sunphys_cache\\synphys_r1.0_2019-08-19_small.sqlite"
-"""
 
 configfile = os.path.join(os.path.dirname(__file__), '..', 'config.yml')
-if not os.path.isfile(configfile):
-    open(configfile, 'wb').write(template.encode('utf8'))
 
-if hasattr(yaml, 'FullLoader'):
-    # pyyaml new API
-    config = yaml.load(open(configfile, 'rb'), Loader=yaml.FullLoader)
-else:
-    # pyyaml old API
-    config = yaml.load(open(configfile, 'rb'))
+if os.path.isfile(configfile):
+    if hasattr(yaml, 'FullLoader'):
+        # pyyaml new API
+        config = yaml.load(open(configfile, 'rb'), Loader=yaml.FullLoader)
+    else:
+        # pyyaml old API
+        config = yaml.load(open(configfile, 'rb'))
+
+if config is None:
+    config = {}
 
 for k,v in config.items():
     locals()[k] = v
@@ -57,5 +52,3 @@ for arg in sys.argv[1:]:
     else:
         ignored_args.append(arg)
 sys.argv = ignored_args        
-
-
