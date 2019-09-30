@@ -376,184 +376,6 @@
             "value": "None"
         }
     },
-    "Mouse Short Term Plasticity": {
-        "data filters": {
-            "value": null,
-            "children": {
-                "Projects": {
-                    "value": null,
-                    "children": {
-                        "Mouse": {
-                            "value": true
-                        },
-                        "Human": {
-                            "value": false
-                        }
-                    }
-                },
-                "ACSF [Ca2+]": {
-                    "value": null,
-                    "children": {
-                        "1.3mM": {
-                            "value": true
-                        },
-                        "2mM": {
-                            "value": false
-                        }
-                    }
-                },
-                "Internal [EGTA]": {
-                    "value": null,
-                    "children": {
-                        "0.3mM EGTA": {
-                            "value": true
-                        },
-                        "1mM EGTA": {
-                            "value": false
-                        },
-                        "No EGTA": {
-                            "value": false
-                        }
-                    }
-                }
-            }
-        },
-        "cell classes": {
-            "value": null,
-            "children": {
-                "Define layer by:": {
-                    "value": "target layer"
-                },
-                "All Transgenic Classes": {
-                    "value": true,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "Excitatory Transgenic Classes": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "Inhibitory Transgenic Classes": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "All Cells": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "Pyramidal Cells": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "Non-Pyramidal Cells": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                }
-            }
-        },
-        "matrix colormap": {
-            "items": {
-                "Steady state plasticity": {
-                    "value": {
-                        "pos": [
-                            0.0,
-                            0.5,
-                            1.0
-                        ],
-                        "color": [
-                            [
-                                0,
-                                0,
-                                255,
-                                255
-                            ],
-                            [
-                                56,
-                                0,
-                                87,
-                                255
-                            ],
-                            [
-                                255,
-                                0,
-                                0,
-                                255
-                            ]
-                        ]
-                    },
-                    "children": {
-                        "Min": {
-                            "value": 0.0
-                        },
-                        "Max": {
-                            "value": 2.0
-                        },
-                        "Operation": {
-                            "value": "Overlay"
-                        },
-                        "Channels..": {
-                            "value": null,
-                            "children": {
-                                "Red": {
-                                    "value": true
-                                },
-                                "Green": {
-                                    "value": true
-                                },
-                                "Blue": {
-                                    "value": true
-                                },
-                                "Alpha": {
-                                    "value": true
-                                }
-                            }
-                        },
-                        "Enabled": {
-                            "value": true
-                        },
-                        "NaN": {
-                            "value": [
-                                128,
-                                128,
-                                128,
-                                255
-                            ]
-                        }
-                    },
-                    "field": "Steady state plasticity"
-                }
-            }
-        },
-        "text format": {
-            "value": "{Steady state plasticity:0.2f}"
-        },
-        "show confidence": {
-            "value": "None"
-        }
-    },
     "Human Connection Probability": {
         "data filters": {
             "value": null,
@@ -926,184 +748,6 @@
         },
         "text format": {
             "value": "{PSP Amplitude.mV}"
-        },
-        "show confidence": {
-            "value": "None"
-        }
-    },
-    "Human Short Term Plasticity": {
-        "data filters": {
-            "value": null,
-            "children": {
-                "Projects": {
-                    "value": null,
-                    "children": {
-                        "Mouse": {
-                            "value": false
-                        },
-                        "Human": {
-                            "value": true
-                        }
-                    }
-                },
-                "ACSF [Ca2+]": {
-                    "value": null,
-                    "children": {
-                        "1.3mM": {
-                            "value": true
-                        },
-                        "2mM": {
-                            "value": true
-                        }
-                    }
-                },
-                "Internal [EGTA]": {
-                    "value": null,
-                    "children": {
-                        "0.3mM EGTA": {
-                            "value": true
-                        },
-                        "1mM EGTA": {
-                            "value": true
-                        },
-                        "No EGTA": {
-                            "value": true
-                        }
-                    }
-                }
-            }
-        },
-        "cell classes": {
-            "value": null,
-            "children": {
-                "Define layer by:": {
-                    "value": "target layer"
-                },
-                "All Transgenic Classes": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "Excitatory Transgenic Classes": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "Inhibitory Transgenic Classes": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "All Cells": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "Pyramidal Cells": {
-                    "value": true,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                },
-                "Non-Pyramidal Cells": {
-                    "value": false,
-                    "children": {
-                        "pre/post": {
-                            "value": "both"
-                        }
-                    }
-                }
-            }
-        },
-        "matrix colormap": {
-            "items": {
-                "Steady state plasticity": {
-                    "value": {
-                        "pos": [
-                            0.0,
-                            0.5,
-                            1.0
-                        ],
-                        "color": [
-                            [
-                                0,
-                                0,
-                                255,
-                                255
-                            ],
-                            [
-                                56,
-                                0,
-                                87,
-                                255
-                            ],
-                            [
-                                255,
-                                0,
-                                0,
-                                255
-                            ]
-                        ]
-                    },
-                    "children": {
-                        "Min": {
-                            "value": 0.0
-                        },
-                        "Max": {
-                            "value": 2.0
-                        },
-                        "Operation": {
-                            "value": "Overlay"
-                        },
-                        "Channels..": {
-                            "value": null,
-                            "children": {
-                                "Red": {
-                                    "value": true
-                                },
-                                "Green": {
-                                    "value": true
-                                },
-                                "Blue": {
-                                    "value": true
-                                },
-                                "Alpha": {
-                                    "value": true
-                                }
-                            }
-                        },
-                        "Enabled": {
-                            "value": true
-                        },
-                        "NaN": {
-                            "value": [
-                                128,
-                                128,
-                                128,
-                                255
-                            ]
-                        }
-                    },
-                    "field": "Steady state plasticity"
-                }
-            }
-        },
-        "text format": {
-            "value": "{Steady state plasticity:0.2f}"
         },
         "show confidence": {
             "value": "None"
@@ -1952,6 +1596,184 @@
         },
         "text format": {
             "value": ""
+        },
+        "show confidence": {
+            "value": "None"
+        }
+    },
+    "Mouse STP": {
+        "data filters": {
+            "value": null,
+            "children": {
+                "Projects": {
+                    "value": null,
+                    "children": {
+                        "Mouse": {
+                            "value": true
+                        },
+                        "Human": {
+                            "value": false
+                        }
+                    }
+                },
+                "ACSF [Ca2+]": {
+                    "value": null,
+                    "children": {
+                        "1.3mM": {
+                            "value": true
+                        },
+                        "2mM": {
+                            "value": true
+                        }
+                    }
+                },
+                "Internal [EGTA]": {
+                    "value": null,
+                    "children": {
+                        "0.3mM EGTA": {
+                            "value": true
+                        },
+                        "1mM EGTA": {
+                            "value": true
+                        },
+                        "No EGTA": {
+                            "value": true
+                        }
+                    }
+                }
+            }
+        },
+        "cell classes": {
+            "value": null,
+            "children": {
+                "Define layer by:": {
+                    "value": "target layer"
+                },
+                "All Transgenic Classes": {
+                    "value": true,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Excitatory Transgenic Classes": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Inhibitory Transgenic Classes": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "All Cells": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Pyramidal Cells": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                },
+                "Non-Pyramidal Cells": {
+                    "value": false,
+                    "children": {
+                        "pre/post": {
+                            "value": "both"
+                        }
+                    }
+                }
+            }
+        },
+        "matrix colormap": {
+            "items": {
+                "Train-induced STP": {
+                    "value": {
+                        "pos": [
+                            0.0,
+                            0.5,
+                            1.0
+                        ],
+                        "color": [
+                            [
+                                0,
+                                0,
+                                255,
+                                255
+                            ],
+                            [
+                                56,
+                                0,
+                                87,
+                                255
+                            ],
+                            [
+                                255,
+                                0,
+                                0,
+                                255
+                            ]
+                        ]
+                    },
+                    "children": {
+                        "Min": {
+                            "value": -1.0
+                        },
+                        "Max": {
+                            "value": 1.0
+                        },
+                        "Operation": {
+                            "value": "Overlay"
+                        },
+                        "Channels..": {
+                            "value": null,
+                            "children": {
+                                "Red": {
+                                    "value": true
+                                },
+                                "Green": {
+                                    "value": true
+                                },
+                                "Blue": {
+                                    "value": true
+                                },
+                                "Alpha": {
+                                    "value": true
+                                }
+                            }
+                        },
+                        "Enabled": {
+                            "value": true
+                        },
+                        "NaN": {
+                            "value": [
+                                128,
+                                128,
+                                128,
+                                255
+                            ]
+                        }
+                    },
+                    "field": "Train-induced STP"
+                }
+            }
+        },
+        "text format": {
+            "value": "{Train-induced STP:0.2f}"
         },
         "show confidence": {
             "value": "None"

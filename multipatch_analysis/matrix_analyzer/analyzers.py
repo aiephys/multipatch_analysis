@@ -741,6 +741,7 @@ class DynamicsAnalyzer(Analyzer):
         self.name = 'dynamics'
         self.results = None
         self.group_results = None
+        self.pair_items = {}
         #self._signalHandler = ConnectivityAnalyzer.SignalHandler()
         #self.sigOutputChanged = self._signalHandler.sigOutputChanged
 
@@ -755,22 +756,22 @@ class DynamicsAnalyzer(Analyzer):
         
         self.fields = [
             ('Paired pulse STP', {'mode': 'range', 'defaults': {
-                'Min': 0, 
-                'Max': 2, 
+                'Min': -1, 
+                'Max': 1, 
                 'colormap': pg.ColorMap(
                 [0, 0.5, 1.0],
                 [(0, 0, 255, 255), (56, 0, 87, 255), (255, 0, 0, 255)],
             )}}),
             ('Train-induced STP', {'mode': 'range', 'defaults': {
-                'Min': 0, 
-                'Max': 2, 
+                'Min': -1, 
+                'Max': 1, 
                 'colormap': pg.ColorMap(
                 [0, 0.5, 1.0],
                 [(0, 0, 255, 255), (56, 0, 87, 255), (255, 0, 0, 255)],
             )}}),
             ('STP recovery', {'mode': 'range', 'defaults': {
-                'Min': 0, 
-                'Max': 2, 
+                'Min': -1, 
+                'Max': 1, 
                 'colormap': pg.ColorMap(
                 [0, 0.5, 1.0],
                 [(0, 0, 255, 255), (56, 0, 87, 255), (255, 0, 0, 255)],
@@ -883,12 +884,13 @@ class DynamicsAnalyzer(Analyzer):
                         trace_plt.plot(trace.time_values, trace.data)
                         traces.append(trace)
             values.append(value)
+            point_data.append(pair)
             y_values = pg.pseudoScatter(np.asarray(values, dtype=float), spacing=1)
             scatter = pg.ScatterPlotItem(symbol='o', brush=(color + (150,)), pen='w', size=12)
-            scatter.setData(values, y_values + 10.)
+            scatter.setData(values, y_values + 10., data=point_data)
         for point in scatter.points():
             pair_id = point.data().id
-            self.pair_items[pair_id].extend([point, color])
+            self.pair_items[pair_id] = [point, color]
         scatter.sigClicked.connect(self.scatter_plot_clicked)
         if len(traces) > 0:
             grand_trace = TSeriesList(traces).mean()
