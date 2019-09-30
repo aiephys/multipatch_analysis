@@ -2,7 +2,7 @@ import os, sys, glob, json
 import yaml
 from collections import OrderedDict
 from acq4.util.DataManager import getDirHandle
-from multipatch_analysis import config, lims
+from aisynphys import config, lims
 
 
 class LIMSSubmission(object):

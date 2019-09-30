@@ -9,10 +9,10 @@ import pyqtgraph as pg
 from neuroanalysis.data import TSeries, TSeriesList
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.fitting import Psp, StackedPsp
-from multipatch_analysis.database import default_db as db
-import multipatch_analysis.data.data_notes_db as notes_db
-from multipatch_analysis.qc import spike_qc
-from multipatch_analysis.fitting import fit_avg_pulse_response
+from aisynphys.database import default_db as db
+import aisynphys.data.data_notes_db as notes_db
+from aisynphys.qc import spike_qc
+from aisynphys.fitting import fit_avg_pulse_response
 
 
 def get_pair_avg_fits(pair, session, notes_session=None, ui=None):

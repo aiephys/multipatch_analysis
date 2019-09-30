@@ -1,10 +1,10 @@
 import pickle, sys
 import numpy as np
 import pyqtgraph as pg
-from multipatch_analysis.data import MultiPatchSyncRecAnalyzer, MultiPatchProbe
-from multipatch_analysis.ui.pulse_response_qc import PulseResponseQCUI
-from multipatch_analysis.qc import PulseResponseQCTestCase, pulse_response_qc_pass
-from multipatch_analysis.database import default_db as db
+from aisynphys.data import MultiPatchSyncRecAnalyzer, MultiPatchProbe
+from aisynphys.ui.pulse_response_qc import PulseResponseQCUI
+from aisynphys.qc import PulseResponseQCTestCase, pulse_response_qc_pass
+from aisynphys.database import default_db as db
 
 pg.dbg()
 

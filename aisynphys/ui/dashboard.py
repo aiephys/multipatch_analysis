@@ -122,9 +122,9 @@ class Dashboard(QtGui.QWidget):
             sel : currently selected dashboard record
             expt : currently selected Experiment
             filter : DataFilterParameter
-            lims : multipatch_analysis.lims module
-            db : multipatch_analysis.database module
-            config : multipatch_analysis.config module
+            lims : aisynphys.lims module
+            db : aisynphys.database module
+            config : aisynphys.config module
         """
         self.console = pg.console.ConsoleWidget(text=console_text, namespace={
             'filter': self.filter.params,

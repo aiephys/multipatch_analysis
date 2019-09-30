@@ -1,7 +1,7 @@
 from __future__ import division
 import numpy as np
 import pyqtgraph as pg
-from multipatch_analysis.experiment_list import cached_experiments
+from aisynphys.experiment_list import cached_experiments
 
 expts = cached_experiments()
 

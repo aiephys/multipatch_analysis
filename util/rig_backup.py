@@ -16,8 +16,8 @@ backup_paths:
 """
 from __future__ import print_function
 import os, sys, argparse, logging
-from multipatch_analysis import util
-from multipatch_analysis import config
+from aisynphys import util
+from aisynphys import config
 
 
 parser = argparse.ArgumentParser()

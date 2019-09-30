@@ -29,12 +29,12 @@ from neuroanalysis.event_detection import exp_deconvolve
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.fitting import Psp
 
-from multipatch_analysis.database import default_db as db
-from multipatch_analysis.ui.multipatch_nwb_viewer import MultipatchNwbViewer
-from multipatch_analysis.ui.experiment_browser import ExperimentBrowser
-from multipatch_analysis.pulse_response_strength import response_query, baseline_query, analyze_response_strength
-from multipatch_analysis.synapse_prediction import get_amps, get_baseline_amps
-from multipatch_analysis import constants
+from aisynphys.database import default_db as db
+from aisynphys.ui.multipatch_nwb_viewer import MultipatchNwbViewer
+from aisynphys.ui.experiment_browser import ExperimentBrowser
+from aisynphys.pulse_response_strength import response_query, baseline_query, analyze_response_strength
+from aisynphys.synapse_prediction import get_amps, get_baseline_amps
+from aisynphys import constants
 
 
 ui_file = os.path.join(os.path.dirname(__file__), 'strength_analysis_ctrl.ui')

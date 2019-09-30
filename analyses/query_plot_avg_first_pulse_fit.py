@@ -5,8 +5,8 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 from sqlalchemy.orm import aliased
-from multipatch_analysis.database import database as db
-from multipatch_analysis import fit_average_first_pulse as fafp
+from aisynphys.database import database as db
+from aisynphys import fit_average_first_pulse as fafp
 
 #----------------------------------------------------------------
 #-------------------------- queries -----------------------------

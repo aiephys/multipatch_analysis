@@ -1,7 +1,7 @@
 import sys, argparse
 import pyqtgraph as pg
-from multipatch_analysis.database import default_db as db
-from multipatch_analysis.matrix_analyzer import MatrixAnalyzer
+from aisynphys.database import default_db as db
+from aisynphys.matrix_analyzer import MatrixAnalyzer
 from collections import OrderedDict
 
 if __name__ == '__main__':

@@ -1,4 +1,4 @@
-from multipatch_analysis.database import database as db
+from aisynphys.database import database as db
 from neuroanalysis.data import TSeries, TSeriesList
 from neuroanalysis.fitting import fit_psp
 from neuroanalysis.baseline import float_mode

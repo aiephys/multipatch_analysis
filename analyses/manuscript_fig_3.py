@@ -13,7 +13,7 @@ from scipy import stats, ndimage
 
 from neuroanalysis.data import TSeries, TSeriesList
 import strength_analysis
-from multipatch_analysis.database import database as db
+from aisynphys.database import database as db
 
 
 

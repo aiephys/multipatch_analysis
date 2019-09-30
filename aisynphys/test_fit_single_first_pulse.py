@@ -1,9 +1,9 @@
-from multipatch_analysis.database import default_db as db
-import multipatch_analysis.synapse_prediction as cs 
+from aisynphys.database import default_db as db
+import aisynphys.synapse_prediction as cs 
 from sqlalchemy.orm import aliased
-from multipatch_analysis.database.database import TableGroup
+from aisynphys.database.database import TableGroup
 import pandas
-import multipatch_analysis.fit_average_first_pulse as afpf
+import aisynphys.fit_average_first_pulse as afpf
 import matplotlib.pyplot as plt
 
 

@@ -11,7 +11,7 @@ from pyqtgraph import parametertree as ptree
 from pyqtgraph.parametertree import Parameter
 from pyqtgraph import parametertree as ptree
 from neuroanalysis.ui.plot_grid import PlotGrid
-from multipatch_analysis.ui.graphics import distance_plot 
+from aisynphys.ui.graphics import distance_plot 
 
 
 class DistancePlotTab(pg.QtGui.QWidget):

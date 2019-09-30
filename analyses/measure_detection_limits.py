@@ -14,7 +14,7 @@ from scipy import stats
 from neuroanalysis.data import TSeries, TSeriesList
 import strength_analysis
 from strength_analysis import TableGroup
-from multipatch_analysis.database import database as db
+from aisynphys.database import database as db
 
 
 class DetectionLimitTableGroup(TableGroup):

@@ -1,4 +1,4 @@
-from multipatch_analysis.genotypes import Genotype
+from aisynphys.genotypes import Genotype
 
 
 known_genotypes = dict([

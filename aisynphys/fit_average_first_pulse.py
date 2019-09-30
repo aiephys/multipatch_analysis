@@ -53,7 +53,7 @@ def extract_first_pulse_info_from_Pair_object(pair, desired_clamp='ic'):
     
     Input
     -----
-    pair: multipatch_analysis.database.database.Pair object
+    pair: aisynphys.database.database.Pair object
     desired_clamp: string
         Specifies whether current or voltage clamp sweeps are desired.
         Options are:
@@ -130,7 +130,7 @@ def get_average_pulse_response(pair, desired_clamp='ic'):
     """
     Inputs
     ------
-    pair: multipatch_analysis.database.database.Pair object
+    pair: aisynphys.database.database.Pair object
 
     desired_clamp: string
         Specifies whether current or voltage clamp sweeps are desired.

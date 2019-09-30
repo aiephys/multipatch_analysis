@@ -12,12 +12,12 @@ import numpy as np
 import pyqtgraph as pg
 import pandas as pd
 from statsmodels.stats.proportion import proportion_confint
-from multipatch_analysis.database import default_db as db
+from aisynphys.database import default_db as db
 # from first_pulse_deconvolved_amps import get_deconvolved_first_pulse_amps
 from neuroanalysis.data import TSeries, TSeriesList
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.filter import bessel_filter
-from multipatch_analysis.connectivity import pair_was_probed, connection_probability_ci
+from aisynphys.connectivity import pair_was_probed, connection_probability_ci
 
 
 thermal_colormap = pg.ColorMap(
