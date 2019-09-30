@@ -3,7 +3,7 @@ ipython==7.7.0
 jupyter==1.0.0
 lmfit==0.9.13
 matplotlib==3.1.0
--e https://github.com/alleninstitute/neuroanalysis#egg=neuroanalysis
+-e git+https://github.com/alleninstitute/neuroanalysis#egg=neuroanalysis
 numpy==1.16.3
 numpydoc==0.9.1
 pandas==0.25.0
