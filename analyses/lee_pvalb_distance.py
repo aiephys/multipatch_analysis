@@ -3,8 +3,8 @@ Distance vs connectivity analysis of old pre-pipeline multipatch data on L4 pval
 
 """
 import pyqtgraph as pg
-from multipatch_analysis.ui.graphics import distance_plot
-from multipatch_analysis.experiment_list import cached_experiments
+from aisynphys.ui.graphics import distance_plot
+from aisynphys.experiment_list import cached_experiments
 
 pg.mkQApp()
 

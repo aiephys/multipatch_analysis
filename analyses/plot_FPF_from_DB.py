@@ -2,7 +2,7 @@ import argparse, first_pulse_from_DB
 import pyqtgraph as pg
 from sqlalchemy.orm import aliased
 from neuroanalysis.ui.plot_grid import PlotGrid
-from multipatch_analysis.database import database as db
+from aisynphys.database import database as db
 from neuroanalysis.data import TSeries, TSeriesList
 
 def plot_features(organism=None, conn_type=None, calcium=None, age=None, sweep_thresh=None, fit_thresh=None):

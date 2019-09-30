@@ -15,8 +15,8 @@ import numpy as np
 import pyqtgraph as pg
 import user
 
-from multipatch_analysis.experiment_list import ExperimentList, cache_file
-from multipatch_analysis import config
+from aisynphys.experiment_list import ExperimentList, cache_file
+from aisynphys import config
 
 def arg_to_date(arg):
     if arg is None:

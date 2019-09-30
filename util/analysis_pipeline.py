@@ -2,9 +2,9 @@ from __future__ import print_function
 import argparse, sys, os, logging
 import six
 import pyqtgraph as pg 
-from multipatch_analysis.pipeline import all_pipelines
-from multipatch_analysis.database import default_db as db
-from multipatch_analysis import config
+from aisynphys.pipeline import all_pipelines
+from aisynphys.database import default_db as db
+from aisynphys import config
 
 
 if __name__ == '__main__':

@@ -7,7 +7,7 @@ import time
 import sys
 import datetime
 import re
-from multipatch_analysis.synaptic_dynamics import DynamicsAnalyzer
+from aisynphys.synaptic_dynamics import DynamicsAnalyzer
 from neuroanalysis.data import TSeries, TSeriesList
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.event_detection import exp_deconvolve
@@ -15,7 +15,7 @@ from neuroanalysis.filter import bessel_filter
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.spike_detection import detect_ic_evoked_spike
 from scipy import stats
-from multipatch_analysis.constants import EXCITATORY_CRE_TYPES, INHIBITORY_CRE_TYPES
+from aisynphys.constants import EXCITATORY_CRE_TYPES, INHIBITORY_CRE_TYPES
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from statsmodels.stats.multicomp import MultiComparison
 app = pg.mkQApp()

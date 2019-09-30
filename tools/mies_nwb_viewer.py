@@ -3,7 +3,7 @@ import acq4
 from acq4.pyqtgraph.Qt import QtCore, QtGui
 import acq4.pyqtgraph.console
 
-from multipatch_analysis.ui.multipatch_nwb_viewer import MultipatchNwbViewer
+from aisynphys.ui.multipatch_nwb_viewer import MultipatchNwbViewer
 
 
 if __name__ == '__main__':
@@ -69,7 +69,7 @@ if __name__ == '__main__':
     # load file or set base directory from argv
     for arg in sys.argv[1:]:
         if not os.path.exists(arg):
-            from multipatch_analysis.experiment_list import cached_experiments
+            from aisynphys.experiment_list import cached_experiments
             expts = cached_experiments()
             try:
                 expt = expts[arg]

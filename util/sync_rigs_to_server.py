@@ -19,8 +19,8 @@ rsync itself, but in practice this presents a few difficult issues:
 import os, sys, shutil, glob, traceback, pickle, time, re
 from acq4.util.DataManager import getDirHandle
 
-from multipatch_analysis import config
-from multipatch_analysis.util import sync_file
+from aisynphys import config
+from aisynphys.util import sync_file
 
 
 def sync_experiment(site_dir):
