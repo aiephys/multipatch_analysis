@@ -12,12 +12,12 @@ import numpy as np
 import pyqtgraph as pg
 import pandas as pd
 from statsmodels.stats.proportion import proportion_confint
-from multipatch_analysis.database import default_db as db
+from aisynphys.database import default_db as db
 # from first_pulse_deconvolved_amps import get_deconvolved_first_pulse_amps
 from neuroanalysis.data import TSeries, TSeriesList
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.filter import bessel_filter
-from multipatch_analysis.connectivity import pair_was_probed, connection_probability_ci
+from aisynphys.connectivity import pair_was_probed, connection_probability_ci
 
 
 thermal_colormap = pg.ColorMap(
@@ -741,6 +741,7 @@ class DynamicsAnalyzer(Analyzer):
         self.name = 'dynamics'
         self.results = None
         self.group_results = None
+        self.pair_items = {}
         #self._signalHandler = ConnectivityAnalyzer.SignalHandler()
         #self.sigOutputChanged = self._signalHandler.sigOutputChanged
 
@@ -755,22 +756,22 @@ class DynamicsAnalyzer(Analyzer):
         
         self.fields = [
             ('Paired pulse STP', {'mode': 'range', 'defaults': {
-                'Min': 0, 
-                'Max': 2, 
+                'Min': -1, 
+                'Max': 1, 
                 'colormap': pg.ColorMap(
                 [0, 0.5, 1.0],
                 [(0, 0, 255, 255), (56, 0, 87, 255), (255, 0, 0, 255)],
             )}}),
             ('Train-induced STP', {'mode': 'range', 'defaults': {
-                'Min': 0, 
-                'Max': 2, 
+                'Min': -1, 
+                'Max': 1, 
                 'colormap': pg.ColorMap(
                 [0, 0.5, 1.0],
                 [(0, 0, 255, 255), (56, 0, 87, 255), (255, 0, 0, 255)],
             )}}),
             ('STP recovery', {'mode': 'range', 'defaults': {
-                'Min': 0, 
-                'Max': 2, 
+                'Min': -1, 
+                'Max': 1, 
                 'colormap': pg.ColorMap(
                 [0, 0.5, 1.0],
                 [(0, 0, 255, 255), (56, 0, 87, 255), (255, 0, 0, 255)],
@@ -883,12 +884,13 @@ class DynamicsAnalyzer(Analyzer):
                         trace_plt.plot(trace.time_values, trace.data)
                         traces.append(trace)
             values.append(value)
+            point_data.append(pair)
             y_values = pg.pseudoScatter(np.asarray(values, dtype=float), spacing=1)
             scatter = pg.ScatterPlotItem(symbol='o', brush=(color + (150,)), pen='w', size=12)
-            scatter.setData(values, y_values + 10.)
+            scatter.setData(values, y_values + 10., data=point_data)
         for point in scatter.points():
             pair_id = point.data().id
-            self.pair_items[pair_id].extend([point, color])
+            self.pair_items[pair_id] = [point, color]
         scatter.sigClicked.connect(self.scatter_plot_clicked)
         if len(traces) > 0:
             grand_trace = TSeriesList(traces).mean()

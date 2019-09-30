@@ -1,7 +1,7 @@
 from synapse_comparison import load_cache
 import pyqtgraph as pg
 from scipy import stats
-from multipatch_analysis.constants import EXCITATORY_CRE_TYPES, INHIBITORY_CRE_TYPES
+from aisynphys.constants import EXCITATORY_CRE_TYPES, INHIBITORY_CRE_TYPES
 from manuscript_figures import get_color
 import numpy as np
 import operator

@@ -3,13 +3,13 @@ import sys
 import argparse
 import numpy as np
 import colorsys
-from multipatch_analysis.experiment_list import cached_experiments
+from aisynphys.experiment_list import cached_experiments
 from manuscript_figures import cache_response, train_amp, induction_summary, recovery_summary, write_cache, get_response, \
     train_qc, colors_human, colors_mouse, deconv_train
 from synapse_comparison import load_cache
 from neuroanalysis.data import TSeriesList
 from neuroanalysis.ui.plot_grid import PlotGrid
-from multipatch_analysis.synaptic_dynamics import RawDynamicsAnalyzer
+from aisynphys.synaptic_dynamics import RawDynamicsAnalyzer
 from rep_connections import ee_connections, human_connections, all_connections, ii_connections, ei_connections, ie_connections, no_include
 pg.dbg()
 app = pg.mkQApp()

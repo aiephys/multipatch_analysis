@@ -1,10 +1,10 @@
 import os, glob, pickle
 import pytest
-import multipatch_analysis
-from multipatch_analysis.qc import PulseResponseQCTestCase
-from multipatch_analysis.ui.pulse_response_qc import PulseResponseQCTestUi
+import aisynphys
+from aisynphys.qc import PulseResponseQCTestCase
+from aisynphys.ui.pulse_response_qc import PulseResponseQCTestUi
 
-path = os.path.join(os.path.dirname(multipatch_analysis.__file__), '..', 'test_data', 'pulse_response_qc', '*.pkl')
+path = os.path.join(os.path.dirname(aisynphys.__file__), '..', 'test_data', 'pulse_response_qc', '*.pkl')
 pulse_response_files = sorted(glob.glob(path))
 
 test_ui = None

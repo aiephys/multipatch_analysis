@@ -1,7 +1,7 @@
 import os, sys, argparse
 import pyqtgraph as pg
 import numpy as np
-from multipatch_analysis import lims
+from aisynphys import lims
 from affpyramid.ui import AffImageItem
 
 # get specimen ID from command line

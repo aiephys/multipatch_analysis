@@ -8,10 +8,10 @@ import pyqtgraph as pg
 import pyqtgraph.multiprocess
 from pyqtgraph.Qt import QtGui, QtCore
 import scipy.stats as stats
-from multipatch_analysis.database import database as db
-from multipatch_analysis.pulse_response_strength import PulseResponseStrength
-from multipatch_analysis.synapse_prediction import SynapsePrediction, get_amps, get_baseline_amps
-from multipatch_analysis.ui.ndslicer import NDSlicer
+from aisynphys.database import database as db
+from aisynphys.pulse_response_strength import PulseResponseStrength
+from aisynphys.synapse_prediction import SynapsePrediction, get_amps, get_baseline_amps
+from aisynphys.ui.ndslicer import NDSlicer
 from neuroanalysis.synaptic_release import ReleaseModel
 
 

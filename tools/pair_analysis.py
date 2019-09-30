@@ -12,12 +12,12 @@ from neuroanalysis.data import TSeriesList
 from neuroanalysis.fitting import Psp, StackedPsp
 from neuroanalysis.ui.fitting import FitExplorer
 
-from multipatch_analysis.ui.experiment_browser import ExperimentBrowser
-from multipatch_analysis.avg_response_fit import get_pair_avg_fits, response_query, sort_responses
-from multipatch_analysis.database import default_db as db
-import multipatch_analysis.data.data_notes_db as notes_db
-from multipatch_analysis.data import PulseResponseList
-from multipatch_analysis.fitting import fit_avg_pulse_response
+from aisynphys.ui.experiment_browser import ExperimentBrowser
+from aisynphys.avg_response_fit import get_pair_avg_fits, response_query, sort_responses
+from aisynphys.database import default_db as db
+import aisynphys.data.data_notes_db as notes_db
+from aisynphys.data import PulseResponseList
+from aisynphys.fitting import fit_avg_pulse_response
 
 
 default_latency = 1e-3

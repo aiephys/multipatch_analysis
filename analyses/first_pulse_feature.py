@@ -3,7 +3,7 @@ import numpy as np
 import csv
 import sys
 import argparse
-from multipatch_analysis.experiment_list import cached_experiments
+from aisynphys.experiment_list import cached_experiments
 from manuscript_figures import get_response, get_amplitude, response_filter, feature_anova, write_cache, trace_plot, \
     colors_human, colors_mouse, fail_rate, pulse_qc, feature_kw
 from synapse_comparison import load_cache, summary_plot_pulse
@@ -11,7 +11,7 @@ from neuroanalysis.data import TSeriesList
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.fitting import fit_psp
 from rep_connections import ee_connections, human_connections, no_include, all_connections, ie_connections, ii_connections, ei_connections
-from multipatch_analysis.synaptic_dynamics import DynamicsAnalyzer
+from aisynphys.synaptic_dynamics import DynamicsAnalyzer
 from scipy import stats
 import time
 import pandas as pd

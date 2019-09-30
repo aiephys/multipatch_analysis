@@ -16,9 +16,9 @@ from pyqtgraph import parametertree as ptree
 from pyqtgraph.parametertree import Parameter
 from pyqtgraph.widgets.DataFilterWidget import DataFilterParameter
 
-from multipatch_analysis.database import default_db as db
-from multipatch_analysis import constants
-from multipatch_analysis.cell_class import CellClass, classify_cells, classify_pairs
+from aisynphys.database import default_db as db
+from aisynphys import constants
+from aisynphys.cell_class import CellClass, classify_cells, classify_pairs
 from .analyzers import ConnectivityAnalyzer, StrengthAnalyzer, DynamicsAnalyzer, get_all_output_fields
 from .matrix_display import MatrixDisplay, MatrixWidget
 from .scatter_plot_display import ScatterPlotTab
@@ -105,7 +105,7 @@ class ExperimentFilter(object):
 
     def get_pair_list(self, session):
         """ Given a set of user selected experiment filters, return a list of pairs.
-        Internally uses multipatch_analysis.db.pair_query.
+        Internally uses aisynphys.db.pair_query.
         """
         if self.pairs is None:
             selected_projects = [child.name() for child in self.params.child('Projects').children() if child.value() is True]

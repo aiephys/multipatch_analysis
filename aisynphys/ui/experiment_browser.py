@@ -2,7 +2,7 @@ from __future__ import print_function, division
 from datetime import datetime
 import pyqtgraph as pg
 
-from multipatch_analysis.database import default_db as db
+from aisynphys.database import default_db as db
 
 
 class ExperimentBrowser(pg.TreeWidget):

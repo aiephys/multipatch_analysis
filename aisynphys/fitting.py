@@ -4,7 +4,7 @@ import warnings, sys
 from pyqtgraph.debug import Profiler
 from neuroanalysis.data import TSeriesList
 from neuroanalysis.fitting import StackedPsp, Psp, fit_psp
-from multipatch_analysis.data import PulseResponseList
+from aisynphys.data import PulseResponseList
 
 
 def fit_avg_pulse_response(pulse_response_list, latency_window, sign, init_params=None, ui=None):

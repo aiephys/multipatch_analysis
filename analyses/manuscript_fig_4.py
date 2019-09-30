@@ -12,11 +12,11 @@ import pyqtgraph as pg
 import scipy.stats
 
 from neuroanalysis.data import TSeries
-from multipatch_analysis.experiment_list import ExperimentList, cache_file
-from multipatch_analysis.cell_class import CellClass, classify_cells
-from multipatch_analysis.connectivity import query_pairs, measure_connectivity
-from multipatch_analysis.database import database as db
-from multipatch_analysis.ui.graphics import distance_plot
+from aisynphys.experiment_list import ExperimentList, cache_file
+from aisynphys.cell_class import CellClass, classify_cells
+from aisynphys.connectivity import query_pairs, measure_connectivity
+from aisynphys.database import database as db
+from aisynphys.ui.graphics import distance_plot
 
 
 def write_csv(fh, data, description, units='connection probability %'):

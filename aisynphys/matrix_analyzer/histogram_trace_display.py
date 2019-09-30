@@ -12,7 +12,7 @@ import pyqtgraph as pg
 from pyqtgraph import parametertree as ptree
 from pyqtgraph.parametertree import Parameter
 from pyqtgraph.widgets.ColorMapWidget import ColorMapParameter
-from multipatch_analysis.ui.graphics import MatrixItem
+from aisynphys.ui.graphics import MatrixItem
 from .analyzers import results_scatter, FormattableNumber
 
 

@@ -996,7 +996,7 @@ class Experiment(object):
     def lims_record(self):
         """A dictionary of specimen information queried from LIMS.
         
-        See multipatch_analysis.lims.section_info()
+        See aisynphys.lims.section_info()
         """
         if self._lims_record is None:
             self._lims_record = lims.specimen_info(self.specimen_name)

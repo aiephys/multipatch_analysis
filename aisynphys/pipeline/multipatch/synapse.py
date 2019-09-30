@@ -9,7 +9,7 @@ from ... import config
 from ..pipeline_module import DatabasePipelineModule
 from .experiment import ExperimentPipelineModule
 from .dataset import DatasetPipelineModule
-import multipatch_analysis.data.data_notes_db as notes_db
+import aisynphys.data.data_notes_db as notes_db
 from ...avg_response_fit import get_pair_avg_fits
 
 

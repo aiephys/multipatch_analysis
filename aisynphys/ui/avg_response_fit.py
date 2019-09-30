@@ -2,7 +2,7 @@ import numpy as np
 import pyqtgraph as pg
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.fitting import StackedPsp
-from multipatch_analysis.data import PulseResponseList
+from aisynphys.data import PulseResponseList
 
 
 class AvgResponseFitUi(object):

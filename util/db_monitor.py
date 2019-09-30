@@ -4,7 +4,7 @@ from __future__ import print_function, division
 import os, sys, subprocess, re
 from collections import OrderedDict
 from datetime import tzinfo, timedelta, datetime
-from multipatch_analysis import config
+from aisynphys import config
 from sqlalchemy import create_engine
 
 
@@ -93,7 +93,7 @@ def check():
             if con['client_addr'] != ip:
                 continue
             app = con['application_name']
-            for pkg in ['acq4', 'multipatch_analysis']:
+            for pkg in ['acq4', 'aisynphys']:
                 a,b,c = app.partition(pkg)
                 if b == '':
                     continue

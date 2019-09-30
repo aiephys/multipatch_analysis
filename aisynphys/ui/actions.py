@@ -2,8 +2,8 @@ import os, subprocess
 from collections import OrderedDict
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtGui, QtCore
-import multipatch_analysis.config as config
-import multipatch_analysis
+import aisynphys.config as config
+import aisynphys
 
 
 class ExperimentActions(pg.QtCore.QObject):
@@ -52,11 +52,11 @@ class ExperimentActions(pg.QtCore.QObject):
         mod.selectFile(expt.path)
 
     def nwb_viewer(self):
-        path = os.path.join(os.path.dirname(multipatch_analysis.__file__), '..', 'tools', 'mies_nwb_viewer.py')
+        path = os.path.join(os.path.dirname(aisynphys.__file__), '..', 'tools', 'mies_nwb_viewer.py')
         subprocess.Popen('python "%s" "%s"' % (path, self.experiment.nwb_file), shell=True)
 
     def connection_detection(self):
-        path = os.path.join(os.path.dirname(multipatch_analysis.__file__), '..', 'tools', 'connection_detection.py')
+        path = os.path.join(os.path.dirname(aisynphys.__file__), '..', 'tools', 'connection_detection.py')
         subprocess.Popen('python "%s" "%s"' % (path, self.experiment.nwb_file), shell=True)
 
     def submission_tool(self):

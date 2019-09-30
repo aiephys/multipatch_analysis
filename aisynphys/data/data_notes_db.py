@@ -2,9 +2,9 @@
 A database holding results of manual analyses
 """
 
-from multipatch_analysis.database.database import declarative_base, make_table
-from multipatch_analysis.database import Database
-from multipatch_analysis import config
+from aisynphys.database.database import declarative_base, make_table
+from aisynphys.database import Database
+from aisynphys import config
 
 DataNotesORMBase = declarative_base()
 

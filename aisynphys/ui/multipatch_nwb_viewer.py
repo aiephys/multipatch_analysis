@@ -2,7 +2,7 @@ from neuroanalysis.ui.nwb_viewer import MiesNwbViewer
 from neuroanalysis.miesnwb import MiesNwb
 
 from .multipatch_view import MultipatchMatrixView
-from multipatch_analysis.data import MultiPatchDataset
+from aisynphys.data import MultiPatchDataset
 from .pair_view import PairView
 
 

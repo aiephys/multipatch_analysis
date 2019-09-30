@@ -1,8 +1,8 @@
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtGui, QtCore
 from neuroanalysis.ui.plot_grid import PlotGrid
-from multipatch_analysis.ui.ui import SynapseTreeWidget, ExperimentInfoWidget
-from multipatch_analysis.synaptic_dynamics import DynamicsAnalyzer
+from aisynphys.ui.ui import SynapseTreeWidget, ExperimentInfoWidget
+from aisynphys.synaptic_dynamics import DynamicsAnalyzer
 
 
 class SynapseExplorer(QtGui.QWidget):
@@ -56,7 +56,7 @@ class SynapseExplorer(QtGui.QWidget):
 
 
 if __name__ == '__main__':
-    from multipatch_analysis.experiment_list import cached_experiments
+    from aisynphys.experiment_list import cached_experiments
     import sys
     app = pg.mkQApp()
 
