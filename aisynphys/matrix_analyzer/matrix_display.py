@@ -239,25 +239,26 @@ class MatrixDisplay(object):
         # update 3/8/19: Doesn't work for CellClasses of 1 item,
         # attempt to fix so it doesn't break in mp_a\ui\graphics.py
         # at line 90. 
-        rows = []
-        cols = []
-        for i,cell_class in enumerate(pre_cell_classes):
-            tup = cell_class.as_tuple
-            row = tup[:1]
-            if len(tup) > 1:
-                row = row + (' '.join(tup[1:]),)
-            else:
-                row = (' '*i,) + row
-            rows.append(row)
-        for i,cell_class in enumerate(post_cell_classes):
-            tup = cell_class.as_tuple
-            col = tup[:1]
-            if len(tup) > 1:
-                col = col + (' '.join(tup[1:]),)
-            else:
-                col = (' '*i,) + col
-            cols.append(col)
-
+        # rows = []
+        # cols = []
+        # for i,cell_class in enumerate(pre_cell_classes):
+        #     tup = cell_class.as_tuple
+        #     row = tup[:1]
+        #     if len(tup) > 1:
+        #         row = row + (' '.join(tup[1:]),)
+        #     else:
+        #         row = (' '*i,) + row
+        #     rows.append(row)
+        # for i,cell_class in enumerate(post_cell_classes):
+        #     tup = cell_class.as_tuple
+        #     col = tup[:1]
+        #     if len(tup) > 1:
+        #         col = col + (' '.join(tup[1:]),)
+        #     else:
+        #         col = (' '*i,) + col
+        #     cols.append(col)
+        rows = [cell_class.display_names for cell_class in pre_cell_classes]        
+        cols = [cell_class.display_names for cell_class in post_cell_classes]        
 
         self.main_window.matrix_widget.set_matrix_data(text=text, fgcolor=fgcolor, bgcolor=bgcolor, border_color=bordercolor,
                     rows=rows, cols=cols, size=50, header_color='k')

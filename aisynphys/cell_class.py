@@ -43,9 +43,6 @@ class CellClass(object):
         Order of elements in the tuple is (target_layer, pyramidal, cre_type), but
         elements are only present if they were specified as criteria for the cell class.
         """
-        if self.name is not None:
-            return self.name
-            
         name = []
 
         target_layer = self.criteria.get('target_layer')
@@ -113,6 +110,24 @@ class CellClass(object):
                 return False
                 # raise Exception('Cannot use "%s" for cell typing; attribute not found on cell or cell.morphology' % k)
         return True
+
+    def __hash__(self):
+        return hash(self.name)
+
+    def __eq__(self, a):
+        """Cell class is considered equal to its *name* to allow it to be indexed from a dict more
+        easily::
+
+            cc = CellClass(cre_type='sst', layer='6')
+            cc.name => 'L6 sst'
+            {cc: 1}['L6 sst'] => 1 
+        """
+        if isinstance(a, str):
+            return a == self.name
+        elif isinstance(a, CellClass):
+            return a.name == self.name
+        else:
+            return object.__eq__(self)  # should raise NotImplemented
 
     def __repr__(self):
         return "<CellClass %s>" % self.name

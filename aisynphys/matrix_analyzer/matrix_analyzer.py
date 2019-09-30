@@ -165,10 +165,17 @@ class CellClassFilter(object):
             for group in self.params.children()[1:]:
                 if group.value() is True:
                     self.cell_classes.extend(ccg[group.name()])
-            self.cell_classes = self.layer_call(self.cell_classes)
-            self.cell_classes = [CellClass(**c) for c in self.cell_classes]
+            cell_classes = self.layer_call(self.cell_classes)
+            self.cell_classes = [self._make_cell_class(c) for c in cell_classes]
             self.cell_groups = classify_cells(self.cell_classes, pairs=pairs)
         return self.cell_groups, self.cell_classes
+
+    def _make_cell_class(self, spec):
+        spec = spec.copy()
+        dnames = spec.pop('display_names')
+        cell_cls = CellClass(**spec)
+        cell_cls.display_names = dnames
+        return cell_cls
 
     def layer_call(self, classes):
         # if self.analyzer_mode == 'external':
@@ -189,8 +196,6 @@ class CellClassFilter(object):
 
     def get_pre_or_post_classes(self, key):
         """Return a list of postsynaptic cell_classes. This will be a subset of self.cell_classes."""
-        # if self.cell_classes is None:
-        #     return []
         ccg = copy.deepcopy(self.cell_class_groups)
         classes = []
         for group in self.params.children():
@@ -198,7 +203,7 @@ class CellClassFilter(object):
                 if group['pre/post'] in ['both', key]:
                     classes.extend(ccg[group.name()])
         classes = self.layer_call(classes)
-        classes = [CellClass(**c) for c in classes]
+        classes = [self._make_cell_class(c) for c in classes]
         return classes
 
     def expand_param(self, param, value):
