@@ -22,17 +22,19 @@ class CellClass(object):
         l23_pyr_class = CellClass(pyramidal=True, target_layer='2/3')
         l5_spiny_class = CellClass(dendrite_type='spiny', cortical_layer='5')
     """
-    def __init__(self, display_names=None, **criteria):
+    def __init__(self, name=None, **criteria):
         self.criteria = criteria
-        self.display_names = display_names
+        self._name = name
 
     @property
     def name(self):
         """A short string representation of this cell class.
         
-        This is the same as as_tuple, concatenated with spaces.
+        If no name was supplied, then this value is `as_tuple` concatenated with spaces.
         """
-        return ' '.join(self.as_tuple)
+        if self._name is not None:
+            return self._name
+        return ' '.join([str(x) for x in self.as_tuple])
 
     @property
     def as_tuple(self):
@@ -41,8 +43,8 @@ class CellClass(object):
         Order of elements in the tuple is (target_layer, pyramidal, cre_type), but
         elements are only present if they were specified as criteria for the cell class.
         """
-        if self.display_names is not None:
-            return self.display_names
+        if self.name is not None:
+            return self.name
             
         name = []
 
@@ -52,7 +54,7 @@ class CellClass(object):
         if target_layer is not None:
             name.append('L' + target_layer)
         elif cortical_layer is not None:
-            name.append('L' + cortical_layer)
+            name.append('L' + str(cortical_layer))
 
         if 'dendrite_type' in self.criteria:
             name.append('%s' % self.criteria['dendrite_type'])
@@ -111,24 +113,6 @@ class CellClass(object):
                 return False
                 # raise Exception('Cannot use "%s" for cell typing; attribute not found on cell or cell.morphology' % k)
         return True
-
-    def __hash__(self):
-        return hash(self.name)
-
-    def __eq__(self, a):
-        """Cell class is considered equal to its *name* to allow it to be indexed from a dict more
-        easily::
-
-            cc = CellClass(cre_type='sst', layer='6')
-            cc.name => 'L6 sst'
-            {cc: 1}['L6 sst'] => 1 
-        """
-        if isinstance(a, str):
-            return a == self.name
-        elif isinstance(a, CellClass):
-            return a.name == self.name
-        else:
-            return object.__eq__(self)  # should raise NotImplemented
 
     def __repr__(self):
         return "<CellClass %s>" % self.name
