@@ -206,7 +206,7 @@ class MatrixElementItem(pg.QtGui.QGraphicsRectItem):
         self.sigClicked.emit(self, event)    
 
 
-def distance_plot(connected, distance, plots=None, color=(100, 100, 255), size=10, window=40e-6, spacing=None, name=None, fill_alpha=30):
+def distance_plot(connected, distance, plots=None, color=(100, 100, 255), size=10, window=40e-6, name=None, fill_alpha=30):
     """Draw connectivity vs distance profiles with confidence intervals.
     
     Parameters
@@ -276,7 +276,8 @@ def distance_plot(connected, distance, plots=None, color=(100, 100, 255), size=1
 
     # use a sliding window to plot the proportion of connections found along with a 95% confidence interval
     # for connection probability
-    xvals, prop, lower, upper = connectivity_profile(connected, distance, window=window, spacing=spacing)
+    bin_edges = np.arange(0, 500e-6, window)
+    xvals, prop, lower, upper = connectivity_profile(connected, distance, bin_edges)
 
     # plot connection probability and confidence intervals
     color2 = [c / 3.0 for c in color]

@@ -3,7 +3,7 @@ import numpy as np
 from statsmodels.stats.proportion import proportion_confint
 
 
-def connectivity_profile(connected, distance, window=40e-6, spacing=None):
+def connectivity_profile(connected, distance, bin_edges):
     """
     Compute connection probability vs distance with confidence intervals.
 
@@ -13,49 +13,50 @@ def connectivity_profile(connected, distance, window=40e-6, spacing=None):
         Whether a synaptic connection was found for each probe
     distance : array
         Distance between cells for each probe
-    window : float
-        Width of distance window over which proportions are calculated for each point on
-        the profile line.
-    spacing : float
-        Distance spacing between points on the profile line
-
+    bin_edges : array
+        The distance values between which connections will be binned
 
     Returns
     -------
     xvals : array
+        bin edges of returned connectivity values
+    prop : array
+        connected proportion in each bin
+    lower : array
+        lower proportion confidence interval for each bin
+    upper : array
+        upper proportion confidence interval for each bin
 
     """
-    if spacing is None:
-        spacing = window / 4.0
-        
     mask = np.isfinite(connected) & np.isfinite(distance)
     connected = connected[mask]
     distance = distance[mask]
 
-    xvals = np.arange(window / 2.0, 500e-6, spacing)
-    upper = []
-    lower = []
-    prop = []
-    for x in xvals:
-        minx = x - window / 2.0
-        maxx = x + window / 2.0
+    n_bins = len(bin_edges) - 1
+    upper = np.zeros(n_bins)
+    lower = np.zeros(n_bins)
+    prop = np.zeros(n_bins)
+    for i in range(n_bins):
+        minx = bin_edges[i]
+        maxx = bin_edges[i+1]
+
         # select points inside this window
-        mask = (distance >= minx) & (distance <= maxx)
+        mask = (distance >= minx) & (distance < maxx)
         pts_in_window = connected[mask]
         # compute stats for window
         n_probed = pts_in_window.shape[0]
         n_conn = pts_in_window.sum()
         if n_probed == 0:
-            prop.append(np.nan)
-            lower.append(np.nan)
-            upper.append(np.nan)
+            prop[i] = np.nan
+            lower[i] = np.nan
+            upper[i] = np.nan
         else:
-            prop.append(n_conn / n_probed)
+            prop[i] = n_conn / n_probed
             ci = connection_probability_ci(n_conn, n_probed)
-            lower.append(ci[0])
-            upper.append(ci[1])
+            lower[i] = ci[0]
+            upper[i] = ci[1]
 
-    return xvals, prop, lower, upper
+    return bin_edges, prop, lower, upper
 
 
 def measure_connectivity(pair_groups):
