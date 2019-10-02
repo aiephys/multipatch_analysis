@@ -79,9 +79,9 @@ def list_db_versions():
     """Return a dictionary listing database versions that are available for download.
     """
     return {
-        'synphys_r1.0_2019-08-29_small.sqlite': {'url': 'http://iwarehouse/api/v2/well_known_file_download/937779595'},
-        'synphys_r1.0_2019-08-29_medium.sqlite': {'url': 'http://iwarehouse/api/v2/well_known_file_download/937780246'},
-        'synphys_r1.0_2019-08-29_full.sqlite': {'url': 'http://iwarehouse/api/v2/well_known_file_download/937780286'},
+        'synphys_r1.0_2019-08-29_small.sqlite': {'url': 'http://api.brain-map.org/api/v2/well_known_file_download/937779595'},
+        'synphys_r1.0_2019-08-29_medium.sqlite': {'url': 'http://api.brain-map.org/api/v2/well_known_file_download/937780246'},
+        'synphys_r1.0_2019-08-29_full.sqlite': {'url': 'http://api.brain-map.org/api/v2/well_known_file_download/937780286'},
     }
 
 
