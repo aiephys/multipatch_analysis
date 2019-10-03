@@ -49,7 +49,7 @@ parser.add_argument('--db-host', default=None, dest='db_host')
 parser.add_argument('--database', default=None)
 
 args, unknown_args = parser.parse_known_args()
-sys.argv = unknown_args
+sys.argv = sys.argv[:1] + unknown_args
 
 if args.db_version is not None:
     from .synphys_cache import get_db_path
