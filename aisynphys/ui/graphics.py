@@ -280,6 +280,7 @@ def distance_plot(connected, distance, plots=None, color=(100, 100, 255), size=1
 
     # plot connection probability and confidence intervals
     color2 = [c / 3.0 for c in color]
+    xvals = (xvals[:-1] + xvals[1:]) * 0.5
     mid_curve = plots[0].plot(xvals, prop, pen={'color': color, 'width': 3}, antialias=True, name=name)
     upper_curve = plots[0].plot(xvals, upper, pen=(0, 0, 0, 0), antialias=True)
     lower_curve = plots[0].plot(xvals, lower, pen=(0, 0, 0, 0), antialias=True)
