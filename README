@@ -1,11 +1,10 @@
-Analysis tools used by multipatch pipeline; not recommended for external use.
+Data access and analysis for Allen Institute Synaptic Physiology projects
+
+
+Main website: http://portal.brain-map.org/explore/connectivity/synaptic-physiology
+
+Documentation: https://aisynphys.readthedocs.io/en/latest/
 
 
 
-Requirements:
-
-* scientific python stack (Anaconda recommended)
-* pip install pyqtgraph
-* pip install pg8000
-* git clone http://stash.corp.alleninstitute.org/scm/inf/allensdk_internal.git
 

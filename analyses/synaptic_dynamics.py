@@ -2,9 +2,9 @@ import pyqtgraph as pg
 from neuroanalysis.ui.plot_grid import PlotGrid
 from neuroanalysis.data import TSeries
 from neuroanalysis.fitting import StackedPsp
-from multipatch_analysis.database import default_db as db
-from multipatch_analysis.ui.experiment_browser import ExperimentBrowser
-from multipatch_analysis.dynamics import pulse_response_query, sorted_pulse_responses
+from aisynphys.database import default_db as db
+from aisynphys.ui.experiment_browser import ExperimentBrowser
+from aisynphys.dynamics import pulse_response_query, sorted_pulse_responses
 
 
 class DynamicsWindow(pg.QtGui.QSplitter):

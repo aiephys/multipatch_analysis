@@ -1,7 +1,7 @@
 # coding=utf-8
 import pyqtgraph as pg
 
-from multipatch_analysis.experiment_list import cached_experiments
+from aisynphys.experiment_list import cached_experiments
 
 
 expts = cached_experiments()

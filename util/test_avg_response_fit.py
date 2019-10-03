@@ -1,9 +1,9 @@
 import sys
 import pyqtgraph as pg
 from neuroanalysis.ui.fitting import FitExplorer
-from multipatch_analysis.database import default_db as db
-from multipatch_analysis.avg_response_fit import get_pair_avg_fits
-from multipatch_analysis.ui.avg_response_fit import AvgResponseFitUi
+from aisynphys.database import default_db as db
+from aisynphys.avg_response_fit import get_pair_avg_fits
+from aisynphys.ui.avg_response_fit import AvgResponseFitUi
 
 
 app = pg.mkQApp()

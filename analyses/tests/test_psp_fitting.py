@@ -3,7 +3,7 @@ explore how fits are different from test data.  Often fitts are just off by
 significant figures.  However, make sure all data is viewed as some fits can 
 can change when others do not
 '''
-from multipatch_analysis.fitting import fit_psp
+from aisynphys.fitting import fit_psp
 import os
 import numpy as np
 from pprint import pprint
@@ -115,15 +115,15 @@ def save_fit_psp_test_set():
     import csv
     import sys
     import argparse
-    from multipatch_analysis.experiment_list import cached_experiments
+    from aisynphys.experiment_list import cached_experiments
     from manuscript_figures import get_response, get_amplitude, response_filter, feature_anova, write_cache, trace_plot, \
         colors_human, colors_mouse, fail_rate, pulse_qc, feature_kw
     from synapse_comparison import load_cache, summary_plot_pulse
     from neuroanalysis.data import TSeriesList, TSeries
     from neuroanalysis.ui.plot_grid import PlotGrid
-    from multipatch_analysis.connection_detection import fit_psp
+    from aisynphys.connection_detection import fit_psp
     from rep_connections import ee_connections, human_connections, no_include, all_connections, ie_connections, ii_connections, ei_connections
-    from multipatch_analysis.synaptic_dynamics import DynamicsAnalyzer
+    from aisynphys.synaptic_dynamics import DynamicsAnalyzer
     from scipy import stats
     import time
     import pandas as pd

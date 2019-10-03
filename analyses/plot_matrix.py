@@ -7,11 +7,11 @@ from experiment_list import ExperimentList
 from manuscript_figures import cache_response, get_amplitude, response_filter, trace_plot, bsub, write_cache, \
     induction_summary, recovery_summary, train_amp, pulse_qc, train_qc, subplots
 from synapse_comparison import load_cache
-from multipatch_analysis.ui.graphics import MatrixItem
+from aisynphys.ui.graphics import MatrixItem
 from rep_connections import connections
 from neuroanalysis.data import TSeriesList
-from multipatch_analysis.constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
-from multipatch_analysis.experiment_list import cached_experiments
+from aisynphys.constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
+from aisynphys.experiment_list import cached_experiments
 from scipy import stats
 
 

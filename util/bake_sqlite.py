@@ -1,5 +1,5 @@
 import os, sys, datetime
-from multipatch_analysis.database import default_db as db
+from aisynphys.database import default_db as db
 
 date = datetime.datetime.today().strftime("%Y-%m-%d")
 

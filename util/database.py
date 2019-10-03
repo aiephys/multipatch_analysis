@@ -2,9 +2,9 @@ from __future__ import division, print_function
 
 import os, sys, argparse
 import six
-from multipatch_analysis.database import default_db as db
-from multipatch_analysis.config import synphys_db
-from multipatch_analysis import config
+from aisynphys.database import default_db as db
+from aisynphys.config import synphys_db
+from aisynphys import config
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--reset-db', action='store_true', default=False, help="Drop all tables in the database.", dest='reset_db')

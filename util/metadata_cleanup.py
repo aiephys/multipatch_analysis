@@ -1,8 +1,8 @@
 import os, sys, glob, datetime, csv, argparse
 from acq4.util.DataManager import getDirHandle
-from multipatch_analysis import config
-from multipatch_analysis.constants import INTERNAL_RECIPES
-from multipatch_analysis.experiment import Experiment
+from aisynphys import config
+from aisynphys.constants import INTERNAL_RECIPES
+from aisynphys.experiment import Experiment
 
 slice_csv_file = 'Slice_Preparation_Record.csv'
 osm_csv_file = 'MultiPatch Throughput.xlsx - Solution Making.csv'

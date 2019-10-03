@@ -1,4 +1,4 @@
-from multipatch_analysis.experiment_list import cached_experiments
+from aisynphys.experiment_list import cached_experiments
 import argparse
 import sys
 import pyqtgraph as pg

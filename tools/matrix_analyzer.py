@@ -1,7 +1,7 @@
 import sys, argparse
 import pyqtgraph as pg
-from multipatch_analysis.database import default_db as db
-from multipatch_analysis.matrix_analyzer import MatrixAnalyzer
+from aisynphys.database import default_db as db
+from aisynphys.matrix_analyzer import MatrixAnalyzer
 from collections import OrderedDict
 
 if __name__ == '__main__':
@@ -94,7 +94,7 @@ if __name__ == '__main__':
             {'cre_type': ('pvalb', 'sst', 'vip'), 'display_names': ('', 'Inhibitory\npvalb, sst, vip')},
         ]),
 
-        ('Inhibitory Transgenic Classes',[
+        ('Inhibitory Transgenic Classes by layer',[
             # {'pyramidal': True, 'target_layer': '2/3'},
             # {'cre_type': 'unknown', 'target_layer': '2/3'},
             {'cre_type': ('pvalb', 'sst', 'vip'), 'target_layer': '2/3', 'display_names': ('L2/3', 'Inhibitory\npv, sst, vip'), 'cortical_layer': '2/3'},
@@ -157,7 +157,7 @@ if __name__ == '__main__':
     ])
 
     if analyzer_mode == 'external':
-        groups = ['All Transgenic Classes','Excitatory Transgenic Classes', 'Inhibitory Transgenic Classes', 'All Cells', 'Pyramidal Cells', 'Non-Pyramidal Cells']
+        groups = ['All Transgenic Classes','Excitatory Transgenic Classes', 'Inhibitory Transgenic Classes by layer', 'All Cells', 'Pyramidal Cells', 'Non-Pyramidal Cells']
         cell_class_groups = {g:cell_class_groups[g] for g in groups}
 
     maz = MatrixAnalyzer(session=session, cell_class_groups=cell_class_groups, default_preset='None', preset_file='matrix_analyzer_presets.json', analyzer_mode=analyzer_mode)
