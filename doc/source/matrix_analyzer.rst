@@ -8,17 +8,9 @@ Welcome to the Synaptic Physiology Matrix Analyzer. This interactive tool will a
 ===============
 Getting Started
 ===============
-* If you don't have them already, install Anaconda and Git
-* Open an Anaconda prompt and run the following:
-``git clone https://github.com/AllenInstitute/multipatch_analysis
-cd multipatch_analysis
-conda env create --name=synphys --file=synphys_env.yml 
-conda activate synphys
-python setup.py develop``
-* Download the Small Database from here
-* Place it in the multipatch_analysis directory you created above
+* Follow the instructions to setup an Anaconda environment found `here <https://aisynphys.readthedocs.io/en/latest/installation.html>`. 
 * Run the Matrix Analyzer in an Anaconda prompt
-``python tools\matrix_analyzer.py -database=synphys_current_small.sqlite``
+``python tools\matrix_analyzer.py --db-version=synphys_r1.0_2019-08-29_small.sqlite``
 
 =========================
 About the Matrix Analyzer

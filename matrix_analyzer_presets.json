@@ -63,7 +63,7 @@
                         }
                     }
                 },
-                "Inhibitory Transgenic Classes": {
+                "Inhibitory Transgenic Classes by layer": {
                     "value": false,
                     "children": {
                         "pre/post": {
@@ -262,7 +262,7 @@
                         }
                     }
                 },
-                "Inhibitory Transgenic Classes": {
+                "Inhibitory Transgenic Classes by layer": {
                     "value": false,
                     "children": {
                         "pre/post": {
@@ -440,7 +440,7 @@
                         }
                     }
                 },
-                "Inhibitory Transgenic Classes": {
+                "Inhibitory Transgenic Classes by layer": {
                     "value": false,
                     "children": {
                         "pre/post": {
@@ -639,7 +639,7 @@
                         }
                     }
                 },
-                "Inhibitory Transgenic Classes": {
+                "Inhibitory Transgenic Classes by layer": {
                     "value": false,
                     "children": {
                         "pre/post": {
@@ -817,7 +817,7 @@
                         }
                     }
                 },
-                "Inhibitory Transgenic Classes": {
+                "Inhibitory Transgenic Classes by layer": {
                     "value": false,
                     "children": {
                         "pre/post": {
@@ -1002,7 +1002,7 @@
                         }
                     }
                 },
-                "Inhibitory Transgenic Classes": {
+                "Inhibitory Transgenic Classes by layer": {
                     "value": false,
                     "children": {
                         "pre/post": {
@@ -1187,7 +1187,7 @@
                         }
                     }
                 },
-                "Inhibitory Transgenic Classes": {
+                "Inhibitory Transgenic Classes by layer": {
                     "value": false,
                     "children": {
                         "pre/post": {
@@ -1305,7 +1305,7 @@
             "value": "{Latency.ms}"
         },
         "show confidence": {
-            "value": "Connection Probability"
+            "value": "None"
         }
     },
     "Human PSP Rise Time": {
@@ -1372,7 +1372,7 @@
                         }
                     }
                 },
-                "Inhibitory Transgenic Classes": {
+                "Inhibitory Transgenic Classes by layer": {
                     "value": false,
                     "children": {
                         "pre/post": {
@@ -1490,7 +1490,7 @@
             "value": "{PSP Rise Time.ms}"
         },
         "show confidence": {
-            "value": "Connection Probability"
+            "value": "None"
         }
     },
     " ": {
@@ -1665,7 +1665,7 @@
                         }
                     }
                 },
-                "Inhibitory Transgenic Classes": {
+                "Inhibitory Transgenic Classes by layer": {
                     "value": false,
                     "children": {
                         "pre/post": {
