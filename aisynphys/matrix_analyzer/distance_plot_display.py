@@ -67,9 +67,9 @@ class DistancePlot(object):
         #suppress scatter plot for all results (takes forever to plot)
             plots = list(self.plots)
             plots[1] = None
-            self.dist_plot = distance_plot(connected, distance, plots=plots, color=color, name=name, size=size, window=dist_win, spacing=dist_win)
+            self.dist_plot = distance_plot(connected, distance, plots=plots, color=color, name=name, size=size, window=dist_win)
         else:
-            self.dist_plot = distance_plot(connected, distance, plots=self.plots, color=color, name=name, size=size, window=dist_win, spacing=dist_win)
+            self.dist_plot = distance_plot(connected, distance, plots=self.plots, color=color, name=name, size=size, window=dist_win)
         
         return self.dist_plot
 

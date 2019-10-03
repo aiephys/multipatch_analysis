@@ -219,15 +219,14 @@ def distance_plot(connected, distance, plots=None, color=(100, 100, 255), size=1
         (optional) Two plots used to display distance profile and scatter plot.
     color : tuple
         (R, G, B) color values for line and confidence interval. The confidence interval
-        will be drawn with alpha=100
+        will be drawn with reduced opacity (see *fill_alpha*)
     size: int
         size of scatter plot symbol
     window : float
         Width of distance window over which proportions are calculated for each point on
         the profile line.
-    spacing : float
-        Distance spacing between points on the profile line
-
+    fill_alpha : int
+        Opacity of confidence interval fill (0-255)
 
     Note: using a spacing value that is smaller than the window size may cause an
     otherwise smooth decrease over distance to instead look more like a series of downward steps.
