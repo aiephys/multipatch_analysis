@@ -1,4 +1,4 @@
-import time
+import sys, time
 from .interactive_mode import interactive_mode
 
 
@@ -38,10 +38,12 @@ class ProgressBar:
             self.dlg = pg.ProgressDialog(self.message, maximum=1000)
         elif self.mode == 'file':
             print(message)
+            sys.stdout.flush()
             # logging to file; don't need frequent updates.
             self.update_dt = 30.0
         else:
             print(message)
+            sys.stdout.flush()
             self.last_line_len = 0
 
     def update(self, value, status):
@@ -73,11 +75,14 @@ class ProgressBar:
             spaces = ' ' * max(0, self.last_line_len - line_len)
             self.last_line_len = line_len
             print('\r' + line + spaces, end='')
+            sys.stdout.flush()
         else:
             print('  ' + status)
+            sys.stdout.flush()
 
         if value >= self.maximum and self.mode != 'qt':
             print("\n  done.")
+            sys.stdout.flush()
 
     def __enter__(self):
         return self
