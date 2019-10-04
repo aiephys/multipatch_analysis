@@ -16,17 +16,18 @@ Getting Started
 About the Matrix Analyzer
 =========================
 
-The Matrix Analyzer primarily displays the Synaptic Physiology dataset as a **matrix** with presynaptic cell groups along the rows and postsynaptic cell groups along the columns. An **element** is a single pre-post pairing within the matrix. The Matrix Analyzer is built using python and pyqtgraph. Pyqtgraph has many functionalities and features, some of which are highlighted in the **Appendix**.
+The Matrix Analyzer primarily displays the Synaptic Physiology dataset as a **matrix** with presynaptic cell groups along the rows and postsynaptic cell groups along the columns. An **element** is a single pre-post pairing within the matrix. The Matrix Analyzer is built using python and pyqtgraph. Pyqtgraph has many functionalities and features, some of which are highlighted in the :ref:`appendix`.
 
 .. image:: images/matrix.*
 
 The Matrix Analyzer has three main panels
-1. Control Panel
-2. Matrix Panel
-3. Data Plot Panel
+1. :ref:`control-panel`
+2. :ref:`matrix-panel`
+3. :ref: `data-plot-panel`
 
 .. image:: images/panels.*
 
+.. _control-panel
 =============
 Control Panel
 =============
@@ -49,6 +50,7 @@ The Matrix Display, particularly the **Color Map** determines which data will be
 By selecting a metric for **Show Confidence**, the color scale of the selected color map will be shaded by a confidence metric. The richer the color, the higher our confidence in the metric.
 When you have selected your favorite set of filters a custom preset can be saved by clicking on the > arrow by **Preset name**, entering a name for your preset and clicking **Save Preset**. If you use the same name as a prest that already exists it will overwrite. If you want to delete a preset, select it from the Preset menu and click **Delete Preset**.
 
+.. _matrix-panel
 ============
 Matrix Panel
 ============
@@ -69,6 +71,7 @@ Up to **six** elements can be co-selected by holding the Ctrl key while selectin
 
 .. image:: images/multi_element_click.*
 
+.. _data-plot-panel
 ===============
 Data Plot Panel
 ===============
@@ -134,6 +137,7 @@ The scatter plot shows the distance for probed pairs in the upper part and conne
 
 ..image:: images/distance.*
 
+.. _appendix
 ========
 Appendix
 ========
