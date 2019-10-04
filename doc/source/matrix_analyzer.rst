@@ -176,7 +176,7 @@ Similar to aCSF, multiple pipette internal solutions were used in these experime
 
 *Excitatory Transgenic Classes* – This class will show exclusively the excitatory transgenic classes. Because layer is a part of this class definition this matrix is also organized by layer. It can be combined with Inhibitory Transgenic Classes or Inhibitory Transgenic Classes by layer and is best used with Mouse projects.
 
-*Inhibitory Transgenic Classes* – This class will show all inhibitory classes combined and organized by layer.
+*Inhibitory Transgenic Classes by layer* – This class will show all inhibitory classes combined and organized by layer.
 
 *All Cells* – This class will show all cells organized by layer. This matrix may be used with either Mouse or Human projects and is the best to view both projects simultaneously.
 
