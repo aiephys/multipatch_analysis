@@ -1,4 +1,0 @@
-Installation
-============
-
-Conda setup instructions
