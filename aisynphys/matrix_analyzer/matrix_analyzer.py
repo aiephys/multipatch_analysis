@@ -180,8 +180,8 @@ class CellClassFilter(object):
     def layer_call(self, classes):
         # if self.analyzer_mode == 'external':
         #     layer_def = 'target layer'
-        # else:
-        classes = sorted(classes, key=lambda i: i['target_layer'])
+        # else
+        classes = sorted(classes, key=lambda i: i.get('target_layer', '7'))
         layer_def = self.params['Define layer by:']
         if layer_def == 'target layer':
             for c in classes:
