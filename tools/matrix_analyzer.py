@@ -74,11 +74,11 @@ if __name__ == '__main__':
             {'cre_type': 'vip', 'target_layer': '6', 'cortical_layer': ('6a', '6b'), 'display_names': ('L6', 'vip')},
         ]),
 
-        # ('Inhibitory Classes',[
-        #     {'cre_type': 'pvalb', 'display_names': ('', 'Pv')},
-        #     {'cre_type': 'sst', 'display_names': ('', 'Sst')},
-        #     {'cre_type': 'vip', 'display_names': ('', 'Vip')},
-        # ]),
+        ('Inhibitory Transgenic Classes',[
+            {'cre_type': 'pvalb', 'display_names': ('', 'Pv')},
+            {'cre_type': 'sst', 'display_names': ('', 'Sst')},
+            {'cre_type': 'vip', 'display_names': ('', 'Vip')},
+        ]),
  
         ('Excitatory Transgenic Classes', [
             {'dendrite_type': 'spiny', 'target_layer': '2/3', 'cortical_layer': '2/3', 'display_names': ('L2/3', 'Pyr\nspiny')},
@@ -157,7 +157,7 @@ if __name__ == '__main__':
     ])
 
     if analyzer_mode == 'external':
-        groups = ['All Transgenic Classes','Excitatory Transgenic Classes', 'Inhibitory Transgenic Classes by layer', 'All Cells', 'Pyramidal Cells', 'Non-Pyramidal Cells']
+        groups = ['All Transgenic Classes','Excitatory Transgenic Classes', 'Inhibitory Transgenic Classes', 'Inhibitory Transgenic Classes by layer', 'All Cells', 'Pyramidal Cells', 'Non-Pyramidal Cells']
         cell_class_groups = {g:cell_class_groups[g] for g in groups}
 
     maz = MatrixAnalyzer(session=session, cell_class_groups=cell_class_groups, default_preset='None', preset_file='matrix_analyzer_presets.json', analyzer_mode=analyzer_mode)
