@@ -152,6 +152,8 @@ class PairScatterPlot(ScatterPlots):
             data = pt.data()
             pair = data.index
             print('Clicked:' '%s' % pair)
+            print('pre-class: %s' % data['pre_class'])
+            print('post-class: %s' % data['post_class'])
             fields = self.fieldList.selectedItems()
             for field in fields:
                 field_name = field.text()
