@@ -23,7 +23,7 @@ The Matrix Analyzer primarily displays the Synaptic Physiology dataset as a **ma
 The Matrix Analyzer has three main panels
 1. :ref:`control-panel`
 2. :ref:`matrix-panel`
-3. :ref: `data-plot-panel`
+3. :ref:`data-plot-panel`
 
 .. image:: images/panels.*
 
