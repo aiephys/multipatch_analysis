@@ -71,6 +71,7 @@ DRIVER_LINES = {                  # dependencies     products
     'Ctgf-T2A-dgCre':             [(['ctgf'],         ['cre'])],
     'Ndnf-IRES2-dgCre':           [(['ndnf'],         ['cre'])],
     'Slc32a1-IRES2-FlpO':         [(['slc32a1'],      ['flp'])],
+    'Sncg-IRES2-FlpO-neo':        [(['Sncg'],         ['flp'])],
     'Fam84b-FlpO':                [(['fam84b'],       ['flp'])],
     'rAAV-mDlx-GFP':              [(['mDlx'],         ['GFP'])],    
     'rAAV-Dlx2.0-SYFP2':          [(['3xcorehI56i'],  ['YFP'])],  # pan-GABA
