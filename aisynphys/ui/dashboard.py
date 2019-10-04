@@ -861,7 +861,10 @@ class ExperimentMetadata(Experiment):
 
     @property
     def db_status(self):
-        jobs = database.query(database.Pipeline).filter(database.Pipeline.job_id==self.uid).all()
+        slice_jobs = database.query(database.Pipeline).filter(database.Pipeline.job_id==self.slice_id).all()
+        expt_jobs = database.query(database.Pipeline).filter(database.Pipeline.job_id==self.uid).all()
+        jobs = slice_jobs + expt_jobs
+                
         has_run = len(jobs) > 0
         success = {j.module_name:j.success for j in jobs}
         errors = {j.module_name:j.error for j in jobs}

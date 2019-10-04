@@ -108,9 +108,9 @@ class SynphysDatabase(Database):
         session = session or self.default_session
         slices = session.query(self.Slice).filter(self.Slice.ext_id==ext_id).all()
         if len(slices) == 0:
-            raise KeyError("No slice found for ext_id %0.3f" % ext_id)
+            raise KeyError("No slice found for ext_id %s" % ext_id)
         elif len(slices) > 1:
-            raise KeyError("Multiple slices found for ext_id %0.3f" % ext_id)
+            raise KeyError("Multiple slices found for ext_id %s" % ext_id)
         
         return slices[0]
 
