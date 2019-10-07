@@ -505,7 +505,6 @@ class MatrixAnalyzer(object):
 
         # Group all cells by selected classes
         self.cell_groups, self.cell_classes = self.cell_class_filter.get_cell_groups(self.pairs)
-        
 
         # Group pairs into (pre_class, post_class) groups
         self.pair_groups = classify_pairs(self.pairs, self.cell_groups)
@@ -513,14 +512,15 @@ class MatrixAnalyzer(object):
         # analyze matrix elements
         for a, analysis in enumerate(self.active_analyzers):
             results = analysis.measure(self.pair_groups)
-            group_results = analysis.group_result(self.pair_groups)
+            try:
+                group_results = analysis.group_result(self.pair_groups)
+            except AttributeError:
+                    pg.QtGui.QMessageBox.information(self.main_window, 'No Results Generated', 'Please check that you have at least one Cell Class selected, if so this filter set produced no results, try something else',
+                        pg.QtGui.QMessageBox.Ok)
+                    break
             if a == 0:
                 self.results = results
-                try:
-                    self.group_results = group_results
-                except AttributeError:
-                    pg.QtGui.QMessageBox.information(self.main_window, '', 'The set of filters you have selected yielded no results, please try something else',
-                        pg.QtGui.QMessageBox.Ok)
+                self.group_results = group_results
             else:
                 merge_results = pd.concat([self.results, results], axis=1)
                 self.results = merge_results.loc[:, ~merge_results.columns.duplicated(keep='first')]
