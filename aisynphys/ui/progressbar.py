@@ -1,3 +1,4 @@
+from __future__ import print_function
 import sys, time
 from .interactive_mode import interactive_mode
 
