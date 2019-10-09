@@ -67,28 +67,35 @@ class MainWindow(pg.QtGui.QWidget):
         self.fit_ptree = ptree.ParameterTree(showHeader=False)
         self.fit_ptree.addParameters(self.output_params, showTop=False)
         self.save_btn = pg.FeedbackButton('Save Analysis')
-        self.expt_btn = pg.QtGui.QPushButton('Set Experiments with Hashtags')
+        self.expt_btn = pg.QtGui.QPushButton('Set Experiments')
         self.fit_btn = pg.QtGui.QPushButton('Fit Responses')
         self.ic_plot = self.pair_analyzer.ic_plot
         self.vc_plot = self.pair_analyzer.vc_plot
-        self.hash_ptree = ptree.ParameterTree(showHeader=False)
-        self.hash_select = Parameter.create(name='Select Hashtags', type='group', children=
+        self.select_ptree = ptree.ParameterTree(showHeader=False)
+        self.hash_select = Parameter.create(name='Hashtags', type='group', children=
             [{'name': 'With multiple selected:', 'type': 'list', 'values': ['Include if any appear', 'Include if all appear'], 'value': 'Include if any appear'}]+
             [{'name': '#', 'type': 'bool'}] +
             [{'name': ht, 'type': 'bool'} for ht in comment_hashtag[1:]])
-        self.hash_ptree.addParameters(self.hash_select)
+        self.rigs = db.query(db.Experiment.rig_name).distinct().all()
+        self.operators = db.query(db.Experiment.operator_name).distinct().all()
+        self.rig_select = Parameter.create(name='Rig', type='group', children=[{'name': rig[0], 'type': 'bool'} for rig in self.rigs])
+        self.operator_select = Parameter.create(name='Operator', type='group', children=[{'name': operator[0], 'type': 'bool'} for operator in self.operators])
+        [self.select_ptree.addParameters(param) for param in [self.rig_select, self.operator_select, self.hash_select]]
         self.experiment_browser = self.pair_analyzer.experiment_browser
         self.v_splitter = pg.QtGui.QSplitter()
         self.v_splitter.setOrientation(pg.QtCore.Qt.Vertical)
+        self.expt_splitter = pg.QtGui.QSplitter()
+        self.expt_splitter.setOrientation(pg.QtCore.Qt.Vertical)
+        self.h_splitter.addWidget(self.expt_splitter)
+        self.expt_splitter.addWidget(self.select_ptree)
+        self.expt_splitter.addWidget(self.expt_btn)
         self.h_splitter.addWidget(self.v_splitter)
-        self.v_splitter.addWidget(self.hash_ptree)
-        self.v_splitter.addWidget(self.expt_btn)
         self.v_splitter.addWidget(self.experiment_browser)
         self.v_splitter.addWidget(self.ptree)
         self.v_splitter.addWidget(self.fit_btn)
         self.v_splitter.addWidget(self.fit_ptree)
         self.v_splitter.addWidget(self.save_btn)
-        self.v_splitter.setSizes([50, 20, 100, 20, 20,400, 20])
+        self.v_splitter.setSizes([200, 20, 20,400, 20])
         # self.next_pair_button = pg.QtGui.QPushButton("Load Next Pair")
         # self.v_splitter.addWidget(self.next_pair_button)
         self.h_splitter.addWidget(self.vc_plot.grid)
@@ -100,7 +107,7 @@ class MainWindow(pg.QtGui.QWidget):
         self.v2_splitter.addWidget(self.fit_compare)
         self.v2_splitter.addWidget(self.meta_compare)
         self.h_splitter.addWidget(self.v2_splitter)
-        self.h_splitter.setSizes([200, 200, 200, 500])
+        self.h_splitter.setSizes([100, 200, 200, 200, 500])
         self.layout.addWidget(self.h_splitter)
         self.fit_compare.hide()
         self.meta_compare.hide()
@@ -110,7 +117,7 @@ class MainWindow(pg.QtGui.QWidget):
         # self.next_pair_button.clicked.connect(self.load_next_pair)
         self.experiment_browser.itemSelectionChanged.connect(self.selected_pair)
         self.save_btn.clicked.connect(self.save_to_db)
-        self.expt_btn.clicked.connect(self.get_expts_hashtag)
+        self.expt_btn.clicked.connect(self.get_expts)
         self.fit_btn.clicked.connect(self.pair_analyzer.fit_response_update)
 
     def save_to_db(self):
@@ -121,8 +128,21 @@ class MainWindow(pg.QtGui.QWidget):
             self.save_btn.failure()
             raise
 
-    def get_expts_hashtag(self):
+    def get_expts(self):
+        expts = []
+        selected_rigs = [rig.name() for rig in self.rig_select.children() if rig.value() is True]
+        if len(selected_rigs) != 0:
+            expts.extend(db.query(db.Experiment).filter(db.Experiment.rig_name.in_(selected_rigs)).all())
+        selected_operators = [operator.name() for operator in self.operator_select.children() if operator.value()is True]
+        if len(selected_operators) != 0:
+            expts.extend(db.query(db.Experiment).filter(db.Experiment.operator_name.in_(selected_operators)).all())
         selected_hashtags = [ht.name() for ht in self.hash_select.children()[1:] if ht.value() is True]
+        if len(selected_hashtags) != 0:
+            expts.extend(get_expts_hashtag(selected_hashtags))
+        expts = list(set(expts))
+        self.set_expts(expts)
+
+    def get_expts_hashtag(self, selected_hashtags):
         q = self.notes_session.query(notes_db.PairNotes)
         pairs_to_include = []
         note_pairs = q.all()
@@ -156,11 +176,12 @@ class MainWindow(pg.QtGui.QWidget):
         timestamps = set([pair.expt_id for pair in pairs_to_include])
         q2 = self.default_session.query(db.Experiment).filter(db.Experiment.acq_timestamp.in_(timestamps))
         expts = q2.all()
-        self.set_expts(expts)
+        return expts
 
     def set_expts(self, expts):
-        self.experiment_browser.clear()
-        self.experiment_browser.populate(experiments=expts)
+        with pg.BusyCursor():
+            self.experiment_browser.clear()
+            self.experiment_browser.populate(experiments=expts)
 
     def selected_pair(self):
         with pg.BusyCursor():
@@ -521,7 +542,6 @@ class PairAnalysis(object):
 
     def analyze_responses(self):
         self.sorted_responses = sort_responses(self.pulse_responses)
-
         got_fitable_responses = False
         for mode in modes:
             for holding in holdings:
@@ -640,11 +660,15 @@ class PairAnalysis(object):
             'post_cell_id': post_cell_id,
             'synapse_type': self.ctrl_panel.user_params['Synapse call'],
             'gap_junction': self.ctrl_panel.user_params['Gap junction call'],
+            'comments': self.ctrl_panel.output_params['Comments', ''],
+        }
+
+        if self.ctrl_panel.user_params['Synapse call'] is not None:
+            meta.update({
             'fit_parameters': self.fit_params,
             'fit_pass': fit_pass,
             'fit_warnings': self.warnings,
-            'comments': self.ctrl_panel.output_params['Comments', ''],
-        }
+            })
         
         session = notes_db.db.session(readonly=False)
         record = notes_db.get_pair_notes_record(expt_id, pre_cell_id, post_cell_id, session=session)
@@ -773,7 +797,6 @@ class PairAnalysis(object):
 if __name__ == '__main__':
     app = pg.mkQApp()
     parser = argparse.ArgumentParser()
-    parser.add_argument('--check', action='store_true')
     parser.add_argument('--timestamps', type=str, nargs='*')
     parser.add_argument('--dbg', default=False, action='store_true')
     parser.add_argument('expt_id', type=str, nargs='?', default=None)
@@ -787,28 +810,11 @@ if __name__ == '__main__':
 
     default_session = db.session()
     notes_session = notes_db.db.session()
-    timestamps = [r.acq_timestamp for r in db.query(db.Experiment.acq_timestamp).all()]
+    # timestamps = [r.acq_timestamp for r in db.query(db.Experiment.acq_timestamp).all()]
+    timestamps = []
     
     mw = MainWindow(default_session, notes_session)
-    if args.check is True:
-        pair_in_notes = []
-        pair_not_in_notes = []
-        ghost_pair = []
-        print('checking %d pairs...' % len(synapses))
-        for pair in synapses:
-            pair_notes = pair_notes_query(notes_session, pair).all()
-            if len(pair_notes) == 0:
-                pair_not_in_notes.append(pair)
-            elif len(pair_notes) == 1:
-                pair_in_notes.append(pair)
-            else:
-                ghost_pair.append(pair)
-        timestamps = set([pair.experiment.acq_timestamp for pair in pair_not_in_notes])
-        print('%d pairs in notes db' % len(pair_in_notes))
-        print('%d pairs not in notes db' % len(pair_not_in_notes))
-        print('%d pairs mysteriously missing' % (len(ghost_pair)))
-        print('%d/%d pairs accounted for' % (sum([len(pair_in_notes), len(pair_not_in_notes), len(ghost_pair)]), len(synapses)))   
-    elif args.timestamps is not None:
+    if args.timestamps is not None:
         timestamps = args.timestamps
     elif args.expt_id is not None:
         timestamps = [args.expt_id]
