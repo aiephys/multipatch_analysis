@@ -206,7 +206,7 @@ class MatrixElementItem(pg.QtGui.QGraphicsRectItem):
         self.sigClicked.emit(self, event)    
 
 
-def distance_plot(connected, distance, plots=None, color=(100, 100, 255), size=10, window=40e-6, spacing=None, name=None, fill_alpha=30):
+def distance_plot(connected, distance, plots=None, color=(100, 100, 255), size=10, window=40e-6, name=None, fill_alpha=30):
     """Draw connectivity vs distance profiles with confidence intervals.
     
     Parameters
@@ -219,15 +219,14 @@ def distance_plot(connected, distance, plots=None, color=(100, 100, 255), size=1
         (optional) Two plots used to display distance profile and scatter plot.
     color : tuple
         (R, G, B) color values for line and confidence interval. The confidence interval
-        will be drawn with alpha=100
+        will be drawn with reduced opacity (see *fill_alpha*)
     size: int
         size of scatter plot symbol
     window : float
         Width of distance window over which proportions are calculated for each point on
         the profile line.
-    spacing : float
-        Distance spacing between points on the profile line
-
+    fill_alpha : int
+        Opacity of confidence interval fill (0-255)
 
     Note: using a spacing value that is smaller than the window size may cause an
     otherwise smooth decrease over distance to instead look more like a series of downward steps.
@@ -276,10 +275,12 @@ def distance_plot(connected, distance, plots=None, color=(100, 100, 255), size=1
 
     # use a sliding window to plot the proportion of connections found along with a 95% confidence interval
     # for connection probability
-    xvals, prop, lower, upper = connectivity_profile(connected, distance, window=window, spacing=spacing)
+    bin_edges = np.arange(0, 500e-6, window)
+    xvals, prop, lower, upper = connectivity_profile(connected, distance, bin_edges)
 
     # plot connection probability and confidence intervals
     color2 = [c / 3.0 for c in color]
+    xvals = (xvals[:-1] + xvals[1:]) * 0.5
     mid_curve = plots[0].plot(xvals, prop, pen={'color': color, 'width': 3}, antialias=True, name=name)
     upper_curve = plots[0].plot(xvals, upper, pen=(0, 0, 0, 0), antialias=True)
     lower_curve = plots[0].plot(xvals, lower, pen=(0, 0, 0, 0), antialias=True)

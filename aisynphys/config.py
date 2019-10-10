@@ -5,7 +5,7 @@ Local variables in this module are overwritten by the contents of config.yml
 
 """
 
-import os, sys, yaml
+import os, sys, yaml, argparse
 
 # default cache path in user's home dir
 cache_path = os.path.join(os.path.expanduser('~'), 'ai_synphys_cache')
@@ -43,12 +43,24 @@ if os.path.isfile(configfile):
 
 
 # intercept specific command line args
-ignored_args = [sys.argv[0]]
-for arg in sys.argv[1:]:
-    if arg.startswith('--database='):
-        synphys_db = arg[11:]
-    elif arg.startswith('--db-host='):
-        synphys_db_host = arg[10:]
-    else:
-        ignored_args.append(arg)
-sys.argv = ignored_args        
+parser = argparse.ArgumentParser()
+parser.add_argument('--db-version', default=None, dest='db_version')
+parser.add_argument('--db-host', default=None, dest='db_host')
+parser.add_argument('--database', default=None)
+
+args, unknown_args = parser.parse_known_args()
+sys.argv = sys.argv[:1] + unknown_args
+
+if args.db_version is not None:
+    from .synphys_cache import get_db_path
+    sqlite_file = get_db_path(args.db_version)
+    synphys_db_host = "sqlite:///"
+    synphys_db_host_rw = None
+    synphys_db = sqlite_file
+    
+else:
+    if args.db_host is not None:
+        synphys_db_host = args.db_host
+    if args.database is not None:
+        synphys_db = args.database
+        

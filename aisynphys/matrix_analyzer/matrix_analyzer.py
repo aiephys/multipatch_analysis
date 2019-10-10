@@ -165,16 +165,23 @@ class CellClassFilter(object):
             for group in self.params.children()[1:]:
                 if group.value() is True:
                     self.cell_classes.extend(ccg[group.name()])
-            self.cell_classes = self.layer_call(self.cell_classes)
-            self.cell_classes = [CellClass(**c) for c in self.cell_classes]
+            cell_classes = self.layer_call(self.cell_classes)
+            self.cell_classes = [self._make_cell_class(c) for c in cell_classes]
             self.cell_groups = classify_cells(self.cell_classes, pairs=pairs)
         return self.cell_groups, self.cell_classes
+
+    def _make_cell_class(self, spec):
+        spec = spec.copy()
+        dnames = spec.pop('display_names')
+        cell_cls = CellClass(**spec)
+        cell_cls.display_names = dnames
+        return cell_cls
 
     def layer_call(self, classes):
         # if self.analyzer_mode == 'external':
         #     layer_def = 'target layer'
-        # else:
-        classes = sorted(classes, key=lambda i: i['target_layer'])
+        # else
+        classes = sorted(classes, key=lambda i: i.get('target_layer', '7'))
         layer_def = self.params['Define layer by:']
         if layer_def == 'target layer':
             for c in classes:
@@ -189,8 +196,6 @@ class CellClassFilter(object):
 
     def get_pre_or_post_classes(self, key):
         """Return a list of postsynaptic cell_classes. This will be a subset of self.cell_classes."""
-        # if self.cell_classes is None:
-        #     return []
         ccg = copy.deepcopy(self.cell_class_groups)
         classes = []
         for group in self.params.children():
@@ -198,7 +203,7 @@ class CellClassFilter(object):
                 if group['pre/post'] in ['both', key]:
                     classes.extend(ccg[group.name()])
         classes = self.layer_call(classes)
-        classes = [CellClass(**c) for c in classes]
+        classes = [self._make_cell_class(c) for c in classes]
         return classes
 
     def expand_param(self, param, value):
@@ -500,7 +505,6 @@ class MatrixAnalyzer(object):
 
         # Group all cells by selected classes
         self.cell_groups, self.cell_classes = self.cell_class_filter.get_cell_groups(self.pairs)
-        
 
         # Group pairs into (pre_class, post_class) groups
         self.pair_groups = classify_pairs(self.pairs, self.cell_groups)
@@ -508,14 +512,15 @@ class MatrixAnalyzer(object):
         # analyze matrix elements
         for a, analysis in enumerate(self.active_analyzers):
             results = analysis.measure(self.pair_groups)
-            group_results = analysis.group_result(self.pair_groups)
+            try:
+                group_results = analysis.group_result(self.pair_groups)
+            except AttributeError:
+                    pg.QtGui.QMessageBox.information(self.main_window, 'No Results Generated', 'Please check that you have at least one Cell Class selected, if so this filter set produced no results, try something else',
+                        pg.QtGui.QMessageBox.Ok)
+                    break
             if a == 0:
                 self.results = results
-                try:
-                    self.group_results = group_results
-                except AttributeError:
-                    pg.QtGui.QMessageBox.information(self.main_window, '', 'The set of filters you have selected yielded no results, please try something else',
-                        pg.QtGui.QMessageBox.Ok)
+                self.group_results = group_results
             else:
                 merge_results = pd.concat([self.results, results], axis=1)
                 self.results = merge_results.loc[:, ~merge_results.columns.duplicated(keep='first')]

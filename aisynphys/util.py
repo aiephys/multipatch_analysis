@@ -391,11 +391,12 @@ def interactive_download(url, file_path, **kwds):
     """
 
     message = "Downloading %s =>\n  %s" % (url, os.path.abspath(file_path))
-        
+
+    # get size first just to verify server is listening and the file exists
+    size = get_url_download_size(url)
+    size_str = si_format(size, suffix='B')
+
     with ProgressBar(message, 1) as prg_bar:
-        # get size first just to verify server is listening and the file exists
-        size = get_url_download_size(url)
-        size_str = si_format(size, suffix='B')
         prg_bar.maximum = size
 
         last_update = time.time()
