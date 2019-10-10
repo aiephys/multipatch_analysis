@@ -80,7 +80,10 @@ class MainWindow(pg.QtGui.QWidget):
         self.operators = db.query(db.Experiment.operator_name).distinct().all()
         self.rig_select = Parameter.create(name='Rig', type='group', children=[{'name': rig[0], 'type': 'bool'} for rig in self.rigs])
         self.operator_select = Parameter.create(name='Operator', type='group', children=[{'name': operator[0], 'type': 'bool'} for operator in self.operators])
-        [self.select_ptree.addParameters(param) for param in [self.rig_select, self.operator_select, self.hash_select]]
+        self.data_type = Parameter.create(name='Reduce data to:', type='group', children=[
+            {'name': 'Pairs with data', 'type': 'bool', 'value': True},
+            {'name': 'Synapse is None', 'type': 'bool', 'value': True}])
+        [self.select_ptree.addParameters(param) for param in [self.data_type, self.rig_select, self.operator_select, self.hash_select]]
         self.experiment_browser = self.pair_analyzer.experiment_browser
         self.v_splitter = pg.QtGui.QSplitter()
         self.v_splitter.setOrientation(pg.QtCore.Qt.Vertical)
@@ -129,17 +132,22 @@ class MainWindow(pg.QtGui.QWidget):
             raise
 
     def get_expts(self):
-        expts = []
+        expt_query = db.query(db.Experiment)
+        synapse_none = self.data_type['Synapse is None']
+        if synapse_none:
+            subquery = db.query(db.Pair.experiment_id).filter(db.Pair.has_synapse==None).subquery()
+            expt_query = expt_query.filter(db.Experiment.id.in_(subquery))
         selected_rigs = [rig.name() for rig in self.rig_select.children() if rig.value() is True]
         if len(selected_rigs) != 0:
-            expts.extend(db.query(db.Experiment).filter(db.Experiment.rig_name.in_(selected_rigs)).all())
+            expt_query = expt_query.filter(db.Experiment.rig_name.in_(selected_rigs))
         selected_operators = [operator.name() for operator in self.operator_select.children() if operator.value()is True]
         if len(selected_operators) != 0:
-            expts.extend(db.query(db.Experiment).filter(db.Experiment.operator_name.in_(selected_operators)).all())
+            expt_query = expt_query.filter(db.Experiment.operator_name.in_(selected_operators))
         selected_hashtags = [ht.name() for ht in self.hash_select.children()[1:] if ht.value() is True]
         if len(selected_hashtags) != 0:
-            expts.extend(get_expts_hashtag(selected_hashtags))
-        expts = list(set(expts))
+            timestamps = get_expts_hashtag(selected_hashtags)
+            expt_query = expt_query.filter(db.Experiment.acq_timestamp.in_(timestamps))
+        expts = expt_query.all()
         self.set_expts(expts)
 
     def get_expts_hashtag(self, selected_hashtags):
@@ -181,7 +189,11 @@ class MainWindow(pg.QtGui.QWidget):
     def set_expts(self, expts):
         with pg.BusyCursor():
             self.experiment_browser.clear()
-            self.experiment_browser.populate(experiments=expts)
+            has_data = self.data_type['Pairs with data']
+            if not has_data:
+                self.experiment_browser.populate(experiments=expts, all_pairs=True)
+            else:
+                self.experiment_browser.populate(experiments=expts)
 
     def selected_pair(self):
         with pg.BusyCursor():
@@ -258,7 +270,7 @@ class ControlPanel(object):
         for k, v in kargs.items():
             self.user_params.child(k).setValue(v)
 
-    def update_fit_params(self, fit_params):
+    def update_fit_params(self, fit_params, fit_pass=False):
         param_names = ['amp', 'xoffset', 'rise_time', 'decay_tau', 'nrmse']
         for mode in modes:
             if mode == 'vc':
@@ -270,6 +282,9 @@ class ControlPanel(object):
                 values = fit_params[mode][str(holding)]
                 format_values = self.format_fit_output(values, param_names, suffix)
                 group.child('Value:').setValue(format_values)
+                if fit_pass:
+                    group.child('Fit Pass').setValue(False)
+
 
     def format_fit_output(self, values, name, suffix):
         format_list = []
@@ -539,6 +554,7 @@ class PairAnalysis(object):
                 synapse_type = None
             pair_params = {'Synapse call': synapse_type, 'Gap junction call': pair.has_electrical}
             self.ctrl_panel.update_user_params(**pair_params)
+            self.ctrl_panel.update_fit_params(self.fit_params['fit'], fit_pass=True)
 
     def analyze_responses(self):
         self.sorted_responses = sort_responses(self.pulse_responses)
@@ -580,6 +596,7 @@ class PairAnalysis(object):
                     self.last_fit[mode, holding] = fit
                     
                     self.initial_fit_parameters[mode][str(holding)]['xoffset'] = latency
+                    self.output_fit_parameters[mode][str(holding)]['nrmse'] = fit.nrmse()
                     self.output_fit_parameters[mode][str(holding)].update(fit.best_values)
                     self.fit_pass = fit.nrmse() < self.nrmse_thresh
                     self.ctrl_panel.output_params.child('Fit parameters', str(holding) + ' ' + mode.upper(), 'Fit Pass').setValue(self.fit_pass)
