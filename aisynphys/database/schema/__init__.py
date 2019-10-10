@@ -28,4 +28,4 @@ from .synapse_prediction import *
 from .resting_state_fit import *
 from .gap_junction import *
 from .cortical_location import *
-from .optical import *
+#from .optical import *
