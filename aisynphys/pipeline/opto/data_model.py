@@ -1,4 +1,4 @@
-from multipatch_analysis import lims
+from aisynphys import lims
 import re
 
 

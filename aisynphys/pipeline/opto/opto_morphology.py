@@ -1,6 +1,6 @@
-from multipatch_analysis.pipeline.pipeline_module import DatabasePipelineModule
+from aisynphys.pipeline.pipeline_module import DatabasePipelineModule
 from .opto_experiment import OptoExperimentPipelineModule
-import multipatch_analysis.database as db
+import aisynphys.database as db
 
 class OptoMorphologyPipelineModule(DatabasePipelineModule):
     """Imports cell morphology data for each experiment

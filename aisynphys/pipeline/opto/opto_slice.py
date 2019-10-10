@@ -1,11 +1,11 @@
-from multipatch_analysis.pipeline.pipeline_module import DatabasePipelineModule
+from aisynphys.pipeline.pipeline_module import DatabasePipelineModule
 from . import data_model
 #from multipatch_analysis.database import slice_tables
 import os, glob, re, pickle, time, csv
-from multipatch_analysis import config, lims, constants
+from aisynphys import config, lims, constants
 from acq4.util.DataManager import getDirHandle
 from collections import OrderedDict
-from multipatch_analysis.util import datetime_to_timestamp, timestamp_to_datetime
+from aisynphys.util import datetime_to_timestamp, timestamp_to_datetime
 #import multipatch_analysis.database as db
 
 

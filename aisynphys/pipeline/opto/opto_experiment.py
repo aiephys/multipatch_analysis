@@ -1,6 +1,6 @@
-from multipatch_analysis.pipeline.pipeline_module import DatabasePipelineModule
+from aisynphys.pipeline.pipeline_module import DatabasePipelineModule
 #import multipatch_analysis.database as db
-from multipatch_analysis import config
+from aisynphys import config
 from .opto_slice import OptoSlicePipelineModule
 from collections import OrderedDict
 import csv, codecs, glob, os
