@@ -1,11 +1,16 @@
 from collections import OrderedDict
 import os
-from ... import config #, synphys_cache, lims, qc
+from ... import config, qc #, synphys_cache, lims
 from ...util import timestamp_to_datetime
 from ..pipeline_module import DatabasePipelineModule
 from .opto_experiment import OptoExperimentPipelineModule
 from neuroanalysis.data.experiment import Experiment
 from neuroanalysis.data.libraries import opto
+#from neuroanalysis.stimuli import find_square_pulses
+from ...data import PulseStimAnalyzer #Experiment, MultiPatchDataset, MultiPatchProbe, PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
+from neuroanalysis.data import PatchClampRecording
+from optoanalysis.optoadapter import OptoRecording
+import optoanalysis.power_calibration as power_cal
 
 
 class OptoDatasetPipelineModule(DatabasePipelineModule):
@@ -17,7 +22,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
         'recording', 
         'patch_clamp_recording', 
         'test_pulse', 
-        'optical_stim_pulse', 
+        'stim_pulse', 
         'pulse_response',
         'baseline'
         ]
@@ -33,15 +38,145 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
 
         # Load experiment from DB
         expt_entry = db.experiment_from_ext_id(job_id, session=session)
+        elecs_by_ad_channel = {elec.device_id:elec for elec in expt_entry.electrodes}
 
         # load NWB file
         path = os.path.join(config.synphys_data, expt_entry.storage_path)
         expt = Experiment(site_path=path, loading_library=opto)
         nwb = expt.data
+        stim_log = expt.library.load_stimulation_log(expt)
 
-        if expt.ephys_file is not None and expt.uid != '2019_06_13_exp1_TH':
-            nwb.contents
-            raise Exception('stop')
+        #if expt.ephys_file is not None:
+        #    raise Exception('stop')
+        #else:
+        #    return
+
+        # Load all data from NWB into DB
+        for srec in nwb.contents:
+            temp = srec.meta.get('temperature', None)
+            srec_entry = db.SyncRec(ext_id=srec.key, experiment=expt_entry, temperature=temp)
+            session.add(srec_entry)
+
+            rec_entries = {}
+            all_pulse_entries = {}
+            for rec in srec.recordings:
+                
+                # import all recordings
+                electrode_entry = elecs_by_ad_channel.get(rec.device_id, None)
+                #if electrode_entry is not None:
+                rec_entry = db.Recording(
+                    sync_rec=srec_entry,
+                    electrode=electrode_entry,
+                    start_time=rec.start_time,
+                    device_name=str(rec.device_id)
+                )
+                session.add(rec_entry)
+                rec_entries[rec.device_id] = rec_entry
+                # else:
+                #     opto_rec_entry = db.OpticalRecoding(
+                #         sync_rec=srec_entry,
+                #         device_name=str(rec.device_id),
+                #         start_time=rec.start_time
+                #     )
+                #     session.add(opto_rec_entry)
+
+                # import patch clamp recording information
+                if isinstance(rec, PatchClampRecording):
+                    qc_pass, qc_failures = qc.recording_qc_pass(rec)
+                    pcrec_entry = db.PatchClampRecording(
+                        recording=rec_entry,
+                        clamp_mode=rec.clamp_mode,
+                        patch_mode=rec.patch_mode,
+                        stim_name=rec.stimulus.description,
+                        baseline_potential=rec.baseline_potential,
+                        baseline_current=rec.baseline_current,
+                        baseline_rms_noise=rec.baseline_rms_noise,
+                        qc_pass=qc_pass,
+                        meta=None if len(qc_failures) == 0 else {'qc_failures': qc_failures},
+                    )
+                    session.add(pcrec_entry)
+
+                    # import test pulse information
+                    tp = rec.nearest_test_pulse
+                    if tp is not None:
+                        indices = tp.indices or [None, None]
+                        tp_entry = db.TestPulse(
+                            electrode=electrode_entry,
+                            recording=rec_entry,
+                            start_index=indices[0],
+                            stop_index=indices[1],
+                            baseline_current=tp.baseline_current,
+                            baseline_potential=tp.baseline_potential,
+                            access_resistance=tp.access_resistance,
+                            input_resistance=tp.input_resistance,
+                            capacitance=tp.capacitance,
+                            time_constant=tp.time_constant,
+                        )
+                        session.add(tp_entry)
+                        pcrec_entry.nearest_test_pulse = tp_entry
+
+                    psa = PulseStimAnalyzer.get(rec)
+                    pulses = psa.pulse_chunks()
+                    pulse_entries = {}
+                    all_pulse_entries[rec.device_id] = pulse_entries
+
+                    for i,pulse in enumerate(pulses):
+                        # Record information about all pulses, including test pulse.
+                        t0, t1 = pulse.meta['pulse_edges']
+                        resampled = pulse['primary'].resample(sample_rate=20000)
+                        pulse_entry = db.StimPulse(
+                            recording=rec_entry,
+                            pulse_number=pulse.meta['pulse_n'],
+                            onset_time=t0,
+                            amplitude=pulse.meta['pulse_amplitude'],
+                            duration=t1-t0,
+                            data=resampled.data,
+                            data_start_time=resampled.t0,
+                            cell=electrode_entry.cell,
+                            device_name=str(rec.device_id)
+                        )
+                        session.add(pulse_entry)
+                        pulse_entries[pulse.meta['pulse_n']] = pulse_entry
+
+                elif isinstance(rec, OptoRecording) and (rec.device_id=='Fidelity' or 'AD6' in rec.device_id): 
+                    #psa = PulseStimAnalyzer.get(rec)
+                    #psa.pulses(channel='reporter')
+                    #pulses = psa.pulse_chunks
+                    #pulses = find_square_pulses(rec['reporter'])
+                    print('adding OptoRecording')
+                    stim_num = rec.meta['notebook']['USER_stim_num']
+                    stim = stim_log[str(int(stim_num))]
+                    cell_entry = expt_entry.cells[stim['stimulationPoint']['name']]
+
+                    for i in range(len(rec.pulse_start_times)):
+                    # Record information about all pulses, including test pulse.
+                        #t0, t1 = pulse.meta['pulse_edges']
+                        #resampled = pulse['reporter'].resample(sample_rate=20000)
+                        pulse_entry = db.StimPulse(
+                            recording=rec_entry,
+                            cell=cell_entry,
+                            pulse_number=i, #pulse.meta['pulse_n'],
+                            onset_time=rec.pulse_start_times[i], #t0,
+                            amplitude=power_cal.convert_voltage_to_power(rec.pulse_power()[i], timestamp_to_datetime(expt_entry.acq_timestamp), expt_entry.rig_name), ## need to fill in laser/objective correctly
+                            #data=resampled.data,
+                            #data_start_time=resampled.t0,
+                            #wavelength,
+                            #light_source,
+                            position=stim['stimPos'],
+                            #position_offset=stim['offset'],
+                            device_name=rec.device_id,
+                            #qc_pass=None
+                        )
+                        session.add(pulse_entry)
+                        pulse_entries[i] = pulse_entry
+
+                elif 'TTL' in rec.device_id:
+                    print('passing device:', rec.device_id)
+                    pass
+                    
+                else:
+                    raise Exception('need to figure out recording type')
+
 
     def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.
