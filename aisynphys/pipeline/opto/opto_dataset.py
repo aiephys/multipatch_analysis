@@ -166,6 +166,13 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                         else:
                             shape['spiral_size'] = None
 
+                    ## calculate offset_distance
+                    offset = stim.get('offset')
+                    if offset is not None:
+                        offset_distance = (offset[0]**2 + offset[1]**2 + offset[2]**2)**0.5
+                    else:
+                        offset_distance = None
+
 
                     for i in range(len(rec.pulse_start_times)):
                     # Record information about all pulses, including test pulse.
@@ -187,7 +194,9 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                             #qc_pass=None
                             meta = {'shape': shape,
                                     'pockel_cmd':stim.get('prairieCmds',{}).get('laserPower', [None]*100)[i],
-                                    'pockel_voltage':rec.pulse_power()[i]
+                                    'pockel_voltage':rec.pulse_power()[i],
+                                    'position_offset':offset,
+                                    'offset_distance':offset_distance,
                                     }
                             )
 
