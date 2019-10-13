@@ -1,6 +1,6 @@
 from collections import OrderedDict
 import os
-from ... import config, qc #, synphys_cache, lims
+from ... import config #, synphys_cache, lims
 from ...util import timestamp_to_datetime
 from ..pipeline_module import DatabasePipelineModule
 from .opto_experiment import OptoExperimentPipelineModule
@@ -11,6 +11,7 @@ from ...data import PulseStimAnalyzer #Experiment, MultiPatchDataset, MultiPatch
 from neuroanalysis.data import PatchClampRecording
 from optoanalysis.optoadapter import OptoRecording
 import optoanalysis.power_calibration as power_cal
+import optoanalysis.qc as qc
 
 
 class OptoDatasetPipelineModule(DatabasePipelineModule):
@@ -199,6 +200,10 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                                     'offset_distance':offset_distance,
                                     }
                             )
+                        qc_pass, qc_failures = qc.opto_stim_pulse_qc_pass(pulse_entry)
+                        pulse_entry.qc_pass = qc_pass
+                        if not qc_pass:
+                            pulse_entry.meta['qc_failures'] = qc_failures
 
                         session.add(pulse_entry)
                         pulse_entries[i] = pulse_entry
