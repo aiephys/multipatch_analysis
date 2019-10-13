@@ -45,6 +45,8 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
         expt = Experiment(site_path=path, loading_library=opto)
         nwb = expt.data
         stim_log = expt.library.load_stimulation_log(expt)
+        if stim_log['version'] < 3:
+            from acq4.util.DataManager import getHandle
 
         #if expt.ephys_file is not None:
         #    raise Exception('stop')
@@ -143,10 +145,27 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                     #psa.pulses(channel='reporter')
                     #pulses = psa.pulse_chunks
                     #pulses = find_square_pulses(rec['reporter'])
-                    print('adding OptoRecording')
+                    #print('adding OptoRecording')
                     stim_num = rec.meta['notebook']['USER_stim_num']
                     stim = stim_log[str(int(stim_num))]
                     cell_entry = expt_entry.cells[stim['stimulationPoint']['name']]
+
+                    if stim_log['version'] >=3:
+                        shape={'spiral_revolutions':stim['shape']['spiral revolutions'], 'spiral_size':stim['shape']['size']}
+                    else:
+                        shape={'spiral_revolutions':stim.get('prairieCmds', {}).get('spiralRevolutions')}
+                        prairie_size = stim['prairieCmds']['spiralSize']
+                        ref_image = os.path.join(expt.path, stim['prairieImage'][-23:])
+                        if os.path.exists(ref_image):
+                            h = getHandle(ref_image)
+                            #x=float(size*1000000)/float(xPixels)/pixelLength
+                            xPixels = h.info()['PrairieMetaInfo']['Environment']['PixelsPerLine']
+                            pixelLength = h.info()['PrairieMetaInfo']['Environment']['XAxis_umPerPixel']
+                            size = prairie_size * pixelLength * xPixels * 1e-6
+                            shape['spiral_size'] = size
+                        else:
+                            shape['spiral_size'] = None
+
 
                     for i in range(len(rec.pulse_start_times)):
                     # Record information about all pulses, including test pulse.
@@ -166,12 +185,17 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                             #position_offset=stim['offset'],
                             device_name=rec.device_id,
                             #qc_pass=None
-                        )
+                            meta = {'shape': shape,
+                                    'pockel_cmd':stim.get('prairieCmds',{}).get('laserPower', [None]*100)[i],
+                                    'pockel_voltage':rec.pulse_power()[i]
+                                    }
+                            )
+
                         session.add(pulse_entry)
                         pulse_entries[i] = pulse_entry
 
                 elif 'TTL' in rec.device_id:
-                    print('passing device:', rec.device_id)
+                    #print('passing device:', rec.device_id)
                     pass
                     
                 else:
