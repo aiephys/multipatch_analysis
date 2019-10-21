@@ -9,9 +9,11 @@ from neuroanalysis.data.libraries import opto
 #from neuroanalysis.stimuli import find_square_pulses
 from ...data import PulseStimAnalyzer #Experiment, MultiPatchDataset, MultiPatchProbe, PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
 from neuroanalysis.data import PatchClampRecording
-from optoanalysis.optoadapter import OptoRecording
+#from optoanalysis.optoadapter import OptoRecording
+from optoanalysis.data.dataset import OptoRecording, OptoSyncRecAnalyzer
 import optoanalysis.power_calibration as power_cal
 import optoanalysis.qc as qc
+from neuroanalysis.stimuli import find_noisy_square_pulses
 
 
 class OptoDatasetPipelineModule(DatabasePipelineModule):
@@ -174,7 +176,10 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                     else:
                         offset_distance = None
 
+                    pulse_entries = {}
+                    all_pulse_entries[rec.device_id] = pulse_entries
 
+                    pulses = find_noisy_square_pulses(rec['reporter'])
                     for i in range(len(rec.pulse_start_times)):
                     # Record information about all pulses, including test pulse.
                         #t0, t1 = pulse.meta['pulse_edges']
@@ -214,7 +219,38 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                     pass
                     
                 else:
-                    raise Exception('need to figure out recording type')
+                    raise Exception('need to figure out recording type for %s' % rec.device_id)
+
+            ### import postsynaptic responses
+            osra = OptoSyncRecAnalyzer(srec)
+            for stim_dev in srec.fidelity_channels:
+                for post_dev in srec.recording_channels:
+                    #if pre_dev == post_dev:
+                    #    continue
+
+                    # get all responses, regardless of the presence of a spike
+                    responses = osra.get_photostim_responses(srec[pre_dev], srec[post_dev])
+                    for resp in responses:
+  
+                        #### NEED a way to get pair_entry - can't use device ids because pre-device is not attached to cell
+
+                        #if resp['ex_qc_pass']:
+                        #    pair_entry.n_ex_test_spikes += 1
+                        #if resp['in_qc_pass']:
+                        #    pair_entry.n_in_test_spikes += 1
+                            
+                        resampled = resp['response']['primary'].resample(sample_rate=20000)
+                        resp_entry = db.PulseResponse(
+                            recording=rec_entries[post_dev],
+                            stim_pulse=all_pulse_entries[pre_dev][resp['pulse_n']],
+                            pair=pair_entry,
+                            data=resampled.data,
+                            data_start_time=resampled.t0,
+                            ex_qc_pass=resp['ex_qc_pass'],
+                            in_qc_pass=resp['in_qc_pass'],
+                            meta=None if resp['ex_qc_pass'] and resp['in_qc_pass'] else {'qc_failures': resp['qc_failures']},
+                        )
+                        session.add(resp_entry)
 
 
     def job_records(self, job_ids, session):
