@@ -61,7 +61,7 @@ class OptoExperimentPipelineModule(DatabasePipelineModule):
 
             # dig to find out which rig this was recorded on
             rig = expt_info.get('rig_name', None)
-            if rig is None:
+            if rig is None and expt.data is not None:
                 ## serial number is recorded in many places, make sure they converge on one rig
                 sns = []
                 for sweeps in expt.data.notebook().values():
@@ -119,7 +119,7 @@ class OptoExperimentPipelineModule(DatabasePipelineModule):
                     cre_type=cell.cre_type,
                     target_layer=cell.target_layer,
                     is_excitatory=cell.is_excitatory,
-                    #depth=cell.depth,
+                    depth=cell.depth,
                     position=cell.position,
                 )
                 session.add(cell_entry)
