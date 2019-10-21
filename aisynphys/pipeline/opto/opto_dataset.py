@@ -185,6 +185,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                             pulse_number=i, #pulse.meta['pulse_n'],
                             onset_time=rec.pulse_start_times[i], #t0,
                             amplitude=power_cal.convert_voltage_to_power(rec.pulse_power()[i], timestamp_to_datetime(expt_entry.acq_timestamp), expt_entry.rig_name), ## need to fill in laser/objective correctly
+                            duration=rec.pulse_duration()[i],
                             #data=resampled.data,
                             #data_start_time=resampled.t0,
                             #wavelength,
