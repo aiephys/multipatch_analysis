@@ -46,7 +46,7 @@ import sys, itertools
 EXPRESSION_FACTORS = ['cre', 'flp', 'dre', 'tTA']
 DRUGS = ['dox']
 
-   
+
 DRIVER_LINES = {                  # dependencies     products
     'Nr5a1-Cre':                  [(['nr5a1'],        ['cre'])],
     'Rorb-T2A-tTA2':              [(['rorb'],         ['tTA'])],
@@ -73,20 +73,17 @@ DRIVER_LINES = {                  # dependencies     products
     'Slc32a1-IRES2-FlpO':         [(['slc32a1'],      ['flp'])],
     'Sncg-IRES2-FlpO-neo':        [(['Sncg'],         ['flp'])],
     'Fam84b-FlpO':                [(['fam84b'],       ['flp'])],
-    'rAAV-mDlx-GFP':              [(['mDlx'],         ['GFP'])],    
-    'rAAV-Dlx2.0-SYFP2':          [(['3xcorehI56i'],  ['YFP'])],  # pan-GABA
-    'rAAV-eHGT_078m-minBglobin-SYFP2-WPRE3-BGHpA': [
-                                   (['eHGT_078m'], ['YFP'])],  # pan-Glu
-    'rAAV-3xhI56icore-minBG-tdTomato-WPRE3-BGHpA': [
-                                   (['3xcorehI56i'],  ['tdTomato'])],  # pan-GABA
-    'rAAV-eHGT_073m-minBglobin-SYFP2-WPRE3-BGHpA': [
-                                   (['eHGT_073m'], ['YFP'])],  # pan-Glu
-    'rAAV-3xHGT_073m(core)-minBG-SYFP2-WPRE3-BGHpA': [
-                                   (['3xHGT_073m(core)'], ['YFP'])],  # pan-Glu
-    'rAAV-EF1a-fDIO-EGFP-WPRE-HGHpA': [
-                                   (['EF1a'], ['EGFP'])],
-    'rAAV-eHGT_078m-minBG-FlpO-WPRE-HGHpA': [
-                                   (['eHGT_078m'], ['flp'])],  # pan-Glu
+    
+    'rAAV-mDlx-GFP':                                      [(['mDlx'],              ['GFP'])],
+    'rAAV-Dlx2.0-SYFP2':                                  [(['3xcorehI56i'],       ['YFP'])],  # pan-GABA
+    'rAAV-eHGT_078m-minBglobin-SYFP2-WPRE3-BGHpA':        [(['eHGT_078m'],         ['YFP'])],  # pan-Glu
+    'rAAV-3xhI56icore-minBG-tdTomato-WPRE3-BGHpA':        [(['3xcorehI56i'],       ['tdTomato'])],  # pan-GABA
+    'rAAV-eHGT_073m-minBglobin-SYFP2-WPRE3-BGHpA':        [(['eHGT_073m'],         ['YFP'])],  # pan-Glu
+    'rAAV-3xHGT_073m(core)-minBG-SYFP2-WPRE3-BGHpA':      [(['3xHGT_073m(core)'],  ['YFP'])],  # pan-Glu
+    'rAAV-EF1a-fDIO-EGFP-WPRE-HGHpA':                     [(['EF1a'],              ['EGFP'])],
+    'rAAV-eHGT_078m-minBG-FlpO-WPRE-HGHpA':               [(['eHGT_078m'],         ['flp'])],  # pan-Glu
+    'rAAV-TRE-SYFP2-WPRE-HGHpA':                          [(['TRE'],               ['YFP'])],
+    'rAAV-hSyn1-tTA-WPRE-HGHpA':                          [(['hSyn1'],             ['tTA'])],
 }
 
 

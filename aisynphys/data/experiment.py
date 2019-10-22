@@ -20,6 +20,7 @@ from ..constants import ALL_CRE_TYPES, ALL_LABELS, FLUOROPHORES, LAYERS, INJECTI
 from ..genotypes import Genotype
 from ..synphys_cache import SynPhysCache
 from ..util import timestamp_to_datetime
+from .slice import Slice
 from .cell import Cell
 from .pair import Pair
 from .electrode import Electrode
@@ -32,6 +33,7 @@ class Experiment(object):
     def __init__(self, site_path=None, entry=None, yml_file=None, verify=True):
         self.entry = entry
         self.source_id = (None, None)
+        self._slice = None
         self._electrodes = None
         self._cells = None
         self._pairs = None
@@ -42,8 +44,6 @@ class Experiment(object):
         self._view = None
         self._site_info = None
         self._slice_info = None
-        self._expt_info = None
-        self._lims_record = None
         self._site_path = site_path
         self._probed = None
         self._sweep_summary = None
@@ -51,7 +51,6 @@ class Experiment(object):
         self._nwb_file = None
         self._data = None
         self._stim_list = None
-        self._genotype = None
         self._cre_types = None
         self._labels = None
         self._target_layers = None
@@ -125,11 +124,13 @@ class Experiment(object):
 
     @property
     def datetime(self):
-        return datetime.datetime.fromtimestamp(self.site_info['__timestamp__'])
+        ts = self.timestamp
+        return None if ts is None else datetime.datetime.fromtimestamp(ts)
 
     @property
     def date(self):
-        return self.datetime.date()
+        dt = self.datetime
+        return None if dt is None else dt.date()
 
     @property
     def last_modification_time(self):
@@ -880,36 +881,32 @@ class Experiment(object):
         return self._site_info
 
     @property
+    def slice(self):
+        if self._slice is None:
+            self._slice = Slice.get(self.slice_path)
+        return self._slice
+
+    @property
     def slice_info(self):
-        if self._slice_info is None:
-            index = os.path.join(os.path.split(self.path)[0], '.index')
-            if not os.path.isfile(index):
-                return None
-            self._slice_info = pg.configfile.readConfigFile(index)['.']
-        return self._slice_info
+        return self.slice.slice_info
 
     @property
     def slice_id(self):
         """Unique string ID for this experiment's slice
         """
-        return "%0.3f" % self.slice_info['__timestamp__']
+        return self.slice.ext_id
 
     @property
     def slice_path(self):
-        return os.path.join(self.path, '..')
+        return os.path.split(self.path)[0]
 
     @property
     def expt_info(self):
-        if self._expt_info is None:
-            index = os.path.join(self.expt_path, '.index')
-            if not os.path.isfile(index):
-                raise TypeError("Cannot find index file (%s) for experiment %s" % (index, self))
-            self._expt_info = pg.configfile.readConfigFile(index)['.']
-        return self._expt_info
+        return self.slice.parent_info
 
     @property
     def expt_path(self):
-        return os.path.abspath(os.path.join(self.path, '..', '..'))
+        return self.slice.parent_path
 
     @property
     def nwb_file(self):
@@ -962,7 +959,7 @@ class Experiment(object):
 
     @property
     def specimen_name(self):
-        return self.slice_info['specimen_ID'].strip()
+        return self.slice.lims_specimen_name
 
     @property
     def cluster_id(self):
@@ -977,20 +974,11 @@ class Experiment(object):
 
     @property
     def age(self):
-        age = self.lims_record.get('age', 0)
-        if self.lims_record['organism'] == 'mouse':
-            if age == 0:
-                raise Exception("Donor age not set in LIMS for specimen %s" % self.specimen_name)
-            # data not entered in to lims
-            age = (self.date - self.birth_date).days
-        else:
-            age = np.nan
-        return age
+        return self.slice.age
 
     @property
     def birth_date(self):
-        bd = self.lims_record['date_of_birth']
-        return datetime.date(bd.year, bd.month, bd.day)
+        return self.slice.birth_date
 
     @property
     def lims_record(self):
@@ -998,57 +986,33 @@ class Experiment(object):
         
         See aisynphys.lims.section_info()
         """
-        if self._lims_record is None:
-            self._lims_record = lims.specimen_info(self.specimen_name)
-        return self._lims_record
+        return self.slice.lims_record
 
     @property
     def injections(self):
         """Return a genotype string for any viral injections or other probes added in this experiment.
         """
-        info = self.expt_info
-        inj = info.get('injections')
-        if inj in (None, ''):
-            return None
-        if inj not in INJECTIONS:
-            raise KeyError("Injection %r is unknown in constants.INJECTIONS" % inj)
-        return INJECTIONS[inj]        
+        return self.slice.injections
 
     @property
     def genotype(self):
         """The genotype of this specimen.
         """
-        if self._genotype is None:
-            gt_name = self.lims_record['genotype']
-            if gt_name is None:
-                return None
-                
-            inj = self.injections
-            if inj is not None:
-                gt_name = ';'.join(gt_name.split(';') + [inj])
-                
-            self._genotype = Genotype(gt_name)
-        return self._genotype
+        return self.slice.genotype
 
     @property
     def biocytin_image_url(self):
         """A LIMS URL that points to the 20x biocytin image for this specimen, or
         None if no image is found.
         """
-        images = lims.specimen_images(self.specimen_name)
-        for image in images:
-            if image['treatment'] == 'Biocytin':
-                return image['url']
+        return self.slice.biocytin_image_url
 
     @property
     def biocytin_20x_file(self):
         """File path of the 20x biocytin image for this specimen, or None if
         no image is found.
         """
-        images = lims.specimen_images(self.specimen_name)
-        for image in images:
-            if image['treatment'] == 'Biocytin':
-                return image['file']
+        return self.slice.biocytin_20x_file
 
     @property
     def biocytin_63x_files(self):
@@ -1067,18 +1031,11 @@ class Experiment(object):
         """A LIMS URL that points to the 20x DAPI image for this specimen, or
         None if no image is found.
         """
-        images = lims.specimen_images(self.specimen_name)
-        for image in images:
-            if image['treatment'] == 'DAPI':
-                return image['url']
+        return self.slice.dapi_image_url
 
     @property
     def lims_drawing_tool_url(self):
-        images = lims.specimen_images(self.specimen_name)
-        if len(images) == 0:
-            return None
-        else:
-            return "http://lims2/drawing_tool?image_series=%d" % images[0]['image_series']
+        return self.slice.lims_drawing_tool_url
 
     @property
     def multipatch_log(self):
