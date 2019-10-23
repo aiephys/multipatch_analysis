@@ -1,3 +1,4 @@
+from __future__ import print_function
 from collections import OrderedDict
 import os
 from ... import config #, synphys_cache, lims
@@ -6,8 +7,9 @@ from ..pipeline_module import DatabasePipelineModule
 from .opto_experiment import OptoExperimentPipelineModule
 from neuroanalysis.data.experiment import Experiment
 from neuroanalysis.data.libraries import opto
+from neuroanalysis.baseline import float_mode
 #from neuroanalysis.stimuli import find_square_pulses
-from ...data import PulseStimAnalyzer #Experiment, MultiPatchDataset, MultiPatchProbe, PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
+from ...data import BaselineDistributor, PulseStimAnalyzer #Experiment, MultiPatchDataset, MultiPatchProbe, PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
 from neuroanalysis.data import PatchClampRecording
 #from optoanalysis.optoadapter import OptoRecording
 from optoanalysis.data.dataset import OptoRecording, OptoSyncRecAnalyzer
@@ -265,6 +267,32 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                             meta=None if resp['ex_qc_pass'] and resp['in_qc_pass'] else {'qc_failures': resp['qc_failures']},
                         )
                         session.add(resp_entry)
+
+            # generate up to 20 baseline snippets for each recording
+            for dev in srec.recording_channels:
+                rec = srec[dev.device_id]
+                dist = BaselineDistributor.get(rec)
+                for i in range(20):
+                    base = dist.get_baseline_chunk(20e-3)
+                    if base is None:
+                        # all out!
+                        break
+                    start, stop = base
+                    #raise Exception('stop')
+                    data = rec['primary'].time_slice(start, stop).resample(sample_rate=20000).data
+
+                    ex_qc_pass, in_qc_pass, qc_failures = qc.opto_pulse_response_qc_pass(rec, [start, stop])
+
+                    base_entry = db.Baseline(
+                        recording=rec_entries[dev.device_id],
+                        data=data,
+                        data_start_time=start,
+                        mode=float_mode(data),
+                        ex_qc_pass=ex_qc_pass,
+                        in_qc_pass=in_qc_pass,
+                        meta=None if ex_qc_pass is True and in_qc_pass is True else {'qc_failures': qc_failures},
+                    )
+                    session.add(base_entry)
 
 
     def job_records(self, job_ids, session):
