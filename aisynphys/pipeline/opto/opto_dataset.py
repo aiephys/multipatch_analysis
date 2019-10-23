@@ -43,6 +43,13 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
         expt_entry = db.experiment_from_ext_id(job_id, session=session)
         elecs_by_ad_channel = {elec.device_id:elec for elec in expt_entry.electrodes}
 
+        pairs_by_cell_id = {}
+        for pair in expt_entry.pairs.values():
+            pre_cell_id = pair.pre_cell.ext_id
+            post_cell_id = pair.post_cell.ext_id
+            pairs_by_cell_id[(pre_cell_id, post_cell_id)] = pair
+
+
         # load NWB file
         path = os.path.join(config.synphys_data, expt_entry.storage_path)
         expt = Experiment(site_path=path, loading_library=opto)
@@ -50,11 +57,6 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
         stim_log = expt.library.load_stimulation_log(expt)
         if stim_log['version'] < 3:
             from acq4.util.DataManager import getHandle
-
-        #if expt.ephys_file is not None:
-        #    raise Exception('stop')
-        #else:
-        #    return
 
         # Load all data from NWB into DB
         for srec in nwb.contents:
@@ -223,26 +225,38 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
 
             ### import postsynaptic responses
             osra = OptoSyncRecAnalyzer(srec)
-            for stim_dev in srec.fidelity_channels:
-                for post_dev in srec.recording_channels:
+            for stim_rec in srec.fidelity_channels:
+                for post_rec in srec.recording_channels:
                     #if pre_dev == post_dev:
                     #    continue
+                    stim_num = stim_rec.meta['notebook']['USER_stim_num']
+                    stim = stim_log[str(int(stim_num))]
+                    pre_cell_name = stim['stimulationPoint']['name']
+
+                    post_cell_name = 'electrode_'+ str(post_rec.device_id)
+
+                    pair_entry = pairs_by_cell_id[(pre_cell_name, post_cell_name)]
+
+
+
 
                     # get all responses, regardless of the presence of a spike
-                    responses = osra.get_photostim_responses(srec[pre_dev], srec[post_dev])
+                    responses = osra.get_photostim_responses(stim_rec, post_rec)
                     for resp in responses:
   
+
+                        #raise Exception('stop')
                         #### NEED a way to get pair_entry - can't use device ids because pre-device is not attached to cell
 
-                        #if resp['ex_qc_pass']:
-                        #    pair_entry.n_ex_test_spikes += 1
-                        #if resp['in_qc_pass']:
-                        #    pair_entry.n_in_test_spikes += 1
+                        if resp['ex_qc_pass']:
+                            pair_entry.n_ex_test_spikes += 1
+                        if resp['in_qc_pass']:
+                            pair_entry.n_in_test_spikes += 1
                             
                         resampled = resp['response']['primary'].resample(sample_rate=20000)
                         resp_entry = db.PulseResponse(
-                            recording=rec_entries[post_dev],
-                            stim_pulse=all_pulse_entries[pre_dev][resp['pulse_n']],
+                            recording=rec_entries[post_rec.device_id],
+                            stim_pulse=all_pulse_entries[stim_rec.device_id][resp['pulse_n']],
                             pair=pair_entry,
                             data=resampled.data,
                             data_start_time=resampled.t0,

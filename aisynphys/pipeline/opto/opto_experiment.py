@@ -138,8 +138,8 @@ class OptoExperimentPipelineModule(DatabasePipelineModule):
                     post_cell=cell_entries[pair.postCell],
                     has_synapse=pair.isSynapse(),
                     has_electrical=None,
-                    n_ex_test_spikes=13,  # spoof these for now because we need them for connectivity analysis and don't have them without filepaths
-                    n_in_test_spikes=13,
+                    n_ex_test_spikes=0,  # will be counted in opto_dataset_pipeline_module
+                    n_in_test_spikes=0,
                     distance=pair.distance,
                     #synapse_sign = sign
                 )
