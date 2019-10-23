@@ -139,7 +139,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                             duration=t1-t0,
                             data=resampled.data,
                             data_start_time=resampled.t0,
-                            cell=electrode_entry.cell,
+                            cell=electrode_entry.cell if electrode_entry is not None else None,
                             device_name=str(rec.device_id)
                         )
                         session.add(pulse_entry)
