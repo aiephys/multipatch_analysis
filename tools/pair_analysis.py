@@ -733,7 +733,7 @@ class PairAnalysis(object):
 
         current_meta = {k:v for k, v in meta_copy.items() if k != 'fit_parameters'} 
         saved_meta = {k:v for k, v in saved_rec.notes.items() if k != 'fit_parameters'} 
-        saved_meta.update({k:str(saved_meta[k]) for k in ['comments', 'expt_id', 'pre_cell_id', 'post_cell_id']})
+        saved_meta.update({k:str(saved_meta[k]) for k in ['comments', 'expt_id', 'pre_cell_id', 'post_cell_id'] if k in saved_meta.keys()})
 
         self.meta_compare.setData(current_meta, saved_meta)
         self.meta_compare.trees[0].setHeaderLabels(['Current Metadata', 'type', 'value'])
