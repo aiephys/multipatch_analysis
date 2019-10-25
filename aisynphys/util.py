@@ -424,10 +424,13 @@ def interactive_download(url, file_path, **kwds):
                     est_time = (size - i) / byte_rate
                     est_time_str = str(datetime.timedelta(seconds=int(est_time)))
 
+                complete_str = si_format(i, suffix='B', float_format='f', precision=2)
+                total_str = si_format(size, suffix='B', float_format='f', precision=1)
                 rate_str = si_format(byte_rate, suffix='B/s', float_format='f')
-                stat_str = '%0.2f%%  %s  %s remaining' % (100.*i/size, rate_str, est_time_str)
+
+                stat_str = '%0.2f%% (%s / %s)  %s  %s remaining' % (100.*i/size, complete_str, total_str, rate_str, est_time_str)
             else:
-                stat_str = '%0.2f%%  [stalled; retrying...] %s' % (100.*i/size, err)
+                stat_str = '%0.2f%% (%s / %s)  [stalled; retrying...] %s' % (100.*i/size, complete_str, total_str, err)
             prg_bar.update(value=i, status=stat_str)
 
 
