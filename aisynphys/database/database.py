@@ -140,6 +140,8 @@ def make_table(ormbase, name, columns, base=None, **table_args):
         Column (for example: 'index', 'unique'). Optionally, *data_type* may be a 'tablename.id'
         string indicating that this column is a foreign key referencing another table.
     """
+    class_name = ''.join([part.title() for part in name.split('_')])
+
     props = {
         '__tablename__': name,
         '__table_args__': table_args,
@@ -167,7 +169,7 @@ def make_table(ormbase, name, columns, base=None, **table_args):
     props['meta'] = Column(column_data_types['object'])
 
     if base is None:
-        new_table = type(name, (ormbase,), props)
+        new_table = type(class_name, (ormbase,), props)
     else:
         # need to jump through a hoop to allow __init__ on table classes;
         # see: https://docs.sqlalchemy.org/en/latest/orm/constructors.html
@@ -176,7 +178,7 @@ def make_table(ormbase, name, columns, base=None, **table_args):
             def _init_on_load(self, *args, **kwds):
                 base._init_on_load(self)
             props['_init_on_load'] = _init_on_load
-        new_table = type(name, (base, ormbase), props)
+        new_table = type(class_name, (base, ormbase), props)
 
     return new_table
 
