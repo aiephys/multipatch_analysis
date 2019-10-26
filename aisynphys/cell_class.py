@@ -11,11 +11,11 @@ class CellClass(object):
     """Represents a class of cells as a list of selection criteria.
     
     Construct with an arbitrary set of keyword arguments, where each argument specifies
-    a criteria for matching cells. Keyword argument names must be a column from the Cell
-    or Morphology database tables.
+    a criteria for matching cells. Keyword argument names must be a column from the 
+    :class:`Cell <aisynphys.database.schema.Cell>` or :class:`Morphology <aisynphys.database.schema.Morphology>`
+    database tables.
     
-    Examples
-    --------
+    Example::
     
         pv_class = CellClass(cre_type='pvalb')
         inhibitory_class = CellClass(cre_type=('pvalb', 'sst', 'vip'))

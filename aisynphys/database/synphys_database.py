@@ -11,6 +11,10 @@ class SynphysDatabase(Database):
     default_sample_rate = default_sample_rate
     schema_version = schema_version
 
+    mouse_projects = ["mouse V1 coarse matrix", "mouse V1 pre-production"]
+    human_projects = ["human coarse matrix"]
+
+
     @classmethod
     def load_sqlite(cls, sqlite_file, readonly=True):
         """Return a SynphysDatabase instance connected to an existing sqlite file.
@@ -29,7 +33,20 @@ class SynphysDatabase(Database):
     def load_version(cls, db_version):
         """Load a named database version.
         
+        Available database names can be listed using :func:`list_versions`.
         The database file will be downloaded and cached, if an existing cache file is not found.
+
+        Example::
+
+            >>> from aisynphys.database import SynphysDatabase
+            >>> SynphysDatabase.list_versions()
+            ['synphys_r1.0_2019-08-29_small.sqlite', 'synphys_r1.0_2019-08-29_medium.sqlite', 'synphys_r1.0_2019-08-29_full.sqlite']
+            >>> db = SynphysDatabase.load_version('synphys_r1.0_2019-08-29_small.sqlite')
+            Downloading http://api.brain-map.org/api/v2/well_known_file_download/937779595 =>
+              /home/luke/docs/aisynphys/doc/cache/database/synphys_r1.0_2019-08-29_small.sqlite
+              [####################]  100.00% (73.13 MB / 73.1 MB)  4.040 MB/s  0:00:00 remaining
+              done.
+
         """
         db_file = get_db_path(db_version)
         return SynphysDatabase.load_sqlite(db_file)
@@ -39,6 +56,10 @@ class SynphysDatabase(Database):
         Database.__init__(self, ro_host, rw_host, db_name, ORMBase)
         
     def create_tables(self, tables=None):
+        """This method is used when initializing a new database or new tables within an existing database.
+
+        Extends :func:`Database.create_tables` to include an extra `Metadata` table.
+        """
         Database.create_tables(self, tables=tables)
         
         # initialize or verify db version
@@ -123,9 +144,9 @@ class SynphysDatabase(Database):
 
         Parameters
         ----------
-        pre_class : CellClass | None
+        pre_class : :class:`aisynphys.cell_class.CellClass` | None
             Filter for pairs where the presynaptic cell belongs to this class
-        post_class : CellClass | None
+        post_class : :class:`aisynphys.cell_class.CellClass` | None
             Filter for pairs where the postsynaptic cell belongs to this class
         synapse : bool | None
             Include only pairs that are (or are not) connected by a chemical synapse
