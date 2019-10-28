@@ -1,4 +1,4 @@
-import os, sys, glob
+import os, sys, glob, pickle, base64, urllib
 from collections import OrderedDict
 from . import config
 from .util import sync_file, dir_timestamp, interactive_download
@@ -75,14 +75,18 @@ class SynPhysCache(object):
             os.mkdir(path)
 
 
+_db_versions = None
 def list_db_versions():
     """Return a dictionary listing database versions that are available for download.
     """
-    return {
-        'synphys_r1.0_2019-08-29_small.sqlite': {'url': 'http://api.brain-map.org/api/v2/well_known_file_download/937779595'},
-        'synphys_r1.0_2019-08-29_medium.sqlite': {'url': 'http://api.brain-map.org/api/v2/well_known_file_download/937780246'},
-        'synphys_r1.0_2019-08-29_full.sqlite': {'url': 'http://api.brain-map.org/api/v2/well_known_file_download/937780286'},
-    }
+    global _db_versions
+    if _db_versions is None:
+        # DB urls are stored as a base64-encoded pickle on GitHub.
+        # This allows us to change download URLs without requiring users to pull new code.
+        # The b64 encoding is just intended to prevent bots scraping our URLs
+        b64_urls = urllib.request.urlopen('https://raw.githubusercontent.com/AllenInstitute/aisynphys/download_urls/download_urls').read()
+        _db_versions = pickle.loads(base64.b64decode(b64_urls))
+    return _db_versions
 
 
 def get_db_path(db_version):
