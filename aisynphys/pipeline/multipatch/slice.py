@@ -32,7 +32,7 @@ class SlicePipelineModule(DatabasePipelineModule):
             'date_of_birth': sl.date_of_birth,
             'age': sl.age,
             'sex': sl.sex,
-            'genotype': sl.genotype.gtype,
+            'genotype': None if sl.genotype is None else sl.genotype.gtype,
             'orientation': sl.orientation,
             'surface': sl.surface,
             'hemisphere': sl.hemisphere,
