@@ -33,7 +33,7 @@ if __name__ == '__main__':
 
     date = datetime.today().strftime("%Y-%m-%d")
     stages = OrderedDict([
-        ('backup_notes',            ('pg_dump -d data_notes -h 10.128.36.109 -U postgres  > data_notes_%s.pgsql'%date, 'backup data notes DB')),
+        ('backup_notes',            ('pg_dump -d data_notes -h 10.128.36.109 -U postgres  > data_notes_backups/data_notes_%s.pgsql'%date, 'backup data notes DB')),
         ('sync',                    ('python util/sync_rigs_to_server.py', 'sync raw data to server')),
         ('pipeline',                ('python util/analysis_pipeline.py multipatch all', 'run analysis pipeline')),
         ('vacuum',                  ('python util/database.py --vacuum', 'vacuum database')),
