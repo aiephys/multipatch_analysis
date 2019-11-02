@@ -84,6 +84,7 @@ DRIVER_LINES = {                  # dependencies     products
     'rAAV-eHGT_078m-minBG-FlpO-WPRE-HGHpA':               [(['eHGT_078m'],         ['flp'])],  # pan-Glu
     'rAAV-TRE-SYFP2-WPRE-HGHpA':                          [(['TRE'],               ['YFP'])],
     'rAAV-hSyn1-tTA-WPRE-HGHpA':                          [(['hSyn1'],             ['tTA'])],
+    'rAAV-3xhI56i(core)-minBglobin-SYFP2-WPRE3-BGHpA':    [(['3xhI56i(core)'],     ['YFP'])],  # pan-GABA
 }
 
 
