@@ -884,7 +884,7 @@ class PairView(pg.QtCore.QObject):
         """
         with pg.BusyCursor():
             item = self.browser.itemFromIndex(index)[0]
-            self.nwb_viewer.load_nwb(item.expt.nwb_cache_file)
+            self.nwb_viewer.load_nwb(item.expt.nwb_file)
             self.nwb_viewer.show()
 
     def _selected(self, *args):

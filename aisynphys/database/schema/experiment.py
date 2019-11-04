@@ -24,11 +24,6 @@ class ExperimentBase(object):
         return os.path.join(config.synphys_data, self.storage_path, self.ephys_file)
 
     @property
-    def nwb_cache_file(self):
-        from ...synphys_cache import SynPhysCache
-        return SynPhysCache().get_cache(self.nwb_file)
-
-    @property
     def data(self):
         """Data object from NWB file. 
         

@@ -3,7 +3,7 @@ import numpy as np
 from datetime import datetime
 from collections import OrderedDict
 from acq4.util.DataManager import getDirHandle
-from ... import config, synphys_cache, lims, qc
+from ... import config, lims, qc
 from ...util import timestamp_to_datetime
 from ...data import Experiment
 from ..pipeline_module import DatabasePipelineModule

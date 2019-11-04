@@ -18,7 +18,6 @@ import pyqtgraph.configfile
 from .. import lims, yaml_local, config
 from ..constants import ALL_CRE_TYPES, ALL_LABELS, FLUOROPHORES, LAYERS, INJECTIONS
 from ..genotypes import Genotype
-from ..synphys_cache import SynPhysCache
 from ..util import timestamp_to_datetime
 from .slice import Slice
 from .cell import Cell
@@ -938,19 +937,13 @@ class Experiment(object):
         return self._nwb_file
 
     @property
-    def nwb_cache_file(self):
-        if self.nwb_file is None:
-            return None
-        return SynPhysCache().get_cache(self.nwb_file)
-
-    @property
     def data(self):
         """Data object from NWB file. 
         
         Contains all ephys recordings.
         """
         if self._data is None:
-            self._data = MultiPatchDataset(self.nwb_cache_file)
+            self._data = MultiPatchDataset(self.nwb_file)
         return self._data
 
     def close_data(self):
