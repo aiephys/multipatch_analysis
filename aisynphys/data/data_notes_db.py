@@ -25,8 +25,6 @@ PairNotes = make_table(
 
 db = Database(config.synphys_db_host, config.synphys_db_host_rw, "data_notes", DataNotesORMBase)
 
-db.create_tables()
-
 
 def get_pair_notes_record(expt_id, pre_cell_id, post_cell_id, session=None):
     if session is None:

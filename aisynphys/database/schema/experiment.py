@@ -1,7 +1,7 @@
 import os
 from collections import OrderedDict
 from sqlalchemy.orm import relationship, deferred, sessionmaker, aliased
-from ... import config, constants
+from ... import config, constants, synphys_cache
 from . import make_table
 from .slice import Slice
 
@@ -21,7 +21,12 @@ class ExperimentBase(object):
 
     @property
     def nwb_file(self):
-        return os.path.join(config.synphys_data, self.storage_path, self.ephys_file)
+        if config.synphys_data is not None:
+            # Return path from local file repo
+            return os.path.join(config.synphys_data, self.storage_path, self.ephys_file)
+        else:
+            # return file cached from download
+            return synphys_cache.get_nwb_path(self.ext_id)
 
     @property
     def data(self):
@@ -32,7 +37,7 @@ class ExperimentBase(object):
 
         if not hasattr(self, '_data'):
             from ...data import MultiPatchDataset
-            self._data = MultiPatchDataset(self.nwb_cache_file)
+            self._data = MultiPatchDataset(self.nwb_file)
         return self._data
 
     def __repr__(self):
