@@ -249,7 +249,8 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                             device_name=rec.device_id,
                             meta = {'shape': 'wide-field', ## TODO: description of field of view
                                     'LED_voltage':str(pulse.amplitude),
-                                    'light_source':lightsource
+                                    'light_source':lightsource,
+                                    'pulse_width_modulation': spa.pwm_params(channel='reporter', pulse_n=i),
                                     #'position_offset':offset,
                                     #'offset_distance':offset_distance,
                                     } ## TODO: put in lightsource and wavelength
