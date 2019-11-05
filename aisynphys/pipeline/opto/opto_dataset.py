@@ -12,10 +12,11 @@ from neuroanalysis.baseline import float_mode
 from ...data import BaselineDistributor, PulseStimAnalyzer #Experiment, MultiPatchDataset, MultiPatchProbe, PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
 from neuroanalysis.data import PatchClampRecording
 #from optoanalysis.optoadapter import OptoRecording
-from optoanalysis.data.dataset import OptoRecording, OptoSyncRecAnalyzer
+from optoanalysis.data.dataset import OptoRecording
+from optoanalysis.data.analyzers import OptoSyncRecAnalyzer, PWMStimPulseAnalyzer
 import optoanalysis.power_calibration as power_cal
 import optoanalysis.qc as qc
-from neuroanalysis.stimuli import find_noisy_square_pulses
+from neuroanalysis.stimuli import find_square_pulses
 
 
 class OptoDatasetPipelineModule(DatabasePipelineModule):
@@ -216,11 +217,60 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                         pulse_entries[i] = pulse_entry
 
                 elif 'TTL' in rec.device_id:
-                    #print('passing device:', rec.device_id)
+                    if rec.device_id == 'TTL1P_0': ## this is the ttl output to Prairie, not an LED stimulation
+                        continue
+
+                    ### This is an LED stimulation
+                    if rec.device_id in ['TTL1_1', 'TTL1P_1']:
+                        lightsource = 'LED-470nm'
+                    elif rec.device_id in ['TTL1_2', 'TTL1P_2']:
+                        lightsource = 'LED-590nm'
+                    else:
+                        raise Exception("Don't know lightsource for device: %s" % rec.device_id)
+
+                    pulse_entries = {}
+                    all_pulse_entries[rec.device_id] = pulse_entries
+
+                    spa = PWMStimPulseAnalyzer(rec)
+                    pulses = spa.pulses(channel='reporter')
+                    max_power=power_cal.get_led_power(timestamp_to_datetime(expt_entry.acq_timestamp), expt_entry.rig_name, lightsource)
+
+                    for i, pulse in enumerate(pulses):
+                        pulse_entry = db.StimPulse(
+                            recording=rec_entry,
+                            #cell=cell_entry, ## we're not stimulating just one cell here TODO: but maybe this should be a list of cells in the fov?
+                            pulse_number=i,
+                            onset_time=pulse.global_start_time,
+                            amplitude=max_power*pulse.amplitude,
+                            duration=pulse.duration,
+                            #data=resampled.data, ## don't need data, it's just a square pulse
+                            #data_start_time=resampled.t0,
+                            #position=None, # don't have a 3D position, have a field
+                            device_name=rec.device_id,
+                            meta = {'shape': 'wide-field', ## TODO: description of field of view
+                                    'LED_voltage':str(pulse.amplitude),
+                                    'light_source':lightsource
+                                    #'position_offset':offset,
+                                    #'offset_distance':offset_distance,
+                                    } ## TODO: put in lightsource and wavelength
+                            )
+                        ## TODO: make qc function for LED stimuli
+                        #qc_pass, qc_failures = qc.opto_stim_pulse_qc_pass(pulse_entry)
+                        #pulse_entry.qc_pass = qc_pass
+                        #if not qc_pass:
+                        #    pulse_entry.meta['qc_failures'] = qc_failures
+
+                        session.add(pulse_entry)
+                        pulse_entries[i] = pulse_entry
+                    
+                elif rec.device_id == 'unknown': 
+                    ## At the end of some .nwbs there are vc traces to check access resistance.
+                    ## These have an AD6(fidelity) channel, but do not have an optical stimulation and
+                    ## this channel is labeled unknown when it gets created in OptoRecording
                     pass
                     
                 else:
-                    raise Exception('need to figure out recording type for %s' % rec.device_id)
+                    raise Exception('Need to figure out recording type for %s (device_id:%s)' % (rec, rec.device_id))
 
             ### import postsynaptic responses
             osra = OptoSyncRecAnalyzer(srec)
@@ -230,27 +280,20 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                     #    continue
                     stim_num = stim_rec.meta['notebook']['USER_stim_num']
                     stim = stim_log[str(int(stim_num))]
-                    pre_cell_name = stim['stimulationPoint']['name']
+                    pre_cell_name = str(stim['stimulationPoint']['name'])
 
-                    post_cell_name = 'electrode_'+ str(post_rec.device_id)
+                    post_cell_name = str('electrode_'+ str(post_rec.device_id))
 
-                    pair_entry = pairs_by_cell_id[(pre_cell_name, post_cell_name)]
-
-
-
+                    pair_entry = pairs_by_cell_id.get((pre_cell_name, post_cell_name))
 
                     # get all responses, regardless of the presence of a spike
                     responses = osra.get_photostim_responses(stim_rec, post_rec)
                     for resp in responses:
-  
-
-                        #raise Exception('stop')
-                        #### NEED a way to get pair_entry - can't use device ids because pre-device is not attached to cell
-
-                        if resp['ex_qc_pass']:
-                            pair_entry.n_ex_test_spikes += 1
-                        if resp['in_qc_pass']:
-                            pair_entry.n_in_test_spikes += 1
+                        if pair_entry is not None: ### when recordings are crappy cells are not always included in connections files so won't exist as pairs in the db
+                            if resp['ex_qc_pass']:
+                                pair_entry.n_ex_test_spikes += 1
+                            if resp['in_qc_pass']:
+                                pair_entry.n_in_test_spikes += 1
                             
                         resampled = resp['response']['primary'].resample(sample_rate=20000)
                         resp_entry = db.PulseResponse(
