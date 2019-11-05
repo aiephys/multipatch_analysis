@@ -51,6 +51,10 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
             post_cell_id = pair.post_cell.ext_id
             pairs_by_cell_id[(pre_cell_id, post_cell_id)] = pair
 
+        # print('pairs_by_cell_id:')
+        # for k in pairs_by_cell_id.keys():
+        #     print('   ', k)
+
 
         # load NWB file
         path = os.path.join(config.synphys_data, expt_entry.storage_path)
@@ -58,6 +62,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
         nwb = expt.data
         stim_log = expt.library.load_stimulation_log(expt)
         if stim_log['version'] < 3:
+            ## gonna need to load an image in order to calculate spiral size later
             from acq4.util.DataManager import getHandle
 
         # Load all data from NWB into DB
@@ -72,7 +77,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                 
                 # import all recordings
                 electrode_entry = elecs_by_ad_channel.get(rec.device_id, None)
-                #if electrode_entry is not None:
+
                 rec_entry = db.Recording(
                     sync_rec=srec_entry,
                     electrode=electrode_entry,
@@ -81,13 +86,6 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                 )
                 session.add(rec_entry)
                 rec_entries[rec.device_id] = rec_entry
-                # else:
-                #     opto_rec_entry = db.OpticalRecoding(
-                #         sync_rec=srec_entry,
-                #         device_name=str(rec.device_id),
-                #         start_time=rec.start_time
-                #     )
-                #     session.add(opto_rec_entry)
 
                 # import patch clamp recording information
                 if isinstance(rec, PatchClampRecording):
@@ -148,24 +146,23 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                         pulse_entries[pulse.meta['pulse_n']] = pulse_entry
 
                 elif isinstance(rec, OptoRecording) and (rec.device_id=='Fidelity' or 'AD6' in rec.device_id): 
-                    #psa = PulseStimAnalyzer.get(rec)
-                    #psa.pulses(channel='reporter')
-                    #pulses = psa.pulse_chunks
-                    #pulses = find_square_pulses(rec['reporter'])
-                    #print('adding OptoRecording')
+                    ## This is a 2p stimulation
+
+                    ## get cell entry
                     stim_num = rec.meta['notebook']['USER_stim_num']
                     stim = stim_log[str(int(stim_num))]
                     cell_entry = expt_entry.cells[stim['stimulationPoint']['name']]
 
+                    ## get stimulation shape parameters
                     if stim_log['version'] >=3:
                         shape={'spiral_revolutions':stim['shape']['spiral revolutions'], 'spiral_size':stim['shape']['size']}
                     else:
+                        ## need to calculate spiral size from reference image, cause stimlog is from before we were saving spiral size
                         shape={'spiral_revolutions':stim.get('prairieCmds', {}).get('spiralRevolutions')}
                         prairie_size = stim['prairieCmds']['spiralSize']
                         ref_image = os.path.join(expt.path, stim['prairieImage'][-23:])
                         if os.path.exists(ref_image):
                             h = getHandle(ref_image)
-                            #x=float(size*1000000)/float(xPixels)/pixelLength
                             xPixels = h.info()['PrairieMetaInfo']['Environment']['PixelsPerLine']
                             pixelLength = h.info()['PrairieMetaInfo']['Environment']['XAxis_umPerPixel']
                             size = prairie_size * pixelLength * xPixels * 1e-6
@@ -183,7 +180,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                     pulse_entries = {}
                     all_pulse_entries[rec.device_id] = pulse_entries
 
-                    pulses = find_noisy_square_pulses(rec['reporter'])
+                    #pulses = find_noisy_square_pulses(rec['reporter'])
                     for i in range(len(rec.pulse_start_times)):
                     # Record information about all pulses, including test pulse.
                         #t0, t1 = pulse.meta['pulse_edges']
@@ -208,7 +205,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                                     'pockel_voltage':rec.pulse_power()[i],
                                     'position_offset':offset,
                                     'offset_distance':offset_distance,
-                                    }
+                                    } # TODO: put in light_source and wavelength
                             )
                         qc_pass, qc_failures = qc.opto_stim_pulse_qc_pass(pulse_entry)
                         pulse_entry.qc_pass = qc_pass
