@@ -3,7 +3,7 @@ A database holding results of manual analyses
 """
 
 from aisynphys.database.database import declarative_base, make_table
-from aisynphys.database import Database
+from aisynphys.database import Database, NoDatabase
 from aisynphys import config
 
 DataNotesORMBase = declarative_base()
@@ -22,8 +22,10 @@ PairNotes = make_table(
     ormbase=DataNotesORMBase,
 )
 
-
-db = Database(config.synphys_db_host, config.synphys_db_host_rw, "data_notes", DataNotesORMBase)
+if config.synphys_db_host is None:
+    db = NoDatabase("Cannot access data_notes; no DB specified in config.synphys_db_host")
+else:
+    db = Database(config.synphys_db_host, config.synphys_db_host_rw, "data_notes", DataNotesORMBase)
 
 
 def get_pair_notes_record(expt_id, pre_cell_id, post_cell_id, session=None):

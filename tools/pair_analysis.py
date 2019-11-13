@@ -545,7 +545,7 @@ class PairAnalysis(object):
             self.pair = pair
             print ('loading responses for %s...' % pair)
             q = response_query(default_session, pair)
-            self.pulse_responses = [q.pulse_response for q in q.all()]
+            self.pulse_responses = [q.PulseResponse for q in q.all()]
             print('got %d pulse responses' % len(self.pulse_responses))
                 
             if pair.has_synapse is True:
