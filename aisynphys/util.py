@@ -339,30 +339,38 @@ def iter_download_with_resume(url, file_path, timeout=10, chunksize=1000000):
     file_size = get_url_download_size(url)
     
     tmp_file_path = file_path + '.part_%d'%file_size
-    first_byte = os.path.getsize(tmp_file_path) if os.path.exists(tmp_file_path) else 0
-    
+
+    conn = None    
     while True:
-        last_byte = min(file_size, first_byte + chunksize)
+        first_byte = os.path.getsize(tmp_file_path) if os.path.exists(tmp_file_path) else 0
         
-        # create the request and set the byte range in the header
-        req = Request(url)
-        req.headers['Range'] = 'bytes=%s-%s' % (first_byte, last_byte-1)
         try:
-            data_chunk = urlopen(req, timeout=timeout).read()
+            if conn is None:
+                # create the request and set the byte range in the header
+                req = Request(url)
+                req.headers['Range'] = 'bytes=%s-%s' % (first_byte, file_size-1)
+                conn = urlopen(req, timeout=timeout)
+
+            while True:
+                data_chunk = conn.read(chunksize)
+                if len(data_chunk) == 0:
+                    break
+                    
+                # Read the data from the URL and write it to the file
+                # (assume that writing is much faster than reading; otherwise this should be done in the background)
+                with open(tmp_file_path, 'ab') as fh:
+                    fh.write(data_chunk)
+                    
+                first_byte += len(data_chunk)
+                yield (first_byte, file_size, None)
+            
         except Exception as exc:
-            # err = traceback.format_exception_only(type(exc), exc)[-1]
             err = str(exc.args[0])
-            yield (last_byte, file_size, "download error: " + err)
+            yield (first_byte, file_size, "download error: " + err)
             time.sleep(1)
+            conn = None
             continue
         
-        # Read the data from the URL and write it to the file
-        # (assume that writing is much faster than reading; otherwise this should be done in the background)
-        with open(tmp_file_path, 'ab') as fh:
-            fh.write(data_chunk)
-        
-        first_byte = last_byte
-        yield (last_byte, file_size, None)
         
         if first_byte >= file_size:
             break
