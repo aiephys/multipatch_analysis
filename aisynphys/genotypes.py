@@ -72,6 +72,7 @@ DRIVER_LINES = {                  # dependencies     products
     'Ndnf-IRES2-dgCre':           [(['ndnf'],         ['cre'])],
     'Slc32a1-IRES2-FlpO':         [(['slc32a1'],      ['flp'])],
     'Sncg-IRES2-FlpO-neo':        [(['Sncg'],         ['flp'])],
+    'Vipr2-IRES2-Cre':            [(['Vipr2'],        ['cre'])],
     'Fam84b-FlpO':                [(['fam84b'],       ['flp'])],
     
     'rAAV-mDlx-GFP':                                      [(['mDlx'],              ['GFP'])],
@@ -106,6 +107,7 @@ REPORTER_LINES = {                # dependencies             products
     'Ai63(TIT-tdT)':              [(['tTA', '~dox'],          ['tdTomato']),
                                    (['rtTA', 'dox'],          ['tdTomato'])],
     'Ai65(RCFL-tdT)':             [(['cre', 'flp'],           ['tdTomato'])],
+    'Ai65':                       [(['cre'],                  ['tdTomato'])],
     'Ai65F':                      [(['flp'],                  ['tdTomato'])],
     'Ai66(RCRL-tdT)':             [(['cre', 'dre'],           ['tdTomato'])],
     'Ai72(RCL-VSFPB)':            [(['cre'],                  ['VSFP', 'Butterfly 1.2'])],
