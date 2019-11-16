@@ -8,11 +8,8 @@ import pyqtgraph as pg
 import pyqtgraph.multiprocess
 from pyqtgraph.Qt import QtGui, QtCore
 import scipy.stats as stats
-from aisynphys.database import database as db
-from aisynphys.pulse_response_strength import PulseResponseStrength
-from aisynphys.synapse_prediction import SynapsePrediction, get_amps, get_baseline_amps
+from aisynphys.database import default_db as db
 from aisynphys.ui.ndslicer import NDSlicer
-from neuroanalysis.synaptic_release import ReleaseModel
 
 
 class StochasticReleaseModel(object):
@@ -176,13 +173,6 @@ def normal_pdf(mu, sigma, x):
     return (1.0 / (2 * np.pi * sigma**2))**0.5 * np.exp(- (x-mu)**2 / (2 * sigma**2))
 
 
-def event_qc(events):
-    mask = events['ex_qc_pass'] == True
-    # need more stringent qc for dynamics:
-    mask &= np.abs(events['baseline_current']) < 500e-12
-    return mask   
-
-
 class ModelResultWidget(QtGui.QWidget):
     def __init__(self):
         QtGui.QWidget.__init__(self)
@@ -326,7 +316,7 @@ class ParameterSpace(object):
         self.params = params
         
         static_params = {}
-        for param, val in params.items():
+        for param, val in list(params.items()):
             if np.isscalar(val):
                 static_params[param] = params.pop(param)
         self.static_params = static_params
@@ -392,24 +382,54 @@ class ParameterSearchWidget(QtGui.QWidget):
             self.slicer.set_index(index)
 
 
+def event_query(pair, db, session):
+    q = session.query(
+        db.PulseResponse,
+        db.PulseResponse.ex_qc_pass,
+        db.PulseResponseFit.fit_amp, 
+        db.PulseResponseFit.baseline_fit_amp, 
+        db.StimPulse.first_spike_time, 
+        db.StimPulse.pulse_number, 
+        db.Recording.start_time.label('rec_start_time'),
+        db.PatchClampRecording.baseline_current,
+    )
+
+    q = q.join(db.PulseResponseFit)
+    q = q.join(db.StimPulse)
+    q = q.join(db.Recording, db.PulseResponse.recording)
+    q = q.join(db.PatchClampRecording)
+
+    q = q.filter(db.PulseResponse.pair_id==pair.id)
+    q = q.filter(db.PatchClampRecording.clamp_mode=='ic')
+
+    return q
+
+
+def event_qc(events):
+    mask = events['ex_qc_pass'] == True
+    # need more stringent qc for dynamics:
+    mask &= np.abs(events['baseline_current']) < 500e-12
+    return mask   
+
+
 if __name__ == '__main__':
     pg.mkQApp()
     pg.dbg()
     
     # strong ex, no failures, no depression
-    expt_id = 1535402792.695
-    pre_cell_id = 8
-    post_cell_id = 7
+    expt_id = '1535402792.695'
+    pre_cell_id = '8'
+    post_cell_id = '7'
     
     # strong ex with failures
-    expt_id = 1537820585.767
-    pre_cell_id = 1
-    post_cell_id = 2
+    expt_id = '1537820585.767'
+    pre_cell_id = '1'
+    post_cell_id = '2'
     
     # strong ex, depressing
-    expt_id = 1536781898.381
-    pre_cell_id = 8
-    post_cell_id = 2
+    expt_id = '1536781898.381'
+    pre_cell_id = '8'
+    post_cell_id = '2'
 
     # expt_id = float(sys.argv[1])
     # pre_cell_id = int(sys.argv[2])
@@ -419,7 +439,7 @@ if __name__ == '__main__':
     session = db.session()
 
 
-    expt = db.experiment_from_timestamp(expt_id, session=session)
+    expt = db.experiment_from_ext_id(expt_id, session=session)
     pair = expt.pairs[(pre_cell_id, post_cell_id)]
 
     syn_type = pair.synapse.synapse_type
@@ -427,13 +447,12 @@ if __name__ == '__main__':
 
     # 1. Get a list of all presynaptic spike times and the amplitudes of postsynaptic responses
 
-    raw_events = get_amps(session, pair, clamp_mode='ic')
+    raw_events = event_query(pair, db, session).dataframe()
     mask = event_qc(raw_events)
     events = raw_events[mask]
 
-    rec_times = 1e-9 * (events['rec_start_time'].astype(float) - float(events['rec_start_time'][0]))
-    spike_times = events['max_dvdt_time'] + rec_times
-    amplitude_field = 'pos_dec_amp'    
+    rec_times = (events['rec_start_time'] - events['rec_start_time'].iloc[0]).dt.total_seconds()
+    spike_times = events['first_spike_time'] + rec_times
 
     # 2. Initialize model parameters:
     #    - release model with depression, facilitation
@@ -441,11 +460,8 @@ if __name__ == '__main__':
     #    - measured distribution of background noise
     #    - parameter space to be searched
 
-    raw_bg_events = get_baseline_amps(session, pair, clamp_mode='ic')
-    mask = event_qc(raw_bg_events)
-    bg_events = raw_bg_events[mask]
-    mean_bg_amp = bg_events[amplitude_field].mean()
-    amplitudes = events[amplitude_field] - mean_bg_amp
+    amplitudes = events['fit_amp']
+    bg_amplitudes = events['baseline_fit_amp']
 
     first_pulse_mask = events['pulse_number'] == 1
     first_pulse_amps = amplitudes[first_pulse_mask]
@@ -458,13 +474,13 @@ if __name__ == '__main__':
     n_release_sites = 20
     release_probability = 0.1
     max_events = -1
-    mini_amp_estimate = first_pulse_amps.mean() / (n_release_sites * release_probability)
+    mini_amp_estimate = pair.synapse.psp_amplitude / (n_release_sites * release_probability)
     params = {
         'n_release_sites': np.array([1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64]),
         'release_probability': log_space(0.01, 0.9, 21),
         'mini_amplitude': log_space(0.001, 0.3, 21),
         'mini_amplitude_stdev': log_space(0.0001, 0.1, 21),
-        'measurement_stdev': bg_events[amplitude_field].std(),
+        'measurement_stdev': bg_amplitudes.std(),
         'recovery_tau': log_space(2e-5, 20, 21),
     }
 
