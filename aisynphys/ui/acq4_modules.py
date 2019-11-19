@@ -24,6 +24,8 @@ import yaml
 from acq4.util.Canvas.items.CanvasItem import CanvasItem
 from acq4.util.Canvas.items import registerItemType
 from . import dashboard
+from acq4.modules.DataManager.FileInfoView import registerFieldType, MetadataField
+from collections import OrderedDict
 
 
 class MultipatchSubmissionModule(Module):
@@ -385,3 +387,60 @@ class AffPyramidCanvasItem(CanvasItem):
             return 0
 
 registerItemType(AffPyramidCanvasItem)
+
+class PatchSeqMetadata(MetadataField):
+    """Site Metadata field customized for patchseq experiments
+    """
+    class HeadstageItem(pg.TreeWidgetItem):
+            def __init__(self, *args):
+                pg.TreeWidgetItem.__init__(self, *args)
+                self.widget_group = None
+                self.name = args[0][0]
+                
+            def setWidgets(self, columns):
+                self.widgets = {
+                'Seal': pg.ComboBox(items=['','GS','LS','NS','TF','NA']),
+                'Cre/Flp': pg.ComboBox(items=['','Cre+', 'FlpO+', '-']),
+                'Nucleus': pg.ComboBox(items=['','+', '-']),
+                'End Seal': pg.QtGui.QCheckBox(''),
+                'Tube ID': pg.QtGui.QLineEdit(),
+                }
+
+                for name, w in self.widgets.items():
+                    col = columns[name]
+                    self.setWidget(col, w)
+                
+                self.widget_group = pg.WidgetGroup(self.widgets)
+
+    def __init__(self, name, value, config):
+        widget = pg.TreeWidget()
+        self.columns = OrderedDict([('HS', 0), ('Seal', 1), ('Cre/Flp', 2), ('Nucleus', 3), ('End Seal', 4), ('Tube ID', 5)])
+        widget.setColumnCount(len(self.columns.values()))
+        widget.setHeaderLabels(self.columns.keys())
+        [widget.setColumnWidth(col, width) for col, width in zip(range(widget.columnCount()), [50, 50, 70, 50, 50, 80])]
+        hs_names = ['HS1', 'HS2', 'HS3', 'HS4', 'HS5', 'HS6', 'HS7', 'HS8']
+        self.headstages = OrderedDict((name, PatchSeqMetadata.HeadstageItem([name])) for name in hs_names)
+        for hs in self.headstages.values():
+            hs.setWidgets(self.columns)
+            widget.addTopLevelItem(hs)
+            hs.widget_group.sigChanged.connect(self.widgetChanged)
+
+        MetadataField.__init__(self, widget, name, value, config)
+
+    def widgetChanged(self, obj):
+        self.valueChanged.emit(self)
+
+    def setValue(self, value):
+        for hs_name, widget_state in value.items():
+            hs = self.headstages[hs_name]
+            hs.widget_group.setState(widget_state)
+
+    def getValue(self):
+        value = {}
+        widget_value = None
+        for hs_name, hs in self.headstages.items():
+            value[hs_name] = hs.widget_group.state() #{}
+        return value        
+
+
+registerFieldType('patchseq', PatchSeqMetadata)
