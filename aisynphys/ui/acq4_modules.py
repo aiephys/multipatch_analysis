@@ -417,7 +417,7 @@ class PatchSeqMetadata(MetadataField):
         self.columns = OrderedDict([('HS', 0), ('Seal', 1), ('Cre/Flp', 2), ('Nucleus', 3), ('End Seal', 4), ('Tube ID', 5)])
         widget.setColumnCount(len(self.columns.values()))
         widget.setHeaderLabels(self.columns.keys())
-        [widget.setColumnWidth(col, width) for col, width in zip(range(widget.columnCount()), [50, 50, 70, 50, 50, 80])]
+        [widget.setColumnWidth(col, width) for col, width in enumerate([50, 50, 70, 50, 50, 80])]
         hs_names = ['HS1', 'HS2', 'HS3', 'HS4', 'HS5', 'HS6', 'HS7', 'HS8']
         self.headstages = OrderedDict((name, PatchSeqMetadata.HeadstageItem([name])) for name in hs_names)
         for hs in self.headstages.values():
@@ -437,7 +437,6 @@ class PatchSeqMetadata(MetadataField):
 
     def getValue(self):
         value = {}
-        widget_value = None
         for hs_name, hs in self.headstages.items():
             value[hs_name] = hs.widget_group.state() #{}
         return value        
