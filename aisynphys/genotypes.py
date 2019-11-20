@@ -75,6 +75,7 @@ DRIVER_LINES = {                  # dependencies     products
     'Vipr2-IRES2-Cre':            [(['Vipr2'],        ['cre'])],
     'Fam84b-FlpO':                [(['fam84b'],       ['flp'])],
     'Glt25d2-Cre_NF107':          [(['glt25d2'],      ['cre'])],
+    'Esr2-IRES2-Cre':             [(['esr2'],         ['cre'])],
     
     'rAAV-mDlx-GFP':                                      [(['mDlx'],              ['GFP'])],
     'rAAV-Dlx2.0-SYFP2':                                  [(['3xcorehI56i'],       ['YFP'])],  # pan-GABA
