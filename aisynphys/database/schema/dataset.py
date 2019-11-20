@@ -136,7 +136,7 @@ StimPulse = make_table(
         ('amplitude', 'float', 'Amplitude of the presynaptic pulse'),
         ('duration', 'float', 'Length of the pulse in seconds'),
         ('n_spikes', 'int', 'Number of spikes evoked by this pulse'),
-        ('first_spike_time', 'float', 'Time of the first spike evoked by this pulse, measured from the max slope of the spike rising phase.'),
+        ('first_spike_time', 'float', 'Time of the first spike evoked by this pulse, measured from the beginning of the recording until the max slope of the spike rising phase.'),
         # ('first_spike', 'stim_spike.id', 'The ID of the first spike evoked by this pulse'),
         ('data', 'array', 'Numpy array of presynaptic recording sampled at '+sample_rate_str, {'deferred': True}),
         ('data_start_time', 'float', "Starting time of the data chunk, relative to the beginning of the recording"),

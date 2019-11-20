@@ -386,10 +386,11 @@ def event_query(pair, db, session):
     q = session.query(
         db.PulseResponse,
         db.PulseResponse.ex_qc_pass,
-        db.PulseResponseFit.fit_amp, 
-        db.PulseResponseFit.baseline_fit_amp, 
-        db.StimPulse.first_spike_time, 
-        db.StimPulse.pulse_number, 
+        db.PulseResponseFit.fit_amp,
+        db.PulseResponseFit.baseline_fit_amp,
+        db.StimPulse.first_spike_time,
+        db.StimPulse.pulse_number,
+        db.StimPulse.onset_time,
         db.Recording.start_time.label('rec_start_time'),
         db.PatchClampRecording.baseline_current,
     )
@@ -401,6 +402,8 @@ def event_query(pair, db, session):
 
     q = q.filter(db.PulseResponse.pair_id==pair.id)
     q = q.filter(db.PatchClampRecording.clamp_mode=='ic')
+    
+    q = q.order_by(db.Recording.start_time).order_by(db.StimPulse.onset_time)
 
     return q
 
@@ -435,7 +438,6 @@ if __name__ == '__main__':
     # pre_cell_id = int(sys.argv[2])
     # post_cell_id = int(sys.argv[3])
 
-
     session = db.session()
 
 
@@ -454,6 +456,12 @@ if __name__ == '__main__':
     rec_times = (events['rec_start_time'] - events['rec_start_time'].iloc[0]).dt.total_seconds()
     spike_times = events['first_spike_time'] + rec_times
 
+    # any missing spike times get filled in with the average latency
+    missing_spike_mask = np.isnan(spike_times)
+    avg_spike_latency = np.nanmedian(spike_times - events['onset_time'])
+    pulse_times = events['onset_time'] + avg_spike_latency + rec_times
+    spike_times[missing_spike_mask] = pulse_times[missing_spike_mask]
+    
     # 2. Initialize model parameters:
     #    - release model with depression, facilitation
     #    - number of synapses, distribution of per-vesicle amplitudes estimated from first pulse CV
