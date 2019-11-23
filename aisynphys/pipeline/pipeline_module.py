@@ -85,21 +85,24 @@ class PipelineModule(object):
         n_retry = 0
         if job_ids is None:
             print("Searching for jobs to update..")
-            drop_job_ids, run_job_ids, error_job_ids = self.updatable_jobs()
+            drop_job_ids, run_jobs, error_jobs = self.updatable_jobs()
             
             if retry_errors:
-                run_job_ids += error_job_ids
-                n_retry = len(error_job_ids)
+                run_jobs.update(error_jobs)
+                n_retry = len(error_jobs)
+
+            run_job_ids = list(run_jobs.keys())
             
             if limit is not None:
                 # pick a random subset to import; this is just meant to ensure we get a variety
                 # of data when testing the import system.
                 rng = np.random.RandomState(0)
-                rng.shuffle(run_job_ids)
-                run_job_ids = run_job_ids[:limit]
-                drop_job_ids = [jid for jid in drop_job_ids if jid in run_job_ids]
+                rng.shuffle(job_ids)
+                run_job_ids = job_ids[:limit]
+                drop_job_ids = [jid for jid in drop_job_ids if jid in run_jobs]
         else:
             run_job_ids = job_ids
+            run_jobs = {}  # no extra metadata provided for these jobs
             drop_job_ids = job_ids
             
         print("Found %d jobs to update." % len(run_job_ids))
@@ -115,11 +118,12 @@ class PipelineModule(object):
 
         # Make a list of specifications for jobs to be run.
         run_jobs = [{
-            'job_id': expt_id, 
+            'job_id': job_id, 
             'job_number': i, 
             'n_jobs': len(run_job_ids),
             'module_class': self.__class__,
-        } for i, expt_id in enumerate(run_job_ids)]
+            'meta': run_jobs.get(job_id, None),
+        } for i, job_id in enumerate(run_job_ids)]
         
         # Allow subclasses to modify spec (especially to add configuration on _where_ to store results)
         run_jobs = [self.make_job_spec(job) for job in run_jobs]
@@ -223,6 +227,15 @@ class PipelineModule(object):
     def ready_jobs(self):
         """Return an ordered dict of all jobs that are ready to be processed (all dependencies are present)
         and the dates that dependencies were created.
+        
+        Returns
+        -------
+        ready : OrderedDict
+            Contains {job_id: {'dep_time': datetime, 'meta': object}, ...}
+            where *job_id* is a string that uniquely identifies the job to be processed,
+            *dep_time* gives the date that its dependencies were last updated, and
+            *meta* is an optional arbitrary object to be stored in the pipeline
+            table along with this job.
         """
         # default implpementation collects IDs of finished jobs from upstream modules.
         job_times = OrderedDict()
@@ -239,7 +252,7 @@ class PipelineModule(object):
         for job_id, times in job_times.items():
             if None in times:
                 continue
-            ready[job_id] = max(times)
+            ready[job_id] = {'dep_time': max(times)}
             
         return ready
 
@@ -248,41 +261,43 @@ class PipelineModule(object):
         
         Returns
         -------
-        drop_job_ids : list
-            Jobs that need to be dropped because their output is invalid and they are not ready to be updated again
-        run_job_ids : list
-            Jobs that need to be updated AND are ready to be updated
-        error_job_ids : list
-            Jobs that previously failed to update due to an error
+        drop_jobs : list
+            Job IDs that need to be dropped because their output is invalid and they are not ready to be updated again
+        run_jobs : OrderedDict
+            {'job_id': meta} for jobs that need to be updated AND are ready to be updated
+        error_jobs : OrderedDict
+            {'job_id': meta} for jobs that previously failed to update due to an error
         """
-        run_job_ids = []
         drop_job_ids = []
-        error_job_ids = []
+        run_jobs = OrderedDict()
+        error_jobs = OrderedDict()
         ready = self.ready_jobs()
         finished = self.finished_jobs()
-        for job in ready:
-            if job in finished:
-                date, success = finished[job]
-                if ready[job] > date:
+        for job_id in ready:
+            meta = ready[job_id].get('meta', None)
+            if job_id in finished:
+                finish_date, success = finished[job_id]
+                dep_date = ready[job_id]['dep_time']
+                if dep_date > finish_date:
                     # result is invalid
-                    run_job_ids.append(job)
+                    run_jobs[job_id] = meta
                 else:
                     if success is False:
-                        error_job_ids.append(job)
+                        error_jobs[job_id] = meta
                     else:
                         # result is valid
                         pass  
             else:
                 # no current result
-                run_job_ids.append(job)
+                run_jobs[job_id] = meta
         
         # look for orphaned results
         for job in finished:
             if job not in ready and job not in drop_job_ids:
                 drop_job_ids.append(job)
         
-        print("%d jobs ready for processing, %d finished, %d need drop, %d need update, %d previous errors" % (len(ready), len(finished), len(drop_job_ids), len(run_job_ids), len(error_job_ids)))
-        return drop_job_ids, run_job_ids, error_job_ids
+        print("%d jobs ready for processing, %d finished, %d need drop, %d need update, %d previous errors" % (len(ready), len(finished), len(drop_job_ids), len(run_jobs), len(error_jobs)))
+        return drop_job_ids, run_jobs, error_jobs
 
 
 def run_job_parallel(job):
@@ -349,14 +364,18 @@ class DatabasePipelineModule(PipelineModule):
         db = job['database']
         job_id = job['job_id']
         
+        # allow addition of extra metadata into pipeline table
+        meta = job.get('meta', None)
+        
         session = db.session(readonly=False)
         # drop old pipeline job record
         session.query(db.Pipeline).filter(db.Pipeline.job_id==job_id).filter(db.Pipeline.module_name==cls.name).delete()
         session.commit()
+
         
         try:
             errors = cls.create_db_entries(job, session)
-            job_result = db.Pipeline(module_name=cls.name, job_id=job_id, success=True, error=errors, finish_time=datetime.now())
+            job_result = db.Pipeline(module_name=cls.name, job_id=job_id, success=True, error=errors, finish_time=datetime.now(), meta=meta)
             session.add(job_result)
 
             session.commit()
@@ -364,7 +383,7 @@ class DatabasePipelineModule(PipelineModule):
             session.rollback()
             
             err = ''.join(traceback.format_exception(*sys.exc_info()))
-            job_result = db.Pipeline(module_name=cls.name, job_id=job_id, success=False, error=err, finish_time=datetime.now())
+            job_result = db.Pipeline(module_name=cls.name, job_id=job_id, success=False, error=err, finish_time=datetime.now(), meta=meta)
             session.add(job_result)
             session.commit()
             raise
@@ -438,6 +457,6 @@ class DatabasePipelineModule(PipelineModule):
         """
         db = self.database
         session = db.session()
-        jobs = session.query(db.Pipeline.job_id, db.Pipeline.error, db.Pipeline.success).filter(db.Pipeline.module_name==self.name).all()
+        jobs = session.query(db.Pipeline.job_id, db.Pipeline.error, db.Pipeline.success, db.Pipeline.meta).filter(db.Pipeline.module_name==self.name).all()
         session.rollback()
-        return OrderedDict([(uid, (success, error)) for uid, error, success in jobs])
+        return OrderedDict([(uid, (success, error, meta)) for uid, error, success, meta in jobs])

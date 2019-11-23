@@ -23,6 +23,11 @@ class SlicePipelineModule(DatabasePipelineModule):
         slices = all_slices()
         path = slices[job_id]
         
+        ignore_file = os.path.join(path, 'ignore')
+        if os.path.exists(ignore_file):
+            err = open(ignore_file).read()
+            raise Exception("Ignoring slice %s: %s" % (job_id, err))
+        
         sl = Slice.get(path)
 
         fields = {
@@ -64,7 +69,7 @@ class SlicePipelineModule(DatabasePipelineModule):
             # import random
             # if random.random() > 0.8:
             #     mtime *= 2
-            ready[ts] = timestamp_to_datetime(mtime)
+            ready[ts] = {'dep_time': timestamp_to_datetime(mtime), 'meta': {'source': path}}
         return ready
 
 

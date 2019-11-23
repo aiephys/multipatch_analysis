@@ -1,3 +1,4 @@
+import re
 from collections import OrderedDict
 from pyqtgraph import toposort
 from .pipeline_module import PipelineModule, DatabasePipelineModule
@@ -79,23 +80,57 @@ class Pipeline(object):
             
         # only report the first error encountered for each job ID
         report = []
-        all_jobs = {}
+        failed_job_ids = set()
         totals = {}
         for module in modules:
             module_errors = []
             totals[module.name] = [0, 0]
-            for job_id, (success, error) in module.job_status().items():
-                if job_id not in all_jobs and success is False:
-                    module_errors.append((job_id, error))
-                all_jobs.setdefault(job_id, []).append((module.name, success, error))
+            for job_id, (success, error, meta) in module.job_status().items():
+                if success is False and job_id not in failed_job_ids:
+                    module_errors.append((job_id, error, meta))
+                    failed_job_ids.add(job_id)
                 totals[module.name][0 if success else 1] += 1
 
-            report.append("\n=====  %s errors =====" % module.name)
+            report.append("\n=====  %s  =====" % module.name)
+            
+            # sort by error 
             module_errors.sort(key=lambda e: e[1])
-            for job_id, error in module_errors:
-                report.append("%s   %s" % (job_id, error.strip().split('\n')[-1]))
+
+            # decide exactly how to describe each error
+            err_strs = []
+            for job_id, job_error, meta in module_errors:
+                # Attempt to summarize the job error string into a single line
+                err_lines = job_error.strip().split('\n')
                 
-        report.append("\n===== Pipeline summary =====")
+                # strip off all traceback lines
+                tb_lines = []
+                while len(err_lines) >= 2:
+                    if err_lines[0].startswith('Traceback '):
+                        err_lines = err_lines[1:]
+                    if re.match(r'  File \".*\", line \d+, .*', err_lines[0]) is not None:
+                        tb_lines.append(err_lines[:2])
+                        err_lines = err_lines[2:]
+                    else:
+                        break
+                if len(err_lines) == 0:
+                    err_msg = "[no error message]"
+                else:
+                    err_msg = err_lines[0]  # assume the first line after the traceback contains the most useful message
+                    
+                err_strs.append((
+                    str(job_id),
+                    "" if meta is None else meta.get('source', ''),
+                    err_msg,
+                ))
+                
+            # format into a nice table
+            if len(err_strs) > 0:
+                col_widths = [max([len(err[i]) for err in err_strs]) for i in range(3)]
+                fmt = "%%%ds %%%ds  %%s" % tuple(col_widths[:2])
+                for cols in err_strs:
+                    report.append(fmt % cols)
+                
+        report.append("\n=====  Pipeline summary  =====")
         fmt = "%%%ds   %%4d pass   %%4d fail" % mod_name_len
         for module in modules:
             tot_success, tot_error = totals[module.name]

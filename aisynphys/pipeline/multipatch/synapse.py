@@ -153,6 +153,6 @@ class SynapsePipelineModule(DatabasePipelineModule):
         for job, (mtime, success) in finished_datasets.items():
             if job in mod_times:
                 mtime = max(mtime, mod_times[job])
-            ready[job] = mtime
+            ready[job] = {'dep_time': mtime}
             
         return ready
