@@ -14,18 +14,18 @@ daily_report_path = '//allen/programs/celltypes/workgroups/synphys/generated_rep
 def generate_daily_report(day):
     file_name = '%s_mps_Transcriptomics_report.xlsx' % datetime.strftime(day, "%y%m%d")
     file_path = daily_report_path + '/' + file_name
-    columns = OrderedDict([
-        ('Patch Tube Name', []),
-        ('Blank Fill Date', []),
-        ('Patch Date', []),
-        ('Library Prep Day1 Date', []),
-        ('Species', []),
-        ('Specimen ID', []),
-        ('Cell Line', []),
-        ('ROI Major', []),
-        ('ROI Minor', []),
-        ('Comments', []),
-        ])
+    columns = [
+        'Patch Tube Name',
+        'Blank Fill Date',
+        'Patch Date',
+        'Library Prep Day1 Date',
+        'Species',
+        'Specimen ID',
+        'Cell Line',
+        'ROI Major',
+        'ROI Minor',
+        'Comments',
+        ]
 
     end = day.date() + timedelta(hours=3)
     start = end - timedelta(hours=24)
@@ -40,37 +40,40 @@ def generate_daily_report(day):
         site_info = site_dh.info()
         slice_info = site_dh.parent().info()
         day_info = site_dh.parent().parent().info()
-
-        data = {k: None for k in columns}
-        data['Blank Fill Date'] = slice_info.get('blank_fill_date')
-        patch_date = timestamp_to_datetime(day_info.get('__timestamp__'))
-        data['Patch Date'] = datetime.strftime(patch_date, "%m/%d/%Y") if isinstance(patch_date, datetime) else None
-        data['Species'] = day_info.get('LIMS_donor_info',{}).get('organism').capitalize()
-        data['Specimen ID'] = day_info.get('animal_ID')
-        data['Cell Line'] = day_info.get('LIMS_donor_info', {}).get('genotype')
-        data['ROI Major'] = format_roi_major(day_info.get('target_region'))
-
         pip_meta = PipetteMetadata(site)
-        pipettes = pip_meta.pipettes
-
         headstages = site_info.get('headstages')
+        
         if headstages is None:
+            print('No recorded headstages')
             continue
-
+        
         for hs, info in headstages.items():
             if info['Tube ID'] == '':
                 continue
-            pip = pipettes[hs[-1]]
-            data['Patch Tube Name'] = info['Tube ID']
-            data['Comments'] = nucleus[info.get('Nucleus', '')]
-            data['ROI Minor'] = format_roi_minor(pip['target_layer'])
+            row = {k: None for k in columns}
+            row['Blank Fill Date'] = slice_info.get('blank_fill_date')
+            patch_date = timestamp_to_datetime(day_info.get('__timestamp__'))
+            row['Patch Date'] = datetime.strftime(patch_date, "%m/%d/%Y") if isinstance(patch_date, datetime) else None
+            row['Species'] = day_info.get('LIMS_donor_info',{}).get('organism').capitalize()
+            row['Specimen ID'] = day_info.get('animal_ID')
+            row['Cell Line'] = day_info.get('LIMS_donor_info', {}).get('genotype')
+            row['ROI Major'] = format_roi_major(day_info.get('target_region'))
 
-            for k, v in data.items():
+            pip = pip_meta.pipettes[hs[-1]]
+            tube_id = int(info['Tube ID'].split('_')[2])
+            row['tube_id'] = tube_id
+            row['Patch Tube Name'] = info['Tube ID']
+            row['Comments'] = nucleus[info.get('Nucleus', '')]
+            row['ROI Minor'] = format_roi_minor(pip['target_layer'])
+
+            for k, v in row.items():
                 if v in [None, ''] and k != 'Library Prep Day1 Date':
                     print('%s %s %s has no data' % (site, hs, k))
-                columns[k].append(v)
+            row_data.append(row)
 
-    data_df = pd.DataFrame(columns)
+    data_df = pd.DataFrame(row_data)
+    data_df.set_index('tube_id', inplace=True)
+    data_df.sort_index(inplace=True)
     data_df.to_excel(file_path, index=False)    
 
 def format_roi_major(roi):
