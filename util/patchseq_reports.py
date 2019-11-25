@@ -12,8 +12,10 @@ nucleus = {'+': 'nucleus_present', '-': 'nucleus_absent', '': None}
 daily_report_path = '//allen/programs/celltypes/workgroups/synphys/generated_reports'
 
 def generate_daily_report(day):
+    errors = []
     file_name = '%s_mps_Transcriptomics_report.xlsx' % datetime.strftime(day, "%y%m%d")
     file_path = daily_report_path + '/' + file_name
+    project_code = '102-01-010-10'
     columns = [
         'Patch Tube Name',
         'Blank Fill Date',
@@ -25,6 +27,7 @@ def generate_daily_report(day):
         'ROI Major',
         'ROI Minor',
         'Comments',
+        'Project Code',
         ]
 
     end = day.date() + timedelta(hours=3)
@@ -36,6 +39,8 @@ def generate_daily_report(day):
     
     row_data = []
     for site in site_paths:
+        site_source = open(os.path.join(site, 'sync_source')).read()
+        errors.append(site_source)
         site_dh = getHandle(site)
         site_info = site_dh.info()
         slice_info = site_dh.parent().info()
@@ -44,17 +49,26 @@ def generate_daily_report(day):
         headstages = site_info.get('headstages')
         
         if headstages is None:
-            print('No recorded headstages')
+            errors.append('%tNo recorded headstages')
             continue
         
+        site_errors = {}
         for hs, info in headstages.items():
             if info['Tube ID'] == '':
                 continue
+            errors.append('\t %s' % hs)
             row = {k: None for k in columns}
-            row['Blank Fill Date'] = slice_info.get('blank_fill_date')
+            blank_fill_date = slice_info.get('blank_fill_date')
+            try:
+                datetime.strptime(blank_fill_date, "%m/%d/%Y")
+            except ValueError:
+                errors.append('\t\tblank fill date has improper format')
+                blank_fill_date = ''
+            row['Blank Fill Date'] = blank_fill_date
             patch_date = timestamp_to_datetime(day_info.get('__timestamp__'))
             row['Patch Date'] = datetime.strftime(patch_date, "%m/%d/%Y") if isinstance(patch_date, datetime) else None
-            row['Species'] = day_info.get('LIMS_donor_info',{}).get('organism').capitalize()
+            species = day_info.get('LIMS_donor_info',{}).get('organism')
+            row['Species'] = species.capitalize() if isinstance(species, str) else None
             row['Specimen ID'] = day_info.get('animal_ID')
             row['Cell Line'] = day_info.get('LIMS_donor_info', {}).get('genotype')
             row['ROI Major'] = format_roi_major(day_info.get('target_region'))
@@ -65,12 +79,16 @@ def generate_daily_report(day):
             row['Patch Tube Name'] = info['Tube ID']
             row['Comments'] = nucleus[info.get('Nucleus', '')]
             row['ROI Minor'] = format_roi_minor(pip['target_layer'])
+            row['Project Code'] = project_code
 
             for k, v in row.items():
-                if v in [None, ''] and k != 'Library Prep Day1 Date':
-                    print('%s %s %s has no data' % (site, hs, k))
+                if v is None and k != 'Library Prep Day1 Date':
+                    if k == 'Cell Line' and row['Species'] == 'Human':
+                        continue
+                    errors.append('\t\t%s has no data' % k)
             row_data.append(row)
 
+    print('\n'.join(errors))
     data_df = pd.DataFrame(row_data)
     data_df.set_index('tube_id', inplace=True)
     data_df.sort_index(inplace=True)
@@ -92,7 +110,7 @@ def get_expts_in_range(expts, start, end):
     in_range = []
     for expt in expts:
         expt_date = timestamp_to_datetime(float(os.path.basename(expt))).date()
-        if expt_date > start and expt_date < end:
+        if expt_date >= start and expt_date <= end:
             in_range.append(expt)
 
     return in_range
