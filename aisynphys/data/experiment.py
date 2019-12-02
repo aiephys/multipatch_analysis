@@ -375,7 +375,7 @@ class Experiment(object):
 
             cell._target_layer = pip_meta.get('target_layer', '')
             if not isinstance(cell._target_layer, str):
-                raise Exception('Target layer must be str, not "%r"' % cell._target_layer)
+                raise Exception('Target layer must be str, not %r' % cell._target_layer)
 
             # load in the initial morphological call made by the experimenter
             cell._morphology = {'initial_call': pip_meta.get('morphology', '')}

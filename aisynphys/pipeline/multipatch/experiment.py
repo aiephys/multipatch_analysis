@@ -6,7 +6,7 @@ from collections import OrderedDict
 from acq4.util.DataManager import getDirHandle
 from ..pipeline_module import DatabasePipelineModule
 from ... import config, lims
-from ...util import datetime_to_timestamp
+from ...util import datetime_to_timestamp, dir_timestamp
 from ...data import Experiment
 from .slice import SlicePipelineModule
 
