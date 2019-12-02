@@ -70,3 +70,35 @@ class Pipeline(object):
     def __getstsate__(self):
         return self.kwds
         
+    def report(self, modules=None):
+        """Return a printable string report describing the state of the pipeline plus error messages
+        """
+        if modules is None:
+            modules = self.sorted_modules()
+        mod_name_len = max([len(mod.name) for mod in modules])
+            
+        # only report the first error encountered for each job ID
+        report = []
+        all_jobs = {}
+        totals = {}
+        for module in modules:
+            module_errors = []
+            totals[module.name] = [0, 0]
+            for job_id, (success, error) in module.job_status().items():
+                if job_id not in all_jobs and success is False:
+                    module_errors.append((job_id, error))
+                all_jobs.setdefault(job_id, []).append((module.name, success, error))
+                totals[module.name][0 if success else 1] += 1
+
+            report.append("\n=====  %s errors =====" % module.name)
+            module_errors.sort(key=lambda e: e[1])
+            for job_id, error in module_errors:
+                report.append("%s   %s" % (job_id, error.strip().split('\n')[-1]))
+                
+        report.append("\n===== Pipeline summary =====")
+        fmt = "%%%ds   %%4d pass   %%4d fail" % mod_name_len
+        for module in modules:
+            tot_success, tot_error = totals[module.name]
+            report.append(fmt % (module.name, tot_success, tot_error))
+        
+        return '\n'.join(report)

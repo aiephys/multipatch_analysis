@@ -432,3 +432,12 @@ class DatabasePipelineModule(PipelineModule):
         jobs = session.query(db.Pipeline.job_id, db.Pipeline.finish_time, db.Pipeline.success).filter(db.Pipeline.module_name==self.name).all()
         session.rollback()
         return OrderedDict([(uid, (date, success)) for uid, date, success in jobs])
+
+    def job_status(self):
+        """Return the status and error message for each job in this module.
+        """
+        db = self.database
+        session = db.session()
+        jobs = session.query(db.Pipeline.job_id, db.Pipeline.error, db.Pipeline.success).filter(db.Pipeline.module_name==self.name).all()
+        session.rollback()
+        return OrderedDict([(uid, (success, error)) for uid, error, success in jobs])
