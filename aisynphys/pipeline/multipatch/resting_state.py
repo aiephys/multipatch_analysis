@@ -2,7 +2,7 @@
 from __future__ import print_function, division
 
 import numpy as np
-from ..pipeline_module import DatabasePipelineModule
+from .pipeline_module import MultipatchPipelineModule
 from .synapse import SynapsePipelineModule
 from ...resting_state import resting_state_response_fits
 
@@ -15,7 +15,7 @@ from ...resting_state import resting_state_response_fits
 minimum_rest_duration = 8.0
 
 
-class RestingStatePipelineModule(DatabasePipelineModule):
+class RestingStatePipelineModule(MultipatchPipelineModule):
     """Measure the "resting state" amplitude of a synapse by averaging together only responses 
     that have no prior stimuli in a certain window. 
     """

@@ -126,9 +126,9 @@ class Pipeline(object):
             # format into a nice table
             if len(err_strs) > 0:
                 col_widths = [max([len(err[i]) for err in err_strs]) for i in range(3)]
-                fmt = "%%%ds %%%ds  %%s" % tuple(col_widths[:2])
+                fmt = "{:<%ds}  {:<%ds}  {:s}" % tuple(col_widths[:2])
                 for cols in err_strs:
-                    report.append(fmt % cols)
+                    report.append(fmt.format(*cols))
                 
         report.append("\n=====  Pipeline summary  =====")
         fmt = "%%%ds   %%4d pass   %%4d fail" % mod_name_len

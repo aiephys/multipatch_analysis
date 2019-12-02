@@ -40,6 +40,22 @@ class ExperimentBase(object):
             self._data = MultiPatchDataset(self.nwb_file)
         return self._data
 
+    @property
+    def path(self):
+        """Filesystem path to the root of this experiment.
+        """
+        return os.path.join(config.synphys_data, self.storage_path)
+        
+    @property
+    def original_path(self):
+        """The original path where this experiment was acquired. 
+        """
+        ss = os.path.join(self.path, 'sync_source')
+        if os.path.isfile(ss):
+            return open(ss, 'rb').read().decode('latin1')
+        else:
+            return self.path
+
     def __repr__(self):
         if self.ext_id is not None:
             return "<%s %s>" % (self.__class__.__name__, self.ext_id)

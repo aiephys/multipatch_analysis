@@ -6,14 +6,14 @@ from acq4.util.DataManager import getDirHandle
 from ... import config, lims, qc
 from ...util import timestamp_to_datetime
 from ...data import Experiment
-from ..pipeline_module import DatabasePipelineModule
+from .pipeline_module import MultipatchPipelineModule
 from .experiment import ExperimentPipelineModule
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.data import PatchClampRecording
 from ...data import Experiment, MultiPatchDataset, MultiPatchProbe, PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
 
 
-class DatasetPipelineModule(DatabasePipelineModule):
+class DatasetPipelineModule(MultipatchPipelineModule):
     """Imports NWB data per-experiment
     """
     name = 'dataset'

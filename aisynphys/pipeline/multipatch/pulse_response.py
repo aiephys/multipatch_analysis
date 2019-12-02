@@ -4,13 +4,13 @@ from __future__ import print_function, division
 import os, random
 import pyqtgraph as pg
 from ... import config
-from ..pipeline_module import DatabasePipelineModule
+from .pipeline_module import MultipatchPipelineModule
 from .dataset import DatasetPipelineModule
 from .synapse import SynapsePipelineModule
 from ...pulse_response_strength import baseline_query, response_query, measure_response, analyze_response_strength
 
 
-class PulseResponsePipelineModule(DatabasePipelineModule):
+class PulseResponsePipelineModule(MultipatchPipelineModule):
     """Analyze postsynaptic responses for all presynaptic evoked spikes
     """
     name = 'pulse_response'

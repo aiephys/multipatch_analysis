@@ -299,6 +299,17 @@ class PipelineModule(object):
         print("%d jobs ready for processing, %d finished, %d need drop, %d need update, %d previous errors" % (len(ready), len(finished), len(drop_job_ids), len(run_jobs), len(error_jobs)))
         return drop_job_ids, run_jobs, error_jobs
 
+    def job_status(self):
+        """Return the status and error message for each job in this module.
+            
+        Return structure is {job_id: (success, error, meta)}, where *success* is boolean,
+        *error* is str or None, and *meta* is dict or None.
+        
+        *meta* is the same value as returned by ready_jobs(), and may contain information about
+        the source of this job so that errors can be traced back to their original data.
+        """
+        raise NotImplementedError()
+
 
 def run_job_parallel(job):
     # multiprocessing Pool.map doesn't work on methods; must be a plain function
@@ -454,6 +465,12 @@ class DatabasePipelineModule(PipelineModule):
 
     def job_status(self):
         """Return the status and error message for each job in this module.
+            
+        Return structure is {job_id: (success, error, meta)}, where *success* is boolean,
+        *error* is str or None, and *meta* is dict or None.
+        
+        *meta* is the same value as returned by ready_jobs(), and may contain information about
+        the source of this job so that errors can be traced back to their original data.
         """
         db = self.database
         session = db.session()

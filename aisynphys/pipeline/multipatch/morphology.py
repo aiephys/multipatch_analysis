@@ -10,7 +10,7 @@ from collections import OrderedDict
 from ...util import timestamp_to_datetime, optional_import
 from ...data.pipette_metadata import PipetteMetadata
 from ... import config, lims
-from ..pipeline_module import DatabasePipelineModule
+from .pipeline_module import MultipatchPipelineModule
 from .experiment import ExperimentPipelineModule
 pyodbc = optional_import('pyodbc')
 
@@ -27,7 +27,7 @@ col_names = {
             }
 
 
-class MorphologyPipelineModule(DatabasePipelineModule):
+class MorphologyPipelineModule(MultipatchPipelineModule):
     """Imports cell morphology data for each experiment
     """
     name = 'morphology'
