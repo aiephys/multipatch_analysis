@@ -1,7 +1,7 @@
 import glob, os, argparse, sys, csv
 import pandas as pd
 from acq4.util.DataManager import getHandle
-from aisynphys import config
+from aisynphys import config, lims
 from aisynphys.util import timestamp_to_datetime
 from datetime import datetime, timedelta
 from aisynphys.data.pipette_metadata import PipetteMetadata
@@ -9,10 +9,14 @@ from collections import OrderedDict
 
 all_paths = glob.glob(os.path.join(config.synphys_data, '*.***'))
 nucleus = {'+': 'nucleus_present', '-': 'nucleus_absent', '': None}
+organism = {'Mus musculus': 'Mouse', 'Homo Sapiens': 'Human'}
 daily_report_path = '//allen/programs/celltypes/workgroups/synphys/generated_reports'
 
 def generate_daily_report(day):
     errors = []
+    if day == datetime.today().date():
+        day = day - timedelta(hours=24)
+
     file_name = '%s_mps_Transcriptomics_report.xlsx' % datetime.strftime(day, "%y%m%d")
     file_path = daily_report_path + '/' + file_name
     project_code = '102-01-010-10'
@@ -30,13 +34,7 @@ def generate_daily_report(day):
         'Project Code',
         ]
 
-    end = day.date() + timedelta(hours=3)
-    start = end - timedelta(hours=24)
-
-    expt_paths = get_expts_in_range(all_paths, start, end)
-    if len(expt_paths) == 0:
-        print('No experiments found within date range %s - %s' % (datetime.strftime(start,"%m/%d/%Y"), datetime.strftime(end,"%m/%d/%Y")))
-        return
+    expt_paths = get_expts_in_range(all_paths, day, day)
     site_paths = [glob.glob(os.path.join(path, 'slice_*', 'site_*')) for path in expt_paths]
     site_paths = [sp for paths in site_paths for sp in paths] #flatten site paths if nested list
     
@@ -70,9 +68,10 @@ def generate_daily_report(day):
             row['Blank Fill Date'] = blank_fill_date
             patch_date = timestamp_to_datetime(day_info.get('__timestamp__'))
             row['Patch Date'] = datetime.strftime(patch_date, "%m/%d/%Y") if isinstance(patch_date, datetime) else None
-            species = day_info.get('LIMS_donor_info',{}).get('organism')
-            row['Species'] = species.capitalize() if isinstance(species, str) else None
-            row['Specimen ID'] = day_info.get('animal_ID')
+            spec_id = day_info.get('animal_ID')
+            row['Specimen ID'] = spec_id
+            species = lims.specimen_species(spec_id)
+            row['Species'] = organism.get(species)
             row['Cell Line'] = day_info.get('LIMS_donor_info', {}).get('genotype')
             row['ROI Major'] = format_roi_major(day_info.get('target_region'))
 
@@ -116,6 +115,9 @@ def get_expts_in_range(expts, start, end):
         if expt_date >= start and expt_date <= end:
             in_range.append(expt)
 
+    if len(in_range) == 0:
+        print('No experiments found within date range %s - %s' % (datetime.strftime(start,"%m/%d/%Y"), datetime.strftime(end,"%m/%d/%Y")))
+        exit()
     return in_range
 
 def valid_date_range(date_range):
@@ -126,7 +128,7 @@ def valid_date_range(date_range):
 
 def valid_date(d):
     try:
-        return datetime.strptime(d, "%Y%m%d")
+        return datetime.strptime(d, "%Y%m%d").date()
     except ValueError:
         msg = "Date '{0}' does not match format YYYYMMDD"
         raise argparse.ArgumentTypeError(msg)
@@ -136,7 +138,7 @@ if __name__ == '__main__':
     pg.dbg()
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--daily', type=valid_date, nargs='?', const=datetime.now(), help="Default date is today, optionally set the date with the format YYYYMMDD")
+    parser.add_argument('--daily', type=valid_date, nargs='?', const=datetime.now().date(), help="Default date is today, optionally set the date with the format YYYYMMDD")
     parser.add_argument('--monthly', type=valid_date_range, nargs=2, help="Provide date range to create monthly report as YYYYMMDD YYYYMMDD (start, end)")
 
     args = parser.parse_args(sys.argv[1:])
