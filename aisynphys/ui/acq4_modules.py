@@ -400,7 +400,7 @@ class PatchSeqMetadata(MetadataField):
             def setWidgets(self, columns):
                 self.widgets = {
                 'Seal': pg.ComboBox(items=['','GS','LS','NS','TF','NA']),
-                'Cre/Flp': pg.ComboBox(items=['','Cre+', 'FlpO+', '-']),
+                'Reporter': pg.ComboBox(items=['','TdT+', 'EGFP+', '-', 'NA']),
                 'Nucleus': pg.ComboBox(items=['','+', '-']),
                 'End Seal': pg.QtGui.QCheckBox(''),
                 'Tube ID': pg.QtGui.QLineEdit(),
@@ -414,7 +414,7 @@ class PatchSeqMetadata(MetadataField):
 
     def __init__(self, name, value, config):
         widget = pg.TreeWidget()
-        self.columns = OrderedDict([('HS', 0), ('Seal', 1), ('Cre/Flp', 2), ('Nucleus', 3), ('End Seal', 4), ('Tube ID', 5)])
+        self.columns = OrderedDict([('HS', 0), ('Seal', 1), ('Reporter', 2), ('Nucleus', 3), ('End Seal', 4), ('Tube ID', 5)])
         widget.setColumnCount(len(self.columns.values()))
         widget.setHeaderLabels(self.columns.keys())
         [widget.setColumnWidth(col, width) for col, width in enumerate([50, 50, 70, 50, 50, 80])]

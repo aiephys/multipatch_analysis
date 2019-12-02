@@ -34,6 +34,9 @@ def generate_daily_report(day):
     start = end - timedelta(hours=24)
 
     expt_paths = get_expts_in_range(all_paths, start, end)
+    if len(expt_paths) == 0:
+        print('No experiments found within date range %s - %s' % (datetime.strftime(start,"%m/%d/%Y"), datetime.strftime(end,"%m/%d/%Y")))
+        return
     site_paths = [glob.glob(os.path.join(path, 'slice_*', 'site_*')) for path in expt_paths]
     site_paths = [sp for paths in site_paths for sp in paths] #flatten site paths if nested list
     
@@ -49,7 +52,7 @@ def generate_daily_report(day):
         headstages = site_info.get('headstages')
         
         if headstages is None:
-            errors.append('%tNo recorded headstages')
+            errors.append('\tNo recorded headstages')
             continue
         
         site_errors = {}
