@@ -264,9 +264,9 @@ class PipelineModule(object):
         drop_jobs : list
             Job IDs that need to be dropped because their output is invalid and they are not ready to be updated again
         run_jobs : OrderedDict
-            {'job_id': meta} for jobs that need to be updated AND are ready to be updated
+            {job_id: meta} for jobs that need to be updated AND are ready to be updated
         error_jobs : OrderedDict
-            {'job_id': meta} for jobs that previously failed to update due to an error
+            {job_id: meta} for jobs that previously failed to update due to an error
         """
         drop_job_ids = []
         run_jobs = OrderedDict()
