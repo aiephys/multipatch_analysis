@@ -194,9 +194,9 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         # Find the LIMS CellCluster ID for this experiment 
         cluster_ids = lims.expt_cluster_ids(self.specimen_name, ts)
         if len(cluster_ids) == 0:
-            raise Exception("No CellCluster found for %s %s" % (self.specimen_name, ts))
+            raise Exception("No CellCluster found for %s %0.3f" % (self.specimen_name, ts))
         if len(cluster_ids) > 1:
-            raise Exception("Multiple CellClusters found for %s %s" % (self.specimen_name, ts))
+            raise Exception("Multiple CellClusters found for %s %0.3f" % (self.specimen_name, ts))
         self.cluster_id = cluster_ids[0]
         self.cluster_name = lims.specimen_name(self.cluster_id)
 
