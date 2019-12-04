@@ -72,9 +72,13 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
             srec_entry = db.SyncRec(ext_id=srec.key, experiment=expt_entry, temperature=temp)
             session.add(srec_entry)
 
+            #raise Exception('stop')
+
             rec_entries = {}
             all_pulse_entries = {}
             for rec in srec.recordings:
+                if not hasattr(rec, 'device_name'):
+                    print(rec.device_id, ' doesnt have device name')
                 
                 # import all recordings
                 electrode_entry = elecs_by_ad_channel.get(rec.device_id, None)
@@ -146,7 +150,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                         session.add(pulse_entry)
                         pulse_entries[pulse.meta['pulse_n']] = pulse_entry
 
-                elif isinstance(rec, OptoRecording) and (rec.device_id=='Fidelity' or 'AD6' in rec.device_id): 
+                elif isinstance(rec, OptoRecording) and (rec.device_name=='Fidelity'): 
                     ## This is a 2p stimulation
 
                     ## get cell entry
@@ -181,7 +185,6 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                     pulse_entries = {}
                     all_pulse_entries[rec.device_id] = pulse_entries
 
-                    #pulses = find_noisy_square_pulses(rec['reporter'])
                     for i in range(len(rec.pulse_start_times)):
                     # Record information about all pulses, including test pulse.
                         #t0, t1 = pulse.meta['pulse_edges']
@@ -206,6 +209,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                                     'pockel_voltage':rec.pulse_power()[i],
                                     'position_offset':offset,
                                     'offset_distance':offset_distance,
+                                    'wavelength': 1070e-9
                                     } # TODO: put in light_source and wavelength
                             )
                         qc_pass, qc_failures = qc.opto_stim_pulse_qc_pass(pulse_entry)
@@ -216,24 +220,24 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                         session.add(pulse_entry)
                         pulse_entries[i] = pulse_entry
 
-                elif 'TTL' in rec.device_id:
-                    if rec.device_id == 'TTL1P_0': ## this is the ttl output to Prairie, not an LED stimulation
-                        continue
+                elif 'LED' in rec.device_name:
+                    #if rec.device_id == 'TTL1P_0': ## this is the ttl output to Prairie, not an LED stimulation
+                    #    continue
 
                     ### This is an LED stimulation
-                    if rec.device_id in ['TTL1_1', 'TTL1P_1']:
-                        lightsource = 'LED-470nm'
-                    elif rec.device_id in ['TTL1_2', 'TTL1P_2']:
-                        lightsource = 'LED-590nm'
-                    else:
-                        raise Exception("Don't know lightsource for device: %s" % rec.device_id)
+                    #if rec.device_id in ['TTL1_1', 'TTL1P_1']:
+                    #    lightsource = 'LED-470nm'
+                    #elif rec.device_id in ['TTL1_2', 'TTL1P_2']:
+                    #    lightsource = 'LED-590nm'
+                    #else:
+                    #    raise Exception("Don't know lightsource for device: %s" % rec.device_id)
 
                     pulse_entries = {}
                     all_pulse_entries[rec.device_id] = pulse_entries
 
                     spa = PWMStimPulseAnalyzer(rec)
                     pulses = spa.pulses(channel='reporter')
-                    max_power=power_cal.get_led_power(timestamp_to_datetime(expt_entry.acq_timestamp), expt_entry.rig_name, lightsource)
+                    max_power=power_cal.get_led_power(timestamp_to_datetime(expt_entry.acq_timestamp), expt_entry.rig_name, rec.device_name)
 
                     for i, pulse in enumerate(pulses):
                         pulse_entry = db.StimPulse(
@@ -249,7 +253,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                             device_name=rec.device_id,
                             meta = {'shape': 'wide-field', ## TODO: description of field of view
                                     'LED_voltage':str(pulse.amplitude),
-                                    'light_source':lightsource,
+                                    'light_source':rec.device_name,
                                     'pulse_width_modulation': spa.pwm_params(channel='reporter', pulse_n=i),
                                     #'position_offset':offset,
                                     #'offset_distance':offset_distance,
@@ -268,6 +272,10 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                     ## At the end of some .nwbs there are vc traces to check access resistance.
                     ## These have an AD6(fidelity) channel, but do not have an optical stimulation and
                     ## this channel is labeled unknown when it gets created in OptoRecording
+                    pass
+
+                elif rec.device_name== 'Prairie_Command':
+                    ### this is just the TTL command sent to the laser, the actually data about when the Laser was active is in the Fidelity channel
                     pass
                     
                 else:

@@ -11,6 +11,19 @@ serial_number_to_rig = {
     830775: 'Garth' # amplifier 2
 }
 
+device_mapping = {
+    'Wayne': {
+        'AD0': 'Electrode_0',
+        'AD1': 'Electrode_1',
+        'AD2': 'Electrode_2',
+        'AD3': 'Electrode_3',
+        'AD6': 'Fidelity',
+        'TTL1_0': 'Prairie_Command',
+        'TTL1_1': 'LED-470nm',
+        'TTL1_2': 'LED-590nm'
+    }
+}
+
 
 def find_lims_specimen_ids(slice_dh):
     """Return a list of lims specimen_ids that match the metainfo in the day and slice .index files.
@@ -65,6 +78,29 @@ def get_rig_name_from_serial_number(sn):
     if rig is None:
         raise Exception('No registry for serial number: %i' % int(sn))
 
+    return rig
+
+def get_rig_from_nwb(nwb=None, notebook=None):
+    """Look up serial numbers in nwb to determine which rig this was recorded on. Uses serial_number_to_rig dict."""
+    if notebook is not None:
+        nb = notebook
+    else:
+        nb = nwb.notebook()
+    ## serial number is recorded in many places, make sure they converge on one rig
+    sns = []
+    for sweeps in nb.values():
+        for channel in sweeps:
+            sn = channel.get('Serial Number', None)
+            if sn is not None:
+                sns.append(sn)
+    unique_sns = list(set(sns))
+    rigs = []
+    for sn in unique_sns:
+        rigs.append(get_rig_name_from_serial_number(sn))
+    unique_rigs = list(set(rigs))
+    if len(unique_rigs) != 1:
+        raise Exception("Could not resolve rig for experiment %s. Found %s" %(expt.uid, unique_rigs))
+    rig = unique_rigs[0]
     return rig
 
 

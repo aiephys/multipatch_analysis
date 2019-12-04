@@ -62,21 +62,7 @@ class OptoExperimentPipelineModule(DatabasePipelineModule):
             # dig to find out which rig this was recorded on
             rig = expt_info.get('rig_name', None)
             if rig is None and expt.data is not None:
-                ## serial number is recorded in many places, make sure they converge on one rig
-                sns = []
-                for sweeps in expt.data.notebook().values():
-                    for channel in sweeps:
-                        sn = channel.get('Serial Number', None)
-                        if sn is not None:
-                            sns.append(sn)
-                unique_sns = list(set(sns))
-                rigs = []
-                for sn in unique_sns:
-                    rigs.append(data_model.get_rig_name_from_serial_number(sn))
-                unique_rigs = list(set(rigs))
-                if len(unique_rigs) != 1:
-                    raise Exception("Could not resolve rig for experiment %s. Found %s" %(expt.uid, unique_rigs))
-                rig = unique_rigs[0]
+                rig = data_model.get_rig_from_nwb(expt.data)
 
                 #serial_number = expt.nwb.notebook()[0][0]['Serial Number']
                 #rig = data_model.get_rig_name_from_serial_number(serial_number)
