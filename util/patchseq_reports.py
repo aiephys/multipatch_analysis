@@ -67,10 +67,9 @@ def generate_daily_report(day):
                 blank_fill_date = ''
             row['Blank Fill Date'] = blank_fill_date
             patch_date = timestamp_to_datetime(day_info.get('__timestamp__'))
-            row['Patch Date'] = datetime.strftime(patch_date, "%m/%d/%Y") if isinstance(patch_date, datetime) else None
-            spec_id = day_info.get('animal_ID')
-            row['Specimen ID'] = spec_id
-            species = lims.specimen_species(spec_id)
+            row['Patch Date'] = datetime.strftime(patch_date, "%m/%d/%Y") if isinstance(patch_date, datetime) else None 
+            row['Specimen ID'] = day_info.get('animal_ID')
+            species = lims.specimen_species(slice_info.get('specimen_ID'))
             row['Species'] = organism.get(species)
             row['Cell Line'] = day_info.get('LIMS_donor_info', {}).get('genotype')
             row['ROI Major'] = format_roi_major(day_info.get('target_region'))
@@ -91,6 +90,9 @@ def generate_daily_report(day):
             row_data.append(row)
 
     print('\n'.join(errors))
+    if len(row_data) == 0:
+        print('No patchseq tubes to report')
+        return
     data_df = pd.DataFrame(row_data)
     data_df.set_index('tube_id', inplace=True)
     data_df.sort_index(inplace=True)
