@@ -20,6 +20,7 @@ class MultipatchPipelineModule(DatabasePipelineModule):
                 meta = {'source': expts[jid].original_path}
             else:
                 # a path should already be present in meta; translate backward to original source
+                meta['storage_path'] = meta['source']
                 sync_file = os.path.join(meta['source'], 'sync_source')
                 if os.path.exists(sync_file):
                     meta['source'] = open(sync_file).read()

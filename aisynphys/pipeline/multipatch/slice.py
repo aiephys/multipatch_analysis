@@ -48,8 +48,9 @@ class SlicePipelineModule(MultipatchPipelineModule):
             'storage_path': sl.storage_path,
         }
 
-        sl = db.Slice(**fields)
-        session.add(sl)
+        orm_sl = db.Slice(**fields)
+        session.add(orm_sl)
+        session.flush()  # force error messages to appear here, if any.
 
     def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.
