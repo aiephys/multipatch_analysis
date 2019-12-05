@@ -1,4 +1,4 @@
-import os, yaml, re
+import os, yaml, re, json
 from datetime import datetime, timedelta
 from collections import OrderedDict
 import acq4
@@ -315,6 +315,35 @@ class ExperimentMetadataSubmission(object):
                     if part not in spec_name:
                         errors.append('Specimen name %s does not contain genotype part %s' % (spec_name, part))
 
+    def lims_cells(self):
+        cells = []
+        site_info = self.site_dh.info()
+        headstages = site_info.get('headstages')
+        if headstages is None:
+            return
+        day_info = self.site_dh.parent().parent().info()
+        region = day.get('target_region')
+        structure = 'VISp' if region == 'V1' else None
+        for hs, info in headstages.items():
+            cell = {
+            'external_specimen_name': None,
+            'patched_cell_container': None,
+            'cell_reporter': None,
+            'structure': structure,
+            }
+            tube_id = info['Tube ID']
+            if tube_id == '':
+                cell['external_specimen_name'] = hs[-1]
+                cells.append(cell)
+                continue
+
+            cell['patched_cell_container'] = tube_id
+            cell['cell_reporter'] = site_info.get('Reporter')
+
+            cells.append(cell)
+
+        return cells
+
     def summary(self):
         summ = OrderedDict()
         summ['file categories'] = self.files
@@ -353,3 +382,8 @@ class ExperimentMetadataSubmission(object):
         # Write an manifest file describing the data that should be uploaded to LIMS
         manifest_file = self.site_dh['file_manifest.yml'].name()
         yaml.dump(self.files, open(manifest_file, 'wb'), default_flow_style=False, indent=4)
+
+        # Generate json for LIMS cell specimens
+        cells = self.lims_cells()
+        json_file = os.path.join(self.site_dh, 'lims_cells.json')
+        json.dump(cells, open(json_file, 'wb'))
