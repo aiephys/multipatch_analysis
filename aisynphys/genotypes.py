@@ -77,17 +77,23 @@ DRIVER_LINES = {                  # dependencies     products
     'Glt25d2-Cre_NF107':          [(['glt25d2'],      ['cre'])],
     'Esr2-IRES2-Cre':             [(['esr2'],         ['cre'])],
     
-    'rAAV-mDlx-GFP':                                      [(['mDlx'],              ['GFP'])],
-    'rAAV-Dlx2.0-SYFP2':                                  [(['3xcorehI56i'],       ['YFP'])],  # pan-GABA
-    'rAAV-eHGT_078m-minBglobin-SYFP2-WPRE3-BGHpA':        [(['eHGT_078m'],         ['YFP'])],  # pan-Glu
-    'rAAV-3xhI56icore-minBG-tdTomato-WPRE3-BGHpA':        [(['3xcorehI56i'],       ['tdTomato'])],  # pan-GABA
-    'rAAV-eHGT_073m-minBglobin-SYFP2-WPRE3-BGHpA':        [(['eHGT_073m'],         ['YFP'])],  # pan-Glu
-    'rAAV-3xHGT_073m(core)-minBG-SYFP2-WPRE3-BGHpA':      [(['3xHGT_073m(core)'],  ['YFP'])],  # pan-Glu
-    'rAAV-EF1a-fDIO-EGFP-WPRE-HGHpA':                     [(['EF1a'],              ['EGFP'])],
-    'rAAV-eHGT_078m-minBG-FlpO-WPRE-HGHpA':               [(['eHGT_078m'],         ['flp'])],  # pan-Glu
-    'rAAV-TRE-SYFP2-WPRE-HGHpA':                          [(['TRE'],               ['YFP'])],
-    'rAAV-hSyn1-tTA-WPRE-HGHpA':                          [(['hSyn1'],             ['tTA'])],
-    'rAAV-3xhI56i(core)-minBglobin-SYFP2-WPRE3-BGHpA':    [(['3xhI56i(core)'],     ['YFP'])],  # pan-GABA
+    'rAAV-mDlx-GFP':                                         [(['mDlx'],                    ['GFP'])],
+    'rAAV-Dlx2.0-SYFP2':                                     [(['3xcorehI56i'],             ['YFP'])],  # pan-GABA
+    'rAAV-3xhI56icore-minBG-tdTomato-WPRE3-BGHpA':           [(['3xcorehI56i'],             ['tdTomato'])],  # pan-GABA
+    'rAAV-3xhI56i(core)-minBglobin-SYFP2-WPRE3-BGHpA':       [(['3xhI56i(core)'],           ['YFP'])],  # pan-GABA
+    'rAAV-3xHGT_073m(core)-minBG-SYFP2-WPRE3-BGHpA':         [(['3xHGT_073m(core)'],        ['YFP'])],  # pan-Glu
+    'rAAV-3xeHGT_073m(core)-minCMV*-SYFP2-WPRE3-BGHpA':      [(['3xeHGT_073m(core)'],       ['YFP'])],  # pan-Glu
+    'rAAV-hsA2-3x(eHGT_078m core)-minRho-SYFP2-WPRE3-BGHpA': [(['hsA2-3x(eHGT_078m core)'], ['YFP'])],  # pan-Glu
+    'rAAV-eHGT_073m-minBglobin-SYFP2-WPRE3-BGHpA':           [(['eHGT_073m'],               ['YFP'])],  # pan-Glu
+    'rAAV-eHGT_073h-minBG-tTA-WPRE-HGHpA':                   [(['eHGT_073h'],               ['tTA'])],  # pan-Glu
+    'rAAV-eHGT_078m-minBglobin-SYFP2-WPRE3-BGHpA':           [(['eHGT_078m'],               ['YFP'])],  # pan-Glu
+    'rAAV-eHGT_078m-minBG-FlpO-WPRE-HGHpA':                  [(['eHGT_078m'],               ['flp'])],  # pan-Glu
+    'rAAV-eHGT_078m-minBG-tTA-WPRE-HGHpA':                   [(['eHGT_078m'],               ['tTA'])],  # pan-Glu
+    'rAAV-EF1a-fDIO-EGFP-WPRE-HGHpA':                        [(['EF1a'],                    ['EGFP'])],
+    'rAAV-TRE-SYFP2-WPRE-HGHpA':                             [(['TRE'],                     ['YFP'])],
+    'rAAV-TREtight-tdTomato-WPRE-HGHpA':                     [(['TREtight'],                ['tdTomato'])],
+    'rAAV-TRE-tdTomato-WPRE-HGHpA':                          [(['TRE'],                     ['tdTomato'])],
+    'rAAV-hSyn1-tTA-WPRE-HGHpA':                             [(['hSyn1'],                   ['tTA'])],
 }
 
 
