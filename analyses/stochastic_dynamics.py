@@ -38,6 +38,16 @@ class StochasticReleaseModel(object):
         """Compute a measure of the likelihood that *times* and *amplitudes* could be generated
         by a synapse with the current dynamic parameters.
         
+        Parameters
+        ----------
+        spike_times : array
+            Times (in seconds) of presynaptic spikes in ascending order
+        amplitudes : array
+            Evoked PSP/PSC amplitudes for each spike listed in *spike_times*. Amplitudes may be
+            NaN to indicate that the event should be ignored (usually because the spike could not be
+            detected or the amplitude could not be measured). Any events within 10 seconds following
+            a NaN will update the model as usual, but will not be included in the likelihood estimate.
+        
         Returns
         -------
         result : array
@@ -60,33 +70,48 @@ class StochasticReleaseModel(object):
         }
         
         previous_t = spike_times[0]
-        
+        last_nan_time = -np.inf
+                
         for i,t in enumerate(spike_times):
             amplitude = amplitudes[i]
+            if np.isnan(amplitude):
+                expected_amplitude = np.nan
+                likelihood = np.nan
+                last_nan_time = t
 
-            # recover vesicles up to the current timepoint
-            dt = t - previous_t
-            previous_t = t
-            recovery = np.exp(-dt / self.recovery_tau)
-            state['available_vesicle'] = state['available_vesicle'] * recovery + self.n_release_sites * (1.0 - recovery)
-            
-            # record model state immediately before spike
-            for k in state:
-                pre_spike_state[i][k] = state[k]
+            else:
+                # recover vesicles up to the current timepoint
+                dt = t - previous_t
+                previous_t = t
+                recovery = np.exp(-dt / self.recovery_tau)
+                state['available_vesicle'] = state['available_vesicle'] * recovery + self.n_release_sites * (1.0 - recovery)
                 
-            # measure likelihood of seeing this response amplitude
-            expected_amplitude = state['available_vesicle'] * self.release_probability * self.mini_amplitude
-            likelihood = self.likelihood([amplitude], state)[0]
-            
-            # release vesicles
-            # note: we allow available_vesicle to become negative because this help to ensure
-            # that the overall likelihood will be low for such models
-            depleted_vesicle = amplitude / self.mini_amplitude
-            state['available_vesicle'] -= depleted_vesicle
+                # predict most likely amplitude for this spike (just for show)
+                expected_amplitude = state['available_vesicle'] * self.release_probability * self.mini_amplitude
+                
+                # record model state immediately before spike
+                for k in state:
+                    pre_spike_state[i][k] = state[k]
+                    
+                # measure likelihood of seeing this response amplitude
+                if t - last_nan_time < 10.0:
+                    # ignore likelihood for this event if it was too close to an unmeasurable response
+                    likelihood = np.nan
+                else:
+                    likelihood = self.likelihood([amplitude], state)[0]
+                
+                # release vesicles
+                # note: we allow available_vesicle to become negative because this help to ensure
+                # that the overall likelihood will be low for such models
+                depleted_vesicle = amplitude / self.mini_amplitude
+                state['available_vesicle'] -= depleted_vesicle
 
-            # record model state immediately after spike
-            for k in state:
-                post_spike_state[i][k] = state[k]
+                # record model state immediately after spike
+                for k in state:
+                    post_spike_state[i][k] = state[k]
+            
+            if np.isnan(state['available_vesicle']):
+                raise Exception("NaNs where they shouldn't be")
             
             # record results
             result[i]['spike_time'] = t
@@ -332,7 +357,7 @@ class ParameterSpace(object):
     def run(self, func):
         all_inds = list(np.ndindex(self.result.shape))
 
-        with pg.multiprocess.Parallelize(enumerate(all_inds), results=self.result, progressDialog='synapticulating...', workers=8) as tasker:
+        with pg.multiprocess.Parallelize(enumerate(all_inds), results=self.result, progressDialog='synapticulating...', workers=16) as tasker:
             for i, inds in tasker:
                 params = self[inds]
                 tasker.results[inds] = func(params)
@@ -364,7 +389,7 @@ class ParameterSearchWidget(QtGui.QWidget):
         
         result_img = np.zeros(param_space.result.shape)
         for ind in np.ndindex(result_img.shape):
-            result_img[ind] = np.log(param_space.result[ind][1]['likelihood'] + 1).mean()
+            result_img[ind] = np.nanmean(np.log(param_space.result[ind][1]['likelihood'] + 1))
         self.slicer.set_data(result_img)
         self.results = result_img
         
@@ -453,12 +478,12 @@ if __name__ == '__main__':
     mask = event_qc(raw_events)
     events = raw_events[mask]
 
-    rec_times = (events['rec_start_time'] - events['rec_start_time'].iloc[0]).dt.total_seconds()
-    spike_times = events['first_spike_time'] + rec_times
+    rec_times = (events['rec_start_time'] - events['rec_start_time'].iloc[0]).dt.total_seconds().to_numpy()
+    spike_times = events['first_spike_time'].to_numpy() + rec_times
 
     # any missing spike times get filled in with the average latency
     missing_spike_mask = np.isnan(spike_times)
-    avg_spike_latency = np.nanmedian(spike_times - events['onset_time'])
+    avg_spike_latency = np.nanmedian(events['first_spike_time'] - events['onset_time'])
     pulse_times = events['onset_time'] + avg_spike_latency + rec_times
     spike_times[missing_spike_mask] = pulse_times[missing_spike_mask]
     
@@ -468,8 +493,8 @@ if __name__ == '__main__':
     #    - measured distribution of background noise
     #    - parameter space to be searched
 
-    amplitudes = events['fit_amp']
-    bg_amplitudes = events['baseline_fit_amp']
+    amplitudes = events['fit_amp'].to_numpy()
+    bg_amplitudes = events['baseline_fit_amp'].to_numpy()
 
     first_pulse_mask = events['pulse_number'] == 1
     first_pulse_amps = amplitudes[first_pulse_mask]
@@ -479,32 +504,32 @@ if __name__ == '__main__':
     def log_space(start, stop, steps):
         return start * (stop/start)**(np.arange(steps) / (steps-1))
         
-    n_release_sites = 20
-    release_probability = 0.1
-    max_events = -1
-    mini_amp_estimate = pair.synapse.psp_amplitude / (n_release_sites * release_probability)
-    params = {
-        'n_release_sites': np.array([1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64]),
-        'release_probability': log_space(0.01, 0.9, 21),
-        'mini_amplitude': log_space(0.001, 0.3, 21),
-        'mini_amplitude_stdev': log_space(0.0001, 0.1, 21),
-        'measurement_stdev': bg_amplitudes.std(),
-        'recovery_tau': log_space(2e-5, 20, 21),
-    }
+    # n_release_sites = 20
+    # release_probability = 0.1
+    # max_events = -1
+    # mini_amp_estimate = pair.synapse.psp_amplitude / (n_release_sites * release_probability)
+    # params = {
+    #     'n_release_sites': np.array([1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64]),
+    #     'release_probability': log_space(0.01, 0.9, 21),
+    #     'mini_amplitude': log_space(0.001, 0.3, 21),
+    #     'mini_amplitude_stdev': log_space(0.0001, 0.1, 21),
+    #     'measurement_stdev': bg_amplitudes.std(),
+    #     'recovery_tau': log_space(2e-5, 20, 21),
+    # }
 
     # quick test
-    # n_release_sites = 8
-    # release_probability = 0.1
-    # mini_amp_estimate = first_pulse_amps.mean() / (n_release_sites * release_probability)
-    # max_events = 20
-    # params = {
-    #     'n_release_sites': np.array([1, 2, 4, 8, 16]),
-    #     'release_probability': np.array([0.1, 0.2, 0.4, 0.6, 0.8, 1.0]),
-    #     'mini_amplitude': mini_amp_estimate * 1.2**np.arange(-24, 24, 2),
-    #     'mini_amplitude_stdev': mini_amp_estimate * 0.2 * 1.2**np.arange(-24, 24, 8),
-    #     'measurement_stdev': 0.001,
-    #     'recovery_tau': 0.01,
-    # }
+    n_release_sites = 8
+    release_probability = 0.1
+    mini_amp_estimate = first_pulse_amps.mean() / (n_release_sites * release_probability)
+    max_events = 200
+    params = {
+        'n_release_sites': np.array([1, 2, 4, 8, 16]),
+        'release_probability': np.array([0.1, 0.2, 0.4, 0.6, 0.8, 1.0]),
+        'mini_amplitude': mini_amp_estimate * 1.2**np.arange(-24, 24, 2),
+        'mini_amplitude_stdev': mini_amp_estimate * 0.2 * 1.2**np.arange(-24, 24, 8),
+        'measurement_stdev': 0.001,
+        'recovery_tau': 0.01,
+    }
 
     # # Effects of mini_amp_stdev
     # n_release_sites = 20
