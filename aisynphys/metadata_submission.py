@@ -316,29 +316,35 @@ class ExperimentMetadataSubmission(object):
                         errors.append('Specimen name %s does not contain genotype part %s' % (spec_name, part))
 
     def lims_cells(self):
+        reporter = {'-': 'negative', None: 'not applicable'}
         cells = []
         site_info = self.site_dh.info()
         headstages = site_info.get('headstages')
         if headstages is None:
             return
         day_info = self.site_dh.parent().parent().info()
-        region = day.get('target_region')
+        region = day_info.get('target_region')
         structure = 'VISp' if region == 'V1' else None
         for hs, info in headstages.items():
             cell = {
-            'external_specimen_name': None,
+            'external_specimen_name': hs[-1],
             'patched_cell_container': None,
             'cell_reporter': None,
-            'structure': structure,
+            'structure': None,
             }
             tube_id = info['Tube ID']
             if tube_id == '':
-                cell['external_specimen_name'] = hs[-1]
                 cells.append(cell)
                 continue
-
+            cell['structure'] = structure
             cell['patched_cell_container'] = tube_id
-            cell['cell_reporter'] = site_info.get('Reporter')
+            cell_reporter = info.get('Reporter')
+            if cell_reporter == '-':
+                cell['cell_reporter'] = 'negative'
+            elif cell_reporter in ['red', 'green', 'yellow']:
+                cell['cell_reporter'] = 'positive'
+            else:
+                cell['cell_reporter'] = 'not applicable'
 
             cells.append(cell)
 
@@ -385,5 +391,5 @@ class ExperimentMetadataSubmission(object):
 
         # Generate json for LIMS cell specimens
         cells = self.lims_cells()
-        json_file = os.path.join(self.site_dh, 'lims_cells.json')
+        json_file = os.path.join(self.site_dh.name(), 'lims_cells.json')
         json.dump(cells, open(json_file, 'wb'))
