@@ -433,12 +433,29 @@ class PatchSeqMetadata(MetadataField):
     def setValue(self, value):
         for hs_name, widget_state in value.items():
             hs = self.headstages[hs_name]
-            hs.widget_group.setState(widget_state)
+            # hs.widget_group.setState(widget_state)
+            for widget_name, widget in hs.widgets.items():
+                widget_value = value[hs_name].get(widget_name)
+                if widget_name == 'End Seal':
+                    widget.setChecked(widget_value)
+                if widget_name in ['Seal', 'Reporter', 'Nucleus']:
+                    widget.setEditable(True)
+                    widget.lineEdit().setText(widget_value)
+                if widget_name == 'Tube ID':
+                    widget.setText(widget_value)
 
     def getValue(self):
         value = {}
         for hs_name, hs in self.headstages.items():
-            value[hs_name] = hs.widget_group.state() #{}
+            # value[hs_name] = hs.widget_group.state() #{}
+            value[hs_name] = {}
+            for widget_name, widget in hs.widgets.items():
+                if widget_name == 'End Seal':
+                    value[hs_name][widget_name] = widget.isChecked()
+                if widget_name in ['Seal', 'Reporter', 'Nucleus']:
+                    value[hs_name][widget_name] = str(widget.currentText())
+                if widget_name == 'Tube ID':
+                    value[hs_name][widget_name] = str(widget.text())
         return value        
 
 
