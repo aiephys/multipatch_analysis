@@ -13,7 +13,7 @@ from ...data import BaselineDistributor, PulseStimAnalyzer #Experiment, MultiPat
 from neuroanalysis.data import PatchClampRecording
 #from optoanalysis.optoadapter import OptoRecording
 from optoanalysis.data.dataset import OptoRecording
-from optoanalysis.data.analyzers import OptoSyncRecAnalyzer, PWMStimPulseAnalyzer
+from optoanalysis.data.analyzers import OptoSyncRecAnalyzer, PWMStimPulseAnalyzer, OptoStimPulseAnalyzer
 import optoanalysis.power_calibration as power_cal
 import optoanalysis.qc as qc
 from neuroanalysis.stimuli import find_square_pulses
@@ -77,8 +77,8 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
             rec_entries = {}
             all_pulse_entries = {}
             for rec in srec.recordings:
-                if not hasattr(rec, 'device_name'):
-                    print(rec.device_id, ' doesnt have device name')
+                #if not hasattr(rec, 'device_name'):
+                #    print(rec.device_id, ' doesnt have device name')
                 
                 # import all recordings
                 electrode_entry = elecs_by_ad_channel.get(rec.device_id, None)
@@ -150,7 +150,8 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                         session.add(pulse_entry)
                         pulse_entries[pulse.meta['pulse_n']] = pulse_entry
 
-                elif isinstance(rec, OptoRecording) and (rec.device_name=='Fidelity'): 
+                #elif isinstance(rec, OptoRecording) and (rec.device_name=='Fidelity'): 
+                elif rec.device_type == 'Fidelity':
                     ## This is a 2p stimulation
 
                     ## get cell entry
@@ -185,7 +186,10 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                     pulse_entries = {}
                     all_pulse_entries[rec.device_id] = pulse_entries
 
-                    for i in range(len(rec.pulse_start_times)):
+                    ospa = OptoStimPulseAnalyzer.get(rec)
+
+                    for i, pulse in enumerate(ospa.pulses()):
+                        ### pulse is (start, stop, amplitude)
                     # Record information about all pulses, including test pulse.
                         #t0, t1 = pulse.meta['pulse_edges']
                         #resampled = pulse['reporter'].resample(sample_rate=20000)
@@ -193,9 +197,9 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                             recording=rec_entry,
                             cell=cell_entry,
                             pulse_number=i, #pulse.meta['pulse_n'],
-                            onset_time=rec.pulse_start_times[i], #t0,
-                            amplitude=power_cal.convert_voltage_to_power(rec.pulse_power()[i], timestamp_to_datetime(expt_entry.acq_timestamp), expt_entry.rig_name), ## need to fill in laser/objective correctly
-                            duration=rec.pulse_duration()[i],
+                            onset_time=pulse[0],#rec.pulse_start_times[i], #t0,
+                            amplitude=power_cal.convert_voltage_to_power(pulse[2], timestamp_to_datetime(expt_entry.acq_timestamp), expt_entry.rig_name), ## need to fill in laser/objective correctly
+                            duration=pulse[1]-pulse[0],#rec.pulse_duration()[i],
                             #data=resampled.data,
                             #data_start_time=resampled.t0,
                             #wavelength,
@@ -206,7 +210,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                             #qc_pass=None
                             meta = {'shape': shape,
                                     'pockel_cmd':stim.get('prairieCmds',{}).get('laserPower', [None]*100)[i],
-                                    'pockel_voltage':rec.pulse_power()[i],
+                                    'pockel_voltage': float(pulse[2]),#rec.pulse_power()[i],
                                     'position_offset':offset,
                                     'offset_distance':offset_distance,
                                     'wavelength': 1070e-9
@@ -220,7 +224,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                         session.add(pulse_entry)
                         pulse_entries[i] = pulse_entry
 
-                elif 'LED' in rec.device_name:
+                elif 'LED' in rec.device_type:
                     #if rec.device_id == 'TTL1P_0': ## this is the ttl output to Prairie, not an LED stimulation
                     #    continue
 
@@ -237,7 +241,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
 
                     spa = PWMStimPulseAnalyzer(rec)
                     pulses = spa.pulses(channel='reporter')
-                    max_power=power_cal.get_led_power(timestamp_to_datetime(expt_entry.acq_timestamp), expt_entry.rig_name, rec.device_name)
+                    max_power=power_cal.get_led_power(timestamp_to_datetime(expt_entry.acq_timestamp), expt_entry.rig_name, rec.device_id)
 
                     for i, pulse in enumerate(pulses):
                         pulse_entry = db.StimPulse(
@@ -253,7 +257,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                             device_name=rec.device_id,
                             meta = {'shape': 'wide-field', ## TODO: description of field of view
                                     'LED_voltage':str(pulse.amplitude),
-                                    'light_source':rec.device_name,
+                                    'light_source':rec.device_id,
                                     'pulse_width_modulation': spa.pwm_params(channel='reporter', pulse_n=i),
                                     #'position_offset':offset,
                                     #'offset_distance':offset_distance,
@@ -274,7 +278,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                     ## this channel is labeled unknown when it gets created in OptoRecording
                     pass
 
-                elif rec.device_name== 'Prairie_Command':
+                elif rec.device_id== 'Prairie_Command':
                     ### this is just the TTL command sent to the laser, the actually data about when the Laser was active is in the Fidelity channel
                     pass
                     
@@ -283,8 +287,10 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
 
             ### import postsynaptic responses
             osra = OptoSyncRecAnalyzer(srec)
-            for stim_rec in srec.fidelity_channels:
-                for post_rec in srec.recording_channels:
+            #for stim_rec in srec.fidelity_channels:
+            for stim_rec in [x for x in srec.recordings if 'Fidelity' in x.device_type]:
+                #for post_rec in rec.recording_channels:
+                for post_rec in [x for x in srec.recordings if 'MultiClamp 700' in x.device_type]:
                     #if pre_dev == post_dev:
                     #    continue
                     stim_num = stim_rec.meta['notebook']['USER_stim_num']
@@ -318,7 +324,8 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                         session.add(resp_entry)
 
             # generate up to 20 baseline snippets for each recording
-            for dev in srec.recording_channels:
+            #for dev in srec.recording_channels:
+            for dev in [x for x in srec.recordings if 'MultiClamp 700' in x.device_type]:
                 rec = srec[dev.device_id]
                 dist = BaselineDistributor.get(rec)
                 for i in range(20):
