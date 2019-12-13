@@ -13,7 +13,7 @@ from ...data import BaselineDistributor, PulseStimAnalyzer #Experiment, MultiPat
 from neuroanalysis.data import PatchClampRecording
 #from optoanalysis.optoadapter import OptoRecording
 from optoanalysis.data.dataset import OptoRecording
-from optoanalysis.data.analyzers import OptoSyncRecAnalyzer, PWMStimPulseAnalyzer, OptoStimPulseAnalyzer
+from optoanalysis.data.analyzers import OptoSyncRecAnalyzer, PWMStimPulseAnalyzer, OptoStimPulseAnalyzer, OptoBaselineAnalyzer
 import optoanalysis.power_calibration as power_cal
 import optoanalysis.qc as qc
 from neuroanalysis.stimuli import find_square_pulses
@@ -94,15 +94,16 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
 
                 # import patch clamp recording information
                 if isinstance(rec, PatchClampRecording):
+                    oba = OptoBaselineAnalyzer.get(rec)
                     qc_pass, qc_failures = qc.recording_qc_pass(rec)
                     pcrec_entry = db.PatchClampRecording(
                         recording=rec_entry,
                         clamp_mode=rec.clamp_mode,
                         patch_mode=rec.patch_mode,
                         stim_name=rec.stimulus.description,
-                        baseline_potential=rec.baseline_potential,
-                        baseline_current=rec.baseline_current,
-                        baseline_rms_noise=rec.baseline_rms_noise,
+                        baseline_potential=oba.baseline_potential,
+                        baseline_current=oba.baseline_current,
+                        baseline_rms_noise=oba.baseline_rms_noise,
                         qc_pass=qc_pass,
                         meta=None if len(qc_failures) == 0 else {'qc_failures': qc_failures},
                     )
@@ -327,7 +328,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
             #for dev in srec.recording_channels:
             for dev in [x for x in srec.recordings if 'MultiClamp 700' in x.device_type]:
                 rec = srec[dev.device_id]
-                dist = BaselineDistributor.get(rec)
+                dist = OptoBaselineAnalyzer.get(rec)
                 for i in range(20):
                     base = dist.get_baseline_chunk(20e-3)
                     if base is None:
