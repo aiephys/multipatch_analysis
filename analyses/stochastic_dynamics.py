@@ -221,7 +221,7 @@ class ModelResultWidget(QtGui.QWidget):
         self.plt4.setMaximumWidth(500)
         self.plt4.selected_items = []
 
-        self.amp_sample_values = np.linspace(-0.02, 0.1, 200)
+        self.amp_sample_values = np.linspace(-0.01, 0.01, 200)
 
     def set_result(self, model, result, pre_state, post_state):
         self.model = model
@@ -354,10 +354,10 @@ class ParameterSpace(object):
     def axes(self):
         return OrderedDict([(ax, {'values': self.params[ax]}) for ax in self.param_order])
         
-    def run(self, func):
+    def run(self, func, workers=None):
         all_inds = list(np.ndindex(self.result.shape))
 
-        with pg.multiprocess.Parallelize(enumerate(all_inds), results=self.result, progressDialog='synapticulating...', workers=16) as tasker:
+        with pg.multiprocess.Parallelize(enumerate(all_inds), results=self.result, progressDialog='synapticulating...', workers=workers) as tasker:
             for i, inds in tasker:
                 params = self[inds]
                 tasker.results[inds] = func(params)
@@ -455,9 +455,9 @@ if __name__ == '__main__':
     post_cell_id = '2'
     
     # strong ex, depressing
-    expt_id = '1536781898.381'
-    pre_cell_id = '8'
-    post_cell_id = '2'
+    # expt_id = '1536781898.381'
+    # pre_cell_id = '8'
+    # post_cell_id = '2'
 
     # expt_id = float(sys.argv[1])
     # pre_cell_id = int(sys.argv[2])
@@ -520,7 +520,7 @@ if __name__ == '__main__':
     # quick test
     n_release_sites = 8
     release_probability = 0.1
-    mini_amp_estimate = first_pulse_amps.mean() / (n_release_sites * release_probability)
+    mini_amp_estimate = np.nanmean(first_pulse_amps) / (n_release_sites * release_probability)
     max_events = 200
     params = {
         'n_release_sites': np.array([1, 2, 4, 8, 16]),
@@ -530,6 +530,12 @@ if __name__ == '__main__':
         'measurement_stdev': 0.001,
         'recovery_tau': 0.01,
     }
+
+    for k,v in params.items():
+        if np.isscalar(v):
+            assert not np.isnan(v)
+        else:
+            assert not np.any(np.isnan(v))
 
     # # Effects of mini_amp_stdev
     # n_release_sites = 20
@@ -555,7 +561,7 @@ if __name__ == '__main__':
     
     
     param_space = ParameterSpace(params)
-    param_space.run(run_model)
+    param_space.run(run_model, workers=16)
 
     # 4. Visualize / characterize mapped parameter space. Somehow.
     win = ParameterSearchWidget(param_space)
