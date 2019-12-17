@@ -231,9 +231,9 @@ class ModelResultWidget(QtGui.QWidget):
         self.glw = pg.GraphicsLayoutWidget()
         self.layout.addWidget(self.glw, 0, 0)
         
-        self.plt1 = self.glw.addPlot(0, 0, title="likelihood vs compressed time")
+        self.plt1 = self.glw.addPlot(0, 0, title="model likelihood vs compressed time")
         
-        self.plt2 = self.glw.addPlot(1, 0, title="deconvolved amplitude vs compressed time")
+        self.plt2 = self.glw.addPlot(1, 0, title="event amplitude vs compressed time")
         self.plt2.setXLink(self.plt1)
         
         self.state_key = 'release_probability'
@@ -538,7 +538,7 @@ if __name__ == '__main__':
     #     'base_release_probability': log_space(0.01, 0.9, 21),
     #     'mini_amplitude': log_space(0.001, 0.3, 21),
     #     'mini_amplitude_stdev': log_space(0.0001, 0.1, 21),
-    #     'measurement_stdev': bg_amplitudes.std(),
+    #     'measurement_stdev': np.nanstd(bg_amplitudes),
     #     'vesicle_recovery_tau': log_space(2e-5, 20, 21),
     # }
 
@@ -552,15 +552,15 @@ if __name__ == '__main__':
         'base_release_probability': np.array([0.1, 0.2, 0.4, 0.6, 0.8, 1.0]),
         'mini_amplitude': mini_amp_estimate * 1.2**np.arange(-24, 24, 2),
         'mini_amplitude_stdev': mini_amp_estimate * 0.2 * 1.2**np.arange(-24, 24, 8),
-        'measurement_stdev': 0.001,
+        'measurement_stdev': np.nanstd(bg_amplitudes),
         'vesicle_recovery_tau': 0.01,
     }
 
     for k,v in params.items():
         if np.isscalar(v):
-            assert not np.isnan(v)
+            assert not np.isnan(v), k
         else:
-            assert not np.any(np.isnan(v))
+            assert not np.any(np.isnan(v)), k
 
     # # Effects of mini_amp_stdev
     # n_release_sites = 20
@@ -572,7 +572,7 @@ if __name__ == '__main__':
     #     'base_release_probability': release_probability,
     #     'mini_amplitude': mini_amp_estimate * 1.2**np.arange(-24, 24),
     #     'mini_amplitude_stdev': mini_amp_estimate * 1.2**np.arange(-24, 24),
-    #     'measurement_stdev': 0,
+    #     'measurement_stdev': np.nanstd(bg_amplitudes),
     #     'vesicle_recovery_tau': 0.01,
     # }
 
