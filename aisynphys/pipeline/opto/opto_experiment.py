@@ -203,7 +203,7 @@ class OptoExperimentPipelineModule(DatabasePipelineModule):
                 n_no_slice += 1
                 continue
 
-            ready[ex.uid] = max(raw_data_mtime, slice_mtime)
+            ready[ex.uid] = {'dep_time':max(raw_data_mtime, slice_mtime), 'meta':{'source':site_path}}
         
         print("Found %d experiments; %d are able to be processed, %d were skipped due to errors, %d were skipped due to missing or failed slice entries." % (len(expts['expt_list']), len(ready), n_errors, n_no_slice))
         return ready

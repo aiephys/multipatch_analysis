@@ -378,5 +378,5 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
             rec = expt_paths[expt_id]
             ephys_file = os.path.join(config.synphys_data, rec.storage_path, rec.ephys_file)
             nwb_mtime = timestamp_to_datetime(os.stat(ephys_file).st_mtime)
-            ready[rec.ext_id] = max(expt_mtime, nwb_mtime)
+            ready[rec.ext_id] = {'dep_time':max(expt_mtime, nwb_mtime), 'meta':{'source':ephys_file}}
         return ready

@@ -95,6 +95,6 @@ class OptoMorphologyPipelineModule(DatabasePipelineModule):
     #             else:
     #                 cell_hash_compare.append(False)
     #         if all(cell_hash_compare) is False:
-    #             ready[expt.acq_timestamp] = datetime.datetime.now()
+    #             ready[expt.acq_timestamp] = datetime.datetime.now() #### if we use this we'll need to update it to {'dep_time': time, 'meta':{}}
     
     #     return ready

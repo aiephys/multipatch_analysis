@@ -99,6 +99,6 @@ class OptoCortexLocationPipelineModule(DatabasePipelineModule):
                 mtime = datetime.datetime.fromtimestamp(os.path.getmtime(expt.connections_file))
             else:
                 mtime = datetime.datetime.fromtimestamp(os.path.getmtime(config.distance_csv))
-            ready[expt_id] = mtime
+            ready[expt_id] = {'dep_time':mtime, 'meta':{}}
     
         return ready

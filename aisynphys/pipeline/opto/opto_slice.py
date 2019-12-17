@@ -119,14 +119,14 @@ class OptoSlicePipelineModule(DatabasePipelineModule):
         ready = OrderedDict()
         for ts, path in slices.items():
             if path == 'place_holder':
-                ready['%.3f'%0.0] = timestamp_to_datetime(0.0)
+                ready['%.3f'%0.0] = {'dep_time':timestamp_to_datetime(0.0), 'meta':{'source':path}}
             else:
                 mtime = os.stat(os.path.join(path, '.index')).st_mtime
                 # test file updates:
                 # import random
                 # if random.random() > 0.8:
                 #     mtime *= 2
-                ready[ts] = timestamp_to_datetime(mtime)
+                ready[ts] = {'dep_time':timestamp_to_datetime(mtime), 'meta':{'source':path}}
         return ready
 
 
