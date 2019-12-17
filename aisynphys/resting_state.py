@@ -81,7 +81,7 @@ def get_resting_state_responses(pair, rest_duration, response_duration=10e-3):
     recs = q.all()
     
     rest_prs = {'ic': [], 'vc': []}
-    stim_times = [datetime_to_timestamp(rec.recording.start_time) + rec.stim_pulse.onset_time for rec in recs]
+    stim_times = [datetime_to_timestamp(rec.Recording.start_time) + rec.StimPulse.onset_time for rec in recs]
     for i,rec in enumerate(recs):
         stim_time = stim_times[i]
         if i > 0:
@@ -95,13 +95,13 @@ def get_resting_state_responses(pair, rest_duration, response_duration=10e-3):
                 # not enough response time; skip
                 continue
         
-        qc_pass = getattr(rec.pulse_response, syn_typ + '_qc_pass')
+        qc_pass = getattr(rec.PulseResponse, syn_typ + '_qc_pass')
         if qc_pass is not True:
             continue
         
-        rest_prs[rec.patch_clamp_recording.clamp_mode].append(rec.pulse_response)
+        rest_prs[rec.PatchClampRecording.clamp_mode].append(rec.PulseResponse)
         
-        assert rec.pulse_response.stim_pulse.pulse_number == 1
+        assert rec.PulseResponse.stim_pulse.pulse_number == 1
 
     return {k:PulseResponseList(v) for k,v in rest_prs.items()}
 

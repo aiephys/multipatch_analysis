@@ -630,6 +630,8 @@ class StrengthAnalyzer(Analyzer):
                 # if nrmse is None or nrmse > 0.8:
                 #     continue
                 data = rsf.vc_avg_data if field_name.startswith('PSC') else rsf.ic_avg_data
+                if data is None:
+                    continue
                 traceA = TSeries(data=data, sample_rate=db.default_sample_rate)
                 if field_name.startswith('PSC'):
                     traceA = bessel_filter(traceA, 5000, btype='low', bidir=True)

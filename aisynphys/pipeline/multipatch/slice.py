@@ -2,12 +2,13 @@ import os, glob, re, pickle, time
 from datetime import datetime
 from collections import OrderedDict
 from acq4.util.DataManager import getDirHandle
-from ..pipeline_module import DatabasePipelineModule
+from .pipeline_module import MultipatchPipelineModule
 from ... import config, lims, constants
 from ...util import datetime_to_timestamp, timestamp_to_datetime
+from ...data.slice import Slice
 
 
-class SlicePipelineModule(DatabasePipelineModule):
+class SlicePipelineModule(MultipatchPipelineModule):
     """Imports per-slice metadata into DB.
     """
     name = 'slice'
@@ -21,67 +22,35 @@ class SlicePipelineModule(DatabasePipelineModule):
 
         slices = all_slices()
         path = slices[job_id]
-        dh = getDirHandle(path)
-        info = dh.info()
-        parent_info = dh.parent().info()
         
-        # pull some metadata from LIMS
-        sid = info.get('specimen_ID', '').strip()
-        if len(sid) > 0:
-            limsdata = lims.specimen_info(sid)
-        else:
-            limsdata = {}
-
-        quality = info.get('slice quality', None)
-        try:
-            quality = int(quality)
-        except Exception:
-            quality = None
-
-        # Interpret slice time
-        slice_time = parent_info.get('time_of_dissection', None)
-        if slice_time == '':
-            slice_time = None
-        if slice_time is not None:
-            m = re.match(r'((20\d\d)-(\d{1,2})-(\d{1,2}) )?(\d+):(\d+)', slice_time.strip())
-            if m is not None:
-                _, year, mon, day, hh, mm = m.groups()
-                if year is None:
-                    date = datetime.fromtimestamp(dh.parent().info()['__timestamp__'])
-                    slice_time = datetime(date.year, date.month, date.day, int(hh), int(mm))
-                else:
-                    slice_time = datetime(int(year), int(mon), int(day), int(hh), int(mm))
-
-        # construct full genotype string 
-        genotype = limsdata['genotype'] or ''
-        for info in (parent_info, info):
-            inj = info.get('injections')
-            if inj in (None, ''):
-                continue
-            if inj not in constants.INJECTIONS:
-                raise KeyError("Injection %r is unknown in constants.INJECTIONS" % inj)
-            genotype = ';'.join(genotype.split(';') + [constants.INJECTIONS[inj]])
+        ignore_file = os.path.join(path, 'ignore')
+        if os.path.exists(ignore_file):
+            err = open(ignore_file).read()
+            raise Exception("Ignoring slice %s: %s" % (job_id, err))
+        
+        sl = Slice.get(path)
 
         fields = {
             'ext_id': job_id,
-            'acq_timestamp': info['__timestamp__'],
-            'species': limsdata.get('organism'),
-            'date_of_birth': limsdata.get('date_of_birth'),
-            'age': limsdata.get('age'),
-            'sex': limsdata.get('sex'),
-            'genotype': genotype,
-            'orientation': limsdata.get('plane_of_section'),
-            'surface': limsdata.get('exposed_surface'),
-            'hemisphere': limsdata.get('hemisphere'),
-            'quality': quality,
-            'slice_time': slice_time,
+            'acq_timestamp': sl.timestamp,
+            'species': sl.species,
+            'date_of_birth': sl.date_of_birth,
+            'age': sl.age,
+            'sex': sl.sex,
+            'genotype': None if sl.genotype is None else sl.genotype.gtype,
+            'orientation': sl.orientation,
+            'surface': sl.surface,
+            'hemisphere': sl.hemisphere,
+            'quality': sl.quality,
+            'slice_time': sl.slice_time,
             'slice_conditions': {},
-            'lims_specimen_name': sid,
-            'storage_path': dh.name(relativeTo=dh.parent().parent()),
+            'lims_specimen_name': sl.lims_specimen_name,
+            'storage_path': sl.storage_path,
         }
 
-        sl = db.Slice(**fields)
-        session.add(sl)
+        orm_sl = db.Slice(**fields)
+        session.add(orm_sl)
+        session.flush()  # force error messages to appear here, if any.
 
     def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.
@@ -101,7 +70,7 @@ class SlicePipelineModule(DatabasePipelineModule):
             # import random
             # if random.random() > 0.8:
             #     mtime *= 2
-            ready[ts] = timestamp_to_datetime(mtime)
+            ready[ts] = {'dep_time': timestamp_to_datetime(mtime), 'meta': {'source': path}}
         return ready
 
 

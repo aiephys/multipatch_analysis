@@ -24,6 +24,8 @@ import yaml
 from acq4.util.Canvas.items.CanvasItem import CanvasItem
 from acq4.util.Canvas.items import registerItemType
 from . import dashboard
+from acq4.modules.DataManager.FileInfoView import registerFieldType, MetadataField
+from collections import OrderedDict
 
 
 class MultipatchSubmissionModule(Module):
@@ -192,9 +194,9 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         # Find the LIMS CellCluster ID for this experiment 
         cluster_ids = lims.expt_cluster_ids(self.specimen_name, ts)
         if len(cluster_ids) == 0:
-            raise Exception("No CellCluster found for %s %s" % (self.specimen_name, ts))
+            raise Exception("No CellCluster found for %s %0.3f" % (self.specimen_name, ts))
         if len(cluster_ids) > 1:
-            raise Exception("Multiple CellClusters found for %s %s" % (self.specimen_name, ts))
+            raise Exception("Multiple CellClusters found for %s %0.3f" % (self.specimen_name, ts))
         self.cluster_id = cluster_ids[0]
         self.cluster_name = lims.specimen_name(self.cluster_id)
 
@@ -385,3 +387,76 @@ class AffPyramidCanvasItem(CanvasItem):
             return 0
 
 registerItemType(AffPyramidCanvasItem)
+
+class PatchSeqMetadata(MetadataField):
+    """Site Metadata field customized for patchseq experiments
+    """
+    class HeadstageItem(pg.TreeWidgetItem):
+            def __init__(self, *args):
+                pg.TreeWidgetItem.__init__(self, *args)
+                self.widget_group = None
+                self.name = args[0][0]
+                
+            def setWidgets(self, columns):
+                self.widgets = {
+                'Seal': pg.ComboBox(items=['','GS','LS','NS','TF','NA']),
+                'Reporter': pg.ComboBox(items=['','red', 'green', 'yellow', '-', 'NA']),
+                'Nucleus': pg.ComboBox(items=['','+', '-']),
+                'End Seal': pg.QtGui.QCheckBox(''),
+                'Tube ID': pg.QtGui.QLineEdit(),
+                }
+
+                for name, w in self.widgets.items():
+                    col = columns[name]
+                    self.setWidget(col, w)
+                
+                self.widget_group = pg.WidgetGroup(self.widgets)
+
+    def __init__(self, name, value, config):
+        widget = pg.TreeWidget()
+        self.columns = OrderedDict([('HS', 0), ('Seal', 1), ('Reporter', 2), ('Nucleus', 3), ('End Seal', 4), ('Tube ID', 5)])
+        widget.setColumnCount(len(self.columns.values()))
+        widget.setHeaderLabels(self.columns.keys())
+        [widget.setColumnWidth(col, width) for col, width in enumerate([50, 50, 70, 50, 50, 80])]
+        hs_names = ['HS1', 'HS2', 'HS3', 'HS4', 'HS5', 'HS6', 'HS7', 'HS8']
+        self.headstages = OrderedDict((name, PatchSeqMetadata.HeadstageItem([name])) for name in hs_names)
+        for hs in self.headstages.values():
+            hs.setWidgets(self.columns)
+            widget.addTopLevelItem(hs)
+            hs.widget_group.sigChanged.connect(self.widgetChanged)
+
+        MetadataField.__init__(self, widget, name, value, config)
+
+    def widgetChanged(self, obj):
+        self.valueChanged.emit(self)
+
+    def setValue(self, value):
+        for hs_name, widget_state in value.items():
+            hs = self.headstages[hs_name]
+            # hs.widget_group.setState(widget_state)
+            for widget_name, widget in hs.widgets.items():
+                widget_value = value[hs_name].get(widget_name)
+                if widget_name == 'End Seal':
+                    widget.setChecked(widget_value)
+                if widget_name in ['Seal', 'Reporter', 'Nucleus']:
+                    widget.setEditable(True)
+                    widget.lineEdit().setText(widget_value)
+                if widget_name == 'Tube ID':
+                    widget.setText(widget_value)
+
+    def getValue(self):
+        value = {}
+        for hs_name, hs in self.headstages.items():
+            # value[hs_name] = hs.widget_group.state() #{}
+            value[hs_name] = {}
+            for widget_name, widget in hs.widgets.items():
+                if widget_name == 'End Seal':
+                    value[hs_name][widget_name] = widget.isChecked()
+                if widget_name in ['Seal', 'Reporter', 'Nucleus']:
+                    value[hs_name][widget_name] = str(widget.currentText())
+                if widget_name == 'Tube ID':
+                    value[hs_name][widget_name] = str(widget.text())
+        return value        
+
+
+registerFieldType('patchseq', PatchSeqMetadata)

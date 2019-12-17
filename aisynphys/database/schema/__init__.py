@@ -1,5 +1,5 @@
 from sqlalchemy.ext.declarative import declarative_base
-from ..database import make_table as orig_make_table
+from ..database import make_table_docstring, make_table as orig_make_table
 
 # schema version should be incremented whenever the schema has changed
 schema_version = "15"
@@ -28,4 +28,7 @@ from .synapse_prediction import *
 from .resting_state_fit import *
 from .gap_junction import *
 from .cortical_location import *
-#from .optical import *
+
+# Create all docstrings now that relationships have been declared
+for cls in ORMBase.__subclasses__():
+    cls.__doc__ = make_table_docstring(cls)

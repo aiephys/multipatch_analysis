@@ -1,4 +1,4 @@
-import os, yaml, re
+import os, yaml, re, json
 from datetime import datetime, timedelta
 from collections import OrderedDict
 import acq4
@@ -223,11 +223,6 @@ class ExperimentMetadataSubmission(object):
             if slice_info['plate_well_ID'] != 'not fixed' and sid is not None:
                 self._check_lims(errors, warnings, spec_name, sid, site_info, slice_info)
         
-
-        # Attempt import of old-format metadata
-        if config.import_old_data_on_submission is True:
-            self._import_old_metadata(site_info, warnings, errors)
-
         return errors, warnings
         
     def _check_lims(self, errors, warnings, spec_name, sid, site_info, slice_info):
@@ -320,6 +315,41 @@ class ExperimentMetadataSubmission(object):
                     if part not in spec_name:
                         errors.append('Specimen name %s does not contain genotype part %s' % (spec_name, part))
 
+    def lims_cells(self):
+        reporter = {'-': 'negative', None: 'not applicable'}
+        cells = []
+        site_info = self.site_dh.info()
+        headstages = site_info.get('headstages')
+        if headstages is None:
+            return
+        day_info = self.site_dh.parent().parent().info()
+        region = day_info.get('target_region')
+        structure = 'VISp' if region == 'V1' else None
+        for hs, info in headstages.items():
+            cell = {
+            'external_specimen_name': hs[-1],
+            'patched_cell_container': None,
+            'cell_reporter': None,
+            'structure': None,
+            }
+            tube_id = info['Tube ID']
+            if tube_id == '':
+                cells.append(cell)
+                continue
+            cell['structure'] = structure
+            cell['patched_cell_container'] = tube_id
+            cell_reporter = info.get('Reporter')
+            if cell_reporter == '-':
+                cell['cell_reporter'] = 'negative'
+            elif cell_reporter in ['red', 'green', 'yellow']:
+                cell['cell_reporter'] = 'positive'
+            else:
+                cell['cell_reporter'] = 'not applicable'
+
+            cells.append(cell)
+
+        return cells
+
     def summary(self):
         summ = OrderedDict()
         summ['file categories'] = self.files
@@ -359,107 +389,7 @@ class ExperimentMetadataSubmission(object):
         manifest_file = self.site_dh['file_manifest.yml'].name()
         yaml.dump(self.files, open(manifest_file, 'wb'), default_flow_style=False, indent=4)
 
-    def _import_old_metadata(self, site_info, warnings, errors):
-        expts = experiment_list.cached_experiments()
-        uid = '%0.02f' % site_info['__timestamp__']
-        try:
-            genotype = genotypes.Genotype(self.spec_info['genotype'])
-        except Exception:
-            genotype = None
-            warnings.append('Error parsing genotype "%s"; will not be able to import old cre label calls' % (self.spec_info['genotype']))
-        
-        try:
-            expt = expts[uid]
-        except KeyError:
-            warnings.append("Could not import any old-format metadata (uid=%s)." % uid)
-            return
-        
-        connections = None if expt.connections is None else expt.connections[:]
-        for cell in expt.cells.values():
-            if cell.cell_id not in self.pipettes:
-                warnings.append("Old-format metadata contains a cell ID %s, but this does not exist in the current submission." % cell.cell_id)
-                continue
-
-            pid = cell.cell_id
-            pip = self.pipettes[pid]
-
-            # import labels
-            labels = {}
-            for label,pos in cell._raw_labels.items():
-                if pos not in ['', '+', '-', '+?', '-?', '?', 'x']:
-                    warnings.append('Pipette %d: ignoring old label "%s" because the value "%s" is unrecognized' % (pid, label, pos))
-                    continue
-
-                # translate different fluorophore labels:
-                label = {'af488': 'AF488', 'cascade_blue':'Cascade Blue'}.get(label, label)
-
-                # biocytin or fluorophore
-                if label == 'biocytin':
-                    labels[label] = pos
-                elif label in constants.FLUOROPHORES:
-                    color = constants.FLUOROPHORES[label]
-                    labels[color] = pos
-                # human_L layer call
-                elif label.startswith('human_L'):
-                    if pos == 'x':
-                        continue
-                    layer = label[7:]
-                    if pip['target_layer'] == '':
-                        pip['target_layer'] = layer
-                        warnings.append("Pipette %d: imported layer %s from old metadata." % (pid, layer))
-                    elif pip['target_layer'] != layer:
-                        warnings.append("Pipette %d: old metadata layer %s conflicts with current layer: %s." % (pid, layer, pip['target_layer']))
-                # Mouse L2/3 pre-production manual calls
-                elif label == 'L23pyr':
-                    if pip['target_layer'] == '':
-                        pip['target_layer'] = '2/3'
-                        warnings.append("Pipette %d: imported layer %s from old metadata." % (pid, pip['target_layer']))
-                    if cell._raw_labels['biocytin'] == '+':
-                        pip['morphology'] = 'pyr'
-                        warnings.append("Pipette %d: imported pyr morphology from old metadata." % pid)    
-                # cre type; convert to color(s)
-                elif label in constants.ALL_CRE_TYPES:
-                    if genotype is None:
-                        warnings.append("Pipette %d: ignoring old cre label %s" % (pid, label))
-                        continue
-                    if label not in genotype.all_drivers:
-                        warnings.append("Pipette %d: old cre label %s is not in genotype!" % (pid, label))
-                        continue
-                    for color in genotype.expressed_colors([label]):
-                        if color in labels:
-                            warnings.append("Pipette %d: color %s is specified twice!" % (pid, color))
-                        labels[color] = pos
-                else:
-                    warnings.append("Pipette %d: old metadata has unrecognized label: %s." % (pid, label))
-            # if target layer is not set above for human or mouse L2/3 assume layer 5
-            if pip['target_layer'] == '' and self.spec_info['organism'] == 'mouse':
-                pip['target_layer'] = '5'
-            # now make sure there are no conflicts
-            for label, pos in labels.items():
-                val = pip['cell_labels'].get(label, '')
-                if val == '':
-                    pip['cell_labels'][label] = pos
-                    warnings.append("Pipette %d: imported label %s=%s from old metadata." % (pid, label, pos))
-                elif val != pos:
-                    warnings.append("Pipette %d: old metadata laybel %s=%s conflicts with current value: %s." % (pid, label, pos, val))
-
-            # import old QC (we can be more lax here because this is deprecated data)
-            pip['cell_qc'] = {'holding': cell.holding_qc, 'access': cell.access_qc, 'spiking': cell.spiking_qc}
-
-            # import connections
-            cell_connects = []
-            if connections is not None:
-                for pre, post in connections[:]:
-                    if pre != pid:
-                        continue
-                    connections.remove((pre, post))
-                    cell_connects.append(post)
-                if pip['synapse_to'] is None:
-                    pip['synapse_to'] = cell_connects
-                    warnings.append("Pipette %d: imported connections %s from old metadata." % (pid, cell_connects))
-                else:
-                    if list(sorted(pip['synapse_to'])) != list(sorted(cell_connects)):
-                        warnings.append("Pipette %d: old metadata connections %s conflicts with current value: %s." % (pid, cell_connects, pip['synapse_to']))
-
-        if connections is not None and len(connections) > 0:
-            warnings.append("Could not import old metadata connections:" % (connections))
+        # Generate json for LIMS cell specimens
+        cells = self.lims_cells()
+        json_file = os.path.join(self.site_dh.name(), 'lims_cells.json')
+        json.dump(cells, open(json_file, 'wb'))

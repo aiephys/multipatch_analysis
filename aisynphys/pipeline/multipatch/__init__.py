@@ -11,7 +11,6 @@ from .synapse_prediction import SynapsePredictionPipelineModule
 from .resting_state import RestingStatePipelineModule
 
 
-
 class MultipatchPipeline(Pipeline):
     
     name = 'multipatch'

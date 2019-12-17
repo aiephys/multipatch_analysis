@@ -4,14 +4,14 @@ import numpy as np
 from datetime import datetime
 from collections import OrderedDict
 from acq4.util.DataManager import getDirHandle
-from ..pipeline_module import DatabasePipelineModule
-from ... import config, synphys_cache, lims
-from ...util import datetime_to_timestamp
+from .pipeline_module import MultipatchPipelineModule
+from ... import config, lims
+from ...util import datetime_to_timestamp, dir_timestamp
 from ...data import Experiment
 from .slice import SlicePipelineModule
 
 
-class ExperimentPipelineModule(DatabasePipelineModule):
+class ExperimentPipelineModule(MultipatchPipelineModule):
     """Imports per-experiment metadata into DB.
     """
     name = 'experiment'
@@ -23,9 +23,15 @@ class ExperimentPipelineModule(DatabasePipelineModule):
         db = job['database']
         job_id = job['job_id']
 
-        cache = synphys_cache.get_cache()
+        cache = get_cache()
         all_expts = cache.list_experiments()
         site_path = all_expts[job_id]
+
+        ignore_file = os.path.join(site_path, 'ignore')
+        if os.path.exists(ignore_file):
+            err = open(ignore_file).read()
+            raise Exception("Ignoring experiment %s: %s" % (job_id, err))
+
         expt = Experiment(site_path=site_path)
         
         # look up slice record in DB
@@ -159,9 +165,6 @@ class ExperimentPipelineModule(DatabasePipelineModule):
         slice_module = self.pipeline.get_module('slice')
         finished_slices = slice_module.finished_jobs()
         
-        # cache = synphys_cache.get_cache()
-        # all_expts = cache.list_experiments()
-        
         db = self.database
         session = db.session()
         slices = session.query(db.Slice.storage_path).all()
@@ -187,7 +190,41 @@ class ExperimentPipelineModule(DatabasePipelineModule):
                 continue
             if slice_mtime is None or slice_success is False:
                 continue
-            ready[expt.uid] = max(raw_data_mtime, slice_mtime)
+            ready[expt.uid] = {'dep_time': max(raw_data_mtime, slice_mtime), 'meta': {'source': site_path}}
         
         print("Found %d experiments; %d are able to be processed, %d were skipped due to errors." % (len(ymls), len(ready), n_errors))
         return ready
+
+
+
+_cache = None
+def get_cache():
+    global _cache
+    if _cache is None:
+        _cache = DataRepo()
+    return _cache
+
+
+class DataRepo(object):
+    def __init__(self, remote_path=config.synphys_data):
+        self._pip_yamls = None
+        self._nwbs = None
+        self._expts = None
+        self.remote_path = os.path.abspath(remote_path)
+        
+    def list_experiments(self):
+        if self._expts is None:
+            yamls = self.list_pip_yamls()
+            site_dirs = sorted([os.path.dirname(yml) for yml in yamls], reverse=True)
+            self._expts = OrderedDict([('%0.3f'%dir_timestamp(site_dir), site_dir) for site_dir in site_dirs])
+        return self._expts
+
+    def list_nwbs(self):
+        if self._nwbs is None:
+            self._nwbs = glob.glob(os.path.join(self.remote_path, '*', 'slice_*', 'site_*', '*.nwb'))
+        return self._nwbs
+    
+    def list_pip_yamls(self):
+        if self._pip_yamls is None:
+            self._pip_yamls = glob.glob(os.path.join(self.remote_path, '*', 'slice_*', 'site_*', 'pipettes.yml'))
+        return self._pip_yamls

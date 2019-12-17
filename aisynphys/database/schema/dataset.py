@@ -209,7 +209,7 @@ PulseResponse = make_table(
 StimPulse.pulse_response = relationship(PulseResponse, back_populates="stim_pulse", cascade='save-update,merge,delete', single_parent=True)
 PulseResponse.stim_pulse = relationship(StimPulse)
 PulseResponse.recording = relationship(Recording)
-Pair.pulse_responses = relationship(PulseResponse, back_populates='pair', single_parent=True)
+Pair.pulse_responses = relationship(PulseResponse, back_populates='pair', single_parent=True, order_by=PulseResponse.id)
 PulseResponse.pair = relationship(Pair, back_populates='pulse_responses')
 
 

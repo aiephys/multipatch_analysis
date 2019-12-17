@@ -14,7 +14,7 @@ class ExperimentActions(pg.QtCore.QObject):
         pg.QtCore.QObject.__init__(self)
 
         self._experiment = None
-
+        
         actions = [
             ('Data Manager', self.data_manager),
             ('NWB Viewer', self.nwb_viewer),
@@ -22,6 +22,7 @@ class ExperimentActions(pg.QtCore.QObject):
             ('Submission Tool', self.submission_tool),
             ('LIMS Drawing Tool', self.lims_drawing_tool),
             ('Edit pipettes.yml', self.edit_pipettes_yml),
+            ('Pair Analysis', self.pair_analysis),
         ]
         self.actions = OrderedDict()
         for name, callback in actions:
@@ -58,6 +59,10 @@ class ExperimentActions(pg.QtCore.QObject):
     def connection_detection(self):
         path = os.path.join(os.path.dirname(aisynphys.__file__), '..', 'tools', 'connection_detection.py')
         subprocess.Popen('python "%s" "%s"' % (path, self.experiment.nwb_file), shell=True)
+
+    def pair_analysis(self):
+        path = os.path.join(os.path.dirname(aisynphys.__file__), '..', 'tools', 'pair_analysis.py')
+        subprocess.Popen('python "%s" "%0.3f"' % (path, self.experiment.timestamp), shell=True)
 
     def submission_tool(self):
         from acq4.Manager import getManager 

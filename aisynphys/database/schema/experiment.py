@@ -1,7 +1,7 @@
 import os
 from collections import OrderedDict
 from sqlalchemy.orm import relationship, deferred, sessionmaker, aliased
-from ... import config, constants
+from ... import config, constants, synphys_cache
 from . import make_table
 from .slice import Slice
 
@@ -21,12 +21,12 @@ class ExperimentBase(object):
 
     @property
     def nwb_file(self):
-        return os.path.join(config.synphys_data, self.storage_path, self.ephys_file)
-
-    @property
-    def nwb_cache_file(self):
-        from ...synphys_cache import SynPhysCache
-        return SynPhysCache().get_cache(self.nwb_file)
+        if config.synphys_data is not None:
+            # Return path from local file repo
+            return os.path.join(config.synphys_data, self.storage_path, self.ephys_file)
+        else:
+            # return file cached from download
+            return synphys_cache.get_nwb_path(self.ext_id)
 
     @property
     def data(self):
@@ -37,8 +37,24 @@ class ExperimentBase(object):
 
         if not hasattr(self, '_data'):
             from ...data import MultiPatchDataset
-            self._data = MultiPatchDataset(self.nwb_cache_file)
+            self._data = MultiPatchDataset(self.nwb_file)
         return self._data
+
+    @property
+    def path(self):
+        """Filesystem path to the root of this experiment.
+        """
+        return os.path.join(config.synphys_data, self.storage_path)
+        
+    @property
+    def original_path(self):
+        """The original path where this experiment was acquired. 
+        """
+        ss = os.path.join(self.path, 'sync_source')
+        if os.path.isfile(ss):
+            return open(ss, 'rb').read().decode('latin1')
+        else:
+            return self.path
 
     def __repr__(self):
         if self.ext_id is not None:

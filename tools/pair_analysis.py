@@ -82,7 +82,7 @@ class MainWindow(pg.QtGui.QWidget):
         self.operator_select = Parameter.create(name='Operator', type='group', children=[{'name': operator[0], 'type': 'bool'} for operator in self.operators])
         self.data_type = Parameter.create(name='Reduce data to:', type='group', children=[
             {'name': 'Pairs with data', 'type': 'bool', 'value': True},
-            {'name': 'Synapse is None', 'type': 'bool', 'value': True}])
+            {'name': 'Synapse is None', 'type': 'bool'}])
         [self.select_ptree.addParameters(param) for param in [self.data_type, self.rig_select, self.operator_select, self.hash_select]]
         self.experiment_browser = self.pair_analyzer.experiment_browser
         self.v_splitter = pg.QtGui.QSplitter()
@@ -545,7 +545,7 @@ class PairAnalysis(object):
             self.pair = pair
             print ('loading responses for %s...' % pair)
             q = response_query(default_session, pair)
-            self.pulse_responses = [q.pulse_response for q in q.all()]
+            self.pulse_responses = [q.PulseResponse for q in q.all()]
             print('got %d pulse responses' % len(self.pulse_responses))
                 
             if pair.has_synapse is True:
@@ -715,12 +715,16 @@ class PairAnalysis(object):
 
     def print_pair_notes(self, meta, saved_rec):
         meta_copy = copy.deepcopy(meta)
-        current_fit = {k:v for k, v in meta_copy['fit_parameters']['fit'].items()}
-        saved_fit = {k:v for k, v in saved_rec.notes['fit_parameters']['fit'].items()}
+        current_fit = {k:v for k, v in meta_copy.get('fit_parameters', {}).get('fit', {}).items()}
+        saved_fit = {k:v for k, v in saved_rec.notes.get('fit_parameters',{}).get('fit', {}).items()}
         
         for mode in modes:
             for holding in holdings:
+                if not current_fit:
+                    continue
                 current_fit[mode][str(holding)] = {k:round(v, self.fit_precision[k][mode]) for k, v in current_fit[mode][str(holding)].items()}
+                if not saved_fit:
+                    continue
                 saved_fit[mode][str(holding)] = {k:round(v, self.fit_precision[k][mode]) for k, v in saved_fit[mode][str(holding)].items()}
 
         self.fit_compare.setData(current_fit, saved_fit)
@@ -729,7 +733,7 @@ class PairAnalysis(object):
 
         current_meta = {k:v for k, v in meta_copy.items() if k != 'fit_parameters'} 
         saved_meta = {k:v for k, v in saved_rec.notes.items() if k != 'fit_parameters'} 
-        saved_meta.update({k:str(saved_meta[k]) for k in ['comments', 'expt_id', 'pre_cell_id', 'post_cell_id']})
+        saved_meta.update({k:str(saved_meta[k]) for k in ['comments', 'expt_id', 'pre_cell_id', 'post_cell_id'] if k in saved_meta.keys()})
 
         self.meta_compare.setData(current_meta, saved_meta)
         self.meta_compare.trees[0].setHeaderLabels(['Current Metadata', 'type', 'value'])

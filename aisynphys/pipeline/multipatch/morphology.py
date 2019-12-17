@@ -10,7 +10,7 @@ from collections import OrderedDict
 from ...util import timestamp_to_datetime, optional_import
 from ...data.pipette_metadata import PipetteMetadata
 from ... import config, lims
-from ..pipeline_module import DatabasePipelineModule
+from .pipeline_module import MultipatchPipelineModule
 from .experiment import ExperimentPipelineModule
 pyodbc = optional_import('pyodbc')
 
@@ -27,7 +27,7 @@ col_names = {
             }
 
 
-class MorphologyPipelineModule(DatabasePipelineModule):
+class MorphologyPipelineModule(MultipatchPipelineModule):
     """Imports cell morphology data for each experiment
     """
     name = 'morphology'
@@ -133,7 +133,7 @@ class MorphologyPipelineModule(DatabasePipelineModule):
                 continue
 
             expt = session.query(db.Experiment).filter(db.Experiment.ext_id==expt_id).all()[0]
-            ready[expt_id] = expt_mtime
+            ready[expt_id] = {'dep_time': expt_mtime}
             cluster = expt.meta.get('lims_cell_cluster_id')
             if cluster is None:
                 continue
@@ -152,7 +152,7 @@ class MorphologyPipelineModule(DatabasePipelineModule):
                 else:
                     cell_hash_compare.append(False)
             if all(cell_hash_compare) is False:
-                ready[expt_id] = datetime.datetime.now()
+                ready[expt_id] = {'dep_time': datetime.datetime.now()}
         
         return ready
 

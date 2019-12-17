@@ -42,7 +42,7 @@ class ExperimentBrowser(pg.TreeWidget):
             self.addTopLevelItem(expt_item)
 
             for pair in expt.pair_list:
-                if not all_pairs and pair.n_ex_test_spikes == 0 and pair.n_in_test_spikes == 0:
+                if all_pairs is False and pair.n_ex_test_spikes == 0 and pair.n_in_test_spikes == 0:
                     continue
                 cells = '%s => %s' % (pair.pre_cell.ext_id, pair.post_cell.ext_id)
                 conn = {True:"syn", False:"-", None:"?"}[pair.has_synapse]

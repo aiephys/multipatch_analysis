@@ -19,12 +19,14 @@ from distutils.version import LooseVersion
 if LooseVersion(sqlalchemy.__version__) < '1.2':
     raise Exception('requires at least sqlalchemy 1.2')
 
+import sqlalchemy.inspection
 from sqlalchemy import create_engine, Column, Integer, BigInteger, String, Boolean, Float, Date, DateTime, LargeBinary, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship, deferred, sessionmaker, reconstructor
 from sqlalchemy.types import TypeDecorator
 from sqlalchemy.sql.expression import func
+
 
 from .. import config
 
@@ -91,6 +93,31 @@ column_data_types = {
 }
 
 
+def make_table_docstring(table):
+    """Introspect ORM table class to generate a nice docstring.
+    """
+    docstr = ['Sqlalchemy model for "%s" database table.\n' % table.__name__]
+    comment = table.__table_args__.get('comment', None)
+    if comment is not None:
+        docstr.append(comment.strip() + '\n')
+            
+    
+    insp = sqlalchemy.inspection.inspect(table)
+    
+    docstr.append("Attributes\n----------")
+    for name, prop in insp.relationships.items():
+        docstr.append("%s : relationship" % name)
+        if hasattr(prop, 'entity'):
+            # entity attribute only available in recent sqlalchemy (>=1.3 ?)
+            docstr.append("    Reference to %s.%s" % (prop.entity.primary_key[0].table.name, prop.entity.primary_key[0].name))
+    for name, col in insp.columns.items():
+        typ_str = str(col.type)
+        docstr.append("%s : %s" % (name, typ_str))
+        if col.comment is not None:
+            docstr.append("    " + col.comment)
+        
+    return '\n'.join(docstr)
+
 
 def make_table(ormbase, name, columns, base=None, **table_args):
     """Generate an ORM mapping class from a simplified schema format.
@@ -115,6 +142,8 @@ def make_table(ormbase, name, columns, base=None, **table_args):
         Column (for example: 'index', 'unique'). Optionally, *data_type* may be a 'tablename.id'
         string indicating that this column is a foreign key referencing another table.
     """
+    class_name = ''.join([part.title() for part in name.split('_')])
+
     props = {
         '__tablename__': name,
         '__table_args__': table_args,
@@ -142,7 +171,7 @@ def make_table(ormbase, name, columns, base=None, **table_args):
     props['meta'] = Column(column_data_types['object'])
 
     if base is None:
-        new_table = type(name, (ormbase,), props)
+        new_table = type(class_name, (ormbase,), props)
     else:
         # need to jump through a hoop to allow __init__ on table classes;
         # see: https://docs.sqlalchemy.org/en/latest/orm/constructors.html
@@ -151,7 +180,7 @@ def make_table(ormbase, name, columns, base=None, **table_args):
             def _init_on_load(self, *args, **kwds):
                 base._init_on_load(self)
             props['_init_on_load'] = _init_on_load
-        new_table = type(name, (base, ormbase), props)
+        new_table = type(class_name, (base, ormbase), props)
 
     return new_table
 
@@ -162,10 +191,11 @@ class Database(object):
     Supported backends: postgres, sqlite.
     
     Features:
-    - Automatically build/dispose ro and rw engines (especially after fork)
-    - Generate ro/rw sessions on demand
-    - Methods for creating / dropping databases
-    - Clone databases across backends
+    
+    * Automatically build/dispose ro and rw engines (especially after fork)
+    * Generate ro/rw sessions on demand
+    * Methods for creating / dropping databases
+    * Clone databases across backends
     """
     _all_dbs = weakref.WeakSet()
     default_app_name = ('mp_a:' + ' '.join(sys.argv))[:60]
@@ -437,7 +467,7 @@ class Database(object):
             raise TypeError("Unsupported database backend %s" % self.backend)
 
     def orm_tables(self):
-        """Return a dependency-sorted of ORM mapping objectstables that are described by the ORM base for this database.
+        """Return a dependency-sorted of ORM mapping objects (tables) that are described by the ORM base for this database.
         """
         # need to re-run every time because we can't tell when a new mapping has been added.
         self._find_mappings()

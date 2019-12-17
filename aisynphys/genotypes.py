@@ -46,7 +46,7 @@ import sys, itertools
 EXPRESSION_FACTORS = ['cre', 'flp', 'dre', 'tTA']
 DRUGS = ['dox']
 
-   
+
 DRIVER_LINES = {                  # dependencies     products
     'Nr5a1-Cre':                  [(['nr5a1'],        ['cre'])],
     'Rorb-T2A-tTA2':              [(['rorb'],         ['tTA'])],
@@ -72,21 +72,28 @@ DRIVER_LINES = {                  # dependencies     products
     'Ndnf-IRES2-dgCre':           [(['ndnf'],         ['cre'])],
     'Slc32a1-IRES2-FlpO':         [(['slc32a1'],      ['flp'])],
     'Sncg-IRES2-FlpO-neo':        [(['Sncg'],         ['flp'])],
+    'Vipr2-IRES2-Cre':            [(['Vipr2'],        ['cre'])],
     'Fam84b-FlpO':                [(['fam84b'],       ['flp'])],
-    'rAAV-mDlx-GFP':              [(['mDlx'],         ['GFP'])],    
-    'rAAV-Dlx2.0-SYFP2':          [(['3xcorehI56i'],  ['YFP'])],  # pan-GABA
-    'rAAV-eHGT_078m-minBglobin-SYFP2-WPRE3-BGHpA': [
-                                   (['eHGT_078m'], ['YFP'])],  # pan-Glu
-    'rAAV-3xhI56icore-minBG-tdTomato-WPRE3-BGHpA': [
-                                   (['3xcorehI56i'],  ['tdTomato'])],  # pan-GABA
-    'rAAV-eHGT_073m-minBglobin-SYFP2-WPRE3-BGHpA': [
-                                   (['eHGT_073m'], ['YFP'])],  # pan-Glu
-    'rAAV-3xHGT_073m(core)-minBG-SYFP2-WPRE3-BGHpA': [
-                                   (['3xHGT_073m(core)'], ['YFP'])],  # pan-Glu
-    'rAAV-EF1a-fDIO-EGFP-WPRE-HGHpA': [
-                                   (['EF1a'], ['EGFP'])],
-    'rAAV-eHGT_078m-minBG-FlpO-WPRE-HGHpA': [
-                                   (['eHGT_078m'], ['flp'])],  # pan-Glu
+    'Glt25d2-Cre_NF107':          [(['glt25d2'],      ['cre'])],
+    'Esr2-IRES2-Cre':             [(['esr2'],         ['cre'])],
+    
+    'rAAV-mDlx-GFP':                                         [(['mDlx'],                    ['GFP'])],
+    'rAAV-Dlx2.0-SYFP2':                                     [(['3xcorehI56i'],             ['YFP'])],  # pan-GABA
+    'rAAV-3xhI56icore-minBG-tdTomato-WPRE3-BGHpA':           [(['3xcorehI56i'],             ['tdTomato'])],  # pan-GABA
+    'rAAV-3xhI56i(core)-minBglobin-SYFP2-WPRE3-BGHpA':       [(['3xhI56i(core)'],           ['YFP'])],  # pan-GABA
+    'rAAV-3xHGT_073m(core)-minBG-SYFP2-WPRE3-BGHpA':         [(['3xHGT_073m(core)'],        ['YFP'])],  # pan-Glu
+    'rAAV-3xeHGT_073m(core)-minCMV*-SYFP2-WPRE3-BGHpA':      [(['3xeHGT_073m(core)'],       ['YFP'])],  # pan-Glu
+    'rAAV-hsA2-3x(eHGT_078m core)-minRho-SYFP2-WPRE3-BGHpA': [(['hsA2-3x(eHGT_078m core)'], ['YFP'])],  # pan-Glu
+    'rAAV-eHGT_073m-minBglobin-SYFP2-WPRE3-BGHpA':           [(['eHGT_073m'],               ['YFP'])],  # pan-Glu
+    'rAAV-eHGT_073h-minBG-tTA-WPRE-HGHpA':                   [(['eHGT_073h'],               ['tTA'])],  # pan-Glu
+    'rAAV-eHGT_078m-minBglobin-SYFP2-WPRE3-BGHpA':           [(['eHGT_078m'],               ['YFP'])],  # pan-Glu
+    'rAAV-eHGT_078m-minBG-FlpO-WPRE-HGHpA':                  [(['eHGT_078m'],               ['flp'])],  # pan-Glu
+    'rAAV-eHGT_078m-minBG-tTA-WPRE-HGHpA':                   [(['eHGT_078m'],               ['tTA'])],  # pan-Glu
+    'rAAV-EF1a-fDIO-EGFP-WPRE-HGHpA':                        [(['EF1a'],                    ['EGFP'])],
+    'rAAV-TRE-SYFP2-WPRE-HGHpA':                             [(['TRE'],                     ['YFP'])],
+    'rAAV-TREtight-tdTomato-WPRE-HGHpA':                     [(['TREtight'],                ['tdTomato'])],
+    'rAAV-TRE-tdTomato-WPRE-HGHpA':                          [(['TRE'],                     ['tdTomato'])],
+    'rAAV-hSyn1-tTA-WPRE-HGHpA':                             [(['hSyn1'],                   ['tTA'])],
 }
 
 
@@ -108,6 +115,7 @@ REPORTER_LINES = {                # dependencies             products
     'Ai63(TIT-tdT)':              [(['tTA', '~dox'],          ['tdTomato']),
                                    (['rtTA', 'dox'],          ['tdTomato'])],
     'Ai65(RCFL-tdT)':             [(['cre', 'flp'],           ['tdTomato'])],
+    'Ai65':                       [(['cre'],                  ['tdTomato'])],
     'Ai65F':                      [(['flp'],                  ['tdTomato'])],
     'Ai66(RCRL-tdT)':             [(['cre', 'dre'],           ['tdTomato'])],
     'Ai72(RCL-VSFPB)':            [(['cre'],                  ['VSFP', 'Butterfly 1.2'])],

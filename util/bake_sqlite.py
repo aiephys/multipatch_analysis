@@ -4,9 +4,9 @@ from aisynphys.database import default_db as db
 date = datetime.datetime.today().strftime("%Y-%m-%d")
 
 db_files = {
-    'small': "synphys_%s_small.sqlite" % date,
-    'medium': "synphys_current_medium.sqlite",
-    'full': "synphys_current_full.sqlite",
+    'small': "db_bakes/synphys_%s_small.sqlite" % date,
+    'medium': "db_bakes/synphys_current_medium.sqlite",
+    'full': "db_bakes/synphys_current_full.sqlite",
 }
 
 skip_tables = {}

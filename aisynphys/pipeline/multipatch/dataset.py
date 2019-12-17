@@ -3,17 +3,17 @@ import numpy as np
 from datetime import datetime
 from collections import OrderedDict
 from acq4.util.DataManager import getDirHandle
-from ... import config, synphys_cache, lims, qc
+from ... import config, lims, qc
 from ...util import timestamp_to_datetime
 from ...data import Experiment
-from ..pipeline_module import DatabasePipelineModule
+from .pipeline_module import MultipatchPipelineModule
 from .experiment import ExperimentPipelineModule
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.data import PatchClampRecording
 from ...data import Experiment, MultiPatchDataset, MultiPatchProbe, PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
 
 
-class DatasetPipelineModule(DatabasePipelineModule):
+class DatasetPipelineModule(MultipatchPipelineModule):
     """Imports NWB data per-experiment
     """
     name = 'dataset'
@@ -30,7 +30,7 @@ class DatasetPipelineModule(DatabasePipelineModule):
         job_id = job['job_id']
 
         # Load experiment from DB
-        expt_entry = db.experiment_from_timestamp(job_id, session=session)
+        expt_entry = db.experiment_from_ext_id(job_id, session=session)
         elecs_by_ad_channel = {elec.device_id:elec for elec in expt_entry.electrodes}
         pairs_by_device_id = {}
         for pair in expt_entry.pairs.values():
@@ -260,5 +260,5 @@ class DatasetPipelineModule(DatabasePipelineModule):
             rec = expt_paths[expt_id]
             ephys_file = os.path.join(config.synphys_data, rec.storage_path, rec.ephys_file)
             nwb_mtime = timestamp_to_datetime(os.stat(ephys_file).st_mtime)
-            ready[rec.ext_id] = max(expt_mtime, nwb_mtime)
+            ready[rec.ext_id] = {'dep_time': max(expt_mtime, nwb_mtime)}
         return ready

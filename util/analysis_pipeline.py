@@ -14,8 +14,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Process analysis pipeline jobs")
     parser.add_argument('pipeline', type=str, help="The name of the pipeline to run: %s" % ', '.join(list(all_pipelines.keys())))
     parser.add_argument('modules', type=str, nargs='*', help="The name of the analysis module(s) to run")
-    parser.add_argument('--rebuild', action='store_true', default=False, help="Remove and rebuild tables for this analysis")
-    parser.add_argument('--retry', action='store_true', default=False, help="Retry processing jobs that previously failed")
+    parser.add_argument('--update', action='store_true', default=False, help="Process any jobs that are ready to be updated")
+    parser.add_argument('--retry', action='store_true', default=False, help="During update, retry processing jobs that previously failed (implies --update)")
+    parser.add_argument('--report', action='store_true', default=False, help="Print a report of pipeline status and errors", )
+    parser.add_argument('--rebuild', action='store_true', default=False, help="Remove and rebuild tables for selected modules")
     parser.add_argument('--workers', type=int, default=None, help="Set the number of concurrent processes during update")
     parser.add_argument('--local', action='store_true', default=False, help="Disable concurrent processing to make debugging easier")
     parser.add_argument('--raise-exc', action='store_true', default=False, help="Disable catching exceptions encountered during processing", dest='raise_exc')
@@ -58,6 +60,9 @@ if __name__ == '__main__':
 
     # sort topologically
     modules = [m for m in list(all_modules.values()) if m in modules]
+
+    if args.report:
+        print(pipeline.report(modules))
     
     if args.rebuild:
         mod_names = ', '.join([module.name for module in modules])
@@ -87,7 +92,8 @@ if __name__ == '__main__':
             else:
                 print("Dropping %d jobs in module %s" % (len(args.uids), module.name))
                 module.drop_jobs(job_ids=args.uids)
-    else:
+ 
+    if args.update or args.rebuild or args.retry:
         report = []
         for module in modules:
             print("=============================================")

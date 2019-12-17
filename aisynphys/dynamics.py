@@ -30,11 +30,11 @@ def sorted_pulse_responses(pr_recs):
     # group records by (clamp mode, ind_freq, rec_delay), recording, and then by pulse number
     sorted_recs = {}
     for rec in pr_recs:
-        stim_key = (rec.patch_clamp_recording.clamp_mode, rec.multi_patch_probe.induction_frequency, rec.multi_patch_probe.recovery_delay)
+        stim_key = (rec.PatchClampRecording.clamp_mode, rec.MultiPatchProbe.induction_frequency, rec.MultiPatchProbe.recovery_delay)
         sorted_recs.setdefault(stim_key, {})
-        sorted_recs[stim_key].setdefault(rec.recording, {})
-        pn = rec.stim_pulse.pulse_number
-        sorted_recs[stim_key][rec.recording][pn] = rec
+        sorted_recs[stim_key].setdefault(rec.Recording, {})
+        pn = rec.StimPulse.pulse_number
+        sorted_recs[stim_key][rec.Recording][pn] = rec
         
     return sorted_recs
 
@@ -73,14 +73,14 @@ def generate_pair_dynamics(pair, db, session):
     pr_query = pulse_response_query(pair, qc_pass=True, clamp_mode='ic')
     pr_recs = pr_query.all()
     # cull out all PRs that didn't get a fit
-    pr_recs = [pr_rec for pr_rec in pr_recs if pr_rec.pulse_response_fit.fit_amp is not None]
+    pr_recs = [pr_rec for pr_rec in pr_recs if pr_rec.PulseResponseFit.fit_amp is not None]
     
     percentile = 90 if syn_type == 'ex' else 10
-    amps = [rec.pulse_response_fit.fit_amp for rec in pr_recs]
+    amps = [rec.PulseResponseFit.fit_amp for rec in pr_recs]
     amp_90p = scipy.stats.scoreatpercentile(amps, percentile)
 
     # load all baseline amplitudes to determine the noise level
-    noise_amps = [rec.pulse_response_fit.baseline_fit_amp for rec in pr_recs if rec.pulse_response_fit.baseline_fit_amp is not None]
+    noise_amps = [rec.PulseResponseFit.baseline_fit_amp for rec in pr_recs if rec.PulseResponseFit.baseline_fit_amp is not None]
     noise_90p = scipy.stats.scoreatpercentile(noise_amps, percentile)
 
     # start new DB record
@@ -104,7 +104,7 @@ def generate_pair_dynamics(pair, db, session):
         for recording, pulses in recs.items():
             if 1 not in pulses or 2 not in pulses:
                 continue
-            amps = {k:r.pulse_response_fit.fit_amp for k,r in pulses.items()}
+            amps = {k:r.PulseResponseFit.fit_amp for k,r in pulses.items()}
             metrics['stp_initial_50hz'].append((amps[2] - amps[1]) / amp_90p)
             if amps[1] != 0:
                 paired_pulse_ratio.append(amps[2] / amps[1])
@@ -113,7 +113,7 @@ def generate_pair_dynamics(pair, db, session):
                 continue
             metrics['stp_induction_50hz'].append((np.mean([amps[6], amps[7], amps[8]]) - amps[1]) / amp_90p)
             
-    # PPR is a bit put of place here, but we're including it since it's a popular metric used
+    # PPR is a bit out of place here, but we're including it since it's a popular metric used
     # in the literature.
     dynamics.paired_pulse_ratio_50hz = scipy.stats.gmean(paired_pulse_ratio)
     
@@ -125,7 +125,7 @@ def generate_pair_dynamics(pair, db, session):
         for recording, pulses in recs.items():
             if any([k not in pulses for k in range(1,13)]):
                 continue
-            amps = {k:r.pulse_response_fit.fit_amp for k,r in pulses.items()}
+            amps = {k:r.PulseResponseFit.fit_amp for k,r in pulses.items()}
             r = [amps[i+8] - amps[i] for i in range(1,5)]
             metrics['stp_recovery_250ms'].append(np.mean(r) / amp_90p)
 

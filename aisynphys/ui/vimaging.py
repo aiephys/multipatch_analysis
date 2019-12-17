@@ -28,6 +28,11 @@ class VImagingAnalyzer(QtGui.QSplitter):
         
         self.layout.addWidget(self.ptree, 0, 0)
 
+        # adds a gradient widget to the left panel; later linked to vb2
+        self.grw = pg.GradientWidget()
+        self.grw.loadPreset('bipolar')
+        self.layout.addWidget(self.grw)
+
         self.gw = pg.GraphicsLayoutWidget()
         self.addWidget(self.gw)
         
@@ -38,6 +43,9 @@ class VImagingAnalyzer(QtGui.QSplitter):
         self.vb2 = self.gw.addViewBox(row=1, col=0)
         self.img2 = pg.ImageItem()
         self.vb2.addItem(self.img2)
+        # links axes of viewboxes (fluor and dF)
+        self.vb2.setXLink(self.vb1)
+        self.vb2.setYLink(self.vb1)
         
         for vb in (self.vb1, self.vb2):
             vb.invertY()
@@ -230,8 +238,9 @@ class VImagingAnalyzer(QtGui.QSplitter):
         base = img_data[:, base_starti:base_stopi].mean(axis=0).mean(axis=0)
         test = img_data[:, test_starti:test_stopi].mean(axis=0).mean(axis=0)
 
-        dff = ndimage.median_filter(test - base, 10)
+        dff = ndimage.median_filter(test - base, 6) # original median radius was 10
         self.img2.setImage(dff)
+        self.img2.setLookupTable(self.grw.getLookupTable(65535)) # set LUT to be the gradient in the left panel widget
 
     def time_indices(self, time_vals):
         base_start, base_stop = self.base_time_rgn.getRegion()

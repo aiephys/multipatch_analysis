@@ -10,19 +10,26 @@ import os, sys, yaml, argparse
 # default cache path in user's home dir
 cache_path = os.path.join(os.path.expanduser('~'), 'ai_synphys_cache')
 
-synphys_db_host = "sqlite:///"
-synphys_db_host_rw = None
-synphys_db = "synphys"
-synphys_db_readonly_user = "readonly"
-synphys_data = None
+# Parameters for the DB connection provided by aisynphys.database.default_db
+# For sqlite files:
+#    synphys_db_host = "sqlite:///"
+#    synphys_db = "path/to/database.sqlite"
+# For postgres
+#    synphys_db_host = "postgresql://user:password@hostname"
+#    synphys_db = "database_name"
+synphys_db_host = None
+synphys_db = None
+
+
+# utility config, not meant for external use
+synphys_data = None  # location of data repo network storage
+synphys_db_host_rw = None  # rw access to postgres / sqlite DB
+synphys_db_readonly_user = "readonly"  # readonly postgres username assigned whrn creating db/tables
 lims_address = None
-grow_cache = False
 rig_name = None
 n_headstages = 8
-raw_data_paths = []
 rig_data_paths = {}
 known_addrs = {}
-import_old_data_on_submission = False
 
 
 configfile = os.path.join(os.path.dirname(__file__), '..', 'config.yml')
