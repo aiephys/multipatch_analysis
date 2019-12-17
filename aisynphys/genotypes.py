@@ -228,6 +228,14 @@ class Genotype(object):
     def __repr__(self):
         return "<Genotype %s>" % self.gtype
     
+    def color_to_reporter(self, color):
+        reporter = None
+        for r in self.all_reporters:
+            c = FLUOROPHORES[r]
+            if c == color:
+                reporter = r
+        return reporter
+
     def expressed_reporters(self, drivers):
         """Return a set of reporters in this genotype (such as GFP, tdTomato, etc.)
         that would be expressed given a list of active drivers (such as pvalb, tlx3, etc.)
