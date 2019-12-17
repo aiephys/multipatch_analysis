@@ -39,7 +39,7 @@ def sorted_pulse_responses(pr_recs):
     return sorted_recs
 
 
-def pulse_response_query(pair, qc_pass=False, clamp_mode=None, data=False, session=None):
+def pulse_response_query(pair, qc_pass=False, clamp_mode=None, data=False, spike_data=False, session=None):
     if session is None:
         session = db.session()
     q = session.query(db.PulseResponse, db.PulseResponseFit, db.StimPulse, db.Recording, db.PatchClampRecording, db.MultiPatchProbe, db.Synapse)
@@ -53,6 +53,10 @@ def pulse_response_query(pair, qc_pass=False, clamp_mode=None, data=False, sessi
 
     if data is True:
         q = q.add_column(db.PulseResponse.data)
+        
+    if spike_data is True:
+        q = q.add_column(db.StimPulse.data.label('spike_data'))
+        q = q.add_column(db.StimPulse.data_start_time.label('spike_data_start_time'))
     
     if clamp_mode is not None:
         q = q.filter(db.PatchClampRecording.clamp_mode==clamp_mode)

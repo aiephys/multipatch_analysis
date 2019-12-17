@@ -22,13 +22,18 @@ class DynamicsWindow(pg.QtGui.QSplitter):
         self.ctrl_split.addWidget(self.ptree)
         
         self.params = pg.parametertree.Parameter.create(name='params', type='group', children=[
-            {'name': 'show spikes', 'type': 'bool', 'value': False},
+            {'name': 'show spikes', 'type': 'bool', 'value': True},
             {'name': 'stimulus filter', 'type': 'group'},
         ])
         self.ptree.setParameters(self.params)
         
+        self.scroll_area = pg.QtGui.QScrollArea()
+        self.addWidget(self.scroll_area)
+        
         self.view = pg.GraphicsLayoutWidget()
-        self.addWidget(self.view)
+        self.scroll_area.setWidget(self.view)
+        
+        self.resize(1600, 1000)
         
         self.plots = []
         
@@ -55,7 +60,7 @@ class DynamicsWindow(pg.QtGui.QSplitter):
     def load_pair(self, pair):
         if pair is not self.loaded_pair:
             print("Loading:", pair)
-            q = pulse_response_query(pair, data=True)
+            q = pulse_response_query(pair, data=True, spike_data=True)
             self.sorted_recs = sorted_pulse_responses(q.all())
             self.stim_keys = sorted(list(self.sorted_recs.keys()))
             self.update_params()
@@ -74,19 +79,25 @@ class DynamicsWindow(pg.QtGui.QSplitter):
                 stim_param.addChild(param)
         
     def plot_all(self):
-        self.clear()
+        with pg.BusyCursor():
+            self.clear()
+            show_spikes = self.params['show spikes']
 
-        for i,stim_key in enumerate(self.stim_keys):
-            if self.params['stimulus filter', str(stim_key)] is False:
-                continue
-            
-            plt = DynamicsPlot()
-            self.plots.append(plt)
-            self.view.addItem(plt)
-            self.view.nextRow()
-            plt.set_title("%s  %0.0f Hz  %0.2f s" % stim_key)
-            prs = self.sorted_recs[stim_key]
-            plt.set_data(prs)
+            for i,stim_key in enumerate(self.stim_keys):
+                if self.params['stimulus filter', str(stim_key)] is False:
+                    continue
+                
+                plt = DynamicsPlot()
+                self.plots.append(plt)
+                self.view.addItem(plt)
+                self.view.nextRow()
+                plt.set_title("%s  %0.0f Hz  %0.2f s" % stim_key)
+                prs = self.sorted_recs[stim_key]
+                plt.set_data(prs, show_spikes=show_spikes)
+
+            plt_height = max(400 if show_spikes else 250, self.scroll_area.height() / len(self.stim_keys))
+            self.view.setFixedHeight(plt_height * len(self.plots))
+            self.view.setFixedWidth(self.scroll_area.width() - self.scroll_area.verticalScrollBar().width())
         
 
 class DynamicsPlot(pg.GraphicsLayout):
@@ -101,11 +112,13 @@ class DynamicsPlot(pg.GraphicsLayout):
         self.spike_plot.setVisible(False)
         self.nextRow()
         self.data_plot = self.addPlot()
+        self.spike_plot.setXLink(self.data_plot)
         
     def set_title(self, title):
         self.label.setText(title)
         
-    def set_data(self, data):
+    def set_data(self, data, show_spikes=False):
+        self.spike_plot.setVisible(show_spikes)
         psp = StackedPsp()
         
         for recording in data:
@@ -126,10 +139,18 @@ class DynamicsPlot(pg.GraphicsLayout):
                 
                 # arrange plots nicely
                 shift = (pulse_n * 35e-3 + (30e-3 if pulse_n > 8 else 0), 0)
+                zval = 0 if qc_pass else -10
                 c.setPos(*shift)
-                
+                c.setZValue(zval)
+
+                if show_spikes:
+                    t0 = rec.spike_data_start_time - spike_t
+                    spike_ts = TSeries(data=rec.spike_data, t0=t0, sample_rate=db.default_sample_rate)
+                    c = self.spike_plot.plot(spike_ts.time_values, spike_ts.data, pen=pen)
+                    c.setPos(*shift)
+                    c.setZValue(zval)
+                    
                 if not qc_pass:
-                    c.setZValue(-10)
                     continue
                     
                 # evaluate recorded fit for this response
@@ -152,12 +173,12 @@ class DynamicsPlot(pg.GraphicsLayout):
                 c.setPos(*shift)
 
 
-
 if __name__ == '__main__':
     import sys
         
     app = pg.mkQApp()
-    pg.dbg()
+    if sys.flags.interactive == 1:
+        pg.dbg()
     
     win = DynamicsWindow()
     win.show()
