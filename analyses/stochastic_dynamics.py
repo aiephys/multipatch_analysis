@@ -70,8 +70,9 @@ class StochasticReleaseModel(object):
             state variables immediately after each spike
         """
         result = np.empty(len(spike_times), dtype=self.result_dtype)
-        pre_spike_state = np.empty(len(spike_times), dtype=self.state_dtype)
-        post_spike_state = np.empty(len(spike_times), dtype=self.state_dtype)
+        pre_spike_state = np.full(len(spike_times), np.nan, dtype=self.state_dtype)
+        post_spike_state = np.full(len(spike_times), np.nan, dtype=self.state_dtype)
+        
         
         # state parameters:
         # available_vesicles is a float as a means of avoiding the need to model stochastic vesicle docking;
@@ -96,15 +97,14 @@ class StochasticReleaseModel(object):
                 # recover vesicles up to the current timepoint
                 dt = t - previous_t
                 previous_t = t
-                recovery = np.exp(-dt / self.recovery_tau)
-                state['available_vesicle'] = state['available_vesicle'] * recovery + self.n_release_sites * (1.0 - recovery)
+                v_recovery = np.exp(-dt / self.vesicle_recovery_tau)
+                state['available_vesicle'] += (self.n_release_sites - state['available_vesicle']) * (1.0 - v_recovery)
 
-                # apply facilitation and recovery to release probability
+                # apply recovery from facilitation toward baseline release probability
                 rp = state['release_probability']
                 rp0 = self.base_release_probability
                 f_recovery = np.exp(-dt / self.facilitation_recovery_tau)
-                state['release_probability'] += (1.0 - rp) * self.facilitation_amount  # spike-induced facilitation
-                state['release_probability'] += (rp0 - rp) * f_recovery                # recovery from facilitation toward baseline release probability
+                state['release_probability'] += (rp0 - rp) * (1.0 - f_recovery)
                 
                 # predict most likely amplitude for this spike (just for show)
                 expected_amplitude = state['available_vesicle'] * state['release_probability'] * self.mini_amplitude
@@ -121,10 +121,13 @@ class StochasticReleaseModel(object):
                     likelihood = self.likelihood([amplitude], state)[0]
                 
                 # release vesicles
-                # note: we allow available_vesicle to become negative because this help to ensure
+                # note: we allow available_vesicle to become negative because this helps to ensure
                 # that the overall likelihood will be low for such models
                 depleted_vesicle = amplitude / self.mini_amplitude
                 state['available_vesicle'] -= depleted_vesicle
+
+                # apply spike-induced facilitation in release probability
+                state['release_probability'] += (1.0 - state['release_probability']) * self.facilitation_amount
 
                 # record model state immediately after spike
                 for k in state:
@@ -145,8 +148,8 @@ class StochasticReleaseModel(object):
         """Estimate the probability density of seeing a particular *amplitude*
         given a number of *available_vesicles*.
         """
-        available_vesicles = int(np.clip(np.round(state['available_vesicle']), 0, self.n_release_sites))
-        return release_likelihood(amplitudes, available_vesicles, state['release_probability'], self.mini_amplitude, self.mini_amplitude_stdev, self.measurement_stdev)
+        available_vesicles = np.clip(np.round(state['available_vesicle']), 0, self.n_release_sites)
+        return release_likelihood(amplitudes, int(available_vesicles), state['release_probability'], self.mini_amplitude, self.mini_amplitude_stdev, self.measurement_stdev)
 
 
 # @numba.jit
@@ -272,7 +275,6 @@ class ModelResultWidget(QtGui.QWidget):
         self.plt3.clear()
         self.plt3.plot(compressed_spike_times, pre_state[self.state_key], pen=None, symbol='t', symbolBrush=brushes)
         self.plt3.plot(compressed_spike_times, post_state[self.state_key], pen=None, symbol='o', symbolBrush=brushes)
-
         self.plt4.clear()
         
         # plot full distribution of event amplitudes
@@ -285,6 +287,8 @@ class ModelResultWidget(QtGui.QWidget):
         total_dist = np.zeros(len(amps))
         for i in range(self.result.shape[0]):
             state = self.pre_state[i]
+            if not np.all(np.isfinite(tuple(state))):
+                continue
             total_dist += self.model.likelihood(amps, state)
         total_dist *= len(total_dist) / total_dist.sum()
         self.plt4.plot(amps, total_dist, fillLevel=0, brush=(255, 0, 0, 50))
@@ -531,11 +535,11 @@ if __name__ == '__main__':
     # mini_amp_estimate = pair.synapse.psp_amplitude / (n_release_sites * release_probability)
     # params = {
     #     'n_release_sites': np.array([1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64]),
-    #     'release_probability': log_space(0.01, 0.9, 21),
+    #     'base_release_probability': log_space(0.01, 0.9, 21),
     #     'mini_amplitude': log_space(0.001, 0.3, 21),
     #     'mini_amplitude_stdev': log_space(0.0001, 0.1, 21),
     #     'measurement_stdev': bg_amplitudes.std(),
-    #     'recovery_tau': log_space(2e-5, 20, 21),
+    #     'vesicle_recovery_tau': log_space(2e-5, 20, 21),
     # }
 
     # quick test
@@ -545,11 +549,11 @@ if __name__ == '__main__':
     max_events = 200
     params = {
         'n_release_sites': np.array([1, 2, 4, 8, 16]),
-        'release_probability': np.array([0.1, 0.2, 0.4, 0.6, 0.8, 1.0]),
+        'base_release_probability': np.array([0.1, 0.2, 0.4, 0.6, 0.8, 1.0]),
         'mini_amplitude': mini_amp_estimate * 1.2**np.arange(-24, 24, 2),
         'mini_amplitude_stdev': mini_amp_estimate * 0.2 * 1.2**np.arange(-24, 24, 8),
         'measurement_stdev': 0.001,
-        'recovery_tau': 0.01,
+        'vesicle_recovery_tau': 0.01,
     }
 
     for k,v in params.items():
@@ -565,11 +569,11 @@ if __name__ == '__main__':
     # mini_amp_estimate = first_pulse_amps.mean() / (n_release_sites * release_probability)
     # params = {
     #     'n_release_sites': np.arange(1, 30),
-    #     'release_probability': release_probability,
+    #     'base_release_probability': release_probability,
     #     'mini_amplitude': mini_amp_estimate * 1.2**np.arange(-24, 24),
     #     'mini_amplitude_stdev': mini_amp_estimate * 1.2**np.arange(-24, 24),
     #     'measurement_stdev': 0,
-    #     'recovery_tau': 0.01,
+    #     'vesicle_recovery_tau': 0.01,
     # }
 
     # 3. For each point in the parameter space, simulate a synapse and estimate the joint probability of the set of measured amplitudes
@@ -577,6 +581,8 @@ if __name__ == '__main__':
     def run_model(params):    
         model = StochasticReleaseModel()
         for k,v in params.items():
+            if not hasattr(model, k):
+                raise Exception("Invalid model parameter '%s'" % k)
             setattr(model, k, v)
         return (model,) + model.measure_likelihood(spike_times[:max_events], amplitudes[:max_events])
     
