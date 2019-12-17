@@ -437,6 +437,7 @@ def event_query(pair, db, session):
         db.PulseResponse,
         db.PulseResponse.ex_qc_pass,
         db.PulseResponseFit.fit_amp,
+        db.PulseResponseFit.fit_nrmse,
         db.PulseResponseFit.baseline_fit_amp,
         db.StimPulse.first_spike_time,
         db.StimPulse.pulse_number,
@@ -460,8 +461,7 @@ def event_query(pair, db, session):
 
 def event_qc(events):
     mask = events['ex_qc_pass'] == True
-    # need more stringent qc for dynamics:
-    mask &= np.abs(events['baseline_current']) < 500e-12
+    mask &= events['fit_nrmse'] < 0.6
     return mask   
 
 
@@ -499,9 +499,7 @@ if __name__ == '__main__':
 
     # 1. Get a list of all presynaptic spike times and the amplitudes of postsynaptic responses
 
-    raw_events = event_query(pair, db, session).dataframe()
-    mask = event_qc(raw_events)
-    events = raw_events[mask]
+    events = event_query(pair, db, session).dataframe()
 
     rec_times = (events['rec_start_time'] - events['rec_start_time'].iloc[0]).dt.total_seconds().to_numpy()
     spike_times = events['first_spike_time'].to_numpy() + rec_times
@@ -521,9 +519,12 @@ if __name__ == '__main__':
     amplitudes = events['fit_amp'].to_numpy()
     bg_amplitudes = events['baseline_fit_amp'].to_numpy()
 
+    qc_mask = event_qc(events)
+    amplitudes[qc_mask] = np.nan
+
     first_pulse_mask = events['pulse_number'] == 1
     first_pulse_amps = amplitudes[first_pulse_mask]
-    first_pulse_stdev = first_pulse_amps.std()
+    first_pulse_stdev = np.nanstd(first_pulse_amps)
     
 
     def log_space(start, stop, steps):
@@ -546,7 +547,7 @@ if __name__ == '__main__':
     n_release_sites = 8
     release_probability = 0.1
     mini_amp_estimate = np.nanmean(first_pulse_amps) / (n_release_sites * release_probability)
-    max_events = 200
+    max_events = 2000
     params = {
         'n_release_sites': np.array([1, 2, 4, 8, 16]),
         'base_release_probability': np.array([0.1, 0.2, 0.4, 0.6, 0.8, 1.0]),
