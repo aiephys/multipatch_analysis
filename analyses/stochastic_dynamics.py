@@ -23,15 +23,27 @@ class StochasticReleaseModel(object):
     
     state_dtype = [
         ('available_vesicle', float),
+        ('release_probability', float),
     ]
     
     def __init__(self):
         # model parameters
         self.n_release_sites = 20
-        self.release_probability = 0.1
+        self.base_release_probability = 0.5
+        
+        # mean and stdev of PSP amplitudes expected from a single vesicle release
         self.mini_amplitude = 50e-6
         self.mini_amplitude_stdev = 20e-6
-        self.recovery_tau = 100e-3
+        
+        # time constant for vesicle replenishment
+        # "typically in the order of seconds" accoring to Hennig 2013
+        self.vesicle_recovery_tau = 500e-3
+        
+        # facilitation and recovery time constant
+        self.facilitation_amount = 0.1
+        self.facilitation_recovery_tau = 20e-3
+        
+        # extra variance in PSP amplitudes purely as a result of membrane noise / measurement error
         self.measurement_stdev = 100e-6
     
     def measure_likelihood(self, spike_times, amplitudes):
@@ -67,6 +79,7 @@ class StochasticReleaseModel(object):
         # instead)
         state = {
             'available_vesicle': self.n_release_sites,
+            'release_probability': self.base_release_probability,
         }
         
         previous_t = spike_times[0]
@@ -85,9 +98,16 @@ class StochasticReleaseModel(object):
                 previous_t = t
                 recovery = np.exp(-dt / self.recovery_tau)
                 state['available_vesicle'] = state['available_vesicle'] * recovery + self.n_release_sites * (1.0 - recovery)
+
+                # apply facilitation and recovery to release probability
+                rp = state['release_probability']
+                rp0 = self.base_release_probability
+                f_recovery = np.exp(-dt / self.facilitation_recovery_tau)
+                state['release_probability'] += (1.0 - rp) * self.facilitation_amount  # spike-induced facilitation
+                state['release_probability'] += (rp0 - rp) * f_recovery                # recovery from facilitation toward baseline release probability
                 
                 # predict most likely amplitude for this spike (just for show)
-                expected_amplitude = state['available_vesicle'] * self.release_probability * self.mini_amplitude
+                expected_amplitude = state['available_vesicle'] * state['release_probability'] * self.mini_amplitude
                 
                 # record model state immediately before spike
                 for k in state:
@@ -126,7 +146,7 @@ class StochasticReleaseModel(object):
         given a number of *available_vesicles*.
         """
         available_vesicles = int(np.clip(np.round(state['available_vesicle']), 0, self.n_release_sites))
-        return release_likelihood(amplitudes, available_vesicles, self.release_probability, self.mini_amplitude, self.mini_amplitude_stdev, self.measurement_stdev)
+        return release_likelihood(amplitudes, available_vesicles, state['release_probability'], self.mini_amplitude, self.mini_amplitude_stdev, self.measurement_stdev)
 
 
 # @numba.jit
@@ -213,7 +233,8 @@ class ModelResultWidget(QtGui.QWidget):
         self.plt2 = self.glw.addPlot(1, 0, title="deconvolved amplitude vs compressed time")
         self.plt2.setXLink(self.plt1)
         
-        self.plt3 = self.glw.addPlot(2, 0, title="available_vesicles vs compressed time")
+        self.state_key = 'release_probability'
+        self.plt3 = self.glw.addPlot(2, 0, title=self.state_key + " vs compressed time")
         self.plt3.setXLink(self.plt1)
         
         self.plt4 = self.glw.addPlot(0, 1, title="amplitude distributions", rowspan=3)
@@ -249,8 +270,8 @@ class ModelResultWidget(QtGui.QWidget):
         amp_sp.scatter.sigClicked.connect(self.amp_sp_clicked)
         
         self.plt3.clear()
-        self.plt3.plot(compressed_spike_times, pre_state['available_vesicle'], pen=None, symbol='t', symbolBrush=brushes)
-        self.plt3.plot(compressed_spike_times, post_state['available_vesicle'], pen=None, symbol='o', symbolBrush=brushes)
+        self.plt3.plot(compressed_spike_times, pre_state[self.state_key], pen=None, symbol='t', symbolBrush=brushes)
+        self.plt3.plot(compressed_spike_times, post_state[self.state_key], pen=None, symbol='o', symbolBrush=brushes)
 
         self.plt4.clear()
         
@@ -272,14 +293,14 @@ class ModelResultWidget(QtGui.QWidget):
         i = pts[0].index()
         state = self.pre_state[i]
         expected_amp = self.result[i]['expected_amplitude']
-        measured_amps = self.result[i]['amplitude']
+        measured_amp = self.result[i]['amplitude']
         amps = self.amp_sample_values
         
         for item in self.plt4.selected_items:
             self.plt4.removeItem(item)
         l = self.model.likelihood(amps, state)
         p = self.plt4.plot(amps, l * len(l) / l.sum(), pen=(255, 255, 0, 100))
-        l1 = self.plt4.addLine(x=self.result[i]['amplitude'])
+        l1 = self.plt4.addLine(x=measured_amp)
         l2 = self.plt4.addLine(x=expected_amp, pen='r')
         self.plt4.selected_items = [p, l1, l2]
 
