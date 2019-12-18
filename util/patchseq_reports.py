@@ -1,4 +1,4 @@
-import glob, os, argparse, sys, csv
+import glob, os, argparse, sys, csv, re
 import pandas as pd
 import pyqtgraph as pg
 from acq4.util.DataManager import getHandle
@@ -71,9 +71,11 @@ def generate_daily_report(day):
         patch_date = datetime.strftime(patch_date, "%m/%d/%Y") if isinstance(patch_date, datetime) else None 
         specimen_id = day_info.get('animal_ID')
         species = lims.specimen_species(slice_info.get('specimen_ID'))
+        species = organism.get(species) 
         if species == 'Mouse':
             genotype = day_info.get('LIMS_donor_info', {}).get('genotype')
-        species = organism.get(species) 
+        else:
+            genotype = None
         roi_major = format_roi_major(day_info.get('target_region'))
 
         blank_fill_date = slice_info.get('blank_fill_date', '')
@@ -85,13 +87,14 @@ def generate_daily_report(day):
         
         # for headstages that have patchseq tubes log metadata
         for hs, info in headstages.items():
-            if info['Tube ID'] == '':
+            tube_name, tube_id, msg = parse_tube(info, patch_date_dt)
+            if tube_name == None:
+                if msg is not None:
+                    print('\t\t%s '%hs + msg)
                 continue
             row = OrderedDict([k, None] for k in columns)
 
             pip = pip_meta.pipettes[hs[-1]]
-            tube_id = info['Tube ID']
-            tube_id_num = int(tube_id.split('_')[2])
             nucleus_state = nucleus[info.get('Nucleus', '')]
             roi_minor = format_roi_minor(pip['target_layer'])
 
@@ -101,8 +104,8 @@ def generate_daily_report(day):
                 'Specimen ID': specimen_id,
                 'Species': species,
                 'Cell Line': genotype,
-                'Patch Tube Name': tube_id,
-                'tube_id': tube_id_num,
+                'Patch Tube Name': tube_name,
+                'tube_id': tube_id,
                 'Comments': nucleus_state,
                 'ROI Major': roi_major,
                 'ROI Minor': roi_minor,
@@ -191,8 +194,8 @@ def generate_monthly_report(start_date, end_date):
 
         index_file = pg.configfile.readConfigFile(os.path.join(day_dh.path, '.index'))
         rig_name = index_file['.'].get('rig_name')
-        patch_date = timestamp_to_datetime(day_info.get('__timestamp__'))
-        patch_date = datetime.strftime(patch_date, "%m/%d/%Y") if isinstance(patch_date, datetime) else None
+        patch_date_dt = timestamp_to_datetime(day_info.get('__timestamp__'))
+        patch_date = datetime.strftime(patch_date_dt, "%m/%d/%Y") if isinstance(patch_date_dt, datetime) else None
         operator = day_info.get('rig_operator', '')
         operator = rig_operators[operator]
         roi = format_roi_major(day_info.get('target_region'))
@@ -216,20 +219,21 @@ def generate_monthly_report(start_date, end_date):
             internal_fill_date = None
         
         for hs, info in headstages.items():
-            if info['Tube ID'] == '':
+            tube_name, tube_id, msg = parse_tube(info, patch_date_dt)
+            if tube_name == None:
+                if msg is not None:
+                    print('\t\t%s '%hs + msg)
                 continue
             row = OrderedDict([k, None] for k in columns)
-             
-            tube_id = info['Tube ID']
-            tube_id_num = int(tube_id.split('_')[2])
            
             color = info.get('Reporter')
+            reporter = None
             if color == '-':
                 reporter = color
-            elif color in ['red', 'greed', 'yellow'] and genotype is not None:
-                reporter = genotype.color_to_reporter(color) + '+'
-            else:
-                reporter = None
+            elif color in ['red', 'green', 'yellow'] and genotype is not None:
+                reporter = genotype.color_to_reporter(color)
+            elif color == 'NA':
+                reporter = ''
             
             pip = pip_meta.pipettes[hs[-1]]
             layer = pip['target_layer']
@@ -241,8 +245,8 @@ def generate_monthly_report(start_date, end_date):
             row.update({
                 'internalFillDate': internal_fill_date,
                 'Fill.Date': blank_fill_date,
-                'tubeID': tube_id,
-                'tube_id': tube_id_num,
+                'tubeID': tube_name,
+                'tube_id': tube_id,
                 'patch.date': patch_date,
                 'rigOperator': operator,
                 'rigNumber': rig_name,
@@ -293,6 +297,22 @@ def tube_cross_check(monthly_tubes, start_date, end_date):
 
     print('### These tubes appear to be missing from the Monthly Report:\n%s' % missing.to_string(index=False))
     print('### These tubes appear in the Monthly Report but not in a Daily Report:\n%s' % extra.to_string(index=False))
+
+def parse_tube(info, date):
+    if info['Tube ID'] == '':
+        return None, None, None
+    tube_name = info['Tube ID']
+    name_check = re.match(r'P(M|T)S4_(?P<date>\d{6})_(?P<tube_id>\d{3})_A01', tube_name)
+    if name_check is None:
+        msg = 'Tube %s ID does not match the proper format' % tube_name
+        return None, None, msg
+    date_check = name_check.group('date') == datetime.strftime(date, "%y%m%d")
+    if date_check is False:
+        msg = 'Date %s in Tube ID does not match the date of the experiment' % name_check.group('date')
+        return None, None, msg
+
+    tube_id = name_check.group('tube_id')
+    return tube_name, tube_id, None
 
 def to_df(report_data, report_type):
     if len(report_data) == 0:
