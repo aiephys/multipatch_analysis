@@ -21,41 +21,62 @@ class ExperimentBrowser(pg.TreeWidget):
         self.setDragDropMode(self.NoDragDrop)
         self._last_expanded = None
         
-    def populate(self, experiments=None, all_pairs=False):
-        # if all_pairs is set to True, all pairs from an experiment will be included regardless of whether they have data
-        self.items_by_pair_id = {}
+    def populate(self, experiments=None, all_pairs=False, synapses=False):
+        """Populate the browser with a list of experiments.
         
-        self.session = db.session()
-        
-        if experiments is None:
-            experiments = db.list_experiments(session=self.session)
-            # preload all cells,pairs so they are not queried individually later on
-            pairs = self.session.query(db.Pair, db.Experiment, db.Cell, db.Slice).join(db.Experiment, db.Pair.experiment_id==db.Experiment.id).join(db.Cell, db.Cell.id==db.Pair.pre_cell_id).join(db.Slice).all()
-        
-        experiments.sort(key=lambda e: e.acq_timestamp)
-        for expt in experiments:
-            date = expt.acq_timestamp
-            date_str = datetime.fromtimestamp(date).strftime('%Y-%m-%d')
-            slice = expt.slice
-            expt_item = pg.TreeWidgetItem(map(str, [date_str, '%0.3f'%expt.acq_timestamp, expt.rig_name, slice.species, expt.project_name, expt.target_region, slice.genotype, expt.acsf]))
-            expt_item.expt = expt
-            self.addTopLevelItem(expt_item)
+        Parameters
+        ----------
+        experiments : list | None
+            A list of Experiment instances. If None, then automatically query experiments from the default database.
+        all_pairs : bool
+            If False, then pairs with no qc-passed pulse responses are excluded
+        synapses : bool
+            If True, then only synaptically connected pairs are shown
+        """
+        with pg.BusyCursor():
+            # if all_pairs is set to True, all pairs from an experiment will be included regardless of whether they have data
+            self.items_by_pair_id = {}
+            
+            self.session = db.session()
+            
+            if experiments is None:
+                # preload all cells,pairs so they are not queried individually later on
+                q = self.session.query(db.Pair, db.Experiment, db.Cell, db.Slice)
+                q = q.join(db.Experiment, db.Pair.experiment_id==db.Experiment.id)
+                q = q.join(db.Cell, db.Cell.id==db.Pair.pre_cell_id)
+                q = q.join(db.Slice)
+                if synapses:
+                    q = q.filter(db.Pair.has_synapse==True)
+                    
+                recs = q.all()
+                experiments = list(set([rec.Experiment for rec in recs]))
+            
+            experiments.sort(key=lambda e: e.acq_timestamp)
+            for expt in experiments:
+                date = expt.acq_timestamp
+                date_str = datetime.fromtimestamp(date).strftime('%Y-%m-%d')
+                slice = expt.slice
+                expt_item = pg.TreeWidgetItem(map(str, [date_str, '%0.3f'%expt.acq_timestamp, expt.rig_name, slice.species, expt.project_name, expt.target_region, slice.genotype, expt.acsf]))
+                expt_item.expt = expt
+                self.addTopLevelItem(expt_item)
 
-            for pair in expt.pair_list:
-                if all_pairs is False and pair.n_ex_test_spikes == 0 and pair.n_in_test_spikes == 0:
-                    continue
-                cells = '%s => %s' % (pair.pre_cell.ext_id, pair.post_cell.ext_id)
-                conn = {True:"syn", False:"-", None:"?"}[pair.has_synapse]
-                types = 'L%s %s => L%s %s' % (pair.pre_cell.target_layer or "?", pair.pre_cell.cre_type, pair.post_cell.target_layer or "?", pair.post_cell.cre_type)
-                pair_item = pg.TreeWidgetItem([cells, conn, types])
-                expt_item.addChild(pair_item)
-                pair_item.pair = pair
-                pair_item.expt = expt
-                self.items_by_pair_id[pair.id] = pair_item
-                # also allow select by ext id
-                self.items_by_pair_id[(expt.acq_timestamp, pair.pre_cell.ext_id, pair.post_cell.ext_id)] = pair_item
-                
-        self.verticalScrollBar().setValue(self.verticalScrollBar().maximum())
+                for pair in expt.pair_list:
+                    if all_pairs is False and pair.n_ex_test_spikes == 0 and pair.n_in_test_spikes == 0:
+                        continue
+                    if synapses and not pair.has_synapse:
+                        continue
+                    cells = '%s => %s' % (pair.pre_cell.ext_id, pair.post_cell.ext_id)
+                    conn = {True:"syn", False:"-", None:"?"}[pair.has_synapse]
+                    types = 'L%s %s => L%s %s' % (pair.pre_cell.target_layer or "?", pair.pre_cell.cre_type, pair.post_cell.target_layer or "?", pair.post_cell.cre_type)
+                    pair_item = pg.TreeWidgetItem([cells, conn, types])
+                    expt_item.addChild(pair_item)
+                    pair_item.pair = pair
+                    pair_item.expt = expt
+                    self.items_by_pair_id[pair.id] = pair_item
+                    # also allow select by ext id
+                    self.items_by_pair_id[(expt.acq_timestamp, pair.pre_cell.ext_id, pair.post_cell.ext_id)] = pair_item
+                    
+            self.verticalScrollBar().setValue(self.verticalScrollBar().maximum())
                 
     def select_pair(self, pair_id):
         """Select a specific pair from the list
