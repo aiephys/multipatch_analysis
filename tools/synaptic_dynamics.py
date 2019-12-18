@@ -23,6 +23,7 @@ class DynamicsWindow(pg.QtGui.QSplitter):
         
         self.params = pg.parametertree.Parameter.create(name='params', type='group', children=[
             {'name': 'show spikes', 'type': 'bool', 'value': True},
+            {'name': 'subtract baseline', 'type': 'bool', 'value': True},
             {'name': 'stimulus filter', 'type': 'group'},
         ])
         self.ptree.setParameters(self.params)
@@ -93,7 +94,7 @@ class DynamicsWindow(pg.QtGui.QSplitter):
                 self.view.nextRow()
                 plt.set_title("%s  %0.0f Hz  %0.2f s" % stim_key)
                 prs = self.sorted_recs[stim_key]
-                plt.set_data(prs, show_spikes=show_spikes)
+                plt.set_data(prs, show_spikes=show_spikes, subtract_baseline=self.params['subtract baseline'])
 
             plt_height = max(400 if show_spikes else 250, self.scroll_area.height() / len(self.stim_keys))
             self.view.setFixedHeight(plt_height * len(self.plots))
@@ -117,8 +118,10 @@ class DynamicsPlot(pg.GraphicsLayout):
     def set_title(self, title):
         self.label.setText(title)
         
-    def set_data(self, data, show_spikes=False):
+    def set_data(self, data, show_spikes=False, subtract_baseline=True):
         self.spike_plot.setVisible(show_spikes)
+        self.spike_plot.enableAutoRange(False, False)
+        self.data_plot.enableAutoRange(False, False)
         psp = StackedPsp()
         
         for recording in data:
@@ -131,14 +134,15 @@ class DynamicsPlot(pg.GraphicsLayout):
                     spike_t = rec.StimPulse.onset_time + 1e-3
                     
                 qc_pass = rec.PulseResponse.in_qc_pass if rec.Synapse.synapse_type == 'in' else rec.PulseResponse.ex_qc_pass
-                pen = (255, 255, 255, 100) if qc_pass else (100, 0, 0, 100)
+                pen = (255, 255, 255, 100) if qc_pass else (200, 50, 0, 100)
                 
                 t0 = rec.PulseResponse.data_start_time - spike_t
                 ts = TSeries(data=rec.data, t0=t0, sample_rate=db.default_sample_rate)
                 c = self.data_plot.plot(ts.time_values, ts.data, pen=pen)
                 
                 # arrange plots nicely
-                shift = (pulse_n * 35e-3 + (30e-3 if pulse_n > 8 else 0), 0)
+                y0 = 0 if not subtract_baseline else ts.time_slice(None, 0).median()
+                shift = (pulse_n * 35e-3 + (30e-3 if pulse_n > 8 else 0), -y0)
                 zval = 0 if qc_pass else -10
                 c.setPos(*shift)
                 c.setZValue(zval)
@@ -149,9 +153,6 @@ class DynamicsPlot(pg.GraphicsLayout):
                     c = self.spike_plot.plot(spike_ts.time_values, spike_ts.data, pen=pen)
                     c.setPos(*shift)
                     c.setZValue(zval)
-                    
-                if not qc_pass:
-                    continue
                     
                 # evaluate recorded fit for this response
                 fit_par = rec.PulseResponseFit
@@ -168,10 +169,16 @@ class DynamicsPlot(pg.GraphicsLayout):
                     yoffset=fit_par.fit_yoffset,
                     rise_power=2,
                 )
-                c = self.data_plot.plot(ts.time_values, fit, pen=(0, 255, 0, 100))
+                pen = (0, 255, 0, 100) if qc_pass else (50, 150, 0, 100)
+                c = self.data_plot.plot(ts.time_values, fit, pen=pen)
                 c.setZValue(10)
                 c.setPos(*shift)
 
+                if not qc_pass:
+                    print("qc fail: ", rec.PulseResponse.meta.get('qc_failures', 'no qc failures recorded'))
+                    
+        self.spike_plot.enableAutoRange(True, True)
+        self.data_plot.enableAutoRange(True, True)
 
 if __name__ == '__main__':
     import sys
@@ -186,11 +193,11 @@ if __name__ == '__main__':
     if len(sys.argv) > 1:
         expt_id, pre_cell, post_cell = sys.argv[1:]
         expt = db.experiment_from_ext_id(expt_id)
-        win.browser.populate([expt])
+        win.browser.populate([expt], synapses=True)
         pair = expt.pairs[pre_cell, post_cell]
         win.browser.select_pair(pair.id)
     else:
-        win.browser.populate()
+        win.browser.populate(synapses=True)
 
     if sys.flags.interactive == 0:
         app.exec_()

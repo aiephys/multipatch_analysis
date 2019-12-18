@@ -1,3 +1,4 @@
+import pandas as pd
 import pyqtgraph as pg
 from neuroanalysis.data import TSeries
 from neuroanalysis.fitting import StackedPsp
@@ -78,7 +79,10 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
             q = q.join(db.MultiPatchProbe)
             q = q.filter(db.PulseResponse.pair_id==pair.id)
             df = q.dataframe()
-                        
+            for col in df.columns:
+                if 'fit_' in col:
+                    df[col] = pd.to_numeric(df[col])
+            
             self.scatter_plot.setData(df.to_records())
             
     def scatter_plot_clicked(self, plt, points):
@@ -138,11 +142,11 @@ if __name__ == '__main__':
     if len(sys.argv) > 1:
         expt_id, pre_cell, post_cell = sys.argv[1:]
         expt = db.experiment_from_ext_id(expt_id)
-        win.browser.populate([expt])
+        win.browser.populate([expt], synapses=True)
         pair = expt.pairs[pre_cell, post_cell]
         win.browser.select_pair(pair.id)
     else:
-        win.browser.populate()
+        win.browser.populate(synapses=True)
 
     if sys.flags.interactive == 0:
         app.exec_()
