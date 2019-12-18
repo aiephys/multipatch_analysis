@@ -69,6 +69,9 @@ class StochasticReleaseModel(object):
         post_spike_state:
             state variables immediately after each spike
         """
+        # How long to wait after a NaN event before the model begins accumulating likelihood values again
+        self.missing_event_penalty = 0.0
+
         result = np.empty(len(spike_times), dtype=self.result_dtype)
         pre_spike_state = np.full(len(spike_times), np.nan, dtype=self.state_dtype)
         post_spike_state = np.full(len(spike_times), np.nan, dtype=self.state_dtype)
@@ -114,7 +117,7 @@ class StochasticReleaseModel(object):
                     pre_spike_state[i][k] = state[k]
                     
                 # measure likelihood of seeing this response amplitude
-                if t - last_nan_time < 10.0:
+                if t - last_nan_time < self.missing_event_penalty:
                     # ignore likelihood for this event if it was too close to an unmeasurable response
                     likelihood = np.nan
                 else:
@@ -245,7 +248,7 @@ class ModelResultWidget(QtGui.QWidget):
         self.plt4.setMaximumWidth(500)
         self.plt4.selected_items = []
 
-        self.amp_sample_values = np.linspace(-0.01, 0.01, 200)
+        self.amp_sample_values = np.linspace(-0.005, 0.005, 200)
 
     def set_result(self, model, result, pre_state, post_state):
         self.model = model
@@ -278,9 +281,9 @@ class ModelResultWidget(QtGui.QWidget):
         self.plt4.clear()
         
         # plot full distribution of event amplitudes
-        bins = np.linspace(self.amp_sample_values[0], self.amp_sample_values[-1], 40)
+        bins = np.linspace(np.nanmin(self.result['amplitude']), np.nanmax(self.result['amplitude']), 40)
         amp_hist = np.histogram(self.result['amplitude'], bins=bins)
-        self.plt4.plot(amp_hist[1], amp_hist[0] * len(amp_hist[0]) / amp_hist[0].sum(), stepMode=True, fillLevel=0, brush=0.3)
+        self.plt4.plot(amp_hist[1], amp_hist[0] / amp_hist[0].sum(), stepMode=True, fillLevel=0, brush=0.3)
 
         # plot average model event distribution
         amps = self.amp_sample_values
@@ -290,7 +293,7 @@ class ModelResultWidget(QtGui.QWidget):
             if not np.all(np.isfinite(tuple(state))):
                 continue
             total_dist += self.model.likelihood(amps, state)
-        total_dist *= len(total_dist) / total_dist.sum()
+        total_dist /= total_dist.sum()
         self.plt4.plot(amps, total_dist, fillLevel=0, brush=(255, 0, 0, 50))
     
     def amp_sp_clicked(self, sp, pts):
@@ -460,14 +463,15 @@ def event_query(pair, db, session):
 
 
 def event_qc(events):
-    mask = events['ex_qc_pass'] == True
-    mask &= events['fit_nrmse'] < 0.6
-    return mask   
+    mask = (events['ex_qc_pass'] == True)
+    # mask = mask & (events['fit_nrmse'] < 0.6)
+    return mask
 
 
 if __name__ == '__main__':
-    pg.mkQApp()
-    pg.dbg()
+    app = pg.mkQApp()
+    if sys.flags.interactive == 1:
+        pg.dbg()
     
     # strong ex, no failures, no depression
     expt_id = '1535402792.695'
@@ -484,9 +488,22 @@ if __name__ == '__main__':
     # pre_cell_id = '8'
     # post_cell_id = '2'
 
+    # strong in, 
+    expt_id = '1540938455.803'
+    pre_cell_id = '6' 
+    post_cell_id = '7'
+
+    # srong in, depressing
+    expt_id = '1530559621.966'
+    pre_cell_id = '7' 
+    post_cell_id = '6'
+    
     # expt_id = float(sys.argv[1])
     # pre_cell_id = int(sys.argv[2])
     # post_cell_id = int(sys.argv[3])
+
+
+    print("Running stochastic model for %s %s %s" % (expt_id, pre_cell_id, post_cell_id))
 
     session = db.session()
 
@@ -495,17 +512,19 @@ if __name__ == '__main__':
     pair = expt.pairs[(pre_cell_id, post_cell_id)]
 
     syn_type = pair.synapse.synapse_type
-
+    print("Synapse type:", syn_type)
 
     # 1. Get a list of all presynaptic spike times and the amplitudes of postsynaptic responses
 
     events = event_query(pair, db, session).dataframe()
+    print("loaded %d events" % len(events))
 
     rec_times = (events['rec_start_time'] - events['rec_start_time'].iloc[0]).dt.total_seconds().to_numpy()
     spike_times = events['first_spike_time'].to_numpy() + rec_times
 
     # any missing spike times get filled in with the average latency
     missing_spike_mask = np.isnan(spike_times)
+    print("%d events missing spike times" % missing_spike_mask.sum())
     avg_spike_latency = np.nanmedian(events['first_spike_time'] - events['onset_time'])
     pulse_times = events['onset_time'] + avg_spike_latency + rec_times
     spike_times[missing_spike_mask] = pulse_times[missing_spike_mask]
@@ -520,7 +539,10 @@ if __name__ == '__main__':
     bg_amplitudes = events['baseline_fit_amp'].to_numpy()
 
     qc_mask = event_qc(events)
-    amplitudes[qc_mask] = np.nan
+    print("%d events passed qc" % qc_mask.sum())
+    amplitudes[~qc_mask] = np.nan
+    amplitudes[missing_spike_mask] = np.nan
+    print("%d good events to be analyzed" % np.isfinite(amplitudes).sum())
 
     first_pulse_mask = events['pulse_number'] == 1
     first_pulse_amps = amplitudes[first_pulse_mask]
@@ -586,7 +608,11 @@ if __name__ == '__main__':
                 raise Exception("Invalid model parameter '%s'" % k)
             setattr(model, k, v)
         return (model,) + model.measure_likelihood(spike_times[:max_events], amplitudes[:max_events])
-    
+
+
+    print("Parameter space:")
+    for k, v in params.items():
+        print("   ", k, v)
     
     param_space = ParameterSpace(params)
     param_space.run(run_model, workers=16)
@@ -594,3 +620,6 @@ if __name__ == '__main__':
     # 4. Visualize / characterize mapped parameter space. Somehow.
     win = ParameterSearchWidget(param_space)
     win.show()
+
+    if sys.flags.interactive == 0:
+        app.exec_()
