@@ -201,7 +201,7 @@ def generate_monthly_report(start_date, end_date):
         roi = format_roi_major(day_info.get('target_region'))
         slic = Slice(site_dh.parent().name())
         genotype = slic.genotype
-        if genotype is None:
+        if genotype is None and slic.species == 'Mouse':
             errors.append('\tno genotype for %s, this may affect the creCell column' % slic.lims_specimen_name)
 
         blank_fill_date = slice_info.get('blank_fill_date', '')
@@ -225,7 +225,10 @@ def generate_monthly_report(start_date, end_date):
                     print('\t\t%s '%hs + msg)
                 continue
             row = OrderedDict([k, None] for k in columns)
-           
+            
+            human_culture = True if tube_name[1] == 'T' else False
+            if human_culture is True and genotype is None:
+                errors.append('\tno genotype for %s, this may affect the creCell column' % slic.lims_specimen_name)
             color = info.get('Reporter')
             reporter = None
             if color == '-':
