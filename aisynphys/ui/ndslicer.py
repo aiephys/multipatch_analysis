@@ -85,7 +85,7 @@ class NDSlicer(QtGui.QWidget):
 
     def set_index(self, index):
         for i,x in enumerate(index):
-            ax = self.axes.values()[i]
+            ax = list(self.axes.values())[i]
             ax.selection = ax.values[x]
         for viewer in self.viewers:
             viewer.update_selection()        
