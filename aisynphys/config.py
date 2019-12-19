@@ -50,7 +50,7 @@ if os.path.isfile(configfile):
 
 
 # intercept specific command line args
-parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser(add_help=False)
 parser.add_argument('--db-version', default=None, dest='db_version')
 parser.add_argument('--db-host', default=None, dest='db_host')
 parser.add_argument('--database', default=None)

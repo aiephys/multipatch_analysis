@@ -180,9 +180,17 @@ class DynamicsPlot(pg.GraphicsLayout):
         self.spike_plot.enableAutoRange(True, True)
         self.data_plot.enableAutoRange(True, True)
 
+
 if __name__ == '__main__':
-    import sys
-        
+    import sys, argparse
+    from aisynphys import config
+    
+    parser = argparse.ArgumentParser(parents=[config.parser])
+    parser.add_argument('experiment_id', type=str, nargs='?')
+    parser.add_argument('pre_cell_id', type=str, nargs='?')
+    parser.add_argument('post_cell_id', type=str, nargs='?')
+    args = parser.parse_args()
+    
     app = pg.mkQApp()
     if sys.flags.interactive == 1:
         pg.dbg()
@@ -190,15 +198,13 @@ if __name__ == '__main__':
     win = DynamicsWindow()
     win.show()
     
-    if len(sys.argv) > 1:
-        expt_id, pre_cell, post_cell = sys.argv[1:]
-        expt = db.experiment_from_ext_id(expt_id)
+    if args.post_cell_id is not None:
+        expt = db.experiment_from_ext_id(args.experiment_id)
         win.browser.populate([expt], synapses=True)
-        pair = expt.pairs[pre_cell, post_cell]
+        pair = expt.pairs[args.pre_cell_id, args.post_cell_id]
         win.browser.select_pair(pair.id)
     else:
         win.browser.populate(synapses=True)
-
+    
     if sys.flags.interactive == 0:
         app.exec_()
-        

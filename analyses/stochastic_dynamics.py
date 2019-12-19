@@ -306,7 +306,7 @@ class ModelResultWidget(QtGui.QWidget):
         for item in self.plt4.selected_items:
             self.plt4.removeItem(item)
         l = self.model.likelihood(amps, state)
-        p = self.plt4.plot(amps, l * len(l) / l.sum(), pen=(255, 255, 0, 100))
+        p = self.plt4.plot(amps, l / l.sum(), pen=(255, 255, 0, 100))
         l1 = self.plt4.addLine(x=measured_amp)
         l2 = self.plt4.addLine(x=expected_amp, pen='r')
         self.plt4.selected_items = [p, l1, l2]
@@ -473,6 +473,15 @@ if __name__ == '__main__':
     if sys.flags.interactive == 1:
         pg.dbg()
     
+    import argparse
+    
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--workers", type=int, default=None)
+    parser.add_argument("--max-events", type=int, default=None, dest='max_events')
+    
+    args = parser.parse_args()
+    
+    
     # strong ex, no failures, no depression
     expt_id = '1535402792.695'
     pre_cell_id = '8'
@@ -493,10 +502,15 @@ if __name__ == '__main__':
     pre_cell_id = '6' 
     post_cell_id = '7'
 
-    # srong in, depressing
+    # strong in, depressing
     expt_id = '1530559621.966'
     pre_cell_id = '7' 
     post_cell_id = '6'
+    
+    # ex->sst
+    expt_id = '1539987094.832'
+    pre_cell_id = '3' 
+    post_cell_id = '4'
     
     # expt_id = float(sys.argv[1])
     # pre_cell_id = int(sys.argv[2])
@@ -569,7 +583,6 @@ if __name__ == '__main__':
     n_release_sites = 8
     release_probability = 0.1
     mini_amp_estimate = np.nanmean(first_pulse_amps) / (n_release_sites * release_probability)
-    max_events = 2000
     params = {
         'n_release_sites': np.array([1, 2, 4, 8, 16]),
         'base_release_probability': np.array([0.1, 0.2, 0.4, 0.6, 0.8, 1.0]),
@@ -607,7 +620,7 @@ if __name__ == '__main__':
             if not hasattr(model, k):
                 raise Exception("Invalid model parameter '%s'" % k)
             setattr(model, k, v)
-        return (model,) + model.measure_likelihood(spike_times[:max_events], amplitudes[:max_events])
+        return (model,) + model.measure_likelihood(spike_times[:args.max_events], amplitudes[:args.max_events])
 
 
     print("Parameter space:")
@@ -615,7 +628,7 @@ if __name__ == '__main__':
         print("   ", k, v)
     
     param_space = ParameterSpace(params)
-    param_space.run(run_model, workers=16)
+    param_space.run(run_model, workers=args.workers)
 
     # 4. Visualize / characterize mapped parameter space. Somehow.
     win = ParameterSearchWidget(param_space)

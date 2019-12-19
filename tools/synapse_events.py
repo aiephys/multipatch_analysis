@@ -5,6 +5,7 @@ from neuroanalysis.fitting import StackedPsp
 from aisynphys.database import default_db as db
 from aisynphys.data import PulseResponseList
 from aisynphys.ui.experiment_browser import ExperimentBrowser
+from aisynphys import config
 
 
 class SynapseEventWindow(pg.QtGui.QSplitter):
@@ -25,7 +26,7 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
         # set up scatter plot fields
         fields = [
             ('clamp_mode', {'mode': 'enum', 'values': ['ic', 'vc']}),
-            ('pulse_number', {'mode': 'range'}),
+            ('pulse_number', {'mode': 'enum', 'values': list(range(1,13))}),
             ('induction_frequency', {'mode': 'range'}),
             ('recovery_delay', {'mode': 'range'}),
         ]
@@ -71,8 +72,16 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
             self.loaded_pair = pair
 
             # Load data for scatter plot            
-            q = db.query(db.PulseResponse.id.label('prid'), db.PulseResponseFit, db.PatchClampRecording.clamp_mode, db.StimPulse.pulse_number, db.MultiPatchProbe.induction_frequency, db.MultiPatchProbe.recovery_delay)
+            q = db.query(
+                db.PulseResponse.id.label('prid'), 
+                db.PulseResponseFit, 
+                db.PatchClampRecording.clamp_mode, 
+                db.StimPulse.pulse_number, 
+                db.MultiPatchProbe.induction_frequency, 
+                db.MultiPatchProbe.recovery_delay
+            )
             q = q.join(db.PulseResponseFit)
+            q = q.join(db.PulseResponseStrength)
             q = q.join(db.StimPulse, db.PulseResponse.stim_pulse)
             q = q.join(db.Recording, db.PulseResponse.recording)
             q = q.join(db.PatchClampRecording)
@@ -130,7 +139,13 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
 
 
 if __name__ == '__main__':
-    import sys
+    import sys, argparse
+    
+    parser = argparse.ArgumentParser(parents=[config.parser])
+    parser.add_argument('experiment_id', type=str, nargs='?')
+    parser.add_argument('pre_cell_id', type=str, nargs='?')
+    parser.add_argument('post_cell_id', type=str, nargs='?')
+    args = parser.parse_args()
         
     app = pg.mkQApp()
     if sys.flags.interactive == 1:
@@ -139,11 +154,10 @@ if __name__ == '__main__':
     win = SynapseEventWindow()
     win.show()
     
-    if len(sys.argv) > 1:
-        expt_id, pre_cell, post_cell = sys.argv[1:]
-        expt = db.experiment_from_ext_id(expt_id)
+    if args.post_cell_id is not None:
+        expt = db.experiment_from_ext_id(args.experiment_id)
         win.browser.populate([expt], synapses=True)
-        pair = expt.pairs[pre_cell, post_cell]
+        pair = expt.pairs[args.pre_cell_id, args.post_cell_id]
         win.browser.select_pair(pair.id)
     else:
         win.browser.populate(synapses=True)
