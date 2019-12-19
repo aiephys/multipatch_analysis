@@ -10,13 +10,13 @@ import numpy as np
 from collections import OrderedDict
 from ...util import timestamp_to_datetime
 from ...dynamics import generate_pair_dynamics
-from ..pipeline_module import DatabasePipelineModule
+from .pipeline_module import MultipatchPipelineModule
 from .pulse_response import PulseResponsePipelineModule
 from .synapse_prediction import SynapsePredictionPipelineModule
 
 
 
-class DynamicsPipelineModule(DatabasePipelineModule):
+class DynamicsPipelineModule(MultipatchPipelineModule):
     """Generates dynamics analysis for each pair
     """
     name = 'dynamics'

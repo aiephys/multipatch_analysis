@@ -6,14 +6,14 @@ import numpy as np
 import pyqtgraph as pg
 from collections import OrderedDict
 from ... import config
-from ..pipeline_module import DatabasePipelineModule
+from .pipeline_module import MultipatchPipelineModule
 from .experiment import ExperimentPipelineModule
 from .dataset import DatasetPipelineModule
 import aisynphys.data.data_notes_db as notes_db
 from ...avg_response_fit import get_pair_avg_fits
 
 
-class SynapsePipelineModule(DatabasePipelineModule):
+class SynapsePipelineModule(MultipatchPipelineModule):
     """Generate fit to response average for all pairs per experiment
     """
     name = 'synapse'
@@ -153,6 +153,6 @@ class SynapsePipelineModule(DatabasePipelineModule):
         for job, (mtime, success) in finished_datasets.items():
             if job in mod_times:
                 mtime = max(mtime, mod_times[job])
-            ready[job] = mtime
+            ready[job] = {'dep_time': mtime}
             
         return ready

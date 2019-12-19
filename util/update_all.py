@@ -15,7 +15,7 @@ def delay(hour=2):
     """Sleep until *hour*"""
     now = datetime.now()
     tomorrow = now + timedelta(days=1)
-    next_run = datetime(tomorrow.year, tomorrow.month, tomorrow.day, 1, 0)
+    next_run = datetime(tomorrow.year, tomorrow.month, tomorrow.day, 3, 0)
     delay = (next_run - now).total_seconds()
 
     print("Sleeping %d seconds until %s.." % (delay, next_run))
@@ -35,7 +35,7 @@ if __name__ == '__main__':
     stages = OrderedDict([
         ('backup_notes',            ('pg_dump -d data_notes -h 10.128.36.109 -U postgres  > data_notes_backups/data_notes_%s.pgsql'%date, 'backup data notes DB')),
         ('sync',                    ('python util/sync_rigs_to_server.py', 'sync raw data to server')),
-        ('pipeline',                ('python util/analysis_pipeline.py multipatch all', 'run analysis pipeline')),
+        ('pipeline',                ('python util/analysis_pipeline.py multipatch all --update', 'run analysis pipeline')),
         ('vacuum',                  ('python util/database.py --vacuum', 'vacuum database')),
         ('bake sqlite',             ('python util/bake_sqlite.py', 'bake sqlite')),
     ])

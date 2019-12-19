@@ -4,14 +4,14 @@ import numpy as np
 from datetime import datetime
 from collections import OrderedDict
 from acq4.util.DataManager import getDirHandle
-from ..pipeline_module import DatabasePipelineModule
+from .pipeline_module import MultipatchPipelineModule
 from ... import config, lims
-from ...util import datetime_to_timestamp
+from ...util import datetime_to_timestamp, dir_timestamp
 from ...data import Experiment
 from .slice import SlicePipelineModule
 
 
-class ExperimentPipelineModule(DatabasePipelineModule):
+class ExperimentPipelineModule(MultipatchPipelineModule):
     """Imports per-experiment metadata into DB.
     """
     name = 'experiment'
@@ -26,6 +26,12 @@ class ExperimentPipelineModule(DatabasePipelineModule):
         cache = get_cache()
         all_expts = cache.list_experiments()
         site_path = all_expts[job_id]
+
+        ignore_file = os.path.join(site_path, 'ignore')
+        if os.path.exists(ignore_file):
+            err = open(ignore_file).read()
+            raise Exception("Ignoring experiment %s: %s" % (job_id, err))
+
         expt = Experiment(site_path=site_path)
         
         # look up slice record in DB
@@ -184,7 +190,7 @@ class ExperimentPipelineModule(DatabasePipelineModule):
                 continue
             if slice_mtime is None or slice_success is False:
                 continue
-            ready[expt.uid] = max(raw_data_mtime, slice_mtime)
+            ready[expt.uid] = {'dep_time': max(raw_data_mtime, slice_mtime), 'meta': {'source': site_path}}
         
         print("Found %d experiments; %d are able to be processed, %d were skipped due to errors." % (len(ymls), len(ready), n_errors))
         return ready

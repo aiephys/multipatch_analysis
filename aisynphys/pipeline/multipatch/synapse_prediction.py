@@ -4,14 +4,14 @@ from __future__ import print_function, division
 import os
 import pyqtgraph as pg
 from ... import config
-from ..pipeline_module import DatabasePipelineModule
+from .pipeline_module import MultipatchPipelineModule
 from .experiment import ExperimentPipelineModule
 from .dataset import DatasetPipelineModule
 from .pulse_response import PulseResponsePipelineModule
 from ...synapse_prediction import get_amps, get_baseline_amps, analyze_pair_connectivity
 
 
-class SynapsePredictionPipelineModule(DatabasePipelineModule):
+class SynapsePredictionPipelineModule(MultipatchPipelineModule):
     """Analyze synaptic connection strength for all pairs per experiment
     """
     name = 'synapse_prediction'

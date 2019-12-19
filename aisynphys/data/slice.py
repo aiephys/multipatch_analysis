@@ -69,7 +69,11 @@ class Slice(object):
         inj = info.get('injections')
         if inj in (None, ''):
             return None
-            
+
+        # If the exact injection code is found, return the corresponding genotype description
+        if inj in INJECTIONS:
+            return INJECTIONS[inj]
+
         # injection may include multiple parts separated by " + " or " and "
         inj_parts = re.split(r'\s*\+\s*|\s+and\s+', inj)
         gtype_parts = []

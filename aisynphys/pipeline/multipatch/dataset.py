@@ -6,14 +6,14 @@ from acq4.util.DataManager import getDirHandle
 from ... import config, lims, qc
 from ...util import timestamp_to_datetime
 from ...data import Experiment
-from ..pipeline_module import DatabasePipelineModule
+from .pipeline_module import MultipatchPipelineModule
 from .experiment import ExperimentPipelineModule
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.data import PatchClampRecording
 from ...data import Experiment, MultiPatchDataset, MultiPatchProbe, PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
 
 
-class DatasetPipelineModule(DatabasePipelineModule):
+class DatasetPipelineModule(MultipatchPipelineModule):
     """Imports NWB data per-experiment
     """
     name = 'dataset'
@@ -260,5 +260,5 @@ class DatasetPipelineModule(DatabasePipelineModule):
             rec = expt_paths[expt_id]
             ephys_file = os.path.join(config.synphys_data, rec.storage_path, rec.ephys_file)
             nwb_mtime = timestamp_to_datetime(os.stat(ephys_file).st_mtime)
-            ready[rec.ext_id] = max(expt_mtime, nwb_mtime)
+            ready[rec.ext_id] = {'dep_time': max(expt_mtime, nwb_mtime)}
         return ready

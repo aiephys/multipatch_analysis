@@ -2,13 +2,13 @@ import os, glob, re, pickle, time
 from datetime import datetime
 from collections import OrderedDict
 from acq4.util.DataManager import getDirHandle
-from ..pipeline_module import DatabasePipelineModule
+from .pipeline_module import MultipatchPipelineModule
 from ... import config, lims, constants
 from ...util import datetime_to_timestamp, timestamp_to_datetime
 from ...data.slice import Slice
 
 
-class SlicePipelineModule(DatabasePipelineModule):
+class SlicePipelineModule(MultipatchPipelineModule):
     """Imports per-slice metadata into DB.
     """
     name = 'slice'
@@ -22,6 +22,11 @@ class SlicePipelineModule(DatabasePipelineModule):
 
         slices = all_slices()
         path = slices[job_id]
+        
+        ignore_file = os.path.join(path, 'ignore')
+        if os.path.exists(ignore_file):
+            err = open(ignore_file).read()
+            raise Exception("Ignoring slice %s: %s" % (job_id, err))
         
         sl = Slice.get(path)
 
@@ -43,8 +48,9 @@ class SlicePipelineModule(DatabasePipelineModule):
             'storage_path': sl.storage_path,
         }
 
-        sl = db.Slice(**fields)
-        session.add(sl)
+        orm_sl = db.Slice(**fields)
+        session.add(orm_sl)
+        session.flush()  # force error messages to appear here, if any.
 
     def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.
@@ -64,7 +70,7 @@ class SlicePipelineModule(DatabasePipelineModule):
             # import random
             # if random.random() > 0.8:
             #     mtime *= 2
-            ready[ts] = timestamp_to_datetime(mtime)
+            ready[ts] = {'dep_time': timestamp_to_datetime(mtime), 'meta': {'source': path}}
         return ready
 
 

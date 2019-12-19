@@ -4,14 +4,14 @@ from __future__ import print_function, division
 import os
 from sqlalchemy.orm import aliased
 from ... import config
-from ..pipeline_module import DatabasePipelineModule
+from .pipeline_module import MultipatchPipelineModule
 from .synapse_prediction import SynapsePredictionPipelineModule
 from ...fit_average_first_pulse import fit_average_first_pulses, fit_single_first_pulse
 import traceback
 import sys
 
 
-class AverageFirstPulseFitPipelineModule(DatabasePipelineModule):
+class AverageFirstPulseFitPipelineModule(MultipatchPipelineModule):
     """Measure the "resting state" amplitude of a synapse by averaging together only responses 
     that have no prior stimuli in a certain window. 
     """
@@ -130,7 +130,7 @@ def get_single_pulse_data(session, pair, db):
 
 
 
-class SingleFirstPulseFitPipelineModule(DatabasePipelineModule):
+class SingleFirstPulseFitPipelineModule(MultipatchPipelineModule):
     """Analyze synaptic connection strength for all pairs per experiment
     """
     name = 'single_first_pulse_fit'

@@ -107,7 +107,9 @@ def make_table_docstring(table):
     docstr.append("Attributes\n----------")
     for name, prop in insp.relationships.items():
         docstr.append("%s : relationship" % name)
-        docstr.append("    Reference to %s.%s" % (prop.entity.primary_key[0].table.name, prop.entity.primary_key[0].name))
+        if hasattr(prop, 'entity'):
+            # entity attribute only available in recent sqlalchemy (>=1.3 ?)
+            docstr.append("    Reference to %s.%s" % (prop.entity.primary_key[0].table.name, prop.entity.primary_key[0].name))
     for name, col in insp.columns.items():
         typ_str = str(col.type)
         docstr.append("%s : %s" % (name, typ_str))
