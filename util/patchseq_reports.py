@@ -67,8 +67,8 @@ def generate_daily_report(day):
         if no_tubes:
             continue
 
-        patch_date = timestamp_to_datetime(day_info.get('__timestamp__'))
-        patch_date = datetime.strftime(patch_date, "%m/%d/%Y") if isinstance(patch_date, datetime) else None 
+        patch_date_dt = timestamp_to_datetime(day_info.get('__timestamp__'))
+        patch_date = datetime.strftime(patch_date_dt, "%m/%d/%Y") if isinstance(patch_date_dt, datetime) else None 
         specimen_id = day_info.get('animal_ID')
         species = lims.specimen_species(slice_info.get('specimen_ID'))
         species = organism.get(species) 

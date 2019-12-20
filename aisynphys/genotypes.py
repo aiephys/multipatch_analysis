@@ -229,6 +229,8 @@ class Genotype(object):
         return "<Genotype %s>" % self.gtype
     
     def color_to_reporter(self, color):
+        """ Return the reporter expressed in this genotype given the color observed (ie red, green, yellow...)
+        """
         reporter = None
         for r in self.all_reporters:
             c = FLUOROPHORES[r]
