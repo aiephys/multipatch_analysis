@@ -286,7 +286,7 @@ def tube_cross_check(monthly_tubes, start_date, end_date):
         daily_report_file = os.path.join(daily_report_folder, '%s_mps_Transcriptomics_report.xlsx' % datetime.strftime(day, "%y%m%d"))
         try:
             daily_df = pd.read_excel(daily_report_file, header=0, index_col=None)
-        except FileNotFoundError:
+        except:
             print('No report for %s' % datetime.strftime(day, "%y%m%d"))
             continue
         if daily_tubes is None:
