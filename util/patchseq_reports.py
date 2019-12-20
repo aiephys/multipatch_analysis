@@ -161,7 +161,8 @@ def generate_monthly_report(start_date, end_date):
     }
 
     # not all columns are required but they must be in a specified order
-    columns = {**required_cols, **not_required_cols}
+    columns = required_cols.copy()
+    columns.update(not_required_cols)
     columns = [k for k,v in sorted(columns.items(), key=lambda item: item[1])]
 
     # collect experiments for the date range provided
