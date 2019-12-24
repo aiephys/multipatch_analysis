@@ -1,3 +1,8 @@
+"""
+For exploring and comparing curve fitting methods.
+"""
+
+
 import numpy as np
 import scipy.optimize, scipy.ndimage
 import pyqtgraph as pg
