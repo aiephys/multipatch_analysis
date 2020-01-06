@@ -34,7 +34,7 @@ from aisynphys.ui.multipatch_nwb_viewer import MultipatchNwbViewer
 from aisynphys.ui.experiment_browser import ExperimentBrowser
 from aisynphys.pulse_response_strength import response_query, baseline_query, analyze_response_strength
 from aisynphys.synapse_prediction import get_amps, get_baseline_amps
-from aisynphys import constants
+from aisynphys import constants, config
 
 
 ui_file = os.path.join(os.path.dirname(__file__), 'strength_analysis_ctrl.ui')
@@ -1023,7 +1023,7 @@ def simulate_connection(fg_recs, bg_results, classifier, amp, rtime, n_trials=8)
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(parents=[config.parser])
     parser.add_argument('--seed', type=int, default=0, help="Seed used to randomize classifier inputs")    
     parser.add_argument('--pairview', default=False, action='store_true', help="Only display experiment browser ui")
     args = parser.parse_args(sys.argv[1:])
