@@ -157,6 +157,8 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
 
                     ## get cell entry
                     stim_num = rec.meta['notebook']['USER_stim_num']
+                    if stim_num is None: ### this is a trace that would have been labeled as 'unknown'
+                        continue
                     stim = stim_log[str(int(stim_num))]
                     cell_entry = expt_entry.cells[stim['stimulationPoint']['name']]
 
@@ -295,6 +297,9 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                     #if pre_dev == post_dev:
                     #    continue
                     stim_num = stim_rec.meta['notebook']['USER_stim_num']
+                    if stim_num is None:
+                        continue
+                        
                     stim = stim_log[str(int(stim_num))]
                     pre_cell_name = str(stim['stimulationPoint']['name'])
 

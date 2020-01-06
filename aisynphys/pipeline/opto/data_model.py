@@ -84,8 +84,12 @@ def get_rig_from_nwb(nwb=None, notebook=None):
     """Look up serial numbers in nwb to determine which rig this was recorded on. Uses serial_number_to_rig dict."""
     if notebook is not None:
         nb = notebook
-    else:
+    elif hasattr(nwb, 'notebook'):
         nb = nwb.notebook()
+    elif hasattr(nwb, 'loader'):
+        nb = nwb.loader.notebook
+    else:
+        raise Exception('not sure how to find notebook')
     ## serial number is recorded in many places, make sure they converge on one rig
     sns = []
     for sweeps in nb.values():
