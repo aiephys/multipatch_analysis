@@ -143,21 +143,21 @@ if __name__ == '__main__':
         ]),
 
         ('All Cells', [
-            {'target_layer': '2', 'cortical_layer': '2'},
-            {'target_layer': '2/3', 'cortical_layer': '2/3'},
-            {'target_layer': '3', 'cortical_layer': '3'},
-            {'target_layer': '4', 'cortical_layer': '4'},
-            {'target_layer': '5', 'cortical_layer': '5'},
+            {'target_layer': '2', 'cortical_layer': '2', 'display_names': ('', 'L2')},
+            {'target_layer': '2/3', 'cortical_layer': '2/3','display_names': ('', 'L2/3')},
+            {'target_layer': '3', 'cortical_layer': '3', 'display_names': ('', 'L3')},
+            {'target_layer': '4', 'cortical_layer': '4','display_names': ('', 'L4')},
+            {'target_layer': '5', 'cortical_layer': '5','display_names': ('', 'L5')},
             {'target_layer': '6', 'cortical_layer': ('6', '6a', '6b'), 'display_names': ('', 'L6')},
         ]),
 
         ('2P-Opto cre types', [
-            {'cre_type':'ntsr1'},
+            {'cre_type':'ntsr1', 'display_names':('', 'ntsr1')},
             #{'cre_type':'unknown'},
-            {'cre_type':'sst'},
-            {'cre_type':'tlx3'},
-            {'cre_type':'rorb'},
-            {'cre_type':'scnn1a'}])
+            {'cre_type':'sst', 'display_names':('', 'sst')},
+            {'cre_type':'tlx3', 'display_names':('', 'tlx3')},
+            {'cre_type':'rorb', 'display_names':('', 'rorb')},
+            {'cre_type':'scnn1a', 'display_names':('', 'scnn1a')}])
     ])
 
     if analyzer_mode == 'external':
