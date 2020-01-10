@@ -60,7 +60,7 @@ def generate_daily_report(day):
         
         # check to make sure there are recorded headstages and patchseq tubes, else move to next site
         if headstages is None:
-            errors.append('\tNo recorded headstages')
+            print('%s\tNo recorded headstages' % site_source)
             continue
         tubes = [hs['Tube ID'] for hs in headstages.values()] 
         no_tubes = all([t == '' for t in tubes]) 
@@ -124,7 +124,8 @@ def generate_daily_report(day):
     
     # convert report to a dataframe and export to excel
     report_df = to_df(row_data, report_type='daily')
-    report_df.to_excel(file_path, index=False)
+    if report_df is not None:
+        report_df.to_excel(file_path, index=False)
 
 def generate_monthly_report(start_date, end_date):
     """ Generate a monthly PatchSeq report for Shiny. PatchSeq metadata is collected from the acq4 directories
@@ -185,7 +186,7 @@ def generate_monthly_report(start_date, end_date):
         
         # if no headstages were recorded or tubes collected, move along
         if headstages is None:
-            errors.append('\tNo recorded headstages')
+            print('%s\tNo recorded headstages' % site_source)
             continue
         tubes = [hs['Tube ID'] for hs in headstages.values()] 
         no_tubes = all([t == '' for t in tubes]) 
@@ -320,7 +321,10 @@ def parse_tube(info, date):
 def to_df(report_data, report_type):
     if len(report_data) == 0:
         print('No patchseq tubes to report')
-        return
+        if report_type == 'monthly':
+            return pd.DataFrame(columns=['tubeID'])
+        else:
+            return None
     data_df = pd.DataFrame(report_data)
     if report_type == 'daily':
         data_df.sort_values('tube_id', inplace=True)
