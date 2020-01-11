@@ -162,7 +162,8 @@ def generate_monthly_report(start_date, end_date):
     }
 
     # not all columns are required but they must be in a specified order
-    columns = {**required_cols, **not_required_cols}
+    columns = required_cols.copy()
+    columns.update(not_required_cols)
     columns = [k for k,v in sorted(columns.items(), key=lambda item: item[1])]
 
     # collect experiments for the date range provided
@@ -286,7 +287,7 @@ def tube_cross_check(monthly_tubes, start_date, end_date):
         daily_report_file = os.path.join(daily_report_folder, '%s_mps_Transcriptomics_report.xlsx' % datetime.strftime(day, "%y%m%d"))
         try:
             daily_df = pd.read_excel(daily_report_file, header=0, index_col=None)
-        except FileNotFoundError:
+        except:
             print('No report for %s' % datetime.strftime(day, "%y%m%d"))
             continue
         if daily_tubes is None:
