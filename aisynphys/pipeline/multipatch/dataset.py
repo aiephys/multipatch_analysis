@@ -54,6 +54,9 @@ class DatasetPipelineModule(MultipatchPipelineModule):
             rec_entries = {}
             all_pulse_entries = {}
             for rec in srec.recordings:
+                if rec.aborted:
+                    # skip incomplete recordings
+                    continue
                 
                 # import all recordings
                 electrode_entry = elecs_by_ad_channel[rec.device_id]  # should probably just skip if this causes KeyError?
