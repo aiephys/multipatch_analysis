@@ -5,7 +5,7 @@ from .experiment import Cell
 
 __all__ = ['PatchSeq']
 
-PatcSeq = make_table(
+PatchSeq = make_table(
     name='patch_seq', 
     comment="Describes transcriptomic data of a cell obtained from patch_seq experiments", 
     columns=[
@@ -13,6 +13,7 @@ PatcSeq = make_table(
     ('cell_id', 'cell.id', 'The ID of the cell described by each record', {'index': True, 'unique': True}),
     ('tube_id', 'str', 'Patched Cell Container ID used for RNA analysis', {'index': True}),
     ('nucleus', 'bool', 'Whether the nucleus was recovered from the cell', {'index': True}),
+    ('patchseq_hash', 'str', 'Hash of patchseq results from amplification and mapping used for updating', {'index': True}),
     # These values are pulled from amplification report
     ('result_BA', 'str', 'Pass/Fail', {'index': True}),
     ('area_400_10000bp', 'float', 'Percentage (0-100) of amplified content in the 400-10,000 bp range which is an indication of intact RNA', {'index': True}),

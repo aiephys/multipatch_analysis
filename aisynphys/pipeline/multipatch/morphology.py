@@ -69,7 +69,7 @@ class MorphologyPipelineModule(MultipatchPipelineModule):
             results = {
                 'pyramidal': pyramidal,
                 'cortical_layer': cortical_layer,
-                'morpho_db_hash': hashlib.md5(str(None).encode()).hexdigest(),
+                'morpho_db_hash': None,
 
             }
             

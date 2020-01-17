@@ -19,7 +19,7 @@ class MultipatchPipeline(Pipeline):
         SlicePipelineModule,
         ExperimentPipelineModule,
         DatasetPipelineModule,
-        # MorphologyPipelineModule,
+        PatchSeqPipelineModule,
         SynapsePipelineModule,
         PulseResponsePipelineModule,
         SynapsePredictionPipelineModule,
