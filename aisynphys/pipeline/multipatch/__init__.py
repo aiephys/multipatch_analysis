@@ -9,6 +9,7 @@ from .pulse_response import PulseResponsePipelineModule
 from .dynamics import DynamicsPipelineModule
 from .synapse_prediction import SynapsePredictionPipelineModule
 from .resting_state import RestingStatePipelineModule
+from .patch_seq import PatchSeqPipelineModule
 
 
 class MultipatchPipeline(Pipeline):
@@ -19,6 +20,7 @@ class MultipatchPipeline(Pipeline):
         SlicePipelineModule,
         ExperimentPipelineModule,
         DatasetPipelineModule,
+        PatchSeqPipelineModule,
         # MorphologyPipelineModule,
         SynapsePipelineModule,
         PulseResponsePipelineModule,
