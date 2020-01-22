@@ -19,7 +19,7 @@ Morphology = make_table(name='morphology', comment="Describes morphological prop
     ('apical_truncation', 'str', 'Qualitative description of apical dendrite truncation', {'index': True}),
     ('axon_truncation', 'str', 'Qualitative description of axon truncation', {'index': True}),
     ('axon_origin', 'str', 'Origination of axon; soma, dendrite, etc', {'index': True}),
-    ('morpho_db_hash', 'bigint', 'hash of Morphology team database for update tracking'),
+    ('morpho_db_hash', 'str', 'hash of Morphology team database for update tracking'),
 ])
 
 Cell.morphology = relationship(Morphology, back_populates="cell", cascade="delete", single_parent=True, uselist=False)
