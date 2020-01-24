@@ -10,7 +10,9 @@ from .pipeline_module import MultipatchPipelineModule
 from .experiment import ExperimentPipelineModule
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.data import PatchClampRecording
-from ...data import Experiment, MultiPatchDataset, MultiPatchProbe, PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
+from ...data import Experiment, MultiPatchDataset, MultiPatchProbe, MultiPatchSyncRecAnalyzer
+from neuroanalyisis.analyzers.stim_pulse import PatchClampStimPulseAnalyzer
+from neuroanalysis.analyzers.baseline import BaselineDistributor
 
 
 class DatasetPipelineModule(MultipatchPipelineModule):
@@ -105,7 +107,7 @@ class DatasetPipelineModule(MultipatchPipelineModule):
                 if not isinstance(rec, MultiPatchProbe):
                     continue
                 srec_has_mp_probes = True
-                psa = PulseStimAnalyzer.get(rec)
+                psa = PatchClampStimPulseAnalyzer.get(rec)
                 ind_freq, rec_delay = psa.stim_params()
                 mprec_entry = db.MultiPatchProbe(
                     patch_clamp_recording=pcrec_entry,

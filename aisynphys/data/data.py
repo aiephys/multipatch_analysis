@@ -6,6 +6,9 @@ from neuroanalysis.stimuli import find_square_pulses
 from neuroanalysis.spike_detection import detect_evoked_spikes
 from neuroanalysis.data import TSeries, TSeriesList
 from neuroanalysis.baseline import float_mode
+from neuroanalysis.analyzers.analyzer import Analyzer
+from neuroanalysis.analyzers.stim_pulse import PatchClampStimPulseAnalyzer
+from neuroanalysis.analyzers.baseline import BaselineDistributor
 
 from .. import qc
 
@@ -45,7 +48,7 @@ class MultiPatchSyncRecording(MiesSyncRecording):
             dt = pri.dt
             settle_size = int(settling_time / dt)
             for rec in self.recordings:
-                pa = PulseStimAnalyzer.get(rec)
+                pa = PatchClampStimPulseAnalyzer.get(rec)
                 try:
                     pulses = pa.pulses()
                 except Exception:
@@ -92,113 +95,113 @@ class MultiPatchProbe(MiesRecording):
         return self._base_regions
 
 
-class Analyzer(object):
-    """Base class for attaching analysis results to a data object.
-    """
-    @classmethod
-    def get(cls, obj):
-        """Get the analyzer attached to a recording, or create a new one.
-        """
-        analyzer = getattr(obj, '_' + cls.__name__, None)
-        if analyzer is None:
-            analyzer = cls(obj)
-        return analyzer
+# class Analyzer(object):
+#     """Base class for attaching analysis results to a data object.
+#     """
+#     @classmethod
+#     def get(cls, obj):
+#         """Get the analyzer attached to a recording, or create a new one.
+#         """
+#         analyzer = getattr(obj, '_' + cls.__name__, None)
+#         if analyzer is None:
+#             analyzer = cls(obj)
+#         return analyzer
 
-    def _attach(self, obj):
-        attr = '_' + self.__class__.__name__
-        if hasattr(obj, attr):
-            raise TypeError("Object %s already has attached %s" % (obj, self.__class__.__name__))
-        setattr(obj, attr, self)
+#     def _attach(self, obj):
+#         attr = '_' + self.__class__.__name__
+#         if hasattr(obj, attr):
+#             raise TypeError("Object %s already has attached %s" % (obj, self.__class__.__name__))
+#         setattr(obj, attr, self)
 
 
-class PulseStimAnalyzer(Analyzer):
-    """Used for analyzing a patch clamp recording with square-pulse stimuli.
-    """
-    def __init__(self, rec):
-        self._attach(rec)
-        self.rec = rec
-        self._pulses = None
-        self._evoked_spikes = None
+# class PulseStimAnalyzer(Analyzer):
+#     """Used for analyzing a patch clamp recording with square-pulse stimuli.
+#     """
+#     def __init__(self, rec):
+#         self._attach(rec)
+#         self.rec = rec
+#         self._pulses = None
+#         self._evoked_spikes = None
         
-    def pulses(self):
-        """Return a list of (start_time, stop_time, amp) tuples describing square pulses
-        in the stimulus.
-        """
-        if self._pulses is None:
-            trace = self.rec['command']
-            pulses = find_square_pulses(trace)
-            self._pulses = []
-            for p in pulses:
-                start = p.global_start_time
-                stop = p.global_start_time + p.duration
-                self._pulses.append((start, stop, p.amplitude))
-        return self._pulses
+#     def pulses(self):
+#         """Return a list of (start_time, stop_time, amp) tuples describing square pulses
+#         in the stimulus.
+#         """
+#         if self._pulses is None:
+#             trace = self.rec['command']
+#             pulses = find_square_pulses(trace)
+#             self._pulses = []
+#             for p in pulses:
+#                 start = p.global_start_time
+#                 stop = p.global_start_time + p.duration
+#                 self._pulses.append((start, stop, p.amplitude))
+#         return self._pulses
 
-    def pulse_chunks(self):
-        """Return time-slices of this recording where evoked spikes are expected to be found (one chunk
-        per pulse)
+#     def pulse_chunks(self):
+#         """Return time-slices of this recording where evoked spikes are expected to be found (one chunk
+#         per pulse)
         
-        Each recording returned has extra metadata keys added: 
-        - pulse_edges: start/end times of the stimulus pulse
-        - pulse_amplitude: amplitude of stimulus puse (in V or A)
-        - pulse_n: the number of this pulse (all detected square pulses are numbered in order from 0)
+#         Each recording returned has extra metadata keys added: 
+#         - pulse_edges: start/end times of the stimulus pulse
+#         - pulse_amplitude: amplitude of stimulus puse (in V or A)
+#         - pulse_n: the number of this pulse (all detected square pulses are numbered in order from 0)
 
-        """
-        pre_trace = self.rec['primary']
+#         """
+#         pre_trace = self.rec['primary']
 
-        # Detect pulse times
-        pulses = self.pulses()
+#         # Detect pulse times
+#         pulses = self.pulses()
 
-        # cut out a chunk for each pulse
-        chunks = []
-        for i,pulse in enumerate(pulses):
-            pulse_start_time, pulse_end_time, amp = pulse
-            if amp < 0:
-                # assume negative pulses do not evoke spikes
-                # (todo: should be watching for rebound spikes as well)
-                continue
-            # cut out a chunk of the recording for spike detection
-            start_time = pulse_start_time - 2e-3
-            stop_time = pulse_end_time + 4e-3
-            if i < len(pulses) - 1:
-                # truncate chunk if another pulse is present
-                next_pulse_time = pulses[i+1][0]
-                stop_time = min(stop_time, next_pulse_time)
-            chunk = self.rec.time_slice(start_time, stop_time)
-            chunk.meta['pulse_edges'] = [pulse_start_time, pulse_end_time]
-            chunk.meta['pulse_amplitude'] = amp
-            chunk.meta['pulse_n'] = i
-            chunks.append(chunk)
-        return chunks
+#         # cut out a chunk for each pulse
+#         chunks = []
+#         for i,pulse in enumerate(pulses):
+#             pulse_start_time, pulse_end_time, amp = pulse
+#             if amp < 0:
+#                 # assume negative pulses do not evoke spikes
+#                 # (todo: should be watching for rebound spikes as well)
+#                 continue
+#             # cut out a chunk of the recording for spike detection
+#             start_time = pulse_start_time - 2e-3
+#             stop_time = pulse_end_time + 4e-3
+#             if i < len(pulses) - 1:
+#                 # truncate chunk if another pulse is present
+#                 next_pulse_time = pulses[i+1][0]
+#                 stop_time = min(stop_time, next_pulse_time)
+#             chunk = self.rec.time_slice(start_time, stop_time)
+#             chunk.meta['pulse_edges'] = [pulse_start_time, pulse_end_time]
+#             chunk.meta['pulse_amplitude'] = amp
+#             chunk.meta['pulse_n'] = i
+#             chunks.append(chunk)
+#         return chunks
 
-    def evoked_spikes(self):
-        """Given presynaptic Recording, detect action potentials
-        evoked by current injection or unclamped spikes evoked by a voltage pulse.
+#     def evoked_spikes(self):
+#         """Given presynaptic Recording, detect action potentials
+#         evoked by current injection or unclamped spikes evoked by a voltage pulse.
 
-        Returns
-        -------
-        spikes : list
-            [{'pulse_n', 'pulse_start', 'pulse_end', 'spikes': [...]}, ...]
-        """
-        if self._evoked_spikes is None:
-            spike_info = []
-            for i,chunk in enumerate(self.pulse_chunks()):
-                pulse_edges = chunk.meta['pulse_edges']
-                spikes = detect_evoked_spikes(chunk, pulse_edges)
-                spike_info.append({'pulse_n': chunk.meta['pulse_n'], 'pulse_start': pulse_edges[0], 'pulse_end': pulse_edges[1], 'spikes': spikes})
-            self._evoked_spikes = spike_info
-        return self._evoked_spikes
+#         Returns
+#         -------
+#         spikes : list
+#             [{'pulse_n', 'pulse_start', 'pulse_end', 'spikes': [...]}, ...]
+#         """
+#         if self._evoked_spikes is None:
+#             spike_info = []
+#             for i,chunk in enumerate(self.pulse_chunks()):
+#                 pulse_edges = chunk.meta['pulse_edges']
+#                 spikes = detect_evoked_spikes(chunk, pulse_edges)
+#                 spike_info.append({'pulse_n': chunk.meta['pulse_n'], 'pulse_start': pulse_edges[0], 'pulse_end': pulse_edges[1], 'spikes': spikes})
+#             self._evoked_spikes = spike_info
+#         return self._evoked_spikes
 
-    def stim_params(self):
-        """Return induction frequency and recovery delay.
-        """
-        pulses = [p[0] for p in self.pulses() if p[2] > 0]
-        if len(pulses) < 2:
-            return None, None
-        ind_freq = np.round(1.0 / (pulses[1] - pulses[0]))
-        rec_delay = np.round(np.diff(pulses).max(), 3)
+#     def stim_params(self):
+#         """Return induction frequency and recovery delay.
+#         """
+#         pulses = [p[0] for p in self.pulses() if p[2] > 0]
+#         if len(pulses) < 2:
+#             return None, None
+#         ind_freq = np.round(1.0 / (pulses[1] - pulses[0]))
+#         rec_delay = np.round(np.diff(pulses).max(), 3)
         
-        return ind_freq, rec_delay
+#         return ind_freq, rec_delay
 
 
 class MultiPatchSyncRecAnalyzer(Analyzer):
@@ -228,7 +231,7 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         
         """
         # detect presynaptic spikes
-        pulse_stim = PulseStimAnalyzer.get(pre_rec)
+        pulse_stim = PatchClampStimPulseAnalyzer.get(pre_rec)
         spikes = pulse_stim.evoked_spikes()
         # spikes looks like:
         #   [{'pulse_n', 'pulse_start', 'pulse_end', 'spikes': [...]}, ...]
@@ -303,7 +306,7 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         return result
 
     def get_pulse_response(self, pre_rec, post_rec, first_pulse=0, last_pulse=-1):
-        pulse_stim = PulseStimAnalyzer.get(pre_rec)
+        pulse_stim = PatchClampStimPulseAnalyzer.get(pre_rec)
         spikes = pulse_stim.evoked_spikes()
         
         if len(spikes) < 10:
@@ -314,13 +317,13 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         return post_rec['primary'].time_slice(start, stop)
 
     def stim_params(self, pre_rec):
-        return PulseStimAnalyzer.get(pre_rec).stim_params()
+        return PatchClampStimPulseAnalyzer.get(pre_rec).stim_params()
         
     def get_train_response(self, pre_rec, post_rec, start_pulse, stop_pulse, padding=(-10e-3, 50e-3)):
         """Return the part of the post-synaptic recording during a range of pulses,
         along with a baseline chunk
         """
-        pulse_stim = PulseStimAnalyzer.get(pre_rec)
+        pulse_stim = PatchClampStimPulseAnalyzer.get(pre_rec)
         pulses = [p[0] for p in pulse_stim.pulses() if p[2] > 0]
         
         post_trace = post_rec['primary']
@@ -355,30 +358,30 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         return artifacts
 
 
-class BaselineDistributor(Analyzer):
-    """Used to find baseline regions in a trace and distribute them on request.
-    """
-    def __init__(self, rec):
-        self._attach(rec)
-        self.rec = rec
-        self.baselines = rec.baseline_regions
-        self.ptr = 0
+# class BaselineDistributor(Analyzer):
+#     """Used to find baseline regions in a trace and distribute them on request.
+#     """
+#     def __init__(self, rec):
+#         self._attach(rec)
+#         self.rec = rec
+#         self.baselines = rec.baseline_regions
+#         self.ptr = 0
 
-    def get_baseline_chunk(self, duration=20e-3):
-        """Return the (start, stop) indices of a chunk of unused baseline with the
-        given duration.
-        """
-        while True:
-            if len(self.baselines) == 0:
-                return None
-            start, stop = self.baselines[0]
-            chunk_start = max(start, self.ptr)
-            chunk_stop = chunk_start + duration
-            if chunk_stop <= stop:
-                self.ptr = chunk_stop
-                return chunk_start, chunk_stop
-            else:
-                self.baselines.pop(0)
+#     def get_baseline_chunk(self, duration=20e-3):
+#         """Return the (start, stop) indices of a chunk of unused baseline with the
+#         given duration.
+#         """
+#         while True:
+#             if len(self.baselines) == 0:
+#                 return None
+#             start, stop = self.baselines[0]
+#             chunk_start = max(start, self.ptr)
+#             chunk_stop = chunk_start + duration
+#             if chunk_stop <= stop:
+#                 self.ptr = chunk_stop
+#                 return chunk_start, chunk_stop
+#             else:
+#                 self.baselines.pop(0)
 
 
 class PulseResponse(object):

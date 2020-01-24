@@ -9,11 +9,13 @@ from neuroanalysis.data.experiment import Experiment
 from neuroanalysis.data.libraries import opto
 from neuroanalysis.baseline import float_mode
 #from neuroanalysis.stimuli import find_square_pulses
-from ...data import BaselineDistributor, PulseStimAnalyzer #Experiment, MultiPatchDataset, MultiPatchProbe, PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
+#from ...data import BaselineDistributor, PulseStimAnalyzer #Experiment, MultiPatchDataset, MultiPatchProbe, PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
 from neuroanalysis.data import PatchClampRecording
 #from optoanalysis.optoadapter import OptoRecording
 from optoanalysis.data.dataset import OptoRecording
-from optoanalysis.data.analyzers import OptoSyncRecAnalyzer, PWMStimPulseAnalyzer, OptoStimPulseAnalyzer, OptoBaselineAnalyzer
+from optoanalysis.analyzers import OptoSyncRecAnalyzer, OptoBaselineAnalyzer
+from neuroanalysis.analyzers.stim_pulse import GenericStimPulseAnalyzer, PWMStimPulseAnalyzer, PatchClampStimPulseAnalyzer
+from neuroanalysis.analyzers.baseline import BaselineDistributor
 import optoanalysis.power_calibration as power_cal
 import optoanalysis.qc as qc
 from neuroanalysis.stimuli import find_square_pulses
@@ -128,7 +130,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                         session.add(tp_entry)
                         pcrec_entry.nearest_test_pulse = tp_entry
 
-                    psa = PulseStimAnalyzer.get(rec)
+                    psa = PatchClampStimPulseAnalyzer.get(rec)
                     pulses = psa.pulse_chunks()
                     pulse_entries = {}
                     all_pulse_entries[rec.device_id] = pulse_entries
@@ -189,7 +191,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                     pulse_entries = {}
                     all_pulse_entries[rec.device_id] = pulse_entries
 
-                    ospa = OptoStimPulseAnalyzer.get(rec)
+                    ospa = GenericStimPulseAnalyzer.get(rec)
 
                     for i, pulse in enumerate(ospa.pulses()):
                         ### pulse is (start, stop, amplitude)
