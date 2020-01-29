@@ -1,10 +1,11 @@
 import pandas as pd
 import pyqtgraph as pg
 from neuroanalysis.data import TSeries
-from neuroanalysis.fitting import StackedPsp
+from neuroanalysis.fitting import StackedPsp, Psp
 from aisynphys.database import default_db as db
 from aisynphys.data import PulseResponseList
 from aisynphys.ui.experiment_browser import ExperimentBrowser
+from aisynphys.pulse_response_strength import deconv_filter
 from aisynphys import config
 
 
@@ -29,10 +30,20 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
             ('pulse_number', {'mode': 'enum', 'values': list(range(1,13))}),
             ('induction_frequency', {'mode': 'range'}),
             ('recovery_delay', {'mode': 'range'}),
+            ('pos_amp', {'mode': 'range'}),
+            ('neg_amp', {'mode': 'range'}),
+            ('pos_dec_amp', {'mode': 'range'}),
+            ('neg_dec_amp', {'mode': 'range'}),
         ]
         fit_keys = ['amp', 'rise_time', 'decay_tau', 'exp_amp', 'yoffset', 'latency', 'nrmse']
         fields = fields + [('fit_'+key, {'mode': 'range'}) for key in fit_keys]
-        fields = fields + [('baseline_fit_'+key, {'mode': 'range'}) for key in fit_keys]        
+        fields = fields + [('baseline_fit_'+key, {'mode': 'range'}) for key in fit_keys]
+        fields = fields + [('dec_fit_'+key, {'mode': 'range'}) for key in fit_keys]
+        fields = fields + [('baseline_dec_fit_'+key, {'mode': 'range'}) for key in fit_keys]
+        fields = fields + [
+            ('dec_fit_reconv_amp', {'mode': 'range'}),
+            ('baseline_dec_fit_reconv_amp', {'mode': 'range'}),
+        ]
         self.scatter_plot.setFields(fields)
         
         # default filter for IC data
@@ -47,7 +58,9 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
         
         self.spike_plot = self.view.addPlot()
         self.data_plot = self.view.addPlot(row=1, col=0)
+        self.dec_plot = self.view.addPlot(row=2, col=0)
         self.spike_plot.setXLink(self.data_plot)
+        self.dec_plot.setXLink(self.data_plot)
         
         self.resize(1600, 1000)
         
@@ -75,18 +88,18 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
             q = db.query(
                 db.PulseResponse.id.label('prid'), 
                 db.PulseResponseFit, 
-                db.PatchClampRecording.clamp_mode, 
+                db.PatchClampRecording.clamp_mode,
                 db.StimPulse.pulse_number, 
                 db.MultiPatchProbe.induction_frequency, 
                 db.MultiPatchProbe.recovery_delay
             )
             q = q.join(db.PulseResponseFit)
-            q = q.join(db.PulseResponseStrength)
             q = q.join(db.StimPulse, db.PulseResponse.stim_pulse)
             q = q.join(db.Recording, db.PulseResponse.recording)
             q = q.join(db.PatchClampRecording)
             q = q.join(db.MultiPatchProbe)
             q = q.filter(db.PulseResponse.pair_id==pair.id)
+            
             df = q.dataframe()
             for col in df.columns:
                 if 'fit_' in col:
@@ -96,8 +109,10 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
             
     def scatter_plot_clicked(self, plt, points):
         self.data_plot.clear()
+        self.dec_plot.clear()
         self.spike_plot.clear()
-        psp = StackedPsp()
+        spsp = StackedPsp()
+        psp = Psp()
 
         # query raw data for selected points
         ids = [int(pt.data()['pulse_response_id']) for pt in points]
@@ -121,7 +136,7 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
             fit_par = recs[i].PulseResponseFit
             if fit_par.fit_amp is None:
                 continue
-            fit = psp.eval(
+            fit = spsp.eval(
                 x=post_ts.time_values, 
                 exp_amp=fit_par.fit_exp_amp,
                 exp_tau=fit_par.fit_decay_tau,
@@ -133,6 +148,47 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
                 rise_power=2,
             )
             self.data_plot.plot(post_ts.time_values, fit, pen=(0, 255, 0, 100))
+
+            # plot with reconvolved amplitude
+            fit = spsp.eval(
+                x=post_ts.time_values, 
+                exp_amp=fit_par.fit_exp_amp,
+                exp_tau=fit_par.fit_decay_tau,
+                amp=fit_par.dec_fit_reconv_amp,
+                rise_time=fit_par.fit_rise_time,
+                decay_tau=fit_par.fit_decay_tau,
+                xoffset=fit_par.fit_latency,
+                yoffset=fit_par.fit_yoffset,
+                rise_power=2,
+            )
+            self.data_plot.plot(post_ts.time_values, fit, pen=(200, 255, 0, 100))
+
+            # plot deconvolution
+            clamp_mode = prl[i].recording.patch_clamp_recording.clamp_mode
+            if clamp_mode == 'ic':
+                decay_tau = self.loaded_pair.synapse.psp_decay_tau
+                lowpass = 2000
+            else:
+                decay_tau = self.loaded_pair.synapse.psc_decay_tau
+                lowpass = 6000
+                
+            dec = deconv_filter(post_ts, None, tau=decay_tau, lowpass=lowpass, remove_artifacts=False, bsub=True)
+            self.dec_plot.plot(dec.time_values, dec.data)
+
+            # plot deconvolution fit
+            fit = psp.eval(
+                x=dec.time_values,
+                exp_tau=fit_par.dec_fit_decay_tau,
+                amp=fit_par.dec_fit_amp,
+                rise_time=fit_par.dec_fit_rise_time,
+                decay_tau=fit_par.dec_fit_decay_tau,
+                xoffset=fit_par.dec_fit_latency,
+                yoffset=fit_par.dec_fit_yoffset,
+                rise_power=1,
+            )
+            self.dec_plot.plot(dec.time_values, fit, pen=(0, 255, 0, 100))
+
+
             
         self.scatter_plot.setSelectedPoints(points)
         
