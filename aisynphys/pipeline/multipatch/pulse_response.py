@@ -7,7 +7,7 @@ from ... import config
 from .pipeline_module import MultipatchPipelineModule
 from .dataset import DatasetPipelineModule
 from .synapse import SynapsePipelineModule
-from ...pulse_response_strength import baseline_query, response_query, measure_response, analyze_response_strength
+from ...pulse_response_strength import baseline_query, response_query, measure_response, measure_deconvolved_response, analyze_response_strength
 
 
 class PulseResponsePipelineModule(MultipatchPipelineModule):
@@ -41,24 +41,37 @@ class PulseResponsePipelineModule(MultipatchPipelineModule):
         baselines = []
         for r in response_recs:
             b = baselines_by_recording.get(r.recording_id, [])
-            if len(b) == 0:
-                baselines.append(None)
-            else:
-                baselines.append(b.pop())
+            while True:
+                if len(b) == 0:
+                    next_b = None
+                    break
+                next_b = b.pop()
+                qc_pass = getattr(next_b, r.synapse_type + '_qc_pass')
+                if qc_pass:
+                    break
+            baselines.append(next_b)
         
         # best estimate of response amplitude using known latency for this synapse
         for rec,baseline_rec in zip(response_recs, baselines):
             if not rec.has_synapse:
                 continue
+            
             response_fit, baseline_fit = measure_response(rec, baseline_rec)
+            response_dec_fit, baseline_dec_fit = measure_deconvolved_response(rec, baseline_rec)
+            
             new_rec = db.PulseResponseFit(pulse_response_id=rec.response_id)
-            for fit, prefix in [(response_fit, 'fit_'), (baseline_fit, 'baseline_fit_')]:
+            for fit, prefix in [(response_fit, 'fit_'), (baseline_fit, 'baseline_fit_'), (response_dec_fit, 'dec_fit_'), (baseline_dec_fit, 'baseline_dec_fit_')]:
                 if fit is None:
                     continue
                 for k in ['amp', 'yoffset', 'rise_time', 'decay_tau', 'exp_amp']:
+                    if k not in fit.best_values:
+                        continue
                     setattr(new_rec, prefix+k, fit.best_values[k])
                 setattr(new_rec, prefix+'latency', fit.best_values['xoffset'])
                 setattr(new_rec, prefix+'nrmse', fit.nrmse())
+                
+                if hasattr(fit, 'reconvolved_amp'):
+                    setattr(new_rec, prefix+'reconv_amp', fit.reconvolved_amp)
             session.add(new_rec)
             
             # keepalive; this loop can take a long time

@@ -5,7 +5,7 @@ Analyses that measure the strength of synaptic connections.
 """
 from __future__ import print_function, division
 
-import sys, multiprocessing, time
+import sys, multiprocessing, time, warnings
 
 import numpy as np
 import pyqtgraph as pg
@@ -55,13 +55,15 @@ def measure_response(rec, baseline_rec):
         sign = -sign
 
     # fit response region
-    response_fit = fit_psp(data, 
+    response_fit = fit_psp(data,
         search_window=rec.latency + np.array([-100e-6, 100e-6]), 
         clamp_mode=rec.clamp_mode, 
         sign=sign,
         baseline_like_psp=True, 
         init_params={'rise_time': rise_time, 'decay_tau': decay_tau},
         refine=False,
+        decay_tau_bounds=('fixed',),
+        rise_time_bounds=('fixed',),        
     )
         
     # fit baseline region
@@ -116,19 +118,30 @@ def measure_deconvolved_response(response_rec, baseline_rec):
             continue
             
         filtered = deconv_filter(data, None, tau=decay_tau, lowpass=lowpass, remove_artifacts=False, bsub=True)
+        filtered = filtered.time_slice(response_rec.latency-0.5e-3, response_rec.latency + rise_time)
         
         # deconvolving a PSP-like shape yields a narrower PSP-like shape with lower rise power
-        psp = Psp()
-        
+        psp = Psp()        
         max_amp = filtered.data.max() - filtered.data.min()
-        fit = psp.fit(filtered.data, x=filtered.time_values, params={
-            'xoffset': (response_rec.latency, 'fixed'),
-            'yoffset': (0, 'fixed'),
-            'amp': (0, -max_amp, max_amp),
-            'rise_time': (0.2*rise_time, 0.1*rise_time, 0.4*rise_time),
-            'decay_tau': (0.4*rise_time, 0.15*rise_time, 0.8*rise_time),
-            'rise_power': (1, 'fixed'),
-        })
+        
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")    
+            fit = psp.fit(filtered.data, x=filtered.time_values, params={
+                'xoffset': (response_rec.latency, 'fixed'),
+                'yoffset': (0, 'fixed'),
+                'amp': (0, -max_amp, max_amp),
+                'rise_time': (0.2*rise_time, 0.1*rise_time, 0.4*rise_time),
+                'decay_tau': (0.4*rise_time, 0.15*rise_time, 0.8*rise_time),
+                'rise_power': (1, 'fixed'),
+            })
+        
+        # reconvolve fit to measure amplitude
+        fit_ts = TSeries(fit.best_fit, time_values=filtered.time_values)
+        reconv = exp_reconvolve(fit_ts, tau=decay_tau)
+        if fit.best_values['amp'] > 0:
+            fit.reconvolved_amp = reconv.data.max() - reconv.data.min()
+        else:
+            fit.reconvolved_amp = reconv.data.min() - reconv.data.max()
         
         ret.append(fit)
         
