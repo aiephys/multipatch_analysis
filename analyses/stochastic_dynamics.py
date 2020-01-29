@@ -10,6 +10,7 @@ from pyqtgraph.Qt import QtGui, QtCore
 import scipy.stats as stats
 from aisynphys.database import default_db as db
 from aisynphys.ui.ndslicer import NDSlicer
+from aisynphys import config
 
 
 class StochasticReleaseModel(object):
@@ -440,8 +441,10 @@ def event_query(pair, db, session):
         db.PulseResponse,
         db.PulseResponse.ex_qc_pass,
         db.PulseResponseFit.fit_amp,
+        db.PulseResponseFit.dec_fit_reconv_amp,
         db.PulseResponseFit.fit_nrmse,
         db.PulseResponseFit.baseline_fit_amp,
+        db.PulseResponseFit.baseline_dec_fit_reconv_amp,
         db.StimPulse.first_spike_time,
         db.StimPulse.pulse_number,
         db.StimPulse.onset_time,
@@ -475,7 +478,10 @@ if __name__ == '__main__':
     
     import argparse
     
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(parents=[config.parser])
+    parser.add_argument('experiment_id', type=str, nargs='?')
+    parser.add_argument('pre_cell_id', type=str, nargs='?')
+    parser.add_argument('post_cell_id', type=str, nargs='?')
     parser.add_argument("--workers", type=int, default=None)
     parser.add_argument("--max-events", type=int, default=None, dest='max_events')
     
@@ -483,39 +489,43 @@ if __name__ == '__main__':
     
     
     # strong ex, no failures, no depression
-    expt_id = '1535402792.695'
-    pre_cell_id = '8'
-    post_cell_id = '7'
-    
-    # strong ex with failures
-    expt_id = '1537820585.767'
-    pre_cell_id = '1'
-    post_cell_id = '2'
-    
-    # strong ex, depressing
-    # expt_id = '1536781898.381'
+    # expt_id = '1535402792.695'
     # pre_cell_id = '8'
-    # post_cell_id = '2'
-
-    # strong in, 
-    expt_id = '1540938455.803'
-    pre_cell_id = '6' 
-    post_cell_id = '7'
-
-    # strong in, depressing
-    expt_id = '1530559621.966'
-    pre_cell_id = '7' 
-    post_cell_id = '6'
+    # post_cell_id = '7'
     
-    # ex->sst
-    expt_id = '1539987094.832'
-    pre_cell_id = '3' 
-    post_cell_id = '4'
+    # # strong ex with failures
+    # expt_id = '1537820585.767'
+    # pre_cell_id = '1'
+    # post_cell_id = '2'
+    
+    # # strong ex, depressing
+    # # expt_id = '1536781898.381'
+    # # pre_cell_id = '8'
+    # # post_cell_id = '2'
+
+    # # strong in, 
+    # expt_id = '1540938455.803'
+    # pre_cell_id = '6' 
+    # post_cell_id = '7'
+
+    # # strong in, depressing
+    # expt_id = '1530559621.966'
+    # pre_cell_id = '7' 
+    # post_cell_id = '6'
+    
+    # # ex->sst
+    # expt_id = '1539987094.832'
+    # pre_cell_id = '3' 
+    # post_cell_id = '4'
     
     # expt_id = float(sys.argv[1])
     # pre_cell_id = int(sys.argv[2])
     # post_cell_id = int(sys.argv[3])
 
+
+    expt_id = args.experiment_id
+    pre_cell_id = args.pre_cell_id
+    post_cell_id = args.post_cell_id
 
     print("Running stochastic model for %s %s %s" % (expt_id, pre_cell_id, post_cell_id))
 
@@ -549,8 +559,8 @@ if __name__ == '__main__':
     #    - measured distribution of background noise
     #    - parameter space to be searched
 
-    amplitudes = events['fit_amp'].to_numpy()
-    bg_amplitudes = events['baseline_fit_amp'].to_numpy()
+    amplitudes = events['dec_fit_reconv_amp'].to_numpy()
+    bg_amplitudes = events['baseline_dec_fit_reconv_amp'].to_numpy()
 
     qc_mask = event_qc(events)
     print("%d events passed qc" % qc_mask.sum())
@@ -584,10 +594,10 @@ if __name__ == '__main__':
     release_probability = 0.1
     mini_amp_estimate = np.nanmean(first_pulse_amps) / (n_release_sites * release_probability)
     params = {
-        'n_release_sites': np.array([1, 2, 4, 8, 16]),
-        'base_release_probability': np.array([0.1, 0.2, 0.4, 0.6, 0.8, 1.0]),
-        'mini_amplitude': mini_amp_estimate * 1.2**np.arange(-24, 24, 2),
-        'mini_amplitude_stdev': mini_amp_estimate * 0.2 * 1.2**np.arange(-24, 24, 8),
+        'n_release_sites': np.array([1, 2, 4, 8, 16, 32]),
+        'base_release_probability': np.array([0.0125, 0.025, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0]),
+        'mini_amplitude': mini_amp_estimate * 1.2**np.arange(-12, 24, 2),
+        'mini_amplitude_stdev': mini_amp_estimate * 0.2 * 1.2**np.arange(-12, 36, 8),
         'measurement_stdev': np.nanstd(bg_amplitudes),
         'vesicle_recovery_tau': 0.01,
     }
