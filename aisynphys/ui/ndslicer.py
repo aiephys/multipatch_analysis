@@ -35,7 +35,7 @@ class NDSlicer(QtGui.QWidget):
         
         self.params = pg.parametertree.Parameter(name='params', type='group', children=[
             {'name': 'index', 'type': 'group', 'children': [{'name': ax, 'type': 'int', 'value': self.axes[ax].selection} for ax in self.axes]},
-            # {'name': 'max project', 'type': 'group', 'children': [{'name': ax, 'type': 'bool', 'value': False} for ax in self.axes]}
+            {'name': 'max project', 'type': 'group', 'children': [{'name': ax, 'type': 'bool', 'value': False} for ax in self.axes]},
             {'name': '1D views', 'type': 'group'},
             MultiAxisParam(ndim=2, slicer=self),
         ])
@@ -47,6 +47,8 @@ class NDSlicer(QtGui.QWidget):
             ch.sigValueChanged.connect(self.one_d_show_changed)
             ch.viewer, dock = self.add_view(axes=[ax], position=pos)
             pos = {'position': 'bottom', 'relativeTo': dock}
+            
+        self.params.child('max project').sigTreeStateChanged.connect(self.max_project_changed)
         
         self.ctrl_split = pg.QtGui.QSplitter(pg.QtCore.Qt.Vertical)
         
@@ -135,12 +137,19 @@ class NDSlicer(QtGui.QWidget):
                 continue
             viewer.set_image_params(self.histlut.getLevels(), self.histlut.getLookupTable(n=1024))
 
+    def max_project_changed(self):
+        for ax in self.axes.values():
+            ax.max_project = self.params['max project', ax.name]
+        for viewer in self.viewers:
+            viewer.update_selection()
+
 
 class AxisData(object):
     def __init__(self, name, values):
         self.name = name
         self.values = values
         self.selection = values[0]
+        self.max_project = False
 
     def index_at(self, x):
         return np.argmin(np.abs(self.values - x))
@@ -197,13 +206,37 @@ class Viewer(object):
         raise NotImplementedError()
         
     def get_data(self):
-        sl = [ax.index for ax in self.data_axes.values()]
-        order = []
-        for ax in self.selected_axes:
-            i = list(self.data_axes.keys()).index(ax)
-            order.append(i)
-            sl[i] = slice(None)
-        data = self.data[tuple(sl)].transpose(np.argsort(order))
+        # sl = [ax.index for ax in self.data_axes.values()]
+        # order = []
+        # for ax in self.selected_axes:
+        #     i = list(self.data_axes.keys()).index(ax)
+        #     order.append(i)
+        #     sl[i] = slice(None)
+        # data = self.data[tuple(sl)].transpose(np.argsort(order))
+        
+        data = self.data
+        
+        # slice or flatten non-visible axes
+        axis_names = list(self.data_axes.keys())
+        removed = 0
+        for i in range(len(axis_names)):
+            j = i - removed
+            ax_name = axis_names[j]
+            if ax_name in self.selected_axes:
+                continue
+            ax = self.data_axes[ax_name]
+            if ax.max_project:
+                # max projection across this axis
+                data = data.max(axis=j)
+            else:
+                # slice this axis
+                data = data.take(ax.index, j)
+            axis_names.pop(j)
+            removed += 1
+            
+        # re-order visible axes
+        order = [axis_names.index(ax) for ax in self.selected_axes]
+        data = data.transpose(np.argsort(order))
         
         return data
 
