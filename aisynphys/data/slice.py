@@ -89,7 +89,7 @@ class Slice(object):
         """
         if self._genotype is None:
             gt_name = self.lims_record['genotype'].strip()
-            inj = self.injections.strip()
+            inj = self.injections
             if gt_name in (None, ''):
                 if inj is None:
                     return None
@@ -99,7 +99,7 @@ class Slice(object):
                 gt_parts = gt_name.split(';')
                 
             if inj is not None:
-                gt_parts.extend(inj.split(';'))
+                gt_parts.extend(inj.strip().split(';'))
                 
             gt_name = ';'.join([p for p in gt_parts if len(p.strip()) > 0])
            
