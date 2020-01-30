@@ -7,9 +7,17 @@ import pyqtgraph.dockarea
 
 class NDSlicer(QtGui.QWidget):
     """Tool for visualizing 1D and 2D slices from an ND array.
+    
+    Parameters
+    ----------
+    axes : ordered dict
+        Description of array axes to expect. Format is::
+        
+            {'axis_name': {'values': array}}
     """
     
     
+    selection_changing = QtCore.Signal(object)
     selection_changed = QtCore.Signal(object)
     
     def __init__(self, axes):
@@ -27,6 +35,7 @@ class NDSlicer(QtGui.QWidget):
         
         self.params = pg.parametertree.Parameter(name='params', type='group', children=[
             {'name': 'index', 'type': 'group', 'children': [{'name': ax, 'type': 'int', 'value': self.axes[ax].selection} for ax in self.axes]},
+            # {'name': 'max project', 'type': 'group', 'children': [{'name': ax, 'type': 'bool', 'value': False} for ax in self.axes]}
             {'name': '1D views', 'type': 'group'},
             MultiAxisParam(ndim=2, slicer=self),
         ])
@@ -39,20 +48,41 @@ class NDSlicer(QtGui.QWidget):
             ch.viewer, dock = self.add_view(axes=[ax], position=pos)
             pos = {'position': 'bottom', 'relativeTo': dock}
         
+        self.ctrl_split = pg.QtGui.QSplitter(pg.QtCore.Qt.Vertical)
+        
         self.ptree = pg.parametertree.ParameterTree(showHeader=False)
         self.ptree.setParameters(self.params, showTop=False)
-        self.ptree_dock = pg.dockarea.Dock("view selection")
-        self.ptree_dock.addWidget(self.ptree)
-        self.dockarea.addDock(self.ptree_dock, 'left')
+        self.ctrl_split.addWidget(self.ptree)
+        
+        self.histlut = pg.HistogramLUTWidget()
+        self.histlut.sigLevelsChanged.connect(self.histlut_changed)
+        self.histlut.sigLookupTableChanged.connect(self.histlut_changed)
+        self.ctrl_split.addWidget(self.histlut)
+        
+        self.ctrl_dock = pg.dockarea.Dock("view selection")
+        self.ctrl_dock.addWidget(self.ctrl_split)
+        self.dockarea.addDock(self.ctrl_dock, 'left')
 
     def set_data(self, data, axes=None):
+        """Set the data to be displayed.
+        
+        Parameters
+        ----------
+        data : array
+            Data array of any dimensionality to be displayed
+        axes : dict
+            Optional description of axes in *data*.
+        """
         self.data = data
-        axes = axes or  {}
+        axes = axes or {}
         for ax,info in axes.items():
             for k,v in info.items():
                 setattr(self.axes[ax], k, v)
         for viewer in self.viewers:
             viewer.set_data(self.data, self.axes)
+        data_lim = (self.data.min(), self.data.max())
+        self.histlut.setLevels(*data_lim)
+        self.histlut.setHistogramRange(*data_lim)
         
     def add_view(self, axes, position=None):
         dock = pg.dockarea.Dock("viewer", area=self.dockarea)
@@ -65,20 +95,25 @@ class NDSlicer(QtGui.QWidget):
         self.dockarea.addDock(dock, **position)
         viewer.dock = dock
         viewer.selection_changed.connect(self.viewer_selection_changed)
+        viewer.selection_changing.connect(self.viewer_selection_changing)
         self.viewers.append(viewer)
         viewer.set_data(self.data, self.axes)
+        self.histlut_changed()
         return viewer, dock
 
     def one_d_show_changed(self, param):
         param.viewer.dock.setVisible(param.value())
         
     def viewer_selection_changed(self, viewer, axes):
+        self.selection_changed.emit(self)
+
+    def viewer_selection_changing(self, viewer, axes):
         for ax,val in axes.items():
             self.axes[ax].selection = val
             self.params['index', ax] = val
         for viewer in self.viewers:
             viewer.update_selection()
-        self.selection_changed.emit(self)
+        self.selection_changing.emit(self)
 
     def selection(self):
         vals = OrderedDict([(ax,val.selection) for ax,val in self.axes.items()])
@@ -93,6 +128,12 @@ class NDSlicer(QtGui.QWidget):
             ax.selection = ax.values[x]
         for viewer in self.viewers:
             viewer.update_selection()        
+
+    def histlut_changed(self):
+        for viewer in self.viewers:
+            if not isinstance(viewer, TwoDViewer):
+                continue
+            viewer.set_image_params(self.histlut.getLevels(), self.histlut.getLookupTable(n=1024))
 
 
 class AxisData(object):
@@ -168,6 +209,7 @@ class Viewer(object):
 
 
 class OneDViewer(Viewer, pg.PlotWidget):
+    selection_changing = QtCore.Signal(object, object)  # self, {axis: value, ...}
     selection_changed = QtCore.Signal(object, object)  # self, {axis: value, ...}
     
     def __init__(self, axes):
@@ -178,13 +220,20 @@ class OneDViewer(Viewer, pg.PlotWidget):
         Viewer.__init__(self, axes)
 
         self.line.sigDragged.connect(self.line_moved)
+        self.line.sigPositionChangeFinished.connect(self.line_move_finished)
 
     def update_selection(self):
         axis = self.selected_axes[0]
-        self.line.setValue(self.data_axes[axis].index)
+        with pg.SignalBlock(self.line.sigPositionChangeFinished, self.line_move_finished):
+            self.line.setValue(self.data_axes[axis].index)
         Viewer.update_selection(self)
 
     def line_moved(self):
+        ax = self.selected_axes[0]
+        val = self.data_axes[ax].value_at(int(np.round(self.line.value())))
+        self.selection_changing.emit(self, {ax: val})
+        
+    def line_move_finished(self):
         ax = self.selected_axes[0]
         val = self.data_axes[ax].value_at(int(np.round(self.line.value())))
         self.selection_changed.emit(self, {ax: val})
@@ -201,45 +250,67 @@ class OneDViewer(Viewer, pg.PlotWidget):
         self.getAxis('bottom').setTicks([[(i, "%0.2g"%axvals[i]) for i in range(len(axvals))]])
         
 
-class TwoDViewer(Viewer, pg.ImageView):
+class TwoDViewer(Viewer, pg.GraphicsLayoutWidget):
+    selection_changing = QtCore.Signal(object, object)  # self, {axis: value, ...}
     selection_changed = QtCore.Signal(object, object)  # self, {axis: value, ...}
 
     def __init__(self, axes):
-        self.plot = pg.PlotItem()
         self.data_bounds = (0, 1)
+        self.levels = None
+        self.lut = None
         
-        pg.ImageView.__init__(self, view=self.plot)
+        pg.GraphicsLayoutWidget.__init__(self)
+        self.plot = self.addPlot()
         self.plot.invertY(False)
         self.plot.setAspectLocked(False)
+        
+        self.image = pg.ImageItem()
+        self.plot.addItem(self.image)
+        self.image.setPos(-0.5, -0.5)
+        
         self.lines = [self.plot.addLine(x=0, movable=True), self.plot.addLine(y=0, movable=True)]
         Viewer.__init__(self, axes)
         for line in self.lines:
             line.sigDragged.connect(self.line_moved)
+        for line in self.lines:
+            line.sigPositionChangeFinished.connect(self.line_move_finished)
 
     def set_data(self, data, axes):
         self.data_bounds = (data.min(), data.max())
         Viewer.set_data(self, data, axes)
         
+    def set_image_params(self, levels, lut):
+        self.image.setLevels(levels)
+        self.image.setLookupTable(lut)
+        self.levels = levels
+        self.lut = lut
+        
     def update_selection(self):
         for i,line in enumerate(self.lines):
             ax = self.selected_axes[i]
-            line.setValue(self.data_axes[ax].index)
+            with pg.SignalBlock(line.sigPositionChangeFinished, self.line_move_finished):
+                line.setValue(self.data_axes[ax].index)
         Viewer.update_selection(self)
 
     def line_moved(self):
+        axes = {ax: self.data_axes[ax].value_at(int(np.round(self.lines[i].value()))) for i,ax in enumerate(self.selected_axes)}
+        self.selection_changing.emit(self, axes)
+
+    def line_move_finished(self):
         axes = {ax: self.data_axes[ax].value_at(int(np.round(self.lines[i].value()))) for i,ax in enumerate(self.selected_axes)}
         self.selection_changed.emit(self, axes)
 
     def update_display(self):
         if self.data is None:
-            self.setImage(np.zeros((1, 1)))
+            self.image.setImage(np.zeros((1, 1)))
             return
         axes = self.selected_axes
         self.plot.setLabels(left=axes[1], bottom=axes[0])
         data = self.get_data()
         
         # scale = [xvals[1]-xvals[0], yvals[1]-yvals[0]]
-        self.setImage(data, pos=[-0.5, -0.5], levels=self.data_bounds) #, pos=[xvals[0]-scale[0]*0.5, yvals[0]-scale[1]*0.5], scale=scale)
+        levels = self.levels or self.data_bounds
+        self.image.setImage(data, levels=levels) #, pos=[xvals[0]-scale[0]*0.5, yvals[0]-scale[1]*0.5], scale=scale)
 
         xvals = self.data_axes[axes[0]].values
         yvals = self.data_axes[axes[1]].values

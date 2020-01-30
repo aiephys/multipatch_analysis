@@ -1,6 +1,6 @@
 # coding: utf8
 from __future__ import print_function, division
-import sys
+import os, sys, pickle
 from collections import OrderedDict
 import numpy as np
 import numba
@@ -88,17 +88,31 @@ class StochasticReleaseModel(object):
             opt_params = params.copy()
             for i,k in enumerate(optimize.keys()):
                 opt_params[k] = x[i]
-            # print(opt_params)
             res = self._measure_likelihood(spike_times, amplitudes, opt_params)
             results[tuple(x)] = res
+            # print(opt_params)
             # print(res['likelihood'])
             return -res['likelihood']
         
-        best = scipy.optimize.minimize(fn, x0=init, bounds=bounds, 
-            #method='BFGS', options={'gtol': 1, 'eps': 10e-6}  # oscillates
-            method="Nelder-Mead", options={'fatol': 1e-3}
+        best = scipy.optimize.minimize(fn, x0=init, 
+            #method='BFGS', bounds=bounds, options={'gtol': 1, 'eps': 10e-6}  # oscillates
+            method="Nelder-Mead", options={'fatol': 0.01}  # no bounds, can't set initial step?
+            #method='Powell', options={'ftol': 0.01}  # not efficient; can't set initial step
+            #method='CG', options={'eps': 10e-6}  # not efficient
+            #method='Newton-CG',  # requires jacobian
+            #method='L-BFGS-B'  # not efficient
+            #method='COBYLA', options={'rhobeg': -100e-6}  # fast but oscillates, misses peak
+            
         )
-        best_result = results[tuple(best.x)]
+        best_result = results[tuple(best.x.flatten())]
+
+        # plot optimization route (for debugging)
+        # x = [k[0] for k in results.keys()]
+        # y = [v['likelihood'] for v in results.values()]
+        # brushes = [pg.mkBrush((i, int(len(x)*1.2))) for i in range(len(x))]
+        # plt = pg.plot(x, y, pen=None, symbol='o', symbolBrush=brushes)
+        # plt.addLine(x=best.x[0])
+        # plt.addLine(y=best_result['likelihood'])
         
         # update attributes with best result
         for i,k in enumerate(optimize.keys()):
@@ -562,8 +576,9 @@ if __name__ == '__main__':
     parser.add_argument('experiment_id', type=str, nargs='?')
     parser.add_argument('pre_cell_id', type=str, nargs='?')
     parser.add_argument('post_cell_id', type=str, nargs='?')
-    parser.add_argument("--workers", type=int, default=None)
-    parser.add_argument("--max-events", type=int, default=None, dest='max_events')
+    parser.add_argument('--workers', type=int, default=None)
+    parser.add_argument('--max-events', type=int, default=None, dest='max_events')
+    parser.add_argument('--no-cache', default=False, action='store_true', dest='no_cache')
     
     args = parser.parse_args()
     
@@ -679,46 +694,33 @@ if __name__ == '__main__':
         # 'mini_amplitude': mini_amp_estimate * 1.2**np.arange(-12, 24, 2),
         'mini_amplitude_stdev': mini_amp_estimate, # * 0.2 * 1.2**np.arange(-12, 36, 8),
         'measurement_stdev': np.nanstd(bg_amplitudes),
-        'vesicle_recovery_tau': np.array([0.01, 0.04, 0.16, 0.64, 2.56]),
-        'facilitation_amount': np.array([0.1]),
-        'facilitation_recovery_tau': np.array([0.01, 0.02, 0.04, 0.08]),
+        'vesicle_recovery_tau': np.array([0.0025, 0.01, 0.04, 0.16, 0.64, 2.56]),
+        'facilitation_amount': np.array([0.025, 0.05, 0.1, 0.2, 0.4]),
+        'facilitation_recovery_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64]),
     }
     optimize_params = {
         'mini_amplitude': (mini_amp_estimate, 0.1*mini_amp_estimate, 100*mini_amp_estimate),  # optimize in model
     }
-    
-    # search_params = {
-    #     'n_release_sites': 1, 
-    #     'base_release_probability': 0.025, 
-    #     'mini_amplitude': np.array([0.00010003295346306248, 0.00010004785462425633]),
-    #     'mini_amplitude_stdev': 0.00010003295346306248, 
-    #     'vesicle_recovery_tau': 0.64, 
-    #     'facilitation_amount': 0.1, 
-    #     'facilitation_recovery_tau': 0.04, 
-    #     'measurement_stdev': 0.00013711728928047498
-    # }
-    # optimize_params = {}
 
+    # search_params = {
+    #     'n_release_sites': np.array([1, 8, 32]),
+    #     'base_release_probability': np.array([0.001, 0.05, 0.5]),
+    #     # 'mini_amplitude': mini_amp_estimate * 1.2**np.arange(-12, 24, 2),
+    #     'mini_amplitude_stdev': mini_amp_estimate, # * 0.2 * 1.2**np.arange(-12, 36, 8),
+    #     'measurement_stdev': np.nanstd(bg_amplitudes),
+    #     'vesicle_recovery_tau': np.array([0.0025]),
+    #     'facilitation_amount': np.array([0.025]),
+    #     'facilitation_recovery_tau': np.array([0.32]),
+    # }
+    # optimize_params = {
+    #     'mini_amplitude': (mini_amp_estimate, 0.1*mini_amp_estimate, 100*mini_amp_estimate),  # optimize in model
+    # }
     
     for k,v in search_params.items():
         if np.isscalar(v):
             assert not np.isnan(v), k
         else:
             assert not np.any(np.isnan(v)), k
-
-    # # Effects of mini_amp_stdev
-    # n_release_sites = 20
-    # release_probability = 0.1
-    # max_events = -1
-    # mini_amp_estimate = first_pulse_amps.mean() / (n_release_sites * release_probability)
-    # params = {
-    #     'n_release_sites': np.arange(1, 30),
-    #     'base_release_probability': release_probability,
-    #     'mini_amplitude': mini_amp_estimate * 1.2**np.arange(-24, 24),
-    #     'mini_amplitude_stdev': mini_amp_estimate * 1.2**np.arange(-24, 24),
-    #     'measurement_stdev': np.nanstd(bg_amplitudes),
-    #     'vesicle_recovery_tau': 0.01,
-    # }
 
     # 3. For each point in the parameter space, simulate a synapse and estimate the joint probability of the set of measured amplitudes
     
@@ -740,9 +742,19 @@ if __name__ == '__main__':
     print("Parameter space:")
     for k, v in search_params.items():
         print("   ", k, v)
+
+    cache_file = "stochastic_cache/%s_%s_%s.pkl" % (expt_id, pre_cell_id, post_cell_id)
+    if not args.no_cache and os.path.exists(cache_file):
+        param_space = pickle.load(open(cache_file, 'rb'))
+    else:
+        print("cache miss:", cache_file)
+        param_space = ParameterSpace(search_params)
+        param_space.run(run_model, workers=args.workers, optimize=optimize_params)
     
-    param_space = ParameterSpace(search_params)
-    param_space.run(run_model, workers=args.workers, optimize=optimize_params)
+        tmp = cache_file + '.tmp'
+        pickle.dump(param_space, open(tmp, 'wb'))
+        os.rename(tmp, cache_file)
+
 
     # 4. Visualize / characterize mapped parameter space. Somehow.
     win = ParameterSearchWidget(param_space)
