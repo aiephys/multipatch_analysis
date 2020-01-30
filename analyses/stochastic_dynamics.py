@@ -8,6 +8,7 @@ import pyqtgraph as pg
 import pyqtgraph.multiprocess
 from pyqtgraph.Qt import QtGui, QtCore
 import scipy.stats as stats
+import scipy.optimize
 from aisynphys.database import default_db as db
 from aisynphys.ui.ndslicer import NDSlicer
 from aisynphys import config
@@ -594,14 +595,16 @@ if __name__ == '__main__':
     release_probability = 0.1
     mini_amp_estimate = np.nanmean(first_pulse_amps) / (n_release_sites * release_probability)
     params = {
-        'n_release_sites': np.array([1, 2, 4, 8, 16, 32]),
-        'base_release_probability': np.array([0.0125, 0.025, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0]),
+        'n_release_sites': np.array([1, 2, 4, 8, 16, 32, 64]),
+        'base_release_probability': np.array([0.00625, 0.0125, 0.025, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0]),
         'mini_amplitude': mini_amp_estimate * 1.2**np.arange(-12, 24, 2),
-        'mini_amplitude_stdev': mini_amp_estimate * 0.2 * 1.2**np.arange(-12, 36, 8),
+        'mini_amplitude_stdev': mini_amp_estimate, # * 0.2 * 1.2**np.arange(-12, 36, 8),
         'measurement_stdev': np.nanstd(bg_amplitudes),
-        'vesicle_recovery_tau': 0.01,
+        'vesicle_recovery_tau': np.array([0.01, 0.04, 0.16, 0.64, 2.56]),
+        'facilitation_amount': np.array([0.1]),
+        'facilitation_recovery_tau': np.array([0.01, 0.02, 0.04, 0.08]),
     }
-
+    
     for k,v in params.items():
         if np.isscalar(v):
             assert not np.isnan(v), k
