@@ -110,7 +110,7 @@ def specimen_info(specimen_name=None, specimen_id=None):
     #            CC = orientation and hemisphere
     spec_name = rec['specimen_name']
     if rec['organism'] == 'mouse':
-        m = re.match(r'(?P<pedigree1>.*)-(?P<donor_id>\d{6,7})(-(?P<pedigree2>[^\.]+))?\.(?P<section_num>\d{2})(\.(?P<orientation_num>\d{2}))?$', spec_name)
+        m = re.match(r'(?P<pedigree1>.*)-(?P<donor_id>\d{6,7})(?P<pedigree2>-[^\.]+)?\.(?P<section_num>\d{2})(\.(?P<orientation_num>\d{2}))?$', spec_name)
         if m is None:
             raise Exception('Could not parse mouse specimen name: "%s"' % spec_name)
         
