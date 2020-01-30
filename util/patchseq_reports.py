@@ -12,8 +12,6 @@ from collections import OrderedDict
 all_paths = glob.glob(os.path.join(config.synphys_data, '*.***'))
 nucleus = {'+': 'nucleus_present', '-': 'nucleus_absent', '': None}
 organism = {'Mus musculus': 'Mouse', 'Homo Sapiens': 'Human'}
-generated_report_path = '//allen/programs/celltypes/workgroups/synphys/generated_reports'
-rig_operators = {'Operator O': 'lisak', 'Operator Z': 'cristinar', 'Operator X': 'stephanies', '': ''}
 
 def generate_daily_report(day):
     """ Generate a daily PatchSeq report for Kim's team. PatchSeq metadata is collected from the acq4 directories
@@ -24,7 +22,7 @@ def generate_daily_report(day):
         day = day - timedelta(hours=24)
 
     file_name = '%s_mps_Transcriptomics_report.xlsx' % datetime.strftime(day, "%y%m%d")
-    file_path = generated_report_path + '/' + file_name
+    file_path = config.patchseq_report_path + '/' + file_name
     project_code = '102-01-010-10'
     columns = [
         'Patch Tube Name',
@@ -199,7 +197,7 @@ def generate_monthly_report(start_date, end_date):
         patch_date_dt = timestamp_to_datetime(day_info.get('__timestamp__'))
         patch_date = datetime.strftime(patch_date_dt, "%m/%d/%Y") if isinstance(patch_date_dt, datetime) else None
         operator = day_info.get('rig_operator', '')
-        operator = rig_operators[operator]
+        operator = config.rig_operators.get(operator, '')
         roi = format_roi_major(day_info.get('target_region'))
         slic = Slice(site_dh.parent().name())
         genotype = slic.genotype
