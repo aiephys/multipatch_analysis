@@ -6,6 +6,10 @@ import pyqtgraph.dockarea
 
 
 class NDSlicer(QtGui.QWidget):
+    """Tool for visualizing 1D and 2D slices from an ND array.
+    """
+    
+    
     selection_changed = QtCore.Signal(object)
     
     def __init__(self, axes):
@@ -202,6 +206,7 @@ class TwoDViewer(Viewer, pg.ImageView):
 
     def __init__(self, axes):
         self.plot = pg.PlotItem()
+        self.data_bounds = (0, 1)
         
         pg.ImageView.__init__(self, view=self.plot)
         self.plot.invertY(False)
@@ -210,6 +215,10 @@ class TwoDViewer(Viewer, pg.ImageView):
         Viewer.__init__(self, axes)
         for line in self.lines:
             line.sigDragged.connect(self.line_moved)
+
+    def set_data(self, data, axes):
+        self.data_bounds = (data.min(), data.max())
+        Viewer.set_data(self, data, axes)
         
     def update_selection(self):
         for i,line in enumerate(self.lines):
@@ -230,7 +239,7 @@ class TwoDViewer(Viewer, pg.ImageView):
         data = self.get_data()
         
         # scale = [xvals[1]-xvals[0], yvals[1]-yvals[0]]
-        self.setImage(data, pos=[-0.5, -0.5]) #, pos=[xvals[0]-scale[0]*0.5, yvals[0]-scale[1]*0.5], scale=scale)
+        self.setImage(data, pos=[-0.5, -0.5], levels=self.data_bounds) #, pos=[xvals[0]-scale[0]*0.5, yvals[0]-scale[1]*0.5], scale=scale)
 
         xvals = self.data_axes[axes[0]].values
         yvals = self.data_axes[axes[1]].values
