@@ -36,6 +36,7 @@ class NDSlicer(QtGui.QWidget):
         self.params = pg.parametertree.Parameter(name='params', type='group', children=[
             {'name': 'index', 'type': 'group', 'children': [{'name': ax, 'type': 'int', 'value': self.axes[ax].selection} for ax in self.axes]},
             {'name': 'max project', 'type': 'group', 'children': [{'name': ax, 'type': 'bool', 'value': False} for ax in self.axes]},
+            ColorAxisParam(name='color axis', slicer=self),
             {'name': '1D views', 'type': 'group'},
             MultiAxisParam(ndim=2, slicer=self),
         ])
@@ -49,6 +50,7 @@ class NDSlicer(QtGui.QWidget):
             pos = {'position': 'bottom', 'relativeTo': dock}
             
         self.params.child('max project').sigTreeStateChanged.connect(self.max_project_changed)
+        self.params.child('color axis').axis_color_changed.connect(self.axis_color_changed)
         
         self.ctrl_split = pg.QtGui.QSplitter(pg.QtCore.Qt.Vertical)
         
@@ -143,6 +145,15 @@ class NDSlicer(QtGui.QWidget):
         for viewer in self.viewers:
             viewer.update_selection()
 
+    def axis_color_changed(self):
+        for ax in self.axes.values():
+            if ax.name != self.params['color axis', 'axis']:
+                ax.colors = None
+            else:
+                ax.colors = self.params.child('color axis').colors
+        for viewer in self.viewers:
+            viewer.update_selection()
+            
 
 class AxisData(object):
     def __init__(self, name, values):
@@ -150,6 +161,7 @@ class AxisData(object):
         self.values = values
         self.selection = values[0]
         self.max_project = False
+        self.colors = None
 
     def index_at(self, x):
         return np.argmin(np.abs(self.values - x))
@@ -183,6 +195,49 @@ class MultiAxisParam(pg.parametertree.types.GroupParameter):
         param.viewer.set_selected_axes(axes)
 
 
+class ColorAxisParam(pg.parametertree.types.GroupParameter):
+    
+    axis_color_changed = QtCore.Signal(object)  # self
+    
+    def __init__(self, name, slicer):
+        self.slicer = slicer
+        pg.parametertree.types.GroupParameter.__init__(self, name=name, children=[
+            {'name': 'axis', 'type': 'list', 'values': ['none']},
+            {'name': 'mode', 'type': 'list', 'values': ['discrete', 'range'], 'visible': False},
+            {'name': 'colors', 'type': 'group', 'visible': False},
+        ])
+        
+        self.update_axes()
+        self.child('axis').sigValueChanged.connect(self.axis_changed)
+        self.child('colors').sigTreeStateChanged.connect(self.colors_changed)
+        
+    def update_axes(self):
+        axis_names = list(self.slicer.axes.keys())
+        self.child('axis').setLimits(['none'] + axis_names)
+
+    def axis_changed(self):
+        with pg.SignalBlock(self.child('colors').sigTreeStateChanged, self.colors_changed):
+            if self['axis'] == 'none':
+                self.child('mode').setOpts(visible=False)
+                self.child('colors').setOpts(visible=False)
+            else:
+                self.child('mode').setOpts(visible=True)
+                self.child('colors').setOpts(visible=True)
+                values = self.slicer.axes[self['axis']].values
+                for ch in self.child('colors').children():
+                    self.child('colors').removeChild(ch)
+                for i,v in enumerate(values):
+                    color = pg.mkColor((i, int(len(values)*1.2)))
+                    ch = pg.parametertree.types.SimpleParameter(name=str(v), type='color', value=color)
+                    self.child('colors').addChild(ch)
+            
+        self.colors_changed()
+
+    def colors_changed(self):
+        self.colors = [ch.value() for ch in self.child('colors').children()]
+        self.axis_color_changed.emit(self)
+
+
 class Viewer(object):
     def __init__(self, ax):
         self.data = None
@@ -206,25 +261,21 @@ class Viewer(object):
         raise NotImplementedError()
         
     def get_data(self):
-        # sl = [ax.index for ax in self.data_axes.values()]
-        # order = []
-        # for ax in self.selected_axes:
-        #     i = list(self.data_axes.keys()).index(ax)
-        #     order.append(i)
-        #     sl[i] = slice(None)
-        # data = self.data[tuple(sl)].transpose(np.argsort(order))
-        
         data = self.data
         
         # slice or flatten non-visible axes
         axis_names = list(self.data_axes.keys())
+        colormap_axis = None
         removed = 0
         for i in range(len(axis_names)):
             j = i - removed
             ax_name = axis_names[j]
+            ax = self.data_axes[ax_name]
             if ax_name in self.selected_axes:
                 continue
-            ax = self.data_axes[ax_name]
+            if ax.colors is not None:
+                colormap_axis = ax
+                continue
             if ax.max_project:
                 # max projection across this axis
                 data = data.max(axis=j)
@@ -236,9 +287,13 @@ class Viewer(object):
             
         # re-order visible axes
         order = [axis_names.index(ax) for ax in self.selected_axes]
+        if colormap_axis is not None:
+            order.append(axis_names.index(colormap_axis.name))
         data = data.transpose(np.argsort(order))
         
-        return data
+        colormap = None if colormap_axis is None else colormap_axis.colors
+        
+        return data, colormap
 
 
 class OneDViewer(Viewer, pg.PlotWidget):
@@ -248,7 +303,7 @@ class OneDViewer(Viewer, pg.PlotWidget):
     def __init__(self, axes):
         pg.PlotWidget.__init__(self)
         self.line = self.addLine(x=0, movable=True)
-        self.curve = self.plot()
+        self.curves = []
 
         Viewer.__init__(self, axes)
 
@@ -273,14 +328,33 @@ class OneDViewer(Viewer, pg.PlotWidget):
         
     def update_display(self):
         if self.data is None:
-            self.curve.setData([])
+            self.clear_curves()
             return
+            
         axis = self.selected_axes[0]
         self.setLabels(bottom=axis)
-        data = self.get_data()
-        self.curve.setData(data)
+        data, colors = self.get_data()
+            
+        if colors is None:
+            data = data[..., np.newaxis]
+            colors = ['w']
+            
+        new_curves = []
+        for i in range(data.shape[-1]):
+            c = pg.PlotCurveItem(data[...,i], pen=colors[i], antialias=True)
+            new_curves.append(c)
+            self.addItem(c)
+
+        self.clear_curves()
+        self.curves = new_curves
+            
         axvals = self.data_axes[axis].values
         self.getAxis('bottom').setTicks([[(i, "%0.2g"%axvals[i]) for i in range(len(axvals))]])
+        
+    def clear_curves(self):
+        for c in self.curves:
+            self.removeItem(c)
+            self.curves = []
         
 
 class TwoDViewer(Viewer, pg.GraphicsLayoutWidget):
@@ -339,11 +413,18 @@ class TwoDViewer(Viewer, pg.GraphicsLayoutWidget):
             return
         axes = self.selected_axes
         self.plot.setLabels(left=axes[1], bottom=axes[0])
-        data = self.get_data()
+        data, colors = self.get_data()
         
-        # scale = [xvals[1]-xvals[0], yvals[1]-yvals[0]]
         levels = self.levels or self.data_bounds
-        self.image.setImage(data, levels=levels) #, pos=[xvals[0]-scale[0]*0.5, yvals[0]-scale[1]*0.5], scale=scale)
+        
+        if colors is None:
+            self.image.setImage(data, levels=levels)
+        else:
+            comp = np.zeros(data.shape[:-1] + (3,), dtype=data.dtype)
+            for i,color in enumerate(colors):
+                color = np.array(pg.colorTuple(color)[:3], dtype=float).reshape(1, 1, 3) / 255.
+                comp += data[..., i:i+1] * color
+            self.image.setImage(comp, levels=levels)
 
         xvals = self.data_axes[axes[0]].values
         yvals = self.data_axes[axes[1]].values
