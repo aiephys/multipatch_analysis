@@ -46,25 +46,25 @@ if __name__ == '__main__':
         ('Mouse Layer 2/3', [
             # {'cre_type': 'unknown', 'target_layer': '2/3', 'cortical_layer': '2/3'},
             #{'pyramidal': True, 'target_layer': '2/3'},
-            {'dendrite_type': 'spiny', 'target_layer': '2/3', 'cortical_layer': '2/3'},
-            {'cre_type': 'pvalb', 'target_layer': '2/3', 'cortical_layer': '2/3'},
-            {'cre_type': 'sst', 'target_layer': '2/3', 'cortical_layer': '2/3'},
-            {'cre_type': 'vip', 'target_layer': '2/3', 'cortical_layer': '2/3'},
+            {'dendrite_type': 'spiny', 'target_layer': '2/3', 'cortical_layer': '2/3', 'display_names': ('L2/3', 'Pyr\nspiny')},
+            {'cre_type': 'pvalb', 'target_layer': '2/3', 'cortical_layer': '2/3', 'display_names': ('L2/3', 'pvalb')},
+            {'cre_type': 'sst', 'target_layer': '2/3', 'cortical_layer': '2/3', 'display_names': ('L2/3', 'sst')},
+            {'cre_type': 'vip', 'target_layer': '2/3', 'cortical_layer': '2/3', 'display_names': ('L2/3', 'vip')},
         ]),
         
         ('Mouse Layer 4', [
-            {'cre_type': 'nr5a1', 'target_layer': '4', 'cortical_layer': '4'},
-            {'cre_type': 'pvalb', 'target_layer': '4', 'cortical_layer': '4'},
-            {'cre_type': 'sst', 'target_layer': '4', 'cortical_layer': '4'},
-            {'cre_type': 'vip', 'target_layer': '4', 'cortical_layer': '4'},
+            {'cre_type': 'nr5a1', 'target_layer': '4', 'cortical_layer': '4', 'display_names': ('L4', 'Pyr\nnr5a1')},
+            {'cre_type': 'pvalb', 'target_layer': '4', 'cortical_layer': '4', 'display_names': ('L4', 'pvalb')},
+            {'cre_type': 'sst', 'target_layer': '4', 'cortical_layer': '4', 'display_names': ('L4', 'sst')},
+            {'cre_type': 'vip', 'target_layer': '4', 'cortical_layer': '4', 'display_names': ('L4', 'vip')},
         ]),
 
         ('Mouse Layer 5', [
-            {'cre_type': ('sim1', 'fam84b'), 'target_layer': '5', 'display_names': ('L5', 'PT\nsim1, fam84b'), 'cortical_layer': '5'},
+            {'cre_type': ('sim1', 'fam84b'), 'target_layer': '5', 'display_names': ('L5', 'ET\nsim1, fam84b'), 'cortical_layer': '5'},
             {'cre_type': 'tlx3', 'target_layer': '5', 'display_names': ('L5', 'IT\ntlx3'), 'cortical_layer': '5'},
-            {'cre_type': 'pvalb', 'target_layer': '5', 'cortical_layer': '5'},
-            {'cre_type': 'sst', 'target_layer': '5', 'cortical_layer': '5'},
-            {'cre_type': 'vip', 'target_layer': '5', 'cortical_layer': '5'},
+            {'cre_type': 'pvalb', 'target_layer': '5', 'display_names': ('L5', 'pvalb'), 'cortical_layer': '5'},
+            {'cre_type': 'sst', 'target_layer': '5', 'display_names': ('L5', 'sst'), 'cortical_layer': '5'},
+            {'cre_type': 'vip', 'target_layer': '5', 'display_names': ('L5', 'vip'), 'cortical_layer': '5'},
         ]),
 
         ('Mouse Layer 6', [
@@ -108,16 +108,16 @@ if __name__ == '__main__':
         ]),
 
         ('Pyramidal / Nonpyramidal by layer', [
-            {'pyramidal': True, 'target_layer': '2'},
-            {'pyramidal': False, 'target_layer': '2'},
-            {'pyramidal': True, 'target_layer': '3'},
-            {'pyramidal': False, 'target_layer': '3'},
-            {'pyramidal': True, 'target_layer': '4'},
-            {'pyramidal': False, 'target_layer': '4'},
-            {'pyramidal': True, 'target_layer': '5'},
-            {'pyramidal': False, 'target_layer': '5'},
-            {'pyramidal': True, 'target_layer': '6'},
-            {'pyramidal': False, 'target_layer': '6'},
+            {'pyramidal': True, 'target_layer': '2', 'display_names': ('L2', 'Pyr')},
+            {'pyramidal': False, 'target_layer': '2', 'display_names':('L2', 'Non-Pyr')},
+            {'pyramidal': True, 'target_layer': '3', 'display_names':('L3', 'Pyr')},
+            {'pyramidal': False, 'target_layer': '3', 'display_names':('L3', 'Non-Pyr')},
+            {'pyramidal': True, 'target_layer': '4', 'display_names':('L4', 'Pyr')},
+            {'pyramidal': False, 'target_layer': '4', 'display_names':('L4', 'Non-Pyr')},
+            {'pyramidal': True, 'target_layer': '5', 'display_names':('L5', 'Pyr')},
+            {'pyramidal': False, 'target_layer': '5', 'display_names':('L5', 'Non-Pyr')},
+            {'pyramidal': True, 'target_layer': '6', 'display_names':('L6', 'Pyr')},
+            {'pyramidal': False, 'target_layer': '6', 'display_names':('L6', 'Non-Pyr')},
         ]),
 
         ('Pyramidal Cells', [
@@ -139,11 +139,11 @@ if __name__ == '__main__':
         ]),
 
         ('All Cells', [
-            {'target_layer': '2', 'cortical_layer': '2'},
-            {'target_layer': '2/3', 'cortical_layer': '2/3'},
-            {'target_layer': '3', 'cortical_layer': '3'},
-            {'target_layer': '4', 'cortical_layer': '4'},
-            {'target_layer': '5', 'cortical_layer': '5'},
+            {'target_layer': '2', 'cortical_layer': '2', 'display_names': ('', 'L2')},
+            {'target_layer': '2/3', 'cortical_layer': '2/3', 'display_names': ('', 'L2/3')},
+            {'target_layer': '3', 'cortical_layer': '3', 'display_names': ('', 'L3')},
+            {'target_layer': '4', 'cortical_layer': '4', 'display_names': ('', 'L4')},
+            {'target_layer': '5', 'cortical_layer': '5', 'display_names': ('', 'L5')},
             {'target_layer': '6', 'cortical_layer': ('6', '6a', '6b'), 'display_names': ('', 'L6')},
         ]),
 
