@@ -39,6 +39,7 @@ if __name__ == '__main__':
         ('vacuum',              ('daily',  'python util/database.py --vacuum', 'vacuum database')),
         ('bake sqlite',         ('daily',  'python util/bake_sqlite.py small medium', 'bake sqlite')),
         ('bake sqlite full',    ('weekly', 'python util/bake_sqlite.py full', 'bake sqlite full')),
+        ('patchseq report',     ('daily',  'python util/patchseq_reports.py --daily', 'patchseq report')),
     ])
 
     skip = [] if args.skip == '' else args.skip.split(',')
@@ -53,9 +54,12 @@ if __name__ == '__main__':
             if when == 'weekly' and datetime.today().weekday() != 5:
                 continue
                 
-            msg = ("======================================================================================\n" + 
-                   "    " + msg + "\n" + 
-                   "======================================================================================\n")
+            time_str = time.strftime('%Y-%M-%d %H:%M')
+            full_cmd = cmd + " 2>&1 | tee -a " + logfile
+            msg = ("======================================================================================\n" 
+                   "    [%s]  %s\n"
+                   "    %s\n"
+                   "======================================================================================\n") % (time_str, msg, full_cmd)
             print(msg)
             open(logfile, 'a').write(msg)
             
@@ -67,7 +71,8 @@ if __name__ == '__main__':
                 skip.remove(name)  # only skip once
                 continue
 
-            os.system(cmd + " 2>&1 | tee -a " + logfile)
+            os.system(full_cmd)
+        
         delay()
 
 
