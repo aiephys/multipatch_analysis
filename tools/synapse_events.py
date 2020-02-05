@@ -27,6 +27,8 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
         # set up scatter plot fields
         fields = [
             ('clamp_mode', {'mode': 'enum', 'values': ['ic', 'vc']}),
+            ('ex_qc_pass', {'mode': 'enum', 'values': [True, False]}),
+            ('in_qc_pass', {'mode': 'enum', 'values': [True, False]}),
             ('pulse_number', {'mode': 'enum', 'values': list(range(1,13))}),
             ('induction_frequency', {'mode': 'range'}),
             ('recovery_delay', {'mode': 'range'}),
@@ -52,15 +54,26 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
         
         # default color by nrmse 
         nrmse_color = self.scatter_plot.colorMap.addNew('fit_nrmse')
+        qc_color = self.scatter_plot.colorMap.addNew('ex_qc_pass')
+        qc_color['Values', 'True'] = (255, 255, 255)
+        qc_color['Values', 'False'] = (0, 0, 0)
+        qc_color['Operation'] = 'Multiply'
+        
 
         self.view = pg.GraphicsLayoutWidget()
         self.addWidget(self.view)
         
-        self.spike_plot = self.view.addPlot()
-        self.data_plot = self.view.addPlot(row=1, col=0)
-        self.dec_plot = self.view.addPlot(row=2, col=0)
-        self.spike_plot.setXLink(self.data_plot)
-        self.dec_plot.setXLink(self.data_plot)
+        self.spike_plots = [self.view.addPlot(row=0, col=0), self.view.addPlot(row=0, col=1)]
+        self.data_plots = [self.view.addPlot(row=1, col=0), self.view.addPlot(row=1, col=1)]
+        self.dec_plots = [self.view.addPlot(row=2, col=0), self.view.addPlot(row=2, col=1)]
+        for col in (0, 1):
+            self.spike_plots[col].setXLink(self.data_plots[0])
+            self.data_plots[col].setXLink(self.data_plots[0])
+            self.dec_plots[col].setXLink(self.data_plots[0])
+
+        self.spike_plots[1].setYLink(self.spike_plots[0])
+        self.data_plots[1].setYLink(self.data_plots[0])
+        self.dec_plots[1].setYLink(self.dec_plots[0])
         
         self.resize(1600, 1000)
         
@@ -87,6 +100,8 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
             # Load data for scatter plot            
             q = db.query(
                 db.PulseResponse.id.label('prid'), 
+                db.PulseResponse.ex_qc_pass,
+                db.PulseResponse.in_qc_pass,
                 db.PulseResponseFit, 
                 db.PatchClampRecording.clamp_mode,
                 db.StimPulse.pulse_number, 
@@ -108,9 +123,8 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
             self.scatter_plot.setData(df.to_records())
             
     def scatter_plot_clicked(self, plt, points):
-        self.data_plot.clear()
-        self.dec_plot.clear()
-        self.spike_plot.clear()
+        for plt in self.data_plots + self.dec_plots + self.spike_plots:
+            plt.clear()
         spsp = StackedPsp()
         psp = Psp()
 
@@ -129,8 +143,8 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
             pre_ts = pre_tsl[i]
             post_ts = post_tsl[i]
             
-            self.spike_plot.plot(pre_ts.time_values, pre_ts.data)
-            self.data_plot.plot(post_ts.time_values, post_ts.data)
+            self.spike_plots[0].plot(pre_ts.time_values, pre_ts.data)
+            self.data_plots[0].plot(post_ts.time_values, post_ts.data)
 
             # evaluate recorded fit for this response
             fit_par = recs[i].PulseResponseFit
@@ -147,7 +161,7 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
                 yoffset=fit_par.fit_yoffset,
                 rise_power=2,
             )
-            self.data_plot.plot(post_ts.time_values, fit, pen=(0, 255, 0, 100))
+            self.data_plots[0].plot(post_ts.time_values, fit, pen=(0, 255, 0, 100))
 
             # plot with reconvolved amplitude
             fit = spsp.eval(
@@ -161,7 +175,7 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
                 yoffset=fit_par.fit_yoffset,
                 rise_power=2,
             )
-            self.data_plot.plot(post_ts.time_values, fit, pen=(200, 255, 0, 100))
+            self.data_plots[0].plot(post_ts.time_values, fit, pen=(200, 255, 0, 100))
 
             # plot deconvolution
             clamp_mode = prl[i].recording.patch_clamp_recording.clamp_mode
@@ -173,7 +187,7 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
                 lowpass = 6000
                 
             dec = deconv_filter(post_ts, None, tau=decay_tau, lowpass=lowpass, remove_artifacts=False, bsub=True)
-            self.dec_plot.plot(dec.time_values, dec.data)
+            self.dec_plots[0].plot(dec.time_values, dec.data)
 
             # plot deconvolution fit
             fit = psp.eval(
@@ -186,9 +200,7 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
                 yoffset=fit_par.dec_fit_yoffset,
                 rise_power=1,
             )
-            self.dec_plot.plot(dec.time_values, fit, pen=(0, 255, 0, 100))
-
-
+            self.dec_plots[0].plot(dec.time_values, fit, pen=(0, 255, 0, 100))
             
         self.scatter_plot.setSelectedPoints(points)
         

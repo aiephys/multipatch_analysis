@@ -576,6 +576,9 @@ if __name__ == '__main__':
     parser.add_argument('experiment_id', type=str, nargs='?')
     parser.add_argument('pre_cell_id', type=str, nargs='?')
     parser.add_argument('post_cell_id', type=str, nargs='?')
+    parser.add_argument('experiment_id2', type=str, nargs='?')
+    parser.add_argument('pre_cell_id2', type=str, nargs='?')
+    parser.add_argument('post_cell_id2', type=str, nargs='?')
     parser.add_argument('--workers', type=int, default=None)
     parser.add_argument('--max-events', type=int, default=None, dest='max_events')
     parser.add_argument('--no-cache', default=False, action='store_true', dest='no_cache')
@@ -691,15 +694,15 @@ if __name__ == '__main__':
     search_params = {
         'n_release_sites': np.array([1, 2, 4, 8, 16, 32, 64]),
         'base_release_probability': np.array([0.00625, 0.0125, 0.025, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0]),
-        # 'mini_amplitude': mini_amp_estimate * 1.2**np.arange(-12, 24, 2),
-        'mini_amplitude_stdev': mini_amp_estimate, # * 0.2 * 1.2**np.arange(-12, 36, 8),
+        'mini_amplitude': mini_amp_estimate * 1.2**np.arange(-12, 24, 2),
+        'mini_amplitude_stdev': abs(mini_amp_estimate) * np.array([0.1, 0.33, 1]),
         'measurement_stdev': np.nanstd(bg_amplitudes),
         'vesicle_recovery_tau': np.array([0.0025, 0.01, 0.04, 0.16, 0.64, 2.56]),
         'facilitation_amount': np.array([0.025, 0.05, 0.1, 0.2, 0.4]),
         'facilitation_recovery_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64]),
     }
     optimize_params = {
-        'mini_amplitude': (mini_amp_estimate, 0.1*mini_amp_estimate, 100*mini_amp_estimate),  # optimize in model
+        #'mini_amplitude': (mini_amp_estimate, 0.1*mini_amp_estimate, 100*mini_amp_estimate),  # optimize in model
     }
 
     # search_params = {

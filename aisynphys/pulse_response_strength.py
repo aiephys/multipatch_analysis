@@ -12,8 +12,8 @@ import pyqtgraph as pg
 
 from neuroanalysis.data import TSeries
 from neuroanalysis import filter
-from neuroanalysis.event_detection import exp_deconvolve, exp_reconvolve
-from neuroanalysis.fitting import fit_psp, Psp, SearchFit
+from neuroanalysis.event_detection import exp_deconvolve, exp_reconvolve, exp_deconv_psp_params
+from neuroanalysis.fitting import fit_psp, Psp, SearchFit, fit_scale_offset
 from neuroanalysis.baseline import float_mode
 
 from .database import default_db as db
@@ -84,7 +84,7 @@ def measure_response(rec, baseline_rec):
 
 
 def measure_deconvolved_response(response_rec, baseline_rec):
-    """Use exponential deconvolution and a gaussian fit to estimate the amplitude of a synaptic response.
+    """Use exponential deconvolution and a curve fit to estimate the amplitude of a synaptic response.
 
     Uses the known latency and kinetics of the synapse to constrain the fit.
     Optionally fit a baseline at the same time for noise measurement.
@@ -118,30 +118,74 @@ def measure_deconvolved_response(response_rec, baseline_rec):
             continue
             
         filtered = deconv_filter(data, None, tau=decay_tau, lowpass=lowpass, remove_artifacts=False, bsub=True)
-        filtered = filtered.time_slice(response_rec.latency-0.5e-3, response_rec.latency + rise_time)
         
-        # deconvolving a PSP-like shape yields a narrower PSP-like shape with lower rise power
-        psp = Psp()        
-        max_amp = filtered.data.max() - filtered.data.min()
+        # chop down to the minimum we need to fit the deconvolved event.
+        # there's a tradeoff here -- to much data and we risk incorporating nearby spontaneous events; too little
+        # data and we get more noise in the fit to baseline
+        filtered = filtered.time_slice(response_rec.latency-1e-3, response_rec.latency + rise_time + 1e-3)
         
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")    
-            fit = psp.fit(filtered.data, x=filtered.time_values, params={
-                'xoffset': (response_rec.latency, 'fixed'),
-                'yoffset': (0, 'fixed'),
-                'amp': (0, -max_amp, max_amp),
-                'rise_time': (0.2*rise_time, 0.1*rise_time, 0.4*rise_time),
-                'decay_tau': (0.4*rise_time, 0.15*rise_time, 0.8*rise_time),
-                'rise_power': (1, 'fixed'),
-            })
+        # Deconvolving a PSP-like shape yields a narrower PSP-like shape with lower rise power.
+        # Guess the deconvolved time constants:
+        dec_amp, dec_rise_time, dec_rise_power, dec_decay_tau = exp_deconv_psp_params(amp=1, rise_time=rise_time, decay_tau=decay_tau, rise_power=2)
+        amp_ratio = 1 / dec_amp
         
-        # reconvolve fit to measure amplitude
-        fit_ts = TSeries(fit.best_fit, time_values=filtered.time_values)
-        reconv = exp_reconvolve(fit_ts, tau=decay_tau)
-        if fit.best_values['amp'] > 0:
-            fit.reconvolved_amp = reconv.data.max() - reconv.data.min()
-        else:
-            fit.reconvolved_amp = reconv.data.min() - reconv.data.max()
+        psp = Psp()
+
+        # Need to measure amplitude of exp-deconvolved events; two methods to pick from here:
+        # 1) Direct curve fitting using the expected deconvolved rise/decay time constants. This
+        #    allows some wiggle room in latency, but produces a weird butterfly-shaped background noise distribution.
+        # 2) Analytically calculate the scale/offset of a fixed template. Uses a fixed latency, but produces
+        #    a nice, normal-looking background noise distribution.
+
+        # Measure amplitude of deconvolved event by curve fitting:
+        # with warnings.catch_warnings():
+        #     warnings.simplefilter("ignore")
+        #     max_amp = filtered.data.max() - filtered.data.min()
+        #     fit = psp.fit(filtered.data, x=filtered.time_values, params={
+        #         'xoffset': (response_rec.latency, response_rec.latency-0.2e-3, response_rec.latency+0.5e-3),
+        #         'yoffset': (0, 'fixed'),
+        #         'amp': (0, -max_amp, max_amp),
+        #         'rise_time': (dec_rise_time, 'fixed'),
+        #         'decay_tau': (dec_decay_tau, 'fixed'),
+        #         'rise_power': (dec_rise_power, 'fixed'),
+        #     })
+        # reconvolved_amp = fit.best_values['amp'] * amp_ratio
+        
+        # fit = {
+        #     'xoffset': fit.best_values['xoffset'],
+        #     'yoffset': fit.best_values['yoffset'],
+        #     'amp': fit.best_values['amp'],
+        #     'rise_time': dec_rise_time,
+        #     'decay_tau': dec_decay_tau,
+        #     'rise_power': dec_rise_power,
+        #     'reconvolved_amp': reconvolved_amp,
+        # }
+
+        # Measure amplitude of deconvolved events by direct template match
+        template = psp.eval(
+            x=filtered.time_values, 
+            xoffset=response_rec.latency,
+            yoffset=0,
+            amp=1,
+            rise_time=dec_rise_time,
+            decay_tau=dec_decay_tau,
+            rise_power=dec_rise_power,
+        )
+        scale, offset = fit_scale_offset(filtered.data, template)
+
+        # calculate amplitude of reconvolved event -- tis is our best guess as to the
+        # actual event amplitude
+        reconvolved_amp = scale * amp_ratio
+        
+        fit = {
+            'xoffset': response_rec.latency,
+            'yoffset': offset,
+            'amp': scale,
+            'rise_time': dec_rise_time,
+            'decay_tau': dec_decay_tau,
+            'rise_power': 1,
+            'reconvolved_amp': reconvolved_amp,
+        }
         
         ret.append(fit)
         

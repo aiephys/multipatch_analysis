@@ -59,8 +59,11 @@ class PulseResponsePipelineModule(MultipatchPipelineModule):
             response_fit, baseline_fit = measure_response(rec, baseline_rec)
             response_dec_fit, baseline_dec_fit = measure_deconvolved_response(rec, baseline_rec)
             
-            new_rec = db.PulseResponseFit(pulse_response_id=rec.response_id)
-            for fit, prefix in [(response_fit, 'fit_'), (baseline_fit, 'baseline_fit_'), (response_dec_fit, 'dec_fit_'), (baseline_dec_fit, 'baseline_dec_fit_')]:
+            baseline_id = None if baseline_rec is None else baseline_rec.response_id
+            new_rec = db.PulseResponseFit(pulse_response_id=rec.response_id, baseline_id=baseline_id)
+            
+            # Psp fits
+            for fit, prefix in [(response_fit, 'fit_'), (baseline_fit, 'baseline_fit_')]:
                 if fit is None:
                     continue
                 for k in ['amp', 'yoffset', 'rise_time', 'decay_tau', 'exp_amp']:
@@ -69,9 +72,18 @@ class PulseResponsePipelineModule(MultipatchPipelineModule):
                     setattr(new_rec, prefix+k, fit.best_values[k])
                 setattr(new_rec, prefix+'latency', fit.best_values['xoffset'])
                 setattr(new_rec, prefix+'nrmse', fit.nrmse())
-                
-                if hasattr(fit, 'reconvolved_amp'):
-                    setattr(new_rec, prefix+'reconv_amp', fit.reconvolved_amp)
+
+            # Deconvolved fits
+            for fit, prefix in [(response_dec_fit, 'dec_fit_'), (baseline_dec_fit, 'baseline_dec_fit_')]:
+                if fit is None:
+                    continue
+                for k in ['amp', 'yoffset', 'rise_time', 'decay_tau', 'nrmse']:
+                    if k not in fit:
+                        continue
+                    setattr(new_rec, prefix+k, fit[k])
+                setattr(new_rec, prefix+'latency', fit['xoffset'])
+                setattr(new_rec, prefix+'reconv_amp', fit['reconvolved_amp'])
+
             session.add(new_rec)
             
             # keepalive; this loop can take a long time
