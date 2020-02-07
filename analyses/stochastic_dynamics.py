@@ -1,6 +1,6 @@
 # coding: utf8
 from __future__ import print_function, division
-import os, sys, pickle
+import os, sys, time, pickle, functools
 from collections import OrderedDict
 import numpy as np
 import numba
@@ -15,6 +15,22 @@ from aisynphys import config
 
 
 class StochasticReleaseModel(object):
+    """
+    
+    Parameters
+    ----------
+    params : dict
+        A dictionary of parameters specifying the behavior of the model:
+
+        - n_release_sites (int) : Number of synaptic release zones
+        - base_release_probability (float) : Resting-state synaptic release probability (0.0-1.0)
+        - mini_amplitude (float) : Mean PSP amplitude evoked by a single vesicle release
+        - mini_amplitude_stdev (float) : Stdev of PSP amplitude evoked from single releases
+        - vesicle_recovery_tau (float) : Time constant for vesicle replenishment ("typically in the order of seconds" accoring to Hennig 2013)
+        - facilitation_amount (float) : Release probability facilitation per spike (0.0-1.0)
+        - facilitation_recovery_tau (float) : Time constant for facilitated release probability to recover toward resting state
+        - measurement_stdev (float) : Extra variance in PSP amplitudes purely as a result of membrane noise / measurement error
+    """
     
     result_dtype = [
         ('spike_time', float),
@@ -39,26 +55,34 @@ class StochasticReleaseModel(object):
         'measurement_stdev',
     ]
         
-    def __init__(self):
+    def __init__(self, params):
+        for k in params:
+            if k not in self.param_names:
+                raise ValueError("Unknown parameter name %r" % k)
+        self.params = params
+
+        # How long to wait after a NaN event before the model begins accumulating likelihood values again
+        self.missing_event_penalty = 0.0
+
+    def optimize_mini_amplitude(self, spike_times, amplitudes):
+        """Given a set of spike times and amplitudes, optimize the mini_amplitude parameter
+        to produce the highest likelihood model.
         
-        # model parameters
-        self.n_release_sites = 20
-        self.base_release_probability = 0.5
+        Returns the output of measure_likelihood for the best model.
+        """
+        params = self.params.copy()
+
+        init_amp = estimate_mini_amplitude(amplitudes, params)
+        params['mini_amplitude'] = init_amp
+        init_result = self._measure_likelihood(spike_times, amplitudes, params)
+        ratio = np.nanmean(amplitudes) / np.nanmean(init_result['result']['expected_amplitude'])
+        init_amp *= ratio
+             
+        # self.params['mini_amplitude'] = params['mini_amplitude']
+        result = self.optimize(spike_times, amplitudes, optimize={'mini_amplitude': (init_amp, init_amp*0.1, init_amp*10)})
         
-        # mean and stdev of PSP amplitudes expected from a single vesicle release
-        self.mini_amplitude = 50e-6
-        self.mini_amplitude_stdev = 20e-6
-        
-        # time constant for vesicle replenishment
-        # "typically in the order of seconds" accoring to Hennig 2013
-        self.vesicle_recovery_tau = 500e-3
-        
-        # facilitation and recovery time constant
-        self.facilitation_amount = 0.1
-        self.facilitation_recovery_tau = 20e-3
-        
-        # extra variance in PSP amplitudes purely as a result of membrane noise / measurement error
-        self.measurement_stdev = 100e-6
+        result['optimization_info'] = {'init_amp': init_amp / ratio, 'ratio': ratio, 'corrected_amp': init_amp, 'init_likelihood': init_result['likelihood']}
+        return result
     
     def optimize(self, spike_times, amplitudes, optimize):
         """Optimize specific parameters to maximize the model likelihood.
@@ -75,15 +99,20 @@ class StochasticReleaseModel(object):
             NaN to indicate that the event should be ignored (usually because the spike could not be
             detected or the amplitude could not be measured). Any events within 10 seconds following
             a NaN will update the model as usual, but will not be included in the likelihood estimate.
-        optimize : dict
+        optimize : dict | callable
             A dictionary of {'parameter_name': (init, min, max)} that specifies model
-            parameters to be optimized. 
+            parameters to be optimized. Alternatively, this may be a function that accepts 
+            a dictionary of fixed model parameters and returns the dictionary of parameters
+            to be optimized, as described above.
         """
-        # print('----')
-        params = {name:getattr(self, name) for name in self.param_names}
+        params = self.params.copy()
+        if callable(optimize):
+            optimize = optimize(self, params)
+
         init = [val[0] for val in optimize.values()]
         bounds = [val[1:3] for val in optimize.values()]
         results = {}
+        
         def fn(x):
             opt_params = params.copy()
             for i,k in enumerate(optimize.keys()):
@@ -104,7 +133,10 @@ class StochasticReleaseModel(object):
             #method='COBYLA', options={'rhobeg': -100e-6}  # fast but oscillates, misses peak
             
         )
+        
         best_result = results[tuple(best.x.flatten())]
+        best_result['optimization_init'] = optimize
+        best_result['optimization_result'] = best
 
         # plot optimization route (for debugging)
         # x = [k[0] for k in results.keys()]
@@ -116,7 +148,7 @@ class StochasticReleaseModel(object):
         
         # update attributes with best result
         for i,k in enumerate(optimize.keys()):
-            setattr(self, k, best.x[i])
+            self.params[k] = best.x[i]
                     
         return best_result
     
@@ -143,34 +175,43 @@ class StochasticReleaseModel(object):
         post_spike_state:
             state variables immediately after each spike
         params : dict
-            A dictionary of parameters used to generate the model result (including any
-            optimized parameters)
+            A dictionary of parameters used to generate the model result
         """
-        params = {name:getattr(self, name) for name in self.param_names}
-        ret = self._measure_likelihood(spike_times, amplitudes, params)
+        ret = self._measure_likelihood(spike_times, amplitudes, self.params)
         return ret
         
     def _measure_likelihood(self, spike_times, amplitudes, params):
-        # How long to wait after a NaN event before the model begins accumulating likelihood values again
-        self.missing_event_penalty = 0.0
-
+        # prof = pg.debug.Profiler(disabled=True)
+        
         result = np.empty(len(spike_times), dtype=self.result_dtype)
         pre_spike_state = np.full(len(spike_times), np.nan, dtype=self.state_dtype)
         post_spike_state = np.full(len(spike_times), np.nan, dtype=self.state_dtype)
         
         
-        # state parameters:
+        # initialize state parameters:
         # available_vesicles is a float as a means of avoiding the need to model stochastic vesicle docking;
         # we just assume that recovery is a continuous process. (maybe we should just call this "neurotransmitter"
         # instead)
-        state = {
-            'available_vesicle': params['n_release_sites'],
-            'release_probability': params['base_release_probability'],
-        }
+        available_vesicle = params['n_release_sites']
+        release_probability = params['base_release_probability']
+        
         
         previous_t = spike_times[0]
         last_nan_time = -np.inf
-                
+        
+        # prof('init')
+
+        # unpack params for speed 
+        n_release_sites = params['n_release_sites']
+        base_release_probability = params['base_release_probability']
+        mini_amplitude = params['mini_amplitude']
+        mini_amplitude_stdev = params['mini_amplitude_stdev']
+        vesicle_recovery_tau = params['vesicle_recovery_tau']
+        facilitation_amount = params['facilitation_amount']
+        facilitation_recovery_tau = params['facilitation_recovery_tau']
+        measurement_stdev = params['measurement_stdev']
+
+        
         for i,t in enumerate(spike_times):
             amplitude = amplitudes[i]
             if np.isnan(amplitude):
@@ -182,43 +223,50 @@ class StochasticReleaseModel(object):
                 # recover vesicles up to the current timepoint
                 dt = t - previous_t
                 previous_t = t
-                v_recovery = np.exp(-dt / params['vesicle_recovery_tau'])
-                state['available_vesicle'] += (params['n_release_sites'] - state['available_vesicle']) * (1.0 - v_recovery)
-
-                # apply recovery from facilitation toward baseline release probability
-                rp = state['release_probability']
-                rp0 = params['base_release_probability']
-                f_recovery = np.exp(-dt / params['facilitation_recovery_tau'])
-                state['release_probability'] += (rp0 - rp) * (1.0 - f_recovery)
-                
-                # predict most likely amplitude for this spike (just for show)
-                expected_amplitude = state['available_vesicle'] * state['release_probability'] * params['mini_amplitude']
+   
+                # recover vesicles and release probability
+                # (in a separate function so it can be jit compiled)
+                available_vesicle, release_probability, expected_amplitude = _recover_state(
+                    dt, 
+                    vesicle_recovery_tau, 
+                    available_vesicle, 
+                    n_release_sites, 
+                    release_probability, 
+                    base_release_probability, 
+                    facilitation_recovery_tau, 
+                    mini_amplitude
+                )
                 
                 # record model state immediately before spike
-                for k in state:
-                    pre_spike_state[i][k] = state[k]
+                pre_spike_state[i]['available_vesicle'] = available_vesicle
+                pre_spike_state[i]['release_probability'] = release_probability
                     
                 # measure likelihood of seeing this response amplitude
                 if t - last_nan_time < self.missing_event_penalty:
                     # ignore likelihood for this event if it was too close to an unmeasurable response
                     likelihood = np.nan
                 else:
-                    likelihood = self.likelihood([amplitude], state, params)[0]
+                    # likelihood = self.likelihood([amplitude], state, params)[0]
+                    av = int(np.clip(np.round(available_vesicle), 0, n_release_sites))
+                    likelihood = release_likelihood(np.array([amplitude]), av, release_probability, mini_amplitude, mini_amplitude_stdev, measurement_stdev)[0]
+                # prof('likelihood')
                 
                 # release vesicles
                 # note: we allow available_vesicle to become negative because this helps to ensure
                 # that the overall likelihood will be low for such models
-                depleted_vesicle = amplitude / params['mini_amplitude']
-                state['available_vesicle'] -= depleted_vesicle
+                depleted_vesicle = amplitude / mini_amplitude
+                available_vesicle -= depleted_vesicle
 
                 # apply spike-induced facilitation in release probability
-                state['release_probability'] += (1.0 - state['release_probability']) * params['facilitation_amount']
+                release_probability += (1.0 - release_probability) * facilitation_amount
+                # prof('update state')
 
                 # record model state immediately after spike
-                for k in state:
-                    post_spike_state[i][k] = state[k]
+                post_spike_state[i]['available_vesicle'] = available_vesicle
+                post_spike_state[i]['release_probability'] = release_probability
+                # prof('record')
             
-            if np.isnan(state['available_vesicle']):
+            if np.isnan(available_vesicle):
                 raise Exception("NaNs where they shouldn't be")
             
             # record results
@@ -243,13 +291,34 @@ class StochasticReleaseModel(object):
         given a number of *available_vesicles*.
         """
         if params is None:
-            params = {name:getattr(self, name) for name in self.param_names}
+            params = self.params.copy()
         
-        available_vesicles = np.clip(np.round(state['available_vesicle']), 0, params['n_release_sites'])
-        return release_likelihood(amplitudes, int(available_vesicles), state['release_probability'], params['mini_amplitude'], params['mini_amplitude_stdev'], params['measurement_stdev'])
+        available_vesicles = int(np.clip(np.round(state['available_vesicle']), 0, params['n_release_sites']))
+        return release_likelihood(amplitudes, available_vesicles, state['release_probability'], params['mini_amplitude'], params['mini_amplitude_stdev'], params['measurement_stdev'])
 
 
-# @numba.jit
+@numba.jit(nopython=True)
+def _recover_state(dt, vesicle_recovery_tau, available_vesicle, n_release_sites, release_probability, base_release_probability, facilitation_recovery_tau, mini_amplitude):
+    # recover vesicles up to the current timepoint
+    v_recovery = np.exp(-dt / vesicle_recovery_tau)
+    available_vesicle += (n_release_sites - available_vesicle) * (1.0 - v_recovery)
+
+    # apply recovery from facilitation toward baseline release probability
+    f_recovery = np.exp(-dt / facilitation_recovery_tau)
+    release_probability += (base_release_probability - release_probability) * (1.0 - f_recovery)
+    # prof('recover facilitation')
+    
+    # predict most likely amplitude for this spike (just for show)
+    expected_amplitude = release_expectation_value(
+        max(0, available_vesicle),
+        release_probability,
+        mini_amplitude,
+    )
+
+    return available_vesicle, release_probability, expected_amplitude
+
+
+#@numba.jit(nopython=True)
 def release_likelihood(amplitudes, available_vesicles, release_probability, mini_amplitude, mini_amplitude_stdev, measurement_stdev):
     """Return a measure of the likelihood that a synaptic response will have certain amplitude(s),
     given the state parameters for the synapse.
@@ -287,15 +356,10 @@ def release_likelihood(amplitudes, available_vesicles, release_probability, mini
        function where µ = nR * mini_amplitude and σ = sqrt(mini_amplitude_stdev^2 * nR + measurement_stdev)
     3. The total likelihood is the sum of likelihoods for all possible values of nR.
     """
-    amplitudes = np.array(amplitudes)
-    
-    likelihood = np.zeros(len(amplitudes))
-    release_prob = stats.binom(available_vesicles, release_probability)
-    
     n_vesicles = np.arange(available_vesicles + 1)
     
     # probability of releasing n_vesicles given available_vesicles and release_probability
-    p_n = release_prob.pmf(n_vesicles)
+    p_n = binom_pmf_range(available_vesicles, release_probability, available_vesicles + 1)
     
     # expected amplitude for n_vesicles
     amp_mean = n_vesicles * mini_amplitude
@@ -312,10 +376,64 @@ def release_likelihood(amplitudes, available_vesicles, release_probability, mini
     return likelihood
 
 
+# def release_distribution(available_vesicles, release_probability, mini_amplitude, mini_amplitude_stdev, measurement_stdev):
+#     """Return the release amplitude distribution defined by the arguments.
+#     """
+#     # calculate positive and negate at the end if needed.
+#     sign = mini_amplitude / abs(mini_amplitude)
+#     mini_amplitude = abs(mini_amplitude)
+    
+#     mn = -measurement_stdev * 3
+#     mx = max(0, available_vesicles) * mini_amplitude + measurement_stdev * 3
+#     n_samp = int(max(0, available_vesicles) + 1) * 20
+#     amplitudes = np.linspace(mn, mx, n_samp)
+#     da = amplitudes[1] - amplitudes[0]
+#     return amplitudes * sign, release_likelihood(amplitudes, available_vesicles, release_probability, mini_amplitude, mini_amplitude_stdev, measurement_stdev) * da
+
+@numba.jit(nopython=True)
+def release_expectation_value(available_vesicles, release_probability, mini_amplitude):
+    """Return the expectation value for the release amplitude distribution defined by the arguments.
+    """
+    return binom_mean(available_vesicles, release_probability) * mini_amplitude
+   
+
+@numba.jit(nopython=True)
 def normal_pdf(mu, sigma, x):
     """Probability density function of normal distribution
     """
     return (1.0 / (2 * np.pi * sigma**2))**0.5 * np.exp(- (x-mu)**2 / (2 * sigma**2))
+
+#@functools.lru_cache(maxsize=2**14)
+@numba.jit(nopython=True)
+def binom_pmf_range(n, p, k):
+    """Probability mass function of binomial distribution
+    
+    Same as scipy.stats.binom(n, p).pmf(arange(k)), but much faster.
+    """
+    k = np.arange(k)
+    bc = np.array([binom_coeff(n,k1) for k1 in k])
+    return bc * p**k * (1-p)**(n-k)
+
+@numba.jit(nopython=True)
+def binom_coeff(n, k):
+    a, b = k, n-k
+    if a < b:
+        a, b = b, a
+    num = 1
+    for i in range(a+1, n+1):
+        num *= i
+    den = 1
+    for i in range(1, b+1):
+        den *= i
+    return num // den
+
+@numba.jit(nopython=True)
+def binom_mean(n, p):
+    """Expectation value of binomial distribution
+    
+    Same as stats.binom(n, p).mean(), but much-much faster.
+    """
+    return n * p
 
 
 class ModelResultWidget(QtGui.QWidget):
@@ -520,12 +638,42 @@ class ParameterSearchWidget(QtGui.QWidget):
         self.select_result(best)
         
     def selection_changed(self, slicer):
-        index = tuple(slicer.index().values())
+        index = self.selected_index()
         self.select_result(index, update_slicer=False)
 
+    def selected_index(self):
+        return tuple(self.slicer.index().values())
+
+    def get_result(self, index=None):
+        if index is None:
+            index = self.selected_index()
+        return self.param_space.result[index]
+
     def select_result(self, index, update_slicer=True):
-        result = self.param_space.result[index]
+        result = self.get_result(index)
         self.result_widget.set_result(result)
+        
+        print("----- Selected result: -----")
+        print("  model parameters:")
+        for k,v in result['params'].items():
+            print("    {:30s}: {}".format(k, v))
+        if 'optimization_init' in result:
+            print("  initial optimization parameters:")
+            for k,v in result['optimization_init'].items():
+                print("    {:30s}: {}".format(k, v))
+        if 'optimization_result' in result:
+            opt = result['optimization_result']
+            print("  optimization results:")
+            print("    nfev:", opt.nfev)
+            print("    message:", opt.message)
+            print("    success:", opt.success)
+            print("    status:", opt.status)
+        if 'optimization_info' in result:
+            print("  optimization info:")
+            for k,v in result['optimization_info'].items():
+                print("    {:30s}: {}".format(k, v))
+        print("  likelihood: {}".format(result['likelihood']))
+        
         if update_slicer:
             self.slicer.set_index(index)
 
@@ -563,6 +711,20 @@ def event_qc(events):
     mask = (events['ex_qc_pass'] == True)
     # mask = mask & (events['fit_nrmse'] < 0.6)
     return mask
+
+
+def estimate_mini_amplitude(amplitudes, params):
+    avg_amplitude = np.nanmean(amplitudes)
+    expected = release_expectation_value(params['n_release_sites'], params['base_release_probability'], 1)
+    init_amp = avg_amplitude / expected
+    
+    # takes care of cases where the first peak in the distribution is larger than any measured events;
+    # otherwise this case is very difficult to optimize
+    while abs(init_amp) > abs(avg_amplitude):
+        init_amp /= 2
+
+    return init_amp
+
 
 
 if __name__ == '__main__':
@@ -666,44 +828,42 @@ if __name__ == '__main__':
     amplitudes[missing_spike_mask] = np.nan
     print("%d good events to be analyzed" % np.isfinite(amplitudes).sum())
 
-    first_pulse_mask = events['pulse_number'] == 1
-    first_pulse_amps = amplitudes[first_pulse_mask]
-    first_pulse_stdev = np.nanstd(first_pulse_amps)
+    avg_amplitude = np.nanmean(amplitudes)
+    # first_pulse_mask = events['pulse_number'] == 1
+    # first_pulse_amps = amplitudes[first_pulse_mask]
+    # first_pulse_stdev = np.nanstd(first_pulse_amps)
+    # first_pulse_mean = np.nanmean(first_pulse_amps)
     
 
     def log_space(start, stop, steps):
         return start * (stop/start)**(np.arange(steps) / (steps-1))
-        
-    # n_release_sites = 20
-    # release_probability = 0.1
-    # max_events = -1
-    # mini_amp_estimate = pair.synapse.psp_amplitude / (n_release_sites * release_probability)
-    # params = {
-    #     'n_release_sites': np.array([1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64]),
-    #     'base_release_probability': log_space(0.01, 0.9, 21),
-    #     'mini_amplitude': log_space(0.001, 0.3, 21),
-    #     'mini_amplitude_stdev': log_space(0.0001, 0.1, 21),
-    #     'measurement_stdev': np.nanstd(bg_amplitudes),
-    #     'vesicle_recovery_tau': log_space(2e-5, 20, 21),
-    # }
 
-    # quick test
-    n_release_sites = 8
-    release_probability = 0.1
-    mini_amp_estimate = np.nanmean(first_pulse_amps) / (n_release_sites * release_probability)
+
+    n_release_sites = np.array([1, 2, 4, 8, 16, 32, 64])
+    release_probability = np.array([0.00625, 0.0125, 0.025, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0])
     search_params = {
-        'n_release_sites': np.array([1, 2, 4, 8, 16, 32, 64]),
-        'base_release_probability': np.array([0.00625, 0.0125, 0.025, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0]),
-        'mini_amplitude': mini_amp_estimate * 1.2**np.arange(-12, 24, 2),
-        'mini_amplitude_stdev': abs(mini_amp_estimate) * np.array([0.1, 0.33, 1]),
+        'n_release_sites': np.array([1, 3, 8, 24, 64]), #n_release_sites,
+        'base_release_probability': np.array([0.00625, 0.025, 0.1, 0.5, 1.0]), #release_probability,
+        #'mini_amplitude': avg_amplitude * 1.2**np.arange(-12, 24, 2),
+        'mini_amplitude_stdev': 7.7e-5, # abs(first_pulse_mean) * np.array([0.05, 0.1, 0.5]),
         'measurement_stdev': np.nanstd(bg_amplitudes),
-        'vesicle_recovery_tau': np.array([0.0025, 0.01, 0.04, 0.16, 0.64, 2.56]),
-        'facilitation_amount': np.array([0.025, 0.05, 0.1, 0.2, 0.4]),
-        'facilitation_recovery_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64]),
+        'vesicle_recovery_tau': np.array([0.0025, 0.01, 0.04, 0.16, 0.64, 2.56])[::4],
+        'facilitation_amount': np.array([0.025, 0.05, 0.1, 0.2, 0.4])[::4],
+        'facilitation_recovery_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64])[::4],
     }
-    optimize_params = {
-        #'mini_amplitude': (mini_amp_estimate, 0.1*mini_amp_estimate, 100*mini_amp_estimate),  # optimize in model
-    }
+    optimize_params = None 
+       
+    # def optimize_params(model, params):
+    #     init_amp = estimate_mini_amplitude(amplitudes, params)
+    #     params = params.copy()
+    #     params['mini_amplitude'] = init_amp
+    #     init_result = model._measure_likelihood(spike_times, amplitudes, params)
+    #     ratio = np.nanmean(amplitudes) / np.nanmean(init_result['result']['expected_amplitude'])
+    #     init_amp *= ratio
+        
+    #     return {
+    #         'mini_amplitude': (init_amp, None, None),
+    #     }
 
     # search_params = {
     #     'n_release_sites': np.array([1, 8, 32]),
@@ -727,17 +887,16 @@ if __name__ == '__main__':
 
     # 3. For each point in the parameter space, simulate a synapse and estimate the joint probability of the set of measured amplitudes
     
-    def run_model(params, optimize):
-        model = StochasticReleaseModel()
-        for k,v in params.items():
-            if not hasattr(model, k):
-                raise Exception("Invalid model parameter '%s'" % k)
-            setattr(model, k, v)
-        
-        if len(optimize) == 0:
-            result = model.measure_likelihood(spike_times[:args.max_events], amplitudes[:args.max_events])
+    def run_model(params, optimize=None):
+        model = StochasticReleaseModel(params)
+        spikes, amps = spike_times[:args.max_events], amplitudes[:args.max_events]
+        if optimize is None:
+            if 'mini_amplitude' not in params:
+                result = model.optimize_mini_amplitude(spikes, amps)
+            else:
+                result = model.measure_likelihood(spikes, amps)
         else:
-            result = model.optimize(spike_times[:args.max_events], amplitudes[:args.max_events], optimize)
+            result = model.optimize(spikes, amps, optimize)
         result['model'] = model
         return result
 
@@ -752,7 +911,21 @@ if __name__ == '__main__':
     else:
         print("cache miss:", cache_file)
         param_space = ParameterSpace(search_params)
+
+        # run once to jit-precompile before measuring preformance
+        run_model(param_space[(0,)*len(search_params)], optimize_params)
+
+        start = time.time()
+        import cProfile
+        # prof = cProfile.Profile()
+        # prof.enable()
+        
+        
         param_space.run(run_model, workers=args.workers, optimize=optimize_params)
+        # prof.disable()
+        print("Run time:", time.time() - start)
+        # prof.print_stats(sort='cumulative')
+   
     
         tmp = cache_file + '.tmp'
         pickle.dump(param_space, open(tmp, 'wb'))
@@ -760,8 +933,28 @@ if __name__ == '__main__':
 
 
     # 4. Visualize / characterize mapped parameter space. Somehow.
-    win = ParameterSearchWidget(param_space)
-    win.show()
+    if args.experiment_id2 is not None:
+        cache_file2 = "stochastic_cache/%s_%s_%s.pkl" % (args.experiment_id2, args.pre_cell_id2, args.post_cell_id2)
+        param_space2 = pickle.load(open(cache_file2, 'rb'))
+        
+        params = OrderedDict()
+        # params['synapse'] = [
+        #     '%s_%s_%s' % (args.experiment_id, args.pre_cell_id, args.post_cell_id),
+        #     '%s_%s_%s' % (args.experiment_id2, args.pre_cell_id2, args.post_cell_id2),
+        # ]
+        params['synapse'] = np.array([0, 1])
+        params.update(param_space2.params)
+        
+        combined_param_space = ParameterSpace(params)
+        
+        combined_param_space.result = np.stack([param_space.result, param_space2.result])
+        
+        win = ParameterSearchWidget(combined_param_space)
+        win.show()
+        
+    else:
+        win = ParameterSearchWidget(param_space)
+        win.show()
 
     if sys.flags.interactive == 0:
         app.exec_()
