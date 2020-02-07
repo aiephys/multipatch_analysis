@@ -224,43 +224,31 @@ class StochasticReleaseModel(object):
                 dt = t - previous_t
                 previous_t = t
    
-                # recover vesicles and release probability
+                # run model update
                 # (in a separate function so it can be jit compiled)
-                available_vesicle, release_probability, expected_amplitude = _recover_state(
-                    dt, 
-                    vesicle_recovery_tau, 
-                    available_vesicle, 
-                    n_release_sites, 
-                    release_probability, 
-                    base_release_probability, 
-                    facilitation_recovery_tau, 
-                    mini_amplitude
+                pre_available_vesicle, pre_release_probability, available_vesicle, release_probability, expected_amplitude, likelihood = _model_update(
+                    dt,
+                    amplitude,
+                    vesicle_recovery_tau,
+                    available_vesicle,
+                    n_release_sites,
+                    release_probability,
+                    base_release_probability,
+                    facilitation_amount,
+                    facilitation_recovery_tau,
+                    mini_amplitude,
+                    mini_amplitude_stdev,
+                    measurement_stdev
                 )
                 
-                # record model state immediately before spike
-                pre_spike_state[i]['available_vesicle'] = available_vesicle
-                pre_spike_state[i]['release_probability'] = release_probability
-                    
-                # measure likelihood of seeing this response amplitude
+                # ignore likelihood for this event if it was too close to an unmeasurable response
                 if t - last_nan_time < self.missing_event_penalty:
-                    # ignore likelihood for this event if it was too close to an unmeasurable response
                     likelihood = np.nan
-                else:
-                    # likelihood = self.likelihood([amplitude], state, params)[0]
-                    av = int(np.clip(np.round(available_vesicle), 0, n_release_sites))
-                    likelihood = release_likelihood(np.array([amplitude]), av, release_probability, mini_amplitude, mini_amplitude_stdev, measurement_stdev)[0]
-                # prof('likelihood')
-                
-                # release vesicles
-                # note: we allow available_vesicle to become negative because this helps to ensure
-                # that the overall likelihood will be low for such models
-                depleted_vesicle = amplitude / mini_amplitude
-                available_vesicle -= depleted_vesicle
 
-                # apply spike-induced facilitation in release probability
-                release_probability += (1.0 - release_probability) * facilitation_amount
-                # prof('update state')
-
+                # record model state immediately before spike
+                pre_spike_state[i]['available_vesicle'] = pre_available_vesicle
+                pre_spike_state[i]['release_probability'] = pre_release_probability
+                    
                 # record model state immediately after spike
                 post_spike_state[i]['available_vesicle'] = available_vesicle
                 post_spike_state[i]['release_probability'] = release_probability
@@ -298,7 +286,7 @@ class StochasticReleaseModel(object):
 
 
 @numba.jit(nopython=True)
-def _recover_state(dt, vesicle_recovery_tau, available_vesicle, n_release_sites, release_probability, base_release_probability, facilitation_recovery_tau, mini_amplitude):
+def _model_update(dt, amplitude, vesicle_recovery_tau, available_vesicle, n_release_sites, release_probability, base_release_probability, facilitation_amount, facilitation_recovery_tau, mini_amplitude, mini_amplitude_stdev, measurement_stdev):
     # recover vesicles up to the current timepoint
     v_recovery = np.exp(-dt / vesicle_recovery_tau)
     available_vesicle += (n_release_sites - available_vesicle) * (1.0 - v_recovery)
@@ -315,10 +303,29 @@ def _recover_state(dt, vesicle_recovery_tau, available_vesicle, n_release_sites,
         mini_amplitude,
     )
 
-    return available_vesicle, release_probability, expected_amplitude
+    pre_available_vesicle = available_vesicle
+    pre_release_probability = release_probability
+
+    # measure likelihood of seeing this response amplitude
+    av = max(0, min(n_release_sites, int(np.round(available_vesicle))))
+    likelihood = release_likelihood_scalar(amplitude, av, release_probability, mini_amplitude, mini_amplitude_stdev, measurement_stdev)
+    # prof('likelihood')
+    
+    # release vesicles
+    # note: we allow available_vesicle to become negative because this helps to ensure
+    # that the overall likelihood will be low for such models
+    depleted_vesicle = amplitude / mini_amplitude
+    available_vesicle -= depleted_vesicle
+
+    # apply spike-induced facilitation in release probability
+    release_probability += (1.0 - release_probability) * facilitation_amount
+    # prof('update state')
 
 
-#@numba.jit(nopython=True)
+    return pre_available_vesicle, pre_release_probability, available_vesicle, release_probability, expected_amplitude, likelihood
+
+
+@numba.jit(nopython=True)
 def release_likelihood(amplitudes, available_vesicles, release_probability, mini_amplitude, mini_amplitude_stdev, measurement_stdev):
     """Return a measure of the likelihood that a synaptic response will have certain amplitude(s),
     given the state parameters for the synapse.
@@ -356,6 +363,14 @@ def release_likelihood(amplitudes, available_vesicles, release_probability, mini
        function where µ = nR * mini_amplitude and σ = sqrt(mini_amplitude_stdev^2 * nR + measurement_stdev)
     3. The total likelihood is the sum of likelihoods for all possible values of nR.
     """
+    return np.array([
+        release_likelihood_scalar(amplitude, available_vesicles, release_probability, mini_amplitude, mini_amplitude_stdev, measurement_stdev) 
+        for amplitude in amplitudes])
+
+
+@numba.jit(nopython=True)
+def release_likelihood_scalar(amplitude, available_vesicles, release_probability, mini_amplitude, mini_amplitude_stdev, measurement_stdev):
+    """Same as release_likelihood, but optimized for a scalar amplitude argument"""
     n_vesicles = np.arange(available_vesicles + 1)
     
     # probability of releasing n_vesicles given available_vesicles and release_probability
@@ -368,10 +383,10 @@ def release_likelihood(amplitudes, available_vesicles, release_probability, mini
     amp_stdev = (mini_amplitude_stdev**2 * n_vesicles + measurement_stdev**2) ** 0.5
     
     # distributions of amplitudes expected for n_vesicles
-    amp_prob = p_n[None, :] * normal_pdf(amp_mean[None, :], amp_stdev[None, :], amplitudes[:, None])
+    amp_prob = p_n * normal_pdf(amp_mean, amp_stdev, amplitude)
     
     # sum all distributions across n_vesicles
-    likelihood = amp_prob.sum(axis=1)
+    likelihood = amp_prob.sum()
     
     return likelihood
 

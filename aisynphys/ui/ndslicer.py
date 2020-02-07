@@ -289,7 +289,8 @@ class Viewer(object):
         order = [axis_names.index(ax) for ax in self.selected_axes]
         if colormap_axis is not None:
             order.append(axis_names.index(colormap_axis.name))
-        data = data.transpose(np.argsort(order))
+        # data = data.transpose(np.argsort(order))
+        data = data.transpose(order)
         
         colormap = None if colormap_axis is None else colormap_axis.colors
         
