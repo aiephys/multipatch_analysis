@@ -16,7 +16,7 @@ PatchSeq = make_table(
     ('patchseq_hash', 'str', 'Hash of patchseq results from amplification and mapping used for updating', {'index': True}),
     # These values are pulled from amplification report
     ('result_BA', 'str', 'Pass/Fail', {'index': True}),
-    ('area_400_10000bp', 'float', 'Percentage (0-100) of amplified content in the 400-10,000 bp range which is an indication of intact RNA', {'index': True}),
+    ('area_400_10000bp', 'float', 'Area (0-1) of amplified content in the 400-10,000 bp range which is an indication of intact RNA', {'index': True}),
     ('picogreen_yield', 'float', '(pg/ul)', {'index': True}),
     # These values come from mapping report
     ('cluster_detail', 'str', 'Detailed name of last mapped cluster, for class-level nodes this a descriptive name', {'index': True}),
