@@ -74,7 +74,7 @@ class StochasticReleaseModel(object):
 
         init_amp = estimate_mini_amplitude(amplitudes, params)
         params['mini_amplitude'] = init_amp
-        init_result = self._measure_likelihood(spike_times, amplitudes, params)
+        init_result = self.measure_likelihood(spike_times, amplitudes, params)
         ratio = np.nanmean(amplitudes) / np.nanmean(init_result['result']['expected_amplitude'])
         init_amp *= ratio
              
@@ -117,7 +117,7 @@ class StochasticReleaseModel(object):
             opt_params = params.copy()
             for i,k in enumerate(optimize.keys()):
                 opt_params[k] = np.clip(x[i], *bounds[i])
-            res = self._measure_likelihood(spike_times, amplitudes, opt_params)
+            res = self.measure_likelihood(spike_times, amplitudes, opt_params)
             results[tuple(x)] = res
             # print(opt_params)
             # print(res['likelihood'])
@@ -152,7 +152,7 @@ class StochasticReleaseModel(object):
                     
         return best_result
     
-    def measure_likelihood(self, spike_times, amplitudes):
+    def measure_likelihood(self, spike_times, amplitudes, params=None):
         """Compute a measure of the likelihood that *times* and *amplitudes* could be generated
         by a synapse with the current dynamic parameters.
         
@@ -177,10 +177,11 @@ class StochasticReleaseModel(object):
         params : dict
             A dictionary of parameters used to generate the model result
         """
-        ret = self._measure_likelihood(spike_times, amplitudes, self.params)
-        return ret
-        
-    def _measure_likelihood(self, spike_times, amplitudes, params):
+        if params is None:
+            params = self.params
+
+        assert params['n_release_sites'] < 67, "For n_release_sites > 66 we need to use scipy.special.binom instead of the optimized binom_coeff"
+
         result = np.empty(len(spike_times), dtype=self.result_dtype)
         pre_spike_state = np.full(len(spike_times), np.nan, dtype=self.state_dtype)
         post_spike_state = np.full(len(spike_times), np.nan, dtype=self.state_dtype)
@@ -407,6 +408,8 @@ def release_expectation_value(available_vesicles, release_probability, mini_ampl
 @numba.jit(nopython=True)
 def normal_pdf(mu, sigma, x):
     """Probability density function of normal distribution
+    
+    Same as scipy.stats.norm(mu, sigma).pdf(x)
     """
     return (1.0 / (2 * np.pi * sigma**2))**0.5 * np.exp(- (x-mu)**2 / (2 * sigma**2))
 
@@ -421,18 +424,19 @@ def binom_pmf_range(n, p, k):
     bc = np.array([binom_coeff(n,k1) for k1 in k])
     return bc * p**k * (1-p)**(n-k)
 
+
+_binom_coeff_cache = np.fromfunction(scipy.special.binom, (67, 67)).astype(int)
+
 @numba.jit(nopython=True)
 def binom_coeff(n, k):
-    a, b = k, n-k
-    if a < b:
-        a, b = b, a
-    num = 1
-    for i in range(a+1, n+1):
-        num *= i
-    den = 1
-    for i in range(1, b+1):
-        den *= i
-    return num // den
+    """Binomial coefficient: n! / (k! (n-k)!)
+    
+    Same as scipy.special.binom, but much faster and limited to n < 67.
+    """
+    # note: one cold imagine writing an optimized binomial coefficient function that
+    # is not limited to n < 67, but having to look out for integer overflows slows us down.
+    return _binom_coeff_cache[n, k]
+
 
 @numba.jit(nopython=True)
 def binom_mean(n, p):
@@ -851,40 +855,14 @@ if __name__ == '__main__':
     search_params = {
         'n_release_sites': n_release_sites,
         'base_release_probability': release_probability,
-        #'mini_amplitude': avg_amplitude * 1.2**np.arange(-12, 24, 2),
+        #'mini_amplitude': avg_amplitude * 1.2**np.arange(-12, 24, 2),  # optimized by model
         'mini_amplitude_stdev': abs(avg_amplitude) * np.array([0.05, 0.1, 0.5]),
         'measurement_stdev': np.nanstd(bg_amplitudes),
         'vesicle_recovery_tau': np.array([0.0025, 0.01, 0.04, 0.16, 0.64, 2.56]),
         'facilitation_amount': np.array([0.025, 0.05, 0.1, 0.2, 0.4]),
         'facilitation_recovery_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64]),
     }
-    optimize_params = None 
        
-    # def optimize_params(model, params):
-    #     init_amp = estimate_mini_amplitude(amplitudes, params)
-    #     params = params.copy()
-    #     params['mini_amplitude'] = init_amp
-    #     init_result = model._measure_likelihood(spike_times, amplitudes, params)
-    #     ratio = np.nanmean(amplitudes) / np.nanmean(init_result['result']['expected_amplitude'])
-    #     init_amp *= ratio
-        
-    #     return {
-    #         'mini_amplitude': (init_amp, None, None),
-    #     }
-
-    # search_params = {
-    #     'n_release_sites': np.array([1, 8, 32]),
-    #     'base_release_probability': np.array([0.001, 0.05, 0.5]),
-    #     # 'mini_amplitude': mini_amp_estimate * 1.2**np.arange(-12, 24, 2),
-    #     'mini_amplitude_stdev': mini_amp_estimate, # * 0.2 * 1.2**np.arange(-12, 36, 8),
-    #     'measurement_stdev': np.nanstd(bg_amplitudes),
-    #     'vesicle_recovery_tau': np.array([0.0025]),
-    #     'facilitation_amount': np.array([0.025]),
-    #     'facilitation_recovery_tau': np.array([0.32]),
-    # }
-    # optimize_params = {
-    #     'mini_amplitude': (mini_amp_estimate, 0.1*mini_amp_estimate, 100*mini_amp_estimate),  # optimize in model
-    # }
     
     for k,v in search_params.items():
         if np.isscalar(v):
@@ -893,17 +871,13 @@ if __name__ == '__main__':
             assert not np.any(np.isnan(v)), k
 
     # 3. For each point in the parameter space, simulate a synapse and estimate the joint probability of the set of measured amplitudes
+
+    trunc_spike_times = spike_times[:args.max_events]
+    trunc_amplitudes = amplitudes[:args.max_events]
     
-    def run_model(params, optimize=None):
+    def run_model(params):
         model = StochasticReleaseModel(params)
-        spikes, amps = spike_times[:args.max_events], amplitudes[:args.max_events]
-        if optimize is None:
-            if 'mini_amplitude' not in params:
-                result = model.optimize_mini_amplitude(spikes, amps)
-            else:
-                result = model.measure_likelihood(spikes, amps)
-        else:
-            result = model.optimize(spikes, amps, optimize)
+        result = model.optimize_mini_amplitude(trunc_spike_times, trunc_amplitudes)
         result['model'] = model
         return result
 
@@ -920,7 +894,7 @@ if __name__ == '__main__':
         param_space = ParameterSpace(search_params)
 
         # run once to jit-precompile before measuring preformance
-        run_model(param_space[(0,)*len(search_params)], optimize_params)
+        run_model(param_space[(0,)*len(search_params)])
 
         start = time.time()
         import cProfile
@@ -928,7 +902,7 @@ if __name__ == '__main__':
         # prof.enable()
         
         
-        param_space.run(run_model, workers=args.workers, optimize=optimize_params)
+        param_space.run(run_model, workers=args.workers)
         # prof.disable()
         print("Run time:", time.time() - start)
         # prof.print_stats(sort='cumulative')
