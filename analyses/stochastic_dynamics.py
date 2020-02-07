@@ -79,7 +79,7 @@ class StochasticReleaseModel(object):
         init_amp *= ratio
              
         # self.params['mini_amplitude'] = params['mini_amplitude']
-        result = self.optimize(spike_times, amplitudes, optimize={'mini_amplitude': (init_amp, init_amp*0.1, init_amp*10)})
+        result = self.optimize(spike_times, amplitudes, optimize={'mini_amplitude': (init_amp, init_amp*0.01, init_amp*100)})
         
         result['optimization_info'] = {'init_amp': init_amp / ratio, 'ratio': ratio, 'corrected_amp': init_amp, 'init_likelihood': init_result['likelihood']}
         return result
@@ -110,13 +110,13 @@ class StochasticReleaseModel(object):
             optimize = optimize(self, params)
 
         init = [val[0] for val in optimize.values()]
-        bounds = [val[1:3] for val in optimize.values()]
+        bounds = [sorted(val[1:3]) for val in optimize.values()]
         results = {}
         
         def fn(x):
             opt_params = params.copy()
             for i,k in enumerate(optimize.keys()):
-                opt_params[k] = x[i]
+                opt_params[k] = np.clip(x[i], *bounds[i])
             res = self._measure_likelihood(spike_times, amplitudes, opt_params)
             results[tuple(x)] = res
             # print(opt_params)
@@ -240,6 +240,8 @@ class StochasticReleaseModel(object):
                     mini_amplitude_stdev,
                     measurement_stdev
                 )
+                
+                assert np.isfinite(available_vesicle)
                 
                 # ignore likelihood for this event if it was too close to an unmeasurable response
                 if t - last_nan_time < self.missing_event_penalty:
@@ -857,14 +859,14 @@ if __name__ == '__main__':
     n_release_sites = np.array([1, 2, 4, 8, 16, 32, 64])
     release_probability = np.array([0.00625, 0.0125, 0.025, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0])
     search_params = {
-        'n_release_sites': np.array([1, 3, 8, 24, 64]), #n_release_sites,
-        'base_release_probability': np.array([0.00625, 0.025, 0.1, 0.5, 1.0]), #release_probability,
+        'n_release_sites': n_release_sites,
+        'base_release_probability': release_probability,
         #'mini_amplitude': avg_amplitude * 1.2**np.arange(-12, 24, 2),
-        'mini_amplitude_stdev': 7.7e-5, # abs(first_pulse_mean) * np.array([0.05, 0.1, 0.5]),
+        'mini_amplitude_stdev': abs(avg_amplitude) * np.array([0.05, 0.1, 0.5]),
         'measurement_stdev': np.nanstd(bg_amplitudes),
-        'vesicle_recovery_tau': np.array([0.0025, 0.01, 0.04, 0.16, 0.64, 2.56])[::4],
-        'facilitation_amount': np.array([0.025, 0.05, 0.1, 0.2, 0.4])[::4],
-        'facilitation_recovery_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64])[::4],
+        'vesicle_recovery_tau': np.array([0.0025, 0.01, 0.04, 0.16, 0.64, 2.56]),
+        'facilitation_amount': np.array([0.025, 0.05, 0.1, 0.2, 0.4]),
+        'facilitation_recovery_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64]),
     }
     optimize_params = None 
        
