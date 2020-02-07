@@ -181,90 +181,20 @@ class StochasticReleaseModel(object):
         return ret
         
     def _measure_likelihood(self, spike_times, amplitudes, params):
-        # prof = pg.debug.Profiler(disabled=True)
-        
         result = np.empty(len(spike_times), dtype=self.result_dtype)
         pre_spike_state = np.full(len(spike_times), np.nan, dtype=self.state_dtype)
         post_spike_state = np.full(len(spike_times), np.nan, dtype=self.state_dtype)
         
+        self._run_model(
+            spike_times=spike_times, 
+            amplitudes=amplitudes, 
+            result=result, 
+            pre_spike_state=pre_spike_state, 
+            post_spike_state=post_spike_state, 
+            missing_event_penalty=self.missing_event_penalty,
+            **params,
+        )
         
-        # initialize state parameters:
-        # available_vesicles is a float as a means of avoiding the need to model stochastic vesicle docking;
-        # we just assume that recovery is a continuous process. (maybe we should just call this "neurotransmitter"
-        # instead)
-        available_vesicle = params['n_release_sites']
-        release_probability = params['base_release_probability']
-        
-        
-        previous_t = spike_times[0]
-        last_nan_time = -np.inf
-        
-        # prof('init')
-
-        # unpack params for speed 
-        n_release_sites = params['n_release_sites']
-        base_release_probability = params['base_release_probability']
-        mini_amplitude = params['mini_amplitude']
-        mini_amplitude_stdev = params['mini_amplitude_stdev']
-        vesicle_recovery_tau = params['vesicle_recovery_tau']
-        facilitation_amount = params['facilitation_amount']
-        facilitation_recovery_tau = params['facilitation_recovery_tau']
-        measurement_stdev = params['measurement_stdev']
-
-        
-        for i,t in enumerate(spike_times):
-            amplitude = amplitudes[i]
-            if np.isnan(amplitude):
-                expected_amplitude = np.nan
-                likelihood = np.nan
-                last_nan_time = t
-
-            else:
-                # recover vesicles up to the current timepoint
-                dt = t - previous_t
-                previous_t = t
-   
-                # run model update
-                # (in a separate function so it can be jit compiled)
-                pre_available_vesicle, pre_release_probability, available_vesicle, release_probability, expected_amplitude, likelihood = _model_update(
-                    dt,
-                    amplitude,
-                    vesicle_recovery_tau,
-                    available_vesicle,
-                    n_release_sites,
-                    release_probability,
-                    base_release_probability,
-                    facilitation_amount,
-                    facilitation_recovery_tau,
-                    mini_amplitude,
-                    mini_amplitude_stdev,
-                    measurement_stdev
-                )
-                
-                assert np.isfinite(available_vesicle)
-                
-                # ignore likelihood for this event if it was too close to an unmeasurable response
-                if t - last_nan_time < self.missing_event_penalty:
-                    likelihood = np.nan
-
-                # record model state immediately before spike
-                pre_spike_state[i]['available_vesicle'] = pre_available_vesicle
-                pre_spike_state[i]['release_probability'] = pre_release_probability
-                    
-                # record model state immediately after spike
-                post_spike_state[i]['available_vesicle'] = available_vesicle
-                post_spike_state[i]['release_probability'] = release_probability
-                # prof('record')
-            
-            if np.isnan(available_vesicle):
-                raise Exception("NaNs where they shouldn't be")
-            
-            # record results
-            result[i]['spike_time'] = t
-            result[i]['amplitude'] = amplitude
-            result[i]['expected_amplitude'] = expected_amplitude
-            result[i]['likelihood'] = likelihood
-            
         # scalar representation of overall likelihood
         likelihood = np.nanmean(np.log(result['likelihood'] + 0.1))
         
@@ -287,44 +217,104 @@ class StochasticReleaseModel(object):
         return release_likelihood(amplitudes, available_vesicles, state['release_probability'], params['mini_amplitude'], params['mini_amplitude_stdev'], params['measurement_stdev'])
 
 
-@numba.jit(nopython=True)
-def _model_update(dt, amplitude, vesicle_recovery_tau, available_vesicle, n_release_sites, release_probability, base_release_probability, facilitation_amount, facilitation_recovery_tau, mini_amplitude, mini_amplitude_stdev, measurement_stdev):
-    # recover vesicles up to the current timepoint
-    v_recovery = np.exp(-dt / vesicle_recovery_tau)
-    available_vesicle += (n_release_sites - available_vesicle) * (1.0 - v_recovery)
+    @staticmethod
+    @numba.jit(nopython=True)
+    def _run_model( spike_times, 
+                    amplitudes,
+                    result,
+                    pre_spike_state,
+                    post_spike_state, 
+                    missing_event_penalty,
+                    n_release_sites,
+                    base_release_probability,
+                    mini_amplitude,
+                    mini_amplitude_stdev,
+                    vesicle_recovery_tau,
+                    facilitation_amount,
+                    facilitation_recovery_tau,
+                    measurement_stdev,
+                    ):
 
-    # apply recovery from facilitation toward baseline release probability
-    f_recovery = np.exp(-dt / facilitation_recovery_tau)
-    release_probability += (base_release_probability - release_probability) * (1.0 - f_recovery)
-    # prof('recover facilitation')
-    
-    # predict most likely amplitude for this spike (just for show)
-    expected_amplitude = release_expectation_value(
-        max(0, available_vesicle),
-        release_probability,
-        mini_amplitude,
-    )
+        # initialize state parameters:
+        # available_vesicles is a float as a means of avoiding the need to model stochastic vesicle docking;
+        # we just assume that recovery is a continuous process. (maybe we should just call this "neurotransmitter"
+        # instead)
+        available_vesicle = n_release_sites
+        release_probability = base_release_probability
+        
+        previous_t = spike_times[0]
+        last_nan_time = -np.inf
 
-    pre_available_vesicle = available_vesicle
-    pre_release_probability = release_probability
+        for i,t in enumerate(spike_times):
+            amplitude = amplitudes[i]
+            if np.isnan(amplitude):
+                expected_amplitude = np.nan
+                likelihood = np.nan
+                last_nan_time = t
 
-    # measure likelihood of seeing this response amplitude
-    av = max(0, min(n_release_sites, int(np.round(available_vesicle))))
-    likelihood = release_likelihood_scalar(amplitude, av, release_probability, mini_amplitude, mini_amplitude_stdev, measurement_stdev)
-    # prof('likelihood')
-    
-    # release vesicles
-    # note: we allow available_vesicle to become negative because this helps to ensure
-    # that the overall likelihood will be low for such models
-    depleted_vesicle = amplitude / mini_amplitude
-    available_vesicle -= depleted_vesicle
+            else:
+                # recover vesicles up to the current timepoint
+                dt = t - previous_t
+                previous_t = t
 
-    # apply spike-induced facilitation in release probability
-    release_probability += (1.0 - release_probability) * facilitation_amount
-    # prof('update state')
+                # recover vesicles up to the current timepoint
+                v_recovery = np.exp(-dt / vesicle_recovery_tau)
+                available_vesicle += (n_release_sites - available_vesicle) * (1.0 - v_recovery)
 
+                # apply recovery from facilitation toward baseline release probability
+                f_recovery = np.exp(-dt / facilitation_recovery_tau)
+                release_probability += (base_release_probability - release_probability) * (1.0 - f_recovery)
+                # prof('recover facilitation')
+                
+                # predict most likely amplitude for this spike (just for show)
+                expected_amplitude = release_expectation_value(
+                    max(0, available_vesicle),
+                    release_probability,
+                    mini_amplitude,
+                )
 
-    return pre_available_vesicle, pre_release_probability, available_vesicle, release_probability, expected_amplitude, likelihood
+                pre_available_vesicle = available_vesicle
+                pre_release_probability = release_probability
+
+                # measure likelihood of seeing this response amplitude
+                av = max(0, min(n_release_sites, int(np.round(available_vesicle))))
+                likelihood = release_likelihood_scalar(amplitude, av, release_probability, mini_amplitude, mini_amplitude_stdev, measurement_stdev)
+                # prof('likelihood')
+                assert likelihood > 0
+                
+                # release vesicles
+                # note: we allow available_vesicle to become negative because this helps to ensure
+                # that the overall likelihood will be low for such models
+                depleted_vesicle = amplitude / mini_amplitude
+                available_vesicle -= depleted_vesicle
+
+                # apply spike-induced facilitation in release probability
+                release_probability += (1.0 - release_probability) * facilitation_amount
+                # prof('update state')
+                
+                assert np.isfinite(available_vesicle)
+                
+                # ignore likelihood for this event if it was too close to an unmeasurable response
+                if t - last_nan_time < missing_event_penalty:
+                    likelihood = np.nan
+
+                # record model state immediately before spike
+                pre_spike_state[i]['available_vesicle'] = pre_available_vesicle
+                pre_spike_state[i]['release_probability'] = pre_release_probability
+                    
+                # record model state immediately after spike
+                post_spike_state[i]['available_vesicle'] = available_vesicle
+                post_spike_state[i]['release_probability'] = release_probability
+                # prof('record')
+            
+            if np.isnan(available_vesicle):
+                raise Exception("NaNs where they shouldn't be")
+            
+            # record results
+            result[i]['spike_time'] = t
+            result[i]['amplitude'] = amplitude
+            result[i]['expected_amplitude'] = expected_amplitude
+            result[i]['likelihood'] = likelihood
 
 
 @numba.jit(nopython=True)
