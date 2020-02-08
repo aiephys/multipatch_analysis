@@ -930,7 +930,7 @@ if __name__ == '__main__':
         params['synapse'] = np.array([0, 1])
         params.update(param_space2.params)
         
-        space = ParameterSpace(params)
+        param_space = ParameterSpace(params)
         
         param_space.result = np.stack([param_space1.result, param_space2.result])
     
@@ -956,6 +956,8 @@ if __name__ == '__main__':
     
     # tur on max projection for all parameters by default
     for ch in win.slicer.params.child('max project'):
+        if ch.name() == 'synapse':
+            continue
         ch.setValue(True)
     
     max_like = win.results.max()

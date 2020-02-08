@@ -193,6 +193,8 @@ class MultiAxisParam(pg.parametertree.types.GroupParameter):
 
     def axes_changed(self, param, changes):
         axes = [ch.value() for ch in param.children()]
+        if len(axes) == 2 and axes[0] == axes[1]:
+            return
         param.viewer.set_selected_axes(axes)
 
 
