@@ -75,8 +75,12 @@ class StochasticReleaseModel(object):
         init_amp = estimate_mini_amplitude(amplitudes, params)
         params['mini_amplitude'] = init_amp
         init_result = self.measure_likelihood(spike_times, amplitudes, params)
-        ratio = np.nanmean(amplitudes) / np.nanmean(init_result['result']['expected_amplitude'])
+        mean_amp = np.nanmean(amplitudes)
+        ratio = mean_amp / np.nanmean(init_result['result']['expected_amplitude'])
         init_amp *= ratio
+        
+        # in some cases, init_amp is way too large; force these back down:
+        init_amp = min(init_amp, mean_amp) if mean_amp > 0 else max(init_amp, mean_amp)
              
         # self.params['mini_amplitude'] = params['mini_amplitude']
         result = self.optimize(spike_times, amplitudes, optimize={'mini_amplitude': (init_amp, init_amp*0.01, init_amp*100)})
@@ -912,9 +916,9 @@ if __name__ == '__main__':
         pickle.dump(param_space, open(tmp, 'wb'))
         os.rename(tmp, cache_file)
 
-
-    # 4. Visualize / characterize mapped parameter space. Somehow.
+    # if a second experiment was specified, build a combined parameter space
     if args.experiment_id2 is not None:
+        param_space1 = param_space
         cache_file2 = "stochastic_cache/%s_%s_%s.pkl" % (args.experiment_id2, args.pre_cell_id2, args.post_cell_id2)
         param_space2 = pickle.load(open(cache_file2, 'rb'))
         
@@ -926,16 +930,38 @@ if __name__ == '__main__':
         params['synapse'] = np.array([0, 1])
         params.update(param_space2.params)
         
-        combined_param_space = ParameterSpace(params)
+        space = ParameterSpace(params)
         
-        combined_param_space.result = np.stack([param_space.result, param_space2.result])
+        param_space.result = np.stack([param_space1.result, param_space2.result])
+    
+    # 4. Visualize / characterize mapped parameter space. Somehow.
         
-        win = ParameterSearchWidget(combined_param_space)
-        win.show()
+    win = ParameterSearchWidget(param_space)
+            
+    # set up a few default 2D slicer views
+    v1 = win.slicer.params.child('2D views').addNew()
+    v1['axis 0'] = 'n_release_sites'
+    v1['axis 1'] = 'base_release_probability'
+    v2 = win.slicer.params.child('2D views').addNew()
+    v2['axis 0'] = 'vesicle_recovery_tau'
+    v2['axis 1'] = 'facilitation_recovery_tau'
+    win.slicer.dockarea.moveDock(v2.viewer.dock, 'bottom', v1.viewer.dock)
+    v3 = win.slicer.params.child('2D views').addNew()
+    v3['axis 0'] = 'vesicle_recovery_tau'
+    v3['axis 1'] = 'base_release_probability'
+    v4 = win.slicer.params.child('2D views').addNew()
+    v4['axis 0'] = 'facilitation_amount'
+    v4['axis 1'] = 'facilitation_recovery_tau'
+    win.slicer.dockarea.moveDock(v4.viewer.dock, 'bottom', v3.viewer.dock)
+    
+    # tur on max projection for all parameters by default
+    for ch in win.slicer.params.child('max project'):
+        ch.setValue(True)
+    
+    max_like = win.results.max()
+    win.slicer.histlut.setLevels(max_like * 0.95, max_like)
         
-    else:
-        win = ParameterSearchWidget(param_space)
-        win.show()
+    win.show()
 
     if sys.flags.interactive == 0:
         app.exec_()
