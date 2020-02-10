@@ -103,6 +103,8 @@ class PatchSeqPipelineModule(MultipatchPipelineModule):
                         if data is not None:
                             if col_name == 'meta':
                                 data = {'amplification_comments': data}
+                            if col_name == 'genes_detected':
+                                data = int(data)
                             results[col_name] = data
 
                     # Write new record to DB

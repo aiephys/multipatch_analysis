@@ -39,7 +39,7 @@ PatchSeq = make_table(
     ('tree_third_cluster', 'str', 'Third mapping cluster based on Tree method', {'index': True}),
     ('tree_third_score', 'float', 'Mapping score of third cluster (0-1)', {'index': True}),
     ('tree_call', 'str', 'Tree mapping', {'index': True}),
-    ('genes_detected', 'str', 'Number of genes detected', {'index': True}),
+    ('genes_detected', 'int', 'Number of genes detected', {'index': True}),
 ])
 
 Cell.patch_seq = relationship(PatchSeq, back_populates="cell", cascade="delete", single_parent=True, uselist=False)
