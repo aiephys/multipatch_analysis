@@ -201,7 +201,7 @@ class StochasticReleaseModel(object):
         )
         
         # scalar representation of overall likelihood
-        likelihood = np.nanmean(np.log(result['likelihood'] + 0.1))
+        likelihood = np.exp(np.nanmean(np.log(result['likelihood'] + 0.1)))
         
         return {
             'result': result, 
