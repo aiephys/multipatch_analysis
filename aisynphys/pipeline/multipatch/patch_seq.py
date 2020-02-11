@@ -107,6 +107,10 @@ class PatchSeqPipelineModule(MultipatchPipelineModule):
                                 data = int(data)
                             results[col_name] = data
 
+                    tree_call = results.get('tree_call')
+                    if tree_call is not None and tree_call in ['Core', 'I1']:
+                        results['t_type'] = results['tree_first_cluster']
+
                     # Write new record to DB
                     patch_seq = db.PatchSeq(cell_id=cell.id, **results)
                     session.add(patch_seq)
