@@ -35,7 +35,7 @@ if __name__ == '__main__':
     stages = OrderedDict([
         ('backup_notes',        ('daily',  'pg_dump -d data_notes -h 10.128.36.109 -U postgres  > data_notes_backups/data_notes_%s.pgsql'%date, 'backup data notes DB')),
         ('sync',                ('daily',  'python util/sync_rigs_to_server.py', 'sync raw data to server')),
-        ('pipeline',            ('daily',  'python util/analysis_pipeline.py multipatch all --update', 'run analysis pipeline')),
+        ('pipeline',            ('daily',  'python util/analysis_pipeline.py multipatch all --update --retry', 'run analysis pipeline')),
         ('vacuum',              ('daily',  'python util/database.py --vacuum', 'vacuum database')),
         ('bake sqlite',         ('daily',  'python util/bake_sqlite.py small medium', 'bake sqlite')),
         ('bake sqlite full',    ('weekly', 'python util/bake_sqlite.py full', 'bake sqlite full')),

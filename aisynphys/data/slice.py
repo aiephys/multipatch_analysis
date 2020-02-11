@@ -88,7 +88,7 @@ class Slice(object):
         """The genotype string for this specimen.
         """
         if self._genotype is None:
-            gt_name = self.lims_record['genotype'].strip()
+            gt_name = self.lims_record['genotype']
             inj = self.injections
             if gt_name in (None, ''):
                 if inj is None:
@@ -96,7 +96,7 @@ class Slice(object):
                 else:
                     gt_parts = []
             else:
-                gt_parts = gt_name.split(';')
+                gt_parts = gt_name.strip().split(';')
                 
             if inj is not None:
                 gt_parts.extend(inj.strip().split(';'))

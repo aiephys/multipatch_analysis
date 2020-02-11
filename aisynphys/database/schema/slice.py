@@ -6,7 +6,7 @@ __all__ = ['Slice']
 Slice = make_table(name='slice', comment="All brain slices on which an experiment was attempted.", columns=[
     ('ext_id', 'str', 'Unique external ID for this slice', {'unique': True, 'index': True}),
     ('acq_timestamp', 'float', 'Creation timestamp for slice data acquisition folder.'),
-    ('species', 'str', 'Human | mouse (from LIMS)'),
+    ('species', 'str', 'human | mouse (from LIMS)'),
     ('date_of_birth', 'datetime', 'Date of birth for this specimen'),
     ('age', 'int', 'Specimen age (in days) at time of dissection (from LIMS)'),
     ('sex', 'str', 'Specimen sex ("M", "F", or "unknown"; from LIMS)'),
