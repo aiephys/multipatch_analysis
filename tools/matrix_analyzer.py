@@ -147,6 +147,21 @@ if __name__ == '__main__':
             {'target_layer': '6', 'cortical_layer': ('6', '6a', '6b'), 'display_names': ('', 'L6')},
         ]),
 
+        ('Layer 2/3 T-types', [
+            {'target_layer': '2/3', 't_type': 'L2/3 IT VISp Adamts2', 'display_names': ('L2/3 IT', 'Adamts2')},
+            {'target_layer': '2/3', 't_type': 'L2/3 IT VISp Rrad', 'display_names': ('L2/3 IT', 'Rrad')},
+            {'target_layer': '2/3', 't_type': 'L2/3 IT VISp Agmat', 'display_names': ('L2/3 IT', 'Agmat')},
+            {'target_layer': '2/3', 't_type': 'Pvalb Tpbg', 'display_names': ('Pvalb', 'Tpbg')},
+            {'target_layer': '2/3', 't_type': 'Pvalb Reln Itm2a', 'display_names': ('Pvalb', 'Reln Itm2a')},
+            {'target_layer': '2/3', 't_type': 'Pvalb Vipr2', 'display_names': ('Pvalb', 'Vipr2')},
+            {'target_layer': '2/3', 't_type': 'Sst Tac1 Htr1d', 'display_names': ('Sst', 'Tac1 Htr1d')},
+            {'target_layer': '2/3', 't_type': 'Sst Calb2 Pdlim5', 'display_names': ('Sst', 'Calb2 Pdlim5')},
+            {'target_layer': '2/3', 't_type': 'Vip Chat Htr1f', 'display_names': ('Vip', 'Chat Htr1f')},
+            {'target_layer': '2/3', 't_type': 'Vip Pygm C1ql1', 'display_names': ('Vip', 'Pygm C1ql1')},
+            {'target_layer': '2/3', 't_type': 'Vip Crispld2 Htr2c', 'display_names': ('Vip', 'Crispld2 Htr2c')},
+            {'target_layer': '2/3', 't_type': 'Vip Crispld2 Kcne4', 'display_names': ('Vip', 'Crispld2 Kcne4')},
+        ]),
+
         ('2P-Opto cre types', [
             {'cre_type':'ntsr1'},
             #{'cre_type':'unknown'},
