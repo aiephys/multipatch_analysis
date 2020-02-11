@@ -62,6 +62,9 @@ class CellClass(object):
         cre_type = self.criteria.get('cre_type')
         if cre_type is not None:
             name.append(str(cre_type))
+        t_type = self.criteria.get('t_type')
+        if t_type is not None:
+            name.append(str(t_type))
         
         return tuple(name)
 
@@ -83,7 +86,8 @@ class CellClass(object):
 
     def __contains__(self, cell):
         morpho = cell.morphology
-        objs = [cell, morpho]
+        patchseq = cell.patch_seq
+        objs = [cell, morpho, patchseq]
         for k, v in self.criteria.items():
             found_attr = False
             if isinstance(v, dict):

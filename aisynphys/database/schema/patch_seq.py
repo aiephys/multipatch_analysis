@@ -40,6 +40,7 @@ PatchSeq = make_table(
     ('tree_third_score', 'float', 'Mapping score of third cluster (0-1)', {'index': True}),
     ('tree_call', 'str', 'Tree mapping', {'index': True}),
     ('genes_detected', 'int', 'Number of genes detected', {'index': True}),
+    ('t_type', 'str', 'Transcriptomic type = tree_first_cluster if tree_call in [Core, I1]', {'index': True}),
 ])
 
 Cell.patch_seq = relationship(PatchSeq, back_populates="cell", cascade="delete", single_parent=True, uselist=False)
