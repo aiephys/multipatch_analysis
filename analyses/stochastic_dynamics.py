@@ -642,13 +642,15 @@ class ModelDisplayWidget(QtGui.QWidget):
         best = np.unravel_index(np.argmax(result_img), result_img.shape)
         self.select_result(best)
 
+        max_like = self.results.max()
+        
         # if results are combined across synapses, set up colors
         if 'synapse' in self.param_space.params:
             self.slicer.params['color axis', 'axis'] = 'synapse'
             syn_axis = list(self.param_space.params.keys()).index('synapse')
             max_img = np.array([result_img.take(i, axis=syn_axis).max() for i in range(result_img.shape[syn_axis])])
-            max_img = max_img.min() / max_img
             max_like = max_img.min()
+            max_img = max_img.min() / max_img
             syns = self.param_space.params['synapse']
             for i in syns:
                 c = pg.colorTuple(pg.intColor(i, len(syns)*1.2))
@@ -656,7 +658,6 @@ class ModelDisplayWidget(QtGui.QWidget):
                 self.slicer.params['color axis', 'colors', str(i)] = c
             
         # set histogram range
-        max_like = self.results.max()
         self.slicer.histlut.setLevels(max_like * 0.85, max_like)
 
     def selection_changed(self, slicer):
@@ -883,7 +884,7 @@ class StochasticModelRunner:
             'mini_amplitude_cv': np.array([0.05, 0.1, 0.2, 0.4, 0.8]),
             'measurement_stdev': np.nanstd(bg_amplitudes),
             'vesicle_recovery_tau': np.array([0.0025, 0.01, 0.04, 0.16, 0.64, 2.56]),
-            'facilitation_amount': np.array([0.0, 0.025, 0.05, 0.1, 0.2, 0.4]),
+            'facilitation_amount': np.array([0.0, 0.00625, 0.025, 0.05, 0.1, 0.2, 0.4]),
             'facilitation_recovery_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 1.28]),
         }
         
