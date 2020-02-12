@@ -16,7 +16,6 @@ class NDSlicer(QtGui.QWidget):
             {'axis_name': {'values': array}}
     """
     
-    
     selection_changing = QtCore.Signal(object)
     selection_changed = QtCore.Signal(object)
     
@@ -387,7 +386,8 @@ class TwoDViewer(Viewer, pg.GraphicsLayoutWidget):
             line.sigPositionChangeFinished.connect(self.line_move_finished)
 
     def set_data(self, data, axes):
-        self.data_bounds = (data.min(), data.max())
+        if data is not None:
+            self.data_bounds = (data.min(), data.max())
         Viewer.set_data(self, data, axes)
         
     def set_image_params(self, levels, lut):

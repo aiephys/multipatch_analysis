@@ -15,7 +15,18 @@ from aisynphys import config
 
 
 class StochasticReleaseModel(object):
-    """
+    """A model of stochastic synaptic release used for determining optimal model parameters that describe
+    empirically measured synaptic responses.
+    
+    Synaptic strength changes moment to moment based on the prior history of action potentials at 
+    the presynaptic terminal. Many models have been published previously that attempt to capture this relationship.
+    However, synaptic strength also depends on the synapse's prior history of vesicle release. This model uses
+    both spike timing and response amplitude to compare a series of evoked synaptic events against the distribution
+    of likely amplitudes predicted by the model.
+    
+    Usually, synaptic response data alone is not sufficient to fully constrain all parameters in a release model.
+    This model is intended to be used to search large paremeter spaces to determine the subspace of parameters
+    that are consistent with the measured data.
     
     Parameters
     ----------
@@ -451,7 +462,9 @@ def binom_mean(n, p):
     return n * p
 
 
-class ModelResultWidget(QtGui.QWidget):
+class ModelSingleResultWidget(QtGui.QWidget):
+    """Plots event amplitudes and distributions for a single stochastic model run.
+    """
     def __init__(self):
         QtGui.QWidget.__init__(self)
         self.layout = QtGui.QGridLayout()
@@ -477,7 +490,10 @@ class ModelResultWidget(QtGui.QWidget):
 
         self.amp_sample_values = np.linspace(-0.005, 0.005, 200)
 
-    def set_result(self, result):
+    def set_result(self, model_runner, result):
+        # re-run the model to get the complete results
+        result = model_runner.run_model(result['params'], full_result=True)
+        
         self.model = result['model']
         self.result = result['result']
         self.pre_state = result['pre_spike_state']
@@ -625,8 +641,8 @@ class ParameterSpace(object):
         return params
 
 
-class ParameterSearchWidget(QtGui.QWidget):
-    def __init__(self, param_space):
+class ModelDisplayWidget(QtGui.QWidget):
+    def __init__(self, model_runner):
         QtGui.QWidget.__init__(self)
         self.layout = QtGui.QGridLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
@@ -634,24 +650,52 @@ class ParameterSearchWidget(QtGui.QWidget):
         self.splitter = QtGui.QSplitter(QtCore.Qt.Vertical)
         self.layout.addWidget(self.splitter)
         
-        self.slicer = NDSlicer(param_space.axes())
+        self.slicer = NDSlicer(model_runner.param_space.axes())
         self.slicer.selection_changed.connect(self.selection_changed)
         self.splitter.addWidget(self.slicer)
         
-        self.result_widget = ModelResultWidget()
+        self.result_widget = ModelSingleResultWidget()
         self.splitter.addWidget(self.result_widget)
+
+        # set up a few default 2D slicer views
+        v1 = self.slicer.params.child('2D views').addNew()
+        v1['axis 0'] = 'n_release_sites'
+        v1['axis 1'] = 'base_release_probability'
+        v2 = self.slicer.params.child('2D views').addNew()
+        v2['axis 0'] = 'vesicle_recovery_tau'
+        v2['axis 1'] = 'facilitation_recovery_tau'
+        self.slicer.dockarea.moveDock(v2.viewer.dock, 'bottom', v1.viewer.dock)
+        v3 = self.slicer.params.child('2D views').addNew()
+        v3['axis 0'] = 'vesicle_recovery_tau'
+        v3['axis 1'] = 'base_release_probability'
+        v4 = self.slicer.params.child('2D views').addNew()
+        v4['axis 0'] = 'facilitation_amount'
+        v4['axis 1'] = 'facilitation_recovery_tau'
+        self.slicer.dockarea.moveDock(v4.viewer.dock, 'bottom', v3.viewer.dock)
         
-        self.param_space = param_space
+        # turn on max projection for all parameters by default
+        for ch in self.slicer.params.child('max project'):
+            if ch.name() == 'synapse':
+                continue
+            ch.setValue(True)
         
-        result_img = np.zeros(param_space.result.shape)
+        self.model_runner = model_runner
+        self.param_space = model_runner.param_space
+        
+        result_img = np.zeros(self.param_space.result.shape)
         for ind in np.ndindex(result_img.shape):
-            result_img[ind] = param_space.result[ind]['likelihood']
+            result_img[ind] = self.param_space.result[ind]['likelihood']
         self.slicer.set_data(result_img)
         self.results = result_img
         
+        # select best result
         best = np.unravel_index(np.argmax(result_img), result_img.shape)
         self.select_result(best)
-        
+
+        # set histogram range
+        max_like = self.results.max()
+        self.slicer.histlut.setLevels(max_like * 0.95, max_like)
+
     def selection_changed(self, slicer):
         index = self.selected_index()
         self.select_result(index, update_slicer=False)
@@ -666,7 +710,8 @@ class ParameterSearchWidget(QtGui.QWidget):
 
     def select_result(self, index, update_slicer=True):
         result = self.get_result(index)
-        self.result_widget.set_result(result)
+        result['params'].update(self.param_space[index])
+        self.result_widget.set_result(self.model_runner, result)
         
         print("----- Selected result: -----")
         print("  model parameters:")
@@ -742,6 +787,191 @@ def estimate_mini_amplitude(amplitudes, params):
 
 
 
+class StochasticModelRunner:
+    """Handles loading data for a synapse and executing the model across a parameter space.
+    """
+    def __init__(self, experiment_id, pre_cell_id, post_cell_id):
+        self.experiment_id = experiment_id
+        self.pre_cell_id = pre_cell_id
+        self.post_cell_id = post_cell_id
+        
+        self.max_events = None
+        
+        self._synapse_events = None
+        self._parameters = None
+        self._param_space = None
+
+    @property
+    def param_space(self):
+        """A ParameterSpace instance containing the model output over the entire parameter space.
+        """
+        if self._param_space is None:
+            self._param_space = self._generate_param_space()
+        return self._param_space
+
+    def _generate_param_space(self):
+        search_params = self.parameters
+        
+        param_space = ParameterSpace(search_params)
+
+        # run once to jit-precompile before measuring preformance
+        self.run_model(param_space[(0,)*len(search_params)])
+
+        start = time.time()
+        import cProfile
+        # prof = cProfile.Profile()
+        # prof.enable()
+        
+        param_space.run(self.run_model, workers=args.workers)
+        # prof.disable()
+        print("Run time:", time.time() - start)
+        # prof.print_stats(sort='cumulative')
+        
+        return param_space
+
+    def store_result(self, cache_file):    
+        tmp = cache_file + '.tmp'
+        pickle.dump(self.param_space, open(tmp, 'wb'))
+        os.rename(tmp, cache_file)
+
+    def load_result(self, cache_file):
+        self._param_space = pickle.load(open(cache_file, 'rb'))
+        
+    @property
+    def synapse_events(self):
+        """Tuple containing (spike_times, amplitudes, baseline_amps)
+        """
+        if self._synapse_events is None:
+            self._synapse_events = self._load_synapse_events()
+        return self._synapse_events
+
+    def _load_synapse_events(self):
+        session = db.session()
+
+        expt = db.experiment_from_ext_id(self.experiment_id, session=session)
+        pair = expt.pairs[(self.pre_cell_id, self.post_cell_id)]
+
+        syn_type = pair.synapse.synapse_type
+        print("Synapse type:", syn_type)
+
+        # 1. Get a list of all presynaptic spike times and the amplitudes of postsynaptic responses
+
+        events = event_query(pair, db, session).dataframe()
+        print("loaded %d events" % len(events))
+
+        rec_times = (events['rec_start_time'] - events['rec_start_time'].iloc[0]).dt.total_seconds().to_numpy()
+        spike_times = events['first_spike_time'].to_numpy() + rec_times
+
+        # any missing spike times get filled in with the average latency
+        missing_spike_mask = np.isnan(spike_times)
+        print("%d events missing spike times" % missing_spike_mask.sum())
+        avg_spike_latency = np.nanmedian(events['first_spike_time'] - events['onset_time'])
+        pulse_times = events['onset_time'] + avg_spike_latency + rec_times
+        spike_times[missing_spike_mask] = pulse_times[missing_spike_mask]
+        
+        # 2. Initialize model parameters:
+        #    - release model with depression, facilitation
+        #    - number of synapses, distribution of per-vesicle amplitudes estimated from first pulse CV
+        #    - measured distribution of background noise
+        #    - parameter space to be searched
+
+        amplitudes = events['dec_fit_reconv_amp'].to_numpy()
+        bg_amplitudes = events['baseline_dec_fit_reconv_amp'].to_numpy()
+
+        qc_mask = event_qc(events)
+        print("%d events passed qc" % qc_mask.sum())
+        amplitudes[~qc_mask] = np.nan
+        amplitudes[missing_spike_mask] = np.nan
+        print("%d good events to be analyzed" % np.isfinite(amplitudes).sum())
+
+        # first_pulse_mask = events['pulse_number'] == 1
+        # first_pulse_amps = amplitudes[first_pulse_mask]
+        # first_pulse_stdev = np.nanstd(first_pulse_amps)
+        # first_pulse_mean = np.nanmean(first_pulse_amps)
+        
+        if self.max_events is not None:
+            spike_times = spike_times[:self.max_events]
+            amplitudes = amplitudes[:self.max_events]
+        
+        return spike_times, amplitudes, bg_amplitudes
+
+    @property
+    def parameters(self):
+        """A structure defining the parameters to search.
+        """
+        if self._parameters is None:
+            self._parameters = self._generate_parameters()
+        return self._parameters  
+
+    def _generate_parameters(self):
+        spike_times, amplitudes, bg_amplitudes = self.synapse_events
+        
+        avg_amplitude = np.nanmean(amplitudes)
+
+        def log_space(start, stop, steps):
+            return start * (stop/start)**(np.arange(steps) / (steps-1))
+
+        n_release_sites = np.array([1, 2, 4, 8, 16, 32, 64])
+        release_probability = np.array([0.00625, 0.0125, 0.025, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0])
+        search_params = {
+            'n_release_sites': n_release_sites,
+            'base_release_probability': release_probability,
+            #'mini_amplitude': avg_amplitude * 1.2**np.arange(-12, 24, 2),  # optimized by model
+            'mini_amplitude_stdev': abs(avg_amplitude) * np.array([0.05, 0.1, 0.5]),
+            'measurement_stdev': np.nanstd(bg_amplitudes),
+            'vesicle_recovery_tau': np.array([0.0025, 0.01, 0.04, 0.16, 0.64, 2.56]),
+            'facilitation_amount': np.array([0.0, 0.025, 0.05, 0.1, 0.2, 0.4]),
+            'facilitation_recovery_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 1.28]),
+        }
+        
+        # sanity checking
+        for k,v in search_params.items():
+            if np.isscalar(v):
+                assert not np.isnan(v), k
+            else:
+                assert not np.any(np.isnan(v)), k
+
+        # 3. For each point in the parameter space, simulate a synapse and estimate the joint probability of the set of measured amplitudes
+        
+        print("Parameter space:")
+        for k, v in search_params.items():
+            print("   ", k, v)
+
+        return search_params
+
+    def run_model(self, params, full_result=False):
+        model = StochasticReleaseModel(params)
+        spike_times, amplitudes, bg = self.synapse_events
+        result = model.optimize_mini_amplitude(spike_times, amplitudes)
+        if full_result:
+            result['model'] = model
+            return result
+        else:
+            return {'likelihood': result['likelihood'], 'params': result['params']}
+
+
+class CombinedModelRunner:
+    def __init__(self, runners):
+        self.model_runners = runners
+        
+        params = OrderedDict()
+        # params['synapse'] = [
+        #     '%s_%s_%s' % (args.experiment_id, args.pre_cell_id, args.post_cell_id),
+        #     '%s_%s_%s' % (args.experiment_id2, args.pre_cell_id2, args.post_cell_id2),
+        # ]
+        params['synapse'] = np.arange(len(runners))
+        params.update(runners[0].param_space.params)
+        param_space = ParameterSpace(params)
+        param_space.result = np.stack([runner.param_space.result for runner in runners])
+        
+        self.param_space = param_space
+        
+    def run_model(self, params, full_result=False):
+        params = params.copy()
+        runner = self.model_runners[params.pop('synapse')]
+        return runner.run_model(params, full_result)
+
+
 if __name__ == '__main__':
     app = pg.mkQApp()
     if sys.flags.interactive == 1:
@@ -797,172 +1027,28 @@ if __name__ == '__main__':
     # pre_cell_id = int(sys.argv[2])
     # post_cell_id = int(sys.argv[3])
 
+    def load_experiment(experiment_id, pre_cell_id, post_cell_id):
+        print("Loading stochastic model for %s %s %s" % (experiment_id, pre_cell_id, post_cell_id))
 
-    expt_id = args.experiment_id
-    pre_cell_id = args.pre_cell_id
-    post_cell_id = args.post_cell_id
-
-    print("Running stochastic model for %s %s %s" % (expt_id, pre_cell_id, post_cell_id))
-
-    session = db.session()
-
-
-    expt = db.experiment_from_ext_id(expt_id, session=session)
-    pair = expt.pairs[(pre_cell_id, post_cell_id)]
-
-    syn_type = pair.synapse.synapse_type
-    print("Synapse type:", syn_type)
-
-    # 1. Get a list of all presynaptic spike times and the amplitudes of postsynaptic responses
-
-    events = event_query(pair, db, session).dataframe()
-    print("loaded %d events" % len(events))
-
-    rec_times = (events['rec_start_time'] - events['rec_start_time'].iloc[0]).dt.total_seconds().to_numpy()
-    spike_times = events['first_spike_time'].to_numpy() + rec_times
-
-    # any missing spike times get filled in with the average latency
-    missing_spike_mask = np.isnan(spike_times)
-    print("%d events missing spike times" % missing_spike_mask.sum())
-    avg_spike_latency = np.nanmedian(events['first_spike_time'] - events['onset_time'])
-    pulse_times = events['onset_time'] + avg_spike_latency + rec_times
-    spike_times[missing_spike_mask] = pulse_times[missing_spike_mask]
-    
-    # 2. Initialize model parameters:
-    #    - release model with depression, facilitation
-    #    - number of synapses, distribution of per-vesicle amplitudes estimated from first pulse CV
-    #    - measured distribution of background noise
-    #    - parameter space to be searched
-
-    amplitudes = events['dec_fit_reconv_amp'].to_numpy()
-    bg_amplitudes = events['baseline_dec_fit_reconv_amp'].to_numpy()
-
-    qc_mask = event_qc(events)
-    print("%d events passed qc" % qc_mask.sum())
-    amplitudes[~qc_mask] = np.nan
-    amplitudes[missing_spike_mask] = np.nan
-    print("%d good events to be analyzed" % np.isfinite(amplitudes).sum())
-
-    avg_amplitude = np.nanmean(amplitudes)
-    # first_pulse_mask = events['pulse_number'] == 1
-    # first_pulse_amps = amplitudes[first_pulse_mask]
-    # first_pulse_stdev = np.nanstd(first_pulse_amps)
-    # first_pulse_mean = np.nanmean(first_pulse_amps)
-    
-
-    def log_space(start, stop, steps):
-        return start * (stop/start)**(np.arange(steps) / (steps-1))
-
-
-    n_release_sites = np.array([1, 2, 4, 8, 16, 32, 64])
-    release_probability = np.array([0.00625, 0.0125, 0.025, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0])
-    search_params = {
-        'n_release_sites': n_release_sites,
-        'base_release_probability': release_probability,
-        #'mini_amplitude': avg_amplitude * 1.2**np.arange(-12, 24, 2),  # optimized by model
-        'mini_amplitude_stdev': abs(avg_amplitude) * np.array([0.05, 0.1, 0.5]),
-        'measurement_stdev': np.nanstd(bg_amplitudes),
-        'vesicle_recovery_tau': np.array([0.0025, 0.01, 0.04, 0.16, 0.64, 2.56]),
-        'facilitation_amount': np.array([0.025, 0.05, 0.1, 0.2, 0.4]),
-        'facilitation_recovery_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64]),
-    }
-       
-    
-    for k,v in search_params.items():
-        if np.isscalar(v):
-            assert not np.isnan(v), k
+        result = StochasticModelRunner(experiment_id, pre_cell_id, post_cell_id)
+        result.max_events = args.max_events
+        cache_file = "stochastic_cache/%s_%s_%s.pkl" % (experiment_id, pre_cell_id, post_cell_id)
+        if not args.no_cache and os.path.exists(cache_file):
+            result.load_result(cache_file)
         else:
-            assert not np.any(np.isnan(v)), k
-
-    # 3. For each point in the parameter space, simulate a synapse and estimate the joint probability of the set of measured amplitudes
-
-    trunc_spike_times = spike_times[:args.max_events]
-    trunc_amplitudes = amplitudes[:args.max_events]
-    
-    def run_model(params):
-        model = StochasticReleaseModel(params)
-        result = model.optimize_mini_amplitude(trunc_spike_times, trunc_amplitudes)
-        result['model'] = model
+            print("cache miss:", cache_file)
+            result.store_result(cache_file)
         return result
 
+    # load 1 or 2 experiments:        
+    result1 = load_experiment(args.experiment_id, args.pre_cell_id, args.post_cell_id)
+    result2 = None if args.experiment_id2 is None else load_experiment(args.experiment_id2, args.pre_cell_id2, args.post_cell_id2)
 
-    print("Parameter space:")
-    for k, v in search_params.items():
-        print("   ", k, v)
-
-    cache_file = "stochastic_cache/%s_%s_%s.pkl" % (expt_id, pre_cell_id, post_cell_id)
-    if not args.no_cache and os.path.exists(cache_file):
-        param_space = pickle.load(open(cache_file, 'rb'))
-    else:
-        print("cache miss:", cache_file)
-        param_space = ParameterSpace(search_params)
-
-        # run once to jit-precompile before measuring preformance
-        run_model(param_space[(0,)*len(search_params)])
-
-        start = time.time()
-        import cProfile
-        # prof = cProfile.Profile()
-        # prof.enable()
-        
-        
-        param_space.run(run_model, workers=args.workers)
-        # prof.disable()
-        print("Run time:", time.time() - start)
-        # prof.print_stats(sort='cumulative')
-   
+    result = result1 if result2 is None else CombinedModelRunner([result1, result2])
     
-        tmp = cache_file + '.tmp'
-        pickle.dump(param_space, open(tmp, 'wb'))
-        os.rename(tmp, cache_file)
-
-    # if a second experiment was specified, build a combined parameter space
-    if args.experiment_id2 is not None:
-        param_space1 = param_space
-        cache_file2 = "stochastic_cache/%s_%s_%s.pkl" % (args.experiment_id2, args.pre_cell_id2, args.post_cell_id2)
-        param_space2 = pickle.load(open(cache_file2, 'rb'))
+    # 4. Visualize parameter space.
         
-        params = OrderedDict()
-        # params['synapse'] = [
-        #     '%s_%s_%s' % (args.experiment_id, args.pre_cell_id, args.post_cell_id),
-        #     '%s_%s_%s' % (args.experiment_id2, args.pre_cell_id2, args.post_cell_id2),
-        # ]
-        params['synapse'] = np.array([0, 1])
-        params.update(param_space2.params)
-        
-        param_space = ParameterSpace(params)
-        
-        param_space.result = np.stack([param_space1.result, param_space2.result])
-    
-    # 4. Visualize / characterize mapped parameter space. Somehow.
-        
-    win = ParameterSearchWidget(param_space)
-            
-    # set up a few default 2D slicer views
-    v1 = win.slicer.params.child('2D views').addNew()
-    v1['axis 0'] = 'n_release_sites'
-    v1['axis 1'] = 'base_release_probability'
-    v2 = win.slicer.params.child('2D views').addNew()
-    v2['axis 0'] = 'vesicle_recovery_tau'
-    v2['axis 1'] = 'facilitation_recovery_tau'
-    win.slicer.dockarea.moveDock(v2.viewer.dock, 'bottom', v1.viewer.dock)
-    v3 = win.slicer.params.child('2D views').addNew()
-    v3['axis 0'] = 'vesicle_recovery_tau'
-    v3['axis 1'] = 'base_release_probability'
-    v4 = win.slicer.params.child('2D views').addNew()
-    v4['axis 0'] = 'facilitation_amount'
-    v4['axis 1'] = 'facilitation_recovery_tau'
-    win.slicer.dockarea.moveDock(v4.viewer.dock, 'bottom', v3.viewer.dock)
-    
-    # tur on max projection for all parameters by default
-    for ch in win.slicer.params.child('max project'):
-        if ch.name() == 'synapse':
-            continue
-        ch.setValue(True)
-    
-    max_like = win.results.max()
-    win.slicer.histlut.setLevels(max_like * 0.95, max_like)
-        
+    win = ModelDisplayWidget(result)
     win.show()
 
     if sys.flags.interactive == 0:
