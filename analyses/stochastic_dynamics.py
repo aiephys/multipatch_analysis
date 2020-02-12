@@ -36,7 +36,7 @@ class StochasticReleaseModel(object):
         - n_release_sites (int) : Number of synaptic release zones
         - base_release_probability (float) : Resting-state synaptic release probability (0.0-1.0)
         - mini_amplitude (float) : Mean PSP amplitude evoked by a single vesicle release
-        - mini_amplitude_stdev (float) : Stdev of PSP amplitude evoked from single releases
+        - mini_amplitude_cv (float) : Coefficient of variation of PSP amplitude evoked from single vesicle releases
         - vesicle_recovery_tau (float) : Time constant for vesicle replenishment ("typically in the order of seconds" accoring to Hennig 2013)
         - facilitation_amount (float) : Release probability facilitation per spike (0.0-1.0)
         - facilitation_recovery_tau (float) : Time constant for facilitated release probability to recover toward resting state
@@ -59,7 +59,7 @@ class StochasticReleaseModel(object):
         'n_release_sites',
         'base_release_probability',
         'mini_amplitude',
-        'mini_amplitude_stdev',
+        'mini_amplitude_cv',
         'vesicle_recovery_tau',
         'facilitation_amount',
         'facilitation_recovery_tau',
@@ -230,7 +230,7 @@ class StochasticReleaseModel(object):
             params = self.params.copy()
         
         available_vesicles = int(np.clip(np.round(state['available_vesicle']), 0, params['n_release_sites']))
-        return release_likelihood(amplitudes, available_vesicles, state['release_probability'], params['mini_amplitude'], params['mini_amplitude_stdev'], params['measurement_stdev'])
+        return release_likelihood(amplitudes, available_vesicles, state['release_probability'], params['mini_amplitude'], params['mini_amplitude_cv'], params['measurement_stdev'])
 
 
     @staticmethod
@@ -244,7 +244,7 @@ class StochasticReleaseModel(object):
                     n_release_sites,
                     base_release_probability,
                     mini_amplitude,
-                    mini_amplitude_stdev,
+                    mini_amplitude_cv,
                     vesicle_recovery_tau,
                     facilitation_amount,
                     facilitation_recovery_tau,
@@ -294,9 +294,8 @@ class StochasticReleaseModel(object):
 
                 # measure likelihood of seeing this response amplitude
                 av = max(0, min(n_release_sites, int(np.round(available_vesicle))))
-                likelihood = release_likelihood_scalar(amplitude, av, release_probability, mini_amplitude, mini_amplitude_stdev, measurement_stdev)
+                likelihood = release_likelihood_scalar(amplitude, av, release_probability, mini_amplitude, mini_amplitude_cv, measurement_stdev)
                 # prof('likelihood')
-                assert likelihood > 0
                 
                 # release vesicles
                 # note: we allow available_vesicle to become negative because this helps to ensure
@@ -334,7 +333,7 @@ class StochasticReleaseModel(object):
 
 
 @numba.jit(nopython=True)
-def release_likelihood(amplitudes, available_vesicles, release_probability, mini_amplitude, mini_amplitude_stdev, measurement_stdev):
+def release_likelihood(amplitudes, available_vesicles, release_probability, mini_amplitude, mini_amplitude_cv, measurement_stdev):
     """Return a measure of the likelihood that a synaptic response will have certain amplitude(s),
     given the state parameters for the synapse.
     
@@ -348,8 +347,8 @@ def release_likelihood(amplitudes, available_vesicles, release_probability, mini
         Probability for each available vesicle to be released
     mini_amplitude : float
         Mean amplitude of response evoked by a single vesicle release
-    mini_amplitude_stdev : float
-        Standard deviation of response amplitudes evoked by a single vesicle release
+    mini_amplitude_cv : float
+        Coefficient of variation of response amplitudes evoked by a single vesicle release
     measurement_stdev : float
         Standard deviation of response amplitude measurement errors
         
@@ -368,16 +367,16 @@ def release_likelihood(amplitudes, available_vesicles, release_probability, mini
                                 3    0.001
     2. For each possible number of released vesicles, calculate the likelihood that this possibility could
        evoke a response of the tested amplitude. This is calculated using the Gaussian probability distribution 
-       function where µ = nR * mini_amplitude and σ = sqrt(mini_amplitude_stdev^2 * nR + measurement_stdev)
+       function where µ = nR * mini_amplitude and σ = sqrt((mini_amplitude * mini_amplitude_cv)^2 * nR + measurement_stdev)
     3. The total likelihood is the sum of likelihoods for all possible values of nR.
     """
     return np.array([
-        release_likelihood_scalar(amplitude, available_vesicles, release_probability, mini_amplitude, mini_amplitude_stdev, measurement_stdev) 
+        release_likelihood_scalar(amplitude, available_vesicles, release_probability, mini_amplitude, mini_amplitude_cv, measurement_stdev) 
         for amplitude in amplitudes])
 
 
 @numba.jit(nopython=True)
-def release_likelihood_scalar(amplitude, available_vesicles, release_probability, mini_amplitude, mini_amplitude_stdev, measurement_stdev):
+def release_likelihood_scalar(amplitude, available_vesicles, release_probability, mini_amplitude, mini_amplitude_cv, measurement_stdev):
     """Same as release_likelihood, but optimized for a scalar amplitude argument"""
     n_vesicles = np.arange(available_vesicles + 1)
     
@@ -388,7 +387,7 @@ def release_likelihood_scalar(amplitude, available_vesicles, release_probability
     amp_mean = n_vesicles * mini_amplitude
     
     # amplitude stdev increases by sqrt(n) with number of released vesicles
-    amp_stdev = (mini_amplitude_stdev**2 * n_vesicles + measurement_stdev**2) ** 0.5
+    amp_stdev = ((mini_amplitude * mini_amplitude_cv)**2 * n_vesicles + measurement_stdev**2) ** 0.5
     
     # distributions of amplitudes expected for n_vesicles
     amp_prob = p_n * normal_pdf(amp_mean, amp_stdev, amplitude)
@@ -396,10 +395,11 @@ def release_likelihood_scalar(amplitude, available_vesicles, release_probability
     # sum all distributions across n_vesicles
     likelihood = amp_prob.sum()
     
+    assert likelihood >= 0
     return likelihood
 
 
-# def release_distribution(available_vesicles, release_probability, mini_amplitude, mini_amplitude_stdev, measurement_stdev):
+# def release_distribution(available_vesicles, release_probability, mini_amplitude, mini_amplitude_cv, measurement_stdev):
 #     """Return the release amplitude distribution defined by the arguments.
 #     """
 #     # calculate positive and negate at the end if needed.
@@ -411,7 +411,7 @@ def release_likelihood_scalar(amplitude, available_vesicles, release_probability
 #     n_samp = int(max(0, available_vesicles) + 1) * 20
 #     amplitudes = np.linspace(mn, mx, n_samp)
 #     da = amplitudes[1] - amplitudes[0]
-#     return amplitudes * sign, release_likelihood(amplitudes, available_vesicles, release_probability, mini_amplitude, mini_amplitude_stdev, measurement_stdev) * da
+#     return amplitudes * sign, release_likelihood(amplitudes, available_vesicles, release_probability, mini_amplitude, mini_amplitude_cv, measurement_stdev) * da
 
 @numba.jit(nopython=True)
 def release_expectation_value(available_vesicles, release_probability, mini_amplitude):
@@ -488,7 +488,7 @@ class ModelSingleResultWidget(QtGui.QWidget):
         self.plt4.setMaximumWidth(500)
         self.plt4.selected_items = []
 
-        self.amp_sample_values = np.linspace(-0.005, 0.005, 200)
+        self.amp_sample_values = np.linspace(-0.005, 0.005, 800)
 
     def set_result(self, model_runner, result):
         # re-run the model to get the complete results
@@ -526,18 +526,20 @@ class ModelSingleResultWidget(QtGui.QWidget):
         
         # plot full distribution of event amplitudes
         bins = np.linspace(np.nanmin(self.result['amplitude']), np.nanmax(self.result['amplitude']), 40)
+        d_amp = bins[1] - bins[0]
         amp_hist = np.histogram(self.result['amplitude'], bins=bins)
-        self.plt4.plot(amp_hist[1], amp_hist[0] / amp_hist[0].sum(), stepMode=True, fillLevel=0, brush=0.3)
+        self.plt4.plot(amp_hist[1], amp_hist[0] / (amp_hist[0].sum() * d_amp), stepMode=True, fillLevel=0, brush=0.3)
 
         # plot average model event distribution
         amps = self.amp_sample_values
+        d_amp = amps[1] - amps[0]
         total_dist = np.zeros(len(amps))
         for i in range(self.result.shape[0]):
             state = self.pre_state[i]
             if not np.all(np.isfinite(tuple(state))):
                 continue
             total_dist += self.model.likelihood(amps, state)
-        total_dist /= total_dist.sum()
+        total_dist /= total_dist.sum() * d_amp
         self.plt4.plot(amps, total_dist, fillLevel=0, brush=(255, 0, 0, 50))
     
     def amp_sp_clicked(self, sp, pts):
@@ -554,58 +556,6 @@ class ModelSingleResultWidget(QtGui.QWidget):
         l1 = self.plt4.addLine(x=measured_amp)
         l2 = self.plt4.addLine(x=expected_amp, pen='r')
         self.plt4.selected_items = [p, l1, l2]
-
-
-class PixelSelector(QtGui.QGraphicsRectItem):
-    
-    sigPixelSelectionChanged = QtCore.Signal(object, object)  # self, (x, y)
-    
-    def __init__(self, image=None, pen='y'):
-        self.image = None
-        QtGui.QGraphicsRectItem.__init__(self, QtCore.QRectF(0, 0, 1, 1))
-        self.setImage(image)
-        self.setPen(pen)
-        
-    def selectedPos(self):
-        """Return the currently selected data location (row, col).
-        """
-        if self.image is None or self.image.width() == 0 or self.image.height() == 0:
-            return (np.nan, np.nan)
-        dataPos = self.image.mapToData(self.pos())
-        return (dataPos.y(), dataPos.x())
-        
-    def setPen(self, pen):
-        QtGui.QGraphicsRectItem.setPen(self, pg.mkPen(pen))
-        
-    def setImage(self, image):
-        if self.scene() is not None:
-            self.scene().sigMouseClicked.disconnect(self._sceneClicked)
-        self.image = image
-        if image is not None:
-            self.setParentItem(image)
-            self.scene().sigMouseClicked.connect(self._sceneClicked)            
-        self.imageChanged()
-        
-    def imageChanged(self):
-        # check new image bounds
-        if self.image is None or self.image.width() == 0 or self.image.height() == 0:
-            pos = (np.nan, np.nan)
-        else:
-            pos = [min(self.pos().x(), self.image.width()), min(self.pos.y(), self.image.height())]
-        
-        self.setPos(*pos)
-        
-    def setPos(self, *args):
-        prevPos = self.pos()
-        QtGui.QGraphicsRectItem.setPos(*args)
-        if self.pos() != prevPos():
-            self.sigPixelSelectionChanged.emit(self, self.selectedPixel())
-
-    def _sceneClicked(self, event):
-        spos = event.scenePos()
-        imgPos = self.image.mapFromScene(spos)
-        i, j = int(imgPos.x()), int(imgPos.y())
-        self.setPos(i, j)
 
         
 class ParameterSpace(object):
@@ -692,9 +642,22 @@ class ModelDisplayWidget(QtGui.QWidget):
         best = np.unravel_index(np.argmax(result_img), result_img.shape)
         self.select_result(best)
 
+        # if results are combined across synapses, set up colors
+        if 'synapse' in self.param_space.params:
+            self.slicer.params['color axis', 'axis'] = 'synapse'
+            syn_axis = list(self.param_space.params.keys()).index('synapse')
+            max_img = np.array([result_img.take(i, axis=syn_axis).max() for i in range(result_img.shape[syn_axis])])
+            max_img = max_img.min() / max_img
+            max_like = max_img.min()
+            syns = self.param_space.params['synapse']
+            for i in syns:
+                c = pg.colorTuple(pg.intColor(i, len(syns)*1.2))
+                c = pg.mkColor(c[0]*max_img[i], c[1]*max_img[i], c[2]*max_img[i])
+                self.slicer.params['color axis', 'colors', str(i)] = c
+            
         # set histogram range
         max_like = self.results.max()
-        self.slicer.histlut.setLevels(max_like * 0.95, max_like)
+        self.slicer.histlut.setLevels(max_like * 0.85, max_like)
 
     def selection_changed(self, slicer):
         index = self.selected_index()
@@ -917,7 +880,7 @@ class StochasticModelRunner:
             'n_release_sites': n_release_sites,
             'base_release_probability': release_probability,
             #'mini_amplitude': avg_amplitude * 1.2**np.arange(-12, 24, 2),  # optimized by model
-            'mini_amplitude_stdev': abs(avg_amplitude) * np.array([0.05, 0.1, 0.5]),
+            'mini_amplitude_cv': np.array([0.05, 0.1, 0.2, 0.4, 0.8]),
             'measurement_stdev': np.nanstd(bg_amplitudes),
             'vesicle_recovery_tau': np.array([0.0025, 0.01, 0.04, 0.16, 0.64, 2.56]),
             'facilitation_amount': np.array([0.0, 0.025, 0.05, 0.1, 0.2, 0.4]),
@@ -951,6 +914,8 @@ class StochasticModelRunner:
 
 
 class CombinedModelRunner:
+    """Model runner combining the results from multiple StochasticModelRunner instances.
+    """
     def __init__(self, runners):
         self.model_runners = runners
         
