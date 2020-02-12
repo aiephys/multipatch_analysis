@@ -108,7 +108,7 @@ def check():
             
             query = con['query'].replace('\n', ' ')[:110]
             
-            print("          {:15s} {:15s} {:45s} {:6d} {:16s} {:s}   ".format(con['usename'], con['datname'], app[:45], con['pid'], state, query))
+            print("          {:15s} {:15s} {:45s} {:6d} {:16s} {:s}   ".format(con['usename'], con['datname'], app[-45:], con['pid'], state, query))
     
 
 class ScreenPrint(object):

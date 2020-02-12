@@ -5,7 +5,7 @@ For generating a DB table describing cell morphology.
 """
 from __future__ import print_function, division
 
-import os, datetime
+import os, datetime, hashlib
 from collections import OrderedDict
 from ...util import timestamp_to_datetime, optional_import
 from ...data.pipette_metadata import PipetteMetadata
@@ -69,12 +69,12 @@ class MorphologyPipelineModule(MultipatchPipelineModule):
             results = {
                 'pyramidal': pyramidal,
                 'cortical_layer': cortical_layer,
-                'morpho_db_hash': hash(None),
+                'morpho_db_hash': None,
 
             }
             
             if cell_morpho is not None:
-                morpho_db_hash = hash(';'.join(filter(None, cell_morpho)))
+                morpho_db_hash = hashlib.md5((';'.join(filter(None, cell_morpho))).encode()).hexdigest()
                 results['morpho_db_hash'] = morpho_db_hash
                 for morpho_db_name, result in col_names.items():
                     col_name = result['name']
@@ -144,7 +144,7 @@ class MorphologyPipelineModule(MultipatchPipelineModule):
             for cell in cluster_cells:
                 if cell.id is None:
                     continue
-                morpho_db_hash = hash(';'.join(filter(None, morpho_results.get(cell.id, [None]))))
+                morpho_db_hash = hashlib.md5((';'.join(filter(None, morpho_results.get(cell.id, [None])))).encode()).hexdigest()
                 cell_morpho_rec = session.query(db.Morphology).join(db.Cell).filter(db.Cell.meta.info.get('lims_specimen_id')==str(cell.id)).all()
                 if len(cell_morpho_rec) == 1:   
                     cell_rec_hash = cell_morpho_rec[0].morpho_db_hash
