@@ -171,7 +171,9 @@ def measure_deconvolved_response(response_rec, baseline_rec):
             decay_tau=dec_decay_tau,
             rise_power=dec_rise_power,
         )
-        scale, offset = fit_scale_offset(filtered.data, template)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            scale, offset = fit_scale_offset(filtered.data, template)
 
         # calculate amplitude of reconvolved event -- tis is our best guess as to the
         # actual event amplitude
