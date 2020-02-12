@@ -26,6 +26,7 @@ if __name__ == '__main__':
     parser.add_argument('--drop', action='store_true', default=False, help="Drop selected analysis results (do not run updates)", )
     parser.add_argument('--vacuum', action='store_true', default=False, help="Run VACUUM ANALYZE on the database to optimize its query planner", )
     parser.add_argument('--bake', action='store_true', default=False, help="Bake an sqlite file after the pipeline update completes", )
+    parser.add_argument('--info', action='store_true', default=False, help="Display information about the selected pipeline", )
     
     
     args = parser.parse_args(sys.argv[1:])
@@ -115,3 +116,10 @@ if __name__ == '__main__':
     if args.bake:
         print("\n================== Bake Sqlite ===========================")
         db.bake_sqlite(config.synphys_db_sqlite)
+
+    if args.info:
+        print("Pipeline:", args.pipeline)
+        print("  {:20s}  :  dependencies".format('module'))
+        print("  --------------------------------------")
+        for module in all_modules.values():
+            print("  {:20s}  :  {}".format(module.name, ', '.join([m.name for m in module.dependencies])))
