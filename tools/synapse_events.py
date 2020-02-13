@@ -103,12 +103,24 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
                 db.PulseResponse.ex_qc_pass,
                 db.PulseResponse.in_qc_pass,
                 db.PulseResponseFit, 
+                
+                db.PulseResponseStrength.pos_amp,
+                db.PulseResponseStrength.neg_amp,
+                db.PulseResponseStrength.pos_dec_amp,
+                db.PulseResponseStrength.neg_dec_amp,
+                db.PulseResponseStrength.pos_dec_latency,
+                db.PulseResponseStrength.neg_dec_latency,
+                db.PulseResponseStrength.crosstalk,
+
+                # db.BaselineResponseStrength,
                 db.PatchClampRecording.clamp_mode,
                 db.StimPulse.pulse_number, 
                 db.MultiPatchProbe.induction_frequency, 
                 db.MultiPatchProbe.recovery_delay
             )
             q = q.join(db.PulseResponseFit)
+            q = q.join(db.PulseResponseStrength)
+            # q = q.join(db.BaselineResponseStrength)
             q = q.join(db.StimPulse, db.PulseResponse.stim_pulse)
             q = q.join(db.Recording, db.PulseResponse.recording)
             q = q.join(db.PatchClampRecording)
@@ -125,85 +137,94 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
     def scatter_plot_clicked(self, plt, points):
         for plt in self.data_plots + self.dec_plots + self.spike_plots:
             plt.clear()
-        spsp = StackedPsp()
-        psp = Psp()
 
         # query raw data for selected points
         ids = [int(pt.data()['pulse_response_id']) for pt in points]
         q = db.query(db.PulseResponse, db.PulseResponse.data, db.PulseResponseFit).join(db.PulseResponseFit).filter(db.PulseResponse.id.in_(ids))
         recs = q.all()
         
-        # get pre- and postsynaptic data spike aligned
-        prl = PulseResponseList([rec.PulseResponse for rec in recs])
-        pre_tsl = prl.pre_tseries(align='spike')
-        post_tsl = prl.post_tseries(align='spike')
-        
-        # plot all
-        for i in range(len(prl)):
-            pre_ts = pre_tsl[i]
-            post_ts = post_tsl[i]
-            
-            self.spike_plots[0].plot(pre_ts.time_values, pre_ts.data)
-            self.data_plots[0].plot(post_ts.time_values, post_ts.data)
-
-            # evaluate recorded fit for this response
-            fit_par = recs[i].PulseResponseFit
-            if fit_par.fit_amp is None:
-                continue
-            fit = spsp.eval(
-                x=post_ts.time_values, 
-                exp_amp=fit_par.fit_exp_amp,
-                exp_tau=fit_par.fit_decay_tau,
-                amp=fit_par.fit_amp,
-                rise_time=fit_par.fit_rise_time,
-                decay_tau=fit_par.fit_decay_tau,
-                xoffset=fit_par.fit_latency,
-                yoffset=fit_par.fit_yoffset,
-                rise_power=2,
-            )
-            self.data_plots[0].plot(post_ts.time_values, fit, pen=(0, 255, 0, 100))
-
-            # plot with reconvolved amplitude
-            fit = spsp.eval(
-                x=post_ts.time_values, 
-                exp_amp=fit_par.fit_exp_amp,
-                exp_tau=fit_par.fit_decay_tau,
-                amp=fit_par.dec_fit_reconv_amp,
-                rise_time=fit_par.fit_rise_time,
-                decay_tau=fit_par.fit_decay_tau,
-                xoffset=fit_par.fit_latency,
-                yoffset=fit_par.fit_yoffset,
-                rise_power=2,
-            )
-            self.data_plots[0].plot(post_ts.time_values, fit, pen=(200, 255, 0, 100))
-
-            # plot deconvolution
-            clamp_mode = prl[i].recording.patch_clamp_recording.clamp_mode
-            if clamp_mode == 'ic':
-                decay_tau = self.loaded_pair.synapse.psp_decay_tau
-                lowpass = 2000
-            else:
-                decay_tau = self.loaded_pair.synapse.psc_decay_tau
-                lowpass = 6000
-                
-            dec = deconv_filter(post_ts, None, tau=decay_tau, lowpass=lowpass, remove_artifacts=False, bsub=True)
-            self.dec_plots[0].plot(dec.time_values, dec.data)
-
-            # plot deconvolution fit
-            fit = psp.eval(
-                x=dec.time_values,
-                exp_tau=fit_par.dec_fit_decay_tau,
-                amp=fit_par.dec_fit_amp,
-                rise_time=fit_par.dec_fit_rise_time,
-                decay_tau=fit_par.dec_fit_decay_tau,
-                xoffset=fit_par.dec_fit_latency,
-                yoffset=fit_par.dec_fit_yoffset,
-                rise_power=1,
-            )
-            self.dec_plots[0].plot(dec.time_values, fit, pen=(0, 255, 0, 100))
+        for rec in recs:
+            self._plot_pulse_response(rec)
             
         self.scatter_plot.setSelectedPoints(points)
         
+
+    def _plot_pulse_response(self, rec):
+        pr = rec.PulseResponse
+        
+        pre_ts = pr.get_tseries('pre', align_to='spike')
+        
+        # If there is no presynaptic spike time, plot spike in red and bail out
+        if pre_ts is None:
+            pre_ts = pr.get_tseries('pre', align_to='pulse')
+            self.spike_plots[0].plot(pre_ts.time_values, pre_ts.data, pen=(255, 0, 0, 100))
+            return
+        
+        post_ts = pr.get_tseries('post', align_to='spike')
+        
+        self.spike_plots[0].plot(pre_ts.time_values, pre_ts.data)
+        self.data_plots[0].plot(post_ts.time_values, post_ts.data)
+
+        # evaluate recorded fit for this response
+        fit_par = rec.PulseResponseFit
+        
+        # If there is no fit, bail out here
+        if fit_par.fit_amp is None:
+            return
+        
+        spsp = StackedPsp()
+        fit = spsp.eval(
+            x=post_ts.time_values, 
+            exp_amp=fit_par.fit_exp_amp,
+            exp_tau=fit_par.fit_decay_tau,
+            amp=fit_par.fit_amp,
+            rise_time=fit_par.fit_rise_time,
+            decay_tau=fit_par.fit_decay_tau,
+            xoffset=fit_par.fit_latency,
+            yoffset=fit_par.fit_yoffset,
+            rise_power=2,
+        )
+        self.data_plots[0].plot(post_ts.time_values, fit, pen=(0, 255, 0, 100))
+
+        # plot with reconvolved amplitude
+        fit = spsp.eval(
+            x=post_ts.time_values, 
+            exp_amp=fit_par.fit_exp_amp,
+            exp_tau=fit_par.fit_decay_tau,
+            amp=fit_par.dec_fit_reconv_amp,
+            rise_time=fit_par.fit_rise_time,
+            decay_tau=fit_par.fit_decay_tau,
+            xoffset=fit_par.fit_latency,
+            yoffset=fit_par.fit_yoffset,
+            rise_power=2,
+        )
+        self.data_plots[0].plot(post_ts.time_values, fit, pen=(200, 255, 0, 100))
+
+        # plot deconvolution
+        clamp_mode = pr.recording.patch_clamp_recording.clamp_mode
+        if clamp_mode == 'ic':
+            decay_tau = self.loaded_pair.synapse.psp_decay_tau
+            lowpass = 2000
+        else:
+            decay_tau = self.loaded_pair.synapse.psc_decay_tau
+            lowpass = 6000
+            
+        dec = deconv_filter(post_ts, None, tau=decay_tau, lowpass=lowpass, remove_artifacts=False, bsub=True)
+        self.dec_plots[0].plot(dec.time_values, dec.data)
+
+        # plot deconvolution fit
+        psp = Psp()
+        fit = psp.eval(
+            x=dec.time_values,
+            exp_tau=fit_par.dec_fit_decay_tau,
+            amp=fit_par.dec_fit_amp,
+            rise_time=fit_par.dec_fit_rise_time,
+            decay_tau=fit_par.dec_fit_decay_tau,
+            xoffset=fit_par.dec_fit_latency,
+            yoffset=fit_par.dec_fit_yoffset,
+            rise_power=1,
+        )
+        self.dec_plots[0].plot(dec.time_values, fit, pen=(0, 255, 0, 100))
 
 
 if __name__ == '__main__':
