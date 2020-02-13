@@ -183,6 +183,33 @@ class PulseResponseBase(object):
     def stim_tseries(self):
         return self.stim_pulse.stimulus_tseries
 
+    def get_tseries(self, ts_type, align_to):
+        """Return the pre-, post-, or stimulus TSeries, time aligned to either the spike or the stimulus onset.
+            
+        If spike alignment is requested but no spike time is available, then return None.
+        
+        Parameters
+        ----------
+        ts_type : str
+            One of "pre", "post", or "stim"
+        align_to : str | None
+            One of "spike" or "pulse"        
+        """
+        assert ts_type in ('pre', 'post', 'stim'), "ts_type must be 'pre', 'post', or 'stim'"
+        assert align_to in ('spike', 'pulse', None), "align_to must be 'spike', 'stim', or None"
+        
+        ts = getattr(self, ts_type+"_tseries")
+        if align_to == None:
+            return ts
+        elif align_to == 'spike':
+            align_time = self.stim_pulse.first_spike_time
+            if align_time is None:
+                return None
+        elif align_to == 'pulse':
+            align_time = self.stim_pulse.onset_time
+        return ts.copy(t0=ts.t0 - align_time)
+        
+
 PulseResponse = make_table(
     name='pulse_response',
     base=PulseResponseBase,
