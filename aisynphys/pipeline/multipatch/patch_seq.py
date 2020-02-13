@@ -30,7 +30,7 @@ mapping_cols = {
             'topLeaf': 'top_leaf',
             'topLeafValue': 'top_leaf_score',
             'broad_class_label': 'broad_class_label',
-            'subclass_label': 'sublass_label',
+            'subclass_label': 'subclass_label',
             'quality_score_label': 'quality_score',
             'seurat_cluster_label': 'seurat_cluster',
             'seurat_prediction_score_label': 'seurat_score',
