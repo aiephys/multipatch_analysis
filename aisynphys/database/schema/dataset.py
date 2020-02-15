@@ -234,8 +234,9 @@ PulseResponse.pair = relationship(Pair, back_populates='pulse_responses')
 
 Baseline = make_table(
     name='baseline',
-    comment="A snippet of baseline data, matched to a postsynaptic recording",
+    comment="A snippet of baseline data matched to a pulse response from the same Recording",
     columns=[
+        ('pulse_response_id', 'pulse_response.id', 'The PulseResponse to which this baseline is matched.', {'index': True}),
         ('recording_id', 'recording.id', 'The recording from which this baseline snippet was extracted.', {'index': True}),
         ('data', 'array', 'numpy array of baseline data sampled at '+sample_rate_str, {'deferred': True}),
         ('data_start_time', 'float', "Starting time of this chunk of the recording in seconds, relative to the beginning of the recording"),
@@ -247,3 +248,5 @@ Baseline = make_table(
 
 Recording.baselines = relationship(Baseline, back_populates="recording", cascade='save-update,merge,delete', single_parent=True)
 Baseline.recording = relationship(Recording, back_populates="baselines")
+PulseResponse.baseline = relationship(Baseline, back_populates="pulse_response", cascade='save-update,merge,delete', single_parent=True, uselist=False)
+Baseline.pulse_response = relationship(PulseResponse, back_populates="baseline")
