@@ -126,7 +126,7 @@ class DatasetPipelineModule(MultipatchPipelineModule):
                 for i,pulse in enumerate(pulses):
                     # Record information about all pulses, including test pulse.
                     t0, t1 = pulse.meta['pulse_edges']
-                    resampled = pulse['primary'].resample(sample_rate=20000)
+                    resampled = pulse['primary'].resample(sample_rate=db.default_sample_rate)
                     pulse_entry = db.StimPulse(
                         recording=rec_entry,
                         pulse_number=pulse.meta['pulse_n'],
@@ -180,7 +180,9 @@ class DatasetPipelineModule(MultipatchPipelineModule):
                 rng.shuffle(chunks)
                 
                 baseline_chunks[dev] = chunks
-                
+
+            baseline_qc_cache = {}
+
             # import postsynaptic responses
             unmatched = 0
             mpa = MultiPatchSyncRecAnalyzer(srec)
@@ -193,14 +195,6 @@ class DatasetPipelineModule(MultipatchPipelineModule):
                     responses = mpa.get_spike_responses(srec[pre_dev], srec[post_dev], align_to='pulse', require_spike=False)
                     
                     for resp in responses:
-                        # base_entry = db.Baseline(
-                        #     recording=rec_entries[post_dev],
-                        #     start_index=resp['baseline_start'],
-                        #     stop_index=resp['baseline_stop'],
-                        #     data=resp['baseline'].resample(sample_rate=20000).data,
-                        #     mode=float_mode(resp['baseline'].data),
-                        # )
-                        # session.add(base_entry)
                         pair_entry = pairs_by_device_id.get((pre_dev, post_dev), None)
                         if pair_entry is None:
                             continue  # no data for one or both channels
@@ -209,7 +203,7 @@ class DatasetPipelineModule(MultipatchPipelineModule):
                         if resp['in_qc_pass']:
                             pair_entry.n_in_test_spikes += 1
                         
-                        resampled = resp['response']['primary'].resample(sample_rate=20000)
+                        resampled = resp['response']['primary'].resample(sample_rate=db.default_sample_rate)
                         resp_entry = db.PulseResponse(
                             recording=rec_entries[post_dev],
                             stim_pulse=all_pulse_entries[pre_dev][resp['pulse_n']],
@@ -222,16 +216,32 @@ class DatasetPipelineModule(MultipatchPipelineModule):
                         )
                         session.add(resp_entry)
 
-                        # match a baseline to this response
-                        if len(baseline_chunks[post_dev]) == 0:
-                            # no more baseline available
+                        # find a baseline chunk from this recording with compatible qc metrics
+                        got_baseline = False
+                        for i, (start, stop) in enumerate(baseline_chunks[post_dev]):
+                            key = (post_dev, start, stop)
+
+                            # pull data and run qc if needed
+                            if key not in baseline_qc_cache:
+                                data = srec[post_dev]['primary'].time_slice(start, stop).resample(sample_rate=db.default_sample_rate).data
+                                ex_qc_pass, in_qc_pass, qc_failures = qc.pulse_response_qc_pass(rec, [start, stop], None, [])
+                                baseline_qc_cache[key] = (data, ex_qc_pass, in_qc_pass)
+                            else:
+                                (data, ex_qc_pass, in_qc_pass) = baseline_qc_cache[key]
+
+                            if resp_entry.ex_qc_pass is True and ex_qc_pass is not True:
+                                continue
+                            elif resp_entry.in_qc_pass is True and in_qc_pass is not True:
+                                continue
+                            else:
+                                got_baseline = True
+                                baseline_chunks.pop(i)
+                                break
+
+                        if not got_baseline:
+                            # no matching baseline available
                             unmatched += 1
                             continue
-                        
-                        start, stop = baseline_chunks[post_dev].pop()
-                        data = srec[post_dev]['primary'].time_slice(start, stop).resample(sample_rate=20000).data
-
-                        ex_qc_pass, in_qc_pass, qc_failures = qc.pulse_response_qc_pass(rec, [start, stop], None, [])
 
                         base_entry = db.Baseline(
                             pulse_response=resp_entry,

@@ -27,29 +27,7 @@ class PulseResponsePipelineModule(MultipatchPipelineModule):
 
         # select just data for the selected experiment
         rq = rq.join(db.SyncRec).join(db.Experiment).filter(db.Experiment.ext_id==expt_id)
-        bq = bq.join(db.SyncRec).join(db.Experiment).filter(db.Experiment.ext_id==expt_id)
         response_recs = rq.all()
-        baseline_recs = bq.all()
-        
-        # match a baseline to each response
-        baselines_by_recording = {}
-        for b in baseline_recs:
-            baselines_by_recording.setdefault(b.recording_id, []).append(b)
-        for b in baselines_by_recording.values():
-            random.shuffle(b)
-        
-        baselines = []
-        for r in response_recs:
-            b = baselines_by_recording.get(r.recording_id, [])
-            while True:
-                if len(b) == 0:
-                    next_b = None
-                    break
-                next_b = b.pop()
-                qc_pass = getattr(next_b, r.synapse_type + '_qc_pass')
-                if qc_pass:
-                    break
-            baselines.append(next_b)
         
         # best estimate of response amplitude using known latency for this synapse
         for rec,baseline_rec in zip(response_recs, baselines):
@@ -92,7 +70,7 @@ class PulseResponsePipelineModule(MultipatchPipelineModule):
 
         # "unbiased" response analysis used to predict connectivity
         _compute_strength('pulse_response', response_recs, session, db)
-        _compute_strength('baseline', baseline_recs, session, db)
+        _compute_strength('baseline', response_recs, session, db)
         
     def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.
