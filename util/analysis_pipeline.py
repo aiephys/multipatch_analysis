@@ -119,7 +119,10 @@ if __name__ == '__main__':
 
     if args.info:
         print("Pipeline:", args.pipeline)
-        print("  {:20s}  :  dependencies".format('module'))
-        print("  --------------------------------------")
+        print("  {:20s}  :  ok  : err  :  dependencies".format('module'))
+        print("  -----------------------------------------------------------")
         for module in all_modules.values():
-            print("  {:20s}  :  {}".format(module.name, ', '.join([m.name for m in module.dependencies])))
+            status = module.job_status()
+            success = len([j for j in status.values() if j[0] is True])
+            err = len(status) - success
+            print("  {:20s}  : {:<5d}: {:<5d}:  {}".format(module.name, success, err, ', '.join([m.name for m in module.dependencies])))
