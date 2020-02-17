@@ -11,7 +11,6 @@ PulseResponseFit = make_table(
     comment="Curve fits to individual synaptic responses.",
     columns=[
         ('pulse_response_id', 'pulse_response.id', '', {'index': True, 'unique': True}),
-        ('baseline_id', 'baseline.id', 'ID of the baseline snippet chosen to match the pulse response', {}),
         
         ('fit_amp', 'float', 'Fit amplitude of the response to this stimulus', {'index': True}),
         ('fit_latency', 'float', 'Fit latency of the response to this stimulus', {'index': True}),

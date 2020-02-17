@@ -7,7 +7,7 @@ from ... import config
 from .pipeline_module import MultipatchPipelineModule
 from .dataset import DatasetPipelineModule
 from .synapse import SynapsePipelineModule
-from ...pulse_response_strength import baseline_query, response_query, measure_response, measure_deconvolved_response, analyze_response_strength
+from ...pulse_response_strength import response_query, measure_response, measure_deconvolved_response, analyze_response_strength
 
 
 class PulseResponsePipelineModule(MultipatchPipelineModule):
@@ -23,22 +23,20 @@ class PulseResponsePipelineModule(MultipatchPipelineModule):
         expt_id = job['job_id']
 
         rq = response_query(session)
-        bq = baseline_query(session)
 
         # select just data for the selected experiment
         rq = rq.join(db.SyncRec).join(db.Experiment).filter(db.Experiment.ext_id==expt_id)
         response_recs = rq.all()
         
         # best estimate of response amplitude using known latency for this synapse
-        for rec,baseline_rec in zip(response_recs, baselines):
+        for rec in response_recs:
             if not rec.has_synapse:
                 continue
             
-            response_fit, baseline_fit = measure_response(rec, baseline_rec)
-            response_dec_fit, baseline_dec_fit = measure_deconvolved_response(rec, baseline_rec)
+            response_fit, baseline_fit = measure_response(rec)
+            response_dec_fit, baseline_dec_fit = measure_deconvolved_response(rec)
             
-            baseline_id = None if baseline_rec is None else baseline_rec.response_id
-            new_rec = db.PulseResponseFit(pulse_response_id=rec.response_id, baseline_id=baseline_id)
+            new_rec = db.PulseResponseFit(pulse_response_id=rec.response_id)
             
             # Psp fits
             for fit, prefix in [(response_fit, 'fit_'), (baseline_fit, 'baseline_fit_')]:

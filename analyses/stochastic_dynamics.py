@@ -992,6 +992,9 @@ if __name__ == '__main__':
     # expt_id = float(sys.argv[1])
     # pre_cell_id = int(sys.argv[2])
     # post_cell_id = int(sys.argv[3])
+    
+    # 1525985474.422 3 4
+    # 1535150219.310 5 3
 
     def load_experiment(experiment_id, pre_cell_id, post_cell_id):
         print("Loading stochastic model for %s %s %s" % (experiment_id, pre_cell_id, post_cell_id))

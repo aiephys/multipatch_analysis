@@ -167,19 +167,23 @@ class DatasetPipelineModule(MultipatchPipelineModule):
 
             # collect and shuffle baseline chunks for each recording
             baseline_chunks = {}
-            for dev in srec.devices:
+            for post_dev in srec.devices:
 
-                base_dist = BaselineDistributor.get(srec[dev])
+                base_dist = BaselineDistributor.get(srec[post_dev])
                 chunks = list(base_dist.baseline_chunks())
                 
-                # shuffle baseline chunks in a deterministic way:
-                # convert expt_id/srec_id/rec_id into an integer seed
-                seed_str = ("%s %s %s" % (job_id, srec.key, dev)).encode()
-                seed = struct.unpack('I', hashlib.sha1(seed_str).digest()[:4])[0]
-                rng = np.random.RandomState(seed)
-                rng.shuffle(chunks)
-                
-                baseline_chunks[dev] = chunks
+                # generate a different random shuffle for each combination pre,post device
+                # (we are not allowed to reuse the same baseline chunks for a particular pre-post pair,
+                # but it is ok to reuse them across pairs)
+                for pre_dev in srec.devices:
+                    # shuffle baseline chunks in a deterministic way:
+                    # convert expt_id/srec_id/pre/post into an integer seed
+                    seed_str = ("%s %s %s %s" % (job_id, srec.key, pre_dev, post_dev)).encode()
+                    seed = struct.unpack('I', hashlib.sha1(seed_str).digest()[:4])[0]
+                    rng = np.random.RandomState(seed)
+                    rng.shuffle(chunks)
+                    
+                    baseline_chunks[pre_dev, post_dev] = chunks[:]
 
             baseline_qc_cache = {}
 
@@ -218,13 +222,13 @@ class DatasetPipelineModule(MultipatchPipelineModule):
 
                         # find a baseline chunk from this recording with compatible qc metrics
                         got_baseline = False
-                        for i, (start, stop) in enumerate(baseline_chunks[post_dev]):
+                        for i, (start, stop) in enumerate(baseline_chunks[pre_dev, post_dev]):
                             key = (post_dev, start, stop)
 
                             # pull data and run qc if needed
                             if key not in baseline_qc_cache:
                                 data = srec[post_dev]['primary'].time_slice(start, stop).resample(sample_rate=db.default_sample_rate).data
-                                ex_qc_pass, in_qc_pass, qc_failures = qc.pulse_response_qc_pass(rec, [start, stop], None, [])
+                                ex_qc_pass, in_qc_pass, qc_failures = qc.pulse_response_qc_pass(srec[post_dev], [start, stop], None, [])
                                 baseline_qc_cache[key] = (data, ex_qc_pass, in_qc_pass)
                             else:
                                 (data, ex_qc_pass, in_qc_pass) = baseline_qc_cache[key]
@@ -235,7 +239,7 @@ class DatasetPipelineModule(MultipatchPipelineModule):
                                 continue
                             else:
                                 got_baseline = True
-                                baseline_chunks.pop(i)
+                                baseline_chunks[pre_dev, post_dev].pop(i)
                                 break
 
                         if not got_baseline:
