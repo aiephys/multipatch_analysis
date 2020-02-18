@@ -244,6 +244,7 @@ class DatasetPipelineModule(MultipatchPipelineModule):
 
                         if not got_baseline:
                             # no matching baseline available
+                            # raise Exception()
                             unmatched += 1
                             continue
 
@@ -270,6 +271,41 @@ class DatasetPipelineModule(MultipatchPipelineModule):
         # only need to return from syncrec table; other tables will be dropped automatically.
         db = self.database
         return session.query(db.SyncRec).filter(db.SyncRec.experiment_id==db.Experiment.id).filter(db.Experiment.ext_id.in_(job_ids)).all()
+
+    def drop_jobs(self, job_ids, session=None, skip=None):
+        # the default drop_jobs works, but it's pretty slow for this module.
+        # faster:
+        db = self.database
+        session = session or db.session(readonly=False)
+        for jid in job_ids:
+            # break link between patch_clamp_recording and test_pulse:
+            q = """
+                update patch_clamp_recording
+                set nearest_test_pulse_id=null
+                where patch_clamp_recording.id in (
+                    select patch_clamp_recording.id from patch_clamp_recording
+                    join recording on patch_clamp_recording.recording_id=recording.id
+                    join sync_rec on recording.sync_rec_id=sync_rec.id
+                    join experiment on sync_rec.experiment_id=experiment.id
+                    where experiment.ext_id='{jid}'
+                );
+            """.format(jid=jid)
+            session.execute(q)
+            for table in 'baseline', 'pulse_response', 'test_pulse':
+                q = """
+                    delete from {table}
+                    where {table}.id in (
+                        select {table}.id from {table}
+                        join recording on {table}.recording_id=recording.id
+                        join sync_rec on recording.sync_rec_id=sync_rec.id
+                        join experiment on sync_rec.experiment_id=experiment.id
+                        where experiment.ext_id='{jid}'
+                    );
+                """.format(table=table, jid=jid)
+                session.execute(q)
+            session.commit()
+        
+        return MultipatchPipelineModule.drop_jobs(self, job_ids, session, skip=skip)
 
     def ready_jobs(self):
         """Return an ordered dict of all jobs that are ready to be processed (all dependencies are present)
