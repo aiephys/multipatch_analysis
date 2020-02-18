@@ -293,7 +293,7 @@ def response_query(session):
     q = q.join(db.PatchClampRecording)
     q = q.join(db.Pair, db.PulseResponse.pair)
     q = q.join(db.Synapse, db.Pair.synapse)
-    q = q.join(db.Baseline, db.Baseline.pulse_response)
+    q = q.join(db.Baseline, db.PulseResponse.id==db.Baseline.pulse_response_id)
 
     return q
 

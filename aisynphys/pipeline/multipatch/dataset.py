@@ -244,7 +244,6 @@ class DatasetPipelineModule(MultipatchPipelineModule):
 
                         if not got_baseline:
                             # no matching baseline available
-                            # raise Exception()
                             unmatched += 1
                             continue
 
