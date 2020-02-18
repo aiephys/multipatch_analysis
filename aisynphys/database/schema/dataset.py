@@ -182,6 +182,13 @@ class PulseResponseBase(object):
     @property
     def stim_tseries(self):
         return self.stim_pulse.stimulus_tseries
+        
+    @property
+    def baseline_tseries(self):
+        bl = self.baseline
+        if bl is None:
+            return None
+        return TSeries(bl.data, sample_rate=default_sample_rate, t0=bl.data_start_time)
 
     def get_tseries(self, ts_type, align_to):
         """Return the pre-, post-, or stimulus TSeries, time aligned to either the spike or the stimulus onset.
@@ -191,17 +198,23 @@ class PulseResponseBase(object):
         Parameters
         ----------
         ts_type : str
-            One of "pre", "post", or "stim"
+            One of "pre", "post", "stim", or "baseline"
         align_to : str | None
             One of "spike" or "pulse"        
         """
-        assert ts_type in ('pre', 'post', 'stim'), "ts_type must be 'pre', 'post', or 'stim'"
+        assert ts_type in ('pre', 'post', 'stim', 'baseline'), "ts_type must be 'pre', 'post', 'stim', or 'baseline'"
         assert align_to in ('spike', 'pulse', None), "align_to must be 'spike', 'stim', or None"
         
         ts = getattr(self, ts_type+"_tseries")
         if align_to == None:
             return ts
-        elif align_to == 'spike':
+        
+        # For baseline tseries, make pulse appear 10ms from start and spike 11ms.
+        if ts_type == 'baseline':
+            offset = -10e-3 if align_to == 'pulse' else -11e-3
+            return ts.copy(t0=offset)
+        
+        if align_to == 'spike':
             align_time = self.stim_pulse.first_spike_time
             if align_time is None:
                 return None

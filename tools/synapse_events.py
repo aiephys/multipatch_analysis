@@ -147,10 +147,14 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
             self._plot_pulse_response(rec)
             
         self.scatter_plot.setSelectedPoints(points)
-        
 
     def _plot_pulse_response(self, rec):
         pr = rec.PulseResponse
+
+        base_ts = pr.get_tseries('baseline', align_to='spike')
+        if base_ts is not None:
+            self.data_plots[1].plot(base_ts.time_values, base_ts.data)
+
         
         pre_ts = pr.get_tseries('pre', align_to='spike')
         
