@@ -7,7 +7,7 @@ from ... import config
 from .pipeline_module import MultipatchPipelineModule
 from .dataset import DatasetPipelineModule
 from .synapse import SynapsePipelineModule
-from ...pulse_response_strength import response_query, measure_response, measure_deconvolved_response, analyze_response_strength
+from ...pulse_response_strength import measure_response, measure_deconvolved_response, analyze_response_strength
 
 
 class PulseResponsePipelineModule(MultipatchPipelineModule):
@@ -22,21 +22,22 @@ class PulseResponsePipelineModule(MultipatchPipelineModule):
         db = job['database']
         expt_id = job['job_id']
 
-        rq = response_query(session)
-
+        expt = db.experiment_from_ext_id(expt_id, session=session)
+        
         # select just data for the selected experiment
-        rq = rq.join(db.SyncRec).join(db.Experiment).filter(db.Experiment.ext_id==expt_id)
-        response_recs = rq.all()
+        rq = db.query(db.PulseResponse).join(db.Recording).join(db.SyncRec).join(db.Experiment).filter(db.Experiment.ext_id==expt_id)
+        prs = rq.all()
+        print("got %d pulse responses" % len(prs))
         
         # best estimate of response amplitude using known latency for this synapse
-        for rec in response_recs:
-            if not rec.has_synapse:
+        for pr in prs:
+            if not pr.pair.has_synapse:
                 continue
             
-            response_fit, baseline_fit = measure_response(rec)
-            response_dec_fit, baseline_dec_fit = measure_deconvolved_response(rec)
+            response_fit, baseline_fit = measure_response(pr)
+            response_dec_fit, baseline_dec_fit = measure_deconvolved_response(pr)
             
-            new_rec = db.PulseResponseFit(pulse_response_id=rec.response_id)
+            new_rec = db.PulseResponseFit(pulse_response_id=pr.id)
             
             # Psp fits
             for fit, prefix in [(response_fit, 'fit_'), (baseline_fit, 'baseline_fit_')]:
@@ -67,8 +68,8 @@ class PulseResponsePipelineModule(MultipatchPipelineModule):
         
 
         # "unbiased" response analysis used to predict connectivity
-        _compute_strength('pulse_response', response_recs, session, db)
-        _compute_strength('baseline', response_recs, session, db)
+        _compute_strength('pulse_response', prs, session, db)
+        _compute_strength('baseline', prs, session, db)
         
     def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.
@@ -102,13 +103,19 @@ class PulseResponsePipelineModule(MultipatchPipelineModule):
         return fits+prs+brs
 
 
-def _compute_strength(source, recs, session, db):
+def _compute_strength(source, prs, session, db):
     """Compute per-pulse-response strength metrics
     """
     rec_type = db.PulseResponseStrength if source == 'pulse_response' else db.BaselineResponseStrength
-    for rec in recs:
-        new_rec = {'%s_id'%source: rec.response_id}
-        result = analyze_response_strength(rec, source)
+    for pr in prs:
+        if source == 'pulse_response':
+            new_rec = {'pulse_response_id': pr.id}
+        if source == 'baseline':
+            if pr.baseline is None:
+                continue
+            new_rec = {'baseline_id': pr.baseline.id}
+            
+        result = analyze_response_strength(pr, source)
         # copy a subset of results over to new record
         for k in ['pos_amp', 'neg_amp', 'pos_dec_amp', 'neg_dec_amp', 'pos_dec_latency', 'neg_dec_latency', 'crosstalk']:
             new_rec[k] = result[k]

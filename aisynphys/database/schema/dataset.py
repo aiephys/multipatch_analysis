@@ -194,6 +194,9 @@ class PulseResponseBase(object):
         """Return the pre-, post-, or stimulus TSeries, time aligned to either the spike or the stimulus onset.
             
         If spike alignment is requested but no spike time is available, then return None.
+
+        If any alignment is requested, this method also adds keys to the returned ``tseries.meta``: 
+        'pulse_start', 'pulse_stop', and 'spike_time', giving the times of these events relative to the aligned timebase.
         
         Parameters
         ----------
@@ -205,14 +208,17 @@ class PulseResponseBase(object):
         assert ts_type in ('pre', 'post', 'stim', 'baseline'), "ts_type must be 'pre', 'post', 'stim', or 'baseline'"
         assert align_to in ('spike', 'pulse', None), "align_to must be 'spike', 'stim', or None"
         
+        pulse_time = self.stim_pulse.onset_time
+        spike_time = self.stim_pulse.first_spike_time
+        
         ts = getattr(self, ts_type+"_tseries")
         if align_to == None:
             return ts
-        
-        # For baseline tseries, make pulse appear 10ms from start and spike 11ms.
+
         if ts_type == 'baseline':
-            offset = -10e-3 if align_to == 'pulse' else -11e-3
-            return ts.copy(t0=offset)
+            # if pulse/spike aligning, we set up timing to be exactly
+            # the same as the post recording
+            ts = ts.copy(t0=self.data_start_time)
         
         if align_to == 'spike':
             align_time = self.stim_pulse.first_spike_time
@@ -220,7 +226,14 @@ class PulseResponseBase(object):
                 return None
         elif align_to == 'pulse':
             align_time = self.stim_pulse.onset_time
-        return ts.copy(t0=ts.t0 - align_time)
+            
+        ts = ts.copy(t0=ts.t0 - align_time)
+        ts.meta.update({
+            'pulse_start': pulse_time - align_time,
+            'pulse_stop': pulse_time - align_time + self.stim_pulse.duration,
+            'spike_time': None if spike_time is None else spike_time - align_time,
+        })
+        return ts
         
 
 PulseResponse = make_table(
@@ -231,6 +244,7 @@ PulseResponse = make_table(
         ('recording_id', 'recording.id', 'The full recording from which this pulse was extracted', {'index': True}),
         ('stim_pulse_id', 'stim_pulse.id', 'The presynaptic pulse', {'index': True}),
         ('pair_id', 'pair.id', 'The pre-post cell pair involved in this pulse response', {'index': True}),
+        ('baseline_id', 'baseline.id', 'A random baseline snippet matched from the same recording.'),
         ('data', 'array', 'numpy array of response data sampled at '+sample_rate_str, {'deferred': True}),
         ('data_start_time', 'float', 'Starting time of this chunk of the recording in seconds, relative to the beginning of the recording'),
         ('ex_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for excitatory synapse probing', {'index': True}),
@@ -247,9 +261,8 @@ PulseResponse.pair = relationship(Pair, back_populates='pulse_responses')
 
 Baseline = make_table(
     name='baseline',
-    comment="A snippet of baseline data matched to a pulse response from the same Recording",
+    comment="A snippet of baseline data used for comparison to pulse_response records",
     columns=[
-        ('pulse_response_id', 'pulse_response.id', 'The PulseResponse to which this baseline is matched.', {'index': True}),
         ('recording_id', 'recording.id', 'The recording from which this baseline snippet was extracted.', {'index': True}),
         ('data', 'array', 'numpy array of baseline data sampled at '+sample_rate_str, {'deferred': True}),
         ('data_start_time', 'float', "Starting time of this chunk of the recording in seconds, relative to the beginning of the recording"),
@@ -261,5 +274,5 @@ Baseline = make_table(
 
 Recording.baselines = relationship(Baseline, back_populates="recording", cascade='save-update,merge,delete', single_parent=True)
 Baseline.recording = relationship(Recording, back_populates="baselines")
-PulseResponse.baseline = relationship(Baseline, back_populates="pulse_response", cascade='save-update,merge,delete', single_parent=True, uselist=False)
-Baseline.pulse_response = relationship(PulseResponse, back_populates="baseline")
+PulseResponse.baseline = relationship(Baseline, back_populates="pulse_responses", cascade='save-update,merge,delete', uselist=False)
+Baseline.pulse_responses = relationship(PulseResponse, back_populates="baseline", uselist=True)

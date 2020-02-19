@@ -80,7 +80,8 @@ def generate_pair_dynamics(pair, db, session):
     pr_recs = [pr_rec for pr_rec in pr_recs if pr_rec.PulseResponseFit.fit_amp is not None]
     
     percentile = 90 if syn_type == 'ex' else 10
-    amps = [rec.PulseResponseFit.fit_amp for rec in pr_recs]
+    # dec_fit_reconv_amp generally has much lower noise than fit_amp:
+    amps = [rec.PulseResponseFit.dec_fit_reconv_amp for rec in pr_recs]
     amp_90p = scipy.stats.scoreatpercentile(amps, percentile)
 
     # load all baseline amplitudes to determine the noise level

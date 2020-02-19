@@ -186,6 +186,7 @@ class DatasetPipelineModule(MultipatchPipelineModule):
                     baseline_chunks[pre_dev, post_dev] = chunks[:]
 
             baseline_qc_cache = {}
+            baseline_entry_cache = {}
 
             # import postsynaptic responses
             unmatched = 0
@@ -247,17 +248,21 @@ class DatasetPipelineModule(MultipatchPipelineModule):
                             unmatched += 1
                             continue
 
-                        base_entry = db.Baseline(
-                            pulse_response=resp_entry,
-                            recording=rec_entries[post_dev],
-                            data=data,
-                            data_start_time=start,
-                            mode=float_mode(data),
-                            ex_qc_pass=ex_qc_pass,
-                            in_qc_pass=in_qc_pass,
-                            meta=None if ex_qc_pass is True and in_qc_pass is True else {'qc_failures': qc_failures},
-                        )
-                        session.add(base_entry)
+                        if key not in baseline_entry_cache:
+                            # create a db record for this baseline chunk if it has not already appeared elsewhere
+                            base_entry = db.Baseline(
+                                recording=rec_entries[post_dev],
+                                data=data,
+                                data_start_time=start,
+                                mode=float_mode(data),
+                                ex_qc_pass=ex_qc_pass,
+                                in_qc_pass=in_qc_pass,
+                                meta=None if ex_qc_pass is True and in_qc_pass is True else {'qc_failures': qc_failures},
+                            )
+                            session.add(base_entry)
+                            baseline_entry_cache[key] = base_entry
+                        
+                        resp_entry.baseline = baseline_entry_cache[key]
 
             if unmatched > 0:
                 print("%s %s: %d pulse responses without matched baselines" % (job_id, srec, unmatched))

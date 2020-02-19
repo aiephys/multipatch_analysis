@@ -52,7 +52,6 @@ PulseResponseStrength = make_table(
     comment="Measurements of membrane potential or current deflection following each evoked presynaptic spike.",
     columns=[
         ('pulse_response_id', 'pulse_response.id', '', {'index': True, 'unique': True}),
-        
         ('pos_amp', 'float', 'max-median offset from baseline to pulse response window'),
         ('neg_amp', 'float', 'min-median offset from baseline to pulse response window'),
         ('pos_dec_amp', 'float', 'max-median offset from baseline to pulse response window from devonvolved trace'),
@@ -67,7 +66,7 @@ BaselineResponseStrength = make_table(
     name='baseline_response_strength',
     comment="Measurements of membrane potential or current deflection in the absence of presynaptic spikes (provides a measurement of background noise to compare to pulse_response_strength).",
     columns=[
-        ('baseline_id', 'baseline.id', '', {'index': True, 'unique': True}),
+        ('baseline_id', 'baseline.id', '', {'index': True}),
         ('pos_amp', 'float', 'max-median offset from baseline to pulse response window'),
         ('neg_amp', 'float', 'min-median offset from baseline to pulse response window'),
         ('pos_dec_amp', 'float', 'max-median offset from baseline to pulse response window from devonvolved trace'),

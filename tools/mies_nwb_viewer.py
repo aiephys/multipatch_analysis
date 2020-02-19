@@ -69,14 +69,13 @@ if __name__ == '__main__':
     # load file or set base directory from argv
     for arg in sys.argv[1:]:
         if not os.path.exists(arg):
-            from aisynphys.experiment_list import cached_experiments
-            expts = cached_experiments()
+            from aisynphys.database import default_db as db
             try:
-                expt = expts[arg]
+                expt = db.experiment_from_ext_id(arg)
             except Exception:
                 print("Could not find experiment %s" % arg)
                 sys.exit(-1)
-            arg = expt.nwb_file
+            arg = os.path.join(expt.nwb_file)
 
         if os.path.isdir(arg):
             m.setBaseDir(arg)

@@ -1,8 +1,10 @@
-import pandas as pd
+import numpy as np
 import pyqtgraph as pg
+from sqlalchemy.sql import sqltypes
 from neuroanalysis.data import TSeries
 from neuroanalysis.fitting import StackedPsp, Psp
 from aisynphys.database import default_db as db
+import aisynphys.database.database as database
 from aisynphys.data import PulseResponseList
 from aisynphys.ui.experiment_browser import ExperimentBrowser
 from aisynphys.pulse_response_strength import deconv_filter
@@ -24,29 +26,41 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
         self.ctrl_split.addWidget(self.scatter_plot.ctrlPanel)
         self.addWidget(self.scatter_plot.plot)
 
-        # set up scatter plot fields
-        fields = [
-            ('clamp_mode', {'mode': 'enum', 'values': ['ic', 'vc']}),
-            ('ex_qc_pass', {'mode': 'enum', 'values': [True, False]}),
-            ('in_qc_pass', {'mode': 'enum', 'values': [True, False]}),
-            ('pulse_number', {'mode': 'enum', 'values': list(range(1,13))}),
-            ('induction_frequency', {'mode': 'range'}),
-            ('recovery_delay', {'mode': 'range'}),
-            ('pos_amp', {'mode': 'range'}),
-            ('neg_amp', {'mode': 'range'}),
-            ('pos_dec_amp', {'mode': 'range'}),
-            ('neg_dec_amp', {'mode': 'range'}),
-        ]
-        fit_keys = ['amp', 'rise_time', 'decay_tau', 'exp_amp', 'yoffset', 'latency', 'nrmse']
-        fields = fields + [('fit_'+key, {'mode': 'range'}) for key in fit_keys]
-        fields = fields + [('baseline_fit_'+key, {'mode': 'range'}) for key in fit_keys]
-        fields = fields + [('dec_fit_'+key, {'mode': 'range'}) for key in fit_keys]
-        fields = fields + [('baseline_dec_fit_'+key, {'mode': 'range'}) for key in fit_keys]
-        fields = fields + [
-            ('dec_fit_reconv_amp', {'mode': 'range'}),
-            ('baseline_dec_fit_reconv_amp', {'mode': 'range'}),
-        ]
-        self.scatter_plot.setFields(fields)
+        # Select all fields to be displayed
+        fields = {
+            'pulse_response_id': {'column': db.PulseResponse.id, 'mode': 'range', 'dtype': int},
+            'clamp_mode': {'column': db.PatchClampRecording.clamp_mode, 'mode': 'enum', 'values': ['ic', 'vc'], 'dtype': str},
+            'pulse_number': {'column': db.StimPulse.pulse_number, 'mode': 'enum', 'values': list(range(1,13)), 'dtype': int},
+            'induction_frequency': {'column': db.MultiPatchProbe.induction_frequency, 'mode': 'range', 'dtype': float},
+            'recovery_delay': {'column': db.MultiPatchProbe.recovery_delay, 'mode': 'range', 'dtype': float},
+        }
+        for table, prefix in [(db.PulseResponse, ''), (db.PulseResponseFit, ''), (db.PulseResponseStrength, ''), (db.BaselineResponseStrength, 'baseline_')]:
+            for name, col in table.__table__.c.items():
+                if name == 'id' or name.endswith('_id'):
+                    continue
+                colname = name
+                name = prefix + name
+                if isinstance(col.type, (sqltypes.Integer, sqltypes.Float, database.FloatType)):
+                    fields[name] = {'mode': 'range', 'dtype': float}
+                elif isinstance(col.type, sqltypes.String):
+                    fields[name] = {'mode': 'enum', 'dtype': str}
+                elif isinstance(col.type, sqltypes.Boolean):
+                    fields[name] = {'mode': 'enum', 'values': [True, False], 'dtype': bool}
+                else:
+                    continue
+                fields[name]['column'] = getattr(table, colname)
+        self.fields = fields
+
+        # set up scatter plot fields         
+        sp_fields = []
+        self.dtype = []
+        for name, spec in fields.items():
+            if spec['mode'] == 'enum':
+                sp_fields.append((name, {'mode': 'enum', 'values': spec['values']}))
+            else:
+                sp_fields.append((name, {'mode': 'range'}))
+            self.dtype.append((name, spec['dtype']))
+        self.scatter_plot.setFields(sp_fields)
         
         # default filter for IC data
         cm_filter = self.scatter_plot.filter.addNew('clamp_mode')
@@ -97,42 +111,24 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
             print("Loading:", pair)
             self.loaded_pair = pair
 
-            # Load data for scatter plot            
-            q = db.query(
-                db.PulseResponse.id.label('prid'), 
-                db.PulseResponse.ex_qc_pass,
-                db.PulseResponse.in_qc_pass,
-                db.PulseResponseFit, 
-                
-                db.PulseResponseStrength.pos_amp,
-                db.PulseResponseStrength.neg_amp,
-                db.PulseResponseStrength.pos_dec_amp,
-                db.PulseResponseStrength.neg_dec_amp,
-                db.PulseResponseStrength.pos_dec_latency,
-                db.PulseResponseStrength.neg_dec_latency,
-                db.PulseResponseStrength.crosstalk,
-
-                # db.BaselineResponseStrength,
-                db.PatchClampRecording.clamp_mode,
-                db.StimPulse.pulse_number, 
-                db.MultiPatchProbe.induction_frequency, 
-                db.MultiPatchProbe.recovery_delay
-            )
-            q = q.join(db.PulseResponseFit)
-            q = q.join(db.PulseResponseStrength)
-            # q = q.join(db.BaselineResponseStrength)
+            # Load data for scatter plot
+            cols = [spec['column'].label(name) for name, spec in self.fields.items()]
+            q = db.query(*cols)
+            q = q.outerjoin(db.PulseResponseFit)
+            q = q.outerjoin(db.PulseResponseStrength)
+            q = q.outerjoin(db.BaselineResponseStrength, db.BaselineResponseStrength.baseline_id==db.PulseResponse.baseline_id)
             q = q.join(db.StimPulse, db.PulseResponse.stim_pulse)
             q = q.join(db.Recording, db.PulseResponse.recording)
             q = q.join(db.PatchClampRecording)
             q = q.join(db.MultiPatchProbe)
             q = q.filter(db.PulseResponse.pair_id==pair.id)
+            recs = q.all()
             
-            df = q.dataframe()
-            for col in df.columns:
-                if 'fit_' in col:
-                    df[col] = pd.to_numeric(df[col])
-            
-            self.scatter_plot.setData(df.to_records())
+            data = np.empty(len(recs), dtype=self.dtype)
+            for i,rec in enumerate(recs):
+                for name, spec in self.dtype:
+                    data[i][name] = getattr(rec, name)
+            self.scatter_plot.setData(data)
             
     def scatter_plot_clicked(self, plt, points):
         for plt in self.data_plots + self.dec_plots + self.spike_plots:
@@ -140,9 +136,10 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
 
         # query raw data for selected points
         ids = [int(pt.data()['pulse_response_id']) for pt in points]
-        q = db.query(db.PulseResponse, db.PulseResponse.data, db.PulseResponseFit).join(db.PulseResponseFit).filter(db.PulseResponse.id.in_(ids))
+
+        q = db.query(db.PulseResponse, db.PulseResponse.data, db.PulseResponseFit).outerjoin(db.PulseResponseFit).filter(db.PulseResponse.id.in_(ids))
         recs = q.all()
-        
+
         for rec in recs:
             self._plot_pulse_response(rec)
             
@@ -150,7 +147,6 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
 
     def _plot_pulse_response(self, rec):
         pr = rec.PulseResponse
-
         base_ts = pr.get_tseries('baseline', align_to='spike')
         if base_ts is not None:
             self.data_plots[1].plot(base_ts.time_values, base_ts.data)
@@ -239,7 +235,7 @@ if __name__ == '__main__':
     parser.add_argument('pre_cell_id', type=str, nargs='?')
     parser.add_argument('post_cell_id', type=str, nargs='?')
     args = parser.parse_args()
-        
+    
     app = pg.mkQApp()
     if sys.flags.interactive == 1:
         pg.dbg()
@@ -247,11 +243,12 @@ if __name__ == '__main__':
     win = SynapseEventWindow()
     win.show()
     
-    if args.post_cell_id is not None:
+    if args.experiment_id is not None:
         expt = db.experiment_from_ext_id(args.experiment_id)
-        win.browser.populate([expt], synapses=True)
-        pair = expt.pairs[args.pre_cell_id, args.post_cell_id]
-        win.browser.select_pair(pair.id)
+        win.browser.populate([expt])
+        if args.post_cell_id is not None:
+            pair = expt.pairs[args.pre_cell_id, args.post_cell_id]
+            win.browser.select_pair(pair.id)
     else:
         win.browser.populate(synapses=True)
 
