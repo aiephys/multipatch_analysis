@@ -165,8 +165,8 @@ class OptoExperimentPipelineModule(DatabasePipelineModule):
         #    ymls.extend(glob.glob(os.path.join(config.synphys_data, path, 'site_*', 'pipettes.yml')))
         expts = read_expt_csvs()
         
-        n_errors = 0
-        n_no_slice = 0
+        n_errors = {}
+        n_no_slice = []
         ready = OrderedDict()
         print("checking for ready expts....")
         for i, expt in enumerate(expts['expt_list']):
@@ -192,17 +192,23 @@ class OptoExperimentPipelineModule(DatabasePipelineModule):
                     slice_ts = 0.0
                 slice_mtime, slice_success = finished_slices.get('%.3f'%slice_ts, (None, None))
                 #print('found expt for path:', site_path)
-            except Exception:
-                n_errors += 1
+            except Exception as exc:
+                n_errors[expt['experiment']] = exc
                 continue
             if slice_mtime is None or slice_success is False:
             #    slice_mtime = 0
-                n_no_slice += 1
+                n_no_slice.append(expt['experiment'])
                 continue
 
             ready[ex.uid] = {'dep_time':max(raw_data_mtime, slice_mtime), 'meta':{'source':site_path}}
         
-        print("Found %d experiments; %d are able to be processed, %d were skipped due to errors, %d were skipped due to missing or failed slice entries." % (len(expts['expt_list']), len(ready), n_errors, n_no_slice))
+        print("Found %d experiments; %d are able to be processed, %d were skipped due to errors, %d were skipped due to missing or failed slice entries." % (len(expts['expt_list']), len(ready), len(n_errors), len(n_no_slice)))
+        if len(n_errors) > 0 or len(n_no_slice) > 0:
+            print("-------- skipped experiments: ----------")
+            for e, exc in n_errors.items():
+                print('     %s: Error - %s' %(e.split('_conn')[0],exc))
+            for e in n_no_slice:
+                print('     %s: skipped due to problem with slice' % e.split('_conn')[0])
         return ready
 
     def dependent_job_ids(self, module, job_ids):
