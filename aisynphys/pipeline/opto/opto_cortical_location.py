@@ -7,6 +7,8 @@ from ..pipeline_module import DatabasePipelineModule
 from .opto_experiment import OptoExperimentPipelineModule, load_experiment
 from collections import OrderedDict
 import datetime, os
+import json
+from aisynphys import config
 
 
 class OptoCortexLocationPipelineModule(DatabasePipelineModule):
@@ -25,20 +27,28 @@ class OptoCortexLocationPipelineModule(DatabasePipelineModule):
 
         try:
             # look up slice record in DB
-            try:
-                ts = expt.slice_timestamp
-            except KeyError:
+            # try:
+            #     ts = expt.slice_timestamp
+            # except KeyError:
+            #     ts = 0.0
+            ts = expt.info.get('slice_info', {}).get('__timestamp__')
+            if ts is None:
                 ts = 0.0
             slice_entry = db.slice_from_timestamp(ts, session=session)
 
+            with open(expt.files['connections']) as f:
+                cnx_json = json.load(f)
+
+            cortex = cnx_json.get('CortexMarker', {})
+
             site_entry = db.CorticalSite(
-                    pia_to_wm_distance=expt.cortical_site_info.get('pia_to_wm_distance'),
-                    pia_position=expt.cortical_site_info.get('piaPos'),
-                    wm_position=expt.cortical_site_info.get('wmPos'),
-                    L1_L23_boundary=expt.cortical_site_info.get('layerBounds_percentDepth',{}).get('L2/3', [None])[0],
-                    L23_L4_boundary=expt.cortical_site_info.get('layerBounds_percentDepth',{}).get('L4', [None])[0],
-                    L4_L5_boundary=expt.cortical_site_info.get('layerBounds_percentDepth',{}).get('L5', [None])[0],
-                    L5_L6_boundary=expt.cortical_site_info.get('layerBounds_percentDepth',{}).get('L6', [None])[0]
+                    pia_to_wm_distance=cortex.get('pia_to_wm_distance'),
+                    pia_position=cortex.get('piaPos'),
+                    wm_position=cortex.get('wmPos'),
+                    L1_L23_boundary=cortex.get('layerBounds_percentDepth',{}).get('L2/3', [None])[0],
+                    L23_L4_boundary=cortex.get('layerBounds_percentDepth',{}).get('L4', [None])[0],
+                    L4_L5_boundary=cortex.get('layerBounds_percentDepth',{}).get('L5', [None])[0],
+                    L5_L6_boundary=cortex.get('layerBounds_percentDepth',{}).get('L6', [None])[0]
                     )
 
             site_entry.slice = slice_entry
@@ -95,8 +105,8 @@ class OptoCortexLocationPipelineModule(DatabasePipelineModule):
             if success is not True:
                 continue
             expt = load_experiment(expt_id)
-            if expt.connections_file_version <= 3:
-                mtime = datetime.datetime.fromtimestamp(os.path.getmtime(expt.connections_file))
+            if expt.loader.get_cnx_file_version(expt.files['connections']) >= 3:
+                mtime = datetime.datetime.fromtimestamp(os.path.getmtime(expt.files['connections']))
             else:
                 mtime = datetime.datetime.fromtimestamp(os.path.getmtime(config.distance_csv))
             ready[expt_id] = {'dep_time':mtime, 'meta':{}}
