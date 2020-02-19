@@ -15,7 +15,7 @@ class PulseResponsePipelineModule(MultipatchPipelineModule):
     """
     name = 'pulse_response'
     dependencies = [DatasetPipelineModule, SynapsePipelineModule]
-    table_group = ['pulse_response_fit', 'pulse_response_strength', 'baseline_response_strength']
+    table_group = ['pulse_response_fit', 'pulse_response_strength']
     
     @classmethod
     def create_db_entries(cls, job, session):
@@ -68,8 +68,25 @@ class PulseResponsePipelineModule(MultipatchPipelineModule):
         
 
         # "unbiased" response analysis used to predict connectivity
-        _compute_strength('pulse_response', prs, session, db)
-        _compute_strength('baseline', prs, session, db)
+        for pr in prs:
+            bl = pr.baseline
+            if bl is None:
+                blid = None
+                ('pulse_response')
+            else:
+                blid = bl.id
+                sources = ('pulse_response', 'baseline')
+            rec = db.PulseResponseStrength(pulse_response_id=pr.id, baseline_id=blid)
+            for source in sources:
+                result = analyze_response_strength(pr, source)
+                # copy a subset of results over to new record
+                for k in ['pos_amp', 'neg_amp', 'pos_dec_amp', 'neg_dec_amp', 'pos_dec_latency', 'neg_dec_latency', 'crosstalk']:
+                    k1 = k if source == 'pulse_response' else 'baseline_' + k
+                    setattr(rec, k1, result[k])
+            session.add(rec)
+
+        # just to collect error messages here in case we have made a mistake:
+        session.flush()
         
     def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.
@@ -92,40 +109,5 @@ class PulseResponsePipelineModule(MultipatchPipelineModule):
         q = q.filter(db.Experiment.ext_id.in_(job_ids))
         prs = q.all()
         
-        q = session.query(db.BaselineResponseStrength)
-        q = q.filter(db.BaselineResponseStrength.baseline_id==db.Baseline.id)
-        q = q.filter(db.Baseline.recording_id==db.Recording.id)
-        q = q.filter(db.Recording.sync_rec_id==db.SyncRec.id)
-        q = q.filter(db.SyncRec.experiment_id==db.Experiment.id)
-        q = q.filter(db.Experiment.ext_id.in_(job_ids))
-        brs = q.all()
-        
-        return fits+prs+brs
+        return fits + prs
 
-
-def _compute_strength(source, prs, session, db):
-    """Compute per-pulse-response strength metrics
-    """
-    rec_type = db.PulseResponseStrength if source == 'pulse_response' else db.BaselineResponseStrength
-    for pr in prs:
-        if source == 'pulse_response':
-            new_rec = {'pulse_response_id': pr.id}
-        if source == 'baseline':
-            if pr.baseline is None:
-                continue
-            new_rec = {'baseline_id': pr.baseline.id}
-            
-        result = analyze_response_strength(pr, source)
-        # copy a subset of results over to new record
-        for k in ['pos_amp', 'neg_amp', 'pos_dec_amp', 'neg_dec_amp', 'pos_dec_latency', 'neg_dec_latency', 'crosstalk']:
-            new_rec[k] = result[k]
-        session.add(rec_type(**new_rec))
-
-    # Bulk insert is not safe with parallel processes
-    # if source == 'pulse_response':
-    #     session.bulk_insert_mappings(PulseResponseStrength, new_recs)
-    # else:
-    #     session.bulk_insert_mappings(BaselineResponseStrength, new_recs)
-
-    # just to collect error messages here in case we have made a mistake:
-    session.flush()

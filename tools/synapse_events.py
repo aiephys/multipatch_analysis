@@ -29,21 +29,24 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
         # Select all fields to be displayed
         fields = {
             'pulse_response_id': {'column': db.PulseResponse.id, 'mode': 'range', 'dtype': int},
-            'clamp_mode': {'column': db.PatchClampRecording.clamp_mode, 'mode': 'enum', 'values': ['ic', 'vc'], 'dtype': str},
+            'clamp_mode': {'column': db.PatchClampRecording.clamp_mode, 'mode': 'enum', 'values': ['ic', 'vc'], 'dtype': object},
             'pulse_number': {'column': db.StimPulse.pulse_number, 'mode': 'enum', 'values': list(range(1,13)), 'dtype': int},
             'induction_frequency': {'column': db.MultiPatchProbe.induction_frequency, 'mode': 'range', 'dtype': float},
             'recovery_delay': {'column': db.MultiPatchProbe.recovery_delay, 'mode': 'range', 'dtype': float},
         }
-        for table, prefix in [(db.PulseResponse, ''), (db.PulseResponseFit, ''), (db.PulseResponseStrength, ''), (db.BaselineResponseStrength, 'baseline_')]:
+        for table, prefix in [(db.PulseResponse, ''), (db.PulseResponseFit, ''), (db.PulseResponseStrength, '')]:
             for name, col in table.__table__.c.items():
-                if name == 'id' or name.endswith('_id'):
+                if name.endswith('_id'):
                     continue
                 colname = name
-                name = prefix + name
+                if name == 'id':
+                    name = table.__table__.name + '_id'
+                else:
+                    name = prefix + name
                 if isinstance(col.type, (sqltypes.Integer, sqltypes.Float, database.FloatType)):
                     fields[name] = {'mode': 'range', 'dtype': float}
                 elif isinstance(col.type, sqltypes.String):
-                    fields[name] = {'mode': 'enum', 'dtype': str}
+                    fields[name] = {'mode': 'enum', 'dtype': object}
                 elif isinstance(col.type, sqltypes.Boolean):
                     fields[name] = {'mode': 'enum', 'values': [True, False], 'dtype': bool}
                 else:
@@ -114,20 +117,23 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
             # Load data for scatter plot
             cols = [spec['column'].label(name) for name, spec in self.fields.items()]
             q = db.query(*cols)
-            q = q.outerjoin(db.PulseResponseFit)
-            q = q.outerjoin(db.PulseResponseStrength)
-            q = q.outerjoin(db.BaselineResponseStrength, db.BaselineResponseStrength.baseline_id==db.PulseResponse.baseline_id)
+            q = q.outerjoin(db.PulseResponseFit, db.PulseResponseFit.pulse_response_id==db.PulseResponse.id)
+            q = q.outerjoin(db.PulseResponseStrength, db.PulseResponseStrength.pulse_response_id==db.PulseResponse.id)
             q = q.join(db.StimPulse, db.PulseResponse.stim_pulse)
-            q = q.join(db.Recording, db.PulseResponse.recording)
-            q = q.join(db.PatchClampRecording)
+            q = q.join(db.Recording, db.PulseResponse.recording_id==db.Recording.id)
+            q = q.join(db.PatchClampRecording, db.PatchClampRecording.recording_id==db.Recording.id)
             q = q.join(db.MultiPatchProbe)
             q = q.filter(db.PulseResponse.pair_id==pair.id)
             recs = q.all()
+            print("loaded %d/%s pulse responses" % (len(recs), len(pair.pulse_responses)))
+            self.loaded_recs = recs
             
             data = np.empty(len(recs), dtype=self.dtype)
             for i,rec in enumerate(recs):
                 for name, spec in self.dtype:
                     data[i][name] = getattr(rec, name)
+            self.loaded_data = data
+            
             self.scatter_plot.setData(data)
             
     def scatter_plot_clicked(self, plt, points):
@@ -169,7 +175,7 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
         fit_par = rec.PulseResponseFit
         
         # If there is no fit, bail out here
-        if fit_par.fit_amp is None:
+        if fit_par is None:
             return
         
         spsp = StackedPsp()

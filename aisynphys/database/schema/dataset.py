@@ -212,7 +212,7 @@ class PulseResponseBase(object):
         spike_time = self.stim_pulse.first_spike_time
         
         ts = getattr(self, ts_type+"_tseries")
-        if align_to == None:
+        if ts is None or align_to == None:
             return ts
 
         if ts_type == 'baseline':
