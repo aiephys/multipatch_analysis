@@ -6,7 +6,8 @@ from collections import OrderedDict
 import csv, codecs, glob, os
 from acq4.util.DataManager import getDirHandle
 from neuroanalysis.data.experiment import Experiment
-from neuroanalysis.data.libraries import opto
+#from neuroanalysis.data.libraries import opto
+from neuroanalysis.data.loaders.opto_experiment_loader import OptoExperimentLoader
 from . import data_model
 
 ##### TODO: GO BACK TO EXPERIEMENT BEING DEPENDENT ON SLICE -- IN ALL SLICES USE EXPERIMENTS.CSV TO COME UP WITH SLICE LIST
@@ -47,17 +48,13 @@ class OptoExperimentPipelineModule(DatabasePipelineModule):
             #         expt = Experiment(load_file=cnx_json, loading_library=opto, meta_info=entry)
 
             # look up slice record in DB
-            try:
-                ts = expt.slice_timestamp
-            except KeyError:
+            ts = expt.info.get('slice_info', {}).get('__timestamp__')
+            if ts is None:
                 ts = 0.0
-                
-
             slice_entry = db.slice_from_timestamp(ts, session=session)
 
-            expt_info = expt.expt_info
-            if expt_info is None:
-                expt_info = {}
+
+            expt_info = expt.info.get('day_info', {})
 
             # dig to find out which rig this was recorded on
             rig = expt_info.get('rig_name', None)
@@ -70,14 +67,14 @@ class OptoExperimentPipelineModule(DatabasePipelineModule):
 
 
             fields = {
-                'storage_path': expt.original_path, 
-                'ephys_file': None if expt.ephys_file is None else os.path.relpath(expt.ephys_file, expt.path),
+                'storage_path': expt.files.get('path', ''), 
+                'ephys_file': None if expt.files.get('ephys') is None else os.path.relpath(expt.files['ephys'], expt.files.get('path', '')),
                 'rig_name': rig,
                 #'project_name': expt.project_name,
                 'acq_timestamp': expt.timestamp,
                 #'target_region': expt_info.get('region'),
-                'internal': expt_info.get('internal'),
-                'acsf': expt_info.get('solution'),
+                'internal': expt_info.get('day_info', {}).get('internal'),
+                'acsf': expt_info.get('day_info',{}).get('solution'),
                 #'target_temperature': expt.target_temperature,
                 'ext_id': expt.uid
             }
@@ -184,14 +181,14 @@ class OptoExperimentPipelineModule(DatabasePipelineModule):
             try:
                 if expt['site_path'] == '':
                     cnx_json = os.path.join(config.connections_dir, expt['experiment'])
-                    ex = Experiment(load_file=cnx_json, loading_library=opto, meta_info=expt)
+                    ex = Experiment(loader=OptoExperimentLoader(load_file=cnx_json), meta_info=expt)
                 else:
-                    ex = Experiment(site_path=site_path, loading_library=opto)
+                    ex = Experiment(loader=OptoExperimentLoader(site_path=site_path))
 
                 raw_data_mtime = ex.last_modification_time
-                try:
-                    slice_ts = ex.slice_timestamp
-                except KeyError:
+                
+                slice_ts = ex.info.get('slice_info', {}).get('__timestamp__')
+                if slice_ts is None:
                     slice_ts = 0.0
                 slice_mtime, slice_success = finished_slices.get('%.3f'%slice_ts, (None, None))
                 #print('found expt for path:', site_path)
@@ -261,10 +258,12 @@ def load_experiment(job_id):
     entry['distances'] = [e for e in all_expts['distances'] if e['exp_id']==job_id]
     #print('create_db_entries for:', entry['site_path'], "job_id:", job_id)
     if entry['site_path'] != '':
-        expt = Experiment(site_path=os.path.join(config.synphys_data, entry['site_path']), loading_library=opto, meta_info=entry)
+        #expt = Experiment(site_path=os.path.join(config.synphys_data, entry['site_path']), loading_library=opto, meta_info=entry)
+        expt = Experiment(loader=OptoExperimentLoader(site_path=os.path.join(config.synphys_data, entry['site_path'])), meta_info=entry)
     else:
         cnx_json = os.path.join(config.connections_dir, entry['experiment'])
-        expt = Experiment(load_file=cnx_json, loading_library=opto, meta_info=entry)
+        #expt = Experiment(load_file=cnx_json, loading_library=opto, meta_info=entry)
+        expt = Experiment(loader=OptoExperimentLoader(load_file=cnx_json), meta_info=entry)
 
     return expt
 
