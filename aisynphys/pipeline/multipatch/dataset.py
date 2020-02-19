@@ -11,7 +11,7 @@ from .experiment import ExperimentPipelineModule
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.data import PatchClampRecording
 from ...data import Experiment, MultiPatchDataset, MultiPatchProbe, MultiPatchSyncRecAnalyzer
-from neuroanalyisis.analyzers.stim_pulse import PatchClampStimPulseAnalyzer
+from neuroanalysis.analyzers.stim_pulse import PatchClampStimPulseAnalyzer
 from neuroanalysis.analyzers.baseline import BaselineDistributor
 
 
