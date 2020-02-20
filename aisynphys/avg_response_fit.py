@@ -198,5 +198,6 @@ def check_fit_qc_pass(fit_result, expected_params, clamp_mode):
         if (error > error_threshold) and (abs(v1 - v2) > abs_threshold):
             failures.append('%s error too large (%s != %s)' % (k, v1, v2))
 
-    print('; '.join(failures))
+    if len(failures) > 0:
+        print('; '.join(failures))
     return len(failures) == 0, failures

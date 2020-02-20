@@ -110,7 +110,7 @@ def measure_deconvolved_response(pr):
     
     # make sure all parameters are available
     for v in [pr.stim_pulse.first_spike_time, syn.latency, rise_time, decay_tau]:
-        if v is None or syn.latency is None or not np.isfinite(v):
+        if v is None or not np.isfinite(v):
             return None, None
 
     response_data = pr.get_tseries('post', align_to='spike')
@@ -282,7 +282,10 @@ def analyze_response_strength(pr, source, remove_artifacts=False, deconvolve=Tru
         data = pr.get_tseries('baseline', align_to='pulse')
     else:
         raise ValueError("Invalid source %s" % source)
-        
+    
+    if data is None:
+        return None
+            
     pulse_times = data.meta['pulse_start'], data.meta['pulse_stop']
     spike_time = data.meta['spike_time']
     if spike_time is None:

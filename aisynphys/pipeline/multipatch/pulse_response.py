@@ -36,6 +36,8 @@ class PulseResponsePipelineModule(MultipatchPipelineModule):
             
             response_fit, baseline_fit = measure_response(pr)
             response_dec_fit, baseline_dec_fit = measure_deconvolved_response(pr)
+            if response_fit is None and response_dec_fit is None:
+                continue
             
             new_rec = db.PulseResponseFit(pulse_response_id=pr.id)
             
@@ -72,13 +74,15 @@ class PulseResponsePipelineModule(MultipatchPipelineModule):
             bl = pr.baseline
             if bl is None:
                 blid = None
-                ('pulse_response')
+                sources = ['pulse_response']
             else:
                 blid = bl.id
-                sources = ('pulse_response', 'baseline')
+                sources = ['pulse_response', 'baseline']
             rec = db.PulseResponseStrength(pulse_response_id=pr.id, baseline_id=blid)
             for source in sources:
                 result = analyze_response_strength(pr, source)
+                if result is None:
+                    continue
                 # copy a subset of results over to new record
                 for k in ['pos_amp', 'neg_amp', 'pos_dec_amp', 'neg_dec_amp', 'pos_dec_latency', 'neg_dec_latency', 'crosstalk']:
                     k1 = k if source == 'pulse_response' else 'baseline_' + k

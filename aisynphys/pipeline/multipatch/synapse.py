@@ -96,8 +96,10 @@ class SynapsePipelineModule(MultipatchPipelineModule):
                 latency = (lvals * nvals).sum() / nvals.sum()
                 dist = np.abs(lvals - latency)
                 # only set latency if the averaged values agree
-                if np.all(dist < 150e-6):
+                if np.all(dist < 200e-6):
                     syn.latency = latency
+                else:
+                    print("   latencies do not match for synapse", pair, pair.id)
             
             # compute weighted averages of kinetic parameters
             for mode, pfx in [('ic', 'psp_'), ('vc', 'psc_')]:
