@@ -726,6 +726,9 @@ def event_query(pair, db, session):
     q = session.query(
         db.PulseResponse,
         db.PulseResponse.ex_qc_pass,
+        db.PulseResponse.in_qc_pass,
+        db.Baseline.ex_qc_pass.label('baseline_ex_qc_pass'),
+        db.Baseline.in_qc_pass.label('baseline_in_qc_pass'),
         db.PulseResponseFit.fit_amp,
         db.PulseResponseFit.dec_fit_reconv_amp,
         db.PulseResponseFit.fit_nrmse,
@@ -737,7 +740,7 @@ def event_query(pair, db, session):
         db.Recording.start_time.label('rec_start_time'),
         db.PatchClampRecording.baseline_current,
     )
-
+    q = q.join(db.Baseline, db.PulseResponse.baseline)
     q = q.join(db.PulseResponseFit)
     q = q.join(db.StimPulse)
     q = q.join(db.Recording, db.PulseResponse.recording)
@@ -751,12 +754,6 @@ def event_query(pair, db, session):
     return q
 
 
-def event_qc(events):
-    mask = (events['ex_qc_pass'] == True)
-    # mask = mask & (events['fit_nrmse'] < 0.6)
-    return mask
-
-
 def estimate_mini_amplitude(amplitudes, params):
     avg_amplitude = np.nanmean(amplitudes)
     expected = release_expectation_value(params['n_release_sites'], params['base_release_probability'], 1)
@@ -768,7 +765,6 @@ def estimate_mini_amplitude(amplitudes, params):
         init_amp /= 2
 
     return init_amp
-
 
 
 class StochasticModelRunner:
@@ -853,22 +849,24 @@ class StochasticModelRunner:
         avg_spike_latency = np.nanmedian(events['first_spike_time'] - events['onset_time'])
         pulse_times = events['onset_time'] + avg_spike_latency + rec_times
         spike_times[missing_spike_mask] = pulse_times[missing_spike_mask]
-        
-        # 2. Initialize model parameters:
-        #    - release model with depression, facilitation
-        #    - number of synapses, distribution of per-vesicle amplitudes estimated from first pulse CV
-        #    - measured distribution of background noise
-        #    - parameter space to be searched
 
+        # get individual event amplitudes
         amplitudes = events['dec_fit_reconv_amp'].to_numpy()
-        bg_amplitudes = events['baseline_dec_fit_reconv_amp'].to_numpy()
-
-        qc_mask = event_qc(events)
+        
+        # filter events by inhibitory or excitatory qc
+        qc_field = syn_type + '_qc_pass'
+        qc_mask = events[qc_field] == True
         print("%d events passed qc" % qc_mask.sum())
         amplitudes[~qc_mask] = np.nan
         amplitudes[missing_spike_mask] = np.nan
         print("%d good events to be analyzed" % np.isfinite(amplitudes).sum())
 
+        # get background events for determining measurement noise
+        bg_amplitudes = events['baseline_dec_fit_reconv_amp'].to_numpy()
+        # filter by qc
+        bg_qc_mask = events['baseline_'+qc_field] == True
+        bg_amplitudes[~qc_mask] = np.nan
+        
         # first_pulse_mask = events['pulse_number'] == 1
         # first_pulse_amps = amplitudes[first_pulse_mask]
         # first_pulse_stdev = np.nanstd(first_pulse_amps)
