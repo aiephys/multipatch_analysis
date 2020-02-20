@@ -66,6 +66,8 @@ class StochasticReleaseModel(object):
         'measurement_stdev',
     ]
         
+    _optimization_plot = None
+    
     def __init__(self, params):
         for k in params:
             if k not in self.param_names:
@@ -74,8 +76,9 @@ class StochasticReleaseModel(object):
 
         # How long to wait after a NaN event before the model begins accumulating likelihood values again
         self.missing_event_penalty = 0.0
+        
 
-    def optimize_mini_amplitude(self, spike_times, amplitudes):
+    def optimize_mini_amplitude(self, spike_times, amplitudes, show=False):
         """Given a set of spike times and amplitudes, optimize the mini_amplitude parameter
         to produce the highest likelihood model.
         
@@ -83,23 +86,34 @@ class StochasticReleaseModel(object):
         """
         params = self.params.copy()
 
+        
         init_amp = estimate_mini_amplitude(amplitudes, params)
         params['mini_amplitude'] = init_amp
         init_result = self.measure_likelihood(spike_times, amplitudes, params)
         mean_amp = np.nanmean(amplitudes)
+        if show:
+            print("========== Optimize mini amplitude ==============")
+            for k,v in params.items():
+                print("   %s: %s" % (k, v))
+            print("   initial guess:", init_amp)
+            print("   mean amp:", mean_amp)
         ratio = mean_amp / np.nanmean(init_result['result']['expected_amplitude'])
         init_amp *= ratio
+        if show:
+            print("   corrected amp 1:", init_amp)
         
         # in some cases, init_amp is way too large; force these back down:
         init_amp = min(init_amp, mean_amp) if mean_amp > 0 else max(init_amp, mean_amp)
+        if show:
+            print("   corrected amp 2:", init_amp)
              
         # self.params['mini_amplitude'] = params['mini_amplitude']
-        result = self.optimize(spike_times, amplitudes, optimize={'mini_amplitude': (init_amp, init_amp*0.01, init_amp*100)})
-        
+        result = self.optimize(spike_times, amplitudes, optimize={'mini_amplitude': (init_amp, init_amp*0.01, init_amp*100)}, show=show)
+        print("   optimized amp:", result['params']['mini_amplitude'])
         result['optimization_info'] = {'init_amp': init_amp / ratio, 'ratio': ratio, 'corrected_amp': init_amp, 'init_likelihood': init_result['likelihood']}
         return result
     
-    def optimize(self, spike_times, amplitudes, optimize):
+    def optimize(self, spike_times, amplitudes, optimize, show=False):
         """Optimize specific parameters to maximize the model likelihood.
 
         This method updates the attributes for any optimized parameters and returns the
@@ -154,12 +168,17 @@ class StochasticReleaseModel(object):
         best_result['optimization_result'] = best
 
         # plot optimization route (for debugging)
-        # x = [k[0] for k in results.keys()]
-        # y = [v['likelihood'] for v in results.values()]
-        # brushes = [pg.mkBrush((i, int(len(x)*1.2))) for i in range(len(x))]
-        # plt = pg.plot(x, y, pen=None, symbol='o', symbolBrush=brushes)
-        # plt.addLine(x=best.x[0])
-        # plt.addLine(y=best_result['likelihood'])
+        if show:
+            if self._optimization_plot is None:
+                StochasticReleaseModel._optimization_plot = pg.plot()
+            plt = self._optimization_plot
+            x = [k[0] for k in results.keys()]
+            y = [v['likelihood'] for v in results.values()]
+            brushes = [pg.mkBrush((i, int(len(x)*1.2))) for i in range(len(x))]
+            plt.clear()
+            plt.plot(x, y, pen=None, symbol='o', symbolBrush=brushes)
+            plt.addLine(x=best.x[0])
+            plt.addLine(y=best_result['likelihood'])
         
         # update attributes with best result
         for i,k in enumerate(optimize.keys()):
@@ -167,7 +186,7 @@ class StochasticReleaseModel(object):
                     
         return best_result
     
-    def measure_likelihood(self, spike_times, amplitudes, params=None):
+    def measure_likelihood(self, spike_times, amplitudes, params=None, show=False):
         """Compute a measure of the likelihood that *times* and *amplitudes* could be generated
         by a synapse with the current dynamic parameters.
         
@@ -490,10 +509,7 @@ class ModelSingleResultWidget(QtGui.QWidget):
 
         self.amp_sample_values = np.linspace(-0.005, 0.005, 800)
 
-    def set_result(self, model_runner, result):
-        # re-run the model to get the complete results
-        result = model_runner.run_model(result['params'], full_result=True)
-        
+    def set_result(self, result):
         self.model = result['model']
         self.result = result['result']
         self.pre_state = result['pre_spike_state']
@@ -675,7 +691,10 @@ class ModelDisplayWidget(QtGui.QWidget):
     def select_result(self, index, update_slicer=True):
         result = self.get_result(index)
         result['params'].update(self.param_space[index])
-        self.result_widget.set_result(self.model_runner, result)
+        
+        # re-run the model to get the complete results
+        full_result = self.model_runner.run_model(result['params'], full_result=True, show=True)
+        self.result_widget.set_result(full_result)
         
         print("----- Selected result: -----")
         print("  model parameters:")
@@ -876,7 +895,9 @@ class StochasticModelRunner:
             return start * (stop/start)**(np.arange(steps) / (steps-1))
 
         n_release_sites = np.array([1, 2, 4, 8, 16, 32, 64])
+        # n_release_sites = np.array([1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64])
         release_probability = np.array([0.00625, 0.0125, 0.025, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0])
+        # release_probability = 1.0 / 1.5**(np.arange(15)[::-1])
         search_params = {
             'n_release_sites': n_release_sites,
             'base_release_probability': release_probability,
@@ -903,10 +924,13 @@ class StochasticModelRunner:
 
         return search_params
 
-    def run_model(self, params, full_result=False):
+    def run_model(self, params, full_result=False, **kwds):
         model = StochasticReleaseModel(params)
         spike_times, amplitudes, bg = self.synapse_events
-        result = model.optimize_mini_amplitude(spike_times, amplitudes)
+        if 'mini_amplitude' in params:
+            result = model.measure_likelihood(spike_times, amplitudes, **kwds)
+        else:
+            result = model.optimize_mini_amplitude(spike_times, amplitudes, **kwds)
         if full_result:
             result['model'] = model
             return result
