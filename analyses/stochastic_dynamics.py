@@ -109,7 +109,8 @@ class StochasticReleaseModel(object):
              
         # self.params['mini_amplitude'] = params['mini_amplitude']
         result = self.optimize(spike_times, amplitudes, optimize={'mini_amplitude': (init_amp, init_amp*0.01, init_amp*100)}, show=show)
-        print("   optimized amp:", result['params']['mini_amplitude'])
+        if show:
+            print("   optimized amp:", result['params']['mini_amplitude'])
         result['optimization_info'] = {'init_amp': init_amp / ratio, 'ratio': ratio, 'corrected_amp': init_amp, 'init_likelihood': init_result['likelihood']}
         return result
     
@@ -777,6 +778,7 @@ class StochasticModelRunner:
         self.experiment_id = experiment_id
         self.pre_cell_id = pre_cell_id
         self.post_cell_id = post_cell_id
+        self.title = "%s %s %s" % (experiment_id, pre_cell_id, post_cell_id)
         
         self.max_events = None
         
@@ -943,6 +945,7 @@ class CombinedModelRunner:
     """
     def __init__(self, runners):
         self.model_runners = runners
+        self.title = " : ".join(r.title for r in runners)
         
         params = OrderedDict()
         # params['synapse'] = [
@@ -981,44 +984,6 @@ if __name__ == '__main__':
     parser.add_argument('--no-cache', default=False, action='store_true', dest='no_cache')
     
     args = parser.parse_args()
-    
-    
-    # strong ex, no failures, no depression
-    # expt_id = '1535402792.695'
-    # pre_cell_id = '8'
-    # post_cell_id = '7'
-    
-    # # strong ex with failures
-    # expt_id = '1537820585.767'
-    # pre_cell_id = '1'
-    # post_cell_id = '2'
-    
-    # # strong ex, depressing
-    # # expt_id = '1536781898.381'
-    # # pre_cell_id = '8'
-    # # post_cell_id = '2'
-
-    # # strong in, 
-    # expt_id = '1540938455.803'
-    # pre_cell_id = '6' 
-    # post_cell_id = '7'
-
-    # # strong in, depressing
-    # expt_id = '1530559621.966'
-    # pre_cell_id = '7' 
-    # post_cell_id = '6'
-    
-    # # ex->sst
-    # expt_id = '1539987094.832'
-    # pre_cell_id = '3' 
-    # post_cell_id = '4'
-    
-    # expt_id = float(sys.argv[1])
-    # pre_cell_id = int(sys.argv[2])
-    # post_cell_id = int(sys.argv[3])
-    
-    # 1525985474.422 3 4
-    # 1535150219.310 5 3
 
     def load_experiment(experiment_id, pre_cell_id, post_cell_id):
         print("Loading stochastic model for %s %s %s" % (experiment_id, pre_cell_id, post_cell_id))
@@ -1042,6 +1007,7 @@ if __name__ == '__main__':
     # 4. Visualize parameter space.
         
     win = ModelDisplayWidget(result)
+    win.setWindowTitle(result.title)
     win.show()
 
     if sys.flags.interactive == 0:

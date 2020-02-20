@@ -24,9 +24,12 @@ class PulseResponsePipelineModule(MultipatchPipelineModule):
 
         expt = db.experiment_from_ext_id(expt_id, session=session)
         
-        # select just data for the selected experiment
-        rq = db.query(db.PulseResponse).join(db.Recording).join(db.SyncRec).join(db.Experiment).filter(db.Experiment.ext_id==expt_id)
-        prs = rq.all()
+        # select pulse responses for the selected experiment
+        # also request pulse response data to speed up access
+        rq = db.query(db.PulseResponse, db.PulseResponse.data)
+        rq = rq.join(db.Recording).join(db.SyncRec).join(db.Experiment)
+        rq = rq.filter(db.Experiment.ext_id==expt_id)
+        prs = [rec.PulseResponse for rec in rq.all()]
         print("got %d pulse responses" % len(prs))
         
         # best estimate of response amplitude using known latency for this synapse
