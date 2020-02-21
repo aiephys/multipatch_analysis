@@ -200,7 +200,7 @@ class ExperimentMetadataSubmission(object):
             
             # Check that patchseq tubes have correct format
             hs_name = 'HS%d' % pip_id
-            tube_name = site_info['headstages'][hs_name]['Tube ID']
+            tube_name = site_info.get('headstages', {}).get(hs_name, {}).get('Tube ID', '')
             if tube_name != '':
                 patchseq_tube_ids.append(tube_name)
                 name_check = re.match(r'P(M|T)S4_(?P<date>\d{6})_(?P<tube_id>\d{3})_A01', tube_name)
