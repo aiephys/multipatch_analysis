@@ -192,12 +192,23 @@ class ExperimentMetadataSubmission(object):
                 warnings.append("Specimen is from the future, likely need to update LabTracks info in LIMS")
 
         # Sanity checks on pipette metadata:
-        
+        patchseq_tube_ids = []
         for pip_id, pip in self.pipettes.items():
             # Check pipette status
             if pip['pipette_status'] not in ['No seal', 'Low seal', 'GOhm seal', 'Technical failure', 'No attempt', 'Not recorded']:
                 warnings.append('Pipette %d has unrecognized status "%s"' % (pip_id, pip['pipette_status']))
             
+            # Check that patchseq tubes have correct format
+            hs_name = 'HS%d' % pip_id
+            tube_name = site_info['headstages'][hs_name]['Tube ID']
+            if tube_name != '':
+                patchseq_tube_ids.append(tube_name)
+                name_check = re.match(r'P(M|T)S4_(?P<date>\d{6})_(?P<tube_id>\d{3})_A01', tube_name)
+                if name_check is None:
+                    errors.append('Tube ID %s for pipette %d does not have proper format' % (tube_name, pip_id))
+                if name_check.group('date') != datetime.strftime(datetime.now(), "%y%m%d"):
+                    errors.append('Incorrect date in tube ID %s for pipette %d' % (tube_name, pip_id))
+
             # Following checks only apply if we got data from this pipette.    
             if not pip['got_data']:
                 continue
@@ -212,6 +223,10 @@ class ExperimentMetadataSubmission(object):
             
             # Does the selected dye overlap with cre reporters?
 
+        # If there are patchseq tubes make sure all IDs are unique
+        if len(patchseq_tube_ids) > 0:
+            if len(patchseq_tube_ids) != len(set(patchseq_tube_ids)):
+                errors.append('Looks like there are duplicate patchseq Tube IDs, please double check')
         
         if project not in no_lims_specimen_projects:
             # If slice was not fixed, don't attempt LIMS submission
