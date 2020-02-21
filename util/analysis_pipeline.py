@@ -58,7 +58,7 @@ if __name__ == '__main__':
     modules = [m for m in list(all_modules.values()) if m in modules]
 
     if args.report:
-        print(pipeline.report(modules))
+        print(pipeline.report(modules, job_ids=args.uids))
     
     if args.rebuild:
         mod_names = ', '.join([module.name for module in modules])
