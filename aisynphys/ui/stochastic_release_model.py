@@ -22,80 +22,164 @@ class ModelSingleResultWidget(QtGui.QWidget):
         self.layout = QtGui.QGridLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(self.layout)
+
+        self.splitter = QtGui.QSplitter(QtCore.Qt.Horizontal)
+        self.layout.addWidget(self.splitter)
         
-        self.glw = pg.GraphicsLayoutWidget()
-        self.layout.addWidget(self.glw, 0, 0)
+        self.btn_layout = QtGui.QVBoxLayout()
+        self.btn_widget = QtGui.QWidget()
+        self.btn_widget.setLayout(self.btn_layout)
+        self.splitter.addWidget(self.btn_widget)
         
-        self.plt1 = self.glw.addPlot(0, 0, title="model likelihood vs compressed time")
+        self.opt_path_plot = pg.PlotWidget()
+
+        self.panels = {
+            'events': ModelEventPlot(self),
+        }
+        for name, panel in self.panels.items():
+            btn = QtGui.QPushButton(name)
+            self.btn_layout.addWidget(btn)
+            btn.setCheckable(True)
+            btn.toggled.connect(panel.set_visible)
+            btn.setMaximumWidth(150)
+            panel.show_btn = btn
         
-        self.plt2 = self.glw.addPlot(1, 0, title="event amplitude vs compressed time")
+        self.panels['events'].show_btn.setChecked(True)
+
+    def set_result(self, result):
+        self.result = result
+        for p in self.panels.values():
+            p.result_changed()
+
+    def plot_optimization_path(self):
+        plt = self._optimization_plot
+        x = [k[0] for k in results.keys()]
+        y = [v['likelihood'] for v in results.values()]
+        brushes = [pg.mkBrush((i, int(len(x)*1.2))) for i in range(len(x))]
+        plt.clear()
+        plt.plot(x, y, pen=None, symbol='o', symbolBrush=brushes)
+        plt.addLine(x=best.x[0])
+        plt.addLine(y=best_result['likelihood'])
+
+
+class ModelResultView(object):
+    """Displays one aspect of a model result.
+    """
+    def __init__(self, parent):
+        """Responsible for attaching widgets to parent.
+        """
+        self._parent = parent
+        self._visible = False
+        self.widget = QtGui.QWidget()
+        self.layout = QtGui.QGridLayout()
+        self.widget.setLayout(self.layout)
+        parent.splitter.addWidget(self.widget)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self._need_update = False
+        
+    def set_visible(self, visible):
+        self._visible = visible
+        self.widget.setVisible(visible)
+        if visible and self._need_update:
+            self.update_display()
+
+    @property
+    def visible(self):
+        return self._visible
+
+    def result_changed(self):
+        """Called when the model result has been set on parent
+        """
+        self._need_update = True
+        if self.visible:
+            self.update_display()
+        
+    def update_display(self):
+        """Extend in subclass to update displayed results (taken from self._parent.result)
+        """
+        self._need_update = False    
+        
+
+class ModelEventPlot(ModelResultView):
+    def __init__(self, parent):
+        ModelResultView.__init__(self, parent)
+
+        self.event_view = pg.GraphicsLayoutWidget()
+        self.layout.addWidget(self.event_view)
+        
+        self.plt1 = self.event_view.addPlot(0, 0, title="model likelihood vs compressed time")
+        
+        self.plt2 = self.event_view.addPlot(1, 0, title="event amplitude vs compressed time")
         self.plt2.setXLink(self.plt1)
         
         self.state_key = 'release_probability'
-        self.plt3 = self.glw.addPlot(2, 0, title=self.state_key + " vs compressed time")
+        self.plt3 = self.event_view.addPlot(2, 0, title=self.state_key + " vs compressed time")
         self.plt3.setXLink(self.plt1)
         
-        self.plt4 = self.glw.addPlot(0, 1, title="amplitude distributions", rowspan=3)
+        self.plt4 = self.event_view.addPlot(0, 1, title="amplitude distributions", rowspan=3)
         # self.plt4.setYLink(self.plt2)
         self.plt4.setMaximumWidth(500)
         self.plt4.selected_items = []
 
         self.amp_sample_values = np.linspace(-0.005, 0.005, 800)
 
-    def set_result(self, result):
-        self.model = result['model']
-        self.result = result['result']
-        self.pre_state = result['pre_spike_state']
-        self.post_state = result['post_spike_state']
-        self.params = result['params']
+    def update_display(self):
+        ModelResultView.update_display(self)
 
+        full_result = self._parent.result
+        model = full_result['model']
+        result = full_result['result']
+        pre_state = full_result['pre_spike_state']
+        post_state = full_result['post_spike_state']
+        
         # color events by likelihood
         cmap = pg.ColorMap([0, 1.0], [(0, 0, 0), (255, 0, 0)])
         threshold = 10
-        err_colors = cmap.map((threshold - self.result['likelihood']) / threshold)
+        err_colors = cmap.map((threshold - result['likelihood']) / threshold)
         brushes = [pg.mkBrush(c) for c in err_colors]
 
         # log spike intervals to make visualization a little easier
-        compressed_spike_times = np.empty(len(self.result['spike_time']))
+        compressed_spike_times = np.empty(len(result['spike_time']))
         compressed_spike_times[0] = 0.0
-        np.cumsum(np.diff(self.result['spike_time'])**0.25, out=compressed_spike_times[1:])
+        np.cumsum(np.diff(result['spike_time'])**0.25, out=compressed_spike_times[1:])
 
         self.plt1.clear()
-        self.plt1.plot(compressed_spike_times, self.result['likelihood'], pen=None, symbol='o', symbolBrush=brushes)
+        self.plt1.plot(compressed_spike_times, result['likelihood'], pen=None, symbol='o', symbolBrush=brushes)
         
         self.plt2.clear()
-        self.plt2.plot(compressed_spike_times, self.result['expected_amplitude'], pen=None, symbol='x', symbolPen=0.5, symbolBrush=brushes)
-        amp_sp = self.plt2.plot(compressed_spike_times, self.result['amplitude'], pen=None, symbol='o', symbolBrush=brushes)
+        self.plt2.plot(compressed_spike_times, result['expected_amplitude'], pen=None, symbol='x', symbolPen=0.5, symbolBrush=brushes)
+        amp_sp = self.plt2.plot(compressed_spike_times, result['amplitude'], pen=None, symbol='o', symbolBrush=brushes)
         amp_sp.scatter.sigClicked.connect(self.amp_sp_clicked)
         
         self.plt3.clear()
-        self.plt3.plot(compressed_spike_times, self.pre_state[self.state_key], pen=None, symbol='t', symbolBrush=brushes)
-        self.plt3.plot(compressed_spike_times, self.post_state[self.state_key], pen=None, symbol='o', symbolBrush=brushes)
+        self.plt3.plot(compressed_spike_times, pre_state[self.state_key], pen=None, symbol='t', symbolBrush=brushes)
+        self.plt3.plot(compressed_spike_times, post_state[self.state_key], pen=None, symbol='o', symbolBrush=brushes)
         self.plt4.clear()
         
         # plot full distribution of event amplitudes
-        bins = np.linspace(np.nanmin(self.result['amplitude']), np.nanmax(self.result['amplitude']), 40)
+        bins = np.linspace(np.nanmin(result['amplitude']), np.nanmax(result['amplitude']), 40)
         d_amp = bins[1] - bins[0]
-        amp_hist = np.histogram(self.result['amplitude'], bins=bins)
+        amp_hist = np.histogram(result['amplitude'], bins=bins)
         self.plt4.plot(amp_hist[1], amp_hist[0] / (amp_hist[0].sum() * d_amp), stepMode=True, fillLevel=0, brush=0.3)
 
         # plot average model event distribution
         amps = self.amp_sample_values
         d_amp = amps[1] - amps[0]
         total_dist = np.zeros(len(amps))
-        for i in range(self.result.shape[0]):
-            state = self.pre_state[i]
+        for i in range(result.shape[0]):
+            state = pre_state[i]
             if not np.all(np.isfinite(tuple(state))):
                 continue
-            total_dist += self.model.likelihood(amps, state)
+            total_dist += model.likelihood(amps, state)
         total_dist /= total_dist.sum() * d_amp
         self.plt4.plot(amps, total_dist, fillLevel=0, brush=(255, 0, 0, 50))
     
     def amp_sp_clicked(self, sp, pts):
+        result = self._parent.result['result']
         i = pts[0].index()
         state = self.pre_state[i]
-        expected_amp = self.result[i]['expected_amplitude']
-        measured_amp = self.result[i]['amplitude']
+        expected_amp = result[i]['expected_amplitude']
+        measured_amp = result[i]['amplitude']
         amps = self.amp_sample_values
         
         for item in self.plt4.selected_items:
@@ -106,7 +190,7 @@ class ModelSingleResultWidget(QtGui.QWidget):
         l2 = self.plt4.addLine(x=expected_amp, pen='r')
         self.plt4.selected_items = [p, l1, l2]
 
-        
+
 class ParameterSpace(object):
     def __init__(self, params):
         self.params = params

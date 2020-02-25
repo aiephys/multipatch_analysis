@@ -3,7 +3,6 @@ from __future__ import print_function, division
 import functools
 import numpy as np
 import numba
-import pyqtgraph as pg
 import scipy.stats as stats
 import scipy.optimize
 
@@ -161,19 +160,10 @@ class StochasticReleaseModel(object):
         best_result = results[tuple(best.x.flatten())]
         best_result['optimization_init'] = optimize
         best_result['optimization_result'] = best
-
-        # plot optimization route (for debugging)
-        if show:
-            if self._optimization_plot is None:
-                StochasticReleaseModel._optimization_plot = pg.plot()
-            plt = self._optimization_plot
-            x = [k[0] for k in results.keys()]
-            y = [v['likelihood'] for v in results.values()]
-            brushes = [pg.mkBrush((i, int(len(x)*1.2))) for i in range(len(x))]
-            plt.clear()
-            plt.plot(x, y, pen=None, symbol='o', symbolBrush=brushes)
-            plt.addLine(x=best.x[0])
-            plt.addLine(y=best_result['likelihood'])
+        best_result['optimization_path'] = {
+            'mini_amplitude': [k[0] for k in results.keys()], 
+            'likelihood': [v['likelihood'] for v in results.values()]
+        }
         
         # update attributes with best result
         for i,k in enumerate(optimize.keys()):
