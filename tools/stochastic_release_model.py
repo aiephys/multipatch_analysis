@@ -27,7 +27,7 @@ if __name__ == '__main__':
 
         result = StochasticModelRunner(experiment_id, pre_cell_id, post_cell_id, workers=args.workers)
         result.max_events = args.max_events
-        cache_path = os.path.join(config.cache_path, 'stochastic_path')
+        cache_path = os.path.join(config.cache_path, 'stochastic_model_results')
         if not os.path.exists(cache_path):
             os.makedirs(cache_path)
         cache_file = os.path.join(cache_path, "%s_%s_%s.pkl" % (experiment_id, pre_cell_id, post_cell_id))

@@ -103,7 +103,7 @@ class StochasticReleaseModel(object):
         # self.params['mini_amplitude'] = params['mini_amplitude']
         result = self.optimize(spike_times, amplitudes, optimize={'mini_amplitude': (init_amp, init_amp*0.01, init_amp*100)}, show=show)
         if show:
-            print("   optimized amp:", result['params']['mini_amplitude'])
+            print("   optimized amp:", result['optimized_params']['mini_amplitude'])
         result['optimization_info'] = {'init_amp': init_amp / ratio, 'ratio': ratio, 'corrected_amp': init_amp, 'init_likelihood': init_result['likelihood']}
         return result
     
@@ -157,7 +157,10 @@ class StochasticReleaseModel(object):
             
         )
         
+        
         best_result = results[tuple(best.x.flatten())]
+        best_result['params'] = self.params.copy()
+        best_result['optimized_params'] = {k:best.x[i] for i,k in enumerate(optimize.keys())}
         best_result['optimization_init'] = optimize
         best_result['optimization_result'] = best
         best_result['optimization_path'] = {
@@ -166,6 +169,7 @@ class StochasticReleaseModel(object):
         }
         
         # update attributes with best result
+        self.params = self.params.copy()
         for i,k in enumerate(optimize.keys()):
             self.params[k] = best.x[i]
                     

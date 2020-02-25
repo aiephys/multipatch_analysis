@@ -35,6 +35,7 @@ class ModelSingleResultWidget(QtGui.QWidget):
 
         self.panels = {
             'events': ModelEventPlot(self),
+            'optimization': ModelOptimizationPlot(self),
         }
         for name, panel in self.panels.items():
             btn = QtGui.QPushButton(name)
@@ -51,21 +52,11 @@ class ModelSingleResultWidget(QtGui.QWidget):
         for p in self.panels.values():
             p.result_changed()
 
-    def plot_optimization_path(self):
-        plt = self._optimization_plot
-        x = [k[0] for k in results.keys()]
-        y = [v['likelihood'] for v in results.values()]
-        brushes = [pg.mkBrush((i, int(len(x)*1.2))) for i in range(len(x))]
-        plt.clear()
-        plt.plot(x, y, pen=None, symbol='o', symbolBrush=brushes)
-        plt.addLine(x=best.x[0])
-        plt.addLine(y=best_result['likelihood'])
-
 
 class ModelResultView(object):
     """Displays one aspect of a model result.
     """
-    def __init__(self, parent):
+    def __init__(self, parent, visible=False):
         """Responsible for attaching widgets to parent.
         """
         self._parent = parent
@@ -76,6 +67,8 @@ class ModelResultView(object):
         parent.splitter.addWidget(self.widget)
         self.layout.setContentsMargins(0, 0, 0, 0)
         self._need_update = False
+        
+        self.set_visible(visible)
         
     def set_visible(self, visible):
         self._visible = visible
@@ -191,6 +184,27 @@ class ModelEventPlot(ModelResultView):
         self.plt4.selected_items = [p, l1, l2]
 
 
+class ModelOptimizationPlot(ModelResultView):
+    def __init__(self, parent):
+        ModelResultView.__init__(self, parent)
+
+        self.plot = pg.PlotWidget()
+        self.layout.addWidget(self.plot)
+        
+    def update_display(self):
+        ModelResultView.update_display(self)
+
+        result = self._parent.result
+        plt = self.plot
+        x = result['optimization_path']['mini_amplitude']
+        y = result['optimization_path']['likelihood']
+        brushes = [pg.mkBrush((i, int(len(x)*1.2))) for i in range(len(x))]
+        plt.clear()
+        plt.plot(x, y, pen=None, symbol='o', symbolBrush=brushes)
+        plt.addLine(x=result['optimized_params']['mini_amplitude'])
+        plt.addLine(y=result['likelihood'])
+
+
 class ParameterSpace(object):
     def __init__(self, params):
         self.params = params
@@ -225,6 +239,9 @@ class ParameterSpace(object):
 
 
 class ModelDisplayWidget(QtGui.QWidget):
+    """UI containing an NDSlicer for visualizing the complete model parameter space, and
+    a ModelSingleResultWidget for showing more detailed results from individual points in the parameter space.
+    """
     def __init__(self, model_runner):
         QtGui.QWidget.__init__(self)
         self.layout = QtGui.QGridLayout()
@@ -315,24 +332,28 @@ class ModelDisplayWidget(QtGui.QWidget):
         
         print("----- Selected result: -----")
         print("  model parameters:")
-        for k,v in result['params'].items():
+        for k,v in full_result['params'].items():
             print("    {:30s}: {}".format(k, v))
-        if 'optimization_init' in result:
-            print("  initial optimization parameters:")
-            for k,v in result['optimization_init'].items():
+        if 'optimized_params' in full_result:
+            print("  optimized parameters:")
+            for k,v in full_result['optimized_params'].items():
                 print("    {:30s}: {}".format(k, v))
-        if 'optimization_result' in result:
-            opt = result['optimization_result']
+        if 'optimization_init' in full_result:
+            print("  initial optimization parameters:")
+            for k,v in full_result['optimization_init'].items():
+                print("    {:30s}: {}".format(k, v))
+        if 'optimization_result' in full_result:
+            opt = full_result['optimization_result']
             print("  optimization results:")
             print("    nfev:", opt.nfev)
             print("    message:", opt.message)
             print("    success:", opt.success)
             print("    status:", opt.status)
-        if 'optimization_info' in result:
+        if 'optimization_info' in full_result:
             print("  optimization info:")
-            for k,v in result['optimization_info'].items():
+            for k,v in full_result['optimization_info'].items():
                 print("    {:30s}: {}".format(k, v))
-        print("  likelihood: {}".format(result['likelihood']))
+        print("  likelihood: {}".format(full_result['likelihood']))
         
         if update_slicer:
             self.slicer.set_index(index)
