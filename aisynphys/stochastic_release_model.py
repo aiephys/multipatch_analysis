@@ -185,11 +185,13 @@ class StochasticReleaseModel(object):
         ----------
         spike_times : array
             Times (in seconds) of presynaptic spikes in ascending order
-        amplitudes : array
+        amplitudes : array | None
             Evoked PSP/PSC amplitudes for each spike listed in *spike_times*. Amplitudes may be
             NaN to indicate that the event should be ignored (usually because the spike could not be
             detected or the amplitude could not be measured). Any events within 10 seconds following
             a NaN will update the model as usual, but will not be included in the likelihood estimate.
+            If None, then the model will run assuming that the amplitude of each event is just the
+            expectation value of the predicted distribution.
         
         Returns
         -------
@@ -204,7 +206,9 @@ class StochasticReleaseModel(object):
         """
         if params is None:
             params = self.params
-
+        if amplitudes is None:
+            amplitudes = np.array([])
+        
         assert params['n_release_sites'] < 67, "For n_release_sites > 66 we need to use scipy.special.binom instead of the optimized binom_coeff"
 
         result = np.empty(len(spike_times), dtype=self.result_dtype)
@@ -265,6 +269,9 @@ class StochasticReleaseModel(object):
         # available_vesicles is a float as a means of avoiding the need to model stochastic vesicle docking;
         # we just assume that recovery is a continuous process. (maybe we should just call this "neurotransmitter"
         # instead)
+        
+        have_amps = len(amplitudes) > 0
+        
         available_vesicle = n_release_sites
         release_probability = base_release_probability
         
@@ -272,8 +279,10 @@ class StochasticReleaseModel(object):
         last_nan_time = -np.inf
 
         for i,t in enumerate(spike_times):
-            amplitude = amplitudes[i]
-            if np.isnan(amplitude):
+            if have_amps:
+                amplitude = amplitudes[i]
+            
+            if have_amps and np.isnan(amplitude):
                 expected_amplitude = np.nan
                 likelihood = np.nan
                 last_nan_time = t
@@ -298,6 +307,10 @@ class StochasticReleaseModel(object):
                     release_probability,
                     mini_amplitude,
                 )
+                
+                if not have_amps:
+                    # run model forward based on expectation
+                    amplitude = expected_amplitude
 
                 pre_available_vesicle = available_vesicle
                 pre_release_probability = release_probability

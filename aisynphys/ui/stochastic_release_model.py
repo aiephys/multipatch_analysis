@@ -391,7 +391,6 @@ class ModelInductionPlot(ModelResultView):
             ind_pulses = [[] for i in range(8)]
             for rec_d, rec_trains in ind_trains.items():
                 for train in rec_trains:
-                    print(len(train))
                     for i,amp in enumerate(train):
                         if i >= 8:
                             break
@@ -411,16 +410,14 @@ class ModelInductionPlot(ModelResultView):
             self.ind_plots[ind_i].plot(x, y, pen=None, symbol='o')
             
             # # re-model based on mean amplitudes
-            # mean_amps = np.array([np.mean(a) for a in sorted_amps])
-            # mean_times = np.arange(12) / 50.
+            mean_times = np.arange(8) / ind_f
             # mean_times[8:] += 0.25
-            # model = result['model']
-            # params = result['params'].copy()
-            # params.update(result['optimized_params'])
-            # # need to do forward-modeling here
-            # # mean_result = model.measure_likelihood(mean_times, mean_amps, params)
+            model = result['model']
+            params = result['params'].copy()
+            params.update(result['optimized_params'])
+            mean_result = model.measure_likelihood(mean_times, amplitudes=None, params=params)
             
-            # self.plot.plot(range(12), mean_result['result']['expected_amplitude'], pen='w', symbol='d', symbolBrush='y')
+            self.ind_plots[ind_i].plot(mean_result['result']['expected_amplitude'], pen='w', symbol='d', symbolBrush='y')
         
         # scatter plot of event pairs normalized by model expectation
         
