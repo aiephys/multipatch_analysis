@@ -35,6 +35,7 @@ class ModelSingleResultWidget(QtGui.QWidget):
 
         self.panels = {
             'events': ModelEventPlot(self),
+            'correlation': ModelEventCorrelationPlot(self),
             'optimization': ModelOptimizationPlot(self),
         }
         for name, panel in self.panels.items():
@@ -185,9 +186,10 @@ class ModelEventPlot(ModelResultView):
 
 
 class ModelOptimizationPlot(ModelResultView):
+    """Plots the mini amplitude optimization path
+    """
     def __init__(self, parent):
         ModelResultView.__init__(self, parent)
-
         self.plot = pg.PlotWidget()
         self.layout.addWidget(self.plot)
         
@@ -203,6 +205,27 @@ class ModelOptimizationPlot(ModelResultView):
         plt.plot(x, y, pen=None, symbol='o', symbolBrush=brushes)
         plt.addLine(x=result['optimized_params']['mini_amplitude'])
         plt.addLine(y=result['likelihood'])
+
+
+class ModelEventCorrelationPlot(ModelResultView):
+    def __init__(self, parent):
+        ModelResultView.__init__(self, parent)
+        self.plot = pg.PlotWidget(labels={'left': 'amp 2', 'bottom': 'amp 1'})
+        self.plot.showGrid(True, True)
+        self.layout.addWidget(self.plot)
+        
+    def update_display(self):
+        ModelResultView.update_display(self)
+        result = self._parent.result
+        spikes = result['result']['spike_time']
+        amps = result['result']['amplitude']
+        
+        cmap = pg.ColorMap(np.linspace(0, 1, 4), np.array([[255, 255, 255], [255, 255, 0], [255, 0, 0], [0, 0, 0]], dtype='ubyte'))
+        cvals = [((np.log(dt) / np.log(10)) + 2) / 4. for dt in np.diff(spikes)]
+        brushes = [pg.mkBrush(cmap.map(c)) for c in cvals]
+        
+        self.plot.clear()
+        self.plot.plot(amps[:-1], amps[1:], pen=None, symbol='o', symbolBrush=brushes)
 
 
 class ParameterSpace(object):

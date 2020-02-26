@@ -33,6 +33,10 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
             'pulse_number': {'column': db.StimPulse.pulse_number, 'mode': 'enum', 'values': list(range(1,13)), 'dtype': int},
             'induction_frequency': {'column': db.MultiPatchProbe.induction_frequency, 'mode': 'range', 'dtype': float},
             'recovery_delay': {'column': db.MultiPatchProbe.recovery_delay, 'mode': 'range', 'dtype': float},
+            'baseline_current': {'column': db.PatchClampRecording.baseline_current, 'mode': 'range', 'dtype': float},
+            'baseline_potential': {'column': db.PatchClampRecording.baseline_potential, 'mode': 'range', 'dtype': float},
+            'baseline_rms_noise': {'column': db.PatchClampRecording.baseline_rms_noise, 'mode': 'range', 'dtype': float},
+            'recording_qc_pass': {'column': db.PatchClampRecording.qc_pass, 'mode': 'enum', 'values': [True, False], 'dtype': bool},
         }
         for table, prefix in [(db.PulseResponse, ''), (db.PulseResponseFit, ''), (db.PulseResponseStrength, '')]:
             for name, col in table.__table__.c.items():
@@ -146,7 +150,9 @@ class SynapseEventWindow(pg.QtGui.QSplitter):
         q = db.query(db.PulseResponse, db.PulseResponse.data, db.PulseResponseFit).outerjoin(db.PulseResponseFit).filter(db.PulseResponse.id.in_(ids))
         recs = q.all()
 
+        print("Selected pulse responses:")
         for rec in recs:
+            print(rec.PulseResponse.id, rec.PulseResponse.meta)
             self._plot_pulse_response(rec)
             
         self.scatter_plot.setSelectedPoints(points)

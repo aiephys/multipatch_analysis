@@ -59,8 +59,6 @@ class StochasticReleaseModel(object):
         'measurement_stdev',
     ]
         
-    _optimization_plot = None
-    
     def __init__(self, params):
         for k in params:
             if k not in self.param_names:
@@ -69,7 +67,6 @@ class StochasticReleaseModel(object):
 
         # How long to wait after a NaN event before the model begins accumulating likelihood values again
         self.missing_event_penalty = 0.0
-        
 
     def optimize_mini_amplitude(self, spike_times, amplitudes, show=False):
         """Given a set of spike times and amplitudes, optimize the mini_amplitude parameter
@@ -78,7 +75,6 @@ class StochasticReleaseModel(object):
         Returns the output of measure_likelihood for the best model.
         """
         params = self.params.copy()
-
         
         init_amp = estimate_mini_amplitude(amplitudes, params)
         params['mini_amplitude'] = init_amp
@@ -147,16 +143,14 @@ class StochasticReleaseModel(object):
             return -res['likelihood']
         
         best = scipy.optimize.minimize(fn, x0=init, 
-            #method='BFGS', bounds=bounds, options={'gtol': 1, 'eps': 10e-6}  # oscillates
             method="Nelder-Mead", options={'fatol': 0.01}  # no bounds, can't set initial step?
+            #method='BFGS', bounds=bounds, options={'gtol': 1, 'eps': 10e-6}  # oscillates
             #method='Powell', options={'ftol': 0.01}  # not efficient; can't set initial step
             #method='CG', options={'eps': 10e-6}  # not efficient
             #method='Newton-CG',  # requires jacobian
             #method='L-BFGS-B'  # not efficient
             #method='COBYLA', options={'rhobeg': -100e-6}  # fast but oscillates, misses peak
-            
         )
-        
         
         best_result = results[tuple(best.x.flatten())]
         best_result['params'] = self.params.copy()
