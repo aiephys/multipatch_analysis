@@ -8,6 +8,13 @@ import scipy.stats as stats
 import scipy.optimize
 
 
+# lets us quickly disable jit for debugging:
+def _fake_jit(**kwds):
+    return lambda fn: fn
+#jit = _fake_jit    
+jit = numba.jit
+
+
 class StochasticReleaseModel(object):
     """A model of stochastic synaptic release used for determining optimal model parameters that describe
     empirically measured synaptic responses.
@@ -237,7 +244,7 @@ class StochasticReleaseModel(object):
 
 
     @staticmethod
-    @numba.jit(nopython=True)
+    @jit(nopython=True)
     def _run_model( spike_times, 
                     amplitudes,
                     result,
@@ -335,7 +342,7 @@ class StochasticReleaseModel(object):
             result[i]['likelihood'] = likelihood
 
 
-@numba.jit(nopython=True)
+@jit(nopython=True)
 def release_likelihood(amplitudes, available_vesicles, release_probability, mini_amplitude, mini_amplitude_cv, measurement_stdev):
     """Return a measure of the likelihood that a synaptic response will have certain amplitude(s),
     given the state parameters for the synapse.
@@ -378,7 +385,7 @@ def release_likelihood(amplitudes, available_vesicles, release_probability, mini
         for amplitude in amplitudes])
 
 
-@numba.jit(nopython=True)
+@jit(nopython=True)
 def release_likelihood_scalar(amplitude, available_vesicles, release_probability, mini_amplitude, mini_amplitude_cv, measurement_stdev):
     """Same as release_likelihood, but optimized for a scalar amplitude argument"""
     n_vesicles = np.arange(available_vesicles + 1)
@@ -416,14 +423,14 @@ def release_likelihood_scalar(amplitude, available_vesicles, release_probability
 #     da = amplitudes[1] - amplitudes[0]
 #     return amplitudes * sign, release_likelihood(amplitudes, available_vesicles, release_probability, mini_amplitude, mini_amplitude_cv, measurement_stdev) * da
 
-@numba.jit(nopython=True)
+@jit(nopython=True)
 def release_expectation_value(available_vesicles, release_probability, mini_amplitude):
     """Return the expectation value for the release amplitude distribution defined by the arguments.
     """
     return binom_mean(available_vesicles, release_probability) * mini_amplitude
    
 
-@numba.jit(nopython=True)
+@jit(nopython=True)
 def normal_pdf(mu, sigma, x):
     """Probability density function of normal distribution
     
@@ -432,7 +439,7 @@ def normal_pdf(mu, sigma, x):
     return (1.0 / (2 * np.pi * sigma**2))**0.5 * np.exp(- (x-mu)**2 / (2 * sigma**2))
 
 #@functools.lru_cache(maxsize=2**14)
-@numba.jit(nopython=True)
+@jit(nopython=True)
 def binom_pmf_range(n, p, k):
     """Probability mass function of binomial distribution
     
@@ -445,7 +452,7 @@ def binom_pmf_range(n, p, k):
 
 _binom_coeff_cache = np.fromfunction(scipy.special.binom, (67, 67)).astype(int)
 
-@numba.jit(nopython=True)
+@jit(nopython=True)
 def binom_coeff(n, k):
     """Binomial coefficient: n! / (k! (n-k)!)
     
@@ -456,7 +463,7 @@ def binom_coeff(n, k):
     return _binom_coeff_cache[n, k]
 
 
-@numba.jit(nopython=True)
+@jit(nopython=True)
 def binom_mean(n, p):
     """Expectation value of binomial distribution
     
@@ -530,12 +537,17 @@ def event_query(pair, db, session):
         db.StimPulse.onset_time,
         db.Recording.start_time.label('rec_start_time'),
         db.PatchClampRecording.baseline_current,
+        db.MultiPatchProbe.induction_frequency,
+        db.MultiPatchProbe.recovery_delay,
+        db.SyncRec.ext_id.label('sync_rec_ext_id'),
     )
     q = q.join(db.Baseline, db.PulseResponse.baseline)
     q = q.join(db.PulseResponseFit)
     q = q.join(db.StimPulse)
     q = q.join(db.Recording, db.PulseResponse.recording)
+    q = q.join(db.SyncRec, db.Recording.sync_rec)
     q = q.join(db.PatchClampRecording)
+    q = q.join(db.MultiPatchProbe)
 
     q = q.filter(db.PulseResponse.pair_id==pair.id)
     q = q.filter(db.PatchClampRecording.clamp_mode=='ic')
@@ -622,7 +634,11 @@ class StochasticModelRunner:
 
         rec_times = (events['rec_start_time'] - events['rec_start_time'].iloc[0]).dt.total_seconds().to_numpy()
         spike_times = events['first_spike_time'].to_numpy() + rec_times
-
+        
+        # some metadata to follow the events around--not needed for the model, but useful for 
+        # analysis later on.
+        event_meta = events[['sync_rec_ext_id', 'pulse_number', 'induction_frequency', 'recovery_delay']]
+        
         # any missing spike times get filled in with the average latency
         missing_spike_mask = np.isnan(spike_times)
         print("%d events missing spike times" % missing_spike_mask.sum())
@@ -656,7 +672,7 @@ class StochasticModelRunner:
             spike_times = spike_times[:self.max_events]
             amplitudes = amplitudes[:self.max_events]
         
-        return spike_times, amplitudes, bg_amplitudes
+        return spike_times, amplitudes, bg_amplitudes, event_meta
 
     @property
     def parameters(self):
@@ -667,7 +683,7 @@ class StochasticModelRunner:
         return self._parameters  
 
     def _generate_parameters(self):
-        spike_times, amplitudes, bg_amplitudes = self.synapse_events
+        spike_times, amplitudes, bg_amplitudes, event_meta = self.synapse_events
         
         search_params = {
             'n_release_sites': np.array([1, 2, 4, 8, 16, 32, 64]),
@@ -697,13 +713,14 @@ class StochasticModelRunner:
 
     def run_model(self, params, full_result=False, **kwds):
         model = StochasticReleaseModel(params)
-        spike_times, amplitudes, bg = self.synapse_events
+        spike_times, amplitudes, bg, event_meta = self.synapse_events
         if 'mini_amplitude' in params:
             result = model.measure_likelihood(spike_times, amplitudes, **kwds)
         else:
             result = model.optimize_mini_amplitude(spike_times, amplitudes, **kwds)
         if full_result:
             result['model'] = model
+            result['event_meta'] = event_meta
             return result
         else:
             return {'likelihood': result['likelihood'], 'params': result['params']}

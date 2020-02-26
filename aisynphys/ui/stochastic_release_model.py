@@ -151,6 +151,7 @@ class ModelSingleResultWidget(QtGui.QWidget):
         self.panels = {
             'events': ModelEventPlot(self),
             'correlation': ModelEventCorrelationPlot(self),
+            'induction': ModelInductionPlot(self),
             'optimization': ModelOptimizationPlot(self),
         }
         for name, panel in self.panels.items():
@@ -341,3 +342,86 @@ class ModelEventCorrelationPlot(ModelResultView):
         
         self.plot.clear()
         self.plot.plot(amps[:-1], amps[1:], pen=None, symbol='o', symbolBrush=brushes)
+
+
+class ModelInductionPlot(ModelResultView):
+    def __init__(self, parent):
+        ModelResultView.__init__(self, parent)
+        self.lw = pg.GraphicsLayoutWidget()
+        self.ind_plots = [self.lw.addPlot(0, 0), self.lw.addPlot(1, 0), self.lw.addPlot(2, 0)]
+        self.rec_plot = self.lw.addPlot(0, 1)
+        self.corr_plot = self.lw.addPlot(1, 1, rowspan=2)
+        self.layout.addWidget(self.lw)
+        
+    def update_display(self):
+        ModelResultView.update_display(self)
+        result = self._parent.result
+        spikes = result['result']['spike_time']
+        amps = result['result']['amplitude']
+        meta = result['event_meta']
+        
+        # generate a list of all trains sorted by stimulus
+        trains = {}  # {ind_f: {rec_d: [[a1, a2, ..a12], [b1, b2, ..b12], ...], ...}, ...}
+        current_sweep = None
+        skip_sweep = False
+        current_train = []
+        for i in range(len(amps)):
+            sweep_id = meta['sync_rec_ext_id'][i]
+            ind_f = meta['induction_frequency'][i]
+            rec_d = meta['recovery_delay'][i]
+            if sweep_id != current_sweep:
+                skip_sweep = False
+                current_sweep = sweep_id
+                current_train = []
+                ind_trains = trains.setdefault(ind_f, {})
+                rec_trains = ind_trains.setdefault(rec_d, [])
+                rec_trains.append(current_train)
+            if skip_sweep:
+                continue
+            if not np.isfinite(amps[i]) or not np.isfinite(spikes[i]):
+                skip_sweep = True
+                continue
+            current_train.append(amps[i])
+
+        # scatter plots of event amplitudes sorted by pulse number
+        for ind_i, ind_f in enumerate([20, 50, 100]):
+            ind_trains = trains.get(ind_f, {})
+            
+            # collect all induction events by pulse number
+            ind_pulses = [[] for i in range(8)]
+            for rec_d, rec_trains in ind_trains.items():
+                for train in rec_trains:
+                    print(len(train))
+                    for i,amp in enumerate(train):
+                        if i >= 8:
+                            break
+                        ind_pulses[i].append(amp)
+                        
+            x = []
+            y = []
+            for i in range(8):
+                if len(ind_pulses[i]) == 0:
+                    continue
+                y.extend(ind_pulses[i])
+                xs = pg.pseudoScatter(np.array(ind_pulses[i]), bidir=True, shuffle=True)
+                xs /= np.abs(xs).max() * 4
+                x.extend(xs + i)
+
+            self.ind_plots[ind_i].clear()
+            self.ind_plots[ind_i].plot(x, y, pen=None, symbol='o')
+            
+            # # re-model based on mean amplitudes
+            # mean_amps = np.array([np.mean(a) for a in sorted_amps])
+            # mean_times = np.arange(12) / 50.
+            # mean_times[8:] += 0.25
+            # model = result['model']
+            # params = result['params'].copy()
+            # params.update(result['optimized_params'])
+            # # need to do forward-modeling here
+            # # mean_result = model.measure_likelihood(mean_times, mean_amps, params)
+            
+            # self.plot.plot(range(12), mean_result['result']['expected_amplitude'], pen='w', symbol='d', symbolBrush='y')
+        
+        # scatter plot of event pairs normalized by model expectation
+        
+        
