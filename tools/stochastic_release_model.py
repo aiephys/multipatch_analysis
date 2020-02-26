@@ -1,6 +1,8 @@
 import os, sys, argparse
 import pyqtgraph as pg
-from aisynphys.ui.stochastic_release_model import StochasticModelRunner, CombinedModelRunner, ModelDisplayWidget
+from aisynphys.database import default_db as db
+from aisynphys.stochastic_release_model import StochasticModelRunner, CombinedModelRunner
+from aisynphys.ui.stochastic_release_model import ModelDisplayWidget
 from aisynphys import config
 
 
@@ -25,7 +27,7 @@ if __name__ == '__main__':
     def load_experiment(experiment_id, pre_cell_id, post_cell_id):
         print("Loading stochastic model for %s %s %s" % (experiment_id, pre_cell_id, post_cell_id))
 
-        result = StochasticModelRunner(experiment_id, pre_cell_id, post_cell_id, workers=args.workers)
+        result = StochasticModelRunner(db, experiment_id, pre_cell_id, post_cell_id, workers=args.workers)
         result.max_events = args.max_events
         cache_path = os.path.join(config.cache_path, 'stochastic_model_results')
         if not os.path.exists(cache_path):
