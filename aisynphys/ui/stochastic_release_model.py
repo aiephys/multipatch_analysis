@@ -351,6 +351,8 @@ class ModelInductionPlot(ModelResultView):
         self.ind_plots = [self.lw.addPlot(0, 0), self.lw.addPlot(1, 0), self.lw.addPlot(2, 0)]
         self.rec_plot = self.lw.addPlot(0, 1)
         self.corr_plot = self.lw.addPlot(1, 1, rowspan=2)
+        self.corr_plot.setAspectLocked()
+        self.corr_plot.showGrid(True, True)
         self.layout.addWidget(self.lw)
         
     def update_display(self):
@@ -359,6 +361,8 @@ class ModelInductionPlot(ModelResultView):
         spikes = result['result']['spike_time']
         amps = result['result']['amplitude']
         meta = result['event_meta']
+        
+        self.corr_plot.clear()
         
         # generate a list of all trains sorted by stimulus
         trains = {}  # {ind_f: {rec_d: [[a1, a2, ..a12], [b1, b2, ..b12], ...], ...}, ...}
@@ -388,17 +392,15 @@ class ModelInductionPlot(ModelResultView):
             ind_trains = trains.get(ind_f, {})
             
             # collect all induction events by pulse number
-            ind_pulses = [[] for i in range(8)]
+            ind_pulses = [[] for i in range(12)]
             for rec_d, rec_trains in ind_trains.items():
                 for train in rec_trains:
                     for i,amp in enumerate(train):
-                        if i >= 8:
-                            break
                         ind_pulses[i].append(amp)
                         
             x = []
             y = []
-            for i in range(8):
+            for i in range(12):
                 if len(ind_pulses[i]) == 0:
                     continue
                 y.extend(ind_pulses[i])
@@ -409,16 +411,29 @@ class ModelInductionPlot(ModelResultView):
             self.ind_plots[ind_i].clear()
             self.ind_plots[ind_i].plot(x, y, pen=None, symbol='o')
             
-            # # re-model based on mean amplitudes
-            mean_times = np.arange(8) / ind_f
-            # mean_times[8:] += 0.25
+            # re-model based on mean amplitudes
+            mean_times = np.arange(12) / ind_f
+            mean_times[8:] += 0.25
             model = result['model']
             params = result['params'].copy()
             params.update(result['optimized_params'])
             mean_result = model.measure_likelihood(mean_times, amplitudes=None, params=params)
             
-            self.ind_plots[ind_i].plot(mean_result['result']['expected_amplitude'], pen='w', symbol='d', symbolBrush='y')
+            expected_amps = mean_result['result']['expected_amplitude']
+            self.ind_plots[ind_i].plot(expected_amps, pen='w', symbol='d', symbolBrush='y')
         
+            # normalize events by model prediction
+            x = []
+            y = []
+            for rec_d, rec_trains in ind_trains.items():
+                for train in rec_trains:
+                    train = [t - expected_amps[i] for i,t in enumerate(train)]
+                    for i in range(1, len(train)):
+                        x.append(train[i-1])
+                        y.append(train[i])
+        
+            self.corr_plot.plot(x, y, pen=None, symbol='o', symbolBrush=(ind_i, 4))
+            
         # scatter plot of event pairs normalized by model expectation
         
         
