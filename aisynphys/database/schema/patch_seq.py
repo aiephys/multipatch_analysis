@@ -26,7 +26,7 @@ PatchSeq = make_table(
     ('top_leaf', 'str', '', {'index': True}),
     ('top_leaf_score', 'float', 'Confidence of top_leaf mapping (0-1)', {'index': True}),
     ('broad_class_label', 'str', 'Mapped class designation', {'index': True}),
-    ('sublass_label', 'str', 'Mapped subclass designation', {'index': True}),
+    ('subclass_label', 'str', 'Mapped subclass designation', {'index': True}),
     ('quality_score', 'float', '', {'index': True}),
     ('norm_marker_sum', 'float', '', {'index': True}),
     ('seurat_cluster', 'str', 'Mapped cluster based on Seurat method', {'index': True}),

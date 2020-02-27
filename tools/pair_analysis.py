@@ -37,6 +37,7 @@ comment_hashtag = [
     '#polysynaptic',
     '#doublechecked',
     '#syncretypmismatch',
+    '#badfit',
 ]
 
 comment_hashtag.sort(key=lambda x:x[1])
@@ -145,8 +146,8 @@ class MainWindow(pg.QtGui.QWidget):
             expt_query = expt_query.filter(db.Experiment.operator_name.in_(selected_operators))
         selected_hashtags = [ht.name() for ht in self.hash_select.children()[1:] if ht.value() is True]
         if len(selected_hashtags) != 0:
-            timestamps = get_expts_hashtag(selected_hashtags)
-            expt_query = expt_query.filter(db.Experiment.acq_timestamp.in_(timestamps))
+            timestamps = self.get_expts_hashtag(selected_hashtags)
+            expt_query = expt_query.filter(db.Experiment.ext_id.in_(timestamps))
         expts = expt_query.all()
         self.set_expts(expts)
 
@@ -181,10 +182,7 @@ class MainWindow(pg.QtGui.QWidget):
                     print(p.expt_id, p.pre_cell_id, p.post_cell_id, comments)
                     pairs_to_include.append(p)
 
-        timestamps = set([pair.expt_id for pair in pairs_to_include])
-        q2 = self.default_session.query(db.Experiment).filter(db.Experiment.acq_timestamp.in_(timestamps))
-        expts = q2.all()
-        return expts
+        return set([pair.expt_id for pair in pairs_to_include])
 
     def set_expts(self, expts):
         with pg.BusyCursor():

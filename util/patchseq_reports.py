@@ -131,7 +131,7 @@ def generate_monthly_report(start_date, end_date):
     """
 
     file_name = '%s_%s_mps_metadata_report.xlsx' % (datetime.strftime(start_date, "%y%m%d"), datetime.strftime(end_date, "%y%m%d"))
-    file_path = generated_report_path + '/' + file_name
+    file_path = config.patchseq_report_path + '/' + file_name
 
     required_cols = {
         'tubeID': 'A',
@@ -197,7 +197,6 @@ def generate_monthly_report(start_date, end_date):
         patch_date_dt = timestamp_to_datetime(day_info.get('__timestamp__'))
         patch_date = datetime.strftime(patch_date_dt, "%m/%d/%Y") if isinstance(patch_date_dt, datetime) else None
         operator = day_info.get('rig_operator', '')
-        operator = config.rig_operators.get(operator, '')
         roi = format_roi_major(day_info.get('target_region'))
         slic = Slice(site_dh.parent().name())
         genotype = slic.genotype

@@ -333,6 +333,8 @@ class DatabasePipelineModule(PipelineModule):
     def create_db_entries(cls, job_id, session):
         """Generate DB entries for *job_id* and add them to *session*.
         
+        Return a list of error strings.
+
         May be invoked in a subprocess.
         """
         raise NotImplementedError()
