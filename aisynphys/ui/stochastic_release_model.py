@@ -351,7 +351,7 @@ class ModelInductionPlot(ModelResultView):
         self.ind_plots = [self.lw.addPlot(0, 0), self.lw.addPlot(1, 0), self.lw.addPlot(2, 0)]
         self.rec_plot = self.lw.addPlot(0, 1)
         self.corr_plot = self.lw.addPlot(1, 1, rowspan=2)
-        self.corr_plot.setAspectLocked()
+        # self.corr_plot.setAspectLocked()
         self.corr_plot.showGrid(True, True)
         self.layout.addWidget(self.lw)
         
@@ -431,8 +431,18 @@ class ModelInductionPlot(ModelResultView):
                     for i in range(1, len(train)):
                         x.append(train[i-1])
                         y.append(train[i])
-        
-            self.corr_plot.plot(x, y, pen=None, symbol='o', symbolBrush=(ind_i, 4))
+            x = np.array(x)
+            y = np.array(y)
+            
+            y1 = y[x<0]
+            y2 = y[x>0]
+            x1 = pg.pseudoScatter(y1, bidir=True)
+            x2 = pg.pseudoScatter(y2, bidir=True)
+            x1 = 0.25 * x1 / x1.max()
+            x2 = 0.25 * x2 / x2.max()
+            self.corr_plot.plot(x1, y1, pen=None, symbol='o')
+            self.corr_plot.plot(x2 + 1, y2, pen=None, symbol='o')
+            # self.corr_plot.plot(x, y, pen=None, symbol='o', symbolBrush=(ind_i, 4))
             
         # scatter plot of event pairs normalized by model expectation
         
