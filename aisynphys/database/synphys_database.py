@@ -49,7 +49,10 @@ class SynphysDatabase(Database):
 
         """
         db_file = get_db_path(db_version)
-        return SynphysDatabase.load_sqlite(db_file)
+        db = SynphysDatabase.load_sqlite(db_file, readonly=False)
+        # instantiate any new tables that have been added to the schema but don't exist in the db file
+        db.create_tables()
+        return db
 
     def __init__(self, ro_host, rw_host, db_name):
         from .schema import ORMBase
