@@ -146,7 +146,7 @@ class CellClass(object):
         if db is None:
             db = default_db
         morpho = aliased(db.Morphology)
-        query = query.join(morpho, morpho.cell_id==cell_table.id)
+        query = query.outerjoin(morpho, morpho.cell_id==cell_table.id)
         tables = [cell_table, morpho]
         for k, v in self.criteria.items():
             found_attr = False
