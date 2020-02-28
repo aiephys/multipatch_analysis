@@ -244,7 +244,7 @@ PulseResponse = make_table(
         ('recording_id', 'recording.id', 'The full recording from which this pulse was extracted', {'index': True}),
         ('stim_pulse_id', 'stim_pulse.id', 'The presynaptic pulse', {'index': True}),
         ('pair_id', 'pair.id', 'The pre-post cell pair involved in this pulse response', {'index': True}),
-        ('baseline_id', 'baseline.id', 'A random baseline snippet matched from the same recording.'),
+        ('baseline_id', 'baseline.id', 'A random baseline snippet matched from the same recording.', {'index': True}),
         ('data', 'array', 'numpy array of response data sampled at '+sample_rate_str, {'deferred': True}),
         ('data_start_time', 'float', 'Starting time of this chunk of the recording in seconds, relative to the beginning of the recording'),
         ('ex_qc_pass', 'bool', 'Indicates whether this recording snippet passes QC for excitatory synapse probing', {'index': True}),

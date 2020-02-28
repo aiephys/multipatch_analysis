@@ -160,6 +160,8 @@ def make_table(ormbase, name, columns, base=None, **table_args):
         if coltype not in column_data_types:
             if not coltype.endswith('.id'):
                 raise ValueError("Unrecognized column type %s" % coltype)
+            # force indexing on all foreign keys; otherwise deletes can become vrey slow
+            kwds['index'] = True
             props[colname] = Column(Integer, ForeignKey(coltype, ondelete=ondelete), **kwds)
         else:
             ctyp = column_data_types[coltype]
