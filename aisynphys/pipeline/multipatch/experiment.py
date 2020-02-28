@@ -103,7 +103,11 @@ class ExperimentPipelineModule(MultipatchPipelineModule):
 
             if elec.cell is not None:
                 cell = elec.cell
-                cell_meta = {'lims_specimen_id': lims_cell_ids.get(cell.cell_id)}
+                transgenic_class = {True:'ex', False:'in'}.get(cell.is_excitatory, None)
+                cell_meta = {
+                    'lims_specimen_id': lims_cell_ids.get(cell.cell_id),
+                    'transgenic_cell_class': transgenic_class,
+                }
 
                 cell_entry = db.Cell(
                     experiment=expt_entry,
@@ -111,7 +115,8 @@ class ExperimentPipelineModule(MultipatchPipelineModule):
                     ext_id=cell.cell_id,
                     cre_type=cell.cre_type,
                     target_layer=cell.target_layer,
-                    is_excitatory=cell.is_excitatory,
+                    cell_class=None,   # cell class fields get filled in later
+                    cell_class_nonsynaptic=None,
                     depth=cell.depth,
                     position=cell.position,
                     meta=cell_meta

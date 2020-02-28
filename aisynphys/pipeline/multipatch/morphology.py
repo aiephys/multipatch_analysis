@@ -96,6 +96,21 @@ class MorphologyPipelineModule(MultipatchPipelineModule):
 
             # Write new record to DB
             morphology = db.Morphology(cell_id=cell.id, **results)
+            
+            # Update cell_class_nonsynaptic
+            #  (cell_class gets updated later)
+            dtype = results.get('dendrite_type', None)
+            morpho_class = {'spiny': 'ex', 'aspiny': 'in'}.get(dtype, None)
+            cell_meta = cell.meta.copy()
+            cell_meta['morpho_cell_class'] = morpho_class
+            cell.meta = cell_meta
+            transgenic_class = cell.meta['transgenic_cell_class']
+            if transgenic_class is None:
+                cell.cell_class_nonsynaptic = morpho_class
+            elif morpho_class is not None and transgenic_class != morpho_class:
+                # morpho class conflicts with cre class
+                cell.cell_class_nonsynaptic = None
+                
             session.add(morphology)
         
     def job_records(self, job_ids, session):
