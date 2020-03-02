@@ -20,6 +20,7 @@ from neuroanalysis.analyzers.baseline import BaselineDistributor
 import optoanalysis.power_calibration as power_cal
 import optoanalysis.qc as qc
 from neuroanalysis.stimuli import find_square_pulses
+#import cProfile
 
 
 class OptoDatasetPipelineModule(DatabasePipelineModule):
@@ -40,6 +41,10 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
     # when running parallel, each child process may run only one job before being killed
     maxtasksperchild = 1 
 
+    # @classmethod
+    # def create_db_entries(cls, job, session):
+    #     cProfile.runctx('cls.create_db_entries_real(job, session)', globals(), {'cls':cls, 'job':job, 'session':session}, filename='profile.txt')
+
     @classmethod
     def create_db_entries(cls, job, session):
         db = job['database']
@@ -48,17 +53,8 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
         # Load experiment from DB
         expt_entry = db.experiment_from_ext_id(job_id, session=session)
         elecs_by_ad_channel = {elec.device_id:elec for elec in expt_entry.electrodes}
-
-        pairs_by_cell_id = {}
-        for pair in expt_entry.pairs.values():
-            pre_cell_id = pair.pre_cell.ext_id
-            post_cell_id = pair.post_cell.ext_id
-            pairs_by_cell_id[(pre_cell_id, post_cell_id)] = pair
-
-        # print('pairs_by_cell_id:')
-        # for k in pairs_by_cell_id.keys():
-        #     print('   ', k)
-
+        cell_entries = expt_entry.cells ## do this once here instead of multiple times later because it's slooooowwwww
+        pairs_by_cell_id = expt_entry.pairs
 
         # load NWB file
         path = os.path.join(config.synphys_data, expt_entry.storage_path)
@@ -159,7 +155,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                     if stim_num is None: ### this is a trace that would have been labeled as 'unknown'
                         continue
                     stim = stim_log[str(int(stim_num))]
-                    cell_entry = expt_entry.cells[stim['stimulationPoint']['name']]
+                    cell_entry = cell_entries[stim['stimulationPoint']['name']]
 
                     ## get stimulation shape parameters
                     if stim_log['version'] >=3:
