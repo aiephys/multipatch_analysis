@@ -6,14 +6,15 @@ from ...util import timestamp_to_datetime
 from ..pipeline_module import DatabasePipelineModule
 from .opto_experiment import OptoExperimentPipelineModule
 from neuroanalysis.data.experiment import Experiment
-from neuroanalysis.data.libraries import opto
+#from neuroanalysis.data.libraries import opto
+from neuroanalysis.data.loaders.opto_experiment_loader import OptoExperimentLoader
 from neuroanalysis.baseline import float_mode
 #from neuroanalysis.stimuli import find_square_pulses
 #from ...data import BaselineDistributor, PulseStimAnalyzer #Experiment, MultiPatchDataset, MultiPatchProbe, PulseStimAnalyzer, MultiPatchSyncRecAnalyzer, BaselineDistributor
 from neuroanalysis.data import PatchClampRecording
 #from optoanalysis.optoadapter import OptoRecording
 from optoanalysis.data.dataset import OptoRecording
-from optoanalysis.analyzers import OptoSyncRecAnalyzer, OptoBaselineAnalyzer
+from optoanalysis.analyzers import OptoSyncRecAnalyzer
 from neuroanalysis.analyzers.stim_pulse import GenericStimPulseAnalyzer, PWMStimPulseAnalyzer, PatchClampStimPulseAnalyzer
 from neuroanalysis.analyzers.baseline import BaselineDistributor
 import optoanalysis.power_calibration as power_cal
@@ -61,9 +62,9 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
 
         # load NWB file
         path = os.path.join(config.synphys_data, expt_entry.storage_path)
-        expt = Experiment(site_path=path, loading_library=opto)
+        expt = Experiment(loader=OptoExperimentLoader(site_path=path))
         nwb = expt.data
-        stim_log = expt.library.load_stimulation_log(expt)
+        stim_log = expt.loader.load_stimulation_log()
         if stim_log['version'] < 3:
             ## gonna need to load an image in order to calculate spiral size later
             from acq4.util.DataManager import getHandle
@@ -74,13 +75,9 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
             srec_entry = db.SyncRec(ext_id=srec.key, experiment=expt_entry, temperature=temp)
             session.add(srec_entry)
 
-            #raise Exception('stop')
-
             rec_entries = {}
             all_pulse_entries = {}
             for rec in srec.recordings:
-                #if not hasattr(rec, 'device_name'):
-                #    print(rec.device_id, ' doesnt have device name')
                 
                 # import all recordings
                 electrode_entry = elecs_by_ad_channel.get(rec.device_id, None)
@@ -96,16 +93,15 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
 
                 # import patch clamp recording information
                 if isinstance(rec, PatchClampRecording):
-                    oba = OptoBaselineAnalyzer.get(rec)
                     qc_pass, qc_failures = qc.recording_qc_pass(rec)
                     pcrec_entry = db.PatchClampRecording(
                         recording=rec_entry,
                         clamp_mode=rec.clamp_mode,
                         patch_mode=rec.patch_mode,
                         stim_name=rec.stimulus.description,
-                        baseline_potential=oba.baseline_potential,
-                        baseline_current=oba.baseline_current,
-                        baseline_rms_noise=oba.baseline_rms_noise,
+                        baseline_potential=rec.baseline_potential,
+                        baseline_current=rec.baseline_current,
+                        baseline_rms_noise=rec.baseline_rms_noise,
                         qc_pass=qc_pass,
                         meta=None if len(qc_failures) == 0 else {'qc_failures': qc_failures},
                     )
@@ -153,6 +149,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                         session.add(pulse_entry)
                         pulse_entries[pulse.meta['pulse_n']] = pulse_entry
 
+
                 #elif isinstance(rec, OptoRecording) and (rec.device_name=='Fidelity'): 
                 elif rec.device_type == 'Fidelity':
                     ## This is a 2p stimulation
@@ -171,7 +168,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                         ## need to calculate spiral size from reference image, cause stimlog is from before we were saving spiral size
                         shape={'spiral_revolutions':stim.get('prairieCmds', {}).get('spiralRevolutions')}
                         prairie_size = stim['prairieCmds']['spiralSize']
-                        ref_image = os.path.join(expt.path, stim['prairieImage'][-23:])
+                        ref_image = os.path.join(expt.files['path'], stim['prairieImage'][-23:])
                         if os.path.exists(ref_image):
                             h = getHandle(ref_image)
                             xPixels = h.info()['PrairieMetaInfo']['Environment']['PixelsPerLine']
@@ -193,7 +190,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
 
                     ospa = GenericStimPulseAnalyzer.get(rec)
 
-                    for i, pulse in enumerate(ospa.pulses()):
+                    for i, pulse in enumerate(ospa.pulses(channel='reporter')):
                         ### pulse is (start, stop, amplitude)
                     # Record information about all pulses, including test pulse.
                         #t0, t1 = pulse.meta['pulse_edges']
@@ -229,6 +226,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                         session.add(pulse_entry)
                         pulse_entries[i] = pulse_entry
 
+
                 elif 'LED' in rec.device_type:
                     #if rec.device_id == 'TTL1P_0': ## this is the ttl output to Prairie, not an LED stimulation
                     #    continue
@@ -244,7 +242,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                     pulse_entries = {}
                     all_pulse_entries[rec.device_id] = pulse_entries
 
-                    spa = PWMStimPulseAnalyzer(rec)
+                    spa = PWMStimPulseAnalyzer.get(rec)
                     pulses = spa.pulses(channel='reporter')
                     max_power=power_cal.get_led_power(timestamp_to_datetime(expt_entry.acq_timestamp), expt_entry.rig_name, rec.device_id)
 
@@ -291,9 +289,9 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                     raise Exception('Need to figure out recording type for %s (device_id:%s)' % (rec, rec.device_id))
 
             ### import postsynaptic responses
-            osra = OptoSyncRecAnalyzer(srec)
+            osra = OptoSyncRecAnalyzer.get(srec)
             #for stim_rec in srec.fidelity_channels:
-            for stim_rec in [x for x in srec.recordings if 'Fidelity' in x.device_type]:
+            for stim_rec in [x for x in srec.recordings if ('Fidelity' in x.device_type) or ('led' in x.device_type.lower())]:
                 #for post_rec in rec.recording_channels:
                 for post_rec in [x for x in srec.recordings if 'MultiClamp 700' in x.device_type]:
                     #if pre_dev == post_dev:
@@ -335,14 +333,13 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
             #for dev in srec.recording_channels:
             for dev in [x for x in srec.recordings if 'MultiClamp 700' in x.device_type]:
                 rec = srec[dev.device_id]
-                dist = OptoBaselineAnalyzer.get(rec)
+                dist = BaselineDistributor.get(rec)
                 for i in range(20):
                     base = dist.get_baseline_chunk(20e-3)
                     if base is None:
                         # all out!
                         break
                     start, stop = base
-                    #raise Exception('stop')
                     data = rec['primary'].time_slice(start, stop).resample(sample_rate=20000).data
 
                     ex_qc_pass, in_qc_pass, qc_failures = qc.opto_pulse_response_qc_pass(rec, [start, stop])
