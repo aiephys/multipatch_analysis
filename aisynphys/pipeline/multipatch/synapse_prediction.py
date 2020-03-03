@@ -8,7 +8,7 @@ from .pipeline_module import MultipatchPipelineModule
 from .experiment import ExperimentPipelineModule
 from .dataset import DatasetPipelineModule
 from .pulse_response import PulseResponsePipelineModule
-from ...synapse_prediction import get_amps, get_baseline_amps, analyze_pair_connectivity
+from ...synapse_prediction import get_amps, analyze_pair_connectivity
 
 
 class SynapsePredictionPipelineModule(MultipatchPipelineModule):
@@ -30,9 +30,7 @@ class SynapsePredictionPipelineModule(MultipatchPipelineModule):
             amps = {}
             for clamp_mode in ('ic', 'vc'):
                 clamp_mode_fg = get_amps(session, pair, clamp_mode=clamp_mode, get_data=True)
-                clamp_mode_bg = get_baseline_amps(session, pair, amps=clamp_mode_fg, clamp_mode=clamp_mode, get_data=False)
-                amps[clamp_mode, 'fg'] = clamp_mode_fg
-                amps[clamp_mode, 'bg'] = clamp_mode_bg
+                amps[clamp_mode] = clamp_mode_fg
             
             # Generate summary results for this pair
             results = analyze_pair_connectivity(amps)
