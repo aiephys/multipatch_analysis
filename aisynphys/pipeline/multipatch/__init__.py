@@ -21,7 +21,7 @@ class MultipatchPipeline(Pipeline):
         ExperimentPipelineModule,
         DatasetPipelineModule,
         PatchSeqPipelineModule,
-        # MorphologyPipelineModule,
+        MorphologyPipelineModule,
         SynapsePipelineModule,
         PulseResponsePipelineModule,
         SynapsePredictionPipelineModule,

@@ -5,26 +5,24 @@ For generating a DB table describing cell morphology.
 """
 from __future__ import print_function, division
 
-import os, datetime, hashlib
+import os, datetime, hashlib, json
 from collections import OrderedDict
 from ...util import timestamp_to_datetime, optional_import
 from ...data.pipette_metadata import PipetteMetadata
 from ... import config, lims
 from .pipeline_module import MultipatchPipelineModule
 from .experiment import ExperimentPipelineModule
-pyodbc = optional_import('pyodbc')
 
 
 col_names = {
-                'Qual_Morpho_Type': {'name': 'qual_morpho_type', 'type': 'str'},
-                'dendrite_type': {'name': 'dendrite_type', 'type': ['spiny', 'aspiny', 'sparsely spiny', 'NEI']},
-                'Apical_truncation_distance': {'name': 'apical_trunc_distance', 'type': 'float'},
-                'Axon_truncation_distance': {'name': 'axon_trunc_distance', 'type': 'float'},
-                'Axon origination': {'name': 'axon_origin', 'type': ['soma', 'dendrite', 'unclear', 'NEI']},
-                'Axon_truncation': {'name': 'axon_truncation', 'type': ['truncated', 'borderline', 'intact', 'unclear', 'NEI']},
-                'Apical_truncation': {'name': 'apical_truncation', 'type': ['truncated', 'borderline', 'intact','unclear', 'NEI']},
-
-            }
+    'Qual_Morpho_Type': {'name': 'qual_morpho_type', 'type': 'str'},
+    'dendrite_type': {'name': 'dendrite_type', 'type': ['spiny', 'aspiny', 'sparsely spiny', 'NEI']},
+    'Apical_truncation_distance': {'name': 'apical_trunc_distance', 'type': 'float'},
+    'Axon_truncation_distance': {'name': 'axon_trunc_distance', 'type': 'float'},
+    'Axon origination': {'name': 'axon_origin', 'type': ['soma', 'dendrite', 'unclear', 'NEI']},
+    'Axon_truncation': {'name': 'axon_truncation', 'type': ['truncated', 'borderline', 'intact', 'unclear', 'NEI']},
+    'Apical_truncation': {'name': 'apical_truncation', 'type': ['truncated', 'borderline', 'intact','unclear', 'NEI']},
+}
 
 
 class MorphologyPipelineModule(MultipatchPipelineModule):
@@ -74,12 +72,12 @@ class MorphologyPipelineModule(MultipatchPipelineModule):
             }
             
             if cell_morpho is not None:
-                morpho_db_hash = hashlib.md5((';'.join(filter(None, cell_morpho))).encode()).hexdigest()
+                morpho_db_hash = hashlib.md5(repr(cell_morpho).encode()).hexdigest()
                 results['morpho_db_hash'] = morpho_db_hash
                 for morpho_db_name, result in col_names.items():
                     col_name = result['name']
                     col_type = result['type']
-                    data = getattr(cell_morpho, morpho_db_name)
+                    data = cell_morpho[morpho_db_name]
                     if data is not None:
                         if isinstance(col_type, list):
                             d = [t for t in col_type if t == data]
@@ -172,12 +170,23 @@ class MorphologyPipelineModule(MultipatchPipelineModule):
         return ready
 
 
-def morpho_db():
+def import_morpho_db():
+    import pyodbc
     cnxn_str = r'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)}; DBQ=%s' % config.morpho_address
     cnxn = pyodbc.connect(cnxn_str)
     cursor = cnxn.cursor()
     morpho_table = cursor.execute('select * from MPATCH_CellsofCluster')
     results = morpho_table.fetchall()
-    morpho_results = {int(r.cell_specimen_id): r for r in results}
+    fields = [r[0] for r in results[0].cursor_description]
+    morpho_results = {int(r.cell_specimen_id): {k:getattr(r, k) for k in fields} for r in results}
+    
+    return morpho_results
 
+
+def morpho_db():
+    if hasattr(config, 'morpho_address'):
+        morpho_results = import_morpho_db()
+    else:
+        morpho_results = json.load(open(config.morpho_json_file))
+    
     return morpho_results
