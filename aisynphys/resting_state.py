@@ -66,9 +66,14 @@ def resting_state_response_fits(pair, rest_duration):
     return fits
 
 
-def get_resting_state_responses(pair, rest_duration, response_duration=10e-3):
+def get_resting_state_responses(pair, rest_duration, response_duration):
     """Return {'ic': PulseResponseList(), 'vc': PulseResponseList()} containing
     all qc-passed, resting-state pulse responses for *pair*.
+    
+    The *response_duration* parameter is used to define the stimuli that count as "resting state":
+    any pulse-response that is preceded by a window *response_duration* seconds long in which there
+    are no presynaptic spikes. Typical values here might be a few seconds to tens of seconds to 
+    allow the synapse to recover to its resting state.
     """
     syn_typ = pair.synapse.synapse_type
 
@@ -104,4 +109,3 @@ def get_resting_state_responses(pair, rest_duration, response_duration=10e-3):
         assert rec.PulseResponse.stim_pulse.pulse_number == 1
 
     return {k:PulseResponseList(v) for k,v in rest_prs.items()}
-
