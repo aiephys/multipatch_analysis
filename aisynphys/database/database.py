@@ -336,7 +336,8 @@ class Database(object):
         self._check_engines()
         if self._ro_engine is None:
             if self.backend == 'postgresql':
-                opts = {'pool_size': 10, 'max_overflow': 40, 'isolation_level': 'AUTOCOMMIT'}
+                # use echo=True to log all db queries for debugging
+                opts = {'echo': False, 'pool_size': 10, 'max_overflow': 40, 'isolation_level': 'AUTOCOMMIT'}
             else:
                 opts = {}        
             self._ro_engine = create_engine(self.ro_address, **opts)
