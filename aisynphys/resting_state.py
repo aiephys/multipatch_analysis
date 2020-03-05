@@ -76,36 +76,18 @@ def get_resting_state_responses(pair, rest_duration, response_duration):
     allow the synapse to recover to its resting state.
     """
     syn_typ = pair.synapse.synapse_type
-
+    qc_field = getattr(db.PulseResponse, syn_typ + '_qc_pass')
+    
     q = db.query(db.PulseResponse, db.StimPulse, db.Recording, db.PatchClampRecording, db.PulseResponse.data)
     q = q.join(db.StimPulse, db.PulseResponse.stim_pulse)
     q = q.join(db.Recording, db.PulseResponse.recording)
     q = q.join(db.PatchClampRecording, db.PatchClampRecording.recording_id==db.Recording.id)
     q = q.filter(db.PulseResponse.pair_id==pair.id)
+    q = q.filter(db.StimPulse.previous_pulse_dt > response_duration)
+    q = q.filter(qc_field==True)
     q = q.order_by(db.Recording.start_time, db.StimPulse.onset_time)
     recs = q.all()
-    
-    rest_prs = {'ic': [], 'vc': []}
-    stim_times = [datetime_to_timestamp(rec.Recording.start_time) + rec.StimPulse.onset_time for rec in recs]
-    for i,rec in enumerate(recs):
-        stim_time = stim_times[i]
-        if i > 0:
-            last_stim_time = stim_times[i-1]
-            if stim_time - last_stim_time < rest_duration:
-                # not a resting state pulse, skip
-                continue
-        if i < len(recs) - 1:
-            next_stim_time = stim_times[i+1]
-            if next_stim_time - stim_time < response_duration:
-                # not enough response time; skip
-                continue
         
-        qc_pass = getattr(rec.PulseResponse, syn_typ + '_qc_pass')
-        if qc_pass is not True:
-            continue
-        
-        rest_prs[rec.PatchClampRecording.clamp_mode].append(rec.PulseResponse)
-        
-        assert rec.PulseResponse.stim_pulse.pulse_number == 1
+    rest_prs = {clamp_mode: [rec.PulseResponse for rec in recs if rec.PatchClampRecording.clamp_mode==clamp_mode] for clamp_mode in ('ic', 'vc')}
 
     return {k:PulseResponseList(v) for k,v in rest_prs.items()}

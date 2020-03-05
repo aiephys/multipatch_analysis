@@ -132,7 +132,6 @@ StimPulse = make_table(
         ('recording_id', 'recording.id', '', {'index': True}),
         ('pulse_number', 'int', 'The ordinal position of this pulse within a train of pulses.', {'index': True}),
         ('onset_time', 'float', 'The starting time of the pulse, relative to the beginning of the recording'),
-        ('next_pulse_time', 'float', 'Time of the next pulse on any channel in the sync rec'),
         ('amplitude', 'float', 'Amplitude of the presynaptic pulse'),
         ('duration', 'float', 'Length of the pulse in seconds'),
         ('n_spikes', 'int', 'Number of spikes evoked by this pulse'),
@@ -140,6 +139,7 @@ StimPulse = make_table(
         # ('first_spike', 'stim_spike.id', 'The ID of the first spike evoked by this pulse'),
         ('data', 'array', 'Numpy array of presynaptic recording sampled at '+sample_rate_str, {'deferred': True}),
         ('data_start_time', 'float', "Starting time of the data chunk, relative to the beginning of the recording"),
+        ('previous_pulse_dt', 'float', 'Time elapsed since the last stimulus in the same cell', {'index': True}),
     ]
 )
 

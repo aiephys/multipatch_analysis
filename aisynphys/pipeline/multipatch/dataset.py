@@ -4,7 +4,7 @@ from datetime import datetime
 from collections import OrderedDict
 from acq4.util.DataManager import getDirHandle
 from ... import config, lims, qc
-from ...util import timestamp_to_datetime
+from ...util import timestamp_to_datetime, datetime_to_timestamp
 from ...data import Experiment
 from .pipeline_module import MultipatchPipelineModule
 from .experiment import ExperimentPipelineModule
@@ -42,6 +42,8 @@ class DatasetPipelineModule(MultipatchPipelineModule):
         path = os.path.join(config.synphys_data, expt_entry.storage_path)
         expt = Experiment(path)
         nwb = expt.data
+        
+        last_stim_pulse_time = {}
         
         # Load all data from NWB into DB
         for srec in nwb.contents:
@@ -127,6 +129,9 @@ class DatasetPipelineModule(MultipatchPipelineModule):
                     # Record information about all pulses, including test pulse.
                     t0, t1 = pulse.meta['pulse_edges']
                     resampled = pulse['primary'].resample(sample_rate=db.default_sample_rate)
+                    clock_time = t0 + datetime_to_timestamp(rec_entry.start_time)
+                    prev_pulse_dt = clock_time - last_stim_pulse_time.get(rec.device_id, -np.inf)
+                    last_stim_pulse_time[rec.device_id] = clock_time
                     pulse_entry = db.StimPulse(
                         recording=rec_entry,
                         pulse_number=pulse.meta['pulse_n'],
@@ -135,6 +140,7 @@ class DatasetPipelineModule(MultipatchPipelineModule):
                         duration=t1-t0,
                         data=resampled.data,
                         data_start_time=resampled.t0,
+                        previous_pulse_dt=prev_pulse_dt,
                     )
                     session.add(pulse_entry)
                     pulse_entries[pulse.meta['pulse_n']] = pulse_entry
@@ -281,7 +287,8 @@ class DatasetPipelineModule(MultipatchPipelineModule):
         # faster:
         db = self.database
         session = session or db.session(readonly=False)
-        for jid in job_ids:
+        for i,jid in enumerate(job_ids):
+            # print("drop dataset records for %s (%d/%d)" % (jid, i, len(job_ids)))
             # break link between patch_clamp_recording and test_pulse:
             q = """
                 update patch_clamp_recording
@@ -295,16 +302,27 @@ class DatasetPipelineModule(MultipatchPipelineModule):
                 );
             """.format(jid=jid)
             session.execute(q)
-            for table in 'baseline', 'pulse_response', 'test_pulse':
+            for table in 'pulse_response', 'test_pulse', 'baseline':
+                # print("   drop from %s" % table)
+                # q = """
+                #     delete from {table}
+                #     where {table}.id in (
+                #         select {table}.id from {table}
+                #         join recording on {table}.recording_id=recording.id
+                #         join sync_rec on recording.sync_rec_id=sync_rec.id
+                #         join experiment on sync_rec.experiment_id=experiment.id
+                #         where experiment.ext_id='{jid}'
+                #     );
+                # """.format(table=table, jid=jid)
                 q = """
                     delete from {table}
-                    where {table}.id in (
-                        select {table}.id from {table}
-                        join recording on {table}.recording_id=recording.id
-                        join sync_rec on recording.sync_rec_id=sync_rec.id
-                        join experiment on sync_rec.experiment_id=experiment.id
-                        where experiment.ext_id='{jid}'
-                    );
+                    using recording, sync_rec, experiment
+                    where 
+                        {table}.recording_id=recording.id and 
+                        recording.sync_rec_id=sync_rec.id and
+                        sync_rec.experiment_id=experiment.id and
+                        experiment.ext_id='{jid}'
+                    ;
                 """.format(table=table, jid=jid)
                 session.execute(q)
             session.commit()
