@@ -30,9 +30,10 @@ class PulseResponsePipelineModule(MultipatchPipelineModule):
         rq = rq.join(db.Recording).join(db.SyncRec).join(db.Experiment)
         rq = rq.filter(db.Experiment.ext_id==expt_id)
         prs = [rec.PulseResponse for rec in rq.all()]
-        print("got %d pulse responses" % len(prs))
+        print("%s: got %d pulse responses" % (expt_id, len(prs)))
         
         # best estimate of response amplitude using known latency for this synapse
+        fits = 0
         for pr in prs:
             if not pr.pair.has_synapse:
                 continue
@@ -40,6 +41,7 @@ class PulseResponsePipelineModule(MultipatchPipelineModule):
             response_fit, baseline_fit = measure_response(pr)
             response_dec_fit, baseline_dec_fit = measure_deconvolved_response(pr)
             if response_fit is None and response_dec_fit is None:
+                # print("no response/dec fits")
                 continue
             
             new_rec = db.PulseResponseFit(pulse_response_id=pr.id)
@@ -67,10 +69,11 @@ class PulseResponsePipelineModule(MultipatchPipelineModule):
                 setattr(new_rec, prefix+'reconv_amp', fit['reconvolved_amp'])
 
             session.add(new_rec)
-            
+            fits += 1
             # keepalive; this loop can take a long time
             session.query(db.Slice).count()
         
+        print("  %s: added %d fit records" % (expt_id, fits))
 
         # "unbiased" response analysis used to predict connectivity
         for pr in prs:

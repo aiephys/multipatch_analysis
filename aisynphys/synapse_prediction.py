@@ -315,7 +315,11 @@ def analyze_pair_connectivity(amps, sign=None):
             fg_traces.append(trace)
         
         # get averages
-        # bg_avg = bg_traces.mean()        
+        
+        if len(fg_traces) == 0:
+            continue
+            
+        # bg_avg = bg_traces.mean()
         fg_avg = fg_traces.mean()
         base_rgn = fg_avg.time_slice(-6e-3, 0)
         base = float_mode(base_rgn.data)

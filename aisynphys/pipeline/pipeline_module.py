@@ -388,7 +388,10 @@ class DatabasePipelineModule(PipelineModule):
         
         try:
             errors = cls.create_db_entries(job, session)
-            job_result = db.Pipeline(module_name=cls.name, job_id=job_id, success=True, error=errors, finish_time=datetime.now(), meta=meta)
+            if errors is None:
+                errors = []
+            error = '\n'.join(errors)
+            job_result = db.Pipeline(module_name=cls.name, job_id=job_id, success=True, error=error, finish_time=datetime.now(), meta=meta)
             session.add(job_result)
 
             session.commit()

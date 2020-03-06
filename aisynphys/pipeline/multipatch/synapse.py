@@ -109,6 +109,8 @@ class SynapsePipelineModule(MultipatchPipelineModule):
                     syn.latency = latency
                 else:
                     errors.append("latency mismatch on %s %s %s" % (expt_id, pair.pre_cell.ext_id, pair.post_cell.ext_id))
+            else:
+                errors.append("%s %s: No latency values available for this synapse" % (pair.pre_cell.ext_id, pair.post_cell.ext_id))
             
             # compute weighted averages of kinetic parameters
             for mode, pfx in [('ic', 'psp_'), ('vc', 'psc_')]:
@@ -116,6 +118,7 @@ class SynapsePipelineModule(MultipatchPipelineModule):
                     vals = np.array([v[0] for v in fit_vals])
                     nvals = np.array([v[1] for v in fit_vals])
                     if nvals.sum() == 0:
+                        errors.append("%s %s: No %s %s values available for this synapse" % (pair.pre_cell.ext_id, pair.post_cell.ext_id, mode, param))
                         avg = None
                     else:
                         avg = (vals * nvals).sum() / nvals.sum()

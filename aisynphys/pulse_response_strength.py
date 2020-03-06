@@ -41,6 +41,7 @@ def measure_response(pr):
     # make sure all parameters are available
     for v in [pr.stim_pulse.first_spike_time, syn.latency, rise_time, decay_tau]:
         if v is None or syn.latency is None or not np.isfinite(v):
+            # print("bad:", pr.stim_pulse.first_spike_time, syn.latency, rise_time, decay_tau)
             return None, None
     
     data = pr.get_tseries('post', align_to='spike')

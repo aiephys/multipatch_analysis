@@ -152,6 +152,16 @@ class Pipeline(object):
                 else:
                     success, error, meta = js
                     status = 'ok' if success else 'fail'
-                report.append("  {:15s} : {:5s} : {:s}".format(jid, status, error or ''))
+                    
+                report_entry = "  {:20s} :  {:15s} : {:5s} : ".format(module.name, jid, status)
+                
+                error = error or ''
+                indent = ' ' * len(report_entry)
+                for i,err_line in enumerate(error.split('\n')):
+                    if i > 0:
+                        err_line = indent + err_line
+                    report_entry = report_entry + err_line + '\n'
+                    
+                report.append(report_entry)
         
-        return '\n'.join(report)
+        return ''.join(report)

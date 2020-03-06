@@ -40,7 +40,7 @@ def resting_state_response_fits(pair, rest_duration):
     }
         
     # 1. Select qc-passed "resting state" PRs
-    rest_prs = get_resting_state_responses(pair, rest_duration)
+    rest_prs = get_resting_state_responses(pair, rest_duration, response_duration=10e-3)
     
     # 2. Average and fit
     fits = {}
@@ -70,8 +70,8 @@ def get_resting_state_responses(pair, rest_duration, response_duration):
     """Return {'ic': PulseResponseList(), 'vc': PulseResponseList()} containing
     all qc-passed, resting-state pulse responses for *pair*.
     
-    The *response_duration* parameter is used to define the stimuli that count as "resting state":
-    any pulse-response that is preceded by a window *response_duration* seconds long in which there
+    The *rest_duration* parameter is used to define the stimuli that count as "resting state":
+    any pulse-response that is preceded by a window *rest_duration* seconds long in which there
     are no presynaptic spikes. Typical values here might be a few seconds to tens of seconds to 
     allow the synapse to recover to its resting state.
     """
@@ -88,6 +88,12 @@ def get_resting_state_responses(pair, rest_duration, response_duration):
     q = q.order_by(db.Recording.start_time, db.StimPulse.onset_time)
     recs = q.all()
         
-    rest_prs = {clamp_mode: [rec.PulseResponse for rec in recs if rec.PatchClampRecording.clamp_mode==clamp_mode] for clamp_mode in ('ic', 'vc')}
+    rest_prs = {'ic': [], 'vc': []}
+    for rec in recs:
+        pr = rec.PulseResponse
+        if pr.post_tseries.duration < response_duration:
+            # not enough data; skip
+            continue
+        rest_prs[rec.PatchClampRecording.clamp_mode].append(pr)
 
     return {k:PulseResponseList(v) for k,v in rest_prs.items()}
