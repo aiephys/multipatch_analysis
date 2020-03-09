@@ -182,3 +182,109 @@ def show_connectivity_matrix(ax, results, pre_cell_classes, post_cell_classes, c
     labels = annotate_heatmap(im, cprob_str, data=cprob)
     
     return im, cbar, labels
+
+def show_distance_profiles(ax, results, colors, class_labels):
+    """ Display connection probability vs distance plots
+    Parameters
+    -----------
+    ax : matplotlib.axes
+        The matplotlib axes object on which to make the plots
+    results : dict
+        Output of aisynphys.connectivity.measure_distance. This structure maps
+        (pre_class, post_class) onto the results of the connectivity as a function of distance.
+    colors: dict
+        color to draw each (pre_class, post_class) connectivity profile. Keys same as results.
+        To color based on overall connection probability use color_by_conn_prob.
+    class_labels : dict
+        Maps {cell_class: label} to give the strings to display for each cell class.
+    """
+
+    for i, (pair_class, result) in enumerate(results.items()):
+        pre_class, post_class = pair_class
+        plot = ax[i]
+        xvals = result['bin_edges']
+        xvals = (xvals[:-1] + xvals[1:])*0.5e6
+        cp = result['conn_prob']
+        lower = result['lower_ci']
+        upper = result['upper_ci']
+
+        color = colors[pair_class]
+        color2 = list(color)
+        color2[-1] = 0.2
+        mid_curve = plot.plot(xvals, cp, color=color, linewidth=2.5)
+        lower_curve = plot.fill_between(xvals, lower, cp, color=color2)
+        upper_curve = plot.fill_between(xvals, upper, cp, color=color2)
+        
+        plot.set_title('%s -> %s' % (class_labels[pre_class], class_labels[post_class]))
+        if i == len(ax)-1:
+            plot.set_xlabel('Distance (um)')
+            plot.set_ylabel('Connection Probability')
+        
+    return ax
+
+
+def color_by_conn_prob(pair_group_keys, connectivity, norm, cmap):
+    """ Return connection probability mapped color from show_connectivity_matrix
+    """
+    colors = {}
+    for key in pair_group_keys:
+        cp = connectivity[key]['connection_probability'][0]
+        mapper = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap)
+        color = mapper.to_rgba(np.clip(cp, 0.01, 1.0))
+        colors[key] = color
+
+    return colors
+
+def data_matrix(data_df, cell_classes, metric=None, scale=1, unit=None, cmap=None, norm=None, alpha=2):
+    """ Return data and labels to make a matrix using heatmap and annotate_heatmap. Similar to 
+    show_connectivity_matrix but for arbitrary data metrics.
+
+    Parameters:
+    -----------
+    data_df : pandas dataframe 
+        pairs with various metrics as column names along with the pre-class and post-class.
+    cell_classes : list 
+        cell classes included in the matrix, this assumes a square matrix.
+    metric : str
+        data metric to be displayed in matrix
+    scale : float
+        scale of the data
+    unit : str
+        unit for labels
+    cmap : matplotlib colormap instance
+        used to colorize the matrix
+    norm : matplotlib normalize instance
+        used to normalize the data before colorizing
+    alpha : int
+        used to desaturate low confidence data
+    """
+
+    shape = (len(cell_classes), len(cell_classes))
+    data = np.zeros(shape)
+    data_alpha = np.zeros(shape)
+    data_str = np.zeros(shape, dtype=object)
+    
+    mean = data_df.groupby(['pre_class', 'post_class']).aggregate(lambda x: np.mean(x))
+    error = data_df.groupby(['pre_class', 'post_class']).aggregate(lambda x: np.std(x))
+    count = data_df.groupby(['pre_class', 'post_class']).count()
+    
+    for i, pre_class in enumerate(cell_classes):
+        for j, post_class in enumerate(cell_classes):
+            try:
+                value = mean.loc[pre_class].loc[post_class][metric]
+                std = error.loc[pre_class].loc[post_class][metric]
+                n = count.loc[pre_class].loc[post_class][metric]
+                if n == 1:
+                    value = np.nan
+                #data_df.loc[pre_class].loc[post_class][metric]
+            except KeyError:
+                value = np.nan
+            data[i, j] = value*scale
+            data_str[i, j] = "%0.2f %s" % (value*scale, unit) if np.isfinite(value) else ""
+            data_alpha[i, j] = 1-alpha*((std*scale)/np.sqrt(n)) if np.isfinite(value) else 0 
+
+    mapper = matplotlib.cm.ScalarMappable(cmap=cmap, norm=norm)
+    data_rgb = mapper.to_rgba(data)
+    max = mean[metric].max()*scale
+    data_rgb[:,:,3] = np.clip(data_alpha, 0, max)
+    return data_rgb, data_str

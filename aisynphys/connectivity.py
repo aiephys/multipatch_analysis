@@ -58,6 +58,52 @@ def connectivity_profile(connected, distance, bin_edges):
 
     return bin_edges, prop, lower, upper
 
+def measure_distance(pair_groups, window):
+    """Given a description of cell pairs grouped together by cell class,
+    return a structure that describes connectivity as a function of distance between cell classes.
+    
+    Parameters
+    ----------
+    pair_groups : OrderedDict
+        Output of `cell_class.classify_pairs`
+    window: float
+        binning window for distance
+    """
+
+    results = OrderedDict()
+    for key, class_pairs in pair_groups.items():
+        pre_class, post_class = key
+
+        connected, distance = pair_distance(class_pairs, pre_class) 
+        bin_edges = np.arange(0, 500e-6, window)
+        xvals, cp, lower, upper = connectivity_profile(connected, distance, bin_edges)
+
+        results[(pre_class, post_class)] = {
+        'bin_edges': bin_edges,
+        'conn_prob': cp,
+        'lower_ci': lower,
+        'upper_ci': upper,
+        }
+
+    return results
+
+def pair_distance(class_pairs, pre_class):
+    """Given a list of cell pairs return an array of connectivity and distance for each pair.
+    """
+
+    connected = []
+    distance = []
+
+    for pair in class_pairs:
+        probed = pair_was_probed(pair, pre_class.output_synapse_type)
+        if probed and pair.distance is not None:
+            connected.append(pair.has_synapse)
+            distance.append(pair.distance)
+
+    connected = np.asarray(connected).astype(float)
+    distance = np.asarray(distance)
+
+    return connected, distance
 
 def measure_connectivity(pair_groups):
     """Given a description of cell pairs grouped together by cell class,
