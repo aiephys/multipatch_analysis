@@ -182,3 +182,15 @@ def show_connectivity_matrix(ax, results, pre_cell_classes, post_cell_classes, c
     labels = annotate_heatmap(im, cprob_str, data=cprob)
     
     return im, cbar, labels
+
+def color_by_conn_prob(pair_group_keys, connectivity, norm, cmap):
+    """ Return connection probability mapped color from show_connectivity_matrix
+    """
+    colors = {}
+    for key in pair_group_keys:
+        cp = connectivity[key]['connection_probability'][0]
+        mapper = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap)
+        color = mapper.to_rgba(np.clip(cp, 0.01, 1.0))
+        colors[key] = color
+
+    return colors
