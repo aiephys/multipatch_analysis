@@ -76,6 +76,7 @@ class SynapsePipelineModule(MultipatchPipelineModule):
                     avg_data_start_time=fit['average'].t0,
                     n_averaged_responses=len(fit['responses']),
                     avg_baseline_noise=fit['avg_baseline_noise'],
+                    meta={'expected_fit_params': fit['expected_fit_params'], 'expected_fit_pass': fit['expected_fit_pass']},
                 )
                 reasons = fit['fit_qc_pass_reasons']
                 if len(reasons) > 0:
