@@ -1,4 +1,5 @@
 import datetime
+from collections import OrderedDict
 from sqlalchemy.orm import aliased
 from .database import Database
 from .schema import schema_version, default_sample_rate
@@ -245,7 +246,36 @@ class SynphysDatabase(Database):
                 query = query.filter(self.Experiment.internal.in_(internal))
 
         return query
+
+    def matrix_pair_query(self, pre_classes, post_classes, columns=None, pair_query_args=None):
+        """Returns the concatenated result of running pair_query over every combination
+        of presynaptic and postsynaptic cell class.
+        """
+        if pair_query_args is None:
+            pair_query_args = {}
+        results = OrderedDict()
+        pairs = None
+        for pre_name, pre_class in pre_classes.items():
+            for post_name, post_class in post_classes.items():
+                pair_query = self.pair_query(
+                    pre_class=pre_class,
+                    post_class=post_class,
+                    **pair_query_args,
+                )
+                
+                if columns is not None:
+                    pair_query = pair_query.add_columns(*columns)
+                
+                df = pair_query.dataframe()
+                df['pre_class'] = pre_name
+                df['post_class'] = post_name
+                if pairs is None:
+                    pairs = df
+                else:
+                    pairs = pairs.append(df)
         
+        return pairs
+
     def __getstate__(self):
         """Allows DB to be pickled and passed to subprocesses.
         """

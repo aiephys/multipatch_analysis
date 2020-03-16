@@ -182,3 +182,69 @@ def show_connectivity_matrix(ax, results, pre_cell_classes, post_cell_classes, c
     labels = annotate_heatmap(im, cprob_str, data=cprob)
     
     return im, cbar, labels
+
+
+def cell_class_matrix(pre_classes, post_classes, metric, class_labels, ax, db, pair_query_args=None):
+    pair_query_args = pair_query_args or {}
+
+    metrics = {
+        #                               name                         unit   scale  db columns                                    colormap      log     clim           text format
+        'psp_amplitude':               ('PSP Amplitude',             'mV',  1e3,   [db.Synapse.psp_amplitude],                   'bwr',        False,  (-1, 1),       "%0.2f mV"),
+        'psp_rise_time':               ('PSP Rise Time',             'ms',  1e3,   [db.Synapse.psp_rise_time],                   'viridis_r',  False,  (0, 6),        "%0.2f ms"),
+        'psp_decay_tau':               ('PSP Decay Tau',             'ms',  1e3,   [db.Synapse.psp_decay_tau],                   'viridis_r',  False,  (0, 20),       "%0.2f ms"),
+        'psc_amplitude':               ('PSC Amplitude',             'mV',  1e3,   [db.Synapse.psc_amplitude],                   'bwr',        False,  (-1, 1),       "%0.2f mV"),
+        'psc_rise_time':               ('PSC Rise Time',             'ms',  1e3,   [db.Synapse.psc_rise_time],                   'viridis_r',  False,  (0, 6),        "%0.2f ms"),
+        'psc_decay_tau':               ('PSC Decay Tau',             'ms',  1e3,   [db.Synapse.psc_decay_tau],                   'viridis_r',  False,  (0, 20),       "%0.2f ms"),
+        'latency':                     ('Latency',                   'ms',  1e3,   [db.Synapse.latency],                         'viridis_r',  False,  (0, 6),        "%0.2f ms"),
+        'stp_initial_50hz':            ('Paired pulse STP',          '',    1,     [db.Dynamics.stp_initial_50hz],               'bwr',        False,  (-0.5, 0.5),   "%0.2f"),
+        'stp_induction_50hz':          ('Train induced STP',         '',    1,     [db.Dynamics.stp_induction_50hz],             'bwr',        False,  (-0.5, 0.5),   "%0.2f"),
+        'stp_recovery_250ms':          ('STP Recovery',              '',    1,     [db.Dynamics.stp_recovery_250ms],             'bwr',        False,  (-0.5, 0.5),   "%0.2f"),
+        'pulse_amp_90th_percentile':   ('PSP Amplitude 90th %%ile',  'mV',  1e3,   [db.Dynamics.pulse_amp_90th_percentile],      'bwr',        False,  (-1, 1),       "%0.2f mV"),
+    }
+    metric_name, units, scale, columns, cmap, cmap_log, clim, cell_fmt = metrics[metric]
+
+    pairs = db.matrix_pair_query(
+        pre_classes=pre_classes,
+        post_classes=post_classes,
+        pair_query_args=pair_query_args,
+        columns=columns,
+    )
+
+    pairs_has_metric = pairs[~pairs[metric].isnull()]
+    metric_data = pairs_has_metric.groupby(['pre_class', 'post_class']).aggregate(lambda x: np.mean(x))
+
+    cmap = matplotlib.cm.get_cmap(cmap)
+    norm = matplotlib.colors.Normalize(vmin=clim[0], vmax=clim[1], clip=False)
+
+    shape = (len(pre_classes), len(post_classes))
+    data = np.zeros(shape)
+    data_alpha = np.zeros(shape)
+    data_str = np.zeros(shape, dtype=object)
+
+    for i, pre_class in enumerate(pre_classes):
+        for j, post_class in enumerate(post_classes):
+            try:
+                value = getattr(metric_data.loc[pre_class].loc[post_class], metric)
+            except KeyError:
+                value = np.nan
+            data[i, j] = value * scale
+            data_str[i, j] = cell_fmt % (value * scale) if np.isfinite(value) else ""
+            data_alpha[i, j] = 1 if np.isfinite(value) else 0 
+            
+    pre_labels = [class_labels[cls] for cls in pre_classes]
+    post_labels = [class_labels[cls] for cls in post_classes]
+    mapper = matplotlib.cm.ScalarMappable(cmap=cmap, norm=norm)
+    data_rgb = mapper.to_rgba(data)
+    data_rgb[:,:,3] = np.clip(data_alpha, 0, 1)
+
+    im, cbar = heatmap(data_rgb, pre_labels, post_labels,
+                    ax=ax,
+                    ax_labels=('postsynaptic', 'presynaptic'),
+                    bg_color=(0.8, 0.8, 0.8),
+                    cmap=cmap,
+                    norm=norm,
+                    cbarlabel=metric_name,
+                    cbar_kw={'shrink':0.5})
+
+    text = annotate_heatmap(im, data_str, data=data)
+
