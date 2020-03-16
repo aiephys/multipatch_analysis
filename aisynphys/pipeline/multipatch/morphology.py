@@ -68,7 +68,6 @@ class MorphologyPipelineModule(MultipatchPipelineModule):
                 'pyramidal': pyramidal,
                 'cortical_layer': cortical_layer,
                 'morpho_db_hash': None,
-
             }
             
             if cell_morpho is not None:
@@ -187,6 +186,7 @@ def morpho_db():
     if hasattr(config, 'morpho_address'):
         morpho_results = import_morpho_db()
     else:
-        morpho_results = json.load(open(config.morpho_json_file))
+        # json requires string keys, so we have to convert back to int here:
+        morpho_results = {int(k):v for k,v in json.load(open(config.morpho_json_file)).items()}
     
     return morpho_results
