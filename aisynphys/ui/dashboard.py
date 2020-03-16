@@ -639,17 +639,17 @@ class ExperimentMetadata(Experiment):
                 yml_file = os.path.join(path, 'pipettes.yml')
                 if os.path.isfile(yml_file):
                     submitted = True
-                    connections = (0, pass_color)
-                    pips = yaml.load(open(yml_file, 'rb'))
-                    for k,v in pips.items():
-                        if v['got_data']:
-                            if v['synapse_to'] is None:
-                                connections = False
-                                break
-                            else:
-                                connections = (connections[0] + len(v['synapse_to']), pass_color)
                     break
-
+                    # connections = (0, pass_color)
+            #         pips = yaml.load(open(yml_file, 'rb'))
+            #         for k,v in pips.items():
+            #             if v['got_data']:
+            #                 if v['synapse_to'] is None:
+            #                     connections = False
+            #                     break
+            #                 else:
+            #                     connections = (connections[0] + len(v['synapse_to']), pass_color)
+            #         break
 
             rec['submitted'] = submitted
             rec['data'] = '-' if self.nwb_file is None else True
@@ -661,8 +661,9 @@ class ExperimentMetadata(Experiment):
                 rec['20x'] = '-'
 
             if rec['submitted']:
-                rec['connections'] = connections
-                if rec['data'] is True:
+                if rec['data'] is not True:
+                    rec['connections'] = '-'
+                else:
                     rec['site.mosaic'] = self.mosaic_file is not None
                     has_run, expt_success, all_success, errors = self.db_status
                     if not has_run:
@@ -674,6 +675,16 @@ class ExperimentMetadata(Experiment):
                     else:
                         rec['DB'] = True
                     rec['db_errors'] = errors
+                    connections = False
+                    if rec['DB'] is True:
+                        pairs = database.query(database.Pair).join(database.Experiment).filter(database.Experiment.acq_timestamp==self.timestamp).all()
+                        if len(pairs) > 0:
+                            all_none = all(p.has_synapse is None for p in pairs)
+                            if all_none is False:
+                                n_connections = sum(p.has_synapse is True for p in pairs)
+                                connections = (n_connections, pass_color)
+                    rec['connections'] = connections        
+                    
 
                     cell_cluster = self.lims_cell_cluster_id
                     lims_ignore_path = os.path.join(self.archive_path, '.mpe_ignore')
