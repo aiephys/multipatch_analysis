@@ -20,7 +20,7 @@ if __name__ == '__main__':
     parser.add_argument('--rebuild', action='store_true', default=False, help="Remove and rebuild tables for selected modules")
     parser.add_argument('--workers', type=int, default=None, help="Set the number of concurrent processes during update")
     parser.add_argument('--local', action='store_true', default=False, help="Disable concurrent processing to make debugging easier")
-    parser.add_argument('--raise-exc', action='store_true', default=False, help="Disable catching exceptions encountered during processing", dest='raise_exc')
+    parser.add_argument('--debug', action='store_true', default=False, help="Enable debugging features: disable parallel processing, raise exception on first error, open debugging gui")
     parser.add_argument('--limit', type=int, default=None, help="Limit the number of experiments to process")
     parser.add_argument('--uids', type=lambda s: s.split(','), default=None, help="Select specific IDs to analyze (or drop)", )
     parser.add_argument('--drop', action='store_true', default=False, help="Drop selected analysis results (do not run updates)", )
@@ -31,7 +31,8 @@ if __name__ == '__main__':
     
     args = parser.parse_args(sys.argv[1:])
 
-    if args.local:
+    if args.debug:
+        args.local = True
         pg.dbg()
 
     pipeline = all_pipelines[args.pipeline](database=db, config=config)
@@ -94,7 +95,7 @@ if __name__ == '__main__':
         report = []
         for module in modules:
             print("=============================================")
-            result = module.update(job_ids=args.uids, retry_errors=args.retry, limit=args.limit, parallel=not args.local, workers=args.workers, raise_exceptions=args.raise_exc)
+            result = module.update(job_ids=args.uids, retry_errors=args.retry, limit=args.limit, parallel=not args.local, workers=args.workers, debug=args.debug)
             report.append((module, result))
             
         if args.vacuum:

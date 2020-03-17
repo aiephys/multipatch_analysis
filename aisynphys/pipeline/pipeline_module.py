@@ -60,7 +60,7 @@ class PipelineModule(object):
             deps.extend(dep.downstream_modules())
         return [mod for mod in self.pipeline.modules if mod in deps]
     
-    def update(self, job_ids=None, retry_errors=False, limit=None, parallel=False, workers=None, raise_exceptions=False):
+    def update(self, job_ids=None, retry_errors=False, limit=None, parallel=False, workers=None, debug=False):
         """Update analysis results for this module.
         
         Parameters
@@ -76,10 +76,10 @@ class PipelineModule(object):
         limit : int | None
             Maximum number of jobs to process (or None to disable this limit).
             If limit is enabled, then jobs are randomly shuffled before selecting the limited subset.
-        raise_exceptions : bool
+        debug : bool
+            Used mainly for debugging to allow traceback inspection.
             If True, then exceptions are raised and will end any further processing.
             If False, then errors are logged and ignored.
-            This is used mainly for debugging to allow traceback inspection.
         """
         print("Updating pipeline stage: %s" % self.name)
         n_retry = 0
@@ -126,7 +126,11 @@ class PipelineModule(object):
         } for i, job_id in enumerate(run_job_ids)]
         
         # Allow subclasses to modify spec (especially to add configuration on _where_ to store results)
-        run_jobs = [self.make_job_spec(job) for job in run_jobs]
+        run_jobs = []
+        for job in run_jobs:
+            job = self.make_job_spec(job)
+            job['debug'] = debug
+            run_jobs.append(job)
 
         if parallel:
             # kill DB connections before forking multiple processes
@@ -149,7 +153,7 @@ class PipelineModule(object):
             print("Processing all jobs (serial)..")
             job_results = {}
             for job in run_jobs:
-                result = self._run_job(job, raise_exceptions=raise_exceptions)
+                result = self._run_job(job)
                 job_results[result['job_id']] = result['error']
                 
         errors = {job:result for job,result in job_results.items() if result is not None}
@@ -165,7 +169,7 @@ class PipelineModule(object):
         return spec
 
     @classmethod
-    def _run_job(cls, job, raise_exceptions=False):
+    def _run_job(cls, job):
         """Entry point for running a single analysis job; may be invoked in a subprocess.
         """
         job_n = job['job_number']
@@ -177,7 +181,7 @@ class PipelineModule(object):
         try:
             cls.process_job(job)
         except Exception as exc:
-            if raise_exceptions:
+            if job.get('debug', False):
                 raise
             else:
                 print("Error processing %s %d/%d  %s:" % (cls.name, job_n+1, n_jobs, job_id))
@@ -376,6 +380,7 @@ class DatabasePipelineModule(PipelineModule):
         """
         db = job['database']
         job_id = job['job_id']
+        debug = job.get('debug', False)
         
         # allow addition of extra metadata into pipeline table
         meta = job.get('meta', None)
@@ -384,7 +389,6 @@ class DatabasePipelineModule(PipelineModule):
         # drop old pipeline job record
         session.query(db.Pipeline).filter(db.Pipeline.job_id==job_id).filter(db.Pipeline.module_name==cls.name).delete()
         session.commit()
-
         
         try:
             errors = cls.create_db_entries(job, session)
@@ -404,7 +408,8 @@ class DatabasePipelineModule(PipelineModule):
             session.commit()
             raise
         finally:
-            session.close()
+            if not debug:
+                session.close()
 
     def initialize(self):
         """Create space (folders, tables, etc.) for this analyzer to store its results.
