@@ -152,6 +152,10 @@ def make_table(ormbase, name, columns, base=None, **table_args):
 
     for column in columns:
         colname, coltype = column[:2]
+        
+        # avoid weird sqlalchemy issues with case handling
+        assert colname == colname.lower(), "Column names must be all lowercase (got %s.%s)" % (name, colname)
+        
         kwds = {} if len(column) < 4 else column[3]
         kwds['comment'] = None if len(column) < 3 else column[2]
         defer_col = kwds.pop('deferred', False)

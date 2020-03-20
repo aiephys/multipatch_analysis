@@ -17,7 +17,7 @@ pyodbc = optional_import('pyodbc')
 
 amp_cols = {
             'Comment': 'meta',
-            'Result pass/fail BA': 'result_BA',
+            'Result pass/fail BA': 'result_ba',
             '% area 400-10000bp BA': 'area_400_10000bp',
             'Picogreen pg/ul': 'picogreen_yield',
             }    
