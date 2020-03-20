@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 import scipy.stats
 from .database import default_db as db
@@ -50,6 +51,7 @@ def pulse_response_query(pair, qc_pass=False, clamp_mode=None, data=False, spike
     q = q.join(db.MultiPatchProbe, db.MultiPatchProbe.patch_clamp_recording_id==db.PatchClampRecording.id)
     q = q.join(db.Synapse, db.Synapse.pair_id==db.PulseResponse.pair_id)
     q = q.filter(db.PulseResponse.pair_id==pair.id)
+    q = q.order_by(db.Recording.start_time, db.StimPulse.onset_time)
 
     if data is True:
         q = q.add_column(db.PulseResponse.data)
@@ -71,21 +73,28 @@ def pulse_response_query(pair, qc_pass=False, clamp_mode=None, data=False, spike
 def generate_pair_dynamics(pair, db, session):
     """Generate a Dynamics table entry for the given pair.
     """
+    logger = logging.getLogger(__name__)
+    logger.info('generate dynamics for %s', pair)
     syn_type = pair.synapse.synapse_type
     
+    amp_field = 'dec_fit_reconv_amp'
+    baseline_amp_field = 'baseline_' + amp_field
+    
     # load all IC pulse response amplitudes to determine the maximum that will be used for normalization
-    pr_query = pulse_response_query(pair, qc_pass=True, clamp_mode='ic', session=session)
+    pr_query = pulse_response_query(pair, qc_pass=False, clamp_mode='ic', session=session)
     pr_recs = pr_query.all()
-    # cull out all PRs that didn't get a fit
-    pr_recs = [pr_rec for pr_rec in pr_recs if pr_rec.PulseResponseFit.fit_amp is not None]
+    # cull out all PRs that didn't get a fit or failed qc
+    qc_field = syn_type + '_qc_pass'
+    passed_pr_recs = [pr_rec for pr_rec in pr_recs if getattr(pr_rec.PulseResponse, qc_field) and getattr(pr_rec.PulseResponseFit, amp_field) is not None]
     
     percentile = 90 if syn_type == 'ex' else 10
     # dec_fit_reconv_amp generally has much lower noise than fit_amp:
-    amps = [rec.PulseResponseFit.dec_fit_reconv_amp for rec in pr_recs]
+    amps = [getattr(rec.PulseResponseFit, amp_field) for rec in passed_pr_recs]
     amp_90p = scipy.stats.scoreatpercentile(amps, percentile)
 
     # load all baseline amplitudes to determine the noise level
-    noise_amps = [rec.PulseResponseFit.baseline_fit_amp for rec in pr_recs if rec.PulseResponseFit.baseline_fit_amp is not None]
+    noise_amps = np.array([getattr(rec.PulseResponseFit, baseline_amp_field) for rec in passed_pr_recs if getattr(rec.PulseResponseFit, baseline_amp_field) is not None])
+    noise_std = noise_amps.std()
     noise_90p = scipy.stats.scoreatpercentile(noise_amps, percentile)
 
     # start new DB record
@@ -93,10 +102,12 @@ def generate_pair_dynamics(pair, db, session):
         pair_id=pair.id,
         pulse_amp_90th_percentile=amp_90p,
         noise_amp_90th_percentile=noise_90p,
+        noise_std=noise_std,
     )
 
     # sort all PRs by recording and stimulus parameters
-    sorted_prs = sorted_pulse_responses(pr_recs)
+    #   [(clamp_mode, ind_freq, recovery_delay)][recording][pulse_number]
+    sorted_prs = sorted_pulse_responses(passed_pr_recs)
 
     # calculate 50Hz paired pulse and induction metrics
     metrics = {'stp_initial_50hz': [], 'stp_induction_50hz': [], 'stp_recovery_250ms': []}
@@ -109,7 +120,7 @@ def generate_pair_dynamics(pair, db, session):
         for recording, pulses in recs.items():
             if 1 not in pulses or 2 not in pulses:
                 continue
-            amps = {k:r.PulseResponseFit.fit_amp for k,r in pulses.items()}
+            amps = {k:getattr(r.PulseResponseFit, amp_field) for k,r in pulses.items()}
             metrics['stp_initial_50hz'].append((amps[2] - amps[1]) / amp_90p)
             if amps[1] != 0:
                 paired_pulse_ratio.append(amps[2] / amps[1])
@@ -125,12 +136,14 @@ def generate_pair_dynamics(pair, db, session):
     # calculate recovery at 250 ms
     for key,recs in sorted_prs.items():
         clamp_mode, ind_freq, rec_delay = key
+        if rec_delay is None:
+            continue
         if abs(rec_delay - 250e-3) > 5e-3:
             continue
         for recording, pulses in recs.items():
             if any([k not in pulses for k in range(1,13)]):
                 continue
-            amps = {k:r.PulseResponseFit.fit_amp for k,r in pulses.items()}
+            amps = {k:getattr(r.PulseResponseFit, amp_field) for k,r in pulses.items()}
             r = [amps[i+8] - amps[i] for i in range(1,5)]
             metrics['stp_recovery_250ms'].append(np.mean(r) / amp_90p)
 
@@ -138,5 +151,77 @@ def generate_pair_dynamics(pair, db, session):
         setattr(dynamics, k, np.mean(v))
         setattr(dynamics, k+'_n', len(v))
         setattr(dynamics, k+'_std', np.std(v))
+        
+    # Measure PSP variability -- we want a metric something like the coefficient of variation, but 
+    # normalized against the 90th% amplitude, and with measurement noise subtracted out. This
+    # ends up looking like:
+    #     sqrt(amp_stdev^2 - noise_stdev^2) / abs(amp_90th_percentile)
+        
+    # Variability at resting state:
+    resting_amps = []
+    for pr_rec in pr_recs:
+        if pr_rec.StimPulse.previous_pulse_dt > 8.0 and getattr(pr_rec.PulseResponse, qc_field):
+            resting_amps.append(getattr(pr_rec.PulseResponseFit, amp_field))
+    
+    if len(resting_amps) == 0:
+        logger.info("%s: no resting amps; bail out", pair)
+        return dynamics
+        
+    dynamics.variability_resting_state = (np.std(resting_amps)**2 - noise_std**2)**0.5 / abs(amp_90p)
 
+    # Variability in STP-induced state (5th-8th pulses)
+    pulse_amps = {
+        (2,3): [],
+        (5,9): [],
+    }
+    # collect pulse amplitudes in each category
+    for key,recs in sorted_prs.items():
+        clamp_mode, ind_freq, rec_delay = key
+        if ind_freq != 50:
+            continue
+        for recording, pulses in recs.items():
+            for pulse_n, amps in pulse_amps.items():
+                if any([k not in pulses for k in range(1,pulse_n[-1])]):
+                    continue
+                for n in range(*pulse_n):
+                    amps.append(getattr(pulses[n].PulseResponseFit, amp_field))
+    
+    # get stdev from each category
+    pulse_std = {n:(np.std(a) if len(a) > 0 else np.nan) for n,a in pulse_amps.items()}
+    
+    # normalize
+    pulse_var = {n:(s**2 - noise_std**2)**0.5 / abs(amp_90p) for n,s in pulse_std.items()}
+        
+    # record changes in vairabilty
+    dynamics.variability_second_pulse_50hz = pulse_var[2,3]
+    dynamics.variability_stp_induced_state_50hz = pulse_var[5,9]
+    dynamics.variability_change_initial_50hz = pulse_var[2,3] - dynamics.variability_resting_state
+    dynamics.variability_change_induction_50hz = pulse_var[5,9] - dynamics.variability_resting_state
+    
+    # Look for evidence of vesicle depletion -- correlations between adjacent events in 50Hz pulses 5-8.
+    ev1_amp = []
+    ev2_amp = []
+    pulse_amps = [[] for i in range(9)]
+    for key,recs in sorted_prs.items():
+        clamp_mode, ind_freq, rec_delay = key
+        if ind_freq != 50:
+            continue
+        for recording, pulses in recs.items():
+            for i in range(1,9):
+                if i not in pulses:
+                    break
+                if i < 6:
+                    continue
+                ev1_amp.append(getattr(pulses[i-1].PulseResponseFit, amp_field))
+                ev2_amp.append(getattr(pulses[i].PulseResponseFit, amp_field))
+
+    ev1_amp = np.array(ev1_amp)
+    ev2_amp = np.array(ev2_amp)
+    ev1_amp -= np.median(ev1_amp)
+    ev2_amp -= np.median(ev2_amp)
+    
+    r,p = scipy.stats.pearsonr(ev1_amp, ev2_amp)
+    dynamics.paired_event_correlation_r = r
+    dynamics.paired_event_correlation_p = p
+    
     return dynamics

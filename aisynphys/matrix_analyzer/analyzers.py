@@ -752,6 +752,13 @@ class DynamicsAnalyzer(Analyzer):
             'Paired pulse STP': [self.metric_summary, self.metric_conf],
             'Train-induced STP': [self.metric_summary, self.metric_conf],
             'STP recovery': [self.metric_summary, self.metric_conf],
+            'Resting variability': [self.metric_summary, self.metric_conf],
+            '2nd pulse variability': [self.metric_summary, self.metric_conf],
+            'Train-induced variability': [self.metric_summary, self.metric_conf],
+            'Initial variability change': [self.metric_summary, self.metric_conf],
+            'Train-induced variability change': [self.metric_summary, self.metric_conf],
+            'Paired event correlation r': [self.metric_summary, self.metric_conf],
+            'Paired event correlation p': [self.metric_summary, self.metric_conf],
         }
         self.summary_dtypes = {} ## dict to specify how we want to cast different summary measures
         ## looks like {('pulse_ratio_8_1_50hz', 'metric_summary'):float}
@@ -778,6 +785,55 @@ class DynamicsAnalyzer(Analyzer):
                 [0, 0.5, 1.0],
                 [(0, 0, 255, 255), (56, 0, 87, 255), (255, 0, 0, 255)],
             )}}),
+            ('Resting variability', {'mode': 'range', 'defaults': {
+                'Min': 0.1, 
+                'Max': 0.5, 
+                'colormap': pg.ColorMap(
+                [0, 0.5, 1.0],
+                [(0, 0, 255, 255), (56, 0, 87, 255), (255, 0, 0, 255)],
+            )}}),
+            ('2nd pulse variability', {'mode': 'range', 'defaults': {
+                'Min': 0.1, 
+                'Max': 0.5, 
+                'colormap': pg.ColorMap(
+                [0, 0.5, 1.0],
+                [(0, 0, 255, 255), (56, 0, 87, 255), (255, 0, 0, 255)],
+            )}}),
+            ('Train-induced variability', {'mode': 'range', 'defaults': {
+                'Min': 0.1, 
+                'Max': 0.5, 
+                'colormap': pg.ColorMap(
+                [0, 0.5, 1.0],
+                [(0, 0, 255, 255), (56, 0, 87, 255), (255, 0, 0, 255)],
+            )}}),
+            ('Initial variability change', {'mode': 'range', 'defaults': {
+                'Min': -1, 
+                'Max': 1, 
+                'colormap': pg.ColorMap(
+                [0, 0.5, 1.0],
+                [(0, 0, 255, 255), (56, 0, 87, 255), (255, 0, 0, 255)],
+            )}}),
+            ('Train-induced variability change', {'mode': 'range', 'defaults': {
+                'Min': -1, 
+                'Max': 1, 
+                'colormap': pg.ColorMap(
+                [0, 0.5, 1.0],
+                [(0, 0, 255, 255), (56, 0, 87, 255), (255, 0, 0, 255)],
+            )}}),
+            ('Paired event correlation r', {'mode': 'range', 'defaults': {
+                'Min': -1, 
+                'Max': 1, 
+                'colormap': pg.ColorMap(
+                [0, 0.5, 1.0],
+                [(0, 0, 255, 255), (56, 0, 87, 255), (255, 0, 0, 255)],
+            )}}),
+            ('Paired event correlation p', {'mode': 'range', 'defaults': {
+                'Min': -1, 
+                'Max': 1, 
+                'colormap': pg.ColorMap(
+                [0, 0.5, 1.0],
+                [(0, 0, 255, 255), (56, 0, 87, 255), (255, 0, 0, 255)],
+            )}}),
             ('None', {}),
         ]
         
@@ -785,6 +841,13 @@ class DynamicsAnalyzer(Analyzer):
             'Paired pulse STP': '{Paired pulse STP:0.2f}',
             'Train-induced STP': '{Train-induced STP:0.2f}',
             'STP recovery': '{STP recovery:0.2f}',
+            'Resting variability': '{Resting variability:0.2f}',
+            '2nd pulse variability': '{2nd pulse variability:0.2f}',
+            'Train-induced variability': '{Train-induced variability:0.2f}',
+            'Initial variability change': '{Initial variability change:0.2f}',
+            'Train-induced variability change': '{Train-induced variability change:0.2f}',
+            'Paired event correlation r': '{Paired event correlation r:0.2f}',
+            'Paired event correlation p': '{Paired event correlation p:0.2f}',
         }
 
     def invalidate_output(self):
@@ -820,12 +883,19 @@ class DynamicsAnalyzer(Analyzer):
                     dynamics = pair.dynamics
 
                 results[pair] = {
-                'dynamics_no_data': no_data,
-                'pre_class': pre_class,
-                'post_class': post_class,
-                'Paired pulse STP': dynamics.stp_initial_50hz if dynamics is not None else float('nan'),
-                'Train-induced STP': dynamics.stp_induction_50hz if dynamics is not None else float('nan'),
-                'STP recovery': dynamics.stp_recovery_250ms if dynamics is not None else float('nan'),
+                    'dynamics_no_data': no_data,
+                    'pre_class': pre_class,
+                    'post_class': post_class,
+                    'Paired pulse STP': dynamics.stp_initial_50hz if dynamics is not None else float('nan'),
+                    'Train-induced STP': dynamics.stp_induction_50hz if dynamics is not None else float('nan'),
+                    'STP recovery': dynamics.stp_recovery_250ms if dynamics is not None else float('nan'),
+                    'Resting variability': dynamics.variability_resting_state if dynamics is not None else float('nan'),
+                    '2nd pulse variability': dynamics.variability_second_pulse_50hz if dynamics is not None else float('nan'),
+                    'Train-induced variability': dynamics.variability_stp_induced_state_50hz if dynamics is not None else float('nan'),
+                    'Initial variability change': dynamics.variability_change_initial_50hz if dynamics is not None else float('nan'),
+                    'Train-induced variability change': dynamics.variability_change_induction_50hz if dynamics is not None else float('nan'),
+                    'Paired event correlation r': dynamics.paired_event_correlation_r if dynamics is not None else float('nan'),
+                    'Paired event correlation p': dynamics.paired_event_correlation_p if dynamics is not None else float('nan'),
                 }
 
         
