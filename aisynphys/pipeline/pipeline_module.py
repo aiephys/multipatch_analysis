@@ -1,5 +1,5 @@
 from __future__ import division, print_function
-import sys, time, multiprocessing, traceback
+import sys, time, multiprocessing, traceback, logging
 from datetime import datetime
 import numpy as np
 from collections import OrderedDict
@@ -81,17 +81,18 @@ class PipelineModule(object):
             If True, then exceptions are raised and will end any further processing.
             If False, then errors are logged and ignored.
         """
-        print("Updating pipeline stage: %s" % self.name)
+        logger = logging.getLogger(__name__)
+        logger.info("Updating pipeline stage: %s", self.name)
         n_retry = 0
         if job_ids is None:
-            print("Searching for jobs to update..")
-            drop_job_ids, run_jobs, error_jobs = self.updatable_jobs()
+            logger.info("Searching for jobs to update..")
+            drop_job_ids, run_jobs_meta, error_jobs = self.updatable_jobs()
             
             if retry_errors:
-                run_jobs.update(error_jobs)
+                run_jobs_meta.update(error_jobs)
                 n_retry = len(error_jobs)
 
-            run_job_ids = list(run_jobs.keys())
+            run_job_ids = list(run_jobs_meta.keys())
             
             if limit is not None:
                 # pick a random subset to import; this is just meant to ensure we get a variety
@@ -99,44 +100,46 @@ class PipelineModule(object):
                 rng = np.random.RandomState(0)
                 rng.shuffle(job_ids)
                 run_job_ids = job_ids[:limit]
-                drop_job_ids = [jid for jid in drop_job_ids if jid in run_jobs]
+                drop_job_ids = [jid for jid in drop_job_ids if jid in run_jobs_meta]
         else:
             run_job_ids = job_ids
-            run_jobs = {}  # no extra metadata provided for these jobs
+            run_jobs_meta = {}  # no extra metadata provided for these jobs
             drop_job_ids = job_ids
             
-        print("Found %d jobs to update." % len(run_job_ids))
+        logger.info("Found %d job(s) to update.", len(run_job_ids))
 
         # drop invalid records first
         if len(drop_job_ids) > 0:
-            print("Dropping %d invalid results (will not update).." % len(drop_job_ids))
-            print(drop_job_ids)
+            logger.info("Dropping %d invalid results (will not update)..", len(drop_job_ids))
+            logger.debug("%s", drop_job_ids)
             self.drop_jobs(drop_job_ids)
         if len(run_job_ids) > 0:
-            print("Dropping %d invalid results (will update).." % len(run_job_ids))
+            logger.info("Dropping %d invalid results (will update)..", len(run_job_ids))
+            logger.debug("%s", run_job_ids)
             self.drop_jobs(run_job_ids)
 
         # Make a list of specifications for jobs to be run.
-        run_jobs = [{
-            'job_id': job_id, 
-            'job_number': i, 
-            'n_jobs': len(run_job_ids),
-            'module_class': self.__class__,
-            'meta': run_jobs.get(job_id, None),
-        } for i, job_id in enumerate(run_job_ids)]
-        
-        # Allow subclasses to modify spec (especially to add configuration on _where_ to store results)
         run_jobs = []
-        for job in run_jobs:
+        for i, job_id in enumerate(run_job_ids):
+            job = {
+                'job_id': job_id, 
+                'job_number': i, 
+                'n_jobs': len(run_job_ids),
+                'module_class': self.__class__,
+                'meta': run_jobs_meta.get(job_id, None),
+                'debug': debug,
+            }
+            
+            # Allow subclasses to modify spec (especially to add configuration on _where_ to store results)
             job = self.make_job_spec(job)
-            job['debug'] = debug
+            
             run_jobs.append(job)
-
+            
         if parallel:
             # kill DB connections before forking multiple processes
             database.dispose_all_engines()
             
-            print("Processing all jobs (parallel)..")
+            logger.info("Processing %d jobs (parallel)..", len(run_jobs))
             pool = multiprocessing.Pool(processes=workers, maxtasksperchild=self.maxtasksperchild)
             try:
                 # would like to just call self._run_job, but we can't pass a method to Pool.map()
@@ -150,7 +153,7 @@ class PipelineModule(object):
                 pool.close()
                 
         else:
-            print("Processing all jobs (serial)..")
+            logger.info("Processing %d jobs (serial)..", len(run_jobs))
             job_results = {}
             for job in run_jobs:
                 result = self._run_job(job)
@@ -399,7 +402,9 @@ class DatabasePipelineModule(PipelineModule):
             session.add(job_result)
 
             session.commit()
+            got_exc = False
         except Exception:
+            got_exc = True
             session.rollback()
             
             err = ''.join(traceback.format_exception(*sys.exc_info()))
@@ -408,7 +413,8 @@ class DatabasePipelineModule(PipelineModule):
             session.commit()
             raise
         finally:
-            if not debug:
+            if not (got_exc and debug):
+                # leave session open if there was an exception and debugging is requested
                 session.close()
 
     def initialize(self):

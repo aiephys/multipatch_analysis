@@ -8,7 +8,7 @@ from aisynphys import config
 
 
 if __name__ == '__main__':
-    logging.basicConfig()
+    logging.basicConfig(format="%(message)s")
     all_pipelines = all_pipelines()
     
     parser = argparse.ArgumentParser(description="Process analysis pipeline jobs")
@@ -33,6 +33,7 @@ if __name__ == '__main__':
 
     if args.debug:
         args.local = True
+        logging.getLogger().setLevel(logging.DEBUG)
         pg.dbg()
 
     pipeline = all_pipelines[args.pipeline](database=db, config=config)
