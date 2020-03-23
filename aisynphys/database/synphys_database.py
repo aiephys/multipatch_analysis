@@ -260,7 +260,7 @@ class SynphysDatabase(Database):
                 pair_query = self.pair_query(
                     pre_class=pre_class,
                     post_class=post_class,
-                    **pair_query_args,
+                    **pair_query_args
                 )
                 
                 if columns is not None:
