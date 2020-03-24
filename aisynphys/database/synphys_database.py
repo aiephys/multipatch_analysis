@@ -1,5 +1,6 @@
 import datetime
 from sqlalchemy.orm import aliased, contains_eager, selectinload
+from collections import OrderedDict
 from .database import Database
 from .schema import schema_version, default_sample_rate
 from ..synphys_cache import get_db_path, list_db_versions
@@ -49,7 +50,10 @@ class SynphysDatabase(Database):
 
         """
         db_file = get_db_path(db_version)
-        return SynphysDatabase.load_sqlite(db_file)
+        db = SynphysDatabase.load_sqlite(db_file, readonly=False)
+        # instantiate any new tables that have been added to the schema but don't exist in the db file
+        db.create_tables()
+        return db
 
     def __init__(self, ro_host, rw_host, db_name):
         from .schema import ORMBase
@@ -271,7 +275,36 @@ class SynphysDatabase(Database):
             )
 
         return query
+
+    def matrix_pair_query(self, pre_classes, post_classes, columns=None, pair_query_args=None):
+        """Returns the concatenated result of running pair_query over every combination
+        of presynaptic and postsynaptic cell class.
+        """
+        if pair_query_args is None:
+            pair_query_args = {}
+
+        pairs = None
+        for pre_name, pre_class in pre_classes.items():
+            for post_name, post_class in post_classes.items():
+                pair_query = self.pair_query(
+                    pre_class=pre_class,
+                    post_class=post_class,
+                    **pair_query_args
+                )
+                
+                if columns is not None:
+                    pair_query = pair_query.add_columns(*columns)
+                
+                df = pair_query.dataframe()
+                df['pre_class'] = pre_name
+                df['post_class'] = post_name
+                if pairs is None:
+                    pairs = df
+                else:
+                    pairs = pairs.append(df)
         
+        return pairs
+
     def __getstate__(self):
         """Allows DB to be pickled and passed to subprocesses.
         """
