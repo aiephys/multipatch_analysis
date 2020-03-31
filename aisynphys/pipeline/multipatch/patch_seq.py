@@ -193,7 +193,7 @@ def get_amp_results():
     global amp_cache
     if amp_cache is None:
         folder_path = config.amplification_report_address
-        file_paths = [os.path.join(folder_path, path) for path in os.listdir(folder_path) if path.split('.')[1]=='xlsx']
+        file_paths = [os.path.join(folder_path, path) for path in os.listdir(folder_path) if os.path.splitext(path)[1]=='.xlsx']
         mod_time = {os.path.getmtime(path): path for path in file_paths}
         most_recent = max(mod_time.keys())
         current_results = mod_time[most_recent]
