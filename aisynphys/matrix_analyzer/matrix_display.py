@@ -77,8 +77,7 @@ class MatrixDisplayFilter(object):
     
         # desaturate low confidence cells
         if show_confidence != 'None':
-            lower, upper = result[show_confidence, 'metric_conf']
-            confidence = (1.0 - (upper - lower)) ** 2
+            confidence = result[show_confidence, 'metric_conf']
             color = color * confidence + default_bgcolor * (1.0 - confidence)
         # invert text color for dark background
         self.output['fgcolor'] = 'w' if sum(color[:3]) < 384 else 'k'

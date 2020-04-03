@@ -142,8 +142,6 @@ class Analyzer(pg.QtCore.QObject):
         return self.group_results
 
 
-
-
 class ConnectivityAnalyzer(Analyzer):
 
     def __init__(self, analyzer_mode):
@@ -250,9 +248,11 @@ class ConnectivityAnalyzer(Analyzer):
             p1 = p.sum()
             connected = float(p1[0])
             probed = float(p1[1])
-            return connection_probability_ci(connected, probed)
+            lower, upper = connection_probability_ci(connected, probed)
+            return (1.0 - (upper - lower)) ** 2
         if x.name == 'Distance':
-            return [-np.nanstd(x), np.nanstd(x)]
+            lower, upper = [-np.nanstd(x), np.nanstd(x)]
+            return (1.0 - (upper - lower)) ** 2
         else:
             return float('nan')
     
@@ -321,7 +321,6 @@ class ConnectivityAnalyzer(Analyzer):
         print ("Probed Pairs:")
         for probed in probed_pairs:
             print ("\t %s" % (probed))
-        
         
     def plot_element_data(self, pre_class, post_class, element, field_name, color='g', trace_plt=None):
         summary = element.agg(self.summary_stat)  
@@ -585,7 +584,8 @@ class StrengthAnalyzer(Analyzer):
             return x.mean()
 
     def metric_conf(self, x):
-        return [-x.std(), x.std()]
+        lower, upper = [-x.std(), x.std()]
+        return (1.0 - (upper - lower)) ** 2
 
     def print_element_info(self, pre_class, post_class, element, field_name=None):
         if field_name is not None:
@@ -752,9 +752,9 @@ class DynamicsAnalyzer(Analyzer):
             'Paired pulse STP': [self.metric_summary, self.metric_conf],
             'Train-induced STP': [self.metric_summary, self.metric_conf],
             'STP recovery': [self.metric_summary, self.metric_conf],
-            'Resting variability': [self.metric_summary, self.metric_conf],
-            '2nd pulse variability': [self.metric_summary, self.metric_conf],
-            'Train-induced variability': [self.metric_summary, self.metric_conf],
+            'Variability - resting state': [self.metric_summary, self.metric_conf],
+            'Variability - second pulse': [self.metric_summary, self.metric_conf],
+            'Variability - train induced': [self.metric_summary, self.metric_conf],
             'Initial variability change': [self.metric_summary, self.metric_conf],
             'Train-induced variability change': [self.metric_summary, self.metric_conf],
             'Paired event correlation r': [self.metric_summary, self.metric_conf],
@@ -785,22 +785,22 @@ class DynamicsAnalyzer(Analyzer):
                 [0, 0.5, 1.0],
                 [(0, 0, 255, 255), (56, 0, 87, 255), (255, 0, 0, 255)],
             )}}),
-            ('Resting variability', {'mode': 'range', 'defaults': {
-                'Min': 0.1, 
+            ('Variability - resting state', {'mode': 'range', 'defaults': {
+                'Min': -0.5, 
                 'Max': 0.5, 
                 'colormap': pg.ColorMap(
                 [0, 0.5, 1.0],
                 [(0, 0, 255, 255), (56, 0, 87, 255), (255, 0, 0, 255)],
             )}}),
-            ('2nd pulse variability', {'mode': 'range', 'defaults': {
-                'Min': 0.1, 
+            ('Variability - second pulse', {'mode': 'range', 'defaults': {
+                'Min': -0.5, 
                 'Max': 0.5, 
                 'colormap': pg.ColorMap(
                 [0, 0.5, 1.0],
                 [(0, 0, 255, 255), (56, 0, 87, 255), (255, 0, 0, 255)],
             )}}),
-            ('Train-induced variability', {'mode': 'range', 'defaults': {
-                'Min': 0.1, 
+            ('Variability - train induced', {'mode': 'range', 'defaults': {
+                'Min': -0.5, 
                 'Max': 0.5, 
                 'colormap': pg.ColorMap(
                 [0, 0.5, 1.0],
@@ -841,9 +841,9 @@ class DynamicsAnalyzer(Analyzer):
             'Paired pulse STP': '{Paired pulse STP:0.2f}',
             'Train-induced STP': '{Train-induced STP:0.2f}',
             'STP recovery': '{STP recovery:0.2f}',
-            'Resting variability': '{Resting variability:0.2f}',
-            '2nd pulse variability': '{2nd pulse variability:0.2f}',
-            'Train-induced variability': '{Train-induced variability:0.2f}',
+            'Variability - resting state': '{Variability - resting state:0.2f}',
+            'Variability - second pulse': '{Variability - second pulse:0.2f}',
+            'variability - train induced': '{Variability - train induced:0.2f}',
             'Initial variability change': '{Initial variability change:0.2f}',
             'Train-induced variability change': '{Train-induced variability change:0.2f}',
             'Paired event correlation r': '{Paired event correlation r:0.2f}',
@@ -861,7 +861,8 @@ class DynamicsAnalyzer(Analyzer):
             return np.nanmean(x)
 
     def metric_conf(self, x):
-        return [-np.nanstd(x), np.nanstd(x)]
+        n = np.isfinite(x).sum()
+        return np.clip(n / 10, 0, 1)
 
     def measure(self, pair_groups):
         """Given a list of cell pairs and a dict that groups cells together by class,
@@ -882,20 +883,23 @@ class DynamicsAnalyzer(Analyzer):
                     no_data = False
                     dynamics = pair.dynamics
 
+                lcv_rest = (dynamics.variability_resting_state if dynamics is not None else np.nan) or np.nan
+                lcv_sec = (dynamics.variability_second_pulse_50hz if dynamics is not None else np.nan) or np.nan
+                lcv_train = (dynamics.variability_stp_induced_state_50hz if dynamics is not None else np.nan) or np.nan
                 results[pair] = {
                     'dynamics_no_data': no_data,
                     'pre_class': pre_class,
                     'post_class': post_class,
-                    'Paired pulse STP': dynamics.stp_initial_50hz if dynamics is not None else float('nan'),
-                    'Train-induced STP': dynamics.stp_induction_50hz if dynamics is not None else float('nan'),
-                    'STP recovery': dynamics.stp_recovery_250ms if dynamics is not None else float('nan'),
-                    'Resting variability': dynamics.variability_resting_state if dynamics is not None else float('nan'),
-                    '2nd pulse variability': dynamics.variability_second_pulse_50hz if dynamics is not None else float('nan'),
-                    'Train-induced variability': dynamics.variability_stp_induced_state_50hz if dynamics is not None else float('nan'),
-                    'Initial variability change': dynamics.variability_change_initial_50hz if dynamics is not None else float('nan'),
-                    'Train-induced variability change': dynamics.variability_change_induction_50hz if dynamics is not None else float('nan'),
-                    'Paired event correlation r': dynamics.paired_event_correlation_r if dynamics is not None else float('nan'),
-                    'Paired event correlation p': dynamics.paired_event_correlation_p if dynamics is not None else float('nan'),
+                    'Paired pulse STP': dynamics.stp_initial_50hz if dynamics is not None else np.nan,
+                    'Train-induced STP': dynamics.stp_induction_50hz if dynamics is not None else np.nan,
+                    'STP recovery': dynamics.stp_recovery_250ms if dynamics is not None else np.nan,
+                    'Variability - resting state': lcv_rest,
+                    'Variability - second pulse': lcv_sec,
+                    'Variability - train induced': lcv_train,
+                    'Initial variability change': lcv_sec - lcv_rest,
+                    'Train-induced variability change': lcv_train - lcv_rest,
+                    'Paired event correlation r': dynamics.paired_event_correlation_r if dynamics is not None else np.nan,
+                    'Paired event correlation p': dynamics.paired_event_correlation_p if dynamics is not None else np.nan,
                 }
 
         
@@ -983,20 +987,17 @@ class DynamicsAnalyzer(Analyzer):
         self.select_pair(pair)
 
     def select_pair(self, pair):
-        point= self.pair_items[pair.id]
+        point, color = self.pair_items[pair.id]
         point.setBrush(pg.mkBrush('y'))
         point.setSize(15)
-        # if traceA is not None:
-        #     traceA.setPen('y', width=3)
-        #     traceA.setZValue(10)
-        # if traceB is not None:
-        #     traceB.setPen('y', width=3)
-        #     traceB.setZValue(10)
         print('Clicked:' '%s' % pair)
         print(self.results.loc[pair])
 
     def summary(self, results, metric):
         print('')
+
+    def deselect_pairs(self):
+        pass
 
 
 def format_trace(trace, baseline_win, x_offset=1e-3, align='spike'):

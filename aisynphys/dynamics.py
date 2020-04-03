@@ -167,7 +167,10 @@ def generate_pair_dynamics(pair, db, session):
         logger.info("%s: no resting amps; bail out", pair)
         return dynamics
         
-    dynamics.variability_resting_state = (np.std(resting_amps)**2 - noise_std**2)**0.5 / abs(amp_90p)
+    def variability(x):
+        return np.log((np.std(x)**2 - noise_std**2)**0.5 / abs(np.mean(x)))
+
+    dynamics.variability_resting_state = variability(resting_amps)
 
     # Variability in STP-induced state (5th-8th pulses)
     pulse_amps = {
@@ -186,11 +189,8 @@ def generate_pair_dynamics(pair, db, session):
                 for n in range(*pulse_n):
                     amps.append(getattr(pulses[n].PulseResponseFit, amp_field))
     
-    # get stdev from each category
-    pulse_std = {n:(np.std(a) if len(a) > 0 else np.nan) for n,a in pulse_amps.items()}
-    
     # normalize
-    pulse_var = {n:(s**2 - noise_std**2)**0.5 / abs(amp_90p) for n,s in pulse_std.items()}
+    pulse_var = {n:(variability(a) if len(a) > 0 else np.nan) for n,a in pulse_amps.items()}
         
     # record changes in vairabilty
     dynamics.variability_second_pulse_50hz = pulse_var[2,3]
