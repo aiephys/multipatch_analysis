@@ -10,6 +10,7 @@ from .dynamics import DynamicsPipelineModule
 from .synapse_prediction import SynapsePredictionPipelineModule
 from .resting_state import RestingStatePipelineModule
 from .patch_seq import PatchSeqPipelineModule
+from .gap_junction import GapJunctionPipelineModule
 
 
 class MultipatchPipeline(Pipeline):
@@ -23,6 +24,7 @@ class MultipatchPipeline(Pipeline):
         PatchSeqPipelineModule,
         MorphologyPipelineModule,
         SynapsePipelineModule,
+        GapJunctionPipelineModule,
         PulseResponsePipelineModule,
         SynapsePredictionPipelineModule,
         RestingStatePipelineModule,
