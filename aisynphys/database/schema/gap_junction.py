@@ -17,6 +17,7 @@ GapJunction = make_table(
         ('p_val_noise', 'float', 'The Pearson p-value of pre- and post-synaptic background', {'index': True}),
         ('coupling_coeff_pulse', 'float', 'The coupling coefficient of pre- and post-synaptic long pulse', {'index': True}),
         ('coupling_coeff_noise', 'float', 'The coupling coefficient of pre- and post-synaptic background', {'index': True}),
+        ('junctional_conductance', 'float', 'The junctional conductance of pre- and post-synaptic long pulse', {'index': True}),
     ]
 )
 
