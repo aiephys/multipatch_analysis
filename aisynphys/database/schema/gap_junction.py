@@ -11,8 +11,13 @@ GapJunction = make_table(
     comment= "Describes the presence of gap junction.",
     columns=[
         ('pair_id', 'pair.id', 'The ID of the entry in the pair table to which these results apply', {'index': True}),
-        ('gap_junction', 'bool', 'Whether gap junction is present', {'index': True}),
-        ('strength', 'float', 'Strenght of gap junction', {'index': True})
+        ('corr_coeff_pulse', 'float', 'The Pearson correlation coefficient of pre- and post-synaptic long pulse', {'index': True}),
+        ('corr_coeff_noise', 'float', 'The Pearson correlation coefficient of pre- and post-synaptic background', {'index': True}),
+        ('p_val_pulse', 'float', 'The Pearson p-value of pre- and post-synaptic long pulse', {'index': True}),
+        ('p_val_noise', 'float', 'The Pearson p-value of pre- and post-synaptic background', {'index': True}),
+        ('coupling_coeff_pulse', 'float', 'The coupling coefficient of pre- and post-synaptic long pulse', {'index': True}),
+        ('coupling_coeff_noise', 'float', 'The coupling coefficient of pre- and post-synaptic background', {'index': True}),
+        ('junctional_conductance', 'float', 'The junctional conductance of pre- and post-synaptic long pulse', {'index': True}),
     ]
 )
 

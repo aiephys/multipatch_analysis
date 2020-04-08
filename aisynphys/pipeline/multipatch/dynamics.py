@@ -12,8 +12,6 @@ from ...util import timestamp_to_datetime
 from ...dynamics import generate_pair_dynamics
 from .pipeline_module import MultipatchPipelineModule
 from .pulse_response import PulseResponsePipelineModule
-from .synapse_prediction import SynapsePredictionPipelineModule
-
 
 
 class DynamicsPipelineModule(MultipatchPipelineModule):

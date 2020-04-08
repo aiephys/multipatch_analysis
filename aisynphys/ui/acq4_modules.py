@@ -123,6 +123,9 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
                 shutil.copy2(aff_image_path, save_path)
                 self.base_dir.indexFile(aff_image_name)
         
+        image_dapi = lims.specimen_20x_image(self.specimen_name, treatment='DAPI')
+        if image_dapi is None:
+            raise Exception("There is no DAPI image for this slice, proceed with caution")
     
     @property
     def base_dir(self):

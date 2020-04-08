@@ -110,14 +110,14 @@ def specimen_info(specimen_name=None, specimen_id=None):
     #            CC = orientation and hemisphere
     spec_name = rec['specimen_name']
     if rec['organism'] == 'mouse':
-        m = re.match(r'(.*)(-(\d{6,7}))(\.(\d{2}))(\.(\d{2}))?$', spec_name)
+        m = re.match(r'(?P<pedigree1>.*)-(?P<donor_id>\d{6,7})(?P<pedigree2>-[^\.]+)?\.(?P<section_num>\d{2})(\.(?P<orientation_num>\d{2}))?$', spec_name)
         if m is None:
             raise Exception('Could not parse mouse specimen name: "%s"' % spec_name)
         
-        rec['section_number'] = int(m.groups()[4])
+        rec['section_number'] = int(m.groupdict()['section_num'])
         
         # The last number contains information about the orientation and hemisphere
-        orientation_num = m.groups()[6]
+        orientation_num = m.groupdict()['orientation_num']
         plane, hem, mount = {
             '01': ('coronal', 'left', 'anterior'),
             '02': ('coronal', 'right', 'anterior'),
@@ -125,6 +125,10 @@ def specimen_info(specimen_name=None, specimen_id=None):
             '04': ('coronal', 'right', 'posterior'),
             '05': ('sagittal', 'left', 'right'),
             '06': ('sagittal', 'right', 'left'),
+            '07': ('sagittal', 'left', 'left'),
+            '08': ('sagittal', 'right', 'right'),
+            '09': ('coronal', 'bilateral', 'anterior'),
+            '10': ('coronal', 'bilateral', 'posterior'),
         }[orientation_num]
         
         if plane != rec['plane_of_section']:

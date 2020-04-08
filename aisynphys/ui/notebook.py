@@ -182,3 +182,176 @@ def show_connectivity_matrix(ax, results, pre_cell_classes, post_cell_classes, c
     labels = annotate_heatmap(im, cprob_str, data=cprob)
     
     return im, cbar, labels
+
+
+def cell_class_matrix(pre_classes, post_classes, metric, class_labels, ax, db, pair_query_args=None):
+    pair_query_args = pair_query_args or {}
+
+    metrics = {
+        #                               name                         unit   scale  db columns                                    colormap      log     clim           text format
+        'psp_amplitude':               ('PSP Amplitude',             'mV',  1e3,   [db.Synapse.psp_amplitude],                   'bwr',        False,  (-1, 1),       "%0.2f mV"),
+        'psp_rise_time':               ('PSP Rise Time',             'ms',  1e3,   [db.Synapse.psp_rise_time],                   'viridis_r',  False,  (0, 6),        "%0.2f ms"),
+        'psp_decay_tau':               ('PSP Decay Tau',             'ms',  1e3,   [db.Synapse.psp_decay_tau],                   'viridis_r',  False,  (0, 20),       "%0.2f ms"),
+        'psc_amplitude':               ('PSC Amplitude',             'mV',  1e3,   [db.Synapse.psc_amplitude],                   'bwr',        False,  (-1, 1),       "%0.2f mV"),
+        'psc_rise_time':               ('PSC Rise Time',             'ms',  1e3,   [db.Synapse.psc_rise_time],                   'viridis_r',  False,  (0, 6),        "%0.2f ms"),
+        'psc_decay_tau':               ('PSC Decay Tau',             'ms',  1e3,   [db.Synapse.psc_decay_tau],                   'viridis_r',  False,  (0, 20),       "%0.2f ms"),
+        'latency':                     ('Latency',                   'ms',  1e3,   [db.Synapse.latency],                         'viridis_r',  False,  (0, 6),        "%0.2f ms"),
+        'stp_initial_50hz':            ('Paired pulse STP',          '',    1,     [db.Dynamics.stp_initial_50hz],               'bwr',        False,  (-0.5, 0.5),   "%0.2f"),
+        'stp_induction_50hz':          ('Train induced STP',         '',    1,     [db.Dynamics.stp_induction_50hz],             'bwr',        False,  (-0.5, 0.5),   "%0.2f"),
+        'stp_recovery_250ms':          ('STP Recovery',              '',    1,     [db.Dynamics.stp_recovery_250ms],             'bwr',        False,  (-0.5, 0.5),   "%0.2f"),
+        'pulse_amp_90th_percentile':   ('PSP Amplitude 90th %%ile',  'mV',  1e3,   [db.Dynamics.pulse_amp_90th_percentile],      'bwr',        False,  (-1, 1),       "%0.2f mV"),
+    }
+    metric_name, units, scale, columns, cmap, cmap_log, clim, cell_fmt = metrics[metric]
+
+    pairs = db.matrix_pair_query(
+        pre_classes=pre_classes,
+        post_classes=post_classes,
+        pair_query_args=pair_query_args,
+        columns=columns,
+    )
+
+    pairs_has_metric = pairs[~pairs[metric].isnull()]
+    metric_data = pairs_has_metric.groupby(['pre_class', 'post_class']).aggregate(lambda x: np.mean(x))
+
+    cmap = matplotlib.cm.get_cmap(cmap)
+    norm = matplotlib.colors.Normalize(vmin=clim[0], vmax=clim[1], clip=False)
+
+    shape = (len(pre_classes), len(post_classes))
+    data = np.zeros(shape)
+    data_alpha = np.zeros(shape)
+    data_str = np.zeros(shape, dtype=object)
+
+    for i, pre_class in enumerate(pre_classes):
+        for j, post_class in enumerate(post_classes):
+            try:
+                value = getattr(metric_data.loc[pre_class].loc[post_class], metric)
+            except KeyError:
+                value = np.nan
+            data[i, j] = value * scale
+            data_str[i, j] = cell_fmt % (value * scale) if np.isfinite(value) else ""
+            data_alpha[i, j] = 1 if np.isfinite(value) else 0 
+            
+    pre_labels = [class_labels[cls] for cls in pre_classes]
+    post_labels = [class_labels[cls] for cls in post_classes]
+    mapper = matplotlib.cm.ScalarMappable(cmap=cmap, norm=norm)
+    data_rgb = mapper.to_rgba(data)
+    data_rgb[:,:,3] = np.clip(data_alpha, 0, 1)
+
+    im, cbar = heatmap(data_rgb, pre_labels, post_labels,
+                    ax=ax,
+                    ax_labels=('postsynaptic', 'presynaptic'),
+                    bg_color=(0.8, 0.8, 0.8),
+                    cmap=cmap,
+                    norm=norm,
+                    cbarlabel=metric_name,
+                    cbar_kw={'shrink':0.5})
+
+    text = annotate_heatmap(im, data_str, data=data)
+
+
+def show_distance_profiles(ax, results, colors, class_labels):
+    """ Display connection probability vs distance plots
+    Parameters
+    -----------
+    ax : matplotlib.axes
+        The matplotlib axes object on which to make the plots
+    results : dict
+        Output of aisynphys.connectivity.measure_distance. This structure maps
+        (pre_class, post_class) onto the results of the connectivity as a function of distance.
+    colors: dict
+        color to draw each (pre_class, post_class) connectivity profile. Keys same as results.
+        To color based on overall connection probability use color_by_conn_prob.
+    class_labels : dict
+        Maps {cell_class: label} to give the strings to display for each cell class.
+    """
+
+    for i, (pair_class, result) in enumerate(results.items()):
+        pre_class, post_class = pair_class
+        plot = ax[i]
+        xvals = result['bin_edges']
+        xvals = (xvals[:-1] + xvals[1:])*0.5e6
+        cp = result['conn_prob']
+        lower = result['lower_ci']
+        upper = result['upper_ci']
+
+        color = colors[pair_class]
+        color2 = list(color)
+        color2[-1] = 0.2
+        mid_curve = plot.plot(xvals, cp, color=color, linewidth=2.5)
+        lower_curve = plot.fill_between(xvals, lower, cp, color=color2)
+        upper_curve = plot.fill_between(xvals, upper, cp, color=color2)
+        
+        plot.set_title('%s -> %s' % (class_labels[pre_class], class_labels[post_class]))
+        if i == len(ax)-1:
+            plot.set_xlabel('Distance (um)')
+            plot.set_ylabel('Connection Probability')
+        
+    return ax
+
+
+def color_by_conn_prob(pair_group_keys, connectivity, norm, cmap):
+    """ Return connection probability mapped color from show_connectivity_matrix
+    """
+    colors = {}
+    for key in pair_group_keys:
+        cp = connectivity[key]['connection_probability'][0]
+        mapper = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap)
+        color = mapper.to_rgba(np.clip(cp, 0.01, 1.0))
+        colors[key] = color
+
+    return colors
+
+
+def data_matrix(data_df, cell_classes, metric=None, scale=1, unit=None, cmap=None, norm=None, alpha=2):
+    """ Return data and labels to make a matrix using heatmap and annotate_heatmap. Similar to 
+    show_connectivity_matrix but for arbitrary data metrics.
+
+    Parameters:
+    -----------
+    data_df : pandas dataframe 
+        pairs with various metrics as column names along with the pre-class and post-class.
+    cell_classes : list 
+        cell classes included in the matrix, this assumes a square matrix.
+    metric : str
+        data metric to be displayed in matrix
+    scale : float
+        scale of the data
+    unit : str
+        unit for labels
+    cmap : matplotlib colormap instance
+        used to colorize the matrix
+    norm : matplotlib normalize instance
+        used to normalize the data before colorizing
+    alpha : int
+        used to desaturate low confidence data
+    """
+
+    shape = (len(cell_classes), len(cell_classes))
+    data = np.zeros(shape)
+    data_alpha = np.zeros(shape)
+    data_str = np.zeros(shape, dtype=object)
+    
+    mean = data_df.groupby(['pre_class', 'post_class']).aggregate(lambda x: np.mean(x))
+    error = data_df.groupby(['pre_class', 'post_class']).aggregate(lambda x: np.std(x))
+    count = data_df.groupby(['pre_class', 'post_class']).count()
+    
+    for i, pre_class in enumerate(cell_classes):
+        for j, post_class in enumerate(cell_classes):
+            try:
+                value = mean.loc[pre_class].loc[post_class][metric]
+                std = error.loc[pre_class].loc[post_class][metric]
+                n = count.loc[pre_class].loc[post_class][metric]
+                if n == 1:
+                    value = np.nan
+                #data_df.loc[pre_class].loc[post_class][metric]
+            except KeyError:
+                value = np.nan
+            data[i, j] = value*scale
+            data_str[i, j] = "%0.2f %s" % (value*scale, unit) if np.isfinite(value) else ""
+            data_alpha[i, j] = 1-alpha*((std*scale)/np.sqrt(n)) if np.isfinite(value) else 0 
+
+    mapper = matplotlib.cm.ScalarMappable(cmap=cmap, norm=norm)
+    data_rgb = mapper.to_rgba(data)
+    max = mean[metric].max()*scale
+    data_rgb[:,:,3] = np.clip(data_alpha, 0, max)
+    return data_rgb, data_str

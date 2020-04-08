@@ -22,6 +22,7 @@ class SynapsePipelineModule(MultipatchPipelineModule):
     
     @classmethod
     def create_db_entries(cls, job, session):
+        errors = []
         db = job['database']
         expt_id = job['job_id']
         
@@ -76,6 +77,7 @@ class SynapsePipelineModule(MultipatchPipelineModule):
                 reasons = fit['fit_qc_pass_reasons']
                 if len(reasons) > 0:
                     rec.meta = {'fit_qc_pass_reasons': reasons}
+                    errors.append("Fit errors for %s %s %s: %s" % (expt_id, pair.pre_cell.ext_id, pair.post_cell.ext_id, '\n'.join(reasons)))
 
                 for k in ['xoffset', 'yoffset', 'amp', 'rise_time', 'decay_tau', 'exp_amp', 'exp_tau']:
                     setattr(rec, 'fit_'+k, fit['fit_result'].best_values[k])
@@ -98,6 +100,8 @@ class SynapsePipelineModule(MultipatchPipelineModule):
                 # only set latency if the averaged values agree
                 if np.all(dist < 150e-6):
                     syn.latency = latency
+                else:
+                    errors.append("latency mismatch on %s %s %s" % (expt_id, pair.pre_cell.ext_id, pair.post_cell.ext_id))
             
             # compute weighted averages of kinetic parameters
             for mode, pfx in [('ic', 'psp_'), ('vc', 'psc_')]:
@@ -111,8 +115,9 @@ class SynapsePipelineModule(MultipatchPipelineModule):
                     setattr(syn, pfx+param, avg)
             
             session.add(syn)
-
+           
             # session.flush()
+        return errors
         
     def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.

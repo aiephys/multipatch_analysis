@@ -71,21 +71,26 @@ class Pipeline(object):
     def __getstsate__(self):
         return self.kwds
         
-    def report(self, modules=None):
+    def report(self, modules=None, job_ids=None):
         """Return a printable string report describing the state of the pipeline plus error messages
+        
+        If job IDs are specified, then return information about the status of each job.
         """
         if modules is None:
             modules = self.sorted_modules()
+        job_ids = job_ids or []
         mod_name_len = max([len(mod.name) for mod in modules])
             
         # only report the first error encountered for each job ID
         report = []
         failed_job_ids = set()
         totals = {}
+        job_status = {}
         for module in modules:
             module_errors = []
             totals[module.name] = [0, 0]
-            for job_id, (success, error, meta) in module.job_status().items():
+            job_status[module.name] = module.job_status()
+            for job_id, (success, error, meta) in job_status[module.name].items():
                 if success is False and job_id not in failed_job_ids:
                     module_errors.append((job_id, error, meta))
                     failed_job_ids.add(job_id)
@@ -135,5 +140,18 @@ class Pipeline(object):
         for module in modules:
             tot_success, tot_error = totals[module.name]
             report.append(fmt % (module.name, tot_success, tot_error))
+        
+        
+        for jid in job_ids:
+            report.append("\n----- job: %s -----" % jid)
+            for module in modules:
+                js = job_status[module.name].get(jid, None)
+                if js is None:
+                    status = '-'
+                    error = ''
+                else:
+                    success, error, meta = js
+                    status = 'ok' if success else 'fail'
+                report.append("  {:15s} : {:5s} : {:s}".format(jid, status, error or ''))
         
         return '\n'.join(report)

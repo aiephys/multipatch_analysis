@@ -25,6 +25,7 @@ class MultiPatchSyncRecording(MiesSyncRecording):
     def __init__(self, nwb, sweep_id):
         MiesSyncRecording.__init__(self, nwb, sweep_id)
         self._baseline_mask = None
+        self._baseline_regions = None
         try:
             self.meta['temperature'] = self.recordings[0].meta['notebook']['Async AD 1: Bath Temperature']
         except Exception:
@@ -36,7 +37,7 @@ class MultiPatchSyncRecording(MiesSyncRecording):
         if any(substr in stim for substr in ['pulsetrain', 'recovery', 'pulstrn']):
             return MultiPatchProbe(miesrec)
         else:
-            return miesrec
+            return MultiPatchRecording(miesrec)
 
     def baseline_regions(self, settling_time=100e-3):
         """Return a list of start,stop pairs indicating regions during the recording that are expected to be quiescent
@@ -49,31 +50,30 @@ class MultiPatchSyncRecording(MiesSyncRecording):
             settle_size = int(settling_time / dt)
             for rec in self.recordings:
                 pa = PatchClampStimPulseAnalyzer.get(rec)
-                try:
-                    pulses = pa.pulses()
-                except Exception:
-                    print("Ignore recording baseline regions:", rec)
-                    sys.excepthook(*sys.exc_info())
-                    continue
+                pulses = pa.pulses()
                 for pulse in pulses:
                     start = pri.index_at(pulse[0])
                     stop = pri.index_at(pulse[1])
                     mask[start:stop + settle_size] = True
+            # mask is False in quiescent regions
             self._baseline_mask = mask
 
+        if self._baseline_regions is None:
+            mask = self._baseline_mask
             starts = list(np.argwhere(~mask[1:] & mask[:-1])[:,0])
-            stops = list(np.argwhere(mask[1:] & ~mask[:-1])[:,0])
-            if starts[0] > stops[0]:
+            if not mask[0]:
                 starts.insert(0, 0)
-            if stops[-1] < starts[-1]:
-                stops.append(len(mask))
+            stops = list(np.argwhere(mask[1:] & ~mask[:-1])[:,0])
+            if not mask[-1]:
+                starts.append(len(mask))
+            
             baseline_inds = [r for r in zip(starts, stops) if r[1] > r[0]]
             self._baseline_regions = [(pri.time_at(i0), pri.time_at(i1)) for i0, i1 in baseline_inds]
 
         return self._baseline_regions
 
 
-class MultiPatchProbe(MiesRecording):
+class MultiPatchRecording(MiesRecording):
     def __init__(self, recording):
         self._parent_rec = recording
         self._base_regions = None
@@ -88,12 +88,15 @@ class MultiPatchProbe(MiesRecording):
 
     @property
     def baseline_regions(self):
-        # detect baseline regions from pulses rather than labnotebook
-        # (can't always count on there being delay periods in the recording)
+        # ask the parent sweep for baseline regions in which no channels are active
         if self._base_regions is None:
             self._base_regions = self._parent_rec.parent.baseline_regions()
         return self._base_regions
 
+class MultiPatchProbe(MultiPatchRecording):
+    """A 12-pulse stimulus/response used to probe for synaptic connections.
+    """
+    pass
 
 # class Analyzer(object):
 #     """Base class for attaching analysis results to a data object.
@@ -122,7 +125,7 @@ class MultiPatchProbe(MiesRecording):
 #         self.rec = rec
 #         self._pulses = None
 #         self._evoked_spikes = None
-        
+
 #     def pulses(self):
 #         """Return a list of (start_time, stop_time, amp) tuples describing square pulses
 #         in the stimulus.

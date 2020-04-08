@@ -198,7 +198,7 @@ class Database(object):
     * Clone databases across backends
     """
     _all_dbs = weakref.WeakSet()
-    default_app_name = ('mp_a:' + ' '.join(sys.argv))[:60]
+    default_app_name = (' '.join(sys.argv))[-63:]
 
     def __init__(self, ro_host, rw_host, db_name, ormbase):
         self.ormbase = ormbase

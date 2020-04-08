@@ -57,7 +57,9 @@ def kill_pid(pid, terminate=False):
     else:
         result = conn.execute("select pg_cancel_backend(%d);" % pid).fetchall()
     tr.rollback()
-    return result[0][0]
+    killed = result[0][0]
+    print("%d %s" % (pid, 'killed' if killed else 'kill failed'))
+    return killed
 
 
 _known_hostnames = {}
@@ -108,7 +110,7 @@ def check():
             
             query = con['query'].replace('\n', ' ')[:110]
             
-            print("          {:15s} {:15s} {:45s} {:6d} {:16s} {:s}   ".format(con['usename'], con['datname'], app[:45], con['pid'], state, query))
+            print("          {:15s} {:15s} {:45s} {:6d} {:16s} {:s}   ".format(con['usename'], con['datname'], app[-45:], con['pid'], state, query))
     
 
 class ScreenPrint(object):
@@ -150,18 +152,22 @@ if __name__ == '__main__':
     parser.add_argument('--one', action='store_true', default=False, help="List all connections once, then exit.")
     parser.add_argument('--kill', action='store_true', default=False, help="Close idle connections")
     parser.add_argument('--terminate', action='store_true', default=False, help="Terminate (rather than cancel) connections")
+    parser.add_argument('--kill-pid', type=int, default=None, help="Kill a specific process ID", dest='kill_pid')
     parser.add_argument('--kill-from', type=str, default=None, help="Kill only connections from a particular user or IP address", dest='kill_from')
     parser.add_argument('--kill-age', type=float, default=0.5, help="Kill only connections idle for some number of hours (default=0.5)", dest='kill_age')
     args = parser.parse_args()
-    
-    if args.kill:
+
+    if args.kill_pid is not None:
+        kill_pid(args.kill_pid)
+        
+    if args.kill or args.terminate:
         to_kill = list_db_connections()
         to_kill = [c for c in to_kill if c['idle_time']/3600. > args.kill_age]
         if args.kill_from is not None:
             to_kill = [c for c in to_kill if args.kill_from in (c['user'], c['client_addr'], c['hostname'])]
+        print("%s processes: %s" % ('kill' if not args.terminate else 'terminate', to_kill))
         for c in to_kill:
             killed = kill_pid(c['pid'], args.terminate)
-            print("%d %s" % (c['pid'], 'killed' if killed else 'kill failed'))
     
     if args.one:
         check()

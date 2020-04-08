@@ -12,8 +12,6 @@ from collections import OrderedDict
 all_paths = glob.glob(os.path.join(config.synphys_data, '*.***'))
 nucleus = {'+': 'nucleus_present', '-': 'nucleus_absent', '': None}
 organism = {'Mus musculus': 'Mouse', 'Homo Sapiens': 'Human'}
-generated_report_path = '//allen/programs/celltypes/workgroups/synphys/generated_reports'
-rig_operators = {'Operator O': 'lisak', 'Operator Z': 'cristinar', 'Operator X': 'stephanies', '': ''}
 
 def generate_daily_report(day):
     """ Generate a daily PatchSeq report for Kim's team. PatchSeq metadata is collected from the acq4 directories
@@ -24,7 +22,7 @@ def generate_daily_report(day):
         day = day - timedelta(hours=24)
 
     file_name = '%s_mps_Transcriptomics_report.xlsx' % datetime.strftime(day, "%y%m%d")
-    file_path = generated_report_path + '/' + file_name
+    file_path = config.patchseq_report_path + '/' + file_name
     project_code = '102-01-010-10'
     columns = [
         'Patch Tube Name',
@@ -60,7 +58,7 @@ def generate_daily_report(day):
         
         # check to make sure there are recorded headstages and patchseq tubes, else move to next site
         if headstages is None:
-            errors.append('\tNo recorded headstages')
+            print('%s\tNo recorded headstages' % site_source)
             continue
         tubes = [hs['Tube ID'] for hs in headstages.values()] 
         no_tubes = all([t == '' for t in tubes]) 
@@ -124,7 +122,8 @@ def generate_daily_report(day):
     
     # convert report to a dataframe and export to excel
     report_df = to_df(row_data, report_type='daily')
-    report_df.to_excel(file_path, index=False)
+    if report_df is not None:
+        report_df.to_excel(file_path, index=False)
 
 def generate_monthly_report(start_date, end_date):
     """ Generate a monthly PatchSeq report for Shiny. PatchSeq metadata is collected from the acq4 directories
@@ -132,7 +131,7 @@ def generate_monthly_report(start_date, end_date):
     """
 
     file_name = '%s_%s_mps_metadata_report.xlsx' % (datetime.strftime(start_date, "%y%m%d"), datetime.strftime(end_date, "%y%m%d"))
-    file_path = generated_report_path + '/' + file_name
+    file_path = config.patchseq_report_path + '/' + file_name
 
     required_cols = {
         'tubeID': 'A',
@@ -186,7 +185,7 @@ def generate_monthly_report(start_date, end_date):
         
         # if no headstages were recorded or tubes collected, move along
         if headstages is None:
-            errors.append('\tNo recorded headstages')
+            print('%s\tNo recorded headstages' % site_source)
             continue
         tubes = [hs['Tube ID'] for hs in headstages.values()] 
         no_tubes = all([t == '' for t in tubes]) 
@@ -198,7 +197,6 @@ def generate_monthly_report(start_date, end_date):
         patch_date_dt = timestamp_to_datetime(day_info.get('__timestamp__'))
         patch_date = datetime.strftime(patch_date_dt, "%m/%d/%Y") if isinstance(patch_date_dt, datetime) else None
         operator = day_info.get('rig_operator', '')
-        operator = rig_operators[operator]
         roi = format_roi_major(day_info.get('target_region'))
         slic = Slice(site_dh.parent().name())
         genotype = slic.genotype
@@ -321,7 +319,10 @@ def parse_tube(info, date):
 def to_df(report_data, report_type):
     if len(report_data) == 0:
         print('No patchseq tubes to report')
-        return
+        if report_type == 'monthly':
+            return pd.DataFrame(columns=['tubeID'])
+        else:
+            return None
     data_df = pd.DataFrame(report_data)
     if report_type == 'daily':
         data_df.sort_values('tube_id', inplace=True)

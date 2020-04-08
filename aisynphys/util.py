@@ -365,8 +365,8 @@ def iter_download_with_resume(url, file_path, timeout=10, chunksize=1000000):
                 yield (first_byte, file_size, None)
             
         except Exception as exc:
-            err = str(exc.args[0])
-            yield (first_byte, file_size, "download error: " + err)
+            err = '; '.join(traceback.format_exception_only(type(exc), exc))
+            yield (first_byte, file_size, err)
             time.sleep(1)
             conn = None
             continue
@@ -415,6 +415,8 @@ def interactive_download(url, file_path, **kwds):
         
         for i, size, err in iter_download_with_resume(url, file_path, **kwds):
             now = time.time()
+            complete_str = si_format(i, suffix='B', float_format='f', precision=2)
+            total_str = si_format(size, suffix='B', float_format='f', precision=1)
             if err is None:
                 if last_size is not None:
                     chunk_size = i - last_size
@@ -432,8 +434,6 @@ def interactive_download(url, file_path, **kwds):
                     est_time = (size - i) / byte_rate
                     est_time_str = str(datetime.timedelta(seconds=int(est_time)))
 
-                complete_str = si_format(i, suffix='B', float_format='f', precision=2)
-                total_str = si_format(size, suffix='B', float_format='f', precision=1)
                 rate_str = si_format(byte_rate, suffix='B/s', float_format='f')
 
                 stat_str = '%0.2f%% (%s / %s)  %s  %s remaining' % (100.*i/size, complete_str, total_str, rate_str, est_time_str)

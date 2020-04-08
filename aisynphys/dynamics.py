@@ -74,7 +74,7 @@ def generate_pair_dynamics(pair, db, session):
     syn_type = pair.synapse.synapse_type
     
     # load all IC pulse response amplitudes to determine the maximum that will be used for normalization
-    pr_query = pulse_response_query(pair, qc_pass=True, clamp_mode='ic')
+    pr_query = pulse_response_query(pair, qc_pass=True, clamp_mode='ic', session=session)
     pr_recs = pr_query.all()
     # cull out all PRs that didn't get a fit
     pr_recs = [pr_rec for pr_rec in pr_recs if pr_rec.PulseResponseFit.fit_amp is not None]
