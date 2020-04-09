@@ -125,6 +125,7 @@ class ExperimentPipelineModule(MultipatchPipelineModule):
                 cell_entries[cell] = cell_entry
 
         # create pairs
+        pair_entries = {}
         for pair in expt.pairs.values():
             pre_cell_entry = cell_entries[pair.pre_cell]
             post_cell_entry = cell_entries[pair.post_cell]
@@ -139,8 +140,13 @@ class ExperimentPipelineModule(MultipatchPipelineModule):
                 n_in_test_spikes=0,
                 distance=pair.distance,
             )
+            pair_entries[pre_cell_entry, post_cell_entry] = pair_entry
             session.add(pair_entry)
-        
+
+        # fill in reciprocal links
+        for (pre_cell, post_cell), pair_entry in pair_entries.items():
+            pair_entry.reciprocal = pair_entries[post_cell, pre_cell]
+
     def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.
         

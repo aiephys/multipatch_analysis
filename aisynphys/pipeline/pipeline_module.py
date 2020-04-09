@@ -403,7 +403,7 @@ class DatabasePipelineModule(PipelineModule):
 
             session.commit()
             got_exc = False
-        except Exception:
+        except (Exception, KeyboardInterrupt):
             got_exc = True
             session.rollback()
             

@@ -154,12 +154,6 @@ Cell.electrode = relationship(Electrode, back_populates="cell", single_parent=Tr
 
 
 class PairBase(object):
-    @property
-    def reciprocal(self):
-        """The pair that is reciprocal to this one (with pre/post cells in the opposite order)
-        """
-        return self.experiment.pairs.get((self.post_cell.ext_id, self.pre_cell.ext_id))
-        
     def __repr__(self):
         uid = getattr(self.experiment, 'ext_id', None)
         if uid is None or uid == '':
@@ -180,10 +174,14 @@ Pair = make_table(
         ('n_ex_test_spikes', 'int', 'Number of QC-passed spike-responses recorded for this pair at excitatory holding potential', {'index': True}),
         ('n_in_test_spikes', 'int', 'Number of QC-passed spike-responses recorded for this pair at inhibitory holding potential', {'index': True}),
         ('distance', 'float', 'Distance between somas (in m)'),
+        ('reciprocal_id', 'pair.id', 'ID of the reciprocal to this cell pair (the pair with pre_cell and post_cell swapped)', {'index': True}),
     ]
 )
 
 Experiment.pair_list = relationship(Pair, back_populates="experiment", cascade='save-update,merge,delete', single_parent=True)
 Pair.experiment = relationship(Experiment, back_populates="pair_list")
-Pair.pre_cell = relationship(Cell, foreign_keys=[Pair.pre_cell_id])
-Pair.post_cell = relationship(Cell, foreign_keys=[Pair.post_cell_id])
+Pair.pre_cell = relationship(Cell, foreign_keys=[Pair.pre_cell_id], uselist=False)
+Pair.post_cell = relationship(Cell, foreign_keys=[Pair.post_cell_id], uselist=False)
+# docs on handling mutually-dependent relationships: 
+# https://docs.sqlalchemy.org/en/13/orm/relationship_persistence.html#post-update
+Pair.reciprocal = relationship(Pair, foreign_keys=[Pair.reciprocal_id], uselist=False, post_update=True)
