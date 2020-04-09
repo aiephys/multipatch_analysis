@@ -6,6 +6,7 @@ For generating a DB table describing cell morphology.
 from __future__ import print_function, division
 
 import os, datetime, hashlib, json
+from sqlalchemy.orm import joinedload
 from collections import OrderedDict
 from ...util import timestamp_to_datetime, optional_import
 from ...data.pipette_metadata import PipetteMetadata
@@ -67,12 +68,12 @@ class MorphologyPipelineModule(MultipatchPipelineModule):
             results = {
                 'pyramidal': pyramidal,
                 'cortical_layer': cortical_layer,
-                'morpho_db_hash': None,
             }
             
             if cell_morpho is not None:
-                morpho_db_hash = hashlib.md5(repr(cell_morpho).encode()).hexdigest()
-                results['morpho_db_hash'] = morpho_db_hash
+                morpho_db_hash = hash_record(cell_morpho)
+                print(expt.ext_id, cell_id, morpho_db_hash)
+                results['meta'] = {'morpho_db_hash': morpho_db_hash}
                 for morpho_db_name, result in col_names.items():
                     col_name = result['name']
                     col_type = result['type']
@@ -144,30 +145,37 @@ class MorphologyPipelineModule(MultipatchPipelineModule):
             if success is not True:
                 continue
 
-            expt = session.query(db.Experiment).filter(db.Experiment.ext_id==expt_id).all()[0]
+            q = session.query(db.Experiment)
+            # joinedload should speed up access to cell/morpho attributes by eager loading along with the experiment
+            q = q.options(joinedload(db.Experiment.cell_list).joinedload(db.Cell.morphology))
+            q = q.filter(db.Experiment.ext_id==expt_id)
+            expt = q.all()[0]
+
             ready[expt_id] = {'dep_time': expt_mtime}
-            cluster = expt.meta.get('lims_cell_cluster_id')
-            if cluster is None:
-                continue
-            cluster_cells = lims.cluster_cells(cluster)
-            if cluster_cells is None:
-                continue
             cell_hash_compare = []
-            for cell in cluster_cells:
-                if cell.id is None:
-                    continue
-                morpho_db_hash = hashlib.md5((';'.join(filter(None, morpho_results.get(cell.id, [None])))).encode()).hexdigest()
-                cell_morpho_rec = session.query(db.Morphology).join(db.Cell).filter(db.Cell.meta.info.get('lims_specimen_id')==str(cell.id)).all()
-                if len(cell_morpho_rec) == 1:   
-                    cell_rec_hash = cell_morpho_rec[0].morpho_db_hash
-                    cell_hash_compare.append(morpho_db_hash == cell_rec_hash)
-                else:
+            for cell_ext_id, cell in expt.cells.items():
+                if cell.morphology is None:
                     cell_hash_compare.append(False)
-            if all(cell_hash_compare) is False:
+                    break
+                else:
+                    morpho_rec = morpho_results.get(cell.meta['lims_specimen_id'], None)
+                    if morpho_rec is None:
+                        morpho_db_hash = None
+                    else:
+                        morpho_db_hash = hash_record(morpho_rec)
+                    prev_hash = None if cell.morphology.meta is None else cell.morphology.meta['morpho_db_hash']
+                    cell_hash_compare.append(morpho_db_hash==prev_hash)
+                    # assert expt.ext_id!='1523916429.198' or cell_hash_compare[-1]
+            
+            if not all(cell_hash_compare):
+                # raise Exception()
                 ready[expt_id] = {'dep_time': datetime.datetime.now()}
         
         return ready
 
+
+def hash_record(rec):
+    return hashlib.md5(repr(rec).encode()).hexdigest()
 
 def import_morpho_db():
     import pyodbc
