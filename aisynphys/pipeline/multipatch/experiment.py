@@ -27,7 +27,7 @@ class ExperimentPipelineModule(MultipatchPipelineModule):
         all_expts = cache.list_experiments()
         site_path = all_expts[job_id]
 
-        ignore_file = os.path.join(site_path, 'ignore')
+        ignore_file = os.path.join(site_path, 'ignore.txt')
         if os.path.exists(ignore_file):
             err = open(ignore_file).read()
             raise Exception("Ignoring experiment %s: %s" % (job_id, err))

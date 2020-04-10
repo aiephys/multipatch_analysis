@@ -23,7 +23,7 @@ class SlicePipelineModule(MultipatchPipelineModule):
         slices = all_slices()
         path = slices[job_id]
         
-        ignore_file = os.path.join(path, 'ignore')
+        ignore_file = os.path.join(path, 'ignore.txt')
         if os.path.exists(ignore_file):
             err = open(ignore_file).read()
             raise Exception("Ignoring slice %s: %s" % (job_id, err))
@@ -65,7 +65,18 @@ class SlicePipelineModule(MultipatchPipelineModule):
         slices = all_slices()
         ready = OrderedDict()
         for ts, path in slices.items():
-            mtime = os.stat(os.path.join(path, '.index')).st_mtime
+            files = [
+                path,
+                os.path.join(path, '.index'),
+                os.path.join(path, 'ignore.txt'),
+            ]
+            mtimes = [0]
+            for file in files:
+                if not os.path.exists(file):
+                    continue
+                mtimes.append(os.stat(file).st_mtime)
+            mtime = max(mtimes)
+
             # test file updates:
             # import random
             # if random.random() > 0.8:
