@@ -6,22 +6,27 @@ import sqlalchemy
 
 
 _lims_engine = None
+_lims_engine_pid = None
 def lims_engine():
-    global _lims_engine
+    global _lims_engine, _lims_engine_pid
+    if _lims_engine is not None and os.getpid() != _lims_engine_pid:
+        # Force forked processes to dispose and recreate engines.
+        # https://docs.sqlalchemy.org/en/latest/faq/connections.html#how-do-i-use-engines-connections-sessions-with-python-multiprocessing-or-os-fork
+        _lims_engine.dispose()
+        _lims_engine = None
+    
     if _lims_engine is None:
-        from sqlalchemy import create_engine
-        from sqlalchemy.pool import NullPool
-        _lims_engine = create_engine(config.lims_address, poolclass=NullPool)
+        _lims_engine = sqlalchemy.create_engine(config.lims_address)
+        _lims_engine_pid = os.getpid()
+    
     return _lims_engine
 
 
 def query(query_str):
-    conn = lims_engine().connect()
-    try:
-        result = conn.execute(query_str).fetchall()
-    finally:
-        conn.close()
-    return result
+    """Query LIMS database and return result.
+    """
+    with lims_engine().connect() as conn:
+        return conn.execute(query_str).fetchall()
 
 
 def specimen_info(specimen_name=None, specimen_id=None):
