@@ -11,6 +11,7 @@ from .synapse_prediction import SynapsePredictionPipelineModule
 from .resting_state import RestingStatePipelineModule
 from .patch_seq import PatchSeqPipelineModule
 from .gap_junction import GapJunctionPipelineModule
+from .intrinsic import IntrinsicPipelineModule
 
 
 class MultipatchPipeline(Pipeline):
@@ -21,6 +22,7 @@ class MultipatchPipeline(Pipeline):
         SlicePipelineModule,
         ExperimentPipelineModule,
         DatasetPipelineModule,
+        IntrinsicPipelineModule,
         PatchSeqPipelineModule,
         # MorphologyPipelineModule,
         SynapsePipelineModule,

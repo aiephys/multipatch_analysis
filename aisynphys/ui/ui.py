@@ -127,7 +127,12 @@ class ExperimentTimeline(QtGui.QWidget):
         self.channels = list(range(config.n_headstages))
         site_info = site_dh.info()
         for i in self.channels:
-            hs_state = site_info.get('Headstage %d'%(i+1), None)
+            headstages = site_info.get('headstages', None)
+            if headstages is None:
+                hs_state = site_info.get('Headstage %d'%(i+1), None)
+            else:
+                hs = headstages.get('HS%d'%(i+1), {})
+                hs_state = hs.get('Seal', None)
             status = {
                 'NS': 'No seal',
                 'LS': 'Low seal',
