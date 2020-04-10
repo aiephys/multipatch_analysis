@@ -1,7 +1,6 @@
 from __future__ import print_function
 import argparse, sys, os, logging
 import six
-import pyqtgraph as pg 
 from aisynphys.pipeline import all_pipelines
 from aisynphys.database import default_db as db
 from aisynphys import config
@@ -31,6 +30,7 @@ if __name__ == '__main__':
     args = parser.parse_args(sys.argv[1:])
 
     if args.local:
+        import pyqtgraph as pg 
         pg.dbg()
 
     pipeline = all_pipelines[args.pipeline](database=db, config=config)
