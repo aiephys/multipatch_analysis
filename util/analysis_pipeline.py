@@ -9,6 +9,7 @@ from aisynphys import config
 
 if __name__ == '__main__':
     logging.basicConfig(format="%(message)s")
+    logging.getLogger().setLevel(logging.INFO)
     all_pipelines = all_pipelines()
     
     parser = argparse.ArgumentParser(description="Process analysis pipeline jobs")
