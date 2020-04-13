@@ -9,6 +9,7 @@ from ... import config
 from .pipeline_module import MultipatchPipelineModule
 from .experiment import ExperimentPipelineModule
 from .dataset import DatasetPipelineModule
+from ...nwb_recordings import get_lp_sweeps, get_pulse_times, get_db_recording
 
 padding = 30e-3
 duration = 150e-3
@@ -26,20 +27,23 @@ class GapJunctionPipelineModule(MultipatchPipelineModule):
         expt_id = job['job_id']
         
         expt = db.experiment_from_timestamp(expt_id, session=session)
+        try:
+            nwb = expt.data
+        except:
+            return
 
         for pair in expt.pair_list:
-            try:
-                nwb = pair.experiment.data
-            except:
-                continue
             pre_dev = pair.pre_cell.electrode.device_id
             post_dev = pair.post_cell.electrode.device_id
             try:
                 sweeps = nwb.contents
             except:
                 continue
-            long_pulse = get_lp_sweeps(sweeps, pre_dev, post_dev)
-            if long_pulse is None:
+            
+            lp_pre, _ = get_lp_sweeps(sweeps, pre_dev)
+            lp_post, _ = get_lp_sweeps(sweeps, post_dev)
+            long_pulse = list(set(lp_pre).intersection(lp_post))
+            if len(long_pulse) == 0:
                 continue
 
             pre_pulse = []
@@ -89,6 +93,13 @@ class GapJunctionPipelineModule(MultipatchPipelineModule):
             r_noise, p_noise = stats.pearsonr(pre_noise, post_noise)
             cc_pulse = coupling_coeff(pre_pulse, post_pulse)
             cc_noise = coupling_coeff(pre_noise, post_noise)
+
+            post_intrinsic = pair.post_cell.intrinsic
+            if post_intrinsic is not None:
+                post_ir = pair.post_cell.intrinsic.input_resistance
+                gap_conduct = (1/post_ir) * cc_pulse / (1 - cc_pulse)
+            else:
+                gap_conduct = None
             
             results = {
                 'corr_coeff_pulse': r_pulse,
@@ -97,6 +108,7 @@ class GapJunctionPipelineModule(MultipatchPipelineModule):
                 'p_val_noise': p_noise,
                 'coupling_coeff_pulse': cc_pulse,
                 'coupling_coeff_noise': cc_noise,
+                'junctional_conductance': gap_conduct,
                 }
 
             # Write new record to DB
@@ -115,42 +127,7 @@ class GapJunctionPipelineModule(MultipatchPipelineModule):
         q = q.filter(db.Experiment.ext_id.in_(job_ids))
         return q.all()
 
-def get_lp_sweeps(sweeps, pre_dev, post_dev):
-    long_pulse= []
-    for sweep in sweeps:
-        devices = sweep.devices
-        if pre_dev not in devices or post_dev not in devices:
-            continue
-        rec = sweep[pre_dev]
-        stim_name = rec.stimulus.description
-        target_v = 'TargetV' in stim_name
-        if_curve = 'If_Curve' in stim_name
-        if target_v or if_curve:
-            long_pulse.append(sweep)
-    if len(long_pulse) == 0:
-        return None
-    return long_pulse
 
-def get_pulse_times(recording):
-    # returns the start and stop time of the target_v long pulse
-    stims = recording.stimulus.items
-    # newer experiments have 5 elements, the 4th one is the long pulse of the target_v stimulus
-    if len(stims) == 5:
-        return stims[3].start_time, stims[3].start_time + stims[3].duration
-    # older experiments only have metadata for the test pulse, use the following to parse the 
-    # wave itself to find the stimlus
-    elif len(stims) == 2:
-        # skip over test pulse
-        start = stims[1].start_time + stims[1].duration
-        cmd = recording['command'].time_slice(start, None)
-        # find pulse by parsing command wave
-        dif = np.diff((cmd.data != cmd.data[0]).astype(int))
-        inds = np.argwhere(dif != 0)[:, 0]
-        if len(inds) == 0:
-            return None
-        return cmd.time_at(inds[0]), cmd.time_at(inds[1])
-    else:
-        return None
     
 def get_chunk_diff(rec, win1, win2, array):
     chunk1 = rec['primary'].time_slice(win1[0], win1[1])
@@ -158,17 +135,6 @@ def get_chunk_diff(rec, win1, win2, array):
     delta = chunk2.data.mean() - chunk1.data.mean()
     array.append(delta)
     return array     
-
-def get_db_recording(expt, recording):
-    trodes = {e.device_id: e.id for e in expt.electrodes}
-    trode_id = trodes[recording.device_id]
-    srecs = {srec.ext_id: srec for srec in expt.sync_recs}
-    try:
-        srec = srecs[recording.parent.key]
-    except KeyError:
-        return None
-    recs = {rec.electrode_id:rec for rec in srec.recordings}
-    return recs.get(trode_id, None)
 
 def coupling_coeff(a, b):
     a_array= np.asarray(a)

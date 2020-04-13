@@ -19,6 +19,7 @@ from .meta import *
 from .pipeline import *
 from .slice import *
 from .experiment import *
+from .intrinsic import *
 from .morphology import *
 from .dataset import *
 from .synapse import *
