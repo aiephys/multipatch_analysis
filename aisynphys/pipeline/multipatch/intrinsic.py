@@ -107,6 +107,7 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
             conn = db.Intrinsic(cell_id=cell.id, **results)
             session.add(conn)
 
+        return errors
 
     def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.
