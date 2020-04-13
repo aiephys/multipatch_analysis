@@ -9,6 +9,7 @@ from ... import config
 from .pipeline_module import MultipatchPipelineModule
 from .experiment import ExperimentPipelineModule
 from .dataset import DatasetPipelineModule
+from .intrinsic import IntrinsicPipelineModule
 from ...nwb_recordings import get_lp_sweeps, get_pulse_times, get_db_recording
 
 padding = 30e-3
@@ -18,32 +19,33 @@ class GapJunctionPipelineModule(MultipatchPipelineModule):
     """Analyze gap junction presence and strength for all pairs per experiment
     """
     name = 'gap_junction'
-    dependencies = [ExperimentPipelineModule, DatasetPipelineModule]
+    dependencies = [ExperimentPipelineModule, DatasetPipelineModule, IntrinsicPipelineModule]
     table_group = ['gap_junction']
     
     @classmethod
     def create_db_entries(cls, job, session):
+        errors = []
         db = job['database']
         expt_id = job['job_id']
         
         expt = db.experiment_from_timestamp(expt_id, session=session)
-        try:
-            nwb = expt.data
-        except:
-            return
+        nwb = expt.data
+        if nwb is None:
+            raise Exception("No NWB data for this experiment")
+
+        sweeps = nwb.contents
+        if sweeps is None:
+            raise Exception('NWB has not content')
 
         for pair in expt.pair_list:
             pre_dev = pair.pre_cell.electrode.device_id
             post_dev = pair.post_cell.electrode.device_id
-            try:
-                sweeps = nwb.contents
-            except:
-                continue
             
             lp_pre, _ = get_lp_sweeps(sweeps, pre_dev)
             lp_post, _ = get_lp_sweeps(sweeps, post_dev)
             long_pulse = list(set(lp_pre).intersection(lp_post))
             if len(long_pulse) == 0:
+                errors.append('Pair %s, %s, %s NWB has no TargetV sweeps' % (expt.ext_id, pair.pre_cell.ext_id, pair.post_cell.ext_id))
                 continue
 
             pre_pulse = []
@@ -87,6 +89,7 @@ class GapJunctionPipelineModule(MultipatchPipelineModule):
                 post_noise = get_chunk_diff(post_rec, base2_win, base_win, post_noise)
                 
             if qc_pass < 2:
+                errors.append('Only one qc-passed sweep for pair %s, %s, %s; we require 2' % (expt.ext_id, pair.pre_cell.ext_id, pair.post_cell.ext_id))
                 continue
 
             r_pulse, p_pulse = stats.pearsonr(pre_pulse, post_pulse)
@@ -114,6 +117,8 @@ class GapJunctionPipelineModule(MultipatchPipelineModule):
             # Write new record to DB
             conn = db.GapJunction(pair_id=pair.id, **results)
             session.add(conn)
+
+        return errors
         
     def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.
