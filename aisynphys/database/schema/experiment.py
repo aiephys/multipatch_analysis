@@ -21,6 +21,8 @@ class ExperimentBase(object):
 
     @property
     def nwb_file(self):
+        if self.ephys_file is None:
+            return None
         if config.synphys_data is not None:
             # Return path from local file repo
             return os.path.join(config.synphys_data, self.storage_path, self.ephys_file)
@@ -37,7 +39,10 @@ class ExperimentBase(object):
 
         if not hasattr(self, '_data'):
             from ...data import MultiPatchDataset
-            self._data = MultiPatchDataset(self.nwb_file)
+            if self.nwb_file is None:
+                self._data = None
+            else:
+                self._data = MultiPatchDataset(self.nwb_file)
         return self._data
 
     @property
