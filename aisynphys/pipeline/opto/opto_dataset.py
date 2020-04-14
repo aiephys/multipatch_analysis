@@ -5,7 +5,7 @@ from ... import config #, synphys_cache, lims
 from ...util import timestamp_to_datetime
 from ..pipeline_module import DatabasePipelineModule
 from .opto_experiment import OptoExperimentPipelineModule
-from neuroanalysis.data.experiment import Experiment
+from neuroanalysis.data.experiment import AI_Experiment
 #from neuroanalysis.data.libraries import opto
 from neuroanalysis.data.loaders.opto_experiment_loader import OptoExperimentLoader
 from neuroanalysis.baseline import float_mode
@@ -58,7 +58,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
 
         # load NWB file
         path = os.path.join(config.synphys_data, expt_entry.storage_path)
-        expt = Experiment(loader=OptoExperimentLoader(site_path=path))
+        expt = AI_Experiment(loader=OptoExperimentLoader(site_path=path))
         nwb = expt.data
         stim_log = expt.loader.load_stimulation_log()
         if stim_log['version'] < 3:
@@ -164,7 +164,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                         ## need to calculate spiral size from reference image, cause stimlog is from before we were saving spiral size
                         shape={'spiral_revolutions':stim.get('prairieCmds', {}).get('spiralRevolutions')}
                         prairie_size = stim['prairieCmds']['spiralSize']
-                        ref_image = os.path.join(expt.files['path'], stim['prairieImage'][-23:])
+                        ref_image = os.path.join(expt.path, stim['prairieImage'][-23:])
                         if os.path.exists(ref_image):
                             h = getHandle(ref_image)
                             xPixels = h.info()['PrairieMetaInfo']['Environment']['PixelsPerLine']
@@ -292,21 +292,25 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                 for post_rec in [x for x in srec.recordings if 'MultiClamp 700' in x.device_type]:
                     #if pre_dev == post_dev:
                     #    continue
-                    stim_num = stim_rec.meta['notebook']['USER_stim_num']
-                    if stim_num is None:
-                        continue
+                    if 'Fidelity' in stim_rec.device_type:
+                        stim_num = stim_rec.meta['notebook']['USER_stim_num']
+                        if stim_num is None: ## happens when last sweep records a voltage offset - used to be labelled as 'unknown' device
+                            continue
                         
-                    stim = stim_log[str(int(stim_num))]
-                    pre_cell_name = str(stim['stimulationPoint']['name'])
+                        stim = stim_log[str(int(stim_num))]
+                        pre_cell_name = str(stim['stimulationPoint']['name'])
 
-                    post_cell_name = str('electrode_'+ str(post_rec.device_id))
+                        post_cell_name = str('electrode_'+ str(post_rec.device_id))
 
-                    pair_entry = pairs_by_cell_id.get((pre_cell_name, post_cell_name))
+                        pair_entry = pairs_by_cell_id.get((pre_cell_name, post_cell_name))
+
+                    elif 'led' in stim_rec.device_type.lower():
+                        pair_entry = None
 
                     # get all responses, regardless of the presence of a spike
                     responses = osra.get_photostim_responses(stim_rec, post_rec)
                     for resp in responses:
-                        if pair_entry is not None: ### when recordings are crappy cells are not always included in connections files so won't exist as pairs in the db
+                        if pair_entry is not None: ### when recordings are crappy cells are not always included in connections files so won't exist as pairs in the db, also led stimulations don't have pairs
                             if resp['ex_qc_pass']:
                                 pair_entry.n_ex_test_spikes += 1
                             if resp['in_qc_pass']:
