@@ -8,7 +8,7 @@ from acq4.util.DataManager import getDirHandle
 from neuroanalysis.data.experiment import AI_Experiment
 #from neuroanalysis.data.libraries import opto
 from neuroanalysis.data.loaders.opto_experiment_loader import OptoExperimentLoader
-from . import data_model
+from optoanalysis import data_model
 
 ##### TODO: GO BACK TO EXPERIEMENT BEING DEPENDENT ON SLICE -- IN ALL SLICES USE EXPERIMENTS.CSV TO COME UP WITH SLICE LIST
 

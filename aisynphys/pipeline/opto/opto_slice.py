@@ -1,5 +1,5 @@
 from aisynphys.pipeline.pipeline_module import DatabasePipelineModule
-from . import data_model
+from optoanalysis import data_model
 #from multipatch_analysis.database import slice_tables
 import os, glob, re, pickle, time, csv
 from aisynphys import config, lims, constants
