@@ -5,7 +5,7 @@ For generating a DB table describing short term dynamics.
 """
 from __future__ import print_function, division
 
-import os
+import os, logging
 import numpy as np
 from collections import OrderedDict
 from ...util import timestamp_to_datetime
@@ -23,10 +23,11 @@ class DynamicsPipelineModule(MultipatchPipelineModule):
     
     @classmethod
     def create_db_entries(cls, job, session):
+        logger = logging.getLogger(__name__)
         db = job['database']
         job_id = job['job_id']
+        logger.debug("Processing job %s", job_id)
 
-        delays = [125, 250, 500, 1000, 2000, 4000]
         # Load experiment from DB
         expt = db.experiment_from_timestamp(job_id, session=session)
         for pair in expt.pairs.values():
@@ -35,7 +36,9 @@ class DynamicsPipelineModule(MultipatchPipelineModule):
             
             dynamics = generate_pair_dynamics(pair, db, session)
             session.add(dynamics)
-        
+            logger.debug("Finished dynamics for pair %s", pair)
+        session.commit()
+                    
     def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.
         

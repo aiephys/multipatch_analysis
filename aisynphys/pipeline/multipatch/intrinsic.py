@@ -5,6 +5,7 @@ For generating a table that describes cell intrinisic properties
 """
 from __future__ import print_function, division
 
+import traceback, sys
 import numpy as np   
 from ipfx.data_set_features import extractors_for_sweeps
 from ipfx.stimulus_protocol_analysis import LongSquareAnalysis
@@ -21,21 +22,27 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
 
     @classmethod
     def create_db_entries(cls, job, session):
+        errors = []
         db = job['database']
         job_id = job['job_id']
 
         # Load experiment from DB
         expt = db.experiment_from_timestamp(job_id, session=session)
-        try:
-            nwb = expt.data
-        except:
-            return
+        nwb = expt.data
+        if nwb is None:
+            raise Exception('No NWB data for this experiment')
+        sweeps = nwb.contents
 
+        n_cells = len(expt.cell_list)
+        ipfx_fail = 0
         for cell in expt.cell_list:
+            qc_pass = True
             dev_id = cell.electrode.device_id
-            sweeps = nwb.contents
             target_v, if_curve = get_lp_sweeps(sweeps, dev_id)
             lp_sweeps = target_v + if_curve
+            if len(lp_sweeps) == 0:
+                errors.append('No long pulse sweeps for cell %d' % cell.ext_id)
+                continue
             recs = [rec[dev_id] for rec in lp_sweeps]
             min_pulse_dur = np.inf
             sweep_list = []
@@ -60,13 +67,22 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
                     continue
                 sweep_list.append(sweep)
             
+            if len(sweep_list) == 0:
+                errors.append('No sweeps passed qc for cell %d' % cell.ext_id)
+                continue
+
             sweep_set = SweepSet(sweep_list)    
             spx, spfx = extractors_for_sweeps(sweep_set, start=0, end=min_pulse_dur)
             lsa = LongSquareAnalysis(spx, spfx, subthresh_min_amp=-200)
             
             try:
                 analysis = lsa.analyze(sweep_set)
-            except:
+            except Exception:
+                tb = traceback.format_exception_only(sys.last_type, sys.last_value)
+                errors.append('Error running IPFX analysis for cell %d: %s' % (cell.ext_id, tb))
+                ipfx_fail += 1
+                if ipfx_fail == n_cells and n_cells > 1:
+                    raise Exception('All cells failed IPFX analysis')
                 continue
             spike_features = lsa.mean_features_first_spike(analysis['spikes_set'])
             up_down = spike_features['upstroke_downstroke_ratio']
@@ -91,6 +107,7 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
             conn = db.Intrinsic(cell_id=cell.id, **results)
             session.add(conn)
 
+        return errors
 
     def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.

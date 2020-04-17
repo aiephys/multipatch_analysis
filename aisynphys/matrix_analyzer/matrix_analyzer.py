@@ -124,7 +124,9 @@ class ExperimentFilter(object):
                 if acsf_recipes is not None:
                     acsf_recipes = []
                     [acsf_recipes.extend(self.acsf_keys[acsf]) for acsf in selected_acsf]
-            self.pairs = db.pair_query(project_name=project_names, acsf=acsf_recipes, session=session, internal=internal_recipes).all()
+            pair_records = db.pair_query(project_name=project_names, acsf=acsf_recipes, session=session, internal=internal_recipes, preload=['cell']).all()
+            self.pairs = [rec.Pair for rec in pair_records]
+            
         return self.pairs
 
     def invalidate_output(self):
@@ -482,26 +484,27 @@ class MatrixAnalyzer(object):
 
     def update_clicked(self):
         p = cProfile.Profile()
-        p.enable()
-        with pg.BusyCursor():
-            # self.analyzers_needed()
-            self.update_results()
-            pre_cell_classes = self.cell_class_filter.get_pre_or_post_classes('presynaptic')
-            post_cell_classes = self.cell_class_filter.get_pre_or_post_classes('postsynaptic')
-            self.matrix_display.update_matrix_display(self.results, self.group_results, self.cell_groups, self.field_map, pre_cell_classes=pre_cell_classes, post_cell_classes=post_cell_classes)
-            self.hist_plot.matrix_histogram(self.results, self.group_results, self.matrix_display.matrix_display_filter.colorMap, self.field_map)
-            self.element_scatter.set_data(self.group_results)
-            self.pair_scatter.set_data(self.results)
-            self.dist_plot = self.distance_plot.plot_distance(self.results, color=(128, 128, 128), name='All Connections', suppress_scatter=True)
-            if self.main_window.matrix_widget.matrix is not None:
-                self.display_matrix_element_reset()
-        p.disable()
-        # p.print_stats(sort='cumulative')
+        # p.enable()
+        try:
+            with pg.BusyCursor():
+                # self.analyzers_needed()
+                self.update_results()
+                pre_cell_classes = self.cell_class_filter.get_pre_or_post_classes('presynaptic')
+                post_cell_classes = self.cell_class_filter.get_pre_or_post_classes('postsynaptic')
+                self.matrix_display.update_matrix_display(self.results, self.group_results, self.cell_groups, self.field_map, pre_cell_classes=pre_cell_classes, post_cell_classes=post_cell_classes)
+                self.hist_plot.matrix_histogram(self.results, self.group_results, self.matrix_display.matrix_display_filter.colorMap, self.field_map)
+                self.element_scatter.set_data(self.group_results)
+                self.pair_scatter.set_data(self.results)
+                self.dist_plot = self.distance_plot.plot_distance(self.results, color=(128, 128, 128), name='All Connections', suppress_scatter=True)
+                if self.main_window.matrix_widget.matrix is not None:
+                    self.display_matrix_element_reset()
+        finally:
+            p.disable()
+            # p.print_stats(sort='cumulative')
 
     def update_results(self):
         # Select pairs 
         self.pairs = self.experiment_filter.get_pair_list(self.session)
-        
 
         # Group all cells by selected classes
         self.cell_groups, self.cell_classes = self.cell_class_filter.get_cell_groups(self.pairs)

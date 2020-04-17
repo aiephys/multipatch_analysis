@@ -27,7 +27,7 @@ class ExperimentPipelineModule(MultipatchPipelineModule):
         all_expts = cache.list_experiments()
         site_path = all_expts[job_id]
 
-        ignore_file = os.path.join(site_path, 'ignore')
+        ignore_file = os.path.join(site_path, 'ignore.txt')
         if os.path.exists(ignore_file):
             err = open(ignore_file).read()
             raise Exception("Ignoring experiment %s: %s" % (job_id, err))
@@ -103,7 +103,11 @@ class ExperimentPipelineModule(MultipatchPipelineModule):
 
             if elec.cell is not None:
                 cell = elec.cell
-                cell_meta = {'lims_specimen_id': lims_cell_ids.get(cell.cell_id)}
+                transgenic_class = {True:'ex', False:'in'}.get(cell.is_excitatory, None)
+                cell_meta = {
+                    'lims_specimen_id': lims_cell_ids.get(cell.cell_id),
+                    'transgenic_cell_class': transgenic_class,
+                }
 
                 cell_entry = db.Cell(
                     experiment=expt_entry,
@@ -111,7 +115,8 @@ class ExperimentPipelineModule(MultipatchPipelineModule):
                     ext_id=cell.cell_id,
                     cre_type=cell.cre_type,
                     target_layer=cell.target_layer,
-                    is_excitatory=cell.is_excitatory,
+                    cell_class=None,   # cell class fields get filled in later
+                    cell_class_nonsynaptic=None,
                     depth=cell.depth,
                     position=cell.position,
                     meta=cell_meta
@@ -120,6 +125,7 @@ class ExperimentPipelineModule(MultipatchPipelineModule):
                 cell_entries[cell] = cell_entry
 
         # create pairs
+        pair_entries = {}
         for pair in expt.pairs.values():
             pre_cell_entry = cell_entries[pair.pre_cell]
             post_cell_entry = cell_entries[pair.post_cell]
@@ -134,8 +140,13 @@ class ExperimentPipelineModule(MultipatchPipelineModule):
                 n_in_test_spikes=0,
                 distance=pair.distance,
             )
+            pair_entries[pre_cell_entry, post_cell_entry] = pair_entry
             session.add(pair_entry)
-        
+
+        # fill in reciprocal links
+        for (pre_cell, post_cell), pair_entry in pair_entries.items():
+            pair_entry.reciprocal = pair_entries[post_cell, pre_cell]
+
     def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.
         

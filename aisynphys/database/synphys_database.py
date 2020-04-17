@@ -1,6 +1,6 @@
 import datetime
+from sqlalchemy.orm import aliased, contains_eager, selectinload
 from collections import OrderedDict
-from sqlalchemy.orm import aliased
 from .database import Database
 from .schema import schema_version, default_sample_rate
 from ..synphys_cache import get_db_path, list_db_versions
@@ -143,7 +143,9 @@ class SynphysDatabase(Database):
         session = session or self.default_session
         return session.query(self.Experiment).all()
 
-    def pair_query(self, pre_class=None, post_class=None, synapse=None, synapse_type=None, electrical=None, project_name=None, acsf=None, age=None, species=None, distance=None, internal=None, session=None):
+    def pair_query(self, pre_class=None, post_class=None, synapse=None, synapse_type=None, electrical=None, 
+                   project_name=None, acsf=None, age=None, species=None, distance=None, internal=None, 
+                   preload=(), session=None):
         """Generate a query for selecting pairs from the database.
 
         Parameters
@@ -171,26 +173,28 @@ class SynphysDatabase(Database):
             (min, max) intersomatic distance in meters
         internal : str | list | None
             Electrode internal solution recipe name(s)
-        
+        preload : list
+            List of strings specifying resources to preload along with the queried pairs. 
+            This can speed up performance in cases where these would otherwise be 
+            individually queried later on. Options are "cell" (includes cell, morphology, and patch_seq),
+            "synapse" (includes synapse, resting_statem dynamics, and synapse_prediction).
         """
         session = session or self.default_session
         pre_cell = aliased(self.Cell, name='pre_cell')
         post_cell = aliased(self.Cell, name='post_cell')
         pre_morphology = aliased(self.Morphology, name='pre_morphology')
         post_morphology = aliased(self.Morphology, name='post_morphology')
+        pre_patch_seq = aliased(self.PatchSeq, name='pre_patch_seq')
+        post_patch_seq = aliased(self.PatchSeq, name='post_patch_seq')
         query = session.query(
             self.Pair,
-            # pre_cell,
-            # post_cell,
-            # pre_morphology,
-            # post_morphology,
-            # Experiment,
-            # SynapsePrediction,
         )
         query = query.join(pre_cell, pre_cell.id==self.Pair.pre_cell_id)
         query = query.join(post_cell, post_cell.id==self.Pair.post_cell_id)
         query = query.outerjoin(pre_morphology, pre_morphology.cell_id==pre_cell.id)
         query = query.outerjoin(post_morphology, post_morphology.cell_id==post_cell.id)
+        query = query.outerjoin(pre_patch_seq, pre_patch_seq.cell_id==pre_cell.id)
+        query = query.outerjoin(post_patch_seq, post_patch_seq.cell_id==post_cell.id)
         query = query.join(self.Experiment, self.Pair.experiment_id==self.Experiment.id)
         query = query.outerjoin(self.Slice, self.Experiment.slice_id==self.Slice.id) ## don't want to drop all pairs if we don't have slice or connection strength entries
         query = query.outerjoin(self.SynapsePrediction)
@@ -244,6 +248,35 @@ class SynphysDatabase(Database):
                 query = query.filter(self.Experiment.internal==internal)
             else:
                 query = query.filter(self.Experiment.internal.in_(internal))
+        
+        if 'cell' in preload:
+            query = query.add_entity(pre_cell)
+            query = query.add_entity(post_cell)
+            query = query.add_entity(pre_morphology)
+            query = query.add_entity(post_morphology)
+            query = query.add_entity(pre_patch_seq)
+            query = query.add_entity(post_patch_seq)
+            query = query.options(
+                contains_eager(self.Pair.pre_cell, alias=pre_cell), 
+                contains_eager(self.Pair.post_cell, alias=post_cell), 
+                contains_eager(pre_cell.morphology, alias=pre_morphology), 
+                contains_eager(post_cell.morphology, alias=post_morphology), 
+                contains_eager(pre_cell.patch_seq, alias=pre_patch_seq), 
+                contains_eager(post_cell.patch_seq, alias=post_patch_seq), 
+            )
+
+        if 'synapse' in preload:
+            query = query.add_entity(self.Synapse)
+            query = query.options(
+                contains_eager(self.Pair.synapse),
+                selectinload(self.Pair.resting_state_fit), 
+                selectinload(self.Pair.dynamics), 
+                selectinload(self.Pair.synapse_prediction), 
+            )
+
+        # package the aliased cells
+        query.pre_cell = pre_cell
+        query.post_cell = post_cell
 
         return query
 
@@ -253,7 +286,7 @@ class SynphysDatabase(Database):
         """
         if pair_query_args is None:
             pair_query_args = {}
-        results = OrderedDict()
+
         pairs = None
         for pre_name, pre_class in pre_classes.items():
             for post_name, post_class in post_classes.items():

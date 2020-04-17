@@ -1,10 +1,10 @@
-import os, glob, re, time
+import os, glob, re, time, struct, hashlib
 import numpy as np
 from datetime import datetime
 from collections import OrderedDict
 from acq4.util.DataManager import getDirHandle
 from ... import config, lims, qc
-from ...util import timestamp_to_datetime
+from ...util import timestamp_to_datetime, datetime_to_timestamp
 from ...data import Experiment
 from .pipeline_module import MultipatchPipelineModule
 from .experiment import ExperimentPipelineModule
@@ -44,6 +44,8 @@ class DatasetPipelineModule(MultipatchPipelineModule):
         path = os.path.join(config.synphys_data, expt_entry.storage_path)
         expt = Experiment(path)
         nwb = expt.data
+        
+        last_stim_pulse_time = {}
         
         # Load all data from NWB into DB
         for srec in nwb.contents:
@@ -128,7 +130,10 @@ class DatasetPipelineModule(MultipatchPipelineModule):
                 for i,pulse in enumerate(pulses):
                     # Record information about all pulses, including test pulse.
                     t0, t1 = pulse.meta['pulse_edges']
-                    resampled = pulse['primary'].resample(sample_rate=20000)
+                    resampled = pulse['primary'].resample(sample_rate=db.default_sample_rate)
+                    clock_time = t0 + datetime_to_timestamp(rec_entry.start_time)
+                    prev_pulse_dt = clock_time - last_stim_pulse_time.get(rec.device_id, -np.inf)
+                    last_stim_pulse_time[rec.device_id] = clock_time
                     pulse_entry = db.StimPulse(
                         recording=rec_entry,
                         pulse_number=pulse.meta['pulse_n'],
@@ -137,6 +142,7 @@ class DatasetPipelineModule(MultipatchPipelineModule):
                         duration=t1-t0,
                         data=resampled.data,
                         data_start_time=resampled.t0,
+                        previous_pulse_dt=prev_pulse_dt,
                     )
                     session.add(pulse_entry)
                     pulse_entries[pulse.meta['pulse_n']] = pulse_entry
@@ -166,8 +172,32 @@ class DatasetPipelineModule(MultipatchPipelineModule):
             
             if not srec_has_mp_probes:
                 continue
-            
+
+            # collect and shuffle baseline chunks for each recording
+            baseline_chunks = {}
+            for post_dev in srec.devices:
+
+                base_dist = BaselineDistributor.get(srec[post_dev])
+                chunks = list(base_dist.baseline_chunks())
+                
+                # generate a different random shuffle for each combination pre,post device
+                # (we are not allowed to reuse the same baseline chunks for a particular pre-post pair,
+                # but it is ok to reuse them across pairs)
+                for pre_dev in srec.devices:
+                    # shuffle baseline chunks in a deterministic way:
+                    # convert expt_id/srec_id/pre/post into an integer seed
+                    seed_str = ("%s %s %s %s" % (job_id, srec.key, pre_dev, post_dev)).encode()
+                    seed = struct.unpack('I', hashlib.sha1(seed_str).digest()[:4])[0]
+                    rng = np.random.RandomState(seed)
+                    rng.shuffle(chunks)
+                    
+                    baseline_chunks[pre_dev, post_dev] = chunks[:]
+
+            baseline_qc_cache = {}
+            baseline_entry_cache = {}
+
             # import postsynaptic responses
+            unmatched = 0
             mpa = MultiPatchSyncRecAnalyzer(srec)
             for pre_dev in srec.devices:
                 for post_dev in srec.devices:
@@ -176,15 +206,8 @@ class DatasetPipelineModule(MultipatchPipelineModule):
 
                     # get all responses, regardless of the presence of a spike
                     responses = mpa.get_spike_responses(srec[pre_dev], srec[post_dev], align_to='pulse', require_spike=False)
+                    
                     for resp in responses:
-                        # base_entry = db.Baseline(
-                        #     recording=rec_entries[post_dev],
-                        #     start_index=resp['baseline_start'],
-                        #     stop_index=resp['baseline_stop'],
-                        #     data=resp['baseline'].resample(sample_rate=20000).data,
-                        #     mode=float_mode(resp['baseline'].data),
-                        # )
-                        # session.add(base_entry)
                         pair_entry = pairs_by_device_id.get((pre_dev, post_dev), None)
                         if pair_entry is None:
                             continue  # no data for one or both channels
@@ -192,8 +215,8 @@ class DatasetPipelineModule(MultipatchPipelineModule):
                             pair_entry.n_ex_test_spikes += 1
                         if resp['in_qc_pass']:
                             pair_entry.n_in_test_spikes += 1
-                            
-                        resampled = resp['response']['primary'].resample(sample_rate=20000)
+                        
+                        resampled = resp['response']['primary'].resample(sample_rate=db.default_sample_rate)
                         resp_entry = db.PulseResponse(
                             recording=rec_entries[post_dev],
                             stim_pulse=all_pulse_entries[pre_dev][resp['pulse_n']],
@@ -205,31 +228,52 @@ class DatasetPipelineModule(MultipatchPipelineModule):
                             meta=None if resp['ex_qc_pass'] and resp['in_qc_pass'] else {'qc_failures': resp['qc_failures']},
                         )
                         session.add(resp_entry)
+
+                        # find a baseline chunk from this recording with compatible qc metrics
+                        got_baseline = False
+                        for i, (start, stop) in enumerate(baseline_chunks[pre_dev, post_dev]):
+                            key = (post_dev, start, stop)
+
+                            # pull data and run qc if needed
+                            if key not in baseline_qc_cache:
+                                data = srec[post_dev]['primary'].time_slice(start, stop).resample(sample_rate=db.default_sample_rate).data
+                                ex_qc_pass, in_qc_pass, qc_failures = qc.pulse_response_qc_pass(srec[post_dev], [start, stop], None, [])
+                                baseline_qc_cache[key] = (data, ex_qc_pass, in_qc_pass)
+                            else:
+                                (data, ex_qc_pass, in_qc_pass) = baseline_qc_cache[key]
+
+                            if resp_entry.ex_qc_pass is True and ex_qc_pass is not True:
+                                continue
+                            elif resp_entry.in_qc_pass is True and in_qc_pass is not True:
+                                continue
+                            else:
+                                got_baseline = True
+                                baseline_chunks[pre_dev, post_dev].pop(i)
+                                break
+
+                        if not got_baseline:
+                            # no matching baseline available
+                            unmatched += 1
+                            continue
+
+                        if key not in baseline_entry_cache:
+                            # create a db record for this baseline chunk if it has not already appeared elsewhere
+                            base_entry = db.Baseline(
+                                recording=rec_entries[post_dev],
+                                data=data,
+                                data_start_time=start,
+                                mode=float_mode(data),
+                                ex_qc_pass=ex_qc_pass,
+                                in_qc_pass=in_qc_pass,
+                                meta=None if ex_qc_pass is True and in_qc_pass is True else {'qc_failures': qc_failures},
+                            )
+                            session.add(base_entry)
+                            baseline_entry_cache[key] = base_entry
                         
-            # generate up to 20 baseline snippets for each recording
-            for dev in srec.devices:
-                rec = srec[dev]
-                dist = BaselineDistributor.get(rec)
-                for i in range(20):
-                    base = dist.get_baseline_chunk(20e-3)
-                    if base is None:
-                        # all out!
-                        break
-                    start, stop = base
-                    data = rec['primary'].time_slice(start, stop).resample(sample_rate=20000).data
+                        resp_entry.baseline = baseline_entry_cache[key]
 
-                    ex_qc_pass, in_qc_pass, qc_failures = qc.pulse_response_qc_pass(rec, [start, stop], None, [])
-
-                    base_entry = db.Baseline(
-                        recording=rec_entries[dev],
-                        data=data,
-                        data_start_time=start,
-                        mode=float_mode(data),
-                        ex_qc_pass=ex_qc_pass,
-                        in_qc_pass=in_qc_pass,
-                        meta=None if ex_qc_pass is True and in_qc_pass is True else {'qc_failures': qc_failures},
-                    )
-                    session.add(base_entry)
+            if unmatched > 0:
+                print("%s %s: %d pulse responses without matched baselines" % (job_id, srec, unmatched))
         
     def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.

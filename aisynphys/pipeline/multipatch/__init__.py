@@ -24,7 +24,7 @@ class MultipatchPipeline(Pipeline):
         DatasetPipelineModule,
         IntrinsicPipelineModule,
         PatchSeqPipelineModule,
-        # MorphologyPipelineModule,
+        MorphologyPipelineModule,
         SynapsePipelineModule,
         GapJunctionPipelineModule,
         PulseResponsePipelineModule,

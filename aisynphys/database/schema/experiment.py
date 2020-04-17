@@ -21,6 +21,8 @@ class ExperimentBase(object):
 
     @property
     def nwb_file(self):
+        if self.ephys_file is None:
+            return None
         if config.synphys_data is not None:
             # Return path from local file repo
             return os.path.join(config.synphys_data, self.storage_path, self.ephys_file)
@@ -37,7 +39,10 @@ class ExperimentBase(object):
 
         if not hasattr(self, '_data'):
             from ...data import MultiPatchDataset
-            self._data = MultiPatchDataset(self.nwb_file)
+            if self.nwb_file is None:
+                self._data = None
+            else:
+                self._data = MultiPatchDataset(self.nwb_file)
         return self._data
 
     @property
@@ -116,67 +121,6 @@ Electrode.experiment = relationship(Experiment, back_populates="electrodes")
 
 
 class CellBase(object):
-    def _init_on_load(self):
-        self._cell_class = -1
-        self._cell_class_nonsynaptic = -1
-
-    @property
-    def cell_class(self):
-        """Cell class "ex" or "in" determined by synaptic current, cre type, or morphology.
-
-        This property makes use of synaptic currents to define cell class; it should _not_
-        be used when measuring connection probability.
-        """
-        if self._cell_class != -1:
-            return self._cell_class
-        
-        cls = self.cell_class_nonsynaptic
-        if cls is not None:
-            self._cell_class = cls
-            return cls
-        
-        syn_type = None
-        for pair in self.experiment.pair_list:
-            if pair.pre_cell is not self:
-                continue
-            if pair.has_synapse:
-                typ = pair.synapse.synapse_type
-                if typ is not None:
-                    if syn_type is None:
-                        syn_type = typ
-                    elif syn_type != typ:
-                        # cell has mixed in/ex outputs (!!)
-                        return None
-        
-        self._cell_class = syn_type
-        return syn_type        
-        
-    @property
-    def cell_class_nonsynaptic(self):
-        """Cell class "ex" or "in" determined by cre type or morphology.
-        
-        Unlike `cell_class`, this property excludes synaptic currents as a determinant
-        so that it can be used in measurements of connectivity.
-        """
-        if self._cell_class_nonsynaptic != -1:
-            return self._cell_class_nonsynaptic
-
-        cre = self.cre_type
-        if self.morphology is None:
-            pyr = None
-            dendrite = None
-        else:
-            pyr = self.morphology.pyramidal
-            dendrite = self.morphology.dendrite_type
-        if cre in constants.EXCITATORY_CRE_TYPES or pyr is True or dendrite == 'spiny':
-            self._cell_class_nonsynaptic = 'ex'
-        elif cre in constants.INHIBITORY_CRE_TYPES or pyr is False or dendrite == 'aspiny':
-            self._cell_class_nonsynaptic = 'in'
-        else:
-            self._cell_class_nonsynaptic = None
-        
-        return self._cell_class_nonsynaptic
-        
     def __repr__(self):
         uid = getattr(self.experiment, 'ext_id', None)
         if uid is None or uid == '':
@@ -196,7 +140,10 @@ Cell = make_table(
         ('target_layer', 'str', 'The intended cortical layer for this cell (used as a placeholder until the actual layer call is made)', {'index': True}),
         ('position', 'object', '3D location of this cell in the arbitrary coordinate system of the experiment'),
         ('depth', 'float', 'Depth of the cell (in m) from the cut surface of the slice.'),
-        ('is_excitatory', 'bool', 'True if the cell is determined to be excitatory by synaptic current, cre type, or morphology', {'index': True}),
+        ('cell_class', 'str', 'Cell class "ex" or "in" determined by synaptic current, cre type, or morphology. '
+         'This property makes use of synaptic currents to define cell class; it should _not_ be used when measuring connection probability.', {'index': True}),
+        ('cell_class_nonsynaptic', 'str', 'Cell class "ex" or "in" determined by cre type or morphology. '
+         'Unlike `cell_class`, this property excludes synaptic currents as a determinant so that it can be used in measurements of connectivity.', {'index': True}),
         # ('patch_start', 'float', 'Time at which this cell was first patched'),
         # ('patch_stop', 'float', 'Time at which the electrode was detached from the cell'),
         # ('seal_resistance', 'float', 'The seal resistance recorded for this cell immediately before membrane rupture'),
@@ -212,12 +159,6 @@ Cell.electrode = relationship(Electrode, back_populates="cell", single_parent=Tr
 
 
 class PairBase(object):
-    @property
-    def reciprocal(self):
-        """The pair that is reciprocal to this one (with pre/post cells in the opposite order)
-        """
-        return self.experiment.pairs.get((self.post_cell.ext_id, self.pre_cell.ext_id))
-        
     def __repr__(self):
         uid = getattr(self.experiment, 'ext_id', None)
         if uid is None or uid == '':
@@ -238,10 +179,14 @@ Pair = make_table(
         ('n_ex_test_spikes', 'int', 'Number of QC-passed spike-responses recorded for this pair at excitatory holding potential', {'index': True}),
         ('n_in_test_spikes', 'int', 'Number of QC-passed spike-responses recorded for this pair at inhibitory holding potential', {'index': True}),
         ('distance', 'float', 'Distance between somas (in m)'),
+        ('reciprocal_id', 'pair.id', 'ID of the reciprocal to this cell pair (the pair with pre_cell and post_cell swapped)', {'index': True}),
     ]
 )
 
 Experiment.pair_list = relationship(Pair, back_populates="experiment", cascade='save-update,merge,delete', single_parent=True)
 Pair.experiment = relationship(Experiment, back_populates="pair_list")
-Pair.pre_cell = relationship(Cell, foreign_keys=[Pair.pre_cell_id])
-Pair.post_cell = relationship(Cell, foreign_keys=[Pair.post_cell_id])
+Pair.pre_cell = relationship(Cell, foreign_keys=[Pair.pre_cell_id], uselist=False)
+Pair.post_cell = relationship(Cell, foreign_keys=[Pair.post_cell_id], uselist=False)
+# docs on handling mutually-dependent relationships: 
+# https://docs.sqlalchemy.org/en/13/orm/relationship_persistence.html#post-update
+Pair.reciprocal = relationship(Pair, foreign_keys=[Pair.reciprocal_id], uselist=False, post_update=True)

@@ -5,71 +5,80 @@ Analyses that measure the strength of synaptic connections.
 """
 from __future__ import print_function, division
 
-import sys, multiprocessing, time
+import sys, multiprocessing, time, warnings
 
 import numpy as np
 import pyqtgraph as pg
 
 from neuroanalysis.data import TSeries
 from neuroanalysis import filter
-from neuroanalysis.event_detection import exp_deconvolve, exp_reconvolve
-from neuroanalysis.fitting import fit_psp
+from neuroanalysis.event_detection import exp_deconvolve, exp_reconvolve, exp_deconv_psp_params
+from neuroanalysis.fitting import fit_psp, Psp, SearchFit, fit_scale_offset
 from neuroanalysis.baseline import float_mode
 
 from .database import default_db as db
 
 
-def measure_response(rec, baseline_rec):
+def measure_response(pr):
     """Curve fit a single pulse response to measure its amplitude / kinetics.
     
     Uses the known latency and kinetics of the synapse to seed the fit.
     Optionally fit a baseline at the same time for noise measurement.
+    
+    Parameters
+    ----------
+    pr : PulseResponse
     """
-    if rec.clamp_mode == 'ic':
-        rise_time = rec.psp_rise_time
-        decay_tau = rec.psp_decay_tau
+    syn = pr.pair.synapse
+    pcr = pr.recording.patch_clamp_recording
+    if pcr.clamp_mode == 'ic':
+        rise_time = syn.psp_rise_time
+        decay_tau = syn.psp_decay_tau
     else:
-        rise_time = rec.psc_rise_time
-        decay_tau = rec.psc_decay_tau
+        rise_time = syn.psc_rise_time
+        decay_tau = syn.psc_decay_tau
                 
     # make sure all parameters are available
-    for v in [rec.spike_time, rec.latency, rise_time, decay_tau]:
-        if v is None or rec.latency is None or not np.isfinite(v):
+    for v in [pr.stim_pulse.first_spike_time, syn.latency, rise_time, decay_tau]:
+        if v is None or syn.latency is None or not np.isfinite(v):
+            # print("bad:", pr.stim_pulse.first_spike_time, syn.latency, rise_time, decay_tau)
             return None, None
     
-    data = TSeries(rec.data, t0=rec.rec_start-rec.spike_time, sample_rate=db.default_sample_rate)
+    data = pr.get_tseries('post', align_to='spike')
 
     # decide whether/how to constrain the sign of the fit
-    if rec.synapse_type == 'ex':
+    if syn.synapse_type == 'ex':
         sign = 1
-    elif rec.synapse_type == 'in':
-        if rec.baseline_potential > -60e-3:
+    elif syn.synapse_type == 'in':
+        if pcr.baseline_potential > -60e-3:
             sign = -1
         else:
             sign = 0
     else:
         sign = 0
-    if rec.clamp_mode == 'vc':
+    if pcr.clamp_mode == 'vc':
         sign = -sign
 
     # fit response region
-    response_fit = fit_psp(data, 
-        search_window=rec.latency + np.array([-100e-6, 100e-6]), 
-        clamp_mode=rec.clamp_mode, 
+    response_fit = fit_psp(data,
+        search_window=syn.latency + np.array([-100e-6, 100e-6]), 
+        clamp_mode=pcr.clamp_mode, 
         sign=sign,
         baseline_like_psp=True, 
         init_params={'rise_time': rise_time, 'decay_tau': decay_tau},
         refine=False,
+        decay_tau_bounds=('fixed',),
+        rise_time_bounds=('fixed',),        
     )
         
     # fit baseline region
-    if baseline_rec is None:
+    baseline = pr.get_tseries('baseline', align_to='spike')
+    if baseline is None:
         baseline_fit = None
     else:
-        baseline = TSeries(baseline_rec.data, t0=data.t0, sample_rate=db.default_sample_rate)
-        baseline_fit = fit_psp(baseline, 
-            search_window=rec.latency + np.array([-100e-6, 100e-6]), 
-            clamp_mode=rec.clamp_mode, 
+        baseline_fit = fit_psp(baseline,
+            search_window=syn.latency + np.array([-100e-6, 100e-6]), 
+            clamp_mode=pcr.clamp_mode, 
             sign=sign, 
             baseline_like_psp=True, 
             init_params={'rise_time': rise_time, 'decay_tau': decay_tau},
@@ -77,6 +86,118 @@ def measure_response(rec, baseline_rec):
         )
 
     return response_fit, baseline_fit
+
+
+def measure_deconvolved_response(pr):
+    """Use exponential deconvolution and a curve fit to estimate the amplitude of a synaptic response.
+
+    Uses the known latency and kinetics of the synapse to constrain the fit.
+    Optionally fit a baseline at the same time for noise measurement.
+    
+    Parameters
+    ----------
+    pr : PulseResponse
+    """
+    syn = pr.pair.synapse
+    pcr = pr.recording.patch_clamp_recording
+    if pcr.clamp_mode == 'ic':
+        rise_time = syn.psp_rise_time
+        decay_tau = syn.psp_decay_tau
+        lowpass = 2000
+    else:
+        rise_time = syn.psc_rise_time
+        decay_tau = syn.psc_decay_tau
+        lowpass = 6000
+    
+    # make sure all parameters are available
+    for v in [pr.stim_pulse.first_spike_time, syn.latency, rise_time, decay_tau]:
+        if v is None or not np.isfinite(v):
+            return None, None
+
+    response_data = pr.get_tseries('post', align_to='spike')
+    baseline_data = pr.get_tseries('baseline', align_to='spike')
+
+    ret = []
+    for data in (response_data, baseline_data):
+        if data is None:
+            ret.append(None)
+            continue
+            
+        filtered = deconv_filter(data, None, tau=decay_tau, lowpass=lowpass, remove_artifacts=False, bsub=True)
+        
+        # chop down to the minimum we need to fit the deconvolved event.
+        # there's a tradeoff here -- to much data and we risk incorporating nearby spontaneous events; too little
+        # data and we get more noise in the fit to baseline
+        filtered = filtered.time_slice(syn.latency-1e-3, syn.latency + rise_time + 1e-3)
+        
+        # Deconvolving a PSP-like shape yields a narrower PSP-like shape with lower rise power.
+        # Guess the deconvolved time constants:
+        dec_amp, dec_rise_time, dec_rise_power, dec_decay_tau = exp_deconv_psp_params(amp=1, rise_time=rise_time, decay_tau=decay_tau, rise_power=2)
+        amp_ratio = 1 / dec_amp
+        
+        psp = Psp()
+
+        # Need to measure amplitude of exp-deconvolved events; two methods to pick from here:
+        # 1) Direct curve fitting using the expected deconvolved rise/decay time constants. This
+        #    allows some wiggle room in latency, but produces a weird butterfly-shaped background noise distribution.
+        # 2) Analytically calculate the scale/offset of a fixed template. Uses a fixed latency, but produces
+        #    a nice, normal-looking background noise distribution.
+
+        # Measure amplitude of deconvolved event by curve fitting:
+        # with warnings.catch_warnings():
+        #     warnings.simplefilter("ignore")
+        #     max_amp = filtered.data.max() - filtered.data.min()
+        #     fit = psp.fit(filtered.data, x=filtered.time_values, params={
+        #         'xoffset': (response_rec.latency, response_rec.latency-0.2e-3, response_rec.latency+0.5e-3),
+        #         'yoffset': (0, 'fixed'),
+        #         'amp': (0, -max_amp, max_amp),
+        #         'rise_time': (dec_rise_time, 'fixed'),
+        #         'decay_tau': (dec_decay_tau, 'fixed'),
+        #         'rise_power': (dec_rise_power, 'fixed'),
+        #     })
+        # reconvolved_amp = fit.best_values['amp'] * amp_ratio
+        
+        # fit = {
+        #     'xoffset': fit.best_values['xoffset'],
+        #     'yoffset': fit.best_values['yoffset'],
+        #     'amp': fit.best_values['amp'],
+        #     'rise_time': dec_rise_time,
+        #     'decay_tau': dec_decay_tau,
+        #     'rise_power': dec_rise_power,
+        #     'reconvolved_amp': reconvolved_amp,
+        # }
+
+        # Measure amplitude of deconvolved events by direct template match
+        template = psp.eval(
+            x=filtered.time_values, 
+            xoffset=syn.latency,
+            yoffset=0,
+            amp=1,
+            rise_time=dec_rise_time,
+            decay_tau=dec_decay_tau,
+            rise_power=dec_rise_power,
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            scale, offset = fit_scale_offset(filtered.data, template)
+
+        # calculate amplitude of reconvolved event -- tis is our best guess as to the
+        # actual event amplitude
+        reconvolved_amp = scale * amp_ratio
+        
+        fit = {
+            'xoffset': syn.latency,
+            'yoffset': offset,
+            'amp': scale,
+            'rise_time': dec_rise_time,
+            'decay_tau': dec_decay_tau,
+            'rise_power': 1,
+            'reconvolved_amp': reconvolved_amp,
+        }
+        
+        ret.append(fit)
+        
+    return ret
 
 
 def measure_peak(trace, sign, spike_time, pulse_times, spike_delay=1e-3, response_window=4e-3):
@@ -89,7 +210,7 @@ def measure_peak(trace, sign, spike_time, pulse_times, spike_delay=1e-3, respons
     response_stop = response_start + response_window
 
     # measure baseline from beginning of data until 50µs before pulse onset
-    baseline_start = 0
+    baseline_start = trace.t0
     baseline_stop = pulse_times[0] - 50e-6
 
     baseline = float_mode(trace.time_slice(baseline_start, baseline_stop).data)
@@ -148,85 +269,29 @@ def remove_crosstalk_artifacts(data, pulse_times):
     return filter.remove_artifacts(data, edges, window=100e-6)
 
 
-def response_query(session):
-    """
-    Build a query to get all pulse responses along with presynaptic pulse and spike timing
-    """
-    q = session.query(
-        db.PulseResponse.id.label('response_id'),        
-        db.PulseResponse.data,
-        db.PulseResponse.data_start_time.label('rec_start'),
-        db.StimPulse.onset_time.label('pulse_start'),
-        db.StimPulse.duration.label('pulse_dur'),
-        db.StimPulse.first_spike_time.label('spike_time'),
-        db.PatchClampRecording.clamp_mode,
-        db.PatchClampRecording.baseline_potential,
-        db.PulseResponse.ex_qc_pass,
-        db.PulseResponse.in_qc_pass,
-        db.Pair.has_synapse,
-        db.Synapse.latency,
-        db.Synapse.psp_rise_time,
-        db.Synapse.psp_decay_tau,
-        db.Synapse.psc_rise_time,
-        db.Synapse.psc_decay_tau,
-        db.Synapse.synapse_type,
-        db.Recording.id.label('recording_id'),
-    )
-    q = q.join(db.StimPulse, db.PulseResponse.stim_pulse)
-    q = q.join(db.Recording, db.PulseResponse.recording)
-    q = q.join(db.PatchClampRecording)
-    q = q.join(db.Pair, db.PulseResponse.pair)
-    q = q.join(db.Synapse, db.Pair.synapse)
-
-    return q
-
-
-def baseline_query(session):
-    """
-    Build a query to get all baseline responses
-    """
-    q = session.query(
-        db.Baseline.id.label('response_id'),
-        db.Baseline.data,
-        db.PatchClampRecording.clamp_mode,
-        db.Baseline.ex_qc_pass,
-        db.Baseline.in_qc_pass,
-        db.Recording.id.label('recording_id'),
-    )
-    q = q.join(db.Recording, db.Baseline.recording)
-    q = q.join(db.PatchClampRecording, db.PatchClampRecording.recording_id==db.Recording.id)
-
-    # return qc-failed records as well so we can verify qc is working
-    # q = q.filter(((db.Baseline.ex_qc_pass==True) | (db.Baseline.in_qc_pass==True)))
-
-    return q
-
-
-def analyze_response_strength(rec, source, remove_artifacts=False, deconvolve=True, lpf=True, bsub=True, lowpass=1000):
-    """Perform a standardized strength analysis on a record selected by response_query or baseline_query.
+def analyze_response_strength(pr, source, remove_artifacts=False, deconvolve=True, lpf=True, bsub=True, lowpass=1000):
+    """Perform a standardized strength analysis on a record selected by response_query.
 
     1. Determine timing of presynaptic stimulus pulse edges and spike
     2. Measure peak deflection on raw trace
     3. Apply deconvolution / artifact removal / lpf
     4. Measure peak deflection on deconvolved trace
     """
-    data = TSeries(rec.data, sample_rate=db.default_sample_rate)
     if source == 'pulse_response':
-        # Find stimulus pulse edges for artifact removal
-        start = rec.pulse_start - rec.rec_start
-        pulse_times = [start, start + rec.pulse_dur]
-        if rec.spike_time is None:
-            # these pulses failed QC, but we analyze them anyway to make all data visible
-            spike_time = 11e-3
-        else:
-            spike_time = rec.spike_time - rec.rec_start
+        data = pr.get_tseries('post', align_to='pulse')
     elif source == 'baseline':
-        # Fake stimulus information to ensure that background data receives
-        # the same filtering / windowing treatment
-        pulse_times = [10e-3, 12e-3]
-        spike_time = 11e-3
+        data = pr.get_tseries('baseline', align_to='pulse')
     else:
         raise ValueError("Invalid source %s" % source)
+    
+    if data is None:
+        return None
+            
+    pulse_times = data.meta['pulse_start'], data.meta['pulse_stop']
+    spike_time = data.meta['spike_time']
+    if spike_time is None:
+        # these pulses failed QC, but we analyze them anyway to make all data visible
+        spike_time = 1e-3
 
     results = {}
 
@@ -240,17 +305,18 @@ def analyze_response_strength(rec, source, remove_artifacts=False, deconvolve=Tr
     results['crosstalk'] = p2 - p1
 
     # crosstalk artifacts in VC are removed before deconvolution
-    if rec.clamp_mode == 'vc' and remove_artifacts is True:
+    pcr = pr.recording.patch_clamp_recording
+    if pcr.clamp_mode == 'vc' and remove_artifacts is True:
         data = remove_crosstalk_artifacts(data, pulse_times)
         remove_artifacts = False
 
     # Measure deflection on raw data
     results['pos_amp'], _ = measure_peak(data, '+', spike_time, pulse_times)
     results['neg_amp'], _ = measure_peak(data, '-', spike_time, pulse_times)
-
+    
     # Deconvolution / artifact removal / filtering
     if deconvolve:
-        tau = 15e-3 if rec.clamp_mode == 'ic' else 5e-3
+        tau = 15e-3 if pcr.clamp_mode == 'ic' else 5e-3
     else:
         tau = None
     dec_data = deconv_filter(data, pulse_times, tau=tau, lpf=lpf, remove_artifacts=remove_artifacts, bsub=bsub, lowpass=lowpass)

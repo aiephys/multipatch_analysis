@@ -136,13 +136,14 @@ class Experiment(object):
         """The timestamp of the most recently modified file in this experiment.
         """
         files = [
-            self.path,
+            self.path,  # note: checking for the date on the folder also accounts for deleted files.
             self.pipette_file,
             self.nwb_file,
             self.mosaic_file,
             os.path.join(self.path, '.index'),
             os.path.join(self.slice_path, '.index'),
             os.path.join(self.expt_path, '.index'),
+            os.path.join(self.expt_path, 'ignore.txt'),
         ]
         mtime = 0
         for file in files:
