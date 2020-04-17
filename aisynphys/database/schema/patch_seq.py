@@ -15,7 +15,7 @@ PatchSeq = make_table(
     ('nucleus', 'bool', 'Whether the nucleus was recovered from the cell', {'index': True}),
     ('patchseq_hash', 'str', 'Hash of patchseq results from amplification and mapping used for updating', {'index': True}),
     # These values are pulled from amplification report
-    ('result_BA', 'str', 'Pass/Fail', {'index': True}),
+    ('result_ba', 'str', 'Pass/Fail', {'index': True}),
     ('area_400_10000bp', 'float', 'Area (0-1) of amplified content in the 400-10,000 bp range which is an indication of intact RNA', {'index': True}),
     ('picogreen_yield', 'float', '(pg/ul)', {'index': True}),
     # These values come from mapping report

@@ -28,6 +28,13 @@ def get_amps(session, pair, clamp_mode='ic', get_data=False):
         db.PulseResponseStrength.pos_dec_latency,
         db.PulseResponseStrength.neg_dec_latency,
         db.PulseResponseStrength.crosstalk,
+        db.PulseResponseStrength.baseline_pos_amp,
+        db.PulseResponseStrength.baseline_neg_amp,
+        db.PulseResponseStrength.baseline_pos_dec_amp,
+        db.PulseResponseStrength.baseline_neg_dec_amp,
+        db.PulseResponseStrength.baseline_pos_dec_latency,
+        db.PulseResponseStrength.baseline_neg_dec_latency,
+        db.PulseResponseStrength.baseline_crosstalk,
         db.PulseResponse.ex_qc_pass,
         db.PulseResponse.in_qc_pass,
         db.PatchClampRecording.qc_pass,
@@ -67,72 +74,72 @@ def get_amps(session, pair, clamp_mode='ic', get_data=False):
     return recs
 
 
-def get_baseline_amps(session, pair, clamp_mode='ic', amps=None, get_data=True):
-    """Select records from baseline_response_strength table
+# def get_baseline_amps(session, pair, clamp_mode='ic', amps=None, get_data=True):
+#     """Select records from baseline_response_strength table
 
-    If *amps* is given (output from get_amps), then baseline records will be selected from the same
-    sweeps as the responses.
-    """
-    cols = [
-        db.BaselineResponseStrength.id,
-        db.BaselineResponseStrength.pos_amp,
-        db.BaselineResponseStrength.neg_amp,
-        db.BaselineResponseStrength.pos_dec_amp,
-        db.BaselineResponseStrength.neg_dec_amp,
-        db.BaselineResponseStrength.pos_dec_latency,
-        db.BaselineResponseStrength.neg_dec_latency,
-        db.BaselineResponseStrength.crosstalk,
-        db.Baseline.ex_qc_pass,
-        db.Baseline.in_qc_pass,
-        db.PatchClampRecording.qc_pass,
-        db.PatchClampRecording.clamp_mode,
-        db.PatchClampRecording.baseline_potential,
-        db.PatchClampRecording.baseline_current,
-        db.Recording.start_time.label('rec_start_time'),
-        db.Baseline.data_start_time.label('response_start_time'),
-    ]
-    if get_data:
-        cols.append(db.Baseline.data)
+#     If *amps* is given (output from get_amps), then baseline records will be selected from the same
+#     sweeps as the responses.
+#     """
+#     cols = [
+#         db.BaselineResponseStrength.id,
+#         db.BaselineResponseStrength.pos_amp,
+#         db.BaselineResponseStrength.neg_amp,
+#         db.BaselineResponseStrength.pos_dec_amp,
+#         db.BaselineResponseStrength.neg_dec_amp,
+#         db.BaselineResponseStrength.pos_dec_latency,
+#         db.BaselineResponseStrength.neg_dec_latency,
+#         db.BaselineResponseStrength.crosstalk,
+#         db.Baseline.ex_qc_pass,
+#         db.Baseline.in_qc_pass,
+#         db.PatchClampRecording.qc_pass,
+#         db.PatchClampRecording.clamp_mode,
+#         db.PatchClampRecording.baseline_potential,
+#         db.PatchClampRecording.baseline_current,
+#         db.Recording.start_time.label('rec_start_time'),
+#         db.Baseline.data_start_time.label('response_start_time'),
+#     ]
+#     if get_data:
+#         cols.append(db.Baseline.data)
         
-    q = session.query(*cols)
-    q = q.join(db.Baseline, db.BaselineResponseStrength.baseline)
-    q = q.join(db.Recording)
-    q = q.join(db.PatchClampRecording)
-    q = q.join(db.SyncRec)
-    q = q.join(db.Experiment)
+#     q = session.query(*cols)
+#     q = q.join(db.Baseline, db.BaselineResponseStrength.baseline)
+#     q = q.join(db.Recording)
+#     q = q.join(db.PatchClampRecording)
+#     q = q.join(db.SyncRec)
+#     q = q.join(db.Experiment)
     
-    filters = [
-        (db.Recording.electrode==pair.post_cell.electrode,),
-        (db.PatchClampRecording.clamp_mode==clamp_mode,),
-        # (db.PatchClampRecording.qc_pass==True,),
-    ]
-    for filter_args in filters:
-        q = q.filter(*filter_args)
+#     filters = [
+#         (db.Recording.electrode==pair.post_cell.electrode,),
+#         (db.PatchClampRecording.clamp_mode==clamp_mode,),
+#         # (db.PatchClampRecording.qc_pass==True,),
+#     ]
+#     for filter_args in filters:
+#         q = q.filter(*filter_args)
     
-    # should result in chronological order
-    q = q.order_by(db.Recording.start_time)
+#     # should result in chronological order
+#     q = q.order_by(db.Recording.start_time)
 
-    # if amps is not None:
-    #     q = q.limit(len(amps))
+#     # if amps is not None:
+#     #     q = q.limit(len(amps))
 
-    df = pandas.read_sql_query(q.statement, q.session.bind)
-    recs = df.to_records()
+#     df = pandas.read_sql_query(q.statement, q.session.bind)
+#     recs = df.to_records()
 
-    if amps is not None:
-        # for each record returned from get_amps, return the nearest baseline record
-        mask = np.zeros(len(recs), dtype=bool)
-        amp_times = amps['rec_start_time'].astype(float)*1e-9 + amps['response_start_time']
-        base_times = recs['rec_start_time'].astype(float)*1e-9 + recs['response_start_time']
-        for i in range(len(amps)):
-            order = np.argsort(np.abs(base_times - amp_times[i]))
-            for j in order:
-                if mask[j]:
-                    continue
-                mask[j] = True
-                break
-        recs = recs[mask]
+#     if amps is not None:
+#         # for each record returned from get_amps, return the nearest baseline record
+#         mask = np.zeros(len(recs), dtype=bool)
+#         amp_times = amps['rec_start_time'].astype(float)*1e-9 + amps['response_start_time']
+#         base_times = recs['rec_start_time'].astype(float)*1e-9 + recs['response_start_time']
+#         for i in range(len(amps)):
+#             order = np.argsort(np.abs(base_times - amp_times[i]))
+#             for j in order:
+#                 if mask[j]:
+#                     continue
+#                 mask[j] = True
+#                 break
+#         recs = recs[mask]
 
-    return recs
+#     return recs
 
 
 def join_pulse_response_to_expt(query):
@@ -180,14 +187,12 @@ def analyze_pair_connectivity(amps, sign=None):
     Input must have the following structure::
     
         amps = {
-            ('ic', 'fg'): recs, 
-            ('ic', 'bg'): recs,
-            ('vc', 'fg'): recs, 
-            ('vc', 'bg'): recs,
+            ('ic'): recs, 
+            ('vc'): recs, 
         }
         
     Where each *recs* must be a structured array containing fields as returned
-    by get_amps() and get_baseline_amps().
+    by get_amps().
     
     The overall strategy here is:
     
@@ -218,23 +223,20 @@ def analyze_pair_connectivity(amps, sign=None):
     amp_means = {}
     amp_diffs = {}
     for clamp_mode in ('ic', 'vc'):
-        clamp_mode_fg = amps[clamp_mode, 'fg']
-        clamp_mode_bg = amps[clamp_mode, 'bg']
-        if (len(clamp_mode_fg) == 0 or len(clamp_mode_bg) == 0):
+        clamp_mode_amps = amps[clamp_mode]
+        if len(clamp_mode_amps) == 0:
             continue
         for sign in ('pos', 'neg'):
             # Separate into positive/negative tests and filter out responses that failed qc
             qc_field = {'vc': {'pos': 'in_qc_pass', 'neg': 'ex_qc_pass'}, 'ic': {'pos': 'ex_qc_pass', 'neg': 'in_qc_pass'}}[clamp_mode][sign]
-            fg = clamp_mode_fg[clamp_mode_fg[qc_field]]
-            bg = clamp_mode_bg[clamp_mode_bg[qc_field]]
-            qc_amps[sign, clamp_mode, 'fg'] = fg
-            qc_amps[sign, clamp_mode, 'bg'] = bg
-            if (len(fg) == 0 or len(bg) == 0):
+            fg = clamp_mode_amps[clamp_mode_amps[qc_field]]
+            qc_amps[sign, clamp_mode] = fg
+            if len(fg) == 0:
                 continue
             
             # Measure some statistics from these records
+            bg = fg['baseline_' + sign + '_dec_amp']
             fg = fg[sign + '_dec_amp']
-            bg = bg[sign + '_dec_amp']
             pval = scipy.stats.ks_2samp(fg, bg).pvalue
             ks_pvals[(sign, clamp_mode)] = pval
             # we could ensure that the average amplitude is in the right direction:
@@ -274,21 +276,20 @@ def analyze_pair_connectivity(amps, sign=None):
     # compute the rest of statistics for only positive or negative deflections
     for clamp_mode in ('ic', 'vc'):
         sign = signs[clamp_mode]
-        fg = qc_amps.get((sign, clamp_mode, 'fg'))
-        bg = qc_amps.get((sign, clamp_mode, 'bg'))
-        if fg is None or bg is None or len(fg) == 0 or len(bg) == 0:
+        fg = qc_amps.get((sign, clamp_mode))
+        if fg is None or len(fg) == 0:
             fields[clamp_mode + '_n_samples'] = 0
             continue
         
         fields[clamp_mode + '_n_samples'] = len(fg)
         fields[clamp_mode + '_crosstalk_mean'] = np.mean(fg['crosstalk'])
-        fields[clamp_mode + '_base_crosstalk_mean'] = np.mean(bg['crosstalk'])
+        fields[clamp_mode + '_base_crosstalk_mean'] = np.mean(fg['baseline_crosstalk'])
         
         # measure mean, stdev, and statistical differences between
         # fg and bg for each measurement
         for val, field in [('amp', 'amp'), ('deconv_amp', 'dec_amp'), ('latency', 'dec_latency')]:
             f = fg[sign + '_' + field]
-            b = bg[sign + '_' + field]
+            b = fg['baseline_' + sign + '_' + field]
             fields[clamp_mode + '_' + val + '_mean'] = np.mean(f)
             fields[clamp_mode + '_' + val + '_stdev'] = np.std(f)
             fields[clamp_mode + '_base_' + val + '_mean'] = np.mean(b)
@@ -305,7 +306,6 @@ def analyze_pair_connectivity(amps, sign=None):
         ### generate the average response and psp fit
         
         # collect all bg and fg traces
-        # bg_traces = TSeriesList([TSeries(data, sample_rate=db.default_sample_rate) for data in amps[clamp_mode, 'bg']['data']])
         fg_traces = TSeriesList()
         for rec in fg:
             if not np.isfinite(rec['max_slope_time']) or rec['max_slope_time'] is None:
@@ -315,7 +315,11 @@ def analyze_pair_connectivity(amps, sign=None):
             fg_traces.append(trace)
         
         # get averages
-        # bg_avg = bg_traces.mean()        
+        
+        if len(fg_traces) == 0:
+            continue
+            
+        # bg_avg = bg_traces.mean()
         fg_avg = fg_traces.mean()
         base_rgn = fg_avg.time_slice(-6e-3, 0)
         base = float_mode(base_rgn.data)

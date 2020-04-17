@@ -7,8 +7,8 @@ import pyqtgraph as pg
 from collections import OrderedDict
 from ... import config
 from .pipeline_module import MultipatchPipelineModule
-from .experiment import ExperimentPipelineModule
 from .dataset import DatasetPipelineModule
+from .morphology import MorphologyPipelineModule
 import aisynphys.data.data_notes_db as notes_db
 from ...avg_response_fit import get_pair_avg_fits
 
@@ -17,7 +17,7 @@ class SynapsePipelineModule(MultipatchPipelineModule):
     """Generate fit to response average for all pairs per experiment
     """
     name = 'synapse'
-    dependencies = [ExperimentPipelineModule, DatasetPipelineModule]
+    dependencies = [DatasetPipelineModule, MorphologyPipelineModule]
     table_group = ['synapse', 'avg_response_fit']
     
     @classmethod
@@ -27,6 +27,9 @@ class SynapsePipelineModule(MultipatchPipelineModule):
         expt_id = job['job_id']
         
         expt = db.experiment_from_ext_id(expt_id, session=session)
+
+        # keep track of whether cells look like they should be inhibitory or excitatory based on synaptic projections
+        synaptic_cell_class = {}
 
         for pair in expt.pair_list:
 
@@ -73,6 +76,7 @@ class SynapsePipelineModule(MultipatchPipelineModule):
                     avg_data_start_time=fit['average'].t0,
                     n_averaged_responses=len(fit['responses']),
                     avg_baseline_noise=fit['avg_baseline_noise'],
+                    meta={'expected_fit_params': fit['expected_fit_params'], 'expected_fit_pass': fit['expected_fit_pass']},
                 )
                 reasons = fit['fit_qc_pass_reasons']
                 if len(reasons) > 0:
@@ -91,6 +95,10 @@ class SynapsePipelineModule(MultipatchPipelineModule):
             )
             print("add synapse:", pair, pair.id)
 
+            pre_cell_class = notes_rec.notes['synapse_type']
+            if pre_cell_class is not None:
+                synaptic_cell_class.setdefault(pair.pre_cell, []).append(pre_cell_class)
+
             # compute weighted average of latency values
             lvals = np.array([lv[0] for lv in latency_vals])
             nvals = np.array([lv[1] for lv in latency_vals])
@@ -98,10 +106,12 @@ class SynapsePipelineModule(MultipatchPipelineModule):
                 latency = (lvals * nvals).sum() / nvals.sum()
                 dist = np.abs(lvals - latency)
                 # only set latency if the averaged values agree
-                if np.all(dist < 150e-6):
+                if np.all(dist < 200e-6):
                     syn.latency = latency
                 else:
                     errors.append("latency mismatch on %s %s %s" % (expt_id, pair.pre_cell.ext_id, pair.post_cell.ext_id))
+            else:
+                errors.append("%s %s: No latency values available for this synapse" % (pair.pre_cell.ext_id, pair.post_cell.ext_id))
             
             # compute weighted averages of kinetic parameters
             for mode, pfx in [('ic', 'psp_'), ('vc', 'psc_')]:
@@ -109,14 +119,35 @@ class SynapsePipelineModule(MultipatchPipelineModule):
                     vals = np.array([v[0] for v in fit_vals])
                     nvals = np.array([v[1] for v in fit_vals])
                     if nvals.sum() == 0:
+                        errors.append("%s %s: No %s %s values available for this synapse" % (pair.pre_cell.ext_id, pair.post_cell.ext_id, mode, param))
                         avg = None
                     else:
                         avg = (vals * nvals).sum() / nvals.sum()
                     setattr(syn, pfx+param, avg)
             
             session.add(syn)
-           
-            # session.flush()
+
+        # update cell_class:
+        for cell, cell_classes in synaptic_cell_class.items():
+            if len(cell_classes) == 1:
+                # all synaptic projections agree on sign
+                syn_class = cell_classes[0]
+            else:
+                # mismatched synaptic sign
+                syn_class = None
+                
+            # previously generated nonsynaptic cell class -- based only on transgenic markers and morphology
+            cell_class_ns = cell.cell_class_nonsynaptic
+            
+            if cell_class_ns is None or syn_class == cell_class_ns:
+                # if cell class was not called previously, or if the synaptic class
+                # matches the previous nonsynaptic class
+                cell.cell_class = syn_class
+            
+            cell_meta = cell.meta.copy()
+            cell_meta['synaptic_cell_class'] = syn_class
+            cell.meta = cell_meta
+            
         return errors
         
     def job_records(self, job_ids, session):

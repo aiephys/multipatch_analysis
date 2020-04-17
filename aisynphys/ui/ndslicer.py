@@ -6,6 +6,17 @@ import pyqtgraph.dockarea
 
 
 class NDSlicer(QtGui.QWidget):
+    """Tool for visualizing 1D and 2D slices from an ND array.
+    
+    Parameters
+    ----------
+    axes : ordered dict
+        Description of array axes to expect. Format is::
+        
+            {'axis_name': {'values': array}}
+    """
+    
+    selection_changing = QtCore.Signal(object)
     selection_changed = QtCore.Signal(object)
     
     def __init__(self, axes):
@@ -23,6 +34,8 @@ class NDSlicer(QtGui.QWidget):
         
         self.params = pg.parametertree.Parameter(name='params', type='group', children=[
             {'name': 'index', 'type': 'group', 'children': [{'name': ax, 'type': 'int', 'value': self.axes[ax].selection} for ax in self.axes]},
+            {'name': 'max project', 'type': 'group', 'children': [{'name': ax, 'type': 'bool', 'value': False} for ax in self.axes]},
+            ColorAxisParam(name='color axis', slicer=self),
             {'name': '1D views', 'type': 'group'},
             MultiAxisParam(ndim=2, slicer=self),
         ])
@@ -34,21 +47,45 @@ class NDSlicer(QtGui.QWidget):
             ch.sigValueChanged.connect(self.one_d_show_changed)
             ch.viewer, dock = self.add_view(axes=[ax], position=pos)
             pos = {'position': 'bottom', 'relativeTo': dock}
+            
+        self.params.child('max project').sigTreeStateChanged.connect(self.max_project_changed)
+        self.params.child('color axis').axis_color_changed.connect(self.axis_color_changed)
+        
+        self.ctrl_split = pg.QtGui.QSplitter(pg.QtCore.Qt.Vertical)
         
         self.ptree = pg.parametertree.ParameterTree(showHeader=False)
         self.ptree.setParameters(self.params, showTop=False)
-        self.ptree_dock = pg.dockarea.Dock("view selection")
-        self.ptree_dock.addWidget(self.ptree)
-        self.dockarea.addDock(self.ptree_dock, 'left')
+        self.ctrl_split.addWidget(self.ptree)
+        
+        self.histlut = pg.HistogramLUTWidget()
+        self.histlut.sigLevelsChanged.connect(self.histlut_changed)
+        self.histlut.sigLookupTableChanged.connect(self.histlut_changed)
+        self.ctrl_split.addWidget(self.histlut)
+        
+        self.ctrl_dock = pg.dockarea.Dock("view selection")
+        self.ctrl_dock.addWidget(self.ctrl_split)
+        self.dockarea.addDock(self.ctrl_dock, 'left')
 
     def set_data(self, data, axes=None):
+        """Set the data to be displayed.
+        
+        Parameters
+        ----------
+        data : array
+            Data array of any dimensionality to be displayed
+        axes : dict
+            Optional description of axes in *data*.
+        """
         self.data = data
-        axes = axes or  {}
+        axes = axes or {}
         for ax,info in axes.items():
             for k,v in info.items():
                 setattr(self.axes[ax], k, v)
         for viewer in self.viewers:
             viewer.set_data(self.data, self.axes)
+        data_lim = (self.data.min(), self.data.max())
+        self.histlut.setLevels(*data_lim)
+        self.histlut.setHistogramRange(*data_lim)
         
     def add_view(self, axes, position=None):
         dock = pg.dockarea.Dock("viewer", area=self.dockarea)
@@ -61,20 +98,25 @@ class NDSlicer(QtGui.QWidget):
         self.dockarea.addDock(dock, **position)
         viewer.dock = dock
         viewer.selection_changed.connect(self.viewer_selection_changed)
+        viewer.selection_changing.connect(self.viewer_selection_changing)
         self.viewers.append(viewer)
         viewer.set_data(self.data, self.axes)
+        self.histlut_changed()
         return viewer, dock
 
     def one_d_show_changed(self, param):
         param.viewer.dock.setVisible(param.value())
         
     def viewer_selection_changed(self, viewer, axes):
+        self.selection_changed.emit(self)
+
+    def viewer_selection_changing(self, viewer, axes):
         for ax,val in axes.items():
             self.axes[ax].selection = val
             self.params['index', ax] = val
         for viewer in self.viewers:
             viewer.update_selection()
-        self.selection_changed.emit(self)
+        self.selection_changing.emit(self)
 
     def selection(self):
         vals = OrderedDict([(ax,val.selection) for ax,val in self.axes.items()])
@@ -90,12 +132,35 @@ class NDSlicer(QtGui.QWidget):
         for viewer in self.viewers:
             viewer.update_selection()        
 
+    def histlut_changed(self):
+        for viewer in self.viewers:
+            if not isinstance(viewer, TwoDViewer):
+                continue
+            viewer.set_image_params(self.histlut.getLevels(), self.histlut.getLookupTable(n=1024))
+
+    def max_project_changed(self):
+        for ax in self.axes.values():
+            ax.max_project = self.params['max project', ax.name]
+        for viewer in self.viewers:
+            viewer.update_selection()
+
+    def axis_color_changed(self):
+        for ax in self.axes.values():
+            if ax.name != self.params['color axis', 'axis']:
+                ax.colors = None
+            else:
+                ax.colors = self.params.child('color axis').colors
+        for viewer in self.viewers:
+            viewer.update_selection()
+            
 
 class AxisData(object):
     def __init__(self, name, values):
         self.name = name
         self.values = values
         self.selection = values[0]
+        self.max_project = False
+        self.colors = None
 
     def index_at(self, x):
         return np.argmin(np.abs(self.values - x))
@@ -123,10 +188,56 @@ class MultiAxisParam(pg.parametertree.types.GroupParameter):
         viewer, dock = self.slicer.add_view(axes=list(self.slicer.axes.keys())[:self.ndim])
         param.viewer = viewer
         param.sigTreeStateChanged.connect(self.axes_changed)
+        return param
 
     def axes_changed(self, param, changes):
         axes = [ch.value() for ch in param.children()]
+        if len(axes) == 2 and axes[0] == axes[1]:
+            return
         param.viewer.set_selected_axes(axes)
+
+
+class ColorAxisParam(pg.parametertree.types.GroupParameter):
+    
+    axis_color_changed = QtCore.Signal(object)  # self
+    
+    def __init__(self, name, slicer):
+        self.slicer = slicer
+        pg.parametertree.types.GroupParameter.__init__(self, name=name, children=[
+            {'name': 'axis', 'type': 'list', 'values': ['none']},
+            {'name': 'mode', 'type': 'list', 'values': ['discrete', 'range'], 'visible': False},
+            {'name': 'colors', 'type': 'group', 'visible': False},
+        ])
+        
+        self.update_axes()
+        self.child('axis').sigValueChanged.connect(self.axis_changed)
+        self.child('colors').sigTreeStateChanged.connect(self.colors_changed)
+        
+    def update_axes(self):
+        axis_names = list(self.slicer.axes.keys())
+        self.child('axis').setLimits(['none'] + axis_names)
+
+    def axis_changed(self):
+        with pg.SignalBlock(self.child('colors').sigTreeStateChanged, self.colors_changed):
+            if self['axis'] == 'none':
+                self.child('mode').setOpts(visible=False)
+                self.child('colors').setOpts(visible=False)
+            else:
+                self.child('mode').setOpts(visible=True)
+                self.child('colors').setOpts(visible=True)
+                values = self.slicer.axes[self['axis']].values
+                for ch in self.child('colors').children():
+                    self.child('colors').removeChild(ch)
+                for i,v in enumerate(values):
+                    color = pg.mkColor((i, int(len(values)*1.2)))
+                    ch = pg.parametertree.types.SimpleParameter(name=str(v), type='color', value=color)
+                    self.child('colors').addChild(ch)
+            
+        self.colors_changed()
+
+    def colors_changed(self):
+        self.colors = [ch.value() for ch in self.child('colors').children()]
+        self.axis_color_changed.emit(self)
 
 
 class Viewer(object):
@@ -152,85 +263,172 @@ class Viewer(object):
         raise NotImplementedError()
         
     def get_data(self):
-        sl = [ax.index for ax in self.data_axes.values()]
-        order = []
-        for ax in self.selected_axes:
-            i = list(self.data_axes.keys()).index(ax)
-            order.append(i)
-            sl[i] = slice(None)
-        data = self.data[tuple(sl)].transpose(np.argsort(order))
+        data = self.data
         
-        return data
+        # slice or flatten non-visible axes
+        axis_names = list(self.data_axes.keys())
+        colormap_axis = None
+        removed = 0
+        for i in range(len(axis_names)):
+            j = i - removed
+            ax_name = axis_names[j]
+            ax = self.data_axes[ax_name]
+            if ax_name in self.selected_axes:
+                continue
+            if ax.colors is not None:
+                colormap_axis = ax
+                continue
+            if ax.max_project:
+                # max projection across this axis
+                data = data.max(axis=j)
+            else:
+                # slice this axis
+                data = data.take(ax.index, j)
+            axis_names.pop(j)
+            removed += 1
+            
+        # re-order visible axes
+        order = [axis_names.index(ax) for ax in self.selected_axes]
+        if colormap_axis is not None:
+            order.append(axis_names.index(colormap_axis.name))
+        # data = data.transpose(np.argsort(order))
+        data = data.transpose(order)
+        
+        colormap = None if colormap_axis is None else colormap_axis.colors
+        
+        return data, colormap
 
 
 class OneDViewer(Viewer, pg.PlotWidget):
+    selection_changing = QtCore.Signal(object, object)  # self, {axis: value, ...}
     selection_changed = QtCore.Signal(object, object)  # self, {axis: value, ...}
     
     def __init__(self, axes):
         pg.PlotWidget.__init__(self)
         self.line = self.addLine(x=0, movable=True)
-        self.curve = self.plot()
+        self.curves = []
 
         Viewer.__init__(self, axes)
 
         self.line.sigDragged.connect(self.line_moved)
+        self.line.sigPositionChangeFinished.connect(self.line_move_finished)
 
     def update_selection(self):
         axis = self.selected_axes[0]
-        self.line.setValue(self.data_axes[axis].index)
+        with pg.SignalBlock(self.line.sigPositionChangeFinished, self.line_move_finished):
+            self.line.setValue(self.data_axes[axis].index)
         Viewer.update_selection(self)
 
     def line_moved(self):
+        ax = self.selected_axes[0]
+        val = self.data_axes[ax].value_at(int(np.round(self.line.value())))
+        self.selection_changing.emit(self, {ax: val})
+        
+    def line_move_finished(self):
         ax = self.selected_axes[0]
         val = self.data_axes[ax].value_at(int(np.round(self.line.value())))
         self.selection_changed.emit(self, {ax: val})
         
     def update_display(self):
         if self.data is None:
-            self.curve.setData([])
+            self.clear_curves()
             return
+            
         axis = self.selected_axes[0]
         self.setLabels(bottom=axis)
-        data = self.get_data()
-        self.curve.setData(data)
+        data, colors = self.get_data()
+            
+        if colors is None:
+            data = data[..., np.newaxis]
+            colors = ['w']
+            
+        new_curves = []
+        for i in range(data.shape[-1]):
+            c = pg.PlotCurveItem(data[...,i], pen=colors[i], antialias=True)
+            new_curves.append(c)
+            self.addItem(c)
+
+        self.clear_curves()
+        self.curves = new_curves
+            
         axvals = self.data_axes[axis].values
         self.getAxis('bottom').setTicks([[(i, "%0.2g"%axvals[i]) for i in range(len(axvals))]])
         
+    def clear_curves(self):
+        for c in self.curves:
+            self.removeItem(c)
+            self.curves = []
+        
 
-class TwoDViewer(Viewer, pg.ImageView):
+class TwoDViewer(Viewer, pg.GraphicsLayoutWidget):
+    selection_changing = QtCore.Signal(object, object)  # self, {axis: value, ...}
     selection_changed = QtCore.Signal(object, object)  # self, {axis: value, ...}
 
     def __init__(self, axes):
-        self.plot = pg.PlotItem()
+        self.data_bounds = (0, 1)
+        self.levels = None
+        self.lut = None
         
-        pg.ImageView.__init__(self, view=self.plot)
+        pg.GraphicsLayoutWidget.__init__(self)
+        self.plot = self.addPlot()
         self.plot.invertY(False)
         self.plot.setAspectLocked(False)
+        
+        self.image = pg.ImageItem()
+        self.plot.addItem(self.image)
+        self.image.setPos(-0.5, -0.5)
+        
         self.lines = [self.plot.addLine(x=0, movable=True), self.plot.addLine(y=0, movable=True)]
         Viewer.__init__(self, axes)
         for line in self.lines:
             line.sigDragged.connect(self.line_moved)
+        for line in self.lines:
+            line.sigPositionChangeFinished.connect(self.line_move_finished)
+
+    def set_data(self, data, axes):
+        if data is not None:
+            self.data_bounds = (data.min(), data.max())
+        Viewer.set_data(self, data, axes)
+        
+    def set_image_params(self, levels, lut):
+        self.image.setLevels(levels)
+        self.image.setLookupTable(lut)
+        self.levels = levels
+        self.lut = lut
         
     def update_selection(self):
         for i,line in enumerate(self.lines):
             ax = self.selected_axes[i]
-            line.setValue(self.data_axes[ax].index)
+            with pg.SignalBlock(line.sigPositionChangeFinished, self.line_move_finished):
+                line.setValue(self.data_axes[ax].index)
         Viewer.update_selection(self)
 
     def line_moved(self):
+        axes = {ax: self.data_axes[ax].value_at(int(np.round(self.lines[i].value()))) for i,ax in enumerate(self.selected_axes)}
+        self.selection_changing.emit(self, axes)
+
+    def line_move_finished(self):
         axes = {ax: self.data_axes[ax].value_at(int(np.round(self.lines[i].value()))) for i,ax in enumerate(self.selected_axes)}
         self.selection_changed.emit(self, axes)
 
     def update_display(self):
         if self.data is None:
-            self.setImage(np.zeros((1, 1)))
+            self.image.setImage(np.zeros((1, 1)))
             return
         axes = self.selected_axes
         self.plot.setLabels(left=axes[1], bottom=axes[0])
-        data = self.get_data()
+        data, colors = self.get_data()
         
-        # scale = [xvals[1]-xvals[0], yvals[1]-yvals[0]]
-        self.setImage(data, pos=[-0.5, -0.5]) #, pos=[xvals[0]-scale[0]*0.5, yvals[0]-scale[1]*0.5], scale=scale)
+        levels = self.levels or self.data_bounds
+        
+        if colors is None:
+            self.image.setImage(data, levels=levels)
+        else:
+            comp = np.zeros(data.shape[:-1] + (3,), dtype=data.dtype)
+            for i,color in enumerate(colors):
+                color = np.array(pg.colorTuple(color)[:3], dtype=float).reshape(1, 1, 3) / 255.
+                comp += data[..., i:i+1] * color
+            self.image.setImage(comp, levels=levels)
 
         xvals = self.data_axes[axes[0]].values
         yvals = self.data_axes[axes[1]].values

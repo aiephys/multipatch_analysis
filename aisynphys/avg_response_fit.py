@@ -97,19 +97,18 @@ def get_pair_avg_fits(pair, session, notes_session=None, ui=None):
             qc_pass = False
             reasons = ['no data notes entry']
             expected_fit_params = None
-        elif 'fit_pass' not in notes:
-            print("=============================")
-            print(pair)
-            print(pair.has_synapse)
-            print(notes)
-            raise Exception("WTF")
+            expected_fit_pass = None
         elif notes['fit_pass'][clamp_mode][str(holding)] is not True:
             qc_pass = False
             reasons = ['data notes fit failed qc']
             expected_fit_params = None
+            expected_fit_pass = False
         else:
             expected_fit_params = notes['fit_parameters']['fit'][clamp_mode][str(holding)]
+            expected_fit_pass = True
             qc_pass, reasons = check_fit_qc_pass(fit_result, expected_fit_params, clamp_mode)
+            if not qc_pass:
+                print("%s %s %s: %s" % (str(pair), clamp_mode, holding,  '; '.join(reasons)))
 
         if ui is not None:
             ui.show_fit_results(clamp_mode, holding, fit_result, avg_response, qc_pass)
@@ -122,6 +121,7 @@ def get_pair_avg_fits(pair, session, notes_session=None, ui=None):
             'fit_qc_pass': qc_pass,
             'fit_qc_pass_reasons': reasons,
             'expected_fit_params': expected_fit_params,
+            'expected_fit_pass': expected_fit_pass,
             'avg_baseline_noise': avg_baseline_noise,
         }
 
@@ -198,5 +198,4 @@ def check_fit_qc_pass(fit_result, expected_params, clamp_mode):
         if (error > error_threshold) and (abs(v1 - v2) > abs_threshold):
             failures.append('%s error too large (%s != %s)' % (k, v1, v2))
 
-    print('; '.join(failures))
     return len(failures) == 0, failures

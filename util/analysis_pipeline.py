@@ -7,7 +7,8 @@ from aisynphys import config
 
 
 if __name__ == '__main__':
-    logging.basicConfig()
+    logging.basicConfig(format="%(message)s")
+    logging.getLogger().setLevel(logging.INFO)
     all_pipelines = all_pipelines()
     
     parser = argparse.ArgumentParser(description="Process analysis pipeline jobs")
@@ -19,18 +20,21 @@ if __name__ == '__main__':
     parser.add_argument('--rebuild', action='store_true', default=False, help="Remove and rebuild tables for selected modules")
     parser.add_argument('--workers', type=int, default=None, help="Set the number of concurrent processes during update")
     parser.add_argument('--local', action='store_true', default=False, help="Disable concurrent processing to make debugging easier")
-    parser.add_argument('--raise-exc', action='store_true', default=False, help="Disable catching exceptions encountered during processing", dest='raise_exc')
+    parser.add_argument('--debug', action='store_true', default=False, help="Enable debugging features: disable parallel processing, raise exception on first error, open debugging gui")
     parser.add_argument('--limit', type=int, default=None, help="Limit the number of experiments to process")
     parser.add_argument('--uids', type=lambda s: s.split(','), default=None, help="Select specific IDs to analyze (or drop)", )
     parser.add_argument('--drop', action='store_true', default=False, help="Drop selected analysis results (do not run updates)", )
     parser.add_argument('--vacuum', action='store_true', default=False, help="Run VACUUM ANALYZE on the database to optimize its query planner", )
     parser.add_argument('--bake', action='store_true', default=False, help="Bake an sqlite file after the pipeline update completes", )
+    parser.add_argument('--info', action='store_true', default=False, help="Display information about the selected pipeline", )
     
     
     args = parser.parse_args(sys.argv[1:])
 
-    if args.local:
+    if args.debug:
+        args.local = True
         import pyqtgraph as pg 
+        logging.getLogger().setLevel(logging.DEBUG)
         pg.dbg()
 
     pipeline = all_pipelines[args.pipeline](database=db, config=config)
@@ -93,7 +97,7 @@ if __name__ == '__main__':
         report = []
         for module in modules:
             print("=============================================")
-            result = module.update(job_ids=args.uids, retry_errors=args.retry, limit=args.limit, parallel=not args.local, workers=args.workers, raise_exceptions=args.raise_exc)
+            result = module.update(job_ids=args.uids, retry_errors=args.retry, limit=args.limit, parallel=not args.local, workers=args.workers, debug=args.debug)
             report.append((module, result))
             
         if args.vacuum:
@@ -115,3 +119,13 @@ if __name__ == '__main__':
     if args.bake:
         print("\n================== Bake Sqlite ===========================")
         db.bake_sqlite(config.synphys_db_sqlite)
+
+    if args.info:
+        print("Pipeline:", args.pipeline)
+        print("  {:20s}  :  ok  : err  :  dependencies".format('module'))
+        print("  -----------------------------------------------------------")
+        for module in all_modules.values():
+            status = module.job_status()
+            success = len([j for j in status.values() if j[0] is True])
+            err = len(status) - success
+            print("  {:20s}  : {:<5d}: {:<5d}:  {}".format(module.name, success, err, ', '.join([m.name for m in module.dependencies])))

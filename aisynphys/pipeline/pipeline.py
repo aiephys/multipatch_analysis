@@ -96,7 +96,7 @@ class Pipeline(object):
                     failed_job_ids.add(job_id)
                 totals[module.name][0 if success else 1] += 1
 
-            report.append("\n=====  %s  =====" % module.name)
+            report.append("\n=====  %s  =====\n" % module.name)
             
             # sort by error 
             module_errors.sort(key=lambda e: e[1])
@@ -131,19 +131,19 @@ class Pipeline(object):
             # format into a nice table
             if len(err_strs) > 0:
                 col_widths = [max([len(err[i]) for err in err_strs]) for i in range(3)]
-                fmt = "{:<%ds}  {:<%ds}  {:s}" % tuple(col_widths[:2])
+                fmt = "{:<%ds}  {:<%ds}  {:s}\n" % tuple(col_widths[:2])
                 for cols in err_strs:
                     report.append(fmt.format(*cols))
                 
-        report.append("\n=====  Pipeline summary  =====")
-        fmt = "%%%ds   %%4d pass   %%4d fail" % mod_name_len
+        report.append("\n=====  Pipeline summary  =====\n")
+        fmt = "%%%ds   %%4d pass   %%4d fail\n" % mod_name_len
         for module in modules:
             tot_success, tot_error = totals[module.name]
             report.append(fmt % (module.name, tot_success, tot_error))
         
         
         for jid in job_ids:
-            report.append("\n----- job: %s -----" % jid)
+            report.append("\n----- job: %s -----\n" % jid)
             for module in modules:
                 js = job_status[module.name].get(jid, None)
                 if js is None:
@@ -152,6 +152,16 @@ class Pipeline(object):
                 else:
                     success, error, meta = js
                     status = 'ok' if success else 'fail'
-                report.append("  {:15s} : {:5s} : {:s}".format(jid, status, error or ''))
+                    
+                report_entry = "  {:20s} :  {:15s} : {:5s} : ".format(module.name, jid, status)
+                
+                error = error or ''
+                indent = ' ' * len(report_entry)
+                for i,err_line in enumerate(error.split('\n')):
+                    if i > 0:
+                        err_line = indent + err_line
+                    report_entry = report_entry + err_line + '\n'
+                    
+                report.append(report_entry)
         
-        return '\n'.join(report)
+        return ''.join(report)
