@@ -61,6 +61,8 @@ class JSONObject(TypeDecorator):
         return json.dumps(value)
         
     def process_result_value(self, value, dialect):
+        if value is None:
+            return None
         return json.loads(value)
 
 

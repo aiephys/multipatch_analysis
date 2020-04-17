@@ -274,6 +274,10 @@ class SynphysDatabase(Database):
                 selectinload(self.Pair.synapse_prediction), 
             )
 
+        # package the aliased cells
+        query.pre_cell = pre_cell
+        query.post_cell = post_cell
+
         return query
 
     def matrix_pair_query(self, pre_classes, post_classes, columns=None, pair_query_args=None):
