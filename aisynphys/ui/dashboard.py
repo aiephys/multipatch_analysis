@@ -676,7 +676,8 @@ class ExperimentMetadata(Experiment):
                         rec['DB'] = True
                     rec['db_errors'] = errors
                     connections = False
-                    if rec['DB'] is True:
+                    # if rec['DB'] is True:
+                    if has_run:
                         pairs = database.query(database.Pair).join(database.Experiment).filter(database.Experiment.acq_timestamp==self.timestamp).all()
                         if len(pairs) > 0:
                             all_none = all(p.has_synapse is None for p in pairs)
@@ -720,13 +721,14 @@ class ExperimentMetadata(Experiment):
                         else:
                             rec['cell map'] = False
                         if rec['cell map'] is True:
-                            layers = [lims.cell_layer(cell) for cell in cell_specimens]
+                            morpho = database.query(database.Morphology).all()
+                            cell_morpho = [cell for cell in morpho if cell.cell.meta.get('lims_specimen_id') in cell_specimens]
+                            cell_meta = [cell.meta.get('morpho_db_hash') for cell in cell_morpho if cell.meta is not None]
+                            has_morpho = len(cell_meta) > 0
+                            rec['morphology'] = has_morpho
+                            layers = [cell.cortical_layer for cell in morpho if cell.cell.meta.get('lims_specimen_id') in cell_specimens]
                             layers_drawn = [layer is not None for layer in layers]
                             rec['layers drawn'] = all(layers_drawn)
-                            # morpho = database.query(database.Morphology).all()
-                            # cell_morpho = [cell.morpho_db_hash for cell in morpho if cell.cell.meta.get('lims_specimen_id') in cell_specimens]
-                            # has_morpho = [True for cell in cell_morpho if cell != hash(None)]
-                            # rec['morphology'] = any(has_morpho)
                         else:
                             rec['layers drawn'] = '-'
                             rec['morphology'] = '-'
