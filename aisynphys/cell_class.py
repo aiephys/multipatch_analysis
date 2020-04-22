@@ -74,9 +74,13 @@ class CellClass(object):
         cre type or morphology.
         """
         cre = self.criteria.get('cre_type')
+        if isinstance(cre, tuple):
+            cre_is_exc = all([c in constants.EXCITATORY_CRE_TYPES for c in cre])
+        else:
+            cre_is_exc = cre in constants.EXCITATORY_CRE_TYPES
         pyr = self.criteria.get('pyramidal')
         dendrite = self.criteria.get('dendrite_type')
-        return cre == 'unknown' or cre in constants.EXCITATORY_CRE_TYPES or pyr is True or dendrite == 'spiny'
+        return cre == 'unknown' or cre_is_exc or pyr is True or dendrite == 'spiny'
 
     @property
     def output_synapse_type(self):
