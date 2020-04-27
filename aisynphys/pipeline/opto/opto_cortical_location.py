@@ -36,7 +36,7 @@ class OptoCortexLocationPipelineModule(DatabasePipelineModule):
                 ts = 0.0
             slice_entry = db.slice_from_timestamp(ts, session=session)
 
-            with open(expt.files['connections']) as f:
+            with open(expt.loader.cnx_file) as f:
                 cnx_json = json.load(f)
 
             cortex = cnx_json.get('CortexMarker', {})
@@ -52,7 +52,7 @@ class OptoCortexLocationPipelineModule(DatabasePipelineModule):
                     )
 
             site_entry.slice = slice_entry
-            site_entry.experiment = db.experiment_from_ext_id(expt.uid, session=session)
+            site_entry.experiment = db.experiment_from_ext_id(expt.ext_id, session=session)
             session.add(site_entry)
 
 
@@ -105,8 +105,8 @@ class OptoCortexLocationPipelineModule(DatabasePipelineModule):
             if success is not True:
                 continue
             expt = load_experiment(expt_id)
-            if expt.loader.get_cnx_file_version(expt.files['connections']) >= 3:
-                mtime = datetime.datetime.fromtimestamp(os.path.getmtime(expt.files['connections']))
+            if expt.loader.get_cnx_file_version(expt.loader.cnx_file) >= 3:
+                mtime = datetime.datetime.fromtimestamp(os.path.getmtime(expt.loader.cnx_file))
             else:
                 mtime = datetime.datetime.fromtimestamp(os.path.getmtime(config.distance_csv))
             ready[expt_id] = {'dep_time':mtime, 'meta':{}}
