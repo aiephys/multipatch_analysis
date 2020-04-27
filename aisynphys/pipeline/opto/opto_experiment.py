@@ -70,9 +70,10 @@ class OptoExperimentPipelineModule(DatabasePipelineModule):
                     ext_id=cell.cell_id,
                     cre_type=cell.cre_type,
                     target_layer=cell.target_layer,
-                    is_excitatory=cell.is_excitatory,
                     depth=cell.depth,
                     position=cell.position,
+                    cell_class=None, ## fill in cell class fields later in Morphology module (that doesn't currently exist for opto)
+                    cell_class_nonsynaptic=None,
                 )
                 session.add(cell_entry)
                 cell_entries[cell] = cell_entry
