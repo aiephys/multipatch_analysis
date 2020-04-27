@@ -97,7 +97,7 @@ class GapJunctionPipelineModule(MultipatchPipelineModule):
             cc_pulse = coupling_coeff(pre_pulse, post_pulse)
             cc_noise = coupling_coeff(pre_noise, post_noise)
 
-            post_intrinsic = getattr(pair.post_cell, 'intrinsic')
+            post_intrinsic = pair.post_cell.intrinsic
             if post_intrinsic is not None:
                 post_ir = post_intrinsic.input_resistance
                 gap_conduct = (1/post_ir) * cc_pulse / (1 - cc_pulse)
