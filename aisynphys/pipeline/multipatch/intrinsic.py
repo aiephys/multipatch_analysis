@@ -17,7 +17,7 @@ from ...nwb_recordings import get_lp_sweeps, get_pulse_times, get_db_recording
 class IntrinsicPipelineModule(MultipatchPipelineModule):
     
     name = 'intrinsic'
-    dependencies = [ExperimentPipelineModule]
+    dependencies = [ExperimentPipelineModule, DatasetPipelineModule]
     table_group = ['intrinsic']
 
     @classmethod

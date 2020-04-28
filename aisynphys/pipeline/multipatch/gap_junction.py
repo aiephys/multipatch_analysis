@@ -19,7 +19,7 @@ class GapJunctionPipelineModule(MultipatchPipelineModule):
     """Analyze gap junction presence and strength for all pairs per experiment
     """
     name = 'gap_junction'
-    dependencies = [ExperimentPipelineModule, DatasetPipelineModule, IntrinsicPipelineModule]
+    dependencies = [ExperimentPipelineModule, DatasetPipelineModule]
     table_group = ['gap_junction']
     
     @classmethod
@@ -99,7 +99,7 @@ class GapJunctionPipelineModule(MultipatchPipelineModule):
 
             post_intrinsic = pair.post_cell.intrinsic
             if post_intrinsic is not None:
-                post_ir = pair.post_cell.intrinsic.input_resistance
+                post_ir = post_intrinsic.input_resistance
                 gap_conduct = (1/post_ir) * cc_pulse / (1 - cc_pulse)
             else:
                 gap_conduct = None
