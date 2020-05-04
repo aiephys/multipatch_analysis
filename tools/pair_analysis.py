@@ -4,7 +4,7 @@ import pyqtgraph as pg
 
 from aisynphys.database import default_db as db
 import aisynphys.data.data_notes_db as notes_db
-from aisynphys.pair_analysis import PairAnalysisWindow
+from aisynphys.ui.pair_analysis.pair_analysis import PairAnalysisWindow
 
 if __name__ == '__main__':
     app = pg.mkQApp()
