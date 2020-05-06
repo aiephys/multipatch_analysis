@@ -80,13 +80,13 @@ class CellClass(object):
             cre_is_exc = cre in constants.EXCITATORY_CRE_TYPES
         pyr = self.criteria.get('pyramidal')
         dendrite = self.criteria.get('dendrite_type')
-        return cre == 'unknown' or cre_is_exc or pyr is True or dendrite == 'spiny'
+        return cre_is_exc or pyr is True or dendrite == 'spiny'
 
     @property
     def output_synapse_type(self):
         """Expected type of synapses "ex" or "in" to be output from this cell type.
         """
-        return 'ex' if self.is_excitatory else 'in'
+        return {True: 'ex', False: 'in'}.get(self.is_excitatory, None)
 
     def __contains__(self, cell):
         morpho = cell.morphology
