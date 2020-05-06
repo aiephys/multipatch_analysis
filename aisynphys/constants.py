@@ -46,4 +46,5 @@ INJECTIONS = {
     'CN1987': 'rAAV-3xeHGT_073m(core)-minCMV*-SYFP2-WPRE3-BGHpA',
     'CN1988': 'rAAV-EF1a-fDIO-EGFP-WPRE-HGHpA (Miranda/Tanya)',
     'CN1995': 'rAAV-TREtight-tdTomato-WPRE-HGHpA',
+    'ChrimsonR-Kv-EYFP':'AAV-Syn-FLEX-ChrimsonR-eYFP-Kv2.1',
 }
