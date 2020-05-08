@@ -329,6 +329,11 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
             for stim_rec in srec.recordings:
                 if stim_rec.device_type in ['Prairie_Command', 'unknown']: ### these don't actually contain data we want to use -- ignore them
                     continue
+                if isinstance(stim_rec, PatchClampRecording):
+                    ### exclude trying to analyze intrinsic pulses
+                    stim_name = stim_rec.stimulus.description
+                    if any(substr in stim_name for substr in ['intrins']):
+                        continue
 
                 for post_rec in [x for x in srec.recordings if isinstance(x, PatchClampRecording)]:
                     if stim_rec == post_rec:
@@ -356,6 +361,8 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
 
                     # get all responses, regardless of the presence of a spike
                     responses = osra.get_responses(stim_rec, post_rec)
+                    if len(responses) > 10:
+                        raise Exception('Found more than 10 pulse responses for %s. Please investigate.'%srec)
                     for resp in responses:
                         if pair_entry is not None: ### when recordings are crappy cells are not always included in connections files so won't exist as pairs in the db, also led stimulations don't have pairs
                             if resp['ex_qc_pass']:
@@ -395,7 +402,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                                 continue
                             else:
                                 got_baseline = True
-                                baseline_chunks[pre_dev, post_dev].pop(i)
+                                baseline_chunks[stim_rec.device_id, post_rec.device_id].pop(i)
                                 break
 
                         if not got_baseline:
