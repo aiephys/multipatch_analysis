@@ -14,7 +14,20 @@ from ...avg_response_fit import get_pair_avg_fits
 
 
 class SynapsePipelineModule(MultipatchPipelineModule):
-    """Generate fit to response average for all pairs per experiment
+    """Basic analysis applied to all cell pairs that have a chemical synapse.
+
+    For all cell pairs, this module first records manual synapse and gap junction calls (from notes database)
+    in upstream pair.has_synapse and pair.has_electrical.
+
+    If a chemical synapse is present, then collect any qc-passed pulse responses and sort into 4 categories: (ic -70mV),
+    (ic -55mV), (vc -70mV), and (vc -55mV). Pulse responses are averaged within each category and curve-fit; these fit
+    parameters are recorded along with a qc-pass/fail flag (see aisynphys.avg_response_fit for more on that topic).
+    Fit parameters are stored in the avg_response_fit table.
+
+    A record is also added to the synapse table containing the latency and weighted averages of rise_time / decay_tau.
+    Only qc-passed fit data are included in these kinetic parameters; in cases with insufficient qc-passed data,
+    these values are left empty. The synapse.psp_amplitude and synapse.psc_amplitude parameters are later filled in 
+    by the resting_state module.
     """
     name = 'synapse'
     dependencies = [DatasetPipelineModule, MorphologyPipelineModule]
@@ -47,6 +60,9 @@ class SynapsePipelineModule(MultipatchPipelineModule):
                 continue
             
             # fit PSP shape against averaged PSPs/PCSs at -70 and -55 mV
+            #   - selected from <= 50Hz trains
+            #   - must pass ex_qc_pass or in_qc_pass
+            #   - must have exactly 1 pre spike with onset time
             fits = get_pair_avg_fits(pair, session)
             
             # collect values with which to decide on the "correct" kinetic values to report
