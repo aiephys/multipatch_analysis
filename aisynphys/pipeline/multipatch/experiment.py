@@ -64,9 +64,12 @@ class ExperimentPipelineModule(MultipatchPipelineModule):
             'lims_ephys_result_id': lims_ephys_result_id,
         }
         
+        # normalize path separators so we get the same result regardless of which OS is running this module
+        storage_path = '/'.join(re.split(r'/|\\', expt.server_path))
+
         fields = {
             'ext_id': expt.uid,
-            'storage_path': expt.server_path,
+            'storage_path': storage_path,
             'ephys_file': None if expt.nwb_file is None else os.path.relpath(expt.nwb_file, expt.path),
             'project_name': expt.project_name,
             'date': expt.datetime,
