@@ -48,6 +48,17 @@ class SynapsePipelineModule(MultipatchPipelineModule):
             
             # fit PSP shape against averaged PSPs/PCSs at -70 and -55 mV
             fits = get_pair_avg_fits(pair, session)
+            # This generates a structure like:
+            # {(mode, holding): {
+            #     'traces': , 
+            #     'average', 
+            #     'fit_params',
+            #     'initial_latency',
+            #     'fit_qc_pass',
+            #     'expected_fit_params',
+            #     'avg_baseline_noise',
+            #     }, 
+            # }
             
             # collect values with which to decide on the "correct" kinetic values to report
             latency_vals = []
