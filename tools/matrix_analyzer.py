@@ -104,7 +104,7 @@ if __name__ == '__main__':
         ]),
 
         ('Mouse E-I Cre-types', [
-            {'cre_type': ('unknown', 'nr5a1', 'tlx3', 'sim1', 'ntsr1'), 'display_names': ('', 'Excitatory\nunknown, nr5a1,\ntlx3, sim1, ntsr1')},
+            {'cre_type': ('nr5a1', 'tlx3', 'sim1', 'ntsr1'), 'display_names': ('', 'Excitatory\nnr5a1,\ntlx3, sim1, ntsr1')},
             {'cre_type': ('pvalb', 'sst', 'vip'), 'display_names': ('', 'Inhibitory\npvalb, sst, vip')},
         ]),
 

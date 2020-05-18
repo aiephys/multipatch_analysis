@@ -105,9 +105,12 @@ class MorphologyPipelineModule(MultipatchPipelineModule):
             transgenic_class = cell.meta['transgenic_cell_class']
             if transgenic_class is None:
                 cell.cell_class_nonsynaptic = morpho_class
-            elif morpho_class is not None and transgenic_class != morpho_class:
-                # morpho class conflicts with cre class
-                cell.cell_class_nonsynaptic = None
+            else:
+                if morpho_class is None or morpho_class == transgenic_class:
+                    cell.cell_class_nonsynaptic = transgenic_class
+                else:
+                    # morpho class conflicts with cre class
+                    cell.cell_class_nonsynaptic = None
                 
             session.add(morphology)
         

@@ -257,7 +257,7 @@ class Database(object):
             return object.__getattribute__(self, attr)
 
     def __repr__(self):
-        return "<Database %s (%s)>" % (self.ro_address, 'ro' if self.rw_address is None else 'rw')
+        return "<%s %s (%s)>" % (type(self).__name__, self.ro_address, 'ro' if self.rw_address is None else 'rw')
 
     def __str__(self):
         # str(engine) does a nice job of masking passwords
