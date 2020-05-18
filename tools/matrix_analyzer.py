@@ -74,6 +74,20 @@ if __name__ == '__main__':
             {'cre_type': 'vip', 'target_layer': '6', 'cortical_layer': ('6a', '6b'), 'display_names': ('L6', 'vip')},
         ]),
 
+        ('Mouse Layer 6a', [
+            {'cre_type': 'ntsr1', 'cortical_layer': '6a', 'display_names': ('L6a', 'ntsr1')},
+            {'cre_type': 'pvalb', 'cortical_layer': '6a', 'display_names': ('L6a', 'pvalb')},
+            {'cre_type': 'sst', 'cortical_layer': '6a', 'display_names': ('L6a', 'sst')},
+            {'cre_type': 'vip', 'cortical_layer': '6a', 'display_names': ('L6a', 'vip')},
+        ]),
+
+        ('Mouse Layer 6b', [
+            {'cre_type': 'ntsr1', 'cortical_layer': '6b', 'display_names': ('L6b', 'ntsr1')},
+            {'cre_type': 'pvalb', 'cortical_layer': '6b', 'display_names': ('L6b', 'pvalb')},
+            {'cre_type': 'sst', 'cortical_layer': '6b', 'display_names': ('L6b', 'sst')},
+            {'cre_type': 'vip', 'cortical_layer': '6b', 'display_names': ('L6b', 'vip')},
+        ]),
+
         ('Inhibitory Transgenic Classes',[
             {'cre_type': 'pvalb', 'display_names': ('', 'Pv')},
             {'cre_type': 'sst', 'display_names': ('', 'Sst')},
@@ -156,10 +170,33 @@ if __name__ == '__main__':
             {'target_layer': '2/3', 't_type': 'Pvalb Vipr2', 'display_names': ('Pvalb', 'Vipr2')},
             {'target_layer': '2/3', 't_type': 'Sst Tac1 Htr1d', 'display_names': ('Sst', 'Tac1 Htr1d')},
             {'target_layer': '2/3', 't_type': 'Sst Calb2 Pdlim5', 'display_names': ('Sst', 'Calb2 Pdlim5')},
+            {'target_layer': '2/3', 't_type': 'Sst Hpse Cbln4', 'display_names': ('Sst', 'Hpse Cbln4')},
             {'target_layer': '2/3', 't_type': 'Vip Chat Htr1f', 'display_names': ('Vip', 'Chat Htr1f')},
             {'target_layer': '2/3', 't_type': 'Vip Pygm C1ql1', 'display_names': ('Vip', 'Pygm C1ql1')},
             {'target_layer': '2/3', 't_type': 'Vip Crispld2 Htr2c', 'display_names': ('Vip', 'Crispld2 Htr2c')},
             {'target_layer': '2/3', 't_type': 'Vip Crispld2 Kcne4', 'display_names': ('Vip', 'Crispld2 Kcne4')},
+        ]),
+
+        ('Huamn T-types', [
+            {'target_layer': '3', 't_type': 'LIN FREM3', 'display_names': ('L3C', 'LIN FREM3')},
+            {'target_layer': '3', 't_type': 'RORB CARM1P1', 'display_names': ('L3C', 'RORB CARM1P1')},
+            {'target_layer': '3', 't_type': 'RORB COL22A1', 'display_names': ('L3C', 'RORB COL22A1')},
+        ]),
+
+        ('eLife 2019 - Mouse', [
+            # {'dendrite_type': 'spiny', 'target_layer': '2/3', 'cortical_layer': '2/3', 'display_names': ('L2/3', 'Pyr\nspiny')},
+            {'pyramidal': True, 'target_layer': '2/3', 'cortical_layer': '2/3', 'display_names': ('L2/3', 'Pyr')},
+            {'cre_type': 'rorb', 'target_layer': '4', 'cortical_layer': '4', 'display_names': ('L4', 'Pyr\nrorb')},
+            {'cre_type': 'sim1', 'target_layer': '5', 'display_names': ('L5', 'Pyr ET\nsim1'), 'cortical_layer': '5'},
+            {'cre_type': 'tlx3', 'target_layer': '5', 'display_names': ('L5', 'Pyr IT\ntlx3'), 'cortical_layer': '5'},
+            {'cre_type': 'ntsr1', 'target_layer': '6', 'cortical_layer': ('6a', '6b'), 'display_names': ('L6', 'Pyr\nntsr1')},
+        ]),
+
+        ('eLife 2019 - Human', [
+            {'pyramidal': True, 'target_layer': '2', 'cortical_layer': '2/3', 'display_names': ('L2', 'Pyr')},
+            {'pyramidal': True, 'target_layer': '3', 'cortical_layer': '2/3', 'display_names': ('L3', 'Pyr')},
+            {'pyramidal': True, 'target_layer': '4', 'cortical_layer': '4', 'display_names': ('L4', 'Pyr')},
+            {'pyramidal': True, 'target_layer': '5', 'cortical_layer': '5', 'display_names': ('L5', 'Pyr')},
         ]),
 
         ('2P-Opto cre types', [
