@@ -463,6 +463,8 @@ class StrengthAnalyzer(Analyzer):
         'PSC Amplitude': [self.metric_summary, self.metric_conf],
         'PSC Rise Time': [self.metric_summary, self.metric_conf],
         'PSC Decay Tau': [self.metric_summary, self.metric_conf],
+        'Coupling Coefficient': [self.metric_summary, self.metric_conf],
+        'Junctional Conductance': [self.metric_summary, self.metric_conf],
         'strength_no_data': self.metric_summary,
         }
         self.summary_dtypes = {} ## dict to specify how we want to cast different summary measures
@@ -507,6 +509,16 @@ class StrengthAnalyzer(Analyzer):
                 'Max': 4e-3,
                 'colormap': thermal_colormap,
             }}),
+            ('Coupling Coefficient', {'mode': 'range', 'units': '', 'defaults': {
+                'Min': 0, 
+                'Max': 0.5,
+                'colormap': thermal_colormap,
+            }}),
+            ('Junctional Conductance', {'mode': 'range', 'units': 'S', 'defaults': {
+                'Min': 0, 
+                'Max': 1e-3,
+                'colormap': thermal_colormap,
+            }}),
             ('None',{}),
         ]
 
@@ -518,6 +530,8 @@ class StrengthAnalyzer(Analyzer):
             'PSP Decay Tau': '{PSP Decay Tau.ms}',
             'PSC Rise Time': '{PSC Rise Time.ms}',
             'PSC Decay Tau': '{PSC Decay Tau.ms}',
+            'Coupling Coefficient': '{Coupling Coefficient:0.2f}',
+            'Junctional Conductance': '{Junctional Conductance:0.2e}',
         }
 
     def invalidate_output(self):
@@ -538,35 +552,42 @@ class StrengthAnalyzer(Analyzer):
             pre_class, post_class = key
 
             for pair in class_pairs:
-                if pair.has_synapse is not True:
+                no_data = False
+                synapse = None
+                gap = None
+                if pair.has_synapse is not True and pair.has_electrical is not True:
                     no_data = True
-                elif pair.has_synapse is True:
-                    no_data = False
-                    synapse = pair.synapse
-                    if synapse is None:
-                        no_data = True
-                    else:
-                        psp_amp = synapse.psp_amplitude
-                        psp_decay_tau = synapse.psp_decay_tau
-                        psp_rise_time = synapse.psp_rise_time 
-                        psc_amp = synapse.psc_amplitude
-                        psc_rise_time = synapse.psc_rise_time
-                        psc_decay_tau = synapse.psc_decay_tau
-                        latency = synapse.latency
-
-                    
+                if pair.has_synapse is True:
+                    synapse = pair.synapse   
+                if pair.has_electrical is True:
+                    gap = pair.gap_junction
+                if synapse is None and gap is None:   
+                    no_data = True
+                if synapse is not None:
+                    psp_amp = synapse.psp_amplitude
+                    psp_decay_tau = synapse.psp_decay_tau
+                    psp_rise_time = synapse.psp_rise_time 
+                    psc_amp = synapse.psc_amplitude
+                    psc_rise_time = synapse.psc_rise_time
+                    psc_decay_tau = synapse.psc_decay_tau
+                    latency = synapse.latency
+                if gap is not None:
+                    coupling_coeff = gap.coupling_coeff_pulse
+                    junctional_cond = gap.junctional_conductance           
 
                 results[pair] = {
                 'strength_no_data': no_data,
                 'pre_class': pre_class,
                 'post_class': post_class,
-                'PSP Amplitude': psp_amp if no_data is False else float('nan'),
-                'PSP Rise Time': psp_rise_time if no_data is False else float('nan'),
-                'PSP Decay Tau': psp_decay_tau if no_data is False else float('nan'),
-                'PSC Amplitude': psc_amp if no_data is False else float('nan'),
-                'PSC Rise Time': psc_rise_time if no_data is False else float('nan'),
-                'PSC Decay Tau': psc_decay_tau if no_data is False else float('nan'),
-                'Latency': latency if no_data is False else float('nan'),
+                'PSP Amplitude': psp_amp if synapse is not None else float('nan'),
+                'PSP Rise Time': psp_rise_time if synapse is not None else float('nan'),
+                'PSP Decay Tau': psp_decay_tau if synapse is not None else float('nan'),
+                'PSC Amplitude': psc_amp if synapse is not None else float('nan'),
+                'PSC Rise Time': psc_rise_time if synapse is not None else float('nan'),
+                'PSC Decay Tau': psc_decay_tau if synapse is not None else float('nan'),
+                'Latency': latency if synapse is not None else float('nan'),
+                'Coupling Coefficient': coupling_coeff if gap is not None else float('nan'),
+                'Junctional Conductance': junctional_cond if gap is not None else float('nan'),
                 }
 
         self.results = pd.DataFrame.from_dict(results, orient='index')
@@ -752,6 +773,7 @@ class DynamicsAnalyzer(Analyzer):
             'Paired pulse STP': [self.metric_summary, self.metric_conf],
             'Train-induced STP': [self.metric_summary, self.metric_conf],
             'STP recovery': [self.metric_summary, self.metric_conf],
+            'PSP 90th Percentile': [self.metric_summary, self.metric_conf],
             'Variability - resting state': [self.metric_summary, self.metric_conf],
             'Variability - second pulse': [self.metric_summary, self.metric_conf],
             'Variability - train induced': [self.metric_summary, self.metric_conf],
@@ -774,6 +796,13 @@ class DynamicsAnalyzer(Analyzer):
             ('Train-induced STP', {'mode': 'range', 'defaults': {
                 'Min': -1, 
                 'Max': 1, 
+                'colormap': pg.ColorMap(
+                [0, 0.5, 1.0],
+                [(0, 0, 255, 255), (56, 0, 87, 255), (255, 0, 0, 255)],
+            )}}),
+            ('PSP 90th Percentile', {'mode': 'range', 'units': 'V', 'defaults': {
+                'Min': -1e-3, 
+                'Max': 1e-3, 
                 'colormap': pg.ColorMap(
                 [0, 0.5, 1.0],
                 [(0, 0, 255, 255), (56, 0, 87, 255), (255, 0, 0, 255)],
@@ -841,6 +870,7 @@ class DynamicsAnalyzer(Analyzer):
             'Paired pulse STP': '{Paired pulse STP:0.2f}',
             'Train-induced STP': '{Train-induced STP:0.2f}',
             'STP recovery': '{STP recovery:0.2f}',
+            'PSP 90th Percentile': '{PSP 90th Percentile.mV}',
             'Variability - resting state': '{Variability - resting state:0.2f}',
             'Variability - second pulse': '{Variability - second pulse:0.2f}',
             'variability - train induced': '{Variability - train induced:0.2f}',
@@ -893,6 +923,7 @@ class DynamicsAnalyzer(Analyzer):
                     'Paired pulse STP': dynamics.stp_initial_50hz if dynamics is not None else np.nan,
                     'Train-induced STP': dynamics.stp_induction_50hz if dynamics is not None else np.nan,
                     'STP recovery': dynamics.stp_recovery_250ms if dynamics is not None else np.nan,
+                    'PSP 90th Percentile': dynamics.pulse_amp_90th_percentile if dynamics is not None else np.nan,
                     'Variability - resting state': lcv_rest,
                     'Variability - second pulse': lcv_sec,
                     'Variability - train induced': lcv_train,
