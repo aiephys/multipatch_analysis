@@ -37,6 +37,7 @@ class Model:
 
         LLF = Σᵢ(𝑦ᵢ log(𝑝(𝐱ᵢ)) + (1 − 𝑦ᵢ) log(1 − 𝑝(𝐱ᵢ)))
         """
+        assert np.issubdtype(conn.dtype, np.dtype(bool))
         p = self.pdf(x)
         return np.log(p[conn]).sum() + np.log((1-p)[~conn]).sum()
 
@@ -46,12 +47,13 @@ class Model:
         return -model.likelihood(*args)
 
     @classmethod
-    def fit(cls, x, conn, init=(0.1, 100e-6), bounds=((0, 1), (10e-6, 1e-3))):
+    def fit(cls, x, conn, init=(0.1, 100e-6), bounds=((0.001, 1), (10e-6, 1e-3)), **kwds):
         fit = scipy.optimize.minimize(
             cls.err_fn, 
             x0=init, 
             args=(x, conn),
             bounds=bounds,
+            **kwds,
         )
         ret = cls(*fit.x)
         ret.fit_result = fit

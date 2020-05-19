@@ -12,7 +12,9 @@ from ipfx.stimulus_protocol_analysis import LongSquareAnalysis
 from ipfx.ephys_data_set import Sweep, SweepSet
 from .pipeline_module import MultipatchPipelineModule
 from .experiment import ExperimentPipelineModule
+from .dataset import DatasetPipelineModule
 from ...nwb_recordings import get_lp_sweeps, get_pulse_times, get_db_recording
+
 
 class IntrinsicPipelineModule(MultipatchPipelineModule):
     
