@@ -633,12 +633,16 @@ class ExperimentMetadata(Experiment):
             search_paths = [self.primary_path, self.archive_path, self.nas_path]
             submitted = False
             connections = None
+            ignore = False
             for path in search_paths:
                 if path is None:
                     continue
                 yml_file = os.path.join(path, 'pipettes.yml')
                 if os.path.isfile(yml_file):
                     submitted = True
+                ignore_file = os.path.join(path, 'ignore.txt')
+                if os.path.isfile(ignore_file):
+                    ignore = True
                     break
                     # connections = (0, pass_color)
             #         pips = yaml.load(open(yml_file, 'rb'))
@@ -666,7 +670,9 @@ class ExperimentMetadata(Experiment):
                 else:
                     rec['site.mosaic'] = self.mosaic_file is not None
                     has_run, expt_success, all_success, errors = self.db_status
-                    if not has_run:
+                    if ignore:
+                        rec['DB'] = ("Ignore", (255, 255, 255))
+                    elif not has_run:
                         rec['DB'] = ("MISSING", (255, 255, 100))
                     elif not expt_success:
                         rec['DB'] = ("ERROR", fail_color)
@@ -728,7 +734,7 @@ class ExperimentMetadata(Experiment):
                             rec['morphology'] = has_morpho
                             layers = [cell.cortical_layer for cell in morpho if cell.cell.meta.get('lims_specimen_id') in cell_specimens]
                             layers_drawn = [layer is not None for layer in layers]
-                            rec['layers drawn'] = all(layers_drawn)
+                            rec['layers drawn'] = any(layers_drawn)
                         else:
                             rec['layers drawn'] = '-'
                             rec['morphology'] = '-'
