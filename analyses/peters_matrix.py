@@ -43,7 +43,7 @@ def morph_layer_density(specimen_id):
     cache_file = "morph_layer_density_cache.pkl"
     if _morph_layer_density_cache is None:
         if os.path.exists(cache_file):
-            _morph_layer_density_cache = pickle.load(open(cache_file))
+            _morph_layer_density_cache = pickle.load(open(cache_file, 'rb'))
         else:
             _morph_layer_density_cache = {}
     
@@ -54,7 +54,7 @@ def morph_layer_density(specimen_id):
     _morph_layer_density_cache[key] = _morph_layer_density(specimen_id)
     tmpfile = "cache.tmp"
     try:
-        pickle.dump(_morph_layer_density_cache, open(tmpfile, 'w'))
+        pickle.dump(_morph_layer_density_cache, open(tmpfile, 'wb'))
         os.rename(tmpfile, cache_file)
     finally:
         if os.path.exists(tmpfile):
@@ -184,7 +184,19 @@ if __name__ == '__main__':
     import pyqtgraph as pg
     pg.dbg()
     
-    cells = query_cells()
+    print("querying cells..")
+    cell_recs = query_cells()
+    print("  loaded %d cells" % len(cell_recs))
+    print("calculating morphological layer density..")
+    cells = []
+    for i,rec in enumerate(cell_recs):
+        print(  "%d/%d  %s" % (i, len(cell_recs), rec[0]), end="") 
+        mld = morph_layer_density(rec[0])
+        if mld is None:
+            print("  SKIP")
+        else:
+            cells.append(rec)
+            print("  OK")
     cells = [c for c in cells if morph_layer_density(c[0]) is not None]
     
     groups = group_cells(cells)
