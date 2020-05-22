@@ -635,15 +635,13 @@ class ExperimentMetadata(Experiment):
             connections = None
             ignore = False
             for path in search_paths:
-                if path is None:
-                    continue
-                yml_file = os.path.join(path, 'pipettes.yml')
-                if os.path.isfile(yml_file):
-                    submitted = True
-                ignore_file = os.path.join(path, 'ignore.txt')
-                if os.path.isfile(ignore_file):
-                    ignore = True
+                if path is not None and os.path.exists(path):
+                    chosen_path = path
                     break
+            yml_file = os.path.join(chosen_path, 'pipettes.yml')
+            ignore_file = os.path.join(chosen_path, 'ignore.txt')
+            ignore = os.path.exists(ignore_file)
+            submitted = os.path.exists(yml_file)
                     # connections = (0, pass_color)
             #         pips = yaml.load(open(yml_file, 'rb'))
             #         for k,v in pips.items():
