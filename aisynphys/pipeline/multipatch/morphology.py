@@ -5,7 +5,7 @@ For generating a DB table describing cell morphology.
 """
 from __future__ import print_function, division
 
-import os, datetime, hashlib, json, pandas
+import os, datetime, hashlib, json
 from sqlalchemy.orm import joinedload
 from collections import OrderedDict
 from ...util import timestamp_to_datetime, optional_import
@@ -52,9 +52,9 @@ class MorphologyPipelineModule(MultipatchPipelineModule):
             cell_specimen_id = cell.meta.get('lims_specimen_id')
             cell_morpho = morpho_results.get(cell_specimen_id)
             if cell_specimen_id is not None:
-                cortical_layer = lims_layers[lims_layers['spec_id']==cell_specimen_id]
-                if len(cortical_layer) == 1:
-                    cortical_layer = cortical_layer['layer'].iloc[0].lstrip('Layer')
+                cortical_layer = lims_layers.get(cell_specimen_id)
+                if cortical_layer is not None:
+                    cortical_layer = cortical_layer.lstrip('Layer')
             else:
                 cortical_layer = None
 
@@ -165,9 +165,9 @@ class MorphologyPipelineModule(MultipatchPipelineModule):
                     break
                 else:
                     morpho_rec = morpho_results.get(cell_specimen_id, None)
-                    cortical_layer = lims_layers[lims_layers['spec_id']==cell_specimen_id]
-                    if len(cortical_layer) == 1:
-                        cortical_layer = cortical_layer['layer'].iloc[0].lstrip('Layer')
+                    cortical_layer = lims_layers.get(cell_specimen_id)
+                    if cortical_layer is not None:
+                        cortical_layer = cortical_layer.lstrip('Layer')
                     if morpho_rec is None and cortical_layer is None:
                         morpho_db_hash = None
                     else:
@@ -215,6 +215,6 @@ def get_lims_layers():
     global lims_cache
     if lims_cache is None:
         lims_q = lims.all_cell_layers()
-        lims_cache = pandas.DataFrame(lims_q, columns=['layer', 'spec_id'])
+        lims_cache = {spec_id:layer for layer, spec_id in lims_q}
 
     return lims_cache
