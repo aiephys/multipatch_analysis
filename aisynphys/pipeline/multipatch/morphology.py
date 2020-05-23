@@ -52,11 +52,7 @@ class MorphologyPipelineModule(MultipatchPipelineModule):
             cell_specimen_id = cell.meta.get('lims_specimen_id')
             cell_morpho = morpho_results.get(cell_specimen_id)
             if cell_specimen_id is not None:
-                cortical_layer = lims_layers.get(cell_specimen_id)
-                if cortical_layer is not None:
-                    cortical_layer = cortical_layer.lstrip('Layer')
-            else:
-                cortical_layer = None
+                cortical_layer = lims_layers.get(cell_specimen_id, None)
 
             if user_morpho in (None, ''):
                 pyramidal = None
@@ -157,27 +153,21 @@ class MorphologyPipelineModule(MultipatchPipelineModule):
             expt = q.all()[0]
 
             ready[expt_id] = {'dep_time': expt_mtime}
-            cell_hash_compare = []
+            needs_update = False
             for cell_ext_id, cell in expt.cells.items():
-                cell_specimen_id = cell.meta.get('lims_specimen_id')
-                if cell.morphology is None or cell_specimen_id is None:
-                    cell_hash_compare.append(False)
+                if cell.morphology is None:
+                    needs_update = True
                     break
-                else:
-                    morpho_rec = morpho_results.get(cell_specimen_id, None)
-                    cortical_layer = lims_layers.get(cell_specimen_id)
-                    if cortical_layer is not None:
-                        cortical_layer = cortical_layer.lstrip('Layer')
-                    if morpho_rec is None and cortical_layer is None:
-                        morpho_db_hash = None
-                    else:
-                        morpho_db_hash = hash_record([morpho_rec, cortical_layer])
-                    prev_hash = None if cell.morphology.meta is None else cell.morphology.meta['morpho_db_hash']
-                    cell_hash_compare.append(morpho_db_hash==prev_hash)
-                    # assert expt.ext_id!='1523916429.198' or cell_hash_compare[-1]
-            
-            if not all(cell_hash_compare):
-                # raise Exception()
+                cell_specimen_id = cell.meta.get('lims_specimen_id')
+                morpho_rec = morpho_results.get(cell_specimen_id, None)
+                cortical_layer = lims_layers.get(cell_specimen_id, None)
+                morpho_db_hash = hash_record([morpho_rec, cortical_layer])
+                prev_hash = None if cell.morphology.meta is None else cell.morphology.meta['morpho_db_hash']
+                if morpho_db_hash != prev_hash:
+                    needs_update = True
+                    break
+
+            if needs_update:        
                 ready[expt_id] = {'dep_time': datetime.datetime.now()}
         
         return ready
@@ -215,6 +205,6 @@ def get_lims_layers():
     global lims_cache
     if lims_cache is None:
         lims_q = lims.all_cell_layers()
-        lims_cache = {spec_id:layer for layer, spec_id in lims_q}
+        lims_cache = {spec_id:layer.lstrip('Layer') for layer, spec_id in lims_q if layer is not None}
 
     return lims_cache
