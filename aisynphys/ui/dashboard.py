@@ -657,10 +657,13 @@ class ExperimentMetadata(Experiment):
             rec['data'] = '-' if self.nwb_file is None else True
             slice_fixed = self.slice_fixed
             if slice_fixed is True:
-                image_20x = self.biocytin_20x_file
-                rec['20x'] = image_20x is not None
-            else:
-                rec['20x'] = '-'
+                biocytin_20x = self.biocytin_20x_file is not None
+                dapi_20x = self.dapi_image_url is not None
+                image_20x = biocytin_20x and dapi_20x
+                if biocytin_20x and not dapi_20x:
+                    rec['20x'] = ('No DAPI', (255, 255, 100))
+                else:
+                    rec['20x'] = image_20x 
 
             if rec['submitted']:
                 if rec['data'] is not True:
@@ -704,7 +707,7 @@ class ExperimentMetadata(Experiment):
                     rec['LIMS'] = in_lims
                     image_63x = self.biocytin_63x_files
 
-                    if in_lims is True and slice_fixed is True and image_20x is not None:
+                    if in_lims is True and slice_fixed is True:
                         cell_specimens = lims.child_specimens(cell_cluster)
                         if len(cell_specimens) != 0:
                             cell_info = lims.cluster_cells(cell_cluster)
