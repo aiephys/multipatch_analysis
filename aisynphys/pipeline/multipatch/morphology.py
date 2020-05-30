@@ -51,8 +51,7 @@ class MorphologyPipelineModule(MultipatchPipelineModule):
             user_morpho = pip_meta.pipettes[cell.ext_id].get('morphology')
             cell_specimen_id = cell.meta.get('lims_specimen_id')
             cell_morpho = morpho_results.get(cell_specimen_id)
-            if cell_specimen_id is not None:
-                cortical_layer = lims_layers.get(cell_specimen_id, None)
+            cortical_layer = lims_layers.get(cell_specimen_id, None)
 
             if user_morpho in (None, ''):
                 pyramidal = None
@@ -99,15 +98,9 @@ class MorphologyPipelineModule(MultipatchPipelineModule):
             cell_meta = cell.meta.copy()
             cell_meta['morpho_cell_class'] = morpho_class
             cell.meta = cell_meta
-            transgenic_class = cell.meta['transgenic_cell_class']
-            if transgenic_class is None:
-                cell.cell_class_nonsynaptic = morpho_class
-            else:
-                if morpho_class is None or morpho_class == transgenic_class:
-                    cell.cell_class_nonsynaptic = transgenic_class
-                else:
-                    # morpho class conflicts with cre class
-                    cell.cell_class_nonsynaptic = None
+
+            # this gets updated again in later modules
+            cell.cell_class, cell.cell_class_nonsynaptic = cell._infer_cell_classes()
                 
             session.add(morphology)
         

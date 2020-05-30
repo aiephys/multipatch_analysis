@@ -127,6 +127,28 @@ class CellBase(object):
             uid = str('%0.3f'%self.experiment.acq_timestamp if self.experiment.acq_timestamp is not None else None)
         return "<%s %s %s>" % (self.__class__.__name__, uid, self.ext_id)
 
+    def _infer_cell_classes(self):
+        """Return cell_class and cell_class_nonsynaptic based on the current contents 
+        of cell.meta. 
+
+        This is used internally by pipeline modules to update the cell_class fields whenever new evidence
+        is added.
+        """
+        tm_classes = set()
+        tms_classes = set()
+        for name in ['transgenic', 'morpho', 'synaptic']:
+            cell_cls = self.meta.get(name + '_cell_class', None)
+            if cell_cls is None:
+                continue
+            tms_classes.add(cell_cls)
+            if name != 'synaptic':
+                tm_classes.add(cell_cls)
+            
+        tm_class = None if len(tm_classes) != 1 else list(tm_classes)[0]
+        tms_class = None if len(tms_classes) != 1 else list(tms_classes)[0]
+
+        return tms_class, tm_class
+
 
 Cell = make_table(
     name='cell', 
