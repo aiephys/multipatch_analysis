@@ -729,10 +729,9 @@ class ExperimentMetadata(Experiment):
                             rec['cell map'] = False
                         if rec['cell map'] is True:
                             morpho = database.query(database.Morphology).all()
-                            cell_morpho = [cell for cell in morpho if cell.cell.meta.get('lims_specimen_id') in cell_specimens]
-                            cell_meta = [cell.meta.get('morpho_db_hash') for cell in cell_morpho if cell.meta is not None]
-                            has_morpho = len(cell_meta) > 0
-                            rec['morphology'] = has_morpho
+                            cell_morpho = [cell.dendrite_type for cell in morpho if cell.cell.meta.get('lims_specimen_id') in cell_specimens]
+                            has_morpho = [dendrite is not None for dendrite in cell_morpho]
+                            rec['morphology'] = any(has_morpho)
                             layers = [cell.cortical_layer for cell in morpho if cell.cell.meta.get('lims_specimen_id') in cell_specimens]
                             layers_drawn = [layer is not None for layer in layers]
                             rec['layers drawn'] = any(layers_drawn)
