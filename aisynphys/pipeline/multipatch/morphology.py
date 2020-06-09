@@ -94,7 +94,7 @@ class MorphologyPipelineModule(MultipatchPipelineModule):
             # Update cell_class_nonsynaptic
             #  (cell_class gets updated later)
             dtype = results.get('dendrite_type', None)
-            morpho_class = {'spiny': 'ex', 'aspiny': 'in'}.get(dtype, None)
+            morpho_class = {'spiny': 'ex', 'aspiny': 'in', 'sparsely spiny': 'in'}.get(dtype, None)
             cell_meta = cell.meta.copy()
             cell_meta['morpho_cell_class'] = morpho_class
             cell.meta = cell_meta
