@@ -206,7 +206,7 @@ class ExperimentMetadataSubmission(object):
                 name_check = re.match(r'P(M|T)S4_(?P<date>\d{6})_(?P<tube_id>\d{3})_A01', tube_name)
                 if name_check is None:
                     errors.append('Tube ID %s for pipette %d does not have proper format' % (tube_name, pip_id))
-                if name_check.group('date') != datetime.strftime(datetime.now(), "%y%m%d"):
+                if name_check.group('date') != datetime.strftime(site_date, "%y%m%d"):
                     errors.append('Incorrect date in tube ID %s for pipette %d' % (tube_name, pip_id))
 
             # Following checks only apply if we got data from this pipette.    
