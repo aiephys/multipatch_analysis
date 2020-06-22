@@ -45,10 +45,11 @@ class OptoCortexLocationPipelineModule(DatabasePipelineModule):
                     pia_to_wm_distance=cortex.get('pia_to_wm_distance'),
                     pia_position=cortex.get('piaPos'),
                     wm_position=cortex.get('wmPos'),
-                    layer1_23_boundary=cortex.get('layerBounds_percentDepth',{}).get('L2/3', [None])[0],
-                    layer23_4_boundary=cortex.get('layerBounds_percentDepth',{}).get('L4', [None])[0],
-                    layer4_5_boundary=cortex.get('layerBounds_percentDepth',{}).get('L5', [None])[0],
-                    layer5_6_boundary=cortex.get('layerBounds_percentDepth',{}).get('L6', [None])[0]
+                    layer_boundaries=cortex.get('layerBounds_percentDepth'),
+                    # layer1_23_boundary=cortex.get('layerBounds_percentDepth',{}).get('L2/3', [None])[0],
+                    # layer23_4_boundary=cortex.get('layerBounds_percentDepth',{}).get('L4', [None])[0],
+                    # layer4_5_boundary=cortex.get('layerBounds_percentDepth',{}).get('L5', [None])[0],
+                    # layer5_6_boundary=cortex.get('layerBounds_percentDepth',{}).get('L6', [None])[0]
                     )
 
             site_entry.slice = slice_entry

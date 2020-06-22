@@ -30,10 +30,8 @@ CorticalSite = make_table(
         ('pia_to_wm_distance', 'float', 'The distance (in m) from the pia to the white matter.'),
         ('pia_position', 'object', '3D location where the pia was marked in the arbitrary coordinate system of the experiment'),
         ('wm_position', 'object', '3D location where the wm was marked in the arbitrary coordinate system of the experiment'),
-        ('layer1_23_boundary', 'float', 'Distance from the pia to the boundary between L1 and L2/3 as a fraction of cortex.'),
-        ('layer23_4_boundary', 'float', 'Distance from the pia to the boundary between L2/3 and L4 as a fraction of cortex.'),
-        ('layer4_5_boundary', 'float', 'Distance from the pia to the boundary between L4 and L5 as a fraction of cortex.'),
-        ('layer5_6_boundary', 'float', 'Distance from the pia to the boundary between L5 and L6 as a fraction of cortex.'),
+        ('layer_boundaries', 'object', 'Dictionary with fractional layer boundaries appropriate for the site.'),
+        ('brain_region', 'str', 'The name of the brain region for the site.')
         ])
 
 Slice.site = relationship(CorticalSite, back_populates="slice", cascade="delete", single_parent=True)
