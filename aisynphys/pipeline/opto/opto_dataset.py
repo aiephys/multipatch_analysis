@@ -147,7 +147,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                             data_start_time=resampled.t0,
                             #cell=electrode_entry.cell if electrode_entry is not None else None,
                             cell=cell_entry,
-                            device_name=str(rec.device_id),
+                            #device_name=str(rec.device_id),
                             previous_pulse_dt=prev_pulse_dt
                         )
                         session.add(pulse_entry)
@@ -219,7 +219,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                             #light_source,
                             position=stim['stimPos'],
                             #position_offset=stim['offset'],
-                            device_name=rec.device_id,
+                            #device_name=rec.device_id,
                             #qc_pass=None
                             meta = {'shape': shape,
                                     'pockel_cmd':stim.get('prairieCmds',{}).get('laserPower', [None]*100)[i],
@@ -268,7 +268,7 @@ class OptoDatasetPipelineModule(DatabasePipelineModule):
                             #data=resampled.data, ## don't need data, it's just a square pulse
                             #data_start_time=resampled.t0,
                             #position=None, # don't have a 3D position, have a field
-                            device_name=rec.device_id,
+                            #device_name=rec.device_id,
                             meta = {'shape': 'wide-field', ## TODO: description of field of view
                                     'LED_voltage':str(pulse.amplitude),
                                     'light_source':rec.device_id,
