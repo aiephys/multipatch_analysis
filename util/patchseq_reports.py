@@ -46,6 +46,8 @@ def generate_daily_report(day):
     row_data = []
     # look through each site directory
     for site in site_paths:
+        if os.path.isdir(site) is False:
+            continue
         errors = []
         site_source = open(os.path.join(site, 'sync_source')).read()
         errors.append(site_source)
