@@ -118,12 +118,14 @@ class ExperimentPipelineModule(MultipatchPipelineModule):
                     ext_id=cell.cell_id,
                     cre_type=cell.cre_type,
                     target_layer=cell.target_layer,
-                    cell_class=None,   # cell class fields get filled in later
-                    cell_class_nonsynaptic=None,
                     depth=cell.depth,
                     position=cell.position,
                     meta=cell_meta
                 )
+
+                # these get updated again in later modules
+                cell_entry.cell_class, cell_entry.cell_class_nonsynaptic = cell_entry._infer_cell_classes()
+
                 session.add(cell_entry)
                 cell_entries[cell] = cell_entry
 

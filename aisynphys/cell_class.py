@@ -54,7 +54,7 @@ class CellClass(object):
             name.append('L' + str(cortical_layer))
 
         if 'dendrite_type' in self.criteria:
-            name.append('%s' % self.criteria['dendrite_type'])
+            name.append(str(self.criteria['dendrite_type']))
 
         if 'pyramidal' in self.criteria:
             name.append('pyr' if self.criteria['pyramidal'] else 'nonpyr')

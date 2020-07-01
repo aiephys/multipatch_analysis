@@ -45,7 +45,6 @@ class SynapsePipelineModule(MultipatchPipelineModule):
         synaptic_cell_class = {}
 
         for pair in expt.pair_list:
-
             # look up synapse type from notes db
             notes_rec = notes_db.get_pair_notes_record(pair.experiment.ext_id, pair.pre_cell.ext_id, pair.post_cell.ext_id)
             if notes_rec is None:
@@ -145,7 +144,7 @@ class SynapsePipelineModule(MultipatchPipelineModule):
 
         # update cell_class:
         for cell, cell_classes in synaptic_cell_class.items():
-            if len(cell_classes) == 1:
+            if len(set(cell_classes)) == 1:
                 # all synaptic projections agree on sign
                 syn_class = cell_classes[0]
             else:
@@ -159,11 +158,13 @@ class SynapsePipelineModule(MultipatchPipelineModule):
                 # if cell class was not called previously, or if the synaptic class
                 # matches the previous nonsynaptic class
                 cell.cell_class = syn_class
-            
+            elif syn_class is None:
+                cell.cell_class = cell_class_ns
             cell_meta = cell.meta.copy()
             cell_meta['synaptic_cell_class'] = syn_class
             cell.meta = cell_meta
-            
+            cell.cell_class, cell.cell_class_nonsynaptic = cell._infer_cell_classes()
+
         return errors
         
     def job_records(self, job_ids, session):
