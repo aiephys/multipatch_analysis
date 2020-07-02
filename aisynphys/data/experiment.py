@@ -264,11 +264,15 @@ class Experiment(object):
         if self.lims_record['organism'] == 'mouse':
             # mouse: look up in acq4 metadata
             rgn = self.expt_info.get('target_region', None)
-            corrected = {'V1': 'VisP'}.get(rgn, rgn)
-            return corrected
         else:
-            # human: read from LIMS
-            return self.lims_record['structure']
+            # human: read from LIMS first, then acq4
+            rgn = self.lims_record['structure']
+            if rgn is None or rgn.strip() != '':
+                rgn = self.expt_info.get('target_region', None)
+        
+        corrected = {'V1': 'VisP'}.get(rgn, rgn)
+        return corrected
+
 
     @property
     def labels(self):
