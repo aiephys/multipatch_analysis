@@ -38,7 +38,6 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
         n_cells = len(expt.cell_list)
         ipfx_fail = 0
         for cell in expt.cell_list:
-            qc_pass = True
             dev_id = cell.electrode.device_id
             target_v, if_curve = get_lp_sweeps(sweeps, dev_id)
             lp_sweeps = target_v + if_curve
