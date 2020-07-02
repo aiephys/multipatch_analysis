@@ -174,6 +174,8 @@ def generate_monthly_report(start_date, end_date):
     row_data = []
     # look through each site directory for patchseq data
     for site in site_paths:
+        if os.path.isdir(site) is False:
+            continue
         errors = []
         site_source = open(os.path.join(site, 'sync_source')).read()
         errors.append(site_source)
