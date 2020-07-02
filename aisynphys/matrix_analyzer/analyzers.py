@@ -660,11 +660,11 @@ class StrengthAnalyzer(Analyzer):
                 start_time = rsf.vc_avg_data_start_time if field_name.startswith('PSC') else rsf.ic_avg_data_start_time
                 if latency is not None and start_time is not None:
                     if field_name == 'Latency':
-                        xoffset = start_time + latency
+                        xoffset = start_time
                     else:
                         xoffset = start_time - latency
                     baseline_window = [abs(xoffset)-1e-3, abs(xoffset)]
-                    traceA = format_trace(traceA, baseline_window, x_offset=xoffset, align='psp')
+                    traceA = format_trace(traceA, baseline_window, x_offset=xoffset)
                     trace_itemA = trace_plt[1].plot(traceA.time_values, traceA.data)
                     trace_itemA.pair = pair
                     trace_itemA.curve.setClickable(True)
@@ -675,9 +675,9 @@ class StrengthAnalyzer(Analyzer):
                     traceB = bessel_filter(traceB, 5000, btype='low', bidir=True)
                     start_time = rsf.vc_avg_data_start_time
                     if latency is not None and start_time is not None:
-                        xoffset = start_time + latency
+                        xoffset = start_time
                         baseline_window = [abs(xoffset)-1e-3, abs(xoffset)]
-                        traceB = format_trace(traceB, baseline_window, x_offset=xoffset, align='psp')
+                        traceB = format_trace(traceB, baseline_window, x_offset=xoffset)
                         trace_itemB = trace_plt[0].plot(traceB.time_values, traceB.data)
                         trace_itemB.pair = pair
                         trace_itemB.curve.setClickable(True)
@@ -687,6 +687,8 @@ class StrengthAnalyzer(Analyzer):
             if trace_itemA is not None:
                 values.append(value)
                 point_data.append(pair)
+            else:
+                self.pair_items[pair.id].extend([None, None])
         y_values = pg.pseudoScatter(np.asarray(values, dtype=float), spacing=1)
         scatter = pg.ScatterPlotItem(symbol='o', brush=(color + (150,)), pen='w', size=12)
         scatter.setData(values, y_values + 10., data=point_data)
@@ -746,6 +748,8 @@ class StrengthAnalyzer(Analyzer):
 
     def deselect_pairs(self):
         for (traceA, traceB, point, color) in self.pair_items.values():
+            if all([item is None for item in [traceA, traceB, point, color]]): 
+                continue
             point.setBrush(color + (150,))
             point.setSize(12)
             if traceA is not None:
@@ -1031,12 +1035,10 @@ class DynamicsAnalyzer(Analyzer):
         pass
 
 
-def format_trace(trace, baseline_win, x_offset=1e-3, align='spike'):
-    # align can be to the pre-synaptic spike (default) or the onset of the PSP ('psp')
+def format_trace(trace, baseline_win, x_offset=1e-3):
     baseline = float_mode(trace.time_slice(baseline_win[0],baseline_win[1]).data)
     trace = TSeries(data=(trace.data-baseline), sample_rate=db.default_sample_rate)
-    if align == 'psp':
-        trace.t0 = x_offset
+    trace.t0 = x_offset
     return trace
 
 def get_all_output_fields(analyzer_list):

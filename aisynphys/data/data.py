@@ -443,24 +443,24 @@ class PulseResponseList(object):
         for pr in self.prs:
             yield pr
 
-    def post_tseries(self, align=None, bsub=False):
+    def post_tseries(self, align=None, bsub=False, bsub_win=5e-3):
         """Return a TSeriesList of all postsynaptic recordings.
         """
-        return self._get_tserieslist('post_tseries', align, bsub)
+        return self._get_tserieslist('post_tseries', align, bsub, bsub_win)
 
-    def pre_tseries(self, align=None, bsub=False):
+    def pre_tseries(self, align=None, bsub=False, bsub_win=5e-3):
         """Return a TSeriesList of all presynaptic recordings.
         """
-        return self._get_tserieslist('pre_tseries', align, bsub)
+        return self._get_tserieslist('pre_tseries', align, bsub, bsub_win)
 
-    def _get_tserieslist(self, ts_name, align, bsub):
+    def _get_tserieslist(self, ts_name, align, bsub, bsub_win=5e-3):
         tsl = []
         for pr in self.prs:
             ts = getattr(pr, ts_name)
             stim_time = pr.stim_pulse.onset_time
 
             if bsub is True:
-                start_time = max(ts.t0, stim_time-5e-3)
+                start_time = max(ts.t0, stim_time-bsub_win)
                 baseline_data = ts.time_slice(start_time, stim_time).data
                 if len(baseline_data) == 0:
                     baseline = ts.data[0]
