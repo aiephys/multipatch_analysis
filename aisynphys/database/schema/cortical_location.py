@@ -4,11 +4,11 @@ from . import make_table
 from .slice import Slice
 from .experiment import Cell, Experiment
 
-__all__ = ['CellLocation', 'CorticalSite']
+__all__ = ['CorticalCellLocation', 'CorticalSite']
 
-CellLocation = make_table(
-    name='cell_location',
-    comment='Each row holds location information for a single cell.',
+CorticalCellLocation = make_table(
+    name='cortical_cell_location',
+    comment='Each row holds location information for a single cortical cell.',
     columns=[
         ('cell_id', 'cell.id', 'ID of the cell these locations apply to.', {'index':True}),
         ('cortical_site_id', 'cortical_site.id', 'ID of the site location measurements fit within.', {'index':True}),
@@ -18,8 +18,8 @@ CellLocation = make_table(
         ('fractional_depth', 'float', 'The cortical depth of the cell where pia is 0 and wm is 1.')
         ])
         
-Cell.location = relationship(CellLocation, back_populates="cell", cascade="delete", single_parent=True, uselist=False)
-CellLocation.cell = relationship(Cell, back_populates="location", single_parent=True)
+Cell.cortical_location = relationship(CorticalCellLocation, back_populates="cell", cascade="delete", single_parent=True, uselist=False)
+CorticalCellLocation.cell = relationship(Cell, back_populates="cortical_location", single_parent=True)
 
 CorticalSite = make_table(
     name='cortical_site',
@@ -34,9 +34,11 @@ CorticalSite = make_table(
         ('brain_region', 'str', 'The name of the brain region for the site.')
         ])
 
-Slice.site = relationship(CorticalSite, back_populates="slice", cascade="delete", single_parent=True)
-CorticalSite.slice = relationship(Slice, back_populates='site', single_parent=True)
-CellLocation.site = relationship(CorticalSite, back_populates='cell')
-CorticalSite.cell = relationship(CellLocation, back_populates='site', cascade='delete')
-CorticalSite.experiment = relationship(Experiment, back_populates='site', single_parent=True)
-Experiment.site = relationship(CorticalSite, back_populates='experiment', cascade="delete", single_parent=True)
+Slice.cortical_sites = relationship(CorticalSite, back_populates="slice", cascade="save-update,merge,delete")
+CorticalSite.slice = relationship(Slice, back_populates='cortical_sites')
+
+CorticalCellLocation.cortical_site = relationship(CorticalSite, back_populates='cell_locations')
+CorticalSite.cell_locations = relationship(CorticalCellLocation, back_populates='cortical_site', cascade='delete')
+
+CorticalSite.experiment = relationship(Experiment, back_populates='cortical_sites', single_parent=True)
+Experiment.cortical_sites = relationship(CorticalSite, back_populates='experiment', cascade="save-update,merge,delete")

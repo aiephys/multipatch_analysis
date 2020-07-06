@@ -59,7 +59,7 @@ class OptoCortexLocationPipelineModule(DatabasePipelineModule):
 
             for cell_id, cell in expt.cells.items():
 
-                loc_entry = db.CellLocation(
+                loc_entry = db.CorticalCellLocation(
                     #cell_id=cell.cell_id,
                     layer=cell.target_layer,
                     distance_to_pia=cell.distance_to_pia,
@@ -71,7 +71,7 @@ class OptoCortexLocationPipelineModule(DatabasePipelineModule):
                     loc_entry.cell = cell_entry[0]
                 else:
                     raise Exception("Found wrong number of cell entries for experiment %s, cell %s" %(job_id, cell_id))
-                loc_entry.site = site_entry
+                loc_entry.cortical_site = site_entry
                 session.add(loc_entry)
 
         except:
