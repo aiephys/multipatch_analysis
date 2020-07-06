@@ -54,7 +54,7 @@ class CellClass(object):
             name.append('L' + str(cortical_layer))
 
         if 'dendrite_type' in self.criteria:
-            name.append('%s' % self.criteria['dendrite_type'])
+            name.append(str(self.criteria['dendrite_type']))
 
         if 'pyramidal' in self.criteria:
             name.append('pyr' if self.criteria['pyramidal'] else 'nonpyr')
@@ -74,15 +74,19 @@ class CellClass(object):
         cre type or morphology.
         """
         cre = self.criteria.get('cre_type')
+        if isinstance(cre, tuple):
+            cre_is_exc = all([c in constants.EXCITATORY_CRE_TYPES for c in cre])
+        else:
+            cre_is_exc = cre in constants.EXCITATORY_CRE_TYPES
         pyr = self.criteria.get('pyramidal')
         dendrite = self.criteria.get('dendrite_type')
-        return cre == 'unknown' or cre in constants.EXCITATORY_CRE_TYPES or pyr is True or dendrite == 'spiny'
+        return cre_is_exc or pyr is True or dendrite == 'spiny'
 
     @property
     def output_synapse_type(self):
         """Expected type of synapses "ex" or "in" to be output from this cell type.
         """
-        return 'ex' if self.is_excitatory else 'in'
+        return {True: 'ex', False: 'in'}.get(self.is_excitatory, None)
 
     def __contains__(self, cell):
         morpho = cell.morphology

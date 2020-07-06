@@ -74,74 +74,6 @@ def get_amps(session, pair, clamp_mode='ic', get_data=False):
     return recs
 
 
-# def get_baseline_amps(session, pair, clamp_mode='ic', amps=None, get_data=True):
-#     """Select records from baseline_response_strength table
-
-#     If *amps* is given (output from get_amps), then baseline records will be selected from the same
-#     sweeps as the responses.
-#     """
-#     cols = [
-#         db.BaselineResponseStrength.id,
-#         db.BaselineResponseStrength.pos_amp,
-#         db.BaselineResponseStrength.neg_amp,
-#         db.BaselineResponseStrength.pos_dec_amp,
-#         db.BaselineResponseStrength.neg_dec_amp,
-#         db.BaselineResponseStrength.pos_dec_latency,
-#         db.BaselineResponseStrength.neg_dec_latency,
-#         db.BaselineResponseStrength.crosstalk,
-#         db.Baseline.ex_qc_pass,
-#         db.Baseline.in_qc_pass,
-#         db.PatchClampRecording.qc_pass,
-#         db.PatchClampRecording.clamp_mode,
-#         db.PatchClampRecording.baseline_potential,
-#         db.PatchClampRecording.baseline_current,
-#         db.Recording.start_time.label('rec_start_time'),
-#         db.Baseline.data_start_time.label('response_start_time'),
-#     ]
-#     if get_data:
-#         cols.append(db.Baseline.data)
-        
-#     q = session.query(*cols)
-#     q = q.join(db.Baseline, db.BaselineResponseStrength.baseline)
-#     q = q.join(db.Recording)
-#     q = q.join(db.PatchClampRecording)
-#     q = q.join(db.SyncRec)
-#     q = q.join(db.Experiment)
-    
-#     filters = [
-#         (db.Recording.electrode==pair.post_cell.electrode,),
-#         (db.PatchClampRecording.clamp_mode==clamp_mode,),
-#         # (db.PatchClampRecording.qc_pass==True,),
-#     ]
-#     for filter_args in filters:
-#         q = q.filter(*filter_args)
-    
-#     # should result in chronological order
-#     q = q.order_by(db.Recording.start_time)
-
-#     # if amps is not None:
-#     #     q = q.limit(len(amps))
-
-#     df = pandas.read_sql_query(q.statement, q.session.bind)
-#     recs = df.to_records()
-
-#     if amps is not None:
-#         # for each record returned from get_amps, return the nearest baseline record
-#         mask = np.zeros(len(recs), dtype=bool)
-#         amp_times = amps['rec_start_time'].astype(float)*1e-9 + amps['response_start_time']
-#         base_times = recs['rec_start_time'].astype(float)*1e-9 + recs['response_start_time']
-#         for i in range(len(amps)):
-#             order = np.argsort(np.abs(base_times - amp_times[i]))
-#             for j in order:
-#                 if mask[j]:
-#                     continue
-#                 mask[j] = True
-#                 break
-#         recs = recs[mask]
-
-#     return recs
-
-
 def join_pulse_response_to_expt(query):
     pre_rec = aliased(db.Recording)
     post_rec = aliased(db.Recording)
@@ -157,7 +89,6 @@ def join_pulse_response_to_expt(query):
         query = query.join(*join_args)
 
     return query, pre_rec, post_rec
-
 
 
 def norm_pvalue(pval):

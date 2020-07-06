@@ -18,6 +18,11 @@ minimum_rest_duration = 8.0
 class RestingStatePipelineModule(MultipatchPipelineModule):
     """Measure the "resting state" amplitude of a synapse by averaging together only responses 
     that have no prior stimuli in a certain window. 
+
+    This module generates records in the resting_state_fit table and also updates synapse.psp_amplitude
+    and synapse.psc_amplitude. For QC, the synapse fields are only updated if synapse.psp_rise_time and 
+    .psc_rise_time have already been set.
+
     """
     name = 'resting_state'
     dependencies = [SynapsePipelineModule]
@@ -57,10 +62,12 @@ class RestingStatePipelineModule(MultipatchPipelineModule):
                 
             session.add(fit_rec)
             
-            # update synapse record
-            if result['ic']['fit'] is not None:
+            # update synapse record IF it also has kinetics
+            # (if not, then the synapse failed psp fitting to the all-pulse averages,
+            # so we should assume the fit to only resting-state pulses is even worse)
+            if result['ic']['fit'] is not None and pair.synapse.psp_rise_time is not None:
                 pair.synapse.psp_amplitude = result['ic']['fit'].best_values['amp']
-            if result['vc']['fit'] is not None:
+            if result['vc']['fit'] is not None and pair.synapse.psc_rise_time is not None:
                 pair.synapse.psc_amplitude = result['vc']['fit'].best_values['amp']
         
     def job_records(self, job_ids, session):

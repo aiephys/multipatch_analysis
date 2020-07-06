@@ -639,6 +639,19 @@ def cell_layer(cell):
         raise Exception ('Incorrect number of layers for cell %d' % cell)
     return recs[0][0]
 
+def all_cell_layers():
+    """ Return layer calls for all Cell specimens 
+    """
+    q = """select structures.acronym, specimens.id
+    from structures
+    left join specimens on specimens.cortex_layer_id=structures.id
+    left join specimen_types_specimens on specimen_types_specimens.specimen_id=specimens.id
+    left join specimen_types on specimen_types.id=specimen_types_specimens.specimen_type_id
+    where specimen_types.name like 'Cell'
+    """
+
+    recs = query(q)
+    return recs
 
 if __name__ == '__main__':
     # testing specimen

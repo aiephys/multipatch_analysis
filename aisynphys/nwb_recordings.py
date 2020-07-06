@@ -2,7 +2,9 @@
 import numpy as np
 
 def get_lp_sweeps(sweeps, dev_id):
-    # get stimulus sweeps from the TargetV and IF Curve stim sets
+    """Get stimulus sweeps from the TargetV (subthreshold, mostly hyperpolarizing) 
+    and IF Curve (suprathreshold) stim sets
+    """
     targv_sweeps = []
     ifc_sweeps = []
     for sweep in sweeps:
@@ -20,7 +22,10 @@ def get_lp_sweeps(sweeps, dev_id):
     return targv_sweeps, ifc_sweeps
 
 def get_pulse_times(recording):
-    # returns the start and stop time of the target_v or If_curve long pulse
+    """Returns the start and stop time of the target_v or If_curve long pulse.
+    How this gets parsed depends on how the experiment was aquired as these stimuli 
+    were added later.
+    """
     stims = recording.stimulus.items
     # newer experiments have 5 elements, the 4th one is the long pulse of the target_v or If_curve stimulus
     if len(stims) == 5:
@@ -41,6 +46,8 @@ def get_pulse_times(recording):
         return None
 
 def get_db_recording(expt, recording):
+    """Get the database record for the recording given the raw recording object
+    """
     trodes = {e.device_id: e.id for e in expt.electrodes}
     trode_id = trodes[recording.device_id]
     srecs = {srec.ext_id: srec for srec in expt.sync_recs}

@@ -12,12 +12,14 @@ from ipfx.stimulus_protocol_analysis import LongSquareAnalysis
 from ipfx.ephys_data_set import Sweep, SweepSet
 from .pipeline_module import MultipatchPipelineModule
 from .experiment import ExperimentPipelineModule
+from .dataset import DatasetPipelineModule
 from ...nwb_recordings import get_lp_sweeps, get_pulse_times, get_db_recording
+
 
 class IntrinsicPipelineModule(MultipatchPipelineModule):
     
     name = 'intrinsic'
-    dependencies = [ExperimentPipelineModule]
+    dependencies = [ExperimentPipelineModule, DatasetPipelineModule]
     table_group = ['intrinsic']
 
     @classmethod
@@ -36,12 +38,11 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
         n_cells = len(expt.cell_list)
         ipfx_fail = 0
         for cell in expt.cell_list:
-            qc_pass = True
             dev_id = cell.electrode.device_id
             target_v, if_curve = get_lp_sweeps(sweeps, dev_id)
             lp_sweeps = target_v + if_curve
             if len(lp_sweeps) == 0:
-                errors.append('No long pulse sweeps for cell %d' % cell.ext_id)
+                errors.append('No long pulse sweeps for cell %s' % cell.ext_id)
                 continue
             recs = [rec[dev_id] for rec in lp_sweeps]
             min_pulse_dur = np.inf
@@ -68,7 +69,7 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
                 sweep_list.append(sweep)
             
             if len(sweep_list) == 0:
-                errors.append('No sweeps passed qc for cell %d' % cell.ext_id)
+                errors.append('No sweeps passed qc for cell %s' % cell.ext_id)
                 continue
 
             sweep_set = SweepSet(sweep_list)    
@@ -77,13 +78,15 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
             
             try:
                 analysis = lsa.analyze(sweep_set)
-            except Exception:
-                tb = traceback.format_exception_only(sys.last_type, sys.last_value)
-                errors.append('Error running IPFX analysis for cell %d: %s' % (cell.ext_id, tb))
+            except Exception as exc:
+                errors.append('Error running IPFX analysis for cell %s: %s' % (cell.ext_id, str(exc)))
                 ipfx_fail += 1
-                if ipfx_fail == n_cells and n_cells > 1:
-                    raise Exception('All cells failed IPFX analysis')
                 continue
+
+            if ipfx_fail == n_cells and n_cells > 1:
+                raise Exception('All cells failed IPFX analysis')
+                continue
+            
             spike_features = lsa.mean_features_first_spike(analysis['spikes_set'])
             up_down = spike_features['upstroke_downstroke_ratio']
             rheo = analysis['rheobase_i']

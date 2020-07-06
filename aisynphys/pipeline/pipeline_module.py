@@ -98,8 +98,8 @@ class PipelineModule(object):
                 # pick a random subset to import; this is just meant to ensure we get a variety
                 # of data when testing the import system.
                 rng = np.random.RandomState(0)
-                rng.shuffle(job_ids)
-                run_job_ids = job_ids[:limit]
+                rng.shuffle(run_job_ids)
+                run_job_ids = run_job_ids[:limit]
                 drop_job_ids = [jid for jid in drop_job_ids if jid in run_jobs_meta]
         else:
             run_job_ids = job_ids
