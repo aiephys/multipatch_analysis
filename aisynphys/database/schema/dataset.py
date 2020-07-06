@@ -142,7 +142,7 @@ StimPulse = make_table(
         ('data', 'array', 'Numpy array of presynaptic recording sampled at '+sample_rate_str, {'deferred': True}),
         ('data_start_time', 'float', "Starting time of the data chunk, relative to the beginning of the recording"),       
         ('position', 'object', '3D location of this stimulation in the arbitrary coordinate system of the experiment'),
-        ('qc_pass', 'bool', 'Indicates whether this stimulation passed qc for testing a synaptic connection.'),
+        ('qc_pass', 'bool', 'Indicates whether this stimulation passed qc.'),
         ('previous_pulse_dt', 'float', 'Time elapsed since the last stimulus in the same cell', {'index': True}),
     ]
 )
