@@ -277,6 +277,10 @@ class SynphysDatabase(Database):
         # package the aliased cells
         query.pre_cell = pre_cell
         query.post_cell = post_cell
+        query.pre_morphology = pre_morphology
+        query.post_morphology = post_morphology
+        query.pre_patch_seq = pre_patch_seq
+        query.post_patch_seq = post_patch_seq
 
         return query
 

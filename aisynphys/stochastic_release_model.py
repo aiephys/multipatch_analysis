@@ -500,6 +500,14 @@ def estimate_mini_amplitude(amplitudes, params):
 
 class ParameterSpace(object):
     """Used to generate and store model results over a multidimentional parameter space.
+
+    Parameters
+    ----------
+    params : dict
+        Dictionary of {'parameter_name': array_of_values} describing parameter space to be searched.
+        Scalar values are passed to the evaluation function when calling run(), but are not included
+        as an axis in the result array.
+
     """
     def __init__(self, params):
         self.params = params
@@ -519,14 +527,19 @@ class ParameterSpace(object):
         return OrderedDict([(ax, {'values': self.params[ax]}) for ax in self.param_order])
         
     def run(self, func, workers=None, **kwds):
+        """Run *func* in parallel over the entire parameter space, storing
+        results into self.result.
+        """
         from pyqtgraph.multiprocess import Parallelize
         all_inds = list(np.ndindex(self.result.shape))
-        with Parallelize(enumerate(all_inds), results=self.result, progressDialog='synapticulating...', workers=workers) as tasker:
+        with Parallelize(enumerate(all_inds), results=self.result, progressDialog={'labelText':'synapticulating...', 'nested':True}, workers=workers) as tasker:
             for i, inds in tasker:
                 params = self[inds]
                 tasker.results[inds] = func(params, **kwds)
         
     def __getitem__(self, inds):
+        """Return a dict of the parameter values used at a specific index in the paremter space.
+        """
         params = self.static_params.copy()
         for i,param in enumerate(self.param_order):
             params[param] = self.params[param][inds[i]]
@@ -645,6 +658,9 @@ class StochasticModelRunner:
         events = event_query(pair, self.db, session).dataframe()
         print("loaded %d events" % len(events))
 
+        if len(events) == 0:
+            raise Exception("No events found for this synapse.")
+
         rec_times = (events['rec_start_time'] - events['rec_start_time'].iloc[0]).dt.total_seconds().to_numpy()
         spike_times = events['first_spike_time'].to_numpy() + rec_times
         
@@ -731,12 +747,17 @@ class StochasticModelRunner:
             result = model.measure_likelihood(spike_times, amplitudes, **kwds)
         else:
             result = model.optimize_mini_amplitude(spike_times, amplitudes, **kwds)
+        
         if full_result:
             result['model'] = model
             result['event_meta'] = event_meta
             return result
         else:
-            return {'likelihood': result['likelihood'], 'params': result['params']}
+            return {
+                'likelihood': result['likelihood'], 
+                'params': result['params'],
+                'optimized_params': result.get('optimized_params', {}),
+            }
 
 
 class CombinedModelRunner:

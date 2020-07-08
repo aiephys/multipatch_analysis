@@ -1,7 +1,4 @@
-"""Analyses for fitting the average response from a pair given an optional response latency.
-Spike time is set to 0ms
-"""
-
+# coding: utf8
 import sys
 from collections import OrderedDict
 import numpy as np
@@ -17,39 +14,59 @@ from aisynphys.fitting import fit_avg_pulse_response
 
 def get_pair_avg_fits(pair, session, notes_session=None, ui=None):
     """Return PSP fits to averaged responses for this pair.
+
+    Fits are performed against average PSPs in 4 different categories: 
+    IC -70mV, IC -55mV, VC -70mV, and VC -55mV. All PSPs in these categories are averaged together
+    regardless of their position in a pulse train, so we expect the amplitudes of these averages to
+    be affected by any short-term depression/facilitation present at the synapse. As such, these fits
+    are not ideal for measuring the amplitude of the synapse; however, they do provide good estimates
+    of rise time and decay tau.
     
     Operations are:
-    - query all pulse responses for this pair
-    - sort responses by clamp mode and holding potential
-    - generate average response for each mode/holding combination
-    - fit averages to PSP curve
+    
+    - Query all pulse responses for this pair, where the pulse train frequency was 
+      no faster than 50Hz
+    - Sort responses by clamp mode and holding potential, with the latter in two bins: -80 to -60 mV and -60 to -45 mV.
+      Responses are further separated into qc pass/fail for each bin. QC pass criteria:
+        - PR must have exactly one presynaptic spike with detectable latency
+        - Either PR.ex_qc_pass or .in_qc_pass must be True, depending on clamp mode / holding
+    - Generate average response for qc-passed pulses responses in each mode/holding combination
+    - Fit averages to PSP curve. If the latency was manually annotated for this synapse, then the curve
+      fit will have its latency constrained within ±100 μs.
+    - Compare to manually verified fit parameters; if these are not a close match OR if the 
+      manual fits were already failed, then *fit_qc_pass* will be False.
+      
     
     Returns
     -------
     results : dict
         {(mode, holding): {
-            'traces': , 
-            'average', 
-            'fit_params',
-            'initial_latency',
-            'fit_qc_pass',
-            'expected_fit_params',
-            'avg_baseline_noise',
-            }, 
-        }
+            'responses': ..,
+            'average': ..,
+            'initial_latency': ..,
+            'fit_result': ..,
+            'fit_qc_pass': ..,
+            'fit_qc_pass_reasons': ..,
+            'expected_fit_params': ..,
+            'expected_fit_pass': ..,
+            'avg_baseline_noise': ..,
+        }, ...}
     
     """
     prof = pg.debug.Profiler(disabled=True, delayed=False)
     prof(str(pair))
     results = {}
     
-    # query and sort pulse responses
+    # query and sort pulse responses with induction frequency 50Hz or slower
     records = response_query(session=session, pair=pair).all()
     prof('query prs')
     pulse_responses = [rec[0] for rec in records]
+
+    # sort into clamp mode / holding bins
     sorted_responses = sort_responses(pulse_responses)
     prof('sort prs')
 
+    # load expected PSP curve fit parameters from notes DB
     notes_rec = notes_db.get_pair_notes_record(pair.experiment.ext_id, pair.pre_cell.ext_id, pair.post_cell.ext_id, session=notes_session)
     prof('get pair notes')
 
@@ -91,8 +108,7 @@ def get_pair_avg_fits(pair, session, notes_session=None, ui=None):
         # measure baseline noise
         avg_baseline_noise = avg_response.time_slice(avg_response.t0, avg_response.t0+7e-3).data.std()
 
-        # load up expected fit results and compare to manually-verified
-        # results
+        # compare to manually-verified results
         if notes is None:
             qc_pass = False
             reasons = ['no data notes entry']
@@ -148,6 +164,14 @@ def response_query(session, pair, max_ind_freq=50):
 
 
 def sort_responses(pulse_responses):
+    """Sort a list of pulse responses by clamp mode and holding potential into 4 categories: 
+    (ic -70), (ic -55), (vc -70), (vc -55). Each category contains pulse responses split into
+    lists for qc-pass and qc-fail.
+
+    QC pass for this function requires that the pulse response has True for either pr.in_qc_pass
+    or pr.ex_qc_pass, depending on which category the PR has been sorted into. We _also_ require
+    at this stage that the PR has exactly one presynaptic spike with a detectable onset time.
+    """
     ex_limits = [-80e-3, -60e-3]
     in_limits = [-60e-3, -45e-3]
     
@@ -175,6 +199,9 @@ def sort_responses(pulse_responses):
 
 
 def check_fit_qc_pass(fit_result, expected_params, clamp_mode):
+    """Return bool indicating whether a PSP fit result matches a previously accepted result, as well as
+    a list of strings describing the reasons, if any.
+    """
     failures = []
     fit_params = fit_result.best_values
 
