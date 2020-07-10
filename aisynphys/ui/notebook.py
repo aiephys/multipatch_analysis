@@ -4,6 +4,13 @@ import numpy as np
 import matplotlib
 import matplotlib.cm
 import matplotlib.pyplot as plt
+import pandas as pd
+from scipy import stats
+from aisynphys.cell_class import CellClass
+from neuroanalysis.data import TSeries
+from neuroanalysis.baseline import float_mode
+from aisynphys.avg_response_fit import response_query, sort_responses
+from aisynphys.data import PulseResponseList
 
 
 def heatmap(data, row_labels, col_labels, ax=None, ax_labels=None, bg_color=None,
@@ -185,24 +192,27 @@ def show_connectivity_matrix(ax, results, pre_cell_classes, post_cell_classes, c
     return im, cbar, labels
 
 
-def cell_class_matrix(pre_classes, post_classes, metric, class_labels, ax, db, pair_query_args=None):
+def get_metric_data(metric, db, pre_classes=None, post_classes=None, pair_query_args=None):
     pair_query_args = pair_query_args or {}
 
     metrics = {
-        #                               name                         unit   scale  db columns                                    colormap      log     clim           text format
-        'psp_amplitude':               ('PSP Amplitude',             'mV',  1e3,   [db.Synapse.psp_amplitude],                   'bwr',        False,  (-1, 1),       "%0.2f mV"),
-        'psp_rise_time':               ('PSP Rise Time',             'ms',  1e3,   [db.Synapse.psp_rise_time],                   'viridis_r',  False,  (0, 6),        "%0.2f ms"),
-        'psp_decay_tau':               ('PSP Decay Tau',             'ms',  1e3,   [db.Synapse.psp_decay_tau],                   'viridis_r',  False,  (0, 20),       "%0.2f ms"),
-        'psc_amplitude':               ('PSC Amplitude',             'mV',  1e3,   [db.Synapse.psc_amplitude],                   'bwr',        False,  (-1, 1),       "%0.2f mV"),
-        'psc_rise_time':               ('PSC Rise Time',             'ms',  1e3,   [db.Synapse.psc_rise_time],                   'viridis_r',  False,  (0, 6),        "%0.2f ms"),
-        'psc_decay_tau':               ('PSC Decay Tau',             'ms',  1e3,   [db.Synapse.psc_decay_tau],                   'viridis_r',  False,  (0, 20),       "%0.2f ms"),
-        'latency':                     ('Latency',                   'ms',  1e3,   [db.Synapse.latency],                         'viridis_r',  False,  (0, 6),        "%0.2f ms"),
-        'stp_initial_50hz':            ('Paired pulse STP',          '',    1,     [db.Dynamics.stp_initial_50hz],               'bwr',        False,  (-0.5, 0.5),   "%0.2f"),
-        'stp_induction_50hz':          ('Train induced STP',         '',    1,     [db.Dynamics.stp_induction_50hz],             'bwr',        False,  (-0.5, 0.5),   "%0.2f"),
-        'stp_recovery_250ms':          ('STP Recovery',              '',    1,     [db.Dynamics.stp_recovery_250ms],             'bwr',        False,  (-0.5, 0.5),   "%0.2f"),
-        'pulse_amp_90th_percentile':   ('PSP Amplitude 90th %%ile',  'mV',  1e3,   [db.Dynamics.pulse_amp_90th_percentile],      'bwr',        False,  (-1, 1),       "%0.2f mV"),
+        #                               name                         unit   scale alpha  db columns                                    colormap      log     clim           text format
+        'psp_amplitude':               ('PSP Amplitude',             'mV',  1e3,  1,     [db.Synapse.psp_amplitude],                   'bwr',        False,  (-1.5, 1.5),       "%0.2f mV"),
+        'psp_rise_time':               ('PSP Rise Time',             'ms',  1e3,  0.5,   [db.Synapse.psp_rise_time],                   'viridis_r',  True,  (1, 10),        "%0.2f ms"),
+        'psp_decay_tau':               ('PSP Decay Tau',             'ms',  1e3,  1,     [db.Synapse.psp_decay_tau],                   'viridis_r',  False,  (0, 20),       "%0.2f ms"),
+        'psc_amplitude':               ('PSC Amplitude',             'mV',  1e3,  1,     [db.Synapse.psc_amplitude],                   'bwr',        False,  (-1, 1),       "%0.2f mV"),
+        'psc_rise_time':               ('PSC Rise Time',             'ms',  1e3,  1,     [db.Synapse.psc_rise_time],                   'viridis_r',  False,  (0, 6),        "%0.2f ms"),
+        'psc_decay_tau':               ('PSC Decay Tau',             'ms',  1e3,  1,     [db.Synapse.psc_decay_tau],                   'viridis_r',  False,  (0, 20),       "%0.2f ms"),
+        'latency':                     ('Latency',                   'ms',  1e3,  1,     [db.Synapse.latency],                         'viridis_r',  False,  (0.5, 3),        "%0.2f ms"),
+        'stp_initial_50hz':            ('Paired pulse STP',          '',    1,    1,     [db.Dynamics.stp_initial_50hz],               'bwr',        False,  (-0.5, 0.5),   "%0.2f"),
+        'stp_induction_50hz':          ('Train induced STP',         '',    1,    1,     [db.Dynamics.stp_induction_50hz],             'bwr',        False,  (-0.5, 0.5),   "%0.2f"),
+        'stp_recovery_250ms':          ('STP Recovery',              '',    1,    1,     [db.Dynamics.stp_recovery_250ms],             'bwr',        False,  (-0.5, 0.5),   "%0.2f"),
+        'pulse_amp_90th_percentile':   ('PSP Amplitude 90th %%ile',  'mV',  1e3,  1.5,   [db.Dynamics.pulse_amp_90th_percentile],      'bwr',        False,  (-1.5, 1.5),       "%0.2f mV"),
     }
-    metric_name, units, scale, columns, cmap, cmap_log, clim, cell_fmt = metrics[metric]
+    metric_name, units, scale, alpha, columns, cmap, cmap_log, clim, cell_fmt = metrics[metric]
+
+    if pre_classes is None or post_classes is None:
+        return None, metric_name, units, scale, alpha, cmap, cmap_log, clim, cell_fmt
 
     pairs = db.matrix_pair_query(
         pre_classes=pre_classes,
@@ -212,12 +222,64 @@ def cell_class_matrix(pre_classes, post_classes, metric, class_labels, ax, db, p
     )
 
     pairs_has_metric = pairs[~pairs[metric].isnull()]
+    return pairs_has_metric, metric_name, units, scale, alpha, cmap, cmap_log, clim, cell_fmt
+
+def metric_stats(metric, db, pre_classes, post_classes, pair_query_args):
+    pairs_has_metric, _, units, scale, _, _, _, _, _ = get_metric_data(metric, db, pre_classes=pre_classes, post_classes=post_classes, pair_query_args=pair_query_args)
+    pairs_has_metric[metric] = pairs_has_metric[metric].apply(pd.to_numeric)*scale
+    summary = pairs_has_metric.groupby(['pre_class', 'post_class']).describe(percentiles=[0.5])
+    return summary[metric], units
+
+def ei_hist_plot(ax, metric, bin_edges, db, pair_query_args):
+    ei_classes = {'ex': CellClass(cell_class_nonsynaptic='ex'), 'in': CellClass(cell_class_nonsynaptic='in')}
+    
+    pairs_has_metric, metric_name, units, scale, _, _, _, _, _ = get_metric_data(metric, db, ei_classes, ei_classes, pair_query_args=pair_query_args)
+    ex_pairs = pairs_has_metric[pairs_has_metric['pre_class']=='ex']
+    in_pairs = pairs_has_metric[pairs_has_metric['pre_class']=='in']
+    if 'amp' in metric:
+        ax[0].hist(ex_pairs[metric]*scale, bins=bin_edges, color=(0.8, 0.8, 0.8), label='All Excitatory Synapses')
+        ax[1].hist(in_pairs[metric]*scale, bins=bin_edges, color=(0.8, 0.8, 0.8), label='All Inhibitory Synapses')
+    else:
+        ax[0].hist(pairs_has_metric[metric]*scale, bins=bin_edges, color=(0.8, 0.8, 0.8), label='All Synapses')
+        ax[1].hist(pairs_has_metric[metric]*scale, bins=bin_edges, color=(0.8, 0.8, 0.8), label='All Synapses')
+
+    ee_pairs = ex_pairs[ex_pairs['post_class']=='ex']
+    ei_pairs = ex_pairs[ex_pairs['post_class']=='in']
+    ax[0].hist(ee_pairs[metric]*1e3, bins=bin_edges, color='red', alpha=0.6, label='E->E Synapses')
+    ax[0].hist(ei_pairs[metric]*1e3, bins=bin_edges, color='pink', alpha=0.8, label='E->I Synapses')
+    ax[0].legend(frameon=False)
+
+    ii_pairs = in_pairs[in_pairs['post_class']=='in']
+    ie_pairs = in_pairs[in_pairs['post_class']=='ex']
+    ax[1].hist(ii_pairs[metric]*1e3, bins=bin_edges, color='blue', alpha=0.4, label='I->I Synapses')
+    ax[1].hist(ie_pairs[metric]*1e3, bins=bin_edges, color='purple', alpha=0.4, label='I->E Synapses')
+    ax[1].legend(frameon=False)
+    
+    ax[0].spines['right'].set_visible(False)
+    ax[0].spines['top'].set_visible(False)
+    ax[1].spines['right'].set_visible(False)
+    ax[1].spines['top'].set_visible(False)
+    ax[1].set_xlabel('%s (%s)' % (metric_name, units))
+    ax[1].set_ylabel('Number of Synapses', fontsize=12)
+
+    #KS test
+    excitatory = stats.ks_2samp(ee_pairs[metric], ei_pairs[metric])
+    inhibitory = stats.ks_2samp(ii_pairs[metric], ie_pairs[metric])
+    print('Two-sample KS test for %s' % metric)
+    print('Excitatory: p = %0.3e' % excitatory[1])
+    print('Inhibitory: p = %0.3e' % inhibitory[1])
+
+def cell_class_matrix(pre_classes, post_classes, metric, class_labels, ax, db, pair_query_args=None):
+    pairs_has_metric, metric_name, units, scale, alpha, cmap, cmap_log, clim, cell_fmt = get_metric_data(metric, db, pre_classes, post_classes, pair_query_args=pair_query_args)
     metric_data = pairs_has_metric.groupby(['pre_class', 'post_class']).aggregate(lambda x: np.mean(x))
     error = pairs_has_metric.groupby(['pre_class', 'post_class']).aggregate(lambda x: np.std(x))
     count = pairs_has_metric.groupby(['pre_class', 'post_class']).count()
 
     cmap = matplotlib.cm.get_cmap(cmap)
-    norm = matplotlib.colors.Normalize(vmin=clim[0], vmax=clim[1], clip=False)
+    if cmap_log:
+        norm = matplotlib.colors.LogNorm(vmin=clim[0], vmax=clim[1], clip=False)
+    else:
+        norm = matplotlib.colors.Normalize(vmin=clim[0], vmax=clim[1], clip=False)
 
     shape = (len(pre_classes), len(post_classes))
     data = np.zeros(shape)
@@ -236,13 +298,13 @@ def cell_class_matrix(pre_classes, post_classes, metric, class_labels, ax, db, p
                 value = np.nan
             data[i, j] = value * scale
             data_str[i, j] = cell_fmt % (value * scale) if np.isfinite(value) else ""
-            data_alpha[i, j] = 1-((std*scale)/np.sqrt(n)) if np.isfinite(value) else 0 
+            data_alpha[i, j] = 1-alpha*((std*scale)/np.sqrt(n)) if np.isfinite(value) else 0 
             
     pre_labels = [class_labels[cls] for cls in pre_classes]
     post_labels = [class_labels[cls] for cls in post_classes]
     mapper = matplotlib.cm.ScalarMappable(cmap=cmap, norm=norm)
     data_rgb = mapper.to_rgba(data)
-    data_rgb[:,:,3] = np.clip(data_alpha, 0, 1)
+    data_rgb[:,:,3] = np.clip(data_alpha, 0, metric_data[metric].max()*scale)
 
     im, cbar = heatmap(data_rgb, pre_labels, post_labels,
                     ax=ax,
@@ -255,7 +317,62 @@ def cell_class_matrix(pre_classes, post_classes, metric, class_labels, ax, db, p
 
     text = annotate_heatmap(im, data_str, data=data)
 
-    return pair_has_metric
+    return pairs_has_metric
+
+def get_pair(expt_id, pre_cell, post_cell, db):
+    expt = db.query(db.Experiment).filter(db.Experiment.ext_id==expt_id).all()[0]
+    pairs = expt.pairs
+    pair = pairs[(pre_cell, post_cell)]
+    return pair
+
+def map_color_by_metric(pair, metric, cmap, norm, scale):
+    synapse = pair.synapse
+    try:
+        value= getattr(synapse, metric)*scale
+    except:
+        dynamics =pair.dynamics
+        value = getattr(dynamics, metric)*scale
+    mapper = matplotlib.cm.ScalarMappable(cmap=cmap, norm=norm)
+    color = mapper.to_rgba(value)
+    return color
+
+def plot_metric_pairs(pair_list, metric, db, ax, align='pulse', norm_amp=None, perc=False):
+    pairs = [get_pair(eid, pre, post, db) for eid, pre, post in pair_list]
+    _, metric_name, units, scale, _, cmap, cmap_log, clim, _ = get_metric_data(metric, db)
+    cmap = matplotlib.cm.get_cmap(cmap)
+    if cmap_log:
+        norm = matplotlib.colors.LogNorm(vmin=clim[0], vmax=clim[1], clip=False)
+    else:
+        norm = matplotlib.colors.Normalize(vmin=clim[0], vmax=clim[1], clip=False)
+    colors = [map_color_by_metric(pair, metric, cmap, norm, scale) for pair in pairs]
+    for i, pair in enumerate(pairs):
+        s = db.session()
+        q= response_query(s, pair, max_ind_freq=50)
+        prs = [q.PulseResponse for q in q.all()]
+        sort_prs = sort_responses(prs)
+        prs = sort_prs[('ic', -55)]['qc_pass']
+        if pair.synapse.synapse_type=='ex':
+            prs = prs + sort_prs[('ic', -70)]['qc_pass']
+        if perc:
+            prs_amp = [abs(pr.pulse_response_fit.fit_amp) for pr in prs]
+            amp_85, amp_95 = np.percentile(prs_amp, [85, 95])
+            mask = (prs_amp >= amp_85) & (prs_amp <= amp_95)
+            prs = np.asarray(prs)[mask]
+        prl = PulseResponseList(prs)
+        post_ts = prl.post_tseries(align='spike', bsub=True, bsub_win=0.1e-3)
+        trace = post_ts.mean()*scale
+        if norm_amp=='exc':
+            trace = post_ts.mean()/pair.synapse.psp_amplitude
+        if norm_amp=='inh':
+            trace = post_ts.mean()/pair.synapse.psp_amplitude*-1
+        latency = pair.synapse.latency
+        if align=='pulse':
+            trace.t0 = trace.t0 - latency
+
+        ax.plot(trace.time_values*scale, trace.data, color=colors[i], linewidth=2)
+        ax.set_xlim(-2, 10)
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
 
 def show_distance_profiles(ax, results, colors, class_labels):
     """ Display connection probability vs distance plots
