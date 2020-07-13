@@ -14,10 +14,14 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--mode', type=str, default='external')
+    parser.add_argument('--debug', action='store_true', default=False, help="Raise a pyqtgraph debug console.")
     args = parser.parse_args(sys.argv[1:])
     analyzer_mode = args.mode
 
     session = db.session()
+
+    if args.debug:
+        pg.dbg()
     
     # Define cell classes
     cell_class_groups = OrderedDict([
@@ -200,12 +204,12 @@ if __name__ == '__main__':
         ]),
 
         ('2P-Opto cre types', [
-            {'cre_type':'ntsr1'},
+            {'cre_type':'ntsr1', 'display_names':('', 'ntsr1')},
             #{'cre_type':'unknown'},
-            {'cre_type':'sst'},
-            {'cre_type':'tlx3'},
-            {'cre_type':'rorb'},
-            {'cre_type':'scnn1a'}])
+            {'cre_type':'sst', 'display_names':('', 'sst')},
+            {'cre_type':'tlx3', 'display_names':('', 'tlx3')},
+            {'cre_type':'rorb', 'display_names':('', 'rorb')},
+            {'cre_type':'scnn1a', 'display_names':('', 'scnn1a')}])
     ])
 
     if analyzer_mode == 'external':
