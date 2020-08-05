@@ -3,7 +3,7 @@ import numpy as np
 from neuroanalysis.data import TSeries
 from sqlalchemy.orm import relationship
 from . import make_table
-from .experiment import Experiment, Electrode, Pair
+from .experiment import Experiment, Electrode, Pair, Cell
 from . import default_sample_rate, sample_rate_str
 
 __all__ = ['SyncRec', 'Recording', 'PatchClampRecording', 'MultiPatchProbe', 'TestPulse', 'StimPulse', 'StimSpike', 'PulseResponse', 'Baseline']
@@ -31,6 +31,7 @@ Recording = make_table(
         ('electrode_id', 'electrode.id', 'Identifies the electrode that generated this recording', {'index': True}),
         ('start_time', 'datetime', 'The clock time at the start of this recording'),
         ('sample_rate', 'int', 'Sample rate for this recording'),
+        ('device_name', 'str', 'Name of the device that generated this recording')
     ]
 )
 
@@ -131,6 +132,7 @@ StimPulse = make_table(
     columns=[
         ('recording_id', 'recording.id', '', {'index': True}),
         ('pulse_number', 'int', 'The ordinal position of this pulse within a train of pulses.', {'index': True}),
+        ('cell_id', 'cell.id', 'Cell that was targeted by this stimulus, if any.', {'index':True}),
         ('onset_time', 'float', 'The starting time of the pulse, relative to the beginning of the recording'),
         ('amplitude', 'float', 'Amplitude of the presynaptic pulse'),
         ('duration', 'float', 'Length of the pulse in seconds'),
@@ -138,13 +140,17 @@ StimPulse = make_table(
         ('first_spike_time', 'float', 'Time of the first spike evoked by this pulse, measured from the beginning of the recording until the max slope of the spike rising phase.'),
         # ('first_spike', 'stim_spike.id', 'The ID of the first spike evoked by this pulse'),
         ('data', 'array', 'Numpy array of presynaptic recording sampled at '+sample_rate_str, {'deferred': True}),
-        ('data_start_time', 'float', "Starting time of the data chunk, relative to the beginning of the recording"),
+        ('data_start_time', 'float', "Starting time of the data chunk, relative to the beginning of the recording"),       
+        ('position', 'object', '3D location of this stimulation in the arbitrary coordinate system of the experiment'),
+        ('qc_pass', 'bool', 'Indicates whether this stimulation passed qc.'),
         ('previous_pulse_dt', 'float', 'Time elapsed since the last stimulus in the same cell', {'index': True}),
     ]
 )
 
 Recording.stim_pulses = relationship(StimPulse, back_populates="recording", cascade='save-update,merge,delete', single_parent=True)
 StimPulse.recording = relationship(Recording, back_populates="stim_pulses")
+Cell.stim_pulses = relationship(StimPulse, back_populates="cell", cascade='save-update,merge,delete', single_parent=True)
+StimPulse.cell = relationship(Cell, back_populates='stim_pulses')
 
 
 StimSpike = make_table(
