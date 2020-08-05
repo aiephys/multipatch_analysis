@@ -15,7 +15,15 @@ from .experiment import ExperimentPipelineModule
 from .dataset import DatasetPipelineModule
 from ...nwb_recordings import get_lp_sweeps, get_pulse_times, get_db_recording
 
-
+SPIKE_FEATURES = [
+    'upstroke_downstroke_ratio',
+    'upstroke',
+    'downstroke',
+    'width',
+    'peak_v',
+    'threshold_v',
+    'fast_trough_v',
+]
 class IntrinsicPipelineModule(MultipatchPipelineModule):
     
     name = 'intrinsic'
@@ -87,8 +95,7 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
                 raise Exception('All cells failed IPFX analysis')
                 continue
             
-            spike_features = lsa.mean_features_first_spike(analysis['spikes_set'])
-            up_down = spike_features['upstroke_downstroke_ratio']
+            spike_features = lsa.mean_features_first_spike(analysis['spikes_set'], features_list=SPIKE_FEATURES)
             rheo = analysis['rheobase_i'] * 1e-9 #unscale from pA
             fi_slope = analysis['fi_fit_slope'] * 1e-9 #unscale from pA
             input_r = analysis['input_resistance'] * 1e6 #unscale from MOhm
@@ -97,14 +104,14 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
             adapt = np.mean(analysis['spiking_sweeps'].adapt)
             
             results = {
-                'upstroke_downstroke_ratio': up_down,
                 'rheobase': rheo,
                 'fi_slope': fi_slope,
                 'input_resistance': input_r,
                 'sag': sag,
-                'avg_firing_rate': avg_rate,
+                'avg_firing_rate': np.nan,
                 'adaptation_index': adapt,
             }
+            results.update(spike_features)
 
             # Write new record to DB
             conn = db.Intrinsic(cell_id=cell.id, **results)
