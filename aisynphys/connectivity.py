@@ -105,7 +105,8 @@ def pair_distance(class_pairs, pre_class):
 
     return connected, distance
 
-def measure_connectivity(pair_groups):
+
+def measure_connectivity(pair_groups, alpha=0.05, sigma=None):
     """Given a description of cell pairs grouped together by cell class,
     return a structure that describes connectivity between cell classes.
     
@@ -113,6 +114,12 @@ def measure_connectivity(pair_groups):
     ----------
     pair_groups : OrderedDict
         Output of `cell_class.classify_pairs`
+    alpha : float
+        Alpha value setting confidence interval width (default is 0.05)
+    sigma : float | None
+        Sigma value for distance-adjusted connectivity (see 
+        ``distance_adjysted_connectivity()``). If None, then adjusted
+        values are omitted from the result.
 
     Returns
     -------
@@ -121,7 +128,8 @@ def measure_connectivity(pair_groups):
         containing connectivity results for each pair group::
         
             {n_probed=int, n_connected=int, probed_pairs=list, connected_pairs=list,
-             connection_probability=(cp, lower_ci, upper_ci)}
+             connection_probability=(cp, lower_ci, upper_ci), 
+             adjusted_connectivity=(cp, lower_ci, upper_ci)}
     """    
     results = OrderedDict()
     for key, class_pairs in pair_groups.items():
@@ -132,7 +140,7 @@ def measure_connectivity(pair_groups):
 
         n_connected = len(connections_found)
         n_probed = len(probed_pairs)
-        conf_interval = connection_probability_ci(n_connected, n_probed)
+        conf_interval = connection_probability_ci(n_connected, n_probed, alpha=alpha)
         conn_prob = float('nan') if n_probed == 0 else n_connected / n_probed
 
         results[(pre_class, post_class)] = {
@@ -142,6 +150,13 @@ def measure_connectivity(pair_groups):
             'connected_pairs': connections_found,
             'probed_pairs': probed_pairs,
         }
+
+        if sigma is not None:
+            distances = np.array([p.distance for p in probed_pairs], dtype=float)
+            connections = np.array([p.synapse for p in probed_pairs], dtype=bool)
+            mask = np.isfinite(distances) & np.isfinite(connections)
+            adj_conn_prob, adj_lower_ci, adj_upper_ci = distance_adjusted_connectivity(distances[mask], connections[mask], sigma=sigma, alpha=alpha)
+            results[(pre_class, post_class)]['adjusted_connectivity'] = (adj_conn_prob, adj_lower_ci, adj_upper_ci)
     
     return results
 
@@ -192,14 +207,21 @@ def pair_was_probed(pair, synapse_type):
     return getattr(pair, qc_field) > 10
 
 
-def gaussian_pmax_ci(x_probed, connected, sigma, alpha=0.05):
-    """Return an approximate gaussian amplitude and confidence interval for a connectivity
-    profile that most closely fits data from a connectivity experiment.
-
+def distance_adjusted_connectivity(x_probed, connected, sigma, alpha=0.05):
+    """Return connectivity and binomial confidence interval corrected for the distances
+    at which connections are probed.
+    
     This function models connectivity as a gaussian curve with respect to intersomatic 
     distance; two cells are less likely to be connected if the distance between them is
-    large. In an ideal scenario we would use a maximum likelihood estimation to determine
-    the gaussian amplitude and sigma that most closely match the data. In practice,
+    large. Due to this relationship between distance and connectivity, simple measures
+    of connection probability are sensitive to the distances at which connections are
+    tested. This function returns a connection probability and CI that are adjusted
+    to normalize for these distances.
+    
+    The returned *pmax* is also the maximum value of a gaussian connectivity
+    profile that most closely matches the input data using a maximum likelihood
+    estimation. In an ideal scenario we would use this to determine both
+    the gaussian _amplitude_ and _sigma_ that most closely match the data. In practice,
     however, very large N is required to constrain sigma so we instead use a fixed sigma
     and focus on estimating the amplitude. 
 
