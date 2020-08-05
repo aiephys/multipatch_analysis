@@ -48,8 +48,8 @@ def connectivity_profile(connected, distance, bin_edges):
         n_conn = pts_in_window.sum()
         if n_probed == 0:
             prop[i] = np.nan
-            lower[i] = np.nan
-            upper[i] = np.nan
+            lower[i] = 0
+            upper[i] = 1
         else:
             prop[i] = n_conn / n_probed
             ci = connection_probability_ci(n_conn, n_probed)
@@ -113,6 +113,15 @@ def measure_connectivity(pair_groups):
     ----------
     pair_groups : OrderedDict
         Output of `cell_class.classify_pairs`
+
+    Returns
+    -------
+    result : dict
+        Keys are the same as in the *pair_groups* argument. Values are dictionaries
+        containing connectivity results for each pair group::
+        
+            {n_probed=int, n_connected=int, probed_pairs=list, connected_pairs=list,
+             connection_probability=(cp, lower_ci, upper_ci)}
     """    
     results = OrderedDict()
     for key, class_pairs in pair_groups.items():
@@ -182,3 +191,58 @@ def pair_was_probed(pair, synapse_type):
     qc_field = 'n_%s_test_spikes' % synapse_type
     return getattr(pair, qc_field) > 10
 
+
+def gaussian_pmax_ci(x_probed, connected, sigma, alpha=0.05):
+    """Return an approximate gaussian amplitude and confidence interval for a connectivity
+    profile that most closely fits data from a connectivity experiment.
+
+    This function models connectivity as a gaussian curve with respect to intersomatic 
+    distance; two cells are less likely to be connected if the distance between them is
+    large. In an ideal scenario we would use a maximum likelihood estimation to determine
+    the gaussian amplitude and sigma that most closely match the data. In practice,
+    however, very large N is required to constrain sigma so we instead use a fixed sigma
+    and focus on estimating the amplitude. 
+
+    Another practical constraint is that exact estimates and confidence intervals are 
+    expensive to compute, so we use a close approximation that simply scales the 
+    connectivity proportion and binomial confidence intervals using the average connection
+    probability from the gaussian profile. 
+
+    For more detail on how this method was chosen and developed, see
+    aisynphys/doc/connectivity_vs_distance.ipynb.
+
+    Parameters
+    ----------
+    x_probed : array
+        Array containing intersomatic distances of pairs that were probed for connectivity.
+    connected : bool array
+        Boolean array indicating which pairs were connected.
+    sigma : float
+        Gaussian σ value defining the width of the connectivity profile to fit to *x_probed* and *connected*.
+    alpha : float
+        Alpha value setting the width of the confidence interval. Default is 0.05, giving a 95% CI.
+
+    Returns
+    -------
+    pmax : float
+        Maximum probability value in the gaussian profile (at x=0)
+    lower : float
+        Lower edge of confidence interval
+    upper : float
+        Upper edge of confidence interval
+
+    """
+    # mean connection probability of a gaussian profile where cp is 1.0 at the center,
+    # sampled at locations probed for connectivity
+    mean_cp = np.exp(-x_probed**2 / (2 * sigma**2)).mean()
+
+    n_conn = connected.sum()
+    n_test = len(x_probed)
+
+    # estimated pmax is just the proportion of connections multiplied by a scale factor
+    est_pmax = (n_conn / n_test) / mean_cp
+    
+    # and for the CI, we can just use a standard binomial confidence interval scaled by the same factor
+    lower, upper = connection_probability_ci(n_conn, n_test, alpha)
+    
+    return est_pmax, lower / mean_cp, upper / mean_cp
