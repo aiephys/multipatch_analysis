@@ -155,10 +155,10 @@ def show_connectivity_matrix(ax, results, pre_cell_classes, post_cell_classes, c
     norm : matplotlib normalize instance
         Normalize instance used to normalize connection probability values before color mapping
     ctype: string
-        corresponds to dict key from ``aisynphys.connectivity.measure_connectivity``
-        distance_adjusted - use distance-adjusted connectivity metrics.
-        connection_probability - use unadjusted connectivity metric.
-        gap_probability - get probability of gap junctions.
+        'chemical' or 'electrical'
+    distance_adjusted: bool
+        If True, use distance-adjusted connectivity metrics. See 
+        ``aisynphys.connectivity.measure_connectivity(sigma)``.
     cbarlabel: string
         label for color bar
     alpha : float
@@ -173,11 +173,16 @@ def show_connectivity_matrix(ax, results, pre_cell_classes, post_cell_classes, c
     for i,pre_class in enumerate(pre_cell_classes):
         for j,post_class in enumerate(post_cell_classes):
             result = results[pre_class, post_class]
-            cp, cp_lower_ci, cp_upper_ci = result[ctype]
-            if ctype == 'gap_probability':
-                found = result['n_gaps']
-            else:
+            if ctype == 'chemical':
                 found = result['n_connected']
+                if distance_adjusted:
+                    cp, cp_lower_ci, cp_upper_ci = result['adjusted_connectivity']
+                else:
+                    cp, cp_lower_ci, cp_upper_ci = result['connection_probability']
+            if ctype == 'electrical':
+                found = result['n_gaps']
+                cp, cp_lower_ci, cp_upper_ci = result['gap_probability']
+
             cprob[i,j] = cp
             cprob_str[i,j] = "" if result['n_probed'] == 0 else "%d/%d" % (found, result['n_probed'])
             cprob_alpha[i,j] = 1.0 - 2.0 * (cp_upper_ci - cp_lower_ci)
@@ -242,10 +247,24 @@ def get_metric_data(metric, db, pre_classes=None, post_classes=None, pair_query_
     pairs_has_metric = pairs[~pairs[metric].isnull()]
     return pairs_has_metric, metric_name, units, scale, alpha, cmap, cmap_log, clim, cell_fmt
 
-def scatter_plots(metrics, db, pair_classes, pair_query_args, ax):
-    """To create scatter plots from get_metric_data. In this case pair_classes is a list of
+def pair_class_metric_scatter(metrics, db, pair_classes, pair_query_args, ax):
+    """To create scatter plots from get_metric_data for specific pair_classes. In this case pair_classes is a list of
     tuples of specific pre->post class pairs instead of all combos from a list of pre-classes
     and post-classes
+
+    Parameters
+    -----------
+    metrics : list 
+        correspond to keys in metrics dict of `get_metric_data`
+    db : SynPhys database 
+    pair_classes : list
+        list of tuples of CellClass (pre_class, post_class)
+    pair_query_args : dict
+        arguments to pass to db.pair_query
+
+    Outputs
+    --------
+    Vertically stacked scatter plots for each metric (y) and pair_class (x)
     """
     pre_classes = {pair_class[0].name: pair_class[0] for pair_class in pair_classes}
     post_classes = {pair_class[1].name: pair_class[1] for pair_class in pair_classes}
