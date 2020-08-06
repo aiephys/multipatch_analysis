@@ -152,6 +152,7 @@ REPORTER_LINES = {                # dependencies             products
                                    (['flp'],                  ['tdTomato'])],
     'pAAV-Ef1a-fDIO-EGFP':        [(['flp'],                  ['EGFP'])],
     'pAAV-Ef1a-cDIO-dTomato':     [(['cre'],                  ['tdTomato'])],
+    'AAV-Syn-FLEX-ChrimsonR-eYFP-Kv2.1':[(['cre'], ['ChrimsonR', 'EYFP'])],
 }
 
 

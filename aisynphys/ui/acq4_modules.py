@@ -215,15 +215,29 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
         # Construct JSON to send to LIMS.
         self.data = {}  
         self.data['cells'] = []
-        for cell in pipettes:
-            cell_name = int(cell[0].split('_')[-1])
-            p = cell[1]
-            if image is None:
+        # for cell in pipettes:
+        for i in range(1, 9):
+            cell = [pip for pip in pipettes if int(pip[0].split('_')[-1]) ==i]
+            if len(cell) > 1:
+                raise Exception("Multiple cells match to pipette %d" % i)
+            elif len(cell) == 0:
+                cell_name = i
                 x_float = 0
                 y_float = 0
-            else:
-                x_float = markers[0].graphicsItem().mapToItem(image.graphicsItem(), pg.Point(*p[:2])).x()
-                y_float = markers[0].graphicsItem().mapToItem(image.graphicsItem(), pg.Point(*p[:2])).y()
+                qc = 'fail'
+                start_time = 0
+            elif len(cell)==1:
+                cell = cell[0]
+                cell_name = int(cell[0].split('_')[-1])
+                p = cell[1]
+                if image is None:
+                    x_float = 0
+                    y_float = 0
+                else:
+                    x_float = markers[0].graphicsItem().mapToItem(image.graphicsItem(), pg.Point(*p[:2])).x()
+                    y_float = markers[0].graphicsItem().mapToItem(image.graphicsItem(), pg.Point(*p[:2])).y()
+                qc = ('pass' if pipette_log[cell_name]['got_data'] == True else 'fail')
+                start_time = time.mktime(pipette_log[cell_name]['patch_start'].timetuple())
             self.data['cells'].append({      
                 'ephys_cell_id': cell_name,                  
                 'coordinates_20x': 
@@ -231,15 +245,15 @@ class MultiPatchMosaicEditorExtension(QtGui.QWidget):
                 "x": int(round(x_float)),   # round the float and change to integer for technology requirements
                 "y": int(round(y_float))    # round the float and change to integer for technology requirements
                 },      
-                'ephys_qc_result': ('pass' if pipette_log[cell_name]['got_data'] == True else 'fail'),                 
-                'start_time_sec': time.mktime(pipette_log[cell_name]['patch_start'].timetuple())
+                'ephys_qc_result': qc,                 
+                'start_time_sec': start_time
             })
 
         # check that position values written to self.data are non-zero, if they are ask the user if it's ok to submit
-        x_pos = all([cell['coordinates_20x']['x'] for cell in self.data['cells']]) != 0
-        y_pos = all([cell['coordinates_20x']['y'] for cell in self.data['cells']]) != 0
-        if x_pos is False or y_pos is False:
-            ret = QtGui.QMessageBox.question(self, "Position Check", "x and/or y position values are 0.\n"
+        x_pos = all([cell['coordinates_20x']['x'] == 0 for cell in self.data['cells']])
+        y_pos = all([cell['coordinates_20x']['y'] == 0 for cell in self.data['cells']])
+        if x_pos is True or y_pos is True:
+            ret = QtGui.QMessageBox.question(self, "Position Check", "x and/or y position values for all cells are 0.\n"
                 "Do you still want to submit?", QtGui.QMessageBox.Ok | QtGui.QMessageBox.Cancel)
             # postionValueMsg = QMessageBox()
             # postionValueMsg.setText('x and/or y position values are 0')

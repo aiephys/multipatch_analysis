@@ -48,6 +48,7 @@ class NDSlicer(QtGui.QWidget):
             ch.viewer, dock = self.add_view(axes=[ax], position=pos)
             pos = {'position': 'bottom', 'relativeTo': dock}
             
+        self.params.child('index').sigTreeStateChanged.connect(self.index_param_changed)
         self.params.child('max project').sigTreeStateChanged.connect(self.max_project_changed)
         self.params.child('color axis').axis_color_changed.connect(self.axis_color_changed)
         
@@ -111,12 +112,25 @@ class NDSlicer(QtGui.QWidget):
         self.selection_changed.emit(self)
 
     def viewer_selection_changing(self, viewer, axes):
+        self.set_selection(axes, emit=False)
+        self.selection_changing.emit(self)
+
+    def index_param_changed(self, param, changes):
+        sel = {}
+        for param, change, value in changes:
+            if change != 'value':
+                continue
+            sel[param.name()] = value
+        self.set_selection(sel)
+
+    def set_selection(self, axes, emit=True):
         for ax,val in axes.items():
             self.axes[ax].selection = val
             self.params['index', ax] = val
         for viewer in self.viewers:
             viewer.update_selection()
-        self.selection_changing.emit(self)
+        if emit:
+            self.selection_changed.emit(self)
 
     def selection(self):
         vals = OrderedDict([(ax,val.selection) for ax,val in self.axes.items()])

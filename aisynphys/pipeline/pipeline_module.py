@@ -180,6 +180,7 @@ class PipelineModule(object):
         job_id = job['job_id']
         
         print("Processing %s %d/%d  %s" % (cls.name, job_n+1, n_jobs, job_id))
+
         start = time.time()
         try:
             cls.process_job(job)

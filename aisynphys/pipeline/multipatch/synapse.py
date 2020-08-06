@@ -63,6 +63,17 @@ class SynapsePipelineModule(MultipatchPipelineModule):
             #   - must pass ex_qc_pass or in_qc_pass
             #   - must have exactly 1 pre spike with onset time
             fits = get_pair_avg_fits(pair, session)
+            # This generates a structure like:
+            # {(mode, holding): {
+            #     'traces': , 
+            #     'average', 
+            #     'fit_params',
+            #     'initial_latency',
+            #     'fit_qc_pass',
+            #     'expected_fit_params',
+            #     'avg_baseline_noise',
+            #     }, 
+            # }
             
             # collect values with which to decide on the "correct" kinetic values to report
             latency_vals = []
