@@ -89,8 +89,8 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
             
             spike_features = lsa.mean_features_first_spike(analysis['spikes_set'])
             up_down = spike_features['upstroke_downstroke_ratio']
-            rheo = analysis['rheobase_i'] * 1e9 #unscale from pA
-            fi_slope = analysis['fi_fit_slope'] * 1e9 #unscale from pA
+            rheo = analysis['rheobase_i'] * 1e-9 #unscale from pA
+            fi_slope = analysis['fi_fit_slope'] * 1e-9 #unscale from pA
             input_r = analysis['input_resistance'] * 1e6 #unscale from MOhm
             sag = analysis['sag']
             avg_rate = np.mean(analysis['spiking_sweeps'].avg_rate)
