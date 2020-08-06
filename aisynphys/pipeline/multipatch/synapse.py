@@ -59,10 +59,11 @@ class SynapsePipelineModule(MultipatchPipelineModule):
                 continue
             
             # fit PSP shape against averaged PSPs/PCSs at -70 and -55 mV
-            #   - selected from <= 50Hz trains
+            #   - selected from <= 50Hz trains or <= 20Hz for decay in IC
             #   - must pass ex_qc_pass or in_qc_pass
             #   - must have exactly 1 pre spike with onset time
-            fits = get_pair_avg_fits(pair, session)
+            fits = get_pair_avg_fits(pair, session, max_ind_freq=50)
+            fits_decay = get_pair_avg_fits(pair, session, max_ind_freq=20)
             # This generates a structure like:
             # {(mode, holding): {
             #     'traces': , 
@@ -83,12 +84,20 @@ class SynapsePipelineModule(MultipatchPipelineModule):
             for (mode, holding), fit in fits.items():
                 if fit is None:
                     continue
-                    
+
                 if fit['fit_qc_pass']:
                     # user says this is a good fit; write down the kinetic parameters and number of responses that went into the average
                     latency_vals.append((fit['fit_result'].best_values['xoffset'], len(fit['responses']['qc_pass'])))
                     rise_vals[mode].append((fit['fit_result'].best_values['rise_time'], len(fit['responses']['qc_pass'])))
-                    decay_vals[mode].append((fit['fit_result'].best_values['decay_tau'], len(fit['responses']['qc_pass'])))
+                
+                # for decay tau in IC mode we only use trains up to 20Hz
+                if mode == 'ic':
+                    fit_decay = fits_decay[mode][holding]
+                    if fit decay is not None and fit_decay['fit_qc_pass']:    
+                        decay_vals[mode].append((fit_decay['fit_result'].best_values['decay_tau'], len(fit_decay['responses']['qc_pass'])))
+                else:
+                    if fit['fit_qc_pass']:
+                        decay_vals[mode].append((fit['fit_result'].best_values['decay_tau'], len(fit['responses']['qc_pass'])))
                     
                 # record this fit in the avg_response_fit table
                 rec = db.AvgResponseFit(

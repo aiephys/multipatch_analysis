@@ -12,7 +12,7 @@ from aisynphys.qc import spike_qc
 from aisynphys.fitting import fit_avg_pulse_response
 
 
-def get_pair_avg_fits(pair, session, notes_session=None, ui=None):
+def get_pair_avg_fits(pair, session, notes_session=None, ui=None, max_ind_freq=50):
     """Return PSP fits to averaged responses for this pair.
 
     Fits are performed against average PSPs in 4 different categories: 
