@@ -181,7 +181,10 @@ def show_connectivity_matrix(ax, results, pre_cell_classes, post_cell_classes, c
                     cp, cp_lower_ci, cp_upper_ci = result['connection_probability']
             if ctype == 'electrical':
                 found = result['n_gaps']
-                cp, cp_lower_ci, cp_upper_ci = result['gap_probability']
+                if distance_adjusted:
+                    raise Exception('Distance adjustment for gap junctions not yet available')
+                else:
+                    cp, cp_lower_ci, cp_upper_ci = result['gap_probability']
 
             cprob[i,j] = cp
             cprob_str[i,j] = "" if result['n_probed'] == 0 else "%d/%d" % (found, result['n_probed'])
