@@ -137,17 +137,24 @@ def measure_connectivity(pair_groups, alpha=0.05, sigma=None):
         
         probed_pairs = [p for p in class_pairs if pair_was_probed(p, pre_class.output_synapse_type)]
         connections_found = [p for p in probed_pairs if p.synapse]
+        gaps_found = [p for p in probed_pairs if p.has_electrical]
 
         n_connected = len(connections_found)
         n_probed = len(probed_pairs)
-        conf_interval = connection_probability_ci(n_connected, n_probed, alpha=alpha)
+        n_gaps = len(gaps_found)
+        conf_interval_cp = connection_probability_ci(n_connected, n_probed, alpha=alpha)
         conn_prob = float('nan') if n_probed == 0 else n_connected / n_probed
+        conf_interval_gap = connection_probability_ci(n_gaps, n_probed, alpha=alpha)
+        gap_prob = float('nan') if n_probed == 0 else n_gaps / n_probed
 
         results[(pre_class, post_class)] = {
             'n_probed': n_probed,
             'n_connected': n_connected,
-            'connection_probability': (conn_prob,) + conf_interval,
+            'n_gaps': n_gaps,
+            'connection_probability': (conn_prob,) + conf_interval_cp,
+            'gap_probability': (gap_prob,) + conf_interval_gap,
             'connected_pairs': connections_found,
+            'gap_pairs': gaps_found,
             'probed_pairs': probed_pairs,
         }
 
