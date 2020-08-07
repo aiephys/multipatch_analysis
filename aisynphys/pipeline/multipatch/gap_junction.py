@@ -19,7 +19,7 @@ class GapJunctionPipelineModule(MultipatchPipelineModule):
     """Analyze gap junction presence and strength for all pairs per experiment
     """
     name = 'gap_junction'
-    dependencies = [ExperimentPipelineModule, DatasetPipelineModule]
+    dependencies = [ExperimentPipelineModule, DatasetPipelineModule, IntrinsicPipelineModule]
     table_group = ['gap_junction']
     
     @classmethod
