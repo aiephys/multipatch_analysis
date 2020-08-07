@@ -10,6 +10,7 @@ from aisynphys.cell_class import CellClass
 from neuroanalysis.data import TSeries
 from neuroanalysis.baseline import float_mode
 from aisynphys.avg_response_fit import response_query, sort_responses
+from aisynphys.connectivity import connectivity_profile
 from aisynphys.data import PulseResponseList
 
 
@@ -428,6 +429,58 @@ def show_distance_profiles(ax, results, colors, class_labels):
             plot.set_ylabel('Connection Probability')
         
     return ax
+
+
+def show_connectivity_profile(x_probed, conn, fit, ax, true_model=None, ymax=None):
+    # where to bin connections for measuring connection probability
+    x_bins = np.arange(0, 500e-6, 40e-6)
+
+    # where to sample models
+    #x_vals = 0.5 * (x_bins[1:] + x_bins[:-1])
+    x_vals = np.linspace(x_bins[0], x_bins[-1], 200)
+
+    # plot the ground-truth probability distribution (solid green)
+    if true_model is not None:
+        ax.plot(x_vals, true_model.connection_probability(x_vals), color=(0, 0.5, 0))
+
+    # plot the connectivity profile with confidence intervals (black line / grey area)
+    _, cprop, lower, upper = connectivity_profile(conn, x_probed, x_bins)
+    ax.plot(x_bins, np.append(cprop, cprop[-1]), drawstyle='steps-post', color=(.5, .5, .5))
+    ax.fill_between(x_bins, np.append(lower, lower[-1]), np.append(upper, upper[-1]), step='post', color=(0.85, 0.85, 0.85))
+
+    if ymax is None:
+        ymax = upper.max()
+    
+    # plot the fit result (thick red)
+    ax.plot(x_vals, fit.connection_probability(x_vals), color=(0.5, 0, 0))
+
+    # plot connections probed and found
+    # warning: some mpl versions have a bug that causes the data argument to eventplot to be modified
+    alpha1 = np.clip(30 / len(x_probed), 1/255, 1)
+    alpha2 = np.clip(30 / conn.sum(), 1/255, 1)
+    tickheight = ymax / 10
+    ax.eventplot(x_probed.copy(), lineoffsets=-tickheight*2, linelengths=tickheight, color=(0, 0, 0, alpha1))
+    ax.eventplot(x_probed[conn], lineoffsets=-tickheight, linelengths=tickheight, color=(0, 0, 0, alpha2))
+
+    # err = 0 if not hasattr(fit, 'fit_result') else fit.fit_result.fun
+    # label = "Fit pmax=%0.2f\nsize=%0.2f µm\nerr=%f" % (fit.pmax, fit.size*1e6, err)
+    # ax.text(0.99, 0.85, label, transform=ax.transAxes, color=(0.5, 0, 0), horizontalalignment='right')
+    
+    # if true_model is not None:
+    #     label = "True pmax=%0.2f\nsize=%0.2f µm" % (true_model.pmax, true_model.size*1e6)
+    #     ax.text(0.99, 0.95, label, transform=ax.transAxes, color=(0, 0.5, 0), horizontalalignment='right')
+    
+    ax.axhline(0)
+    
+    ax.set_xlabel('distance (µm)')
+    xticks = np.arange(0, x_vals.max(), 50e-6)
+    ax.set_xticks(xticks)
+    ax.set_xticklabels(['%0.0f'%(x*1e6) for x in xticks])
+
+    y_vals = np.arange(0, ymax + 0.1, 0.1)
+    ax.set_yticks([-tickheight*2, -tickheight] + list(y_vals))
+    ax.set_yticklabels(['probed', 'connected'] + ['%0.1f'%x for x in y_vals])
+    ax.set_ylim(-tickheight*2.6, ymax)
 
 
 def color_by_conn_prob(pair_group_keys, connectivity, norm, cmap):
