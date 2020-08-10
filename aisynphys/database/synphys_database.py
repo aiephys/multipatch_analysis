@@ -200,6 +200,8 @@ class SynphysDatabase(Database):
         query = query.outerjoin(self.SynapsePrediction)
         query = query.outerjoin(self.Synapse)
         query = query.outerjoin(self.Dynamics)
+        query = query.outerjoin(self.GapJunction)
+        query = query.outerjoin(self.RestingStateFit)
 
         if pre_class is not None:
             query = pre_class.filter_query(query, pre_cell, db=self)
