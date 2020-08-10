@@ -58,7 +58,7 @@ def get_pair_avg_fits(pair, session, notes_session=None, ui=None, max_ind_freq=5
     results = {}
     
     # query and sort pulse responses with induction frequency 50Hz or slower
-    records = response_query(session=session, pair=pair).all()
+    records = response_query(session=session, pair=pair, max_ind_freq=max_ind_freq).all()
     prof('query prs')
     pulse_responses = [rec[0] for rec in records]
 
