@@ -1,6 +1,8 @@
+import warnings
 from collections import OrderedDict
 import numpy as np
 from statsmodels.stats.proportion import proportion_confint
+import scipy.optimize
 
 
 def connectivity_profile(connected, distance, bin_edges):
@@ -230,7 +232,10 @@ def distance_adjusted_connectivity(x_probed, connected, sigma, alpha=0.05):
     estimation. In an ideal scenario we would use this to determine both
     the gaussian _amplitude_ and _sigma_ that most closely match the data. In practice,
     however, very large N is required to constrain sigma so we instead use a fixed sigma
-    and focus on estimating the amplitude. 
+    and focus on estimating the amplitude. Keep in mind that the corrections performed
+    here rely on the assumption that connectivity falls off with distance as a gaussian
+    of this fixed sigma value; use caution interpreting these results in cases where
+    that assumption may be wrong (for example, for inter-laminar connectivity in cortex).
 
     Another practical constraint is that exact estimates and confidence intervals are 
     expensive to compute, so we use a close approximation that simply scales the 
@@ -275,3 +280,243 @@ def distance_adjusted_connectivity(x_probed, connected, sigma, alpha=0.05):
     lower, upper = connection_probability_ci(n_conn, n_test, alpha)
     
     return est_pmax, lower / mean_cp, upper / mean_cp
+
+
+class ConnectivityModel:
+    """Base class for modeling and fitting connectivity vs intersomatic distance data.
+
+    Implements fitting by maximum likelihood estimation.
+    """
+    def generate(self, x, seed=None):
+        """Generate a random sample of connectivity, given distances at which connections are tested.
+        
+        The *seed* parameter allows a random seed to be provided so that results are frozen across executions.
+        """
+        p = self.connection_probability(x)
+        rng = np.random.RandomState(seed)
+        return rng.random(size=len(x)) < p
+
+    def likelihood(self, x, conn):
+        """Log-likelihood for maximum likelihood estimation
+
+        LLF = Σᵢ(𝑦ᵢ log(𝑝(𝐱ᵢ)) + (1 − 𝑦ᵢ) log(1 − 𝑝(𝐱ᵢ)))
+        """
+        assert np.issubdtype(conn.dtype, np.dtype(bool))
+        p = self.connection_probability(x)
+        return np.log(p[conn]).sum() + np.log((1-p)[~conn]).sum()
+
+    def connection_probability(self, x):
+        """Return the probability of seeing a connection from cell A to cell B given 
+        the intersomatic distance *x*.
+        
+        This does _not_ include the probability of the reverse connection B→A.
+        """
+        raise NotImplementedError('connection_probability must be implemented in a subclass')
+    
+    @classmethod
+    def err_fn(cls, params, *args):
+        model = cls(*params)
+        return -model.likelihood(*args)
+
+    @classmethod
+    def fit(cls, x, conn, init=(0.1, 150e-6), bounds=((0.001, 1), (10e-6, 1e-3)), fixed_size=None, **kwds):
+        n = 6
+        p_bins = np.linspace(bounds[0][0], bounds[0][1], n)
+        s_bins = np.linspace(bounds[1][0], bounds[1][1], n)
+        best = None
+        # Most minimization methods fail to find the global minimum for this problem.
+        # Instead, we systematically search over a large (n x n) range of the parameter space
+        # and pick the best overall fit.
+        for p_bin in zip(p_bins[:-1], p_bins[1:]):
+            for s_bin in zip(s_bins[:-1], s_bins[1:]):
+                init = (np.mean(p_bin), np.mean(s_bin))
+                bounds = (p_bin, s_bin)
+
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")    
+                    fit = scipy.optimize.minimize(
+                        cls.err_fn, 
+                        x0=init, 
+                        args=(x, conn),
+                        bounds=bounds,
+                        **kwds,
+                    )
+                    if best is None or fit.fun < best.fun:
+                        best = fit
+        
+        ret = cls(*best.x)
+        ret.fit_result = best
+        return ret
+
+
+class SphereIntersectionModel(ConnectivityModel):
+    """Model connection probability as proportional to the volume overlap of intersecting spheres.
+
+    Parameters
+    ----------
+    pmax : float
+        Maximum connection probability (at 0 intersomatic distance)
+    size : float
+        Radius of a single cell
+    density : float
+        Average number of synapses per m^3 connecting one cell to another, within their overlapping volume.        
+
+    Note: the *pmax* and *density* parameters are redundant; can be instantiated using either 
+    (pmax, size) or (density, size).
+    """
+    def __init__(self, pmax=None, size=None, density=None):
+        assert size is not None
+        assert (pmax is not None) or (density is not None)
+            
+        self._pmax = pmax
+        self.size = size
+        self._density = density
+
+    @property
+    def r(self):
+        """Radius of cell; overlapping region extends to 2*r.
+        """
+        return self.size
+        
+    @property
+    def density(self):
+        """Average density of synapses in overlapping regions (synapses / m^3)"""
+        if self._density is None:
+            # calculate synapse density needed to get pmax
+            return np.log(1 - self.pmax) / (-(4/3) * np.pi * self.r**3)
+        else:
+            return self._density
+
+    @density.setter
+    def density(self, d):
+        self._density = d
+        self._pmax = None
+
+    @property
+    def pmax(self):
+        """Maximum connection probability at intersomatic distance=0
+        """
+        if self._pmax is None:
+            return self.connection_probability(0)
+        else:
+            return self._pmax
+
+    @pmax.setter
+    def pmax(self, p):
+        self._pmax = p
+        self._density = None
+    
+    def connection_probability(self, x):
+        # In a Poisson process, the probability of seeing 0 events in an interval is exp(-λ), where
+        # λ is the average number of events in an interval. If we let *density* in this case be the average
+        # number of synapses per unit volume, then λ = density * V, and the probability of seeing no events
+        # in V is just P(V,density) = exp(-denstiy*V).
+        
+        r = self.r
+        density = self.density
+        
+        # volume of overlap between spheres at distance x
+        v = self.volume_overlap(x)
+        
+        # probability of 1 or more synapse given v and density
+        p = 1 - np.exp(-v * density)
+        
+        # clip probability at 0.005 to allow for a small number of
+        # connections past 2*r (otherwise fitting becomes impossible)
+        return np.clip(p, 0.005, 1)
+    
+    def volume_overlap(self, x):
+        r = self.r
+        v = (4 * np.pi / 3) * r**3 - np.pi * x * (r**2 - x**2/12)
+        return np.where(x < r*2, v, 0)
+
+
+class ExpModel(ConnectivityModel):
+    """Model connection probability as an exponential decay
+    
+    Parameters
+    ----------
+    pmax : float
+        Maximum connection probability (at 0 intersomatic distance)
+    size : float
+        Exponential decay tau
+    
+    """
+    def __init__(self, pmax, size):
+        self.pmax = pmax
+        self.size = size
+    
+    def connection_probability(self, x):
+        return self.pmax * np.exp(-x / self.size)
+
+    
+class LinearModel(ConnectivityModel):
+    """Model connection probability as linear decay to 0
+
+    Parameters
+    ----------
+    pmax : float
+        Maximum connection probability (at 0 intersomatic distance)
+    size : float
+        Distance at which connection probability reaches its minimum value
+        
+    Note: in this model, connection probability goes only to 0.5% at minimum.
+    If the minimum is allowed to go to 0, then fitting becomes more difficult.
+    """
+    def __init__(self, pmax, size):
+        self.pmax = pmax
+        self.size = size
+
+    def connection_probability(self, x):
+        return np.clip(self.pmax * (self.size - x) / self.size, 0.005, 1)
+
+
+class GaussianModel(ConnectivityModel):
+    """Model connection probability as gaussian centered at x=0
+
+    Parameters
+    ----------
+    pmax : float
+        Maximum connection probability (at 0 intersomatic distance)
+    size : float
+        Gaussian sigma
+    """
+    def __init__(self, pmax, size):
+        self.pmax = pmax
+        self.size = size
+
+    def connection_probability(self, x):
+        return self.pmax * np.exp(-x**2 / (2 * self.size**2))
+
+
+class FixedSizeModelMixin:
+    @classmethod
+    def fit(cls, x, conn, init=0.1, bounds=(0.001, 1), **kwds):
+        fixed_size = kwds.pop('size', 130e-6)
+        
+        if conn.sum() == 0:
+            # fitting falls apart at 0; just return the obvious result
+            return cls(0, fixed_size)
+        
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")    
+            fit = scipy.optimize.minimize(
+                cls.err_fn, 
+                x0=(init,), 
+                args=(fixed_size, x, conn),
+                bounds=(bounds,),
+                **kwds,
+            )
+        
+        ret = cls(fit.x[0], fixed_size)
+        ret.fit_result = fit
+        return ret
+    
+    @classmethod
+    def err_fn(cls, params, *args):
+        (pmax,) = params
+        size, x, conn = args
+        model = cls(pmax, size)
+        return -model.likelihood(x, conn)
+
+
