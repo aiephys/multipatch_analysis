@@ -92,8 +92,8 @@ class SynapsePipelineModule(MultipatchPipelineModule):
                 
                 # for decay tau in IC mode we only use trains up to 20Hz
                 if mode == 'ic':
-                    fit_decay = fits_decay[mode][holding]
-                    if fit decay is not None and fit_decay['fit_qc_pass']:    
+                    fit_decay = fits_decay[(mode, holding)]
+                    if fit_decay is not None and fit_decay['fit_qc_pass']:    
                         decay_vals[mode].append((fit_decay['fit_result'].best_values['decay_tau'], len(fit_decay['responses']['qc_pass'])))
                 else:
                     if fit['fit_qc_pass']:
