@@ -1,7 +1,6 @@
 from .pipeline import Pipeline
 from . import pipeline_module
 from . import multipatch
-from ..util import optional_import
 try:
     from . import opto
 except ImportError:
