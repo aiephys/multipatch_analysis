@@ -220,8 +220,9 @@ def generate_pair_dynamics(pair, db, session):
     ev1_amp -= np.median(ev1_amp)
     ev2_amp -= np.median(ev2_amp)
     
-    r,p = scipy.stats.pearsonr(ev1_amp, ev2_amp)
-    dynamics.paired_event_correlation_r = r
-    dynamics.paired_event_correlation_p = p
+    if len(ev1_amp) > 1:
+        r,p = scipy.stats.pearsonr(ev1_amp, ev2_amp)
+        dynamics.paired_event_correlation_r = r
+        dynamics.paired_event_correlation_p = p
     
     return dynamics
