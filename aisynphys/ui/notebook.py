@@ -239,7 +239,7 @@ def get_metric_data(metric, db, pre_classes=None, post_classes=None, pair_query_
         'latency':                     ('Latency',                   'ms',  1e3,  1,     [db.Synapse.latency],                         'viridis_r',  False,  (0.5, 3),       "%0.2f ms"),
         'stp_initial_50hz':            ('Paired pulse STP',          '',    1,    1,     [db.Dynamics.stp_initial_50hz],               'bwr',        False,  (-0.5, 0.5),   "%0.2f"),
         'stp_induction_50hz':          ('Train induced STP',         '',    1,    1,     [db.Dynamics.stp_induction_50hz],             'bwr',        False,  (-0.5, 0.5),   "%0.2f"),
-        'stp_recovery_250ms':          ('STP Recovery',              '',    1,    1,     [db.Dynamics.stp_recovery_250ms],             'bwr',        False,  (-0.5, 0.5),   "%0.2f"),
+        'stp_recovery_250ms':          ('STP Recovery',              '',    1,    1,     [db.Dynamics.stp_recovery_250ms],             'bwr',        False,  (-0.2, 0.2),   "%0.2f"),
         'pulse_amp_90th_percentile':   ('PSP Amplitude 90th %%ile',  'mV',  1e3,  1.5,   [db.Dynamics.pulse_amp_90th_percentile],      'bwr',        False,  (-1.5, 1.5),    "%0.2f mV"),
         'junctional_conductance':      ('Junctional Conductance',    'nS',  1e9,  1,     [db.GapJunction.junctional_conductance],      'virdis',     False,  (0, 10),        "%0.2f nS"),
         'coupling_coeff_pulse':        ('Coupling Coefficient',       '',   1,    1,     [db.GapJunction.coupling_coeff_pulse],   'virdis',    False,  (0, 1),         "%0.2f"),
@@ -392,7 +392,7 @@ def cell_class_matrix(pre_classes, post_classes, metric, class_labels, ax, db, p
     post_labels = [class_labels[cls] for cls in post_classes]
     mapper = matplotlib.cm.ScalarMappable(cmap=cmap, norm=norm)
     data_rgb = mapper.to_rgba(data)
-    data_rgb[:,:,3] = np.clip(data_alpha, 0, metric_data[metric].max()*scale)
+    data_rgb[:,:,3] = np.clip(data_alpha, 0, 1)
 
     im, cbar = heatmap(data_rgb, pre_labels, post_labels,
                     ax=ax,
