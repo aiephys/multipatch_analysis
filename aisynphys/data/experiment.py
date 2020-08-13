@@ -271,15 +271,17 @@ class Experiment(object):
                 rgn = self.expt_info.get('target_region', None)
         
         # correct some alternative / misspelled region names
-        corrected = {
+        corrections = {
             'v1': 'VisP',
             'tcx': 'TCx',
             'fcx': 'FCx',
             'pcx': 'PCx',
             'ocx': 'OCx',
-        }.get(rgn.lower(), rgn)
+        }
+        if rgn is not None:
+            rgn = corrections.get(rgn.lower(), rgn)
 
-        return corrected
+        return rgn
 
 
     @property
