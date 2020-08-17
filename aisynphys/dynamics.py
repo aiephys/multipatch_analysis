@@ -112,22 +112,34 @@ def generate_pair_dynamics(pair, db, session):
     # calculate 50Hz paired pulse and induction metrics
     metrics = {'stp_initial_50hz': [], 'stp_induction_50hz': [], 'stp_recovery_250ms': []}
     paired_pulse_ratio = []
+    all_metrics = {}
+    induction = {}
+    recovery = {}
+    delays = [125e-3, 250e-3, 500e-3, 1000e-3, 2000e-3, 4000e-3]
     
     for key,recs in sorted_prs.items():
         clamp_mode, ind_freq, rec_delay = key
-        if ind_freq != 50:
-            continue
+        # if ind_freq != 50:
+        #     continue
+        if ind_freq not in induction.keys():
+            induction[ind_freq] = {'stp_induction': [], 'stp_initial': []}
         for recording, pulses in recs.items():
             if 1 not in pulses or 2 not in pulses:
                 continue
             amps = {k:getattr(r.PulseResponseFit, amp_field) for k,r in pulses.items()}
-            metrics['stp_initial_50hz'].append((amps[2] - amps[1]) / amp_90p)
-            if amps[1] != 0:
-                paired_pulse_ratio.append(amps[2] / amps[1])
-
+            initial = (amps[2] - amps[1]) / amp_90p
+            # we separate out 50Hz into its own column because the most data is here
+            if ind_freq == 50:
+                metrics['stp_initial_50hz'].append(initial)
+                if amps[1] != 0:
+                    paired_pulse_ratio.append(amps[2] / amps[1])
+            induction[ind_freq]['stp_initial'].append(initial)
             if any([k not in pulses for k in [1,6,7,8]]):
                 continue
-            metrics['stp_induction_50hz'].append((np.mean([amps[6], amps[7], amps[8]]) - amps[1]) / amp_90p)
+            ind = (np.mean([amps[6], amps[7], amps[8]]) - amps[1]) / amp_90p
+            if ind_freq == 50:
+                metrics['stp_induction_50hz'].append(ind)
+            induction[ind_freq]['stp_induction'].append(ind)
             
     # PPR is a bit out of place here, but we're including it since it's a popular metric used
     # in the literature.
@@ -137,15 +149,20 @@ def generate_pair_dynamics(pair, db, session):
     for key,recs in sorted_prs.items():
         clamp_mode, ind_freq, rec_delay = key
         if rec_delay is None:
+            continue 
+        check_delays = [abs(rec_delay - d) < 5e-3 for d in delays]
+        if sum(check_delays) != 1:
             continue
-        if abs(rec_delay - 250e-3) > 5e-3:
-            continue
+        delay = delays[check_delays[0]]
+        if delay not in 
         for recording, pulses in recs.items():
             if any([k not in pulses for k in range(1,13)]):
                 continue
             amps = {k:getattr(r.PulseResponseFit, amp_field) for k,r in pulses.items()}
             r = [amps[i+8] - amps[i] for i in range(1,5)]
-            metrics['stp_recovery_250ms'].append(np.mean(r) / amp_90p)
+            if ind_freq == 50 and delay == 250e-3
+                metrics['stp_recovery_250ms'].append(np.mean(r) / amp_90p)
+
 
     for k,v in metrics.items():
         setattr(dynamics, k, np.mean(v))
