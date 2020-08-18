@@ -695,11 +695,11 @@ class ExperimentMetadata(Experiment):
                     
 
                     cell_cluster = self.lims_cell_cluster_id
-                    lims_ignore_path = os.path.join(self.archive_path, '.mpe_ignore')
-                    if cell_cluster is None and os.path.isfile(lims_ignore_path):
+                    if cell_cluster is None and self.archive_path is not None:
                         lims_ignore_file = os.path.join(self.archive_path, '.mpe_ignore')
-                        in_lims = "FAILED"
-                        self.lims_message = open(lims_ignore_file, 'r').read()
+                        if os.path.isfile(lims_ignore_path):
+                            in_lims = "FAILED"
+                            self.lims_message = open(lims_ignore_file, 'r').read()
                     else:
                         in_lims = cell_cluster is not None
                         self.lims_message = self.lims_submissions
