@@ -108,7 +108,7 @@ def pair_distance(class_pairs, pre_class):
     return connected, distance
 
 
-def measure_connectivity(pair_groups, alpha=0.05, sigma=None):
+def measure_connectivity(pair_groups, alpha=0.05, sigma=None, fit_model=None):
     """Given a description of cell pairs grouped together by cell class,
     return a structure that describes connectivity between cell classes.
     
@@ -122,6 +122,10 @@ def measure_connectivity(pair_groups, alpha=0.05, sigma=None):
         Sigma value for distance-adjusted connectivity (see 
         ``distance_adjysted_connectivity()``). If None, then adjusted
         values are omitted from the result.
+    fit_model : ConnectivityModel | None
+        One of ConnectivityModel Class to fit Cp profile. If combined with
+        sigma the fit will be fixed to that sigma. If None, then fit results
+        are ommitted from the results
 
     Returns
     -------
@@ -149,6 +153,7 @@ def measure_connectivity(pair_groups, alpha=0.05, sigma=None):
         conf_interval_gap = connection_probability_ci(n_gaps, n_probed, alpha=alpha)
         gap_prob = float('nan') if n_probed == 0 else n_gaps / n_probed
 
+
         results[(pre_class, post_class)] = {
             'n_probed': n_probed,
             'n_connected': n_connected,
@@ -160,12 +165,22 @@ def measure_connectivity(pair_groups, alpha=0.05, sigma=None):
             'probed_pairs': probed_pairs,
         }
 
-        if sigma is not None:
+        if sigma is not None or fit_model is not None:
             distances = np.array([p.distance for p in probed_pairs], dtype=float)
             connections = np.array([p.synapse for p in probed_pairs], dtype=bool)
             mask = np.isfinite(distances) & np.isfinite(connections)
+            results[(pre_class, post_class)]['probed_distances'] = distances[mask]
+            results[(pre_class, post_class)]['connected_distances'] = connections[mask]
+        if sigma is not None:
             adj_conn_prob, adj_lower_ci, adj_upper_ci = distance_adjusted_connectivity(distances[mask], connections[mask], sigma=sigma, alpha=alpha)
             results[(pre_class, post_class)]['adjusted_connectivity'] = (adj_conn_prob, adj_lower_ci, adj_upper_ci)
+        if fit_model is not None:
+            if sigma is not None:
+                fit = GaussianModel.fit(distances[mask], connections[mask], method='L-BFGS-B', fixed_size=sigma)
+            else:
+                fit = GaussianModel.fit(distances[mask], connections[mask], method='L-BFGS-B')
+            results[(pre_class, post_class)]['connectivity_fit'] = fit
+
     
     return results
 

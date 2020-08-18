@@ -506,7 +506,7 @@ def show_distance_profiles(ax, results, colors, class_labels):
     return ax
 
 
-def show_connectivity_profile(x_probed, conn, fit, ax, true_model=None, ymax=None):
+def show_connectivity_profile(x_probed, conn, ax, fit=None, true_model=None, ymax=None):
     # where to bin connections for measuring connection probability
     x_bins = np.arange(0, 500e-6, 40e-6)
 
@@ -526,8 +526,9 @@ def show_connectivity_profile(x_probed, conn, fit, ax, true_model=None, ymax=Non
     if ymax is None:
         ymax = upper.max()
     
+    if fit is not None:
     # plot the fit result (thick red)
-    ax.plot(x_vals, fit.connection_probability(x_vals), color=(0.5, 0, 0))
+        ax.plot(x_vals, fit.connection_probability(x_vals), color=(0.5, 0, 0))
 
     # plot connections probed and found
     # warning: some mpl versions have a bug that causes the data argument to eventplot to be modified
