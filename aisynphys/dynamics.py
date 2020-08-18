@@ -120,6 +120,7 @@ def generate_pair_dynamics(pair, db, session):
     
     for key,recs in sorted_prs.items():
         clamp_mode, ind_freq, rec_delay = key
+        # check for a rec_delay and match it to closest known interval in delays
         if rec_delay is None:
             delay = None
         else:
@@ -136,15 +137,12 @@ def generate_pair_dynamics(pair, db, session):
         collect_recovery = []
 
         for recording, pulses in recs.items():
-            # get all pulse amps and calculate all possible metrics
+            # get all pulse amps
             amps = {k:getattr(r.PulseResponseFit, amp_field) for k,r in pulses.items()}
-            initial = (amps[2] - amps[1]) / amp_90p
-            induction = (np.mean([amps[6], amps[7], amps[8]]) - amps[1]) / amp_90p
-            r = [amps[i+8] - amps[i] for i in range(1,5)]
-            recovery = np.mean(r) / amp_90p
-            
-            # append metrics if the proper conditions are met
+
+            # calculate metrics if the proper conditions are met
             if 1 in pulses and 2 in pulses:
+                initial = (amps[2] - amps[1]) / amp_90p
                 collect_initial.append(initial)
                 # we separate out 50Hz into its own column because the induction frequency spans
                 # multiple recovery delays
@@ -153,10 +151,13 @@ def generate_pair_dynamics(pair, db, session):
                     if amps[1] != 0:
                     paired_pulse_ratio.append(amps[2] / amps[1])
             if all([k in pulses for k in [1,6,7,8]]):
+                induction = (np.mean([amps[6], amps[7], amps[8]]) - amps[1]) / amp_90p
                 collect_induction.append(induction)
                 if ind_freq == 50:
                     col_metrics['stp_induction_50hz'].append(induction)
             if delay is not None and all([k in pulses for k in range(1,13)]):
+                r = [amps[i+8] - amps[i] for i in range(1,5)]
+                recovery = np.mean(r) / amp_90p
                 collect_recovery.append(recovery)
                 if delay == 250e-3:
                     col_metrics['stp_recovery_250ms'].append(recovery)
