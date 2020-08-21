@@ -30,6 +30,7 @@ AvgResponseFit = make_table(
         ('pair_id', 'pair.id', 'The ID of the entry in the pair table to which these results apply', {'index': True}),
         ('clamp_mode', 'str', 'The clamp mode "ic" or "vc"', {'index': True}),
         ('holding', 'float', 'The holding potential -70 or -55', {'index': True}),
+        ('laser_power_command', 'float', 'The pockel cell command value for the 2p laser'),
         ('fit_xoffset', 'float', 'Fit time from max slope of the presynaptic spike until onset of the synaptic response (seconds)'),
         ('fit_yoffset', 'float', 'Fit constant y-offset (amps or volts)'),
         ('fit_amp', 'float', 'Fit synaptic response amplitude (amps or volts)'),
