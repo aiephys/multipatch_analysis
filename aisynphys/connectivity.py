@@ -175,9 +175,9 @@ def measure_connectivity(pair_groups, alpha=0.05, sigma=None, fit_model=None):
             results[(pre_class, post_class)]['adjusted_connectivity'] = (adj_conn_prob, adj_lower_ci, adj_upper_ci)
         if fit_model is not None:
             if sigma is not None:
-                fit = GaussianModel.fit(distances[mask], connections[mask], method='L-BFGS-B', fixed_size=sigma)
+                fit = fit_model.fit(distances[mask], connections[mask], method='L-BFGS-B', fixed_size=sigma)
             else:
-                fit = GaussianModel.fit(distances[mask], connections[mask], method='L-BFGS-B')
+                fit = fit_model.fit(distances[mask], connections[mask], method='L-BFGS-B')
             results[(pre_class, post_class)]['connectivity_fit'] = fit
 
     
