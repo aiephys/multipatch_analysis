@@ -506,7 +506,7 @@ def show_distance_profiles(ax, results, colors, class_labels):
     return ax
 
 
-def show_connectivity_profile(x_probed, conn, ax, fit=None, true_model=None, ymax=None):
+def show_connectivity_profile(x_probed, conn, ax, fit, true_model=None, ymax=None):
     # where to bin connections for measuring connection probability
     x_bins = np.arange(0, 500e-6, 40e-6)
 
