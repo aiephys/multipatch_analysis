@@ -513,32 +513,18 @@ def show_connectivity_profile(x_probed, conn, ax, fit=None, true_model=None, yma
     # where to sample models
     #x_vals = 0.5 * (x_bins[1:] + x_bins[:-1])
     x_vals = np.linspace(x_bins[0], x_bins[-1], 200)
-
-    # plot the ground-truth probability distribution (solid green)
-    # if true_model is not None:
-    #     ax.plot(x_vals, true_model.connection_probability(x_vals), color=(0, 0.5, 0))
-
-    # plot the connectivity profile with confidence intervals (black line / grey area)
+   
     _, cprop, lower, upper = connectivity_profile(conn, x_probed, x_bins)
-    # ax.plot(x_bins, np.append(cprop, cprop[-1]), drawstyle='steps-post', color=(.5, .5, .5))
-    # ax.fill_between(x_bins, np.append(lower, lower[-1]), np.append(upper, upper[-1]), step='post', color=(0.85, 0.85, 0.85))
+    # plot the connectivity profile with confidence intervals (black line / grey area)
     show_distance_binned_cp(x_bins, cprop, ax, ci_lower=lower, ci_upper=upper)
 
     if ymax is None:
         ymax = upper.max()
     
     show_connectivity_fit(x_vals, fit, ax, true_model=true_model)
-    # plot the fit result (thick red)
-    # ax.plot(x_vals, fit.connection_probability(x_vals), color=(0.5, 0, 0))
 
-    # plot connections probed and found
-    # warning: some mpl versions have a bug that causes the data argument to eventplot to be modified
-    # alpha1 = np.clip(30 / len(x_probed), 1/255, 1)
-    # alpha2 = np.clip(30 / conn.sum(), 1/255, 1)
     tickheight = ymax / 10
     show_connectivity_raster(x_probed, conn, tickheight, ax)
-    # ax.eventplot(x_probed.copy(), lineoffsets=-tickheight*2, linelengths=tickheight, color=(0, 0, 0, alpha1))
-    # ax.eventplot(x_probed[conn], lineoffsets=-tickheight, linelengths=tickheight, color=(0, 0, 0, alpha2))
 
     # err = 0 if not hasattr(fit, 'fit_result') else fit.fit_result.fun
     # label = "Fit pmax=%0.2f\nsize=%0.2f µm\nerr=%f" % (fit.pmax, fit.size*1e6, err)
@@ -558,6 +544,7 @@ def show_connectivity_profile(x_probed, conn, ax, fit=None, true_model=None, yma
 
 def show_connectivity_fit(x_vals, fit, ax, color=(0.5, 0, 0), true_model=None, label=None):
     if true_model is not None:
+        # plot the ground-truth probability distribution (solid green)
         ax.plot(x_vals, true_model.connection_probability(x_vals), color=(0, 0.5, 0))
     ax.plot(x_vals, fit.connection_probability(x_vals), color=color, label=label)
     if label is not None:
