@@ -153,7 +153,6 @@ def measure_connectivity(pair_groups, alpha=0.05, sigma=None, fit_model=None):
         conf_interval_gap = connection_probability_ci(n_gaps, n_probed, alpha=alpha)
         gap_prob = float('nan') if n_probed == 0 else n_gaps / n_probed
 
-
         results[(pre_class, post_class)] = {
             'n_probed': n_probed,
             'n_connected': n_connected,
@@ -536,4 +535,54 @@ class FixedSizeModelMixin:
         model = cls(pmax, size)
         return -model.likelihood(x, conn)
 
+def recip_connectivity_profile(cp_results_1, cp_results_2, bin_edges):
+    """
+    Given connection probability results of two pair groups what is the normalized probability of finding a reciprocal cnx 
+    
+    Parameters
+    ----------
+    cp_results_1 : dict
+        output of measure_connectivity for first connection type (A->B)
+    cp_results_2 : dict
+        output of measure connectivity for second connection type (B->A)
+    bin_edges : array
+        The distance values between which connections will be binned
 
+    Output
+    ------
+    norm_cp_r : array
+        distance binned reciprocal connection probability normalized to cp_1 * cp_2
+    recip_conn : boolean array
+        whether or not a reciprocal connection exists at each probed distance
+    recip_dist : array
+        distance values between reciprocal pairs
+    """
+    unordered_probes = {}
+    unordered_dist = {}
+    # get all pairs from the two types which will have keys that are reciprocals of one another 
+    # and values =  where there is a synapse
+    pairs = cp_results_1['probed_pairs'] + cp_results_2['probed_pairs']
+    probes = {(pair.pre_cell_id, pair.post_cell_id): pair.has_synapse for pair in pairs if pair.has_synapse is not None}
+    probes_dist = {(pair.pre_cell_id, pair.post_cell_id): pair.distance for pair in pairs if pair.has_synapse is not None}
+
+    # unorder the pairs above and count the number of synapses between them
+    # 0 = no synapses
+    # 1 = one-way synapse
+    # 2 = reciprocal synapse
+    for cell_ids,connected in probes.items():
+        cell_ids = tuple(sorted(cell_ids))
+        unordered_probes[cell_ids] = int(connected) + unordered_probes.get(cell_ids, 0)
+        unordered_dist[cell_ids] = probes_dist.get(cell_ids, None)
+        
+    # set to True unordered pairs that have 2 synapses
+    unordered_recip_connections = [x==2 for x in unordered_probes.values()]
+    recip_conn = np.asarray(unordered_recip_connections, dtype='bool')
+    recip_dist = np.asarray([x for x in unordered_dist.values()], dtype='float')
+    
+    _, cp_1, lower_1, upper_1 = connectivity_profile(cp_results_1['connected_distances'], cp_results_1['probed_distances'], bin_edges)
+    _, cp_2, lower_2, upper_2 = connectivity_profile(cp_results_2['connected_distances'], cp_results_2['probed_distances'], bin_edges)
+    _, cp_r, lower_r, upper_r = connectivity_profile(recip_conn, recip_dist, bin_edges)
+    
+    norm_cp_r = cp_r / (cp_1 * cp_2)
+
+    return norm_cp_r, recip_conn, recip_dist
