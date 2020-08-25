@@ -113,9 +113,9 @@ def generate_pair_dynamics(pair, db, session):
     col_metrics = {'stp_initial_50hz': [], 'stp_induction_50hz': [], 'stp_recovery_250ms': []}
     paired_pulse_ratio = []
     # caclulate dynamics for all frequencie and recovery delays
-    #   {(clamp_mode, ind_freq, recovery_delay): 'stp_induction':(mean, std, n),
-    #       'stp_initial': (mean, std, n), 'stp_recovery': (mean, std, n)}
-    all_metrics = {}
+    #   [(clamp_mode, ind_freq, recovery_delay), {'stp_induction':(mean, std, n),
+    #       'stp_initial': (mean, std, n), 'stp_recovery': (mean, std, n)}), ...]
+    all_metrics = []
     delays = [125e-3, 250e-3, 500e-3, 1000e-3, 2000e-3, 4000e-3]
     
     for key,recs in sorted_prs.items():
@@ -129,8 +129,8 @@ def generate_pair_dynamics(pair, db, session):
                 delay = delays[check_delays[0]]
             else:
                 delay = None
-        new_key = (clamp_mode, ind_freq, delay)
-        all_metrics[new_key] = {'stp_induction': (), 'stp_initial': (), 'stp_recovery': ()}
+        meta = (clamp_mode, ind_freq, delay)
+        stp_metrics = {'stp_induction': (), 'stp_initial': (), 'stp_recovery': ()}
         
         collect_initial = []
         collect_induction = []
@@ -149,7 +149,7 @@ def generate_pair_dynamics(pair, db, session):
                 if ind_freq == 50:
                     col_metrics['stp_initial_50hz'].append(initial)
                     if amps[1] != 0:
-                    paired_pulse_ratio.append(amps[2] / amps[1])
+                        paired_pulse_ratio.append(amps[2] / amps[1])
             if all([k in pulses for k in [1,6,7,8]]):
                 induction = (np.mean([amps[6], amps[7], amps[8]]) - amps[1]) / amp_90p
                 collect_induction.append(induction)
@@ -162,9 +162,10 @@ def generate_pair_dynamics(pair, db, session):
                 if delay == 250e-3:
                     col_metrics['stp_recovery_250ms'].append(recovery)
         
-        all_metrics[new_key]['stp_initial'] = (np.mean(collect_initial), np.std(collect_initial), len(collect_initial),) if len(collect_initial) > 1 else float('nan') 
-        all_metrics[new_key]['stp_induction'] = (np.mean(collect_induction), np.std(collect_induction), len(collect_induction),) if len(collect_induction) > 1 else float('nan') 
-        all_metrics[new_key]['stp_recovery'] = (np.mean(collect_recovery), np.std(collect_recovery), len(collect_recovery),) if len(collect_recovery) > 1 else float('nan')   
+        stp_metrics['stp_initial'] = (np.mean(collect_initial), np.std(collect_initial), len(collect_initial),) if len(collect_initial) > 1 else float('nan') 
+        stp_metrics['stp_induction'] = (np.mean(collect_induction), np.std(collect_induction), len(collect_induction),) if len(collect_induction) > 1 else float('nan') 
+        stp_metrics['stp_recovery'] = (np.mean(collect_recovery), np.std(collect_recovery), len(collect_recovery),) if len(collect_recovery) > 1 else float('nan')  
+        all_metrics.append((meta, stp_metrics))
     
     # set one column to the full set of STP analysis
     setattr(dynamics, 'stp_all_stimuli', all_metrics)        
@@ -253,3 +254,9 @@ def generate_pair_dynamics(pair, db, session):
         dynamics.paired_event_correlation_p = p
     
     return dynamics
+
+def all_stp_to_dict(all_stp, df=False):
+"""
+Utility to convert output of stp_all_stimuli column to dictionary. 
+If df=True it will go one step further to a Pandas DataFrame
+"""
