@@ -693,11 +693,11 @@ class ExperimentMetadata(Experiment):
                                 connections = (n_connections, pass_color)
                     rec['connections'] = connections        
                     
-
+                    in_lims = False
                     cell_cluster = self.lims_cell_cluster_id
                     if cell_cluster is None and self.archive_path is not None:
                         lims_ignore_file = os.path.join(self.archive_path, '.mpe_ignore')
-                        if os.path.isfile(lims_ignore_path):
+                        if os.path.isfile(lims_ignore_file):
                             in_lims = "FAILED"
                             self.lims_message = open(lims_ignore_file, 'r').read()
                     else:
