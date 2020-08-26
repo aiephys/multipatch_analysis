@@ -109,7 +109,7 @@ class NDSlicer(QtGui.QWidget):
         param.viewer.dock.setVisible(param.value())
         
     def viewer_selection_changed(self, viewer, axes):
-        self.selection_changed.emit(self)
+        self.set_selection(axes, emit=True)
 
     def viewer_selection_changing(self, viewer, axes):
         self.set_selection(axes, emit=False)
@@ -119,14 +119,16 @@ class NDSlicer(QtGui.QWidget):
         sel = {}
         for param, change, value in changes:
             if change != 'value':
-                continue
-            sel[param.name()] = value
+                continue            
+            sel[param.name()] = self.axes[param.name()].value_at(value)
         self.set_selection(sel)
 
-    def set_selection(self, axes, emit=True):
+    def set_selection(self, axes, emit=True):        
         for ax,val in axes.items():
+            # update index parameters
+            with pg.SignalBlock(self.params.child('index').sigTreeStateChanged, self.index_param_changed):
+                self.params['index', ax] = self.axes[ax].index_at(val)
             self.axes[ax].selection = val
-            self.params['index', ax] = val
         for viewer in self.viewers:
             viewer.update_selection()
         if emit:
