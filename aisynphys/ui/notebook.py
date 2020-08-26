@@ -232,7 +232,7 @@ def get_metric_data(metric, db, pre_classes=None, post_classes=None, pair_query_
         #                               name                         unit   scale alpha  db columns                                    colormap      log     clim           text format
         'psp_amplitude':               ('PSP Amplitude',             'mV',  1e3,  1,     [db.Synapse.psp_amplitude],                   'bwr',        False,  (-1.5, 1.5),       "%0.2f mV"),
         'psp_rise_time':               ('PSP Rise Time',             'ms',  1e3,  0.5,   [db.Synapse.psp_rise_time],                   'viridis_r',  True,  (1, 10),        "%0.2f ms"),
-        'psp_decay_tau':               ('PSP Decay Tau',             'ms',  1e3,  0.01,     [db.Synapse.psp_decay_tau],                 'viridis_r',  True,  (1, 100),       "%0.2f ms"),
+        'psp_decay_tau':               ('PSP Decay Tau',             'ms',  1e3,  0.01,     [db.Synapse.psp_decay_tau],                 'viridis_r',  True,  (1, 200),       "%0.2f ms"),
         'psc_amplitude':               ('PSC Amplitude',             'mV',  1e3,  1,     [db.Synapse.psc_amplitude],                   'bwr',        False,  (-1, 1),       "%0.2f mV"),
         'psc_rise_time':               ('PSC Rise Time',             'ms',  1e3,  1,     [db.Synapse.psc_rise_time],                   'viridis_r',  False,  (0, 6),        "%0.2f ms"),
         'psc_decay_tau':               ('PSC Decay Tau',             'ms',  1e3,  1,     [db.Synapse.psc_decay_tau],                   'viridis_r',  False,  (0, 20),       "%0.2f ms"),
@@ -427,7 +427,7 @@ def map_color_by_metric(pair, metric, cmap, norm, scale):
     return color
 
 
-def plot_metric_pairs(pair_list, metric, db, ax, align='pulse', norm_amp=None, perc=False):
+def plot_metric_pairs(pair_list, metric, db, ax, align='pulse', norm_amp=None, perc=False, labels=None, max_ind_freq=50):
     pairs = [get_pair(eid, pre, post, db) for eid, pre, post in pair_list]
     _, metric_name, units, scale, _, cmap, cmap_log, clim, _ = get_metric_data(metric, db)
     cmap = matplotlib.cm.get_cmap(cmap)
@@ -438,14 +438,14 @@ def plot_metric_pairs(pair_list, metric, db, ax, align='pulse', norm_amp=None, p
     colors = [map_color_by_metric(pair, metric, cmap, norm, scale) for pair in pairs]
     for i, pair in enumerate(pairs):
         s = db.session()
-        q= response_query(s, pair, max_ind_freq=50)
+        q= response_query(s, pair, max_ind_freq=max_ind_freq)
         prs = [q.PulseResponse for q in q.all()]
         sort_prs = sort_responses(prs)
         prs = sort_prs[('ic', -55)]['qc_pass']
         if pair.synapse.synapse_type=='ex':
             prs = prs + sort_prs[('ic', -70)]['qc_pass']
         if perc:
-            prs_amp = [abs(pr.pulse_response_fit.fit_amp) for pr in prs]
+            prs_amp = [abs(pr.pulse_response_fit.fit_amp) for pr in prs if pr.pulse_response_fit is not None]
             amp_85, amp_95 = np.percentile(prs_amp, [85, 95])
             mask = (prs_amp >= amp_85) & (prs_amp <= amp_95)
             prs = np.asarray(prs)[mask]
@@ -453,17 +453,20 @@ def plot_metric_pairs(pair_list, metric, db, ax, align='pulse', norm_amp=None, p
         post_ts = prl.post_tseries(align='spike', bsub=True, bsub_win=0.1e-3)
         trace = post_ts.mean()*scale
         if norm_amp=='exc':
+            
             trace = post_ts.mean()/pair.synapse.psp_amplitude
         if norm_amp=='inh':
             trace = post_ts.mean()/pair.synapse.psp_amplitude*-1
         latency = pair.synapse.latency
         if align=='pulse':
             trace.t0 = trace.t0 - latency
-
-        ax.plot(trace.time_values*scale, trace.data, color=colors[i], linewidth=2)
-        ax.set_xlim(-2, 10)
-        ax.spines['right'].set_visible(False)
-        ax.spines['top'].set_visible(False)
+        label = labels[i] if labels is not None else None
+        ax.plot(trace.time_values*scale, trace.data, color=colors[i], linewidth=2, label=label)
+    ax.set_xlim(-2, 10)
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    if labels is not None:
+        ax.legend(loc='upper left', bbox_to_anchor=(1, 1))
 
 
 def show_distance_profiles(ax, results, colors, class_labels):
