@@ -130,7 +130,6 @@ def generate_pair_dynamics(pair, db, session):
             else:
                 delay = rec_delay
         meta = (clamp_mode, ind_freq, delay)
-        sdf
         stp_metrics = {'stp_induction': (), 'stp_initial': (), 'stp_recovery': ()}
         
         collect_initial = []
