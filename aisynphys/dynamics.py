@@ -124,12 +124,13 @@ def generate_pair_dynamics(pair, db, session):
         if rec_delay is None:
             delay = None
         else:
-            check_delays = [abs(rec_delay - d) < 5e-3 for d in delays]
+            check_delays = [d/rec_delay > 0.9 and d/rec_delay < 1.1 for d in delays] # allow measured delay to be off by 10%
             if sum(check_delays) == 1:
                 delay = delays[check_delays[0]]
             else:
-                delay = None
+                delay = rec_delay
         meta = (clamp_mode, ind_freq, delay)
+        sdf
         stp_metrics = {'stp_induction': (), 'stp_initial': (), 'stp_recovery': ()}
         
         collect_initial = []
@@ -255,8 +256,13 @@ def generate_pair_dynamics(pair, db, session):
     
     return dynamics
 
-def all_stp_to_dict(all_stp, df=False):
-"""
-Utility to convert output of stp_all_stimuli column to dictionary. 
-If df=True it will go one step further to a Pandas DataFrame
-"""
+def all_stp_to_dict(all_stp):
+    """
+    Utility to convert output of stp_all_stimuli column to dictionary. 
+    """
+
+def all_stp_to_df(all_stp):
+    """
+    Utility to convert output of stp_all_stimuli column to pandas dataframe. 
+    """
+    stp_dict = all_stp_to_dict(all_stp)
