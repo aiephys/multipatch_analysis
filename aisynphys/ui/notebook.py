@@ -232,7 +232,7 @@ def get_metric_data(metric, db, pre_classes=None, post_classes=None, pair_query_
         #                               name                         unit   scale alpha  db columns                                    colormap      log     clim           text format
         'psp_amplitude':               ('PSP Amplitude',             'mV',  1e3,  1,     [db.Synapse.psp_amplitude],                   'bwr',        False,  (-1.5, 1.5),       "%0.2f mV"),
         'psp_rise_time':               ('PSP Rise Time',             'ms',  1e3,  0.5,   [db.Synapse.psp_rise_time],                   'viridis_r',  True,  (1, 10),        "%0.2f ms"),
-        'psp_decay_tau':               ('PSP Decay Tau',             'ms',  1e3,  1,     [db.Synapse.psp_decay_tau],                   'viridis_r',  False,  (0, 20),       "%0.2f ms"),
+        'psp_decay_tau':               ('PSP Decay Tau',             'ms',  1e3,  0.01,     [db.Synapse.psp_decay_tau],                 'viridis_r',  True,  (1, 100),       "%0.2f ms"),
         'psc_amplitude':               ('PSC Amplitude',             'mV',  1e3,  1,     [db.Synapse.psc_amplitude],                   'bwr',        False,  (-1, 1),       "%0.2f mV"),
         'psc_rise_time':               ('PSC Rise Time',             'ms',  1e3,  1,     [db.Synapse.psc_rise_time],                   'viridis_r',  False,  (0, 6),        "%0.2f ms"),
         'psc_decay_tau':               ('PSC Decay Tau',             'ms',  1e3,  1,     [db.Synapse.psc_decay_tau],                   'viridis_r',  False,  (0, 20),       "%0.2f ms"),
