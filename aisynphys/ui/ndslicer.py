@@ -89,6 +89,16 @@ class NDSlicer(QtGui.QWidget):
         self.histlut.setHistogramRange(*data_lim)
         
     def add_view(self, axes, position=None):
+        """Add a new 1D or 2D view.
+
+        Parameters
+        ----------
+        axes : list
+            List of 1 or 2 axis names to show in the view.
+        position : dict | None
+            Extra arguments used to set the position of the new dock (see
+            pyqtgraph.dockarea.DockArea.addDock). 
+        """
         dock = pg.dockarea.Dock("viewer", area=self.dockarea)
         if len(axes) == 1:
             viewer = OneDViewer(axes)
@@ -104,6 +114,53 @@ class NDSlicer(QtGui.QWidget):
         viewer.set_data(self.data, self.axes)
         self.histlut_changed()
         return viewer, dock
+
+    def set_selection(self, axes, emit=True):
+        """Set the current selection along any set of axes.
+
+        Parameters:
+        -----------
+        axes : dict
+            Dictionary of {'axis_name': value} pairs specifying the new selection.
+        """
+        for ax,val in axes.items():
+            # update index parameters
+            with pg.SignalBlock(self.params.child('index').sigTreeStateChanged, self.index_param_changed):
+                self.params['index', ax] = self.axes[ax].index_at(val)
+            self.axes[ax].selection = val
+        for viewer in self.viewers:
+            viewer.update_selection()
+        if emit:
+            self.selection_changed.emit(self)
+
+    def set_index(self, index):
+        """Set currently selected indices on any axes.
+
+        Parameters:
+        -----------
+        index : list
+            List of indices to select on each axis.
+        """
+        select_values = {}
+        for i,x in enumerate(index):
+            ax = list(self.axes.values())[i]
+            select_values[ax.name] = ax.values[x]
+        self.set_selection(select_values)
+
+    def selection(self):
+        """Return an ordered dictionary of the currently selected values::
+
+            {'axis_name': value, ...}
+        """
+        vals = OrderedDict([(ax,val.selection) for ax,val in self.axes.items()])
+        return vals
+
+    def index(self):
+        """Return an ordered dictionary of the currently selected indices::
+
+            {'axis_name': index, ...}
+        """
+        return OrderedDict([(ax,val.index) for ax,val in self.axes.items()])
 
     def one_d_show_changed(self, param):
         param.viewer.dock.setVisible(param.value())
@@ -122,31 +179,6 @@ class NDSlicer(QtGui.QWidget):
                 continue            
             sel[param.name()] = self.axes[param.name()].value_at(value)
         self.set_selection(sel)
-
-    def set_selection(self, axes, emit=True):        
-        for ax,val in axes.items():
-            # update index parameters
-            with pg.SignalBlock(self.params.child('index').sigTreeStateChanged, self.index_param_changed):
-                self.params['index', ax] = self.axes[ax].index_at(val)
-            self.axes[ax].selection = val
-        for viewer in self.viewers:
-            viewer.update_selection()
-        if emit:
-            self.selection_changed.emit(self)
-
-    def selection(self):
-        vals = OrderedDict([(ax,val.selection) for ax,val in self.axes.items()])
-        return vals
-
-    def index(self):
-        return OrderedDict([(ax,val.index) for ax,val in self.axes.items()])
-
-    def set_index(self, index):
-        for i,x in enumerate(index):
-            ax = list(self.axes.values())[i]
-            ax.selection = ax.values[x]
-        for viewer in self.viewers:
-            viewer.update_selection()        
 
     def histlut_changed(self):
         for viewer in self.viewers:
