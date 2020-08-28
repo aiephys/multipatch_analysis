@@ -67,8 +67,9 @@ class ExperimentBrowser(pg.TreeWidget):
                         continue
                     cells = '%s => %s' % (pair.pre_cell.ext_id, pair.post_cell.ext_id)
                     conn = {True:"syn", False:"-", None:"?"}[pair.has_synapse]
+                    gap = {True:"gap", False:"-", None:"?"}[pair.has_electrical]
                     types = 'L%s %s => L%s %s' % (pair.pre_cell.target_layer or "?", pair.pre_cell.cre_type, pair.post_cell.target_layer or "?", pair.post_cell.cre_type)
-                    pair_item = pg.TreeWidgetItem([cells, conn, types])
+                    pair_item = pg.TreeWidgetItem([cells, conn+' ; '+gap, types])
                     expt_item.addChild(pair_item)
                     pair_item.pair = pair
                     pair_item.expt = expt
