@@ -14,6 +14,7 @@ from neuroanalysis.baseline import float_mode
 from aisynphys.avg_response_fit import response_query, sort_responses
 from aisynphys.connectivity import connectivity_profile
 from aisynphys.data import PulseResponseList
+from aisynphys.dynamics import stim_sorted_pulse_amp
 
 
 def heatmap(data, row_labels, col_labels, ax=None, ax_labels=None, bg_color=None,
@@ -638,3 +639,26 @@ def data_matrix(data_df, cell_classes, metric=None, scale=1, unit=None, cmap=Non
     max = mean[metric].max()*scale
     data_rgb[:,:,3] = np.clip(data_alpha, 0, max)
     return data_rgb, data_str
+
+def plot_stim_sorted_pulse_amp(pair, ax, ind_f=50):
+    qc_pass_data = stim_sorted_pulse_amp(pair)
+
+    # scatter plots of event amplitudes sorted by pulse number 
+    mask = qc_pass_data['induction_frequency'] == ind_f
+    filtered = qc_pass_data[mask]
+
+    sign = 1 if pair.synapse.synapse_type == 'ex' else -1
+    try:
+        filtered['fit_amp'] *= sign * 1000
+    except KeyError:
+        print('No fit amps for pair: %s' % pair)
+    ax.set_ylim(0, filtered['fit_amp'].max())
+    ax.set_xlim(0, 13)
+
+    sns.swarmplot(x='pulse_number', y='fit_amp', data=filtered, color=(0.7, 0.7, 0.7), size=3, ax=ax)
+
+    pulse_means = filtered.groupby('pulse_number').mean()['fit_amp'].to_list()
+    ax.plot(range(0,8), pulse_means[:8], color='k', linewidth=2, zorder=100)
+    ax.plot(range(8,12), pulse_means[8:12], color='k', linewidth=2, zorder=100)
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
