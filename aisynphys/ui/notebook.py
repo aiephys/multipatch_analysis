@@ -557,7 +557,7 @@ def show_connectivity_fit(x_vals, fit, ax, color=(0.5, 0, 0), true_model=None, l
 def show_distance_binned_cp(x_bins, cprop, ax, color=(0.5, 0.5, 0.5), ci_lower=None, ci_upper=None):
     ax.plot(x_bins, np.append(cprop, cprop[-1]), drawstyle='steps-post', color=color)
     if ci_lower is not None and ci_upper is not None:
-        ax.fill_between(x_bins, np.append(ci_lower, ci_lower[-1]), np.append(ci_upper, ci_upper[-1]), step='post', color=color + (0.3,))
+        ax.fill_between(x_bins, np.append(ci_lower, ci_lower[-1]), np.append(ci_upper, ci_upper[-1]), step='post', facecolor=color + (0.3,))
 
 def show_connectivity_raster(x_probed, conn, tickheight, ax, color=(0, 0, 0), offset=2):
     # plot connections probed and found
@@ -640,7 +640,7 @@ def data_matrix(data_df, cell_classes, metric=None, scale=1, unit=None, cmap=Non
     data_rgb[:,:,3] = np.clip(data_alpha, 0, max)
     return data_rgb, data_str
 
-def plot_stim_sorted_pulse_amp(pair, ax, ind_f=50):
+def plot_stim_sorted_pulse_amp(pair, ax, ind_f=50, color='k'):
     qc_pass_data = stim_sorted_pulse_amp(pair)
 
     # scatter plots of event amplitudes sorted by pulse number 
@@ -658,7 +658,7 @@ def plot_stim_sorted_pulse_amp(pair, ax, ind_f=50):
     sns.swarmplot(x='pulse_number', y='fit_amp', data=filtered, color=(0.7, 0.7, 0.7), size=3, ax=ax)
 
     pulse_means = filtered.groupby('pulse_number').mean()['fit_amp'].to_list()
-    ax.plot(range(0,8), pulse_means[:8], color='k', linewidth=2, zorder=100)
-    ax.plot(range(8,12), pulse_means[8:12], color='k', linewidth=2, zorder=100)
+    ax.plot(range(0,8), pulse_means[:8], color=color, linewidth=2, zorder=100)
+    ax.plot(range(8,12), pulse_means[8:12], color=color, linewidth=2, zorder=100)
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
