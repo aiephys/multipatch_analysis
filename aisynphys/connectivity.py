@@ -252,7 +252,7 @@ def distance_adjusted_connectivity(x_probed, connected, sigma, alpha=0.05):
     connected : bool array
         Boolean array indicating which pairs were connected.
     sigma : float
-        Gaussian σ value defining the width of the connectivity profile to fit to *x_probed* and *connected*.
+        Gaussian sigma value defining the width of the connectivity profile to fit to *x_probed* and *connected*.
     alpha : float
         Alpha value setting the width of the confidence interval. Default is 0.05, giving a 95% CI.
 
