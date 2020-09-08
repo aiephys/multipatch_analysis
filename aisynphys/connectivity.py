@@ -123,7 +123,7 @@ def measure_connectivity(pair_groups, alpha=0.05, sigma=None, fit_model=None):
         ``distance_adjysted_connectivity()``). If None, then adjusted
         values are omitted from the result.
     fit_model : ConnectivityModel | None
-        One of ConnectivityModel Class to fit Cp profile. If combined with
+        ConnectivityModel subclass to fit Cp profile. If combined with
         sigma the fit will be fixed to that sigma. If None, then fit results
         are ommitted from the results
 
@@ -531,15 +531,16 @@ class FixedSizeModelMixin:
         model = cls(pmax, size)
         return -model.likelihood(x, conn)
 
+
 def recip_connectivity_profile(probes_1, probes_2, bin_edges):
     """
     Given probed pairs of two pair groups what is the normalized probability of finding a reciprocal cnx 
     
     Parameters
     ----------
-    probes_1 : list or array
+    probes_1 : list of Pair
         probed pairs for first connection type (A->B)
-    probes_2 : list or array
+    probes_2 : list of Pair
         probed pairs for second connection type (B->A)
     bin_edges : array
         The distance values between which connections will be binned
