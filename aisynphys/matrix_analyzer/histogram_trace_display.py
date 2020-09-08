@@ -14,6 +14,7 @@ from pyqtgraph.parametertree import Parameter
 from pyqtgraph.widgets.ColorMapWidget import ColorMapParameter
 from aisynphys.ui.graphics import MatrixItem
 from .analyzers import results_scatter, FormattableNumber
+from ..ui.actions import PairActions
 
 
 class HistogramTab(pg.QtGui.QWidget):
@@ -38,6 +39,10 @@ class MatrixHistogramPlot(pg.GraphicsLayoutWidget):
         self.scatter = None
         self.trace_plots = None
         self.trace_plot_list = []
+        self.menu = pg.QtGui.QMenu()
+        self.pair_actions = PairActions()
+        for act in self.pair_actions.actions.values():
+            self.menu.addAction(act)
 
     def matrix_histogram(self, results, group_results, colormap, field_map):
          # plot hist or scatter of data in side panel, if there are multiple colormaps take the first enabled one
@@ -87,7 +92,7 @@ class MatrixHistogramPlot(pg.GraphicsLayoutWidget):
         if self.analyzer.name == 'dynamics':
             self.trace_pltB.setYLink(self.trace_pltA) 
         self.trace_plot_list.append(self.trace_plots)
-        self.line, self.scatter = analyzer.plot_element_data(pre_class, post_class, element, self.field_name, color=color, trace_plt=self.trace_plots)
+        self.line, self.scatter = analyzer.plot_element_data(pre_class, post_class, element, self.field_name, color=color, trace_plt=self.trace_plots, pair_actions=self.pair_actions)
         if self.analyzer.name == 'strength' and self.field_name != 'Latency':
             self.trace_panel.removeItem(self.trace_pltA)
         else:
@@ -121,8 +126,19 @@ class MatrixHistogramPlot(pg.GraphicsLayoutWidget):
         self.trace_plot = None
         self.trace_plot_list = []
 
+    def contextMenuEvent(self, event):
+        self.menu.popup(event.globalPos())
+
 
 class MatrixTSeriesPlot(pg.GraphicsLayoutWidget):
     def __init__(self):
         pg.GraphicsLayoutWidget.__init__(self)
         self.setRenderHints(self.renderHints() | pg.QtGui.QPainter.Antialiasing)
+
+        self.menu = pg.QtGui.QMenu()
+        self.pair_actions = PairActions()
+        for act in self.pair_actions.actions.values():
+            self.menu.addAction(act)
+
+        def contextMenuEvent(self, event):
+            self.menu.popup(event.globalPos())
