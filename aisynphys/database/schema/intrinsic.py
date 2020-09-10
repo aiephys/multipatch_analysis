@@ -20,13 +20,19 @@ Intrinsic = make_table(
         ('width', 'float', 'Spike width', {'index': True}),
         ('upstroke', 'float', 'Spike upstroke rate', {'index': True}),
         ('downstroke', 'float', 'Spike downstroke rate', {'index': True}),
-        ('peak_v', 'float', 'Spike peak voltage', {'index': True}),
         ('threshold_v', 'float', 'Spike threshold voltage', {'index': True}),
-        ('fast_trough_v', 'float', 'AHP / fast trough voltage', {'index': True}),
+        ('peak_deltav', 'float', 'Spike peak voltage relative to threshold', {'index': True}),
+        ('fast_trough_deltav', 'float', 'AHP / fast trough voltage relative to threshold', {'index': True}),
+        
         ('chirp_peak_freq', 'float', 'Frequency at which the chirp response peaks', {'index': True}),
         ('chirp_3db_freq', 'float', 'Frequency at which the chirp response amplitude is 3 dB below the peak.', {'index': True}),
         ('chirp_peak_ratio', 'float', 'Ratio of chirp resonance peak amplitude to low-frequency response amplitude', {'index': True}),
         
+        ('isi_adapt_ratio', 'float', 'Ratio of ISI on 5th to 1st spike', {'index': True}),
+        ('upstroke_adapt_ratio', 'float', 'Ratio of upstroke on 5th to 1st spike', {'index': True}),
+        ('downstroke_adapt_ratio', 'float', 'Ratio of downstroke on 5th to 1st spike', {'index': True}),
+        ('width_adapt_ratio', 'float', 'Ratio of spike width on 5th to 1st spike', {'index': True}),
+        ('threshold_v_adapt_ratio', 'float', 'Ratio of spike threshold on 5th to 1st spike', {'index': True}),
     ]
 )
 

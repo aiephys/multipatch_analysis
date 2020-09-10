@@ -11,6 +11,7 @@ from ipfx.data_set_features import extractors_for_sweeps
 from ipfx.stimulus_protocol_analysis import LongSquareAnalysis
 from ipfx.sweep import Sweep, SweepSet
 from ipfx.chirp_features import extract_chirp_features
+from ipfx.bin.features_from_output_json import get_complete_long_square_features
 from .pipeline_module import MultipatchPipelineModule
 from .experiment import ExperimentPipelineModule
 from .dataset import DatasetPipelineModule
@@ -124,21 +125,30 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
             errors.append('Error running IPFX analysis for cell %s: %s' % (cell_id, str(exc)))
             return {}, errors
         
-        spike_features = lsa.mean_features_first_spike(analysis['spikes_set'], features_list=SPIKE_FEATURES)
-        rheo = analysis['rheobase_i'] * 1e-9 #unscale from pA
-        fi_slope = analysis['fi_fit_slope'] * 1e-9 #unscale from pA
-        input_r = analysis['input_resistance'] * 1e6 #unscale from MOhm
-        sag = analysis['sag']
-        adapt = analysis['spiking_sweeps'].adapt.mean()
+        analysis_dict = lsa.as_dict(analysis)
+        output = get_complete_long_square_features(analysis_dict) 
         
         results = {
-            'rheobase': rheo,
-            'fi_slope': fi_slope,
-            'input_resistance': input_r,
-            'sag': sag,
-            'adaptation_index': adapt,
+            'rheobase': output['rheobase_i'] * 1e-9, #unscale from pA,
+            'fi_slope': output['fi_fit_slope'] * 1e-9, #unscale from pA,
+            'input_resistance': output['input_resistance'] * 1e6, #unscale from MOhm,
+            'sag': output['sag'],
+            'adaptation_index': output['adapt_mean'],
+            'upstroke_downstroke_ratio': output['upstroke_downstroke_ratio_hero'],
+            'upstroke': output['upstroke_hero'],
+            'downstroke': output['downstroke_hero'],
+            'width': output['width_hero'],
+            'threshold_v': output['threshold_v_hero'],
+
+            'peak_deltav': output['peak_deltav_hero'],
+            'fast_trough_deltav': output['fast_trough_deltav_hero'],
+
+            'isi_adapt_ratio': output['isi_adapt_ratio_hero'],
+            'upstroke_adapt_ratio': output['upstroke_adapt_ratio_hero'],
+            'downstroke_adapt_ratio': output['downstroke_adapt_ratio_hero'],
+            'width_adapt_ratio': output['width_adapt_ratio_hero'],
+            'threshold_v_adapt_ratio': output['threshold_v_adapt_ratio_hero'],
         }
-        results.update(spike_features)
         return results, errors
 
     def job_records(self, job_ids, session):
