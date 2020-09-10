@@ -54,7 +54,7 @@ if __name__ == '__main__':
             if when == 'weekly' and datetime.today().weekday() != 5:
                 continue
                 
-            time_str = time.strftime('%Y-%M-%d %H:%M')
+            time_str = time.strftime('%Y-%m-%d %H:%M')
             full_cmd = cmd + " 2>&1 | tee -a " + logfile
             msg = ("======================================================================================\n" 
                    "    [%s]  %s\n"
