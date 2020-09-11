@@ -25,7 +25,7 @@ def get_pair_avg_fits(pair, session, notes_session=None, ui=None, max_ind_freq=5
     Operations are:
     
     - Query all pulse responses for this pair, where the pulse train frequency was 
-      no faster than 50Hz
+      no faster than max_ind_freq
     - Sort responses by clamp mode and holding potential, with the latter in two bins: -80 to -60 mV and -60 to -45 mV.
       Responses are further separated into qc pass/fail for each bin. QC pass criteria:
         - PR must have exactly one presynaptic spike with detectable latency
@@ -84,12 +84,12 @@ def get_pair_avg_fits(pair, session, notes_session=None, ui=None, max_ind_freq=5
             notes = None
             sign = 0
             init_latency = None
-            latency_window = (0.5e-3, 8e-3)
+            latency_window = (0.5e-3, 10e-3)
         else:
             notes = notes_rec.notes
             if notes.get('fit_parameters') is None:
                 init_latency = None
-                latency_window = (0.5e-3, 8e-3)
+                latency_window = (0.5e-3, 10e-3)
             else:
                 init_latency = notes['fit_parameters']['initial'][clamp_mode][str(holding)]['xoffset']
                 latency_window = (init_latency - 100e-6, init_latency + 100e-6)
