@@ -65,12 +65,13 @@ def generate_daily_report(day):
         tubes = [hs['Tube ID'] for hs in headstages.values()] 
         no_tubes = all([t == '' for t in tubes]) 
         if no_tubes:
+            print('No tubes for %s' % site_source)
             continue
 
         patch_date_dt = timestamp_to_datetime(day_info.get('__timestamp__'))
         patch_date = datetime.strftime(patch_date_dt, "%m/%d/%Y") if isinstance(patch_date_dt, datetime) else None 
         specimen_id = day_info.get('animal_ID')
-        species = lims.specimen_species(slice_info.get('specimen_ID'))
+        species = lims.specimen_species(slice_info.get('specimen_ID', '').strip())
         species = organism.get(species) 
         if species == 'Mouse':
             genotype = day_info.get('LIMS_donor_info', {}).get('genotype')
@@ -124,6 +125,7 @@ def generate_daily_report(day):
     
     # convert report to a dataframe and export to excel
     report_df = to_df(row_data, report_type='daily')
+
     if report_df is not None:
         report_df.to_excel(file_path, index=False)
 
