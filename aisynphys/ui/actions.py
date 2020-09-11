@@ -41,9 +41,11 @@ class ExperimentActions(pg.QtCore.QObject):
         """
         return self._experiment
 
+
     @experiment.setter
     def experiment(self, expt):
         self._experiment = expt
+
 
     def data_manager(self):
         expt = self.experiment
@@ -99,3 +101,34 @@ class PairActions(pg.QtCore.QObject):
     """
     def __init__(self):
         pg.QtCore.QObject.__init__(self)
+
+        self._pair = None
+        
+        actions = [
+            ('Pair Analysis', self.pair_analysis),
+        ]
+        self.actions = OrderedDict()
+        for name, callback in actions:
+            action = pg.QtGui.QAction(name, self)
+            action.triggered.connect(callback)
+            self.actions[name] = action
+
+    @property
+    def pair(self):
+        """The currently active / selected pair.
+
+        All triggered actions are performed on this pair.
+
+        This propery can be overridden to customize lookup of the
+        selected pair.
+        """
+        return self._pair
+
+
+    @pair.setter
+    def pair(self, p):
+        self._pair = p
+
+    def pair_analysis(self):
+        path = os.path.join(os.path.dirname(aisynphys.__file__), '..', 'tools', 'pair_analysis.py')
+        subprocess.Popen('python "%s" "%s" "%s" "%s"' % (path, self.pair.experiment.ext_id, self.pair.pre_cell.ext_id, self.pair.post_cell.ext_id), shell=True)
