@@ -109,45 +109,73 @@ def generate_pair_dynamics(pair, db, session):
     #   [(clamp_mode, ind_freq, recovery_delay)][recording][pulse_number]
     sorted_prs = sorted_pulse_responses(passed_pr_recs)
 
-    # calculate 50Hz paired pulse and induction metrics
-    metrics = {'stp_initial_50hz': [], 'stp_induction_50hz': [], 'stp_recovery_250ms': []}
+    # calculate 50Hz paired pulse and induction metrics for their own column
+    col_metrics = {'stp_initial_50hz': [], 'stp_induction_50hz': [], 'stp_recovery_250ms': []}
     paired_pulse_ratio = []
+    # caclulate dynamics for all frequencie and recovery delays
+    #   [(clamp_mode, ind_freq, recovery_delay), {'stp_induction':(mean, std, n),
+    #       'stp_initial': (mean, std, n), 'stp_recovery': (mean, std, n)}), ...]
+    all_metrics = []
+    delays = [125e-3, 250e-3, 500e-3, 1000e-3, 2000e-3, 4000e-3]
     
     for key,recs in sorted_prs.items():
         clamp_mode, ind_freq, rec_delay = key
-        if ind_freq != 50:
-            continue
-        for recording, pulses in recs.items():
-            if 1 not in pulses or 2 not in pulses:
-                continue
-            amps = {k:getattr(r.PulseResponseFit, amp_field) for k,r in pulses.items()}
-            metrics['stp_initial_50hz'].append((amps[2] - amps[1]) / amp_90p)
-            if amps[1] != 0:
-                paired_pulse_ratio.append(amps[2] / amps[1])
+        # check for a rec_delay and match it to closest known interval in delays
+        if rec_delay is None:
+            delay = None
+        else:
+            check_delays = [d/rec_delay > 0.9 and d/rec_delay < 1.1 for d in delays] # allow measured delay to be off by 10%
+            if sum(check_delays) == 1:
+                delay = delays[check_delays[0]]
+            else:
+                delay = rec_delay
+        meta = (clamp_mode, ind_freq, delay)
+        stp_metrics = {'stp_induction': (), 'stp_initial': (), 'stp_recovery': ()}
+        
+        collect_initial = []
+        collect_induction = []
+        collect_recovery = []
 
-            if any([k not in pulses for k in [1,6,7,8]]):
-                continue
-            metrics['stp_induction_50hz'].append((np.mean([amps[6], amps[7], amps[8]]) - amps[1]) / amp_90p)
-            
+        for recording, pulses in recs.items():
+            # get all pulse amps
+            amps = {k:getattr(r.PulseResponseFit, amp_field) for k,r in pulses.items()}
+
+            # calculate metrics if the proper conditions are met
+            if 1 in pulses and 2 in pulses:
+                initial = (amps[2] - amps[1]) / amp_90p
+                collect_initial.append(initial)
+                # we separate out 50Hz into its own column because the induction frequency spans
+                # multiple recovery delays
+                if ind_freq == 50:
+                    col_metrics['stp_initial_50hz'].append(initial)
+                    if amps[1] != 0:
+                        paired_pulse_ratio.append(amps[2] / amps[1])
+            if all([k in pulses for k in [1,6,7,8]]):
+                induction = (np.mean([amps[6], amps[7], amps[8]]) - amps[1]) / amp_90p
+                collect_induction.append(induction)
+                if ind_freq == 50:
+                    col_metrics['stp_induction_50hz'].append(induction)
+            if delay is not None and all([k in pulses for k in range(1,13)]):
+                r = [amps[i+8] - amps[i] for i in range(1,5)]
+                recovery = np.mean(r) / amp_90p
+                collect_recovery.append(recovery)
+                if delay == 250e-3:
+                    col_metrics['stp_recovery_250ms'].append(recovery)
+        
+        stp_metrics['stp_initial'] = (np.mean(collect_initial), np.std(collect_initial), len(collect_initial),) if len(collect_initial) > 1 else float('nan') 
+        stp_metrics['stp_induction'] = (np.mean(collect_induction), np.std(collect_induction), len(collect_induction),) if len(collect_induction) > 1 else float('nan') 
+        stp_metrics['stp_recovery'] = (np.mean(collect_recovery), np.std(collect_recovery), len(collect_recovery),) if len(collect_recovery) > 1 else float('nan')  
+        all_metrics.append((meta, stp_metrics))
+    
+    # set one column to the full set of STP analysis
+    setattr(dynamics, 'stp_all_stimuli', all_metrics)        
+    
     # PPR is a bit out of place here, but we're including it since it's a popular metric used
     # in the literature.
     dynamics.paired_pulse_ratio_50hz = scipy.stats.gmean(paired_pulse_ratio)
     
-    # calculate recovery at 250 ms
-    for key,recs in sorted_prs.items():
-        clamp_mode, ind_freq, rec_delay = key
-        if rec_delay is None:
-            continue
-        if abs(rec_delay - 250e-3) > 5e-3:
-            continue
-        for recording, pulses in recs.items():
-            if any([k not in pulses for k in range(1,13)]):
-                continue
-            amps = {k:getattr(r.PulseResponseFit, amp_field) for k,r in pulses.items()}
-            r = [amps[i+8] - amps[i] for i in range(1,5)]
-            metrics['stp_recovery_250ms'].append(np.mean(r) / amp_90p)
-
-    for k,v in metrics.items():
+    # set individual columns for 50hz and 250ms
+    for k,v in col_metrics.items():
         setattr(dynamics, k, np.mean(v))
         setattr(dynamics, k+'_n', len(v))
         setattr(dynamics, k+'_std', np.std(v))
@@ -226,3 +254,14 @@ def generate_pair_dynamics(pair, db, session):
         dynamics.paired_event_correlation_p = p
     
     return dynamics
+
+def all_stp_to_dict(all_stp):
+    """
+    Utility to convert output of stp_all_stimuli column to dictionary. 
+    """
+
+def all_stp_to_df(all_stp):
+    """
+    Utility to convert output of stp_all_stimuli column to pandas dataframe. 
+    """
+    stp_dict = all_stp_to_dict(all_stp)

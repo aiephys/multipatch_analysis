@@ -31,6 +31,7 @@ Dynamics = make_table(
         ('variability_change_induction_50hz', 'float', 'Difference between variability of 1st and 5th-8th pulses in 50Hz trains, corrected for background noise.', {}),
         ('paired_event_correlation_r', 'float', 'Pearson correlation coefficient for amplitudes of adjacent events <= 20 ms apart.', {}),
         ('paired_event_correlation_p', 'float', 'Pearson correlation p-value related to paired_event_correlation_r.', {}),
+        ('stp_all_stimuli', 'object', 'list of initial, induction, and recovery measurements for all stimuli presented', {'index': True}),
     ]
 )
 
