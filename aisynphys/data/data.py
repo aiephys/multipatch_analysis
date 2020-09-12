@@ -93,10 +93,23 @@ class MultiPatchRecording(MiesRecording):
             self._base_regions = self._parent_rec.parent.baseline_regions()
         return self._base_regions
 
+
 class MultiPatchProbe(MultiPatchRecording):
     """A 12-pulse stimulus/response used to probe for synaptic connections.
     """
-    pass
+    def stim_params(self):
+        """Return induction frequency and recovery delay.
+        """
+        psa = PatchClampStimPulseAnalyzer.get(self)
+
+        pulses = [p[0] for p in psa.pulses(channel='command') if p[2] > 0]
+        if len(pulses) < 2:
+            return None, None
+        ind_freq = np.round(1.0 / (pulses[1] - pulses[0]))
+        rec_delay = np.round(np.diff(pulses).max(), 3)
+
+        return ind_freq, rec_delay
+
 
 
 class MultiPatchSyncRecAnalyzer(Analyzer):
@@ -211,9 +224,6 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         stop = spikes[last_pulse]['pulse_start'] + 50e-3
         return post_rec['primary'].time_slice(start, stop)
 
-    def stim_params(self, pre_rec):
-        return PatchClampStimPulseAnalyzer.get(pre_rec).stim_params()
-        
     def get_train_response(self, pre_rec, post_rec, start_pulse, stop_pulse, padding=(-10e-3, 50e-3)):
         """Return the part of the post-synaptic recording during a range of pulses,
         along with a baseline chunk
