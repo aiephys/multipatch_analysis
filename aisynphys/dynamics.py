@@ -256,18 +256,6 @@ def generate_pair_dynamics(pair, db, session):
     return dynamics
 
 
-def all_stp_to_dict(all_stp):
-    """
-    Utility to convert output of stp_all_stimuli column to dictionary. 
-    """
-
-def all_stp_to_df(all_stp):
-    """
-    Utility to convert output of stp_all_stimuli column to pandas dataframe. 
-    """
-    stp_dict = all_stp_to_dict(all_stp)
-
-
 def stim_sorted_pulse_amp(pair):
     qc_field = pair.synapse.synapse_type + '_qc_pass'
 
