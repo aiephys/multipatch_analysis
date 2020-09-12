@@ -7,15 +7,19 @@ from __future__ import print_function, division
 
 import traceback, sys
 import numpy as np   
-from ipfx.data_set_features import extractors_for_sweeps
-from ipfx.stimulus_protocol_analysis import LongSquareAnalysis
-from ipfx.sweep import Sweep, SweepSet
-from ipfx.chirp_features import extract_chirp_features
-from ipfx.bin.features_from_output_json import get_complete_long_square_features
+
+from neuroanalysis.util.optional_import import optional_import
+extractors_for_sweeps = optional_import('ipfx.data_set_features', ['extractors_for_sweeps'])
+LongSquareAnalysis = optional_import('ipfx.stimulus_protocol_analysis', ['LongSquareAnalysis'])
+Sweep, SweepSet = optional_import('ipfx.sweep', ['Sweep', 'SweepSet'])
+extract_chirp_features = optional_import('ipfx.chirp_features')
+get_complete_long_square_features = optional_import('ipfx.bin.features_from_output_json', ['get_complete_long_square_features'])
+
 from .pipeline_module import MultipatchPipelineModule
 from .experiment import ExperimentPipelineModule
 from .dataset import DatasetPipelineModule
 from ...nwb_recordings import get_intrinsic_recording_dict, get_pulse_times
+
 
 SPIKE_FEATURES = [
     'upstroke_downstroke_ratio',
