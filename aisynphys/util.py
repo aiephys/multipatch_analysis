@@ -1,6 +1,7 @@
 # coding: utf8
 from __future__ import print_function, division
 import os, sys, time, datetime, logging.handlers, re, importlib, urllib, hashlib, traceback
+from neuroanalysis.util.optional_import import optional_import
 try:
     from urllib.request import Request, urlopen
 except ImportError:
@@ -284,16 +285,6 @@ def mkdir(path, test=False):
         if root != '':
             mkdir(root)
         os.mkdir(path)
-
-
-def optional_import(module):
-    """Try importing a module, but if that fails, wait until the first time it is
-    accessed before raising the ImportError.
-    """
-    try:
-        return importlib.import_module(module)
-    except ImportError as exc:
-        return OptionalImportError(exc)
 
 
 class OptionalImportError(object):
