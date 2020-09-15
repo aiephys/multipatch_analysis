@@ -9,11 +9,11 @@ import traceback, sys
 import numpy as np   
 
 from neuroanalysis.util.optional_import import optional_import
-extractors_for_sweeps = optional_import('ipfx.data_set_features', ['extractors_for_sweeps'])
-LongSquareAnalysis = optional_import('ipfx.stimulus_protocol_analysis', ['LongSquareAnalysis'])
+extractors_for_sweeps = optional_import('ipfx.data_set_features', 'extractors_for_sweeps')
+LongSquareAnalysis = optional_import('ipfx.stimulus_protocol_analysis', 'LongSquareAnalysis')
 Sweep, SweepSet = optional_import('ipfx.sweep', ['Sweep', 'SweepSet'])
 extract_chirp_features = optional_import('ipfx.chirp_features')
-get_complete_long_square_features = optional_import('ipfx.bin.features_from_output_json', ['get_complete_long_square_features'])
+get_complete_long_square_features = optional_import('ipfx.bin.features_from_output_json', 'get_complete_long_square_features')
 
 from .pipeline_module import MultipatchPipelineModule
 from .experiment import ExperimentPipelineModule
