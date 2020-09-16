@@ -101,6 +101,7 @@ class Analyzer(pg.QtCore.QObject):
 
     sigOutputChanged = pg.QtCore.Signal(object)
 
+
     def group_result(self, pair_groups):
         if self.group_results is not None:
             return self.group_results
@@ -141,7 +142,6 @@ class Analyzer(pg.QtCore.QObject):
         self.group_results = group_results
         return self.group_results
 
-
 class ConnectivityAnalyzer(Analyzer):
 
     def __init__(self, analyzer_mode):
@@ -149,10 +149,12 @@ class ConnectivityAnalyzer(Analyzer):
         self.name = 'connectivity'
         self.results = None
         self.group_results = None
+        self.pair_actions = None
         self.pair_items = {}
         self.analyzer_mode = analyzer_mode
         #self._signalHandler = ConnectivityAnalyzer.SignalHandler()
         #self.sigOutputChanged = self._signalHandler.sigOutputChanged
+        
 
         self.fields = [
             ('Probed Connection', {}),
@@ -322,7 +324,8 @@ class ConnectivityAnalyzer(Analyzer):
         for probed in probed_pairs:
             print ("\t %s" % (probed))
         
-    def plot_element_data(self, pre_class, post_class, element, field_name, color='g', trace_plt=None):
+    def plot_element_data(self, pre_class, post_class, element, field_name, color='g', trace_plt=None, pair_actions=None):
+        self.pair_actions = pair_actions
         summary = element.agg(self.summary_stat)  
         val = summary[field_name]['metric_summary']
         line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
@@ -364,7 +367,7 @@ class ConnectivityAnalyzer(Analyzer):
                             if start_time is not None:
                                 xoffset = start_time - latency
                                 baseline_window = [abs(xoffset)-1e-3, abs(xoffset)]
-                                traceA = format_trace(traceA, baseline_window, x_offset=xoffset, align='psp')
+                                traceA = format_trace(traceA, baseline_window, x_offset=xoffset)
                                 trace_itemA = trace_plt[0].plot(traceA.time_values, traceA.data)
                                 trace_itemA.pair = pair
                                 trace_itemA.curve.setClickable(True)
@@ -377,7 +380,7 @@ class ConnectivityAnalyzer(Analyzer):
                             if latency is not None and start_time is not None:
                                 xoffset = start_time - latency
                                 baseline_window = [abs(xoffset)-1e-3, abs(xoffset)]
-                                traceB = format_trace(traceB, baseline_window, x_offset=xoffset, align='psp')
+                                traceB = format_trace(traceB, baseline_window, x_offset=xoffset)
                                 trace_itemB = trace_plt[1].plot(traceB.time_values, traceB.data)
                                 trace_itemB.pair = pair
                                 trace_itemB.curve.setClickable(True)
@@ -412,10 +415,10 @@ class ConnectivityAnalyzer(Analyzer):
         #     n_elements = len([element for element in results.values() if element['no_data'] is False])
 
         #     print ("Total progress\t %0.1f%%, %d elements" % (100*total_progress/n_elements, n_elements))
-
-    def scatter_plot_clicked(self, scatterplt, points):
-        pair = points[0].data()
-        self.select_pair(pair)
+    
+    # def scatter_plot_clicked(self, scatterplt, points):
+    #     pair = points[0].data()
+    #     self.select_pair(pair)
 
     def trace_plot_clicked(self, trace):
         pair = trace.pair
@@ -432,6 +435,8 @@ class ConnectivityAnalyzer(Analyzer):
             traceB.setZValue(10) 
         print('Clicked:' '%s' % pair)
         print(self.results.loc[pair])
+        if self.pair_actions is not None:
+            self.pair_actions.pair =  pair
 
     def deselect_pairs(self):
         for (traceA, traceB) in self.pair_items.values():
@@ -451,9 +456,11 @@ class StrengthAnalyzer(Analyzer):
         self.name = 'strength'
         self.results = None
         self.group_results = None
+        self.pair_actions = None
         self.pair_items = {}
         #self._signalHandler = ConnectivityAnalyzer.SignalHandler()
         #self.sigOutputChanged = self._signalHandler.sigOutputChanged
+        
 
         self.summary_stat = {
         'PSP Amplitude': [self.metric_summary, self.metric_conf],
@@ -627,7 +634,8 @@ class StrengthAnalyzer(Analyzer):
             for pair in no_qc_data:
                 print ("\t\t %s" % (pair))
 
-    def plot_element_data(self, pre_class, post_class, element, field_name, color='g', trace_plt=None):
+    def plot_element_data(self, pre_class, post_class, element, field_name, color='g', trace_plt=None, pair_actions=None):
+        self.pair_actions = pair_actions
         val = element[field_name].mean()
         line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
         scatter = None
@@ -745,6 +753,7 @@ class StrengthAnalyzer(Analyzer):
             traceB.setZValue(10)
         print('Clicked:' '%s' % pair)
         print(self.results.loc[pair])
+        self.pair_actions.pair = pair
 
     def deselect_pairs(self):
         for (traceA, traceB, point, color) in self.pair_items.values():

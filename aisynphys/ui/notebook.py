@@ -14,6 +14,7 @@ from neuroanalysis.baseline import float_mode
 from aisynphys.avg_response_fit import response_query, sort_responses
 from aisynphys.connectivity import connectivity_profile
 from aisynphys.data import PulseResponseList
+from aisynphys.dynamics import stim_sorted_pulse_amp
 
 
 def heatmap(data, row_labels, col_labels, ax=None, ax_labels=None, bg_color=None,
@@ -232,14 +233,14 @@ def get_metric_data(metric, db, pre_classes=None, post_classes=None, pair_query_
         #                               name                         unit   scale alpha  db columns                                    colormap      log     clim           text format
         'psp_amplitude':               ('PSP Amplitude',             'mV',  1e3,  1,     [db.Synapse.psp_amplitude],                   'bwr',        False,  (-1.5, 1.5),       "%0.2f mV"),
         'psp_rise_time':               ('PSP Rise Time',             'ms',  1e3,  0.5,   [db.Synapse.psp_rise_time],                   'viridis_r',  True,  (1, 10),        "%0.2f ms"),
-        'psp_decay_tau':               ('PSP Decay Tau',             'ms',  1e3,  1,     [db.Synapse.psp_decay_tau],                   'viridis_r',  False,  (0, 20),       "%0.2f ms"),
+        'psp_decay_tau':               ('PSP Decay Tau',             'ms',  1e3,  0.01,     [db.Synapse.psp_decay_tau],                 'viridis_r',  True,  (1, 200),       "%0.2f ms"),
         'psc_amplitude':               ('PSC Amplitude',             'mV',  1e3,  1,     [db.Synapse.psc_amplitude],                   'bwr',        False,  (-1, 1),       "%0.2f mV"),
         'psc_rise_time':               ('PSC Rise Time',             'ms',  1e3,  1,     [db.Synapse.psc_rise_time],                   'viridis_r',  False,  (0, 6),        "%0.2f ms"),
         'psc_decay_tau':               ('PSC Decay Tau',             'ms',  1e3,  1,     [db.Synapse.psc_decay_tau],                   'viridis_r',  False,  (0, 20),       "%0.2f ms"),
         'latency':                     ('Latency',                   'ms',  1e3,  1,     [db.Synapse.latency],                         'viridis_r',  False,  (0.5, 3),       "%0.2f ms"),
         'stp_initial_50hz':            ('Paired pulse STP',          '',    1,    1,     [db.Dynamics.stp_initial_50hz],               'bwr',        False,  (-0.5, 0.5),   "%0.2f"),
-        'stp_induction_50hz':          ('Train induced STP',         '',    1,    1,     [db.Dynamics.stp_induction_50hz],             'bwr',        False,  (-0.5, 0.5),   "%0.2f"),
-        'stp_recovery_250ms':          ('STP Recovery',              '',    1,    1,     [db.Dynamics.stp_recovery_250ms],             'bwr',        False,  (-0.2, 0.2),   "%0.2f"),
+        'stp_induction_50hz':          ('← Facilitating  Depressing →', '',    1,    1,     [db.Dynamics.stp_induction_50hz],             'bwr',        False,  (-0.5, 0.5),   "%0.2f"),
+        'stp_recovery_250ms':          ('← Over-recovered  Not recovered →','',    1,    1,     [db.Dynamics.stp_recovery_250ms],             'bwr',        False,  (-0.2, 0.2),   "%0.2f"),
         'pulse_amp_90th_percentile':   ('PSP Amplitude 90th %%ile',  'mV',  1e3,  1.5,   [db.Dynamics.pulse_amp_90th_percentile],      'bwr',        False,  (-1.5, 1.5),    "%0.2f mV"),
         'junctional_conductance':      ('Junctional Conductance',    'nS',  1e9,  1,     [db.GapJunction.junctional_conductance],      'virdis',     False,  (0, 10),        "%0.2f nS"),
         'coupling_coeff_pulse':        ('Coupling Coefficient',       '',   1,    1,     [db.GapJunction.coupling_coeff_pulse],   'virdis',    False,  (0, 1),         "%0.2f"),
@@ -427,7 +428,7 @@ def map_color_by_metric(pair, metric, cmap, norm, scale):
     return color
 
 
-def plot_metric_pairs(pair_list, metric, db, ax, align='pulse', norm_amp=None, perc=False):
+def plot_metric_pairs(pair_list, metric, db, ax, align='pulse', norm_amp=None, perc=False, labels=None, max_ind_freq=50):
     pairs = [get_pair(eid, pre, post, db) for eid, pre, post in pair_list]
     _, metric_name, units, scale, _, cmap, cmap_log, clim, _ = get_metric_data(metric, db)
     cmap = matplotlib.cm.get_cmap(cmap)
@@ -438,14 +439,14 @@ def plot_metric_pairs(pair_list, metric, db, ax, align='pulse', norm_amp=None, p
     colors = [map_color_by_metric(pair, metric, cmap, norm, scale) for pair in pairs]
     for i, pair in enumerate(pairs):
         s = db.session()
-        q= response_query(s, pair, max_ind_freq=50)
+        q= response_query(s, pair, max_ind_freq=max_ind_freq)
         prs = [q.PulseResponse for q in q.all()]
         sort_prs = sort_responses(prs)
         prs = sort_prs[('ic', -55)]['qc_pass']
         if pair.synapse.synapse_type=='ex':
             prs = prs + sort_prs[('ic', -70)]['qc_pass']
         if perc:
-            prs_amp = [abs(pr.pulse_response_fit.fit_amp) for pr in prs]
+            prs_amp = [abs(pr.pulse_response_fit.fit_amp) for pr in prs if pr.pulse_response_fit is not None]
             amp_85, amp_95 = np.percentile(prs_amp, [85, 95])
             mask = (prs_amp >= amp_85) & (prs_amp <= amp_95)
             prs = np.asarray(prs)[mask]
@@ -453,17 +454,20 @@ def plot_metric_pairs(pair_list, metric, db, ax, align='pulse', norm_amp=None, p
         post_ts = prl.post_tseries(align='spike', bsub=True, bsub_win=0.1e-3)
         trace = post_ts.mean()*scale
         if norm_amp=='exc':
+            
             trace = post_ts.mean()/pair.synapse.psp_amplitude
         if norm_amp=='inh':
             trace = post_ts.mean()/pair.synapse.psp_amplitude*-1
         latency = pair.synapse.latency
         if align=='pulse':
             trace.t0 = trace.t0 - latency
-
-        ax.plot(trace.time_values*scale, trace.data, color=colors[i], linewidth=2)
-        ax.set_xlim(-2, 10)
-        ax.spines['right'].set_visible(False)
-        ax.spines['top'].set_visible(False)
+        label = labels[i] if labels is not None else None
+        ax.plot(trace.time_values*scale, trace.data, color=colors[i], linewidth=2, label=label)
+    ax.set_xlim(-2, 10)
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    if labels is not None:
+        ax.legend(loc='upper left', bbox_to_anchor=(1, 1))
 
 
 def show_distance_profiles(ax, results, colors, class_labels):
@@ -506,36 +510,25 @@ def show_distance_profiles(ax, results, colors, class_labels):
     return ax
 
 
-def show_connectivity_profile(x_probed, conn, fit, ax, true_model=None, ymax=None):
+def show_connectivity_profile(x_probed, conn, ax, fit, true_model=None, ymax=None):
     # where to bin connections for measuring connection probability
     x_bins = np.arange(0, 500e-6, 40e-6)
 
     # where to sample models
     #x_vals = 0.5 * (x_bins[1:] + x_bins[:-1])
     x_vals = np.linspace(x_bins[0], x_bins[-1], 200)
-
-    # plot the ground-truth probability distribution (solid green)
-    if true_model is not None:
-        ax.plot(x_vals, true_model.connection_probability(x_vals), color=(0, 0.5, 0))
-
-    # plot the connectivity profile with confidence intervals (black line / grey area)
+   
     _, cprop, lower, upper = connectivity_profile(conn, x_probed, x_bins)
-    ax.plot(x_bins, np.append(cprop, cprop[-1]), drawstyle='steps-post', color=(.5, .5, .5))
-    ax.fill_between(x_bins, np.append(lower, lower[-1]), np.append(upper, upper[-1]), step='post', color=(0.85, 0.85, 0.85))
+    # plot the connectivity profile with confidence intervals (black line / grey area)
+    show_distance_binned_cp(x_bins, cprop, ax, ci_lower=lower, ci_upper=upper)
 
     if ymax is None:
         ymax = upper.max()
     
-    # plot the fit result (thick red)
-    ax.plot(x_vals, fit.connection_probability(x_vals), color=(0.5, 0, 0))
+    show_connectivity_fit(x_vals, fit, ax, true_model=true_model)
 
-    # plot connections probed and found
-    # warning: some mpl versions have a bug that causes the data argument to eventplot to be modified
-    alpha1 = np.clip(30 / len(x_probed), 1/255, 1)
-    alpha2 = np.clip(30 / conn.sum(), 1/255, 1)
     tickheight = ymax / 10
-    ax.eventplot(x_probed.copy(), lineoffsets=-tickheight*2, linelengths=tickheight, color=(0, 0, 0, alpha1))
-    ax.eventplot(x_probed[conn], lineoffsets=-tickheight, linelengths=tickheight, color=(0, 0, 0, alpha2))
+    show_connectivity_raster(x_probed, conn, tickheight, ax)
 
     # err = 0 if not hasattr(fit, 'fit_result') else fit.fit_result.fun
     # label = "Fit pmax=%0.2f\nsize=%0.2f µm\nerr=%f" % (fit.pmax, fit.size*1e6, err)
@@ -545,18 +538,40 @@ def show_connectivity_profile(x_probed, conn, fit, ax, true_model=None, ymax=Non
     #     label = "True pmax=%0.2f\nsize=%0.2f µm" % (true_model.pmax, true_model.size*1e6)
     #     ax.text(0.99, 0.95, label, transform=ax.transAxes, color=(0, 0.5, 0), horizontalalignment='right')
     
-    ax.axhline(0)
-    
-    ax.set_xlabel('distance (µm)')
-    xticks = np.arange(0, x_vals.max(), 50e-6)
-    ax.set_xticks(xticks)
-    ax.set_xticklabels(['%0.0f'%(x*1e6) for x in xticks])
+    ax.axhline(0, color=(0, 0, 0))
+    set_distance_xticks(x_vals, ax)
 
     y_vals = np.arange(0, ymax + 0.1, 0.1)
     ax.set_yticks([-tickheight*2, -tickheight] + list(y_vals))
     ax.set_yticklabels(['probed', 'connected'] + ['%0.1f'%x for x in y_vals])
     ax.set_ylim(-tickheight*2.6, ymax)
 
+def show_connectivity_fit(x_vals, fit, ax, color=(0.5, 0, 0), true_model=None, label=None):
+    if true_model is not None:
+        # plot the ground-truth probability distribution (solid green)
+        ax.plot(x_vals, true_model.connection_probability(x_vals), color=(0, 0.5, 0))
+    ax.plot(x_vals, fit.connection_probability(x_vals), color=color, label=label)
+    if label is not None:
+        ax.legend()
+
+def show_distance_binned_cp(x_bins, cprop, ax, color=(0.5, 0.5, 0.5), ci_lower=None, ci_upper=None):
+    ax.plot(x_bins, np.append(cprop, cprop[-1]), drawstyle='steps-post', color=color)
+    if ci_lower is not None and ci_upper is not None:
+        ax.fill_between(x_bins, np.append(ci_lower, ci_lower[-1]), np.append(ci_upper, ci_upper[-1]), step='post', facecolor=color + (0.3,))
+
+def show_connectivity_raster(x_probed, conn, tickheight, ax, color=(0, 0, 0), offset=2):
+    # plot connections probed and found
+    # warning: some mpl versions have a bug that causes the data argument to eventplot to be modified
+    alpha1 = np.clip(30 / len(x_probed), 1/255, 1)
+    alpha2 = np.clip(30 / conn.sum(), 1/255, 1)
+    ax.eventplot(x_probed.copy(), lineoffsets=-tickheight*offset, linelengths=tickheight, color=(color + (alpha1,)))
+    ax.eventplot(x_probed[conn], lineoffsets=-tickheight*(offset-1), linelengths=tickheight, color=(color + (alpha2,)))
+
+def set_distance_xticks(x_vals, ax, interval=50e-6):
+    ax.set_xlabel('distance (µm)')
+    xticks = np.arange(0, x_vals.max(), interval)
+    ax.set_xticks(xticks)
+    ax.set_xticklabels(['%0.0f'%(x*1e6) for x in xticks])
 
 def color_by_conn_prob(pair_group_keys, connectivity, norm, cmap):
     """ Return connection probability mapped color from show_connectivity_matrix
@@ -624,3 +639,26 @@ def data_matrix(data_df, cell_classes, metric=None, scale=1, unit=None, cmap=Non
     max = mean[metric].max()*scale
     data_rgb[:,:,3] = np.clip(data_alpha, 0, max)
     return data_rgb, data_str
+
+def plot_stim_sorted_pulse_amp(pair, ax, ind_f=50, color='k'):
+    qc_pass_data = stim_sorted_pulse_amp(pair)
+
+    # scatter plots of event amplitudes sorted by pulse number 
+    mask = qc_pass_data['induction_frequency'] == ind_f
+    filtered = qc_pass_data[mask]
+
+    sign = 1 if pair.synapse.synapse_type == 'ex' else -1
+    try:
+        filtered['fit_amp'] *= sign * 1000
+    except KeyError:
+        print('No fit amps for pair: %s' % pair)
+    ax.set_ylim(0, filtered['fit_amp'].max())
+    ax.set_xlim(0, 13)
+
+    sns.swarmplot(x='pulse_number', y='fit_amp', data=filtered, color=(0.7, 0.7, 0.7), size=3, ax=ax)
+
+    pulse_means = filtered.groupby('pulse_number').mean()['fit_amp'].to_list()
+    ax.plot(range(0,8), pulse_means[:8], color=color, linewidth=2, zorder=100)
+    ax.plot(range(8,12), pulse_means[8:12], color=color, linewidth=2, zorder=100)
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)

@@ -73,7 +73,7 @@ MultiPatchProbe = make_table(
     ]
 )
 
-PatchClampRecording.multi_patch_probe = relationship(MultiPatchProbe, back_populates="patch_clamp_recording", cascade='save-update,merge,delete', single_parent=True)
+PatchClampRecording.multi_patch_probe = relationship(MultiPatchProbe, back_populates="patch_clamp_recording", cascade='save-update,merge,delete', single_parent=True, uselist=False)
 MultiPatchProbe.patch_clamp_recording = relationship(PatchClampRecording, back_populates="multi_patch_probe")
 
 

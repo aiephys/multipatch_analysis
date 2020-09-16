@@ -8,6 +8,7 @@ from __future__ import print_function, division
 import pyqtgraph as pg
 import pandas as pd
 import numpy as np
+from ..ui.actions import PairActions
 
 
 class ScatterPlotTab(pg.QtGui.QWidget):
@@ -105,6 +106,14 @@ class PairScatterPlot(ScatterPlots):
         header.setText('<span style="font-weight: bold">Pair-wise Scatter Plot</span>')
         self.ctrlPanel.insertWidget(0, header)
         self.top_plot = None
+        self.menu = pg.QtGui.QMenu()
+        self.pair_actions = PairActions()
+        for act in self.pair_actions.actions.values():
+            self.menu.addAction(act)
+
+    def contextMenuEvent(self, event):
+        self.menu.popup(event.globalPos())
+
 
     def set_data(self, data):
         data['pair_class'] = data.apply(lambda row: '-'.join([row.pre_class.name, row.post_class.name]), axis=1)
@@ -163,4 +172,5 @@ class PairScatterPlot(ScatterPlots):
             # pt.setSize(15)
         self.top_plot = self.plot.plot(selected_points[0], selected_points[1], pen=None, symbol='o', symbolBrush='y', symbolSize=15)
         self.sigScatterPlotClicked.emit(self, points)
+        self.pair_actions.pair = pair
 

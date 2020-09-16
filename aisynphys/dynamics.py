@@ -255,13 +255,33 @@ def generate_pair_dynamics(pair, db, session):
     
     return dynamics
 
-def all_stp_to_dict(all_stp):
-    """
-    Utility to convert output of stp_all_stimuli column to dictionary. 
-    """
 
-def all_stp_to_df(all_stp):
-    """
-    Utility to convert output of stp_all_stimuli column to pandas dataframe. 
-    """
-    stp_dict = all_stp_to_dict(all_stp)
+def stim_sorted_pulse_amp(pair):
+    qc_field = pair.synapse.synapse_type + '_qc_pass'
+
+    q = db.query(
+        db.PulseResponseFit.fit_amp,
+        getattr(db.PulseResponse, qc_field).label('qc_pass'),
+        db.StimPulse.pulse_number,
+        db.MultiPatchProbe.induction_frequency,
+        db.MultiPatchProbe.recovery_delay,
+        db.SyncRec.ext_id.label('sync_rec_ext_id'),
+    )
+    q = q.join(db.PulseResponse, db.PulseResponseFit.pulse_response)
+    q = q.join(db.Recording, db.PulseResponse.recording)
+    q = q.join(db.SyncRec, db.Recording.sync_rec)
+    q = q.join(db.PatchClampRecording, db.Recording.patch_clamp_recording)
+    q = q.join(db.MultiPatchProbe, db.PatchClampRecording.multi_patch_probe)
+    q = q.join(db.StimPulse, db.PulseResponse.stim_pulse)
+    q = q.join(db.Experiment, db.SyncRec.experiment)
+    q = q.join(db.Pair, db.PulseResponse.pair)
+    q = q.join(db.Synapse, db.Pair.synapse)
+    q = q.filter(db.Pair.id==pair.id)
+    q = q.filter(db.PatchClampRecording.clamp_mode=='ic')
+    q = q.order_by(db.SyncRec.ext_id, db.StimPulse.pulse_number)
+
+    data = q.dataframe()
+
+    qc_pass_data = data[data['qc_pass']]
+    
+    return qc_pass_data

@@ -118,7 +118,7 @@ class SynapsePipelineModule(MultipatchPipelineModule):
                 if mode == 'ic':
                     fit_decay = fits_decay_20hz[(mode, holding)]
                     if fit_decay is not None:    
-                        rec['fit_decay_tau_20hz'] = fit_decay['fit_result'].best_values['decay_tau']
+                        rec.meta['fit_decay_tau_20hz'] = fit_decay['fit_result'].best_values['decay_tau']
 
                 session.add(rec)
             
