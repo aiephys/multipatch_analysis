@@ -125,7 +125,7 @@ def generate_pair_dynamics(pair, db, session):
         if rec_delay is None:
             delay = None
         else:
-            check_delays = [d/rec_delay > 0.9 and d/rec_delay < 1.1 for d in delays] # allow measured delay to be off by 10%
+            check_delays = [abs(rec_delay-d) <= 5e-3 for d in delays] # allow measured delay to be off by 5ms
             if sum(check_delays) == 1:
                 delay = delays[check_delays[0]]
             else:
