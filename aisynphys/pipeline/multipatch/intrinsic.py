@@ -12,7 +12,7 @@ from neuroanalysis.util.optional_import import optional_import
 extractors_for_sweeps = optional_import('ipfx.data_set_features', 'extractors_for_sweeps')
 LongSquareAnalysis = optional_import('ipfx.stimulus_protocol_analysis', 'LongSquareAnalysis')
 Sweep, SweepSet = optional_import('ipfx.sweep', ['Sweep', 'SweepSet'])
-extract_chirp_features = optional_import('ipfx.chirp_features')
+extract_chirp_features = optional_import('ipfx.chirp_features', 'extract_chirp_features')
 get_complete_long_square_features = optional_import('ipfx.bin.features_from_output_json', 'get_complete_long_square_features')
 
 from .pipeline_module import MultipatchPipelineModule
@@ -61,9 +61,6 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
             # Write new record to DB
             conn = db.Intrinsic(cell_id=cell.id, **lp_results, **chirp_results)
             session.add(conn)
-        
-        if len(errors) == 2*n_cells and n_cells > 1:
-            raise Exception('All cells failed IPFX analysis')
 
         return errors
 
@@ -85,12 +82,17 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
             return {}, errors
 
         sweep_set = SweepSet(sweep_list) 
-        all_chirp_features = extract_chirp_features(sweep_set)
-        results = {
-            'chirp_peak_freq': all_chirp_features['peak_freq'],
-            'chirp_3db_freq': all_chirp_features['3db_freq'],
-            'chirp_peak_ratio': all_chirp_features['peak_ratio'],
-        }
+        try:
+            all_chirp_features = extract_chirp_features(sweep_set)
+            results = {
+                'chirp_peak_freq': all_chirp_features['peak_freq'],
+                'chirp_3db_freq': all_chirp_features['3db_freq'],
+                'chirp_peak_ratio': all_chirp_features['peak_ratio'],
+            }
+        except Exception as exc:
+            errors.append('Error processing chirps for cell %s: %s' % (cell_id, str(exc)))
+            results = {}
+        
         return results, errors
 
     @staticmethod
@@ -166,6 +168,7 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
         q = q.filter(db.Cell.experiment_id==db.Experiment.id)
         q = q.filter(db.Experiment.ext_id.in_(job_ids))
         return q.all()
+
 
 class MPSweep(Sweep):
     """Adapter for neuroanalysis.Recording => ipfx.Sweep
