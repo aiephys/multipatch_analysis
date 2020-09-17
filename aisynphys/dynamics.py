@@ -1,6 +1,7 @@
 import logging
 import numpy as np
 import scipy.stats
+import pandas as pd
 from .database import default_db as db
 
 
@@ -285,3 +286,45 @@ def stim_sorted_pulse_amp(pair):
     qc_pass_data = data[data['qc_pass']]
     
     return qc_pass_data
+
+def stp_all_stim_to_df(pairs, stp_df=None, pair_data=None):
+    """
+    Unpack dynamics.stp_all_stimuli column into dataframe for easier analysis
+
+    Parameters
+    ----------
+    pairs: list
+            Synphys Database pair items
+    
+    stp_df: Pandas Dataframe
+            An exisiting dataframe to add this data to
+
+    pair_data: dictionary
+            pair metadata that you want in the resulting dataframe (ex. pre_cell_class or post_cell_class).
+            Keys will be columns and values row data  
+
+    Output
+    -------
+    stp_df: Pandas dataframe with stp data from all stimuli. Each row is a single induction frequency and
+            recovery delay data point
+    """
+    metric = ['_mean', '_std', '_n']
+    stp_df = pd.Dataframe() if stp_df is None else stp_df
+    for pair in pairs:
+        if pair.dynamics is None:
+            continue
+        pair_data = {} if pair_data is None else pair_data
+        pair_data.update({'pair_id': pair.id})
+        stp_all_stim = pair.dynamics.stp_all_stimuli
+        for stp in stp_all_stim:
+            meta, data = stp
+            pair_data.update({'clamp_mode': meta[0], 'ind_freq': meta[1], 'rec_delay': meta[2]})
+            data2 = {}
+            for k, value in data.items():
+                if type(value) != list:
+                    continue
+                for m, v in zip(metric, value):
+                    data2[k+m] = v
+            pair_data.update(data2)
+            stp_df = stp_df.append(pair_data, ignore_index=True)
+    return stp_df
