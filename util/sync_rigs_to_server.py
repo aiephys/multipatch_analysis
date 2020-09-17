@@ -145,6 +145,7 @@ def get_server_path(dh):
 
 def find_all_sites(root):
     sites = glob.glob(os.path.join(root, '*', 'slice_*', 'site_*'))
+    sites = [s for s in sites if os.path.isdir(s)]
     sites.sort(reverse=True)
     return sites
 
