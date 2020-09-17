@@ -175,7 +175,7 @@ class CellClassFilter(object):
     def _make_cell_class(self, spec):
         spec = spec.copy()
         dnames = spec.pop('display_names')
-        cell_cls = CellClass(**spec)
+        cell_cls = CellClass(**spec, name=' '.join(dnames).strip())
         cell_cls.display_names = dnames
         return cell_cls
 
