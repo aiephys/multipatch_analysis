@@ -197,8 +197,8 @@ class SynphysDatabase(Database):
         query = query.outerjoin(post_morphology, post_morphology.cell_id==post_cell.id)
         query = query.outerjoin(pre_patch_seq, pre_patch_seq.cell_id==pre_cell.id)
         query = query.outerjoin(post_patch_seq, post_patch_seq.cell_id==post_cell.id)
-        query = query.outerjoin(pre_intrinsic, pre_intrinsic.cell_id=pre_cell.id)
-        query = query.outerjoin(post_intrinsic, post_intrinsic.cell_id=post_cell.id)
+        query = query.outerjoin(pre_intrinsic, pre_intrinsic.cell_id==pre_cell.id)
+        query = query.outerjoin(post_intrinsic, post_intrinsic.cell_id==post_cell.id)
         query = query.join(self.Experiment, self.Pair.experiment_id==self.Experiment.id)
         query = query.outerjoin(self.Slice, self.Experiment.slice_id==self.Slice.id) ## don't want to drop all pairs if we don't have slice or connection strength entries
         query = query.outerjoin(self.SynapsePrediction)
