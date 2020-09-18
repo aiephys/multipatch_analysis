@@ -13,6 +13,7 @@ PatchSeq = make_table(
     ('cell_id', 'cell.id', 'The ID of the cell described by each record', {'index': True, 'unique': True}),
     ('tube_id', 'str', 'Patched Cell Container ID used for RNA analysis', {'index': True}),
     ('nucleus', 'bool', 'Whether the nucleus was recovered from the cell', {'index': True}),
+    ('reseal', 'bool', 'Was there a giga-reseal during nucleus extraction', {'index': True}),
     ('patchseq_hash', 'str', 'Hash of patchseq results from amplification and mapping used for updating', {'index': True}),
     # These values are pulled from amplification report
     ('result_ba', 'str', 'Pass/Fail', {'index': True}),
