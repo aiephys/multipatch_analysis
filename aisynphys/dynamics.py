@@ -125,9 +125,9 @@ def generate_pair_dynamics(pair, db, session):
         if rec_delay is None:
             delay = None
         else:
-            check_delays = [abs(rec_delay-d) <= 5e-3 for d in delays] # allow measured delay to be off by 5ms
+            check_delays = np.array([abs(rec_delay-d) <= 5e-3 for d in delays]) # allow measured delay to be off by 5ms
             if sum(check_delays) == 1:
-                delay = delays[check_delays[0]]
+                delay = np.array(delays)[check_delays][0]
             else:
                 delay = rec_delay
         meta = (clamp_mode, ind_freq, delay)
