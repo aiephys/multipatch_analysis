@@ -71,6 +71,7 @@ def sync_experiment(site_dir):
 
 def log(msg):
     print(msg)
+    sys.stdout.flush()
     with open(os.path.join(config.synphys_data, 'sync_log'), 'ab') as log_fh:
         log_fh.write((msg+'\n').encode('utf8'))
 
