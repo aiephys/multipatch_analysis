@@ -186,6 +186,8 @@ class SynphysDatabase(Database):
         post_morphology = aliased(self.Morphology, name='post_morphology')
         pre_patch_seq = aliased(self.PatchSeq, name='pre_patch_seq')
         post_patch_seq = aliased(self.PatchSeq, name='post_patch_seq')
+        pre_intrinsic = aliased(self.Intrinsic, name='pre_intrinsic')
+        post_intrinsic = aliased(self.Intrinsic, name='post_intrinsic')
         query = session.query(
             self.Pair,
         )
@@ -195,6 +197,8 @@ class SynphysDatabase(Database):
         query = query.outerjoin(post_morphology, post_morphology.cell_id==post_cell.id)
         query = query.outerjoin(pre_patch_seq, pre_patch_seq.cell_id==pre_cell.id)
         query = query.outerjoin(post_patch_seq, post_patch_seq.cell_id==post_cell.id)
+        query = query.outerjoin(pre_intrinsic, pre_intrinsic.cell_id==pre_cell.id)
+        query = query.outerjoin(post_intrinsic, post_intrinsic.cell_id==post_cell.id)
         query = query.join(self.Experiment, self.Pair.experiment_id==self.Experiment.id)
         query = query.outerjoin(self.Slice, self.Experiment.slice_id==self.Slice.id) ## don't want to drop all pairs if we don't have slice or connection strength entries
         query = query.outerjoin(self.SynapsePrediction)
@@ -258,6 +262,8 @@ class SynphysDatabase(Database):
             query = query.add_entity(post_morphology)
             query = query.add_entity(pre_patch_seq)
             query = query.add_entity(post_patch_seq)
+            query = query.add_entity(pre_intrinsic)
+            query = query.add_entity(post_intrinsic)
             query = query.options(
                 contains_eager(self.Pair.pre_cell, alias=pre_cell), 
                 contains_eager(self.Pair.post_cell, alias=post_cell), 
@@ -265,6 +271,8 @@ class SynphysDatabase(Database):
                 contains_eager(post_cell.morphology, alias=post_morphology), 
                 contains_eager(pre_cell.patch_seq, alias=pre_patch_seq), 
                 contains_eager(post_cell.patch_seq, alias=post_patch_seq), 
+                contains_eager(pre_cell.intrinsic, alias=pre_intrinsic),
+                contains_eager(post_cell.intrinsic, alias=post_intrinsic),
             )
 
         if 'synapse' in preload:
