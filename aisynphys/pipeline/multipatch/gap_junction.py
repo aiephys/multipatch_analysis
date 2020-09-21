@@ -1,7 +1,7 @@
 # coding: utf8
 from __future__ import print_function, division
 
-import os
+import os, warnings
 import pyqtgraph as pg
 import numpy as np
 import scipy.stats as stats
@@ -12,8 +12,10 @@ from .dataset import DatasetPipelineModule
 from .intrinsic import IntrinsicPipelineModule
 from ...nwb_recordings import get_lp_sweeps, get_pulse_times, get_db_recording
 
+
 padding = 30e-3
 duration = 150e-3
+
 
 class GapJunctionPipelineModule(MultipatchPipelineModule):
     """Analyze gap junction presence and strength for all pairs per experiment
@@ -35,7 +37,7 @@ class GapJunctionPipelineModule(MultipatchPipelineModule):
 
         sweeps = nwb.contents
         if sweeps is None:
-            raise Exception('NWB has not content')
+            raise Exception('NWB has no content')
 
         for pair in expt.pair_list:
             pre_dev = pair.pre_cell.electrode.device_id
@@ -100,7 +102,7 @@ class GapJunctionPipelineModule(MultipatchPipelineModule):
             post_intrinsic = pair.post_cell.intrinsic
             if post_intrinsic is not None:
                 post_ir = post_intrinsic.input_resistance
-                gap_conduct = (1/post_ir) * cc_pulse / (1 - cc_pulse)
+                gap_conduct = None if post_ir is None else (1/post_ir) * cc_pulse / (1 - cc_pulse)
             else:
                 gap_conduct = None
             
@@ -132,7 +134,6 @@ class GapJunctionPipelineModule(MultipatchPipelineModule):
         q = q.filter(db.Experiment.ext_id.in_(job_ids))
         return q.all()
 
-
     
 def get_chunk_diff(rec, win1, win2, array):
     chunk1 = rec['primary'].time_slice(win1[0], win1[1])
@@ -141,8 +142,11 @@ def get_chunk_diff(rec, win1, win2, array):
     array.append(delta)
     return array     
 
+
 def coupling_coeff(a, b):
     a_array= np.asarray(a)
     b_array = np.asarray(b)
-    x, _,_,_ = np.linalg.lstsq(a_array[:, None], b_array[:, None])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")    
+        x, _,_,_ = np.linalg.lstsq(a_array[:, None], b_array[:, None])
     return x[0][0]
