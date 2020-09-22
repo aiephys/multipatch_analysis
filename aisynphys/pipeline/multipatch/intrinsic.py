@@ -77,7 +77,7 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
                 sweep_list.append(sweep)
         
         if len(sweep_list) == 0:
-            errors.append('No sweeps passed qc for cell %s' % cell_id)
+            errors.append('No chirp sweeps passed qc for cell %s' % cell_id)
             return {}, errors
 
         sweep_set = SweepSet(sweep_list) 
@@ -117,7 +117,7 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
                 sweep_list.append(sweep)
         
         if len(sweep_list) == 0:
-            errors.append('No sweeps passed qc for cell %s' % cell_id)
+            errors.append('No long square sweeps passed qc for cell %s' % cell_id)
             return {}, errors
 
         sweep_set = SweepSet(sweep_list)    
@@ -127,7 +127,7 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
         try:
             analysis = lsa.analyze(sweep_set)
         except Exception as exc:
-            errors.append('Error running IPFX analysis for cell %s: %s' % (cell_id, str(exc)))
+            errors.append('Error running long square analysis for cell %s: %s' % (cell_id, str(exc)))
             return {}, errors
         
         analysis_dict = lsa.as_dict(analysis)
@@ -188,6 +188,7 @@ class MPSweep(Sweep):
         i = (cmd.data - holding) * 1e12   # convert to pA with holding current removed
         srate = pri.sample_rate
         sweep_num = rec.parent.key
-        clamp_mode = rec.clamp_mode  # this will be 'ic' or 'vc'; not sure if that's right
+        # modes 'ic' and 'vc' should be expanded
+        clamp_mode = "CurrentClamp" if rec.clamp_mode=="ic" else "VoltageClamp" 
 
         Sweep.__init__(self, t, v, i, clamp_mode, srate, sweep_number=sweep_num)
