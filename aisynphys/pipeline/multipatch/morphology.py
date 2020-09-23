@@ -84,7 +84,7 @@ class MorphologyPipelineModule(MultipatchPipelineModule):
                         elif col_type == 'float':
                             try:
                                 scale = result.get('scale', 1)
-                                data = float(data * scale)
+                                data = float(data) * scale
                             except ValueError:
                                 raise Exception ('Error parsing morphology annotation %s for cell %d from column %s' % (data, cell_specimen_id, morpho_db_name))
                     results[col_name] = data
