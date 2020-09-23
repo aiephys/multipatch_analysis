@@ -230,6 +230,7 @@ class ControlPanel(object):
     def __init__(self):
         self.user_latency = Parameter.create(name='User Latency', type='float', suffix='s', siPrefix=True, dec=True, value=default_latency)
         self.synapse = Parameter.create(name='Synapse call', type='list', values={'Excitatory': 'ex', 'Inhibitory': 'in', 'None': None})
+        self.disynaptic = Parameter.create(name='Disynaptic call', type='list', values={'Excitatory': 'ex', 'Inhibitory': 'in', 'Mixed': 'mix', 'None': None})
         self.gap = Parameter.create(name='Gap junction call', type='bool')
         fit_cat = ['-55 VC', '-70 VC', '-55 IC', '-70 IC']
         fit_param = [
@@ -248,6 +249,7 @@ class ControlPanel(object):
         self.user_params = Parameter.create(name='user_params', type='group', children=[
             self.user_latency,
             self.synapse,
+            self.disynaptic,
             self.gap,
         ])
         self.output_params = Parameter.create(name='output_params', type='group', children=[
@@ -581,7 +583,8 @@ class PairAnalysis(object):
             for mode in modes:
                 for holding in holdings:
                     self.fit_pass = False
-                    sign = self.signs[mode][holding].get(self.ctrl_panel.user_params['Synapse call'], 0)
+                    sign = self.signs[mode][holding].get(self.ctrl_panel.user_params['Synapse call'], 
+                            self.signs[mode][holding].get(self.ctrl_panel.user_params['Disynaptic call'], 0))
                     
                     # ofp, x_offset, best_fit = fit_avg_response(self.traces, mode, holding, latency, sign)
                     prs = self.sorted_responses[mode, holding]['qc_pass']
@@ -633,8 +636,11 @@ class PairAnalysis(object):
             warning = 'Latency across modes differs by %s' % pg.siFormat(latency_diff, suffix='s')
             self.warnings.append(warning)
 
-        if np.min(latency_mode) < 0.4e-3 and self.ctrl_panel.user_params['Gap junction call'] is False:
-            self.warnings.append("Short latency; is this a gap junction?")
+        min_latency = np.min(latency_mode) < 0.4e-3
+        max_latency = np.max(latency_mode) > 3.1e-3
+        if min_latency and self.ctrl_panel.user_params['Gap junction call'] is False:
+            self.warnings.append("Short latency; is this a gap junction?") 
+
 
         guess_sign = []
         guess = None
@@ -653,8 +659,10 @@ class PairAnalysis(object):
             guess = "in"
         if guess is None:
             self.warnings.append("Mixed amplitude signs; pick ex/in carefully.")
-        elif guess != self.ctrl_panel.user_params['Synapse call']:
+        elif guess != self.ctrl_panel.user_params['Synapse call'] and not min_latency and not max_latency:
             self.warnings.append("Looks like an %s synapse??" % guess)
+        elif self.ctrl_panel['Disynaptic call'] != guess and max_latency:
+            self.warnings.append("Looks like a %s disynaptic synpase??" % guess)
 
         print_warning = '\n'.join(self.warnings)
         self.ctrl_panel.output_params.child('Warnings').setValue(print_warning)
@@ -674,11 +682,12 @@ class PairAnalysis(object):
             'pre_cell_id': pre_cell_id,
             'post_cell_id': post_cell_id,
             'synapse_type': self.ctrl_panel.user_params['Synapse call'],
+            'disynaptic_type': self.ctrl_panel.user_params['Disynaptic call'],
             'gap_junction': self.ctrl_panel.user_params['Gap junction call'],
             'comments': self.ctrl_panel.output_params['Comments', ''],
         }
 
-        if self.ctrl_panel.user_params['Synapse call'] is not None:
+        if self.ctrl_panel.user_params['Synapse call'] is not None or self.ctrl_panel.user_params['Disynaptic call'] is not None:
             meta.update({
             'fit_parameters': self.fit_params,
             'fit_pass': fit_pass,
@@ -742,7 +751,7 @@ class PairAnalysis(object):
 
     def load_saved_fit(self, record):
         data = record.notes        
-        pair_params = {'Synapse call': data['synapse_type'], 'Gap junction call': data['gap_junction']}
+        pair_params = {'Synapse call': data.get('synapse_type', None), 'Disynaptic call': data.get('disynaptic_type', None), 'Gap junction call': data.get('gap_junction', False)}
         self.ctrl_panel.update_user_params(**pair_params)
         self.warnings = data.get('fit_warnings', [])
         self.ctrl_panel.output_params.child('Warnings').setValue('\n'.join(self.warnings))

@@ -1,5 +1,27 @@
 ### Utility functions for extracting recordings from the NWB
 import numpy as np
+from collections import defaultdict
+
+def get_intrinsic_recording_dict(expt, dev_id, check_qc=True):
+    """Get stimulus recordings for intrinsic stimuli
+    """
+    recording_dict = defaultdict(list)
+    sweeps = expt.data.contents
+    for sweep in sweeps:
+        devices = sweep.devices
+        if dev_id not in devices:
+            continue
+        rec = sweep[dev_id]
+        stim_name = rec.stimulus.description
+        sweep_types = ['TargetV', 'If_Curve', 'Chirp']
+        for code in sweep_types:
+            if code in stim_name and rec.clamp_mode=='ic':
+                if check_qc:
+                    db_rec = get_db_recording(expt, rec)
+                    if db_rec is None or db_rec.patch_clamp_recording.qc_pass is False:
+                        continue
+                recording_dict[code].append(rec)
+    return recording_dict
 
 def get_lp_sweeps(sweeps, dev_id):
     """Get stimulus sweeps from the TargetV (subthreshold, mostly hyperpolarizing) 

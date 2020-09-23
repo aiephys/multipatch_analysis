@@ -112,8 +112,8 @@ class DatasetPipelineModule(MultipatchPipelineModule):
                 if not isinstance(rec, MultiPatchProbe):
                     continue
                 srec_has_mp_probes = True
-                psa = PatchClampStimPulseAnalyzer.get(rec)
-                ind_freq, rec_delay = psa.stim_params()
+                ind_freq, rec_delay = rec.stim_params()
+
                 mprec_entry = db.MultiPatchProbe(
                     patch_clamp_recording=pcrec_entry,
                     induction_frequency=ind_freq,
@@ -122,6 +122,7 @@ class DatasetPipelineModule(MultipatchPipelineModule):
                 session.add(mprec_entry)
             
                 # import presynaptic stim pulses
+                psa = PatchClampStimPulseAnalyzer.get(rec)
                 pulses = psa.pulse_chunks()
                 
                 pulse_entries = {}

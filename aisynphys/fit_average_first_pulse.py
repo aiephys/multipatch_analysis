@@ -94,7 +94,7 @@ def extract_first_pulse_info_from_Pair_object(pair, desired_clamp='ic'):
         ex_qc_pass = pr.ex_qc_pass
         in_qc_pass = pr.in_qc_pass
         pcr = stim_pulse.recording.patch_clamp_recording
-        stim_freq = pcr.multi_patch_probe[0].induction_frequency
+        stim_freq = pcr.multi_patch_probe.induction_frequency
         clamp_mode = pcr.clamp_mode
         # current clamp
         if clamp_mode != desired_clamp:

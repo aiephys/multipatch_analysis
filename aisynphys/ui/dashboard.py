@@ -693,11 +693,11 @@ class ExperimentMetadata(Experiment):
                                 connections = (n_connections, pass_color)
                     rec['connections'] = connections        
                     
-
+                    in_lims = False
                     cell_cluster = self.lims_cell_cluster_id
                     if cell_cluster is None and self.archive_path is not None:
                         lims_ignore_file = os.path.join(self.archive_path, '.mpe_ignore')
-                        if os.path.isfile(lims_ignore_path):
+                        if os.path.isfile(lims_ignore_file):
                             in_lims = "FAILED"
                             self.lims_message = open(lims_ignore_file, 'r').read()
                     else:
@@ -712,15 +712,15 @@ class ExperimentMetadata(Experiment):
                         if len(cell_specimens) != 0:
                             cell_info = lims.cluster_cells(cell_cluster)
                             x_coord = all([ci['x_coord'] is not None for ci in cell_info])
-                            x_coord_values = all([ci['x_coord'] != 0 for ci in cell_info])
+                            x_coord_values = all([ci['x_coord'] == 0 for ci in cell_info])
                             y_coord = all([ci['y_coord'] is not None  for ci in cell_info])
-                            y_coord_values = all([ci['y_coord'] != 0 for ci in cell_info])
+                            y_coord_values = all([ci['y_coord'] == 0 for ci in cell_info])
                             polygons = [lims.cell_polygon(cell.id) for cell in cell_info if cell is not None]
                             polygons = all(polygon is not None for polygon in polygons)
                             mapped = len(cell_info) > 0 and x_coord is True and y_coord is True
-                            if mapped is True and x_coord_values is False and y_coord_values is False:
+                            if mapped is True and x_coord_values is True and y_coord_values is True:
                                 mapped = ('Incomplete', (255, 255, 102))
-                                self.map_message = 'Cell positions contain 0-values, please re-map'
+                                self.map_message = 'Cell positions contain all 0-values, please re-map'
                             if mapped is True and polygons is False:
                                 mapped = ('Incomplete', [c * 0.5 + 128 for c in pass_color])
                                 self.map_message = 'Cell positions submitted to LIMS but polygons have not been drawn yet'

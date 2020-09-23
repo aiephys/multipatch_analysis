@@ -1,11 +1,9 @@
 from .pipeline import Pipeline
 from . import pipeline_module
 from . import multipatch
-try:
-    from . import opto
-except ImportError:
-    from aisynphys.util import optional_import
-    opto = optional_import('aisynphys.pipeline.opto')
+
+from neuroanalysis.util.optional_import import optional_import
+opto = optional_import('.opto', package=__name__)
 
 
 def all_pipelines():

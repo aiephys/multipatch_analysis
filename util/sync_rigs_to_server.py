@@ -71,6 +71,7 @@ def sync_experiment(site_dir):
 
 def log(msg):
     print(msg)
+    sys.stdout.flush()
     with open(os.path.join(config.synphys_data, 'sync_log'), 'ab') as log_fh:
         log_fh.write((msg+'\n').encode('utf8'))
 
@@ -145,6 +146,7 @@ def get_server_path(dh):
 
 def find_all_sites(root):
     sites = glob.glob(os.path.join(root, '*', 'slice_*', 'site_*'))
+    sites = [s for s in sites if os.path.isdir(s)]
     sites.sort(reverse=True)
     return sites
 

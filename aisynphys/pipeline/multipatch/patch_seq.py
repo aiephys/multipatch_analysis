@@ -77,6 +77,7 @@ class PatchSeqPipelineModule(MultipatchPipelineModule):
         if headstages is not None:
             patchseq_tubes = {hs_name.split('HS')[1]: hs['Tube ID'] for hs_name, hs in headstages.items()}
             nucleus = {hs_name.split('HS')[1]: hs['Nucleus'] for hs_name, hs in headstages.items()}
+            reseal = {hs_name.split('HS')[1]: hs['End Seal'] for hs_name, hs in headstages.items()}
             no_tubes = all(t == '' for t in patchseq_tubes.values())
             if no_tubes is False:
 
@@ -88,6 +89,7 @@ class PatchSeqPipelineModule(MultipatchPipelineModule):
                     results = {
                         'tube_id': tube_id,
                         'nucleus': nucleus_bool[nucleus.get(cell_ext_id, '')],
+                        'reseal': reseal.get(cell_ext_id, False),
                         'patchseq_hash': None,
                     }
 

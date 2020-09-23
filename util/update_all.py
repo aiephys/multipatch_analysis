@@ -23,24 +23,25 @@ def delay(hour=2):
 
 
 if __name__ == '__main__':
+    date = datetime.today().strftime("%Y-%m-%d")
+    stages = OrderedDict([
+        ('backup_notes',        ('daily',  'pg_dump -d data_notes -h 10.128.36.109 -U postgres  > data_notes_backups/data_notes_%s.pgsql'%date, 'backup data notes DB')),
+        ('sync',                ('daily',  'python util/sync_rigs_to_server.py', 'sync raw data to server')),
+        ('patchseq_report',     ('daily',  'python util/patchseq_reports.py --daily', 'patchseq report')),
+        ('pipeline',            ('daily',  'python util/analysis_pipeline.py multipatch all --update --retry', 'run analysis pipeline')),
+        ('vacuum',              ('daily',  'python util/database.py --vacuum', 'vacuum database')),
+        ('bake_sqlite',         ('daily',  'python util/bake_sqlite.py small medium', 'bake sqlite')),
+        ('bake_sqlite_full',    ('weekly', 'python util/bake_sqlite.py full', 'bake sqlite full')),
+    ])
+
     parser = argparse.ArgumentParser(description="Run all analysis pipeline stages to import / analyze new data on a schedule.")
     parser.add_argument('--now', default=False, action='store_true', help="Run once immediately before starting scheduled updates.")
-    parser.add_argument('--skip', default='', help="comma-separated list of stages to skip")
+    parser.add_argument('--skip', default='', help="comma-separated list of stages to skip on the first run (options are: %s)" % ', '.join(stages.keys()))
     args = parser.parse_args(sys.argv[1:])
 
     if not args.now:
         delay()
 
-    date = datetime.today().strftime("%Y-%m-%d")
-    stages = OrderedDict([
-        ('backup_notes',        ('daily',  'pg_dump -d data_notes -h 10.128.36.109 -U postgres  > data_notes_backups/data_notes_%s.pgsql'%date, 'backup data notes DB')),
-        ('sync',                ('daily',  'python util/sync_rigs_to_server.py', 'sync raw data to server')),
-        ('patchseq report',     ('daily',  'python util/patchseq_reports.py --daily', 'patchseq report')),
-        ('pipeline',            ('daily',  'python util/analysis_pipeline.py multipatch all --update --retry', 'run analysis pipeline')),
-        ('vacuum',              ('daily',  'python util/database.py --vacuum', 'vacuum database')),
-        ('bake sqlite',         ('daily',  'python util/bake_sqlite.py small medium', 'bake sqlite')),
-        ('bake sqlite full',    ('weekly', 'python util/bake_sqlite.py full', 'bake sqlite full')),
-    ])
 
     skip = [] if args.skip == '' else args.skip.split(',')
     for name in skip:
@@ -54,7 +55,7 @@ if __name__ == '__main__':
             if when == 'weekly' and datetime.today().weekday() != 5:
                 continue
                 
-            time_str = time.strftime('%Y-%M-%d %H:%M')
+            time_str = time.strftime('%Y-%m-%d %H:%M')
             full_cmd = cmd + " 2>&1 | tee -a " + logfile
             msg = ("======================================================================================\n" 
                    "    [%s]  %s\n"
