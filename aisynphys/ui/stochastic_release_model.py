@@ -246,7 +246,7 @@ class ModelEventPlot(ModelResultView):
         cmap = pg.ColorMap([0, 1.0], [(0, 0, 0), (255, 0, 0)])
         threshold = 10
         err_colors = cmap.map((threshold - result['likelihood']) / threshold)
-        brushes = [pg.mkBrush(c) for c in err_colors]
+        brushes = [pg.mkBrush(c) if np.isfinite(result['likelihood'][i]) else pg.mkBrush(None) for i,c in enumerate(err_colors)]
 
         # log spike intervals to make visualization a little easier
         compressed_spike_times = np.empty(len(result['spike_time']))
@@ -324,24 +324,62 @@ class ModelOptimizationPlot(ModelResultView):
 
 
 class ModelEventCorrelationPlot(ModelResultView):
+    """Show correlation in amplitude between adjacent events. 
+
+    The motivation here is that if synaptic release causes vesicle depletion, then the amplitude of
+    two adjacent events in a train should be anti-correlated (a large release on one event causes more vesicle
+    depletion and therefore more depression; the following event should be smaller). 
+    """
     def __init__(self, parent):
         ModelResultView.__init__(self, parent)
         self.plot = pg.PlotWidget(labels={'left': 'amp 2', 'bottom': 'amp 1'})
         self.plot.showGrid(True, True)
+        self.plot.setAspectLocked()
         self.layout.addWidget(self.plot)
+
+        self.ctrl = QtGui.QWidget()
+        self.hl = QtGui.QHBoxLayout()
+        self.ctrl.setLayout(self.hl)
+        self.layout.addWidget(self.ctrl)
+
+        self.mode_radios = {
+            'all_events': QtGui.QRadioButton('all events'),
+            'first_in_train': QtGui.QRadioButton('first in train'),
+        }
+        self.mode_radios['all_events'].setChecked(True)
+        for name,r in self.mode_radios.items():
+            self.hl.addWidget(r)
+            r.toggled.connect(self.update_display)
         
     def update_display(self):
         ModelResultView.update_display(self)
+        self.plot.clear()
+
         result = self._parent.result
         spikes = result['result']['spike_time']
         amps = result['result']['amplitude']
-        
-        cmap = pg.ColorMap(np.linspace(0, 1, 4), np.array([[255, 255, 255], [255, 255, 0], [255, 0, 0], [0, 0, 0]], dtype='ubyte'))
-        cvals = [((np.log(dt) / np.log(10)) + 2) / 4. for dt in np.diff(spikes)]
-        brushes = [pg.mkBrush(cmap.map(c)) for c in cvals]
-        
-        self.plot.clear()
-        self.plot.plot(amps[:-1], amps[1:], pen=None, symbol='o', symbolBrush=brushes)
+
+        if self.mode_radios['all_events'].isChecked():
+            cmap = pg.ColorMap(np.linspace(0, 1, 4), np.array([[255, 255, 255], [255, 255, 0], [255, 0, 0], [0, 0, 0]], dtype='ubyte'))
+            cvals = [((np.log(dt) / np.log(10)) + 2) / 4. for dt in np.diff(spikes)]
+            brushes = [pg.mkBrush(cmap.map(c)) for c in cvals]
+            x = amps[:-1]
+            y = amps[1:]
+        else:
+            brushes = pg.mkBrush('w')
+
+            # find all first+second pulse amps that come from the same recording
+            x_mask = result['event_meta']['pulse_number'] == 1
+            y_mask = result['event_meta']['pulse_number'] == 2
+            x_ids = result['event_meta']['sync_rec_ext_id'][x_mask]
+            y_ids = result['event_meta']['sync_rec_ext_id'][y_mask]
+            common_ids = list(set(x_ids) & set(y_ids))
+            id_mask = np.isin(result['event_meta']['sync_rec_ext_id'], common_ids)
+
+            x = amps[x_mask & id_mask]
+            y = amps[y_mask & id_mask]
+
+        self.plot.plot(x, y, pen=None, symbol='o', symbolBrush=brushes)
 
 
 class ModelInductionPlot(ModelResultView):
