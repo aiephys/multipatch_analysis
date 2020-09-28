@@ -132,8 +132,10 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
         
         analysis_dict = lsa.as_dict(analysis)
         output = get_complete_long_square_features(analysis_dict) 
+        avg_rate = np.mean(analysis['spiking_sweeps'].avg_rate)
         
         results = {
+            'avg_firing_rate': avg_rate,
             'rheobase': output['rheobase_i'] * 1e-9, #unscale from pA,
             'fi_slope': output['fi_fit_slope'] * 1e-9, #unscale from pA,
             'input_resistance': output['input_resistance'] * 1e6, #unscale from MOhm,
