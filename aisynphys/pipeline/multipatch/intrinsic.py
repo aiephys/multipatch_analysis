@@ -52,9 +52,8 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
         for cell in expt.cell_list:
             dev_id = cell.electrode.device_id
             recording_dict = get_intrinsic_recording_dict(expt, dev_id)
-            lp_recs = recording_dict['If_Curve'] + recording_dict['TargetV']
             results = {}
-            lp_results, error = IntrinsicPipelineModule.get_long_square_features(lp_recs, cell_id=cell.ext_id)
+            lp_results, error = IntrinsicPipelineModule.get_long_square_features(recording_dict['LP'], cell_id=cell.ext_id)
             errors += error
             chirp_results, error = IntrinsicPipelineModule.get_chirp_features(recording_dict['Chirp'], cell_id=cell.ext_id)
             errors += error
@@ -133,8 +132,10 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
         
         analysis_dict = lsa.as_dict(analysis)
         output = get_complete_long_square_features(analysis_dict) 
+        avg_rate = np.mean(analysis['spiking_sweeps'].avg_rate)
         
         results = {
+            'avg_firing_rate': avg_rate,
             'rheobase': output['rheobase_i'] * 1e-9, #unscale from pA,
             'fi_slope': output['fi_fit_slope'] * 1e-9, #unscale from pA,
             'input_resistance': output['input_resistance'] * 1e6, #unscale from MOhm,
@@ -149,11 +150,11 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
             'peak_deltav': output['peak_deltav_hero'],
             'fast_trough_deltav': output['fast_trough_deltav_hero'],
 
-            'isi_adapt_ratio': output['isi_adapt_ratio_hero'],
-            'upstroke_adapt_ratio': output['upstroke_adapt_ratio_hero'],
-            'downstroke_adapt_ratio': output['downstroke_adapt_ratio_hero'],
-            'width_adapt_ratio': output['width_adapt_ratio_hero'],
-            'threshold_v_adapt_ratio': output['threshold_v_adapt_ratio_hero'],
+            'isi_adapt_ratio': output['isi_adapt_ratio'],
+            'upstroke_adapt_ratio': output['upstroke_adapt_ratio'],
+            'downstroke_adapt_ratio': output['downstroke_adapt_ratio'],
+            'width_adapt_ratio': output['width_adapt_ratio'],
+            'threshold_v_adapt_ratio': output['threshold_v_adapt_ratio'],
         }
         return results, errors
 

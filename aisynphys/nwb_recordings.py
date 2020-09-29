@@ -13,14 +13,14 @@ def get_intrinsic_recording_dict(expt, dev_id, check_qc=True):
             continue
         rec = sweep[dev_id]
         stim_name = rec.stimulus.description
-        sweep_types = ['TargetV', 'If_Curve', 'Chirp']
-        for code in sweep_types:
-            if code in stim_name and rec.clamp_mode=='ic':
-                if check_qc:
-                    db_rec = get_db_recording(expt, rec)
-                    if db_rec is None or db_rec.patch_clamp_recording.qc_pass is False:
-                        continue
-                recording_dict[code].append(rec)
+        sweep_types = ['TargetV', 'If_Curve', 'IV_Curve ', 'Chirp']
+        if rec.clamp_mode=='ic' and any([code in stim_name for code in sweep_types]):
+            if check_qc:
+                db_rec = get_db_recording(expt, rec)
+                if db_rec is None or db_rec.patch_clamp_recording.qc_pass is False:
+                    continue
+            code = "Chirp" if 'Chirp' in stim_name else "LP" 
+            recording_dict[code].append(rec)
     return recording_dict
 
 def get_lp_sweeps(sweeps, dev_id):
