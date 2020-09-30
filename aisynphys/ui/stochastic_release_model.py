@@ -223,12 +223,12 @@ class ModelEventPlot(ModelResultView):
             'amplitude': self.event_view.addPlot(1, 0, title="event amplitude vs compressed time"),
         }        
         self.plots['amplitude'].setXLink(self.plots['likelihood'])
-        self.state_keys = ['release_probability', 'facilitation', 'sensitization']
+        self.state_keys = ['release_probability', 'sensitization']
         for i,state_key in enumerate(self.state_keys):
             self.plots[state_key] = self.event_view.addPlot(2+i, 0, title=state_key + " vs compressed time")
             self.plots[state_key].setXLink(self.plots['likelihood'])
         
-        self.amp_dist_plot = self.event_view.addPlot(0, 1, title="amplitude distributions", rowspan=3)
+        self.amp_dist_plot = self.event_view.addPlot(0, 1, title="amplitude distributions", rowspan=10)
         self.amp_dist_plot.setMaximumWidth(500)
         self.amp_dist_plot.selected_items = []
 
