@@ -1,6 +1,6 @@
 # coding: utf8
 from __future__ import print_function, division
-import functools, pickle, time, os
+import functools, pickle, time, os, multiprocessing, traceback
 from collections import OrderedDict
 import numpy as np
 import numba
@@ -54,6 +54,7 @@ class StochasticReleaseModel(object):
     state_dtype = [
         ('available_vesicle', float),
         ('release_probability', float),
+        ('sensitization', float),
     ]
 
     param_names = [
@@ -64,6 +65,8 @@ class StochasticReleaseModel(object):
         'vesicle_recovery_tau',
         'facilitation_amount',
         'facilitation_recovery_tau',
+        'desensitization_amount',
+        'desensitization_recovery_tau',
         'measurement_stdev',
     ]
         
@@ -262,6 +265,8 @@ class StochasticReleaseModel(object):
                     vesicle_recovery_tau,
                     facilitation_amount,
                     facilitation_recovery_tau,
+                    desensitization_amount,
+                    desensitization_recovery_tau,
                     measurement_stdev,
                     ):
 
@@ -274,6 +279,7 @@ class StochasticReleaseModel(object):
         
         available_vesicle = n_release_sites
         release_probability = base_release_probability
+        sensitization = 1.0
         
         previous_t = spike_times[0]
         last_nan_time = -np.inf
@@ -288,7 +294,6 @@ class StochasticReleaseModel(object):
                 last_nan_time = t
 
             else:
-                # recover vesicles up to the current timepoint
                 dt = t - previous_t
                 previous_t = t
 
@@ -300,12 +305,16 @@ class StochasticReleaseModel(object):
                 f_recovery = np.exp(-dt / facilitation_recovery_tau)
                 release_probability += (base_release_probability - release_probability) * (1.0 - f_recovery)
                 # prof('recover facilitation')
+
+                # recover from desensitization
+                s_recovery = np.exp(-dt / desensitization_recovery_tau)
+                sensitization += (1.0 - sensitization) * (1.0 - s_recovery)
                 
                 # predict most likely amplitude for this spike (just for show)
                 expected_amplitude = release_expectation_value(
                     max(0, available_vesicle),
                     release_probability,
-                    mini_amplitude,
+                    mini_amplitude * sensitization,
                 )
                 
                 if not have_amps:
@@ -314,6 +323,7 @@ class StochasticReleaseModel(object):
 
                 pre_available_vesicle = available_vesicle
                 pre_release_probability = release_probability
+                pre_sensitization = sensitization
 
                 # measure likelihood of seeing this response amplitude
                 av = max(0, min(n_release_sites, int(np.round(available_vesicle))))
@@ -326,12 +336,15 @@ class StochasticReleaseModel(object):
                 depleted_vesicle = amplitude / mini_amplitude
                 available_vesicle -= depleted_vesicle
 
+                assert np.isfinite(available_vesicle)
+                
                 # apply spike-induced facilitation in release probability
                 release_probability += (1.0 - release_probability) * facilitation_amount
                 # prof('update state')
-                
-                assert np.isfinite(available_vesicle)
-                
+
+                # apply spike-induced desensitization of postsynaptic receptors
+                sensitization *= (1.0 - desensitization_amount) ** depleted_vesicle
+
                 # ignore likelihood for this event if it was too close to an unmeasurable response
                 if t - last_nan_time < missing_event_penalty:
                     likelihood = np.nan
@@ -339,10 +352,12 @@ class StochasticReleaseModel(object):
                 # record model state immediately before spike
                 pre_spike_state[i]['available_vesicle'] = pre_available_vesicle
                 pre_spike_state[i]['release_probability'] = pre_release_probability
+                pre_spike_state[i]['sensitization'] = pre_sensitization
                     
                 # record model state immediately after spike
                 post_spike_state[i]['available_vesicle'] = available_vesicle
                 post_spike_state[i]['release_probability'] = release_probability
+                post_spike_state[i]['sensitization'] = sensitization
                 # prof('record')
             
             if np.isnan(available_vesicle):
@@ -529,16 +544,38 @@ class ParameterSpace(object):
     def run(self, func, workers=None, **kwds):
         """Run *func* in parallel over the entire parameter space, storing
         results into self.result.
+
+        If workers==1, then run locally to make debugging easier.
         """
-        from pyqtgraph.multiprocess import Parallelize
         all_inds = list(np.ndindex(self.result.shape))
-        with Parallelize(enumerate(all_inds), results=self.result, progressDialog={'labelText':'synapticulating...', 'nested':True}, workers=workers) as tasker:
-            for i, inds in tasker:
-                params = self[inds]
-                tasker.results[inds] = func(params, **kwds)
+        all_params = [self[inds] for inds in all_inds] 
+        if workers > 1:
+            # from pyqtgraph.multiprocess import Parallelize
+            # with Parallelize(enumerate(all_inds), results=self.result, progressDialog={'labelText':'synapticulating...', 'nested':True}, workers=workers) as tasker:
+            #     for i, inds in tasker:
+            #         params = self[inds]
+            #         tasker.results[inds] = func(params, **kwds)
+            pool = multiprocessing.Pool(workers)
+            fn = functools.partial(func, **kwds)
+            import pyqtgraph as pg
+            with pg.ProgressDialog('synapticulating...', maximum=len(all_inds)) as dlg:
+                for i,r in enumerate(pool.imap(fn, all_params, chunksize=100)):
+                    dlg += 1
+                    if dlg.wasCanceled():
+                        pool.terminate()
+                        raise Exception("Synapticulation cancelled. No refunds.")
+                    self.result[all_inds[i]] = r
+        else:
+            import pyqtgraph as pg
+            with pg.ProgressDialog('synapticulating (serial)...', nested=True, maximum=len(all_inds)) as dlg:
+                for inds in all_inds:
+                    params = self[inds]
+                    self.result[inds] = func(params, **kwds)
+                    dlg += 1
+                    assert not dlg.wasCanceled()
         
     def __getitem__(self, inds):
-        """Return a dict of the parameter values used at a specific index in the paremter space.
+        """Return a dict of the parameter values used at a specific index in the parameter space.
         """
         params = self.static_params.copy()
         for i,param in enumerate(self.param_order):
@@ -715,16 +752,22 @@ class StochasticModelRunner:
         spike_times, amplitudes, bg_amplitudes, event_meta = self.synapse_events
         
         search_params = {
+            # If mini_amplitude is commented out here, then it will be optimized automatically by the model:
+            #'mini_amplitude': np.nanmean(amplitudes) * 1.2**np.arange(-12, 24, 2),
+
             'n_release_sites': np.array([1, 2, 4, 8, 16, 32, 64]),
-            #'n_release_sites': np.array([1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64]),
             'base_release_probability': np.array([0.00625, 0.0125, 0.025, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0]),
-            #'base_release_probability': 1.0 / 1.5**(np.arange(15)[::-1]),
-            #'mini_amplitude': avg_amplitude * 1.2**np.arange(-12, 24, 2),  # optimized by model
             'mini_amplitude_cv': np.array([0.05, 0.1, 0.2, 0.4, 0.8]),
             'measurement_stdev': np.nanstd(bg_amplitudes),
             'vesicle_recovery_tau': np.array([0.0025, 0.01, 0.04, 0.16, 0.64, 2.56]),
             'facilitation_amount': np.array([0.0, 0.00625, 0.025, 0.05, 0.1, 0.2, 0.4]),
             'facilitation_recovery_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 1.28]),
+            'desensitization_amount': np.array([0.0, 0.00625, 0.025, 0.05, 0.1, 0.2, 0.4]),
+            'desensitization_recovery_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 1.28]),
+            # 'desensitization_amount': np.array([0.0, 0.1]),
+            # 'desensitization_recovery_tau': np.array([0.01, 0.1]),
+            # 'desensitization_amount': 0,
+            # 'desensitization_recovery_tau': 1,
         }
         
         # sanity checking
