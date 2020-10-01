@@ -18,8 +18,8 @@ from .experiment import ExperimentPipelineModule
 col_names = {
     'Qual_Morpho_Type': {'name': 'qual_morpho_type', 'type': 'str'},
     'dendrite_type': {'name': 'dendrite_type', 'type': ['spiny', 'aspiny', 'sparsely spiny', 'NEI']},
-    'Apical_truncation_distance': {'name': 'apical_trunc_distance', 'type': 'float'},
-    'Axon_truncation_distance': {'name': 'axon_trunc_distance', 'type': 'float'},
+    'Apical_truncation_distance': {'name': 'apical_trunc_distance', 'type': 'float', 'scale': 1e-6},
+    'Axon_truncation_distance': {'name': 'axon_trunc_distance', 'type': 'float', 'scale': 1e-6},
     'Axon origination': {'name': 'axon_origin', 'type': ['soma', 'dendrite', 'unclear', 'NEI']},
     'Axon_truncation': {'name': 'axon_truncation', 'type': ['truncated', 'borderline', 'intact', 'unclear', 'NEI']},
     'Apical_truncation': {'name': 'apical_truncation', 'type': ['truncated', 'borderline', 'intact','unclear', 'NEI']},
@@ -83,7 +83,8 @@ class MorphologyPipelineModule(MultipatchPipelineModule):
                                 raise Exception ('Error parsing morphology annotation %s for cell %d from column %s' % (data, cell_specimen_id, morpho_db_name))
                         elif col_type == 'float':
                             try:
-                                data = float(data)
+                                scale = result.get('scale', 1)
+                                data = float(data) * scale
                             except ValueError:
                                 raise Exception ('Error parsing morphology annotation %s for cell %d from column %s' % (data, cell_specimen_id, morpho_db_name))
                     results[col_name] = data
