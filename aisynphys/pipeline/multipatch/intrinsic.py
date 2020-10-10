@@ -170,24 +170,26 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
         q = q.filter(db.Experiment.ext_id.in_(job_ids))
         return q.all()
 
+try:
+    class MPSweep(Sweep):
+        """Adapter for neuroanalysis.Recording => ipfx.Sweep
+        """
+        def __init__(self, rec, t0=0):
+            # pulses may have different start times, so we shift time values to make all pulses start at t=0
+            pri = rec['primary'].copy(t0=t0)
+            cmd = rec['command'].copy()
+            t = pri.time_values
+            v = pri.data * 1e3  # convert to mV
+            holding = [i for i in rec.stimulus.items if i.description=='holding current']
+            if len(holding) == 0:
+                # TODO: maybe log this error
+                return None
+            holding = holding[0].amplitude
+            i = (cmd.data - holding) * 1e12   # convert to pA with holding current removed
+            srate = pri.sample_rate
+            sweep_num = rec.parent.key
+            clamp_mode = rec.clamp_mode  # this will be 'ic' or 'vc'; not sure if that's right
 
-class MPSweep(Sweep):
-    """Adapter for neuroanalysis.Recording => ipfx.Sweep
-    """
-    def __init__(self, rec, t0=0):
-        # pulses may have different start times, so we shift time values to make all pulses start at t=0
-        pri = rec['primary'].copy(t0=t0)
-        cmd = rec['command'].copy()
-        t = pri.time_values
-        v = pri.data * 1e3  # convert to mV
-        holding = [i for i in rec.stimulus.items if i.description=='holding current']
-        if len(holding) == 0:
-            # TODO: maybe log this error
-            return None
-        holding = holding[0].amplitude
-        i = (cmd.data - holding) * 1e12   # convert to pA with holding current removed
-        srate = pri.sample_rate
-        sweep_num = rec.parent.key
-        clamp_mode = rec.clamp_mode  # this will be 'ic' or 'vc'; not sure if that's right
-
-        Sweep.__init__(self, t, v, i, clamp_mode, srate, sweep_number=sweep_num)
+            Sweep.__init__(self, t, v, i, clamp_mode, srate, sweep_number=sweep_num)
+except ImportError:
+    pass
