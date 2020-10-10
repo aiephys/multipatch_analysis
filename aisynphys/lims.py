@@ -653,6 +653,22 @@ def all_cell_layers():
     recs = query(q)
     return recs
 
+def image_series_id(slice_specimen_name):
+        query_str = f"""
+        select
+            imser.id as image_series_id
+        from specimens sp
+        join image_series imser on imser.specimen_id = sp.id
+        where
+            sp.name = '{slice_specimen_name}'
+        """
+
+        results = query(query_str)
+        if len(results) > 0:
+            return results[0]["image_series_id"]
+        else:
+            raise ValueError(f"No focal plane image series ID found for specimen ID {slice_specimen_name}")
+        
 if __name__ == '__main__':
     # testing specimen
     spec_name = "Ntsr1-Cre_GN220;Ai14-349905.03.06"
