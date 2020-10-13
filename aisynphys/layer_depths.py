@@ -8,6 +8,9 @@ from shapely.geometry import Polygon, Point, LineString, LinearRing
 import logging
 logger = logging.getLogger(__name__)
 
+class LayerDepthError(Exception):
+    pass
+
 def get_cell_soma_data(cell_specimen_ids):
     # based on query in lims_apical_queries but remove requirement of reconstruction
     # there is probably a better way to do this, and should be in neuron_morphology
@@ -57,19 +60,17 @@ def layer_info_from_snap_polygons_output(output, resolution=1):
 def get_layer_depths(point, layer_polys, pia_path, wm_path, depth_interp, dx_interp, dy_interp, step_size=1.0, max_iter=1000):
     pia_path = ensure_linestring(pia_path)
     wm_path = ensure_linestring(wm_path)
-    if point is None:
-        return {}
     in_layer = [
         layer for layer in layer_polys if
         layer_polys[layer]['bounds'].intersects(Point(*point)) # checks for common boundary or interior
     ]
 
     if len(in_layer) == 0:
-        raise ValueError("Point not found in any layer")
+        raise LayerDepthError("Point not found in any layer")
     elif len(in_layer) == 1:
         start_layer = in_layer[0]
     else:
-        raise ValueError(f"Overlapping layers: {in_layer}")
+        raise LayerDepthError(f"Overlapping layers: {in_layer}")
     layer_poly = layer_polys[start_layer]
 
     _, pia_side_dist = ld.step_from_node(
@@ -106,11 +107,9 @@ def get_layer_depths(point, layer_polys, pia_path, wm_path, depth_interp, dx_int
         }
     return out
 
-def get_depths_slice(focal_plane_image_series_id, cell_id_list, step_size=1.0, max_iter=1000):
-    soma_centers, resolution = get_cell_soma_data(cell_id_list)
-    
-    mean_soma_loc = np.stack(soma_centers.values()).mean(axis=0)
-    soma_centers['mean']= mean_soma_loc
+def get_depths_slice(focal_plane_image_series_id, soma_centers, resolution=1, step_size=1.0, max_iter=1000):
+    # soma_centers, resolution = get_cell_soma_data(cell_id_list)
+    soma_centers = {cell: resolution*np.array(position) for cell, position in soma_centers.items()}
 
     parser = Parser(args=[], input_data=dict(
         focal_plane_image_series_id=focal_plane_image_series_id))
@@ -141,8 +140,16 @@ def get_depths_slice(focal_plane_image_series_id, cell_id_list, step_size=1.0, m
         try:
             outputs[name] = get_layer_depths(point, layers, pia_path, wm_path, depth_interp, dx_interp, dy_interp,
                                             step_size, max_iter)
+        except LayerDepthError as exc:
+            logger.warning((f"Failure getting depth info for cell {name}: {exc}"))
         except Exception:
             logger.exception(f"Failure getting depth info for cell {name}")
+
+    if len(outputs)>0:
+        # add the mean location of successful cells only
+        mean_soma_loc = np.stack([soma_centers[cell] for cell in outputs]).mean(axis=0)
+        outputs['mean'] = get_layer_depths(mean_soma_loc, layers, pia_path, wm_path, depth_interp, dx_interp, dy_interp,
+                                                step_size, max_iter)
             
     return outputs
 
