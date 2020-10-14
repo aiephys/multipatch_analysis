@@ -5,9 +5,10 @@ and adding layer-aligned distance info to the Pair table
 from ..pipeline_module import DatabasePipelineModule
 from .experiment import ExperimentPipelineModule
 from aisynphys import lims
-from aisynphys.layer_depths import get_depths_slice
 import logging
 import numpy as np
+from neuroanalysis.util.optional_import import optional_import
+get_depths_slice = optional_import('aisynphys.layer_depths', 'get_depths_slice')
 
 
 class CortexLocationPipelineModule(DatabasePipelineModule):
