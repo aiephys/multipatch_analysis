@@ -195,6 +195,10 @@ class ModelResultView(object):
             self.update_display()
 
     @property
+    def parent(self):
+        return self._parent
+
+    @property
     def visible(self):
         return self._visible
 
@@ -206,7 +210,7 @@ class ModelResultView(object):
             self.update_display()
         
     def update_display(self):
-        """Extend in subclass to update displayed results (taken from self._parent.result)
+        """Extend in subclass to update displayed results (taken from self.parent.result)
         """
         self._need_update = False    
         
@@ -219,14 +223,12 @@ class ModelEventPlot(ModelResultView):
         self.layout.addWidget(self.event_view)
 
         self.plots = {
-            'likelihood': self.event_view.addPlot(0, 0, title="model likelihood vs compressed time"),
-            'amplitude': self.event_view.addPlot(1, 0, title="event amplitude vs compressed time"),
-        }        
-        self.plots['amplitude'].setXLink(self.plots['likelihood'])
+            'amplitude': self.event_view.addPlot(0, 0, title="event amplitude vs compressed time"),
+            'likelihood': self.event_view.addPlot(1, 0, title="model likelihood vs compressed time"),
+        }
         self.state_keys = ['release_probability', 'sensitization']
         for i,state_key in enumerate(self.state_keys):
             self.plots[state_key] = self.event_view.addPlot(2+i, 0, title=state_key + " vs compressed time")
-            self.plots[state_key].setXLink(self.plots['likelihood'])
         
         self.amp_dist_plot = self.event_view.addPlot(0, 1, title="amplitude distributions", rowspan=10)
         self.amp_dist_plot.setMaximumWidth(500)
@@ -242,10 +244,9 @@ class ModelEventPlot(ModelResultView):
         self.layout.addWidget(self.ctrl)
 
         self.plot_checks = {
-            'likelihood': QtGui.QCheckBox('likelihood'),
             'amplitude': QtGui.QCheckBox('amplitude'),
+            'likelihood': QtGui.QCheckBox('likelihood'),
             'release_probability': QtGui.QCheckBox('release probability'),
-            'facilitation': QtGui.QCheckBox('facilitation'),
             'sensitization': QtGui.QCheckBox('sensitization'),
         }
         self.plot_checks['amplitude'].setChecked(True)
@@ -253,7 +254,12 @@ class ModelEventPlot(ModelResultView):
             self.hl.addWidget(c)
             c.toggled.connect(self.update_display)
 
+        for name,plot in self.plots.items():
+            plot.setXLink(self.plots['amplitude'])
+
     def update_display(self):
+        """Called when we need to update displayed results (from self.parent.result)
+        """
         ModelResultView.update_display(self)
 
         for k in self.plots:
@@ -264,7 +270,7 @@ class ModelEventPlot(ModelResultView):
                 self.plots[k].setVisible(False)
                 self.plots[k].setMaximumHeight(0)
 
-        full_result = self._parent.result
+        full_result = self.parent.result
         model = full_result['model']
         result = full_result['result']
         pre_state = full_result['pre_spike_state']
@@ -318,19 +324,26 @@ class ModelEventPlot(ModelResultView):
         self.amp_dist_plot.plot(amps, total_dist, fillLevel=0, brush=(255, 0, 0, 50))
     
     def amp_sp_clicked(self, sp, pts):
-        result = self._parent.result['result']
+        # user clicked an event in the scatter plot; show: 
+        # - the amplitude of the selected event (red line)
+        # - expectation value from model distribution (yellow line)
+        # - the full model distribution (yellow histogram)
+
+        result = self.parent.result['result']
+        pre_state = self.parent.result['pre_spike_state']
+        model = self.parent.result['model']
         i = pts[0].index()
-        state = self.pre_state[i]
+        state = pre_state[i]
         expected_amp = result[i]['expected_amplitude']
         measured_amp = result[i]['amplitude']
         amps = self.amp_sample_values
         
         for item in self.amp_dist_plot.selected_items:
             self.amp_dist_plot.removeItem(item)
-        l = self.model.likelihood(amps, state)
-        p = self.amp_dist_plot.plot(amps, l / l.sum(), pen=(255, 255, 0, 100))
-        l1 = self.amp_dist_plot.addLine(x=measured_amp)
-        l2 = self.amp_dist_plot.addLine(x=expected_amp, pen='r')
+        l = model.likelihood(amps, state)
+        p = self.amp_dist_plot.plot(amps, l, pen=(255, 255, 0, 100))
+        l1 = self.amp_dist_plot.addLine(x=measured_amp, pen='r')
+        l2 = self.amp_dist_plot.addLine(x=expected_amp, pen='y')
         self.amp_dist_plot.selected_items = [p, l1, l2]
 
 

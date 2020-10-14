@@ -547,6 +547,8 @@ class ParameterSpace(object):
 
         If workers==1, then run locally to make debugging easier.
         """
+        if workers is None:
+            workers = multiprocessing.cpu_count()
         all_inds = list(np.ndindex(self.result.shape))
         all_params = [self[inds] for inds in all_inds] 
         if workers > 1:
@@ -762,12 +764,12 @@ class StochasticModelRunner:
             'vesicle_recovery_tau': np.array([0.0025, 0.01, 0.04, 0.16, 0.64, 2.56]),
             'facilitation_amount': np.array([0.0, 0.00625, 0.025, 0.05, 0.1, 0.2, 0.4]),
             'facilitation_recovery_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 1.28]),
-            'desensitization_amount': np.array([0.0, 0.00625, 0.025, 0.05, 0.1, 0.2, 0.4]),
-            'desensitization_recovery_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 1.28]),
+            # 'desensitization_amount': np.array([0.0, 0.00625, 0.025, 0.05, 0.1, 0.2, 0.4]),
+            # 'desensitization_recovery_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 1.28]),
             # 'desensitization_amount': np.array([0.0, 0.1]),
             # 'desensitization_recovery_tau': np.array([0.01, 0.1]),
-            # 'desensitization_amount': 0,
-            # 'desensitization_recovery_tau': 1,
+            'desensitization_amount': 0,
+            'desensitization_recovery_tau': 1,
         }
         
         # sanity checking
