@@ -208,11 +208,14 @@ class DatasetPipelineModule(MultipatchPipelineModule):
 
                     # get all responses, regardless of the presence of a spike
                     responses = mpa.get_spike_responses(srec[pre_dev], srec[post_dev], align_to='pulse', require_spike=False)
+
+                    pair_entry = pairs_by_device_id.get((pre_dev, post_dev), None)
+                    if pair_entry is None:
+                        continue  # no data for one or both channels
+                    pair_entry.n_ex_test_spikes = 0
+                    pair_entry.n_in_test_spikes = 0
                     
                     for resp in responses:
-                        pair_entry = pairs_by_device_id.get((pre_dev, post_dev), None)
-                        if pair_entry is None:
-                            continue  # no data for one or both channels
                         if resp['ex_qc_pass']:
                             pair_entry.n_ex_test_spikes += 1
                         if resp['in_qc_pass']:
