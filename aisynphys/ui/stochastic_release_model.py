@@ -503,7 +503,7 @@ class ModelInductionPlot(ModelResultView):
             model = result['model']
             params = result['params'].copy()
             params.update(result['optimized_params'])
-            mean_result = model.measure_likelihood(mean_times, amplitudes=None, params=params)
+            mean_result = model.run_model(mean_times, amplitudes='expected', params=params)
             
             expected_amps = mean_result['result']['expected_amplitude']
             self.ind_plots[ind_i].plot(expected_amps, pen='w', symbol='d', symbolBrush='y')
