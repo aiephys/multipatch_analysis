@@ -18,7 +18,7 @@ CorticalCellLocation = make_table(
         ('fractional_depth', 'float', 'The cortical depth of the cell where pia is 0 and wm is 1.'),
         ('layer_depth', 'float', 'Absolute depth within the layer in m.'),
         ('fractional_layer_depth', 'float', 'Fractional depth within the cells layer.'),
-        ('position', 'object', '2D array, position of cell in the slice (in m)'),
+        ('position', 'object', '2D array, position of cell in slice image coordinates (in m)'),
         ])
         
 Cell.cortical_location = relationship(CorticalCellLocation, back_populates="cell", cascade="delete", single_parent=True, uselist=False)

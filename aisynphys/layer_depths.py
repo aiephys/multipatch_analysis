@@ -134,16 +134,16 @@ def get_depths_slice(focal_plane_image_series_id, soma_centers, resolution=1, st
     dy_interp = ld.setup_interpolator(
         gradient_field, "dy", **interp_params)
 
-
     outputs = {}
+    errors = []
     for name, point in soma_centers.items():
         try:
             outputs[name] = get_layer_depths(point, layers, pia_path, wm_path, depth_interp, dx_interp, dy_interp,
                                             step_size, max_iter)
-        except LayerDepthError as exc:
-            logger.warning((f"Failure getting depth info for cell {name}: {exc}"))
-        except Exception:
-            logger.exception(f"Failure getting depth info for cell {name}")
+        except (LayerDepthError, ValueError) as exc:
+            error = f"Failure getting depth info for cell {name}: {exc}"
+            logger.error(error)
+            errors.append(error)
 
     if len(outputs)>0:
         # add the mean location of successful cells only
@@ -151,5 +151,5 @@ def get_depths_slice(focal_plane_image_series_id, soma_centers, resolution=1, st
         outputs['mean'] = get_layer_depths(mean_soma_loc, layers, pia_path, wm_path, depth_interp, dx_interp, dy_interp,
                                                 step_size, max_iter)
             
-    return outputs
+    return outputs, errors
 

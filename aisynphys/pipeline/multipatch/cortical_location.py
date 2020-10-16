@@ -5,7 +5,6 @@ and adding layer-aligned distance info to the Pair table
 from ..pipeline_module import DatabasePipelineModule
 from .experiment import ExperimentPipelineModule
 from aisynphys import lims
-import logging
 import numpy as np
 from neuroanalysis.util.optional_import import optional_import
 get_depths_slice = optional_import('aisynphys.layer_depths', 'get_depths_slice')
@@ -22,6 +21,7 @@ class CortexLocationPipelineModule(DatabasePipelineModule):
     def create_db_entries(cls, job, session):
         db = job['database']
         expt_id = job['job_id']
+        errors = []
 
         expt = db.experiment_from_ext_id(expt_id, session=session)
         slice_entry = expt.slice
@@ -33,8 +33,8 @@ class CortexLocationPipelineModule(DatabasePipelineModule):
             image_series_id = images[0].get('image_series')
             image_series_resolution = images[0].get('resolution')
         except (AssertionError, ValueError):
-            logging.warning("No LIMS image series found for slice.")
-            return
+            errors.append("No LIMS image series found for slice.")
+            return errors
 
         try:
             lims_cell_cluster_id = expt.meta.get('lims_cell_cluster_id')
@@ -44,13 +44,15 @@ class CortexLocationPipelineModule(DatabasePipelineModule):
                             if all(coords)}
             assert len(soma_centers) > 0
         except (AssertionError, ValueError):
-            logging.warning("No cell coordinates found for cell cluster.")
-            return
+            errors.append("No cell coordinates found for cell cluster.")
+            return errors
         
-        results = get_depths_slice(image_series_id, soma_centers, resolution=image_series_resolution)
+        results, cell_errors = get_depths_slice(image_series_id, soma_centers, 
+                                                resolution=image_series_resolution)
         if len(results)==0:
-            logging.error("No cells passed depth calculation.")
-            return
+            errors.append("No cells passed depth calculation.")
+            errors.extend(cell_errors)
+            return errors
 
         missed_cell_count = 0
         for cell in expt.cell_list:
@@ -61,22 +63,24 @@ class CortexLocationPipelineModule(DatabasePipelineModule):
             cell_results = results[specimen_id]
             loc_entry = db.CorticalCellLocation(
                 layer=cell_results["layer"],
-                distance_to_pia=cell_results["absolute_depth"],
-                distance_to_wm=cell_results["wm_distance"],
+                distance_to_pia=cell_results["absolute_depth"]*1e-6,
+                distance_to_wm=cell_results["wm_distance"]*1e-6,
                 fractional_depth=cell_results["normalized_depth"],
-                layer_depth=cell_results["layer_depth"],
+                layer_depth=cell_results["layer_depth"]*1e-6,
                 fractional_layer_depth=cell_results["normalized_layer_depth"],
-                position=list(cell_results["position"]),
+                position=list(cell_results["position"]*1e-6),
                 cell=cell,
             )
             session.add(loc_entry)
         
         if missed_cell_count > 0:
-            logging.warning(f"{missed_cell_count}/{len(expt.cell_list)} cells failed depth calculation.")
+            errors.append(f"{missed_cell_count}/{len(expt.cell_list)} cells failed depth calculation.")
+            errors.extend(cell_errors)
 
-        if not 'mean' in results:
-            logging.error("Depth calculation for cell cluster mean failed.")
-            return
+        if 'mean' not in results:
+            errors.append("Depth calculation for cell cluster mean failed. No pair distances available.")
+            return errors
+
         mean_results = results['mean']
         pia_direction = mean_results['pia_direction']
 
@@ -84,12 +88,9 @@ class CortexLocationPipelineModule(DatabasePipelineModule):
             pre_id = pair.pre_cell.meta.get('lims_specimen_id')
             post_id = pair.post_cell.meta.get('lims_specimen_id')
             if pre_id in results and post_id in results:
-                try:
-                    d12_lat, d12_vert = get_pair_distances(pair, pia_direction)
-                    pair.lateral_distance = d12_lat
-                    pair.vertical_distance = d12_vert
-                except Exception:
-                    logging.error("Pair distances calculation failed", exc_info=True)
+                d12_lat, d12_vert = get_pair_distances(pair, pia_direction)
+                pair.lateral_distance = d12_lat
+                pair.vertical_distance = d12_vert
 
     def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.
