@@ -330,9 +330,11 @@ class ConnectivityModel:
         return -model.likelihood(*args)
 
     @classmethod
-    def fit(cls, x, conn, init=(0.1, 150e-6), bounds=((0.001, 1), (10e-6, 1e-3)), fixed_size=None, **kwds):
+    def fit(cls, x, conn, init=(0.1, 150e-6), bounds=((0.001, 1), (10e-6, 1e-3)), fixed_size=None, fixed_max=None, **kwds):
         n = 6
         p_bins = np.linspace(bounds[0][0], bounds[0][1], n)
+        if fixed_max is not None:
+            p_bins = [fixed_max] * n
         s_bins = np.linspace(bounds[1][0], bounds[1][1], n)
         if fixed_size is not None:
             s_bins = [fixed_size] * n
