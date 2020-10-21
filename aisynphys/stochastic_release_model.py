@@ -81,7 +81,7 @@ class StochasticReleaseModel(object):
         # How long to wait after a NaN event before the model begins accumulating likelihood values again
         self.missing_event_penalty = 0.0
 
-    def optimize_mini_amplitude(self, spike_times, amplitudes, show=False):
+    def optimize_mini_amplitude(self, spike_times, amplitudes, event_meta=None, show=False):
         """Given a set of spike times and amplitudes, optimize the mini_amplitude parameter
         to produce the highest likelihood model.
         
@@ -91,7 +91,7 @@ class StochasticReleaseModel(object):
         
         init_amp = estimate_mini_amplitude(amplitudes, params)
         params['mini_amplitude'] = init_amp
-        init_result = self.run_model(spike_times, amplitudes, params)
+        init_result = self.run_model(spike_times, amplitudes, params, event_meta=event_meta)
         mean_amp = np.nanmean(amplitudes)
         if show:
             print("========== Optimize mini amplitude ==============")
@@ -99,7 +99,7 @@ class StochasticReleaseModel(object):
                 print("   %s: %s" % (k, v))
             print("   initial guess:", init_amp)
             print("   mean amp:", mean_amp)
-        ratio = mean_amp / np.nanmean(init_result['result']['expected_amplitude'])
+        ratio = mean_amp / np.nanmean(init_result.result['expected_amplitude'])
         init_amp *= ratio
         if show:
             print("   corrected amp 1:", init_amp)
@@ -110,13 +110,13 @@ class StochasticReleaseModel(object):
             print("   corrected amp 2:", init_amp)
              
         # self.params['mini_amplitude'] = params['mini_amplitude']
-        result = self.optimize(spike_times, amplitudes, optimize={'mini_amplitude': (init_amp, init_amp*0.01, init_amp*100)})
+        result = self.optimize(spike_times, amplitudes, optimize={'mini_amplitude': (init_amp, init_amp*0.01, init_amp*100)}, event_meta=event_meta)
         if show:
-            print("   optimized amp:", result['optimized_params']['mini_amplitude'])
-        result['optimization_info'] = {'init_amp': init_amp / ratio, 'ratio': ratio, 'corrected_amp': init_amp, 'init_likelihood': init_result['likelihood']}
+            print("   optimized amp:", result.optimized_params['mini_amplitude'])
+        result.optimization_info = {'init_amp': init_amp / ratio, 'ratio': ratio, 'corrected_amp': init_amp, 'init_likelihood': init_result.likelihood}
         return result
     
-    def optimize(self, spike_times, amplitudes, optimize):
+    def optimize(self, spike_times, amplitudes, optimize, event_meta=None):
         """Optimize specific parameters to maximize the model likelihood.
 
         This method updates the attributes for any optimized parameters and returns the
@@ -149,11 +149,11 @@ class StochasticReleaseModel(object):
             opt_params = params.copy()
             for i,k in enumerate(optimize.keys()):
                 opt_params[k] = np.clip(x[i], *bounds[i])
-            res = self.run_model(spike_times, amplitudes, opt_params)
+            res = self.run_model(spike_times, amplitudes, opt_params, event_meta=event_meta)
             results[tuple(x)] = res
             # print(opt_params)
             # print(res['likelihood'])
-            return -res['likelihood']
+            return -res.likelihood
         
         best = scipy.optimize.minimize(fn, x0=init, 
             method="Nelder-Mead", options={'fatol': 0.01}  # no bounds, can't set initial step?
@@ -166,13 +166,16 @@ class StochasticReleaseModel(object):
         )
         
         best_result = results[tuple(best.x.flatten())]
-        best_result['params'] = self.params.copy()
-        best_result['optimized_params'] = {k:best.x[i] for i,k in enumerate(optimize.keys())}
-        best_result['optimization_init'] = optimize
-        best_result['optimization_result'] = best
-        best_result['optimization_path'] = {
+
+        # take optimized params out of result.params and put them in result.optimized_params instead
+        # (to ensure we can re-run in the same way)
+        best_result.params = self.params.copy()
+        best_result.optimized_params = {k:best.x[i] for i,k in enumerate(optimize.keys())}
+        best_result.optimization_init = optimize
+        best_result.optimization_result = best
+        best_result.optimization_path = {
             'mini_amplitude': [k[0] for k in results.keys()], 
-            'likelihood': [v['likelihood'] for v in results.values()]
+            'likelihood': [v.likelihood for v in results.values()]
         }
         
         # update attributes with best result
@@ -182,7 +185,7 @@ class StochasticReleaseModel(object):
                     
         return best_result
     
-    def run_model(self, spike_times, amplitudes, params=None):
+    def run_model(self, spike_times, amplitudes, params=None, event_meta=None):
         """Run the stochastic release model with a specific set of spike times.
         
         This can be used two different ways: (1) compute a measure of the likelihood that *times* and *amplitudes*
@@ -202,17 +205,15 @@ class StochasticReleaseModel(object):
             If this argument is a string, then the model will generate simulated amplitudes as it runs.
             The string may be "random" to randomly select amplitudes from the model distribution, or
             "expected" to use the expectation value of the predicted distribution at each spike time.
+        params :  dict
+            Dictionary of model parameter values to use during this run. By default, parameters
+            are taken from self.params.
+        event_meta : array
+            Extra per-event metadata to be included in the model results
         
         Returns
         -------
-        result : array
-            result contains fields: spike_time, amplitude, expected_amplitude, likelihood
-        pre_spike_state:
-            state variables immediately before each spike
-        post_spike_state:
-            state variables immediately after each spike
-        params : dict
-            A dictionary of parameters used to generate the model result
+        result : StochasticReleaseModelResult
         """
         if params is None:
             params = self.params
@@ -242,13 +243,15 @@ class StochasticReleaseModel(object):
         # scalar representation of overall likelihood
         likelihood = np.exp(np.nanmean(np.log(result['likelihood'] + 0.1)))
         
-        return {
-            'result': result, 
-            'pre_spike_state': pre_spike_state,
-            'post_spike_state': post_spike_state,
-            'likelihood': likelihood,
-            'params': params,
-        }
+        return StochasticReleaseModelResult(
+            result=result, 
+            pre_spike_state=pre_spike_state,
+            post_spike_state=post_spike_state,
+            likelihood=likelihood,
+            params=params,
+            model=self,
+            event_meta=event_meta,
+        )
             
     def likelihood(self, amplitudes, state, params=None):
         """Estimate the probability density of seeing a particular *amplitude*
@@ -259,7 +262,6 @@ class StochasticReleaseModel(object):
         
         available_vesicles = int(np.clip(np.round(state['available_vesicle']), 0, params['n_release_sites']))
         return release_likelihood(amplitudes, available_vesicles, state['release_probability'], params['mini_amplitude'], params['mini_amplitude_cv'], params['measurement_stdev'])
-
 
     @staticmethod
     @jit(nopython=True)
@@ -392,6 +394,60 @@ class StochasticReleaseModel(object):
             result[i]['amplitude'] = amplitude
             result[i]['expected_amplitude'] = expected_amplitude
             result[i]['likelihood'] = likelihood
+
+
+class StochasticReleaseModelResult:
+    """Contains the results of StochasticReleaseModel.run_model in several attributes:
+
+    Attributes
+    ----------
+    result : array
+        Array of model results, one record per input spike.
+        Contains fields: spike_time, amplitude, expected_amplitude, likelihood
+    pre_spike_state : array
+        State variable values immediately before each spike
+    post_spike_state : array
+        State variable values immediately after each spike
+    likelihood : float
+        The estimated likelihood for this model run
+    params : dict
+        A dictionary of parameters used to generate the model result
+    model : StochasticReleaseModel
+        The model instance that generated this result
+    event_meta : array
+        Per-event metadata, mainly regarding stimulus structure
+    optimized_params : dict | None
+        Parameters that were optimized by running the model
+    """
+    pickle_attributes = ['likelihood', 'params', 'optimized_params']
+
+    def __init__(self, result, pre_spike_state, post_spike_state, likelihood, params, model, optimized_params=None, event_meta=None):
+        self.result = result
+        self.pre_spike_state = pre_spike_state
+        self.post_spike_state = post_spike_state
+        self.likelihood = likelihood
+        self.params = params
+        self.model = model
+        self.event_meta = event_meta
+
+        # filled in later by optimization routine
+        self.optimized_params = optimized_params or {}
+
+    @property
+    def all_params(self):
+        """A dictionary containing the combination of self.params and self.optimized_params; can be used 
+        to re-run the model with the result of the parameter optimization fixed.
+        """
+        p = self.params.copy()
+        p.update(self.optimized_params)
+        return p
+
+    def __getstate__(self):
+        return {k: getattr(self, k) for k in self.pickle_attributes}
+
+    def __setstate__(self, state):
+        for k,v in state.items():
+            setattr(self, k, v)
 
 
 @jit(nopython=True)
@@ -798,9 +854,15 @@ class StochasticModelRunner:
             'base_release_probability': np.array([0.00625, 0.0125, 0.025, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0]),
             'mini_amplitude_cv': np.array([0.05, 0.1, 0.2, 0.4, 0.8]),
             'measurement_stdev': np.nanstd(bg_amplitudes),
+
             'vesicle_recovery_tau': np.array([0.0025, 0.01, 0.04, 0.16, 0.64, 2.56]),
+            # 'vesicle_recovery_tau': np.array([0.0001, 0.01]),
+
             'facilitation_amount': np.array([0.0, 0.00625, 0.025, 0.05, 0.1, 0.2, 0.4]),
             'facilitation_recovery_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 1.28]),
+            # 'facilitation_amount': np.array([0, 0.5]),
+            # 'facilitation_recovery_tau': np.array([0.1, 0.5]),
+
             # 'desensitization_amount': np.array([0.0, 0.00625, 0.025, 0.05, 0.1, 0.2, 0.4]),
             # 'desensitization_recovery_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 1.28]),
             # 'desensitization_amount': np.array([0.0, 0.1]),
@@ -822,24 +884,13 @@ class StochasticModelRunner:
 
         return search_params
 
-    def run_model(self, params, full_result=False, **kwds):
+    def run_model(self, params, **kwds):
         model = StochasticReleaseModel(params)
         spike_times, amplitudes, bg, event_meta = self.synapse_events
         if 'mini_amplitude' in params:
-            result = model.run_model(spike_times, amplitudes, **kwds)
+            return model.run_model(spike_times, amplitudes, event_meta=event_meta, **kwds)
         else:
-            result = model.optimize_mini_amplitude(spike_times, amplitudes, **kwds)
-        
-        if full_result:
-            result['model'] = model
-            result['event_meta'] = event_meta
-            return result
-        else:
-            return {
-                'likelihood': result['likelihood'], 
-                'params': result['params'],
-                'optimized_params': result.get('optimized_params', {}),
-            }
+            return model.optimize_mini_amplitude(spike_times, amplitudes, event_meta=event_meta, **kwds)
 
 
 class CombinedModelRunner:
@@ -861,7 +912,7 @@ class CombinedModelRunner:
         
         self.param_space = param_space
         
-    def run_model(self, params, full_result=False):
+    def run_model(self, params):
         params = params.copy()
         runner = self.model_runners[params.pop('synapse')]
-        return runner.run_model(params, full_result)
+        return runner.run_model(params)

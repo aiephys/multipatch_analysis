@@ -55,7 +55,7 @@ class ModelDisplayWidget(QtGui.QWidget):
         
         result_img = np.zeros(self.param_space.result.shape)
         for ind in np.ndindex(result_img.shape):
-            result_img[ind] = self.param_space.result[ind]['likelihood']
+            result_img[ind] = self.param_space.result[ind].likelihood
         self.slicer.set_data(result_img)
         self.results = result_img
         
@@ -95,36 +95,37 @@ class ModelDisplayWidget(QtGui.QWidget):
 
     def select_result(self, index, update_slicer=True):
         result = self.get_result(index)
-        result['params'].update(self.param_space[index])
+        params = result.params.copy()
+        params.update(self.param_space[index])
         
         # re-run the model to get the complete results
-        full_result = self.model_runner.run_model(result['params'], full_result=True, show=True)
+        full_result = self.model_runner.run_model(params, show=True)
         self.result_widget.set_result(full_result)
         
         print("----- Selected result: -----")
         print("  model parameters:")
-        for k,v in full_result['params'].items():
+        for k,v in full_result.params.items():
             print("    {:30s}: {}".format(k, v))
-        if 'optimized_params' in full_result:
+        if hasattr(full_result, 'optimized_params'):
             print("  optimized parameters:")
-            for k,v in full_result['optimized_params'].items():
+            for k,v in full_result.optimized_params.items():
                 print("    {:30s}: {}".format(k, v))
-        if 'optimization_init' in full_result:
+        if hasattr(full_result, 'optimization_init'):
             print("  initial optimization parameters:")
-            for k,v in full_result['optimization_init'].items():
+            for k,v in full_result.optimization_init.items():
                 print("    {:30s}: {}".format(k, v))
-        if 'optimization_result' in full_result:
-            opt = full_result['optimization_result']
+        if hasattr(full_result, 'optimization_result'):
+            opt = full_result.optimization_result
             print("  optimization results:")
             print("    nfev:", opt.nfev)
             print("    message:", opt.message)
             print("    success:", opt.success)
             print("    status:", opt.status)
-        if 'optimization_info' in full_result:
+        if hasattr(full_result, 'optimization_info'):
             print("  optimization info:")
-            for k,v in full_result['optimization_info'].items():
+            for k,v in full_result.optimization_info.items():
                 print("    {:30s}: {}".format(k, v))
-        print("  likelihood: {}".format(full_result['likelihood']))
+        print("  likelihood: {}".format(full_result.likelihood))
         
         if update_slicer:
             self.slicer.set_index(index)
@@ -272,10 +273,10 @@ class ModelEventPlot(ModelResultView):
                 self.plots[k].setMaximumHeight(0)
 
         full_result = self.parent.result
-        model = full_result['model']
-        result = full_result['result']
-        pre_state = full_result['pre_spike_state']
-        post_state = full_result['post_spike_state']
+        model = full_result.model
+        result = full_result.result
+        pre_state = full_result.pre_spike_state
+        post_state = full_result.post_spike_state
         
         # color events by likelihood
         cmap = pg.ColorMap([0, 1.0], [(0, 0, 0), (255, 0, 0)])
@@ -361,13 +362,13 @@ class ModelOptimizationPlot(ModelResultView):
 
         result = self._parent.result
         plt = self.plot
-        x = result['optimization_path']['mini_amplitude']
-        y = result['optimization_path']['likelihood']
+        x = result.optimization_path['mini_amplitude']
+        y = result.optimization_path['likelihood']
         brushes = [pg.mkBrush((i, int(len(x)*1.2))) for i in range(len(x))]
         plt.clear()
         plt.plot(x, y, pen=None, symbol='o', symbolBrush=brushes)
-        plt.addLine(x=result['optimized_params']['mini_amplitude'])
-        plt.addLine(y=result['likelihood'])
+        plt.addLine(x=result.optimized_params['mini_amplitude'])
+        plt.addLine(y=result.likelihood)
 
 
 class ModelEventCorrelationPlot(ModelResultView):
@@ -388,6 +389,8 @@ class ModelEventCorrelationPlot(ModelResultView):
                 plot.showGrid(True, True)
                 plot.label = pg.TextItem()
                 plot.label.setParentItem(plot.vb)
+            row[1].setXLink(row[0])
+            row[1].setYLink(row[0])
         self.plots[0][0].setTitle('data')
         self.plots[0][1].setTitle('model')
 
@@ -414,15 +417,14 @@ class ModelEventCorrelationPlot(ModelResultView):
                 plot.clear()
 
         result = self.parent.result
-        spikes = result['result']['spike_time']
-        amps = result['result']['amplitude']
+        spikes = result.result['spike_time']
+        amps = result.result['amplitude']
 
         # re-simulate one random trial 
-        model = result['model']
-        params = result['params'].copy()
-        params.update(result['optimized_params'])
+        model = result.model
+        params = result.all_params
         model_result = model.run_model(spikes, amplitudes='random', params=params)
-        model_amps = model_result['result']['amplitude']
+        model_amps = model_result.result['amplitude']
 
         # this analysis relies on repeated structures in the stimulus, so we need to reconstruct
         # these from the event metadata
@@ -430,12 +432,12 @@ class ModelEventCorrelationPlot(ModelResultView):
         last_rec_id = None
         last_pulse_n = 0
         for i in range(len(spikes)):
-            rec_id = result['event_meta']['sync_rec_ext_id'][i]
+            rec_id = result.event_meta['sync_rec_ext_id'][i]
             if rec_id != last_rec_id:
                 last_rec_id = rec_id
                 recs.append([])
                 last_pulse_n = 0
-            pulse_n = result['event_meta']['pulse_number'][i]
+            pulse_n = result.event_meta['pulse_number'][i]
             if pulse_n == last_pulse_n + 1 and np.isfinite(amps[i]):
                 recs[-1].append(i)
                 last_pulse_n = pulse_n
@@ -471,20 +473,16 @@ class ModelInductionPlot(ModelResultView):
         ModelResultView.__init__(self, parent)
         self.lw = pg.GraphicsLayoutWidget()
         self.ind_plots = [self.lw.addPlot(0, 0), self.lw.addPlot(1, 0), self.lw.addPlot(2, 0)]
-        self.rec_plot = self.lw.addPlot(0, 1)
-        self.corr_plot = self.lw.addPlot(1, 1, rowspan=2)
-        # self.corr_plot.setAspectLocked()
-        self.corr_plot.showGrid(True, True)
         self.layout.addWidget(self.lw)
         
     def update_display(self):
         ModelResultView.update_display(self)
         result = self._parent.result
-        spikes = result['result']['spike_time']
-        amps = result['result']['amplitude']
-        meta = result['event_meta']
+        spikes = result.result['spike_time']
+        amps = result.result['amplitude']
+        meta = result.event_meta
         
-        self.corr_plot.clear()
+        # self.corr_plot.clear()
         
         # generate a list of all trains sorted by stimulus
         trains = {}  # {ind_f: {rec_d: [[a1, a2, ..a12], [b1, b2, ..b12], ...], ...}, ...}
@@ -536,36 +534,33 @@ class ModelInductionPlot(ModelResultView):
             # re-model based on mean amplitudes
             mean_times = np.arange(12) / ind_f
             mean_times[8:] += 0.25
-            model = result['model']
-            params = result['params'].copy()
-            params.update(result['optimized_params'])
+            model = result.model
+            params = result.all_params
             mean_result = model.run_model(mean_times, amplitudes='expected', params=params)
             
-            expected_amps = mean_result['result']['expected_amplitude']
+            expected_amps = mean_result.result['expected_amplitude']
             self.ind_plots[ind_i].plot(expected_amps, pen='w', symbol='d', symbolBrush='y')
-        
-            # normalize events by model prediction
-            x = []
-            y = []
-            for rec_d, rec_trains in ind_trains.items():
-                for train in rec_trains:
-                    train = [t - expected_amps[i] for i,t in enumerate(train)]
-                    for i in range(1, len(train)):
-                        x.append(train[i-1])
-                        y.append(train[i])
-            x = np.array(x)
-            y = np.array(y)
+
+
+
+            # # normalize events by model prediction
+            # x = []
+            # y = []
+            # for rec_d, rec_trains in ind_trains.items():
+            #     for train in rec_trains:
+            #         train = [t - expected_amps[i] for i,t in enumerate(train)]
+            #         for i in range(1, len(train)):
+            #             x.append(train[i-1])
+            #             y.append(train[i])
+            # x = np.array(x)
+            # y = np.array(y)
             
-            y1 = y[x<0]
-            y2 = y[x>0]
-            x1 = pg.pseudoScatter(y1, bidir=True)
-            x2 = pg.pseudoScatter(y2, bidir=True)
-            x1 = 0.25 * x1 / x1.max()
-            x2 = 0.25 * x2 / x2.max()
-            self.corr_plot.plot(x1, y1, pen=None, symbol='o')
-            self.corr_plot.plot(x2 + 1, y2, pen=None, symbol='o')
-            # self.corr_plot.plot(x, y, pen=None, symbol='o', symbolBrush=(ind_i, 4))
-            
-        # scatter plot of event pairs normalized by model expectation
-        
-        
+            # y1 = y[x<0]
+            # y2 = y[x>0]
+            # x1 = pg.pseudoScatter(y1, bidir=True)
+            # x2 = pg.pseudoScatter(y2, bidir=True)
+            # x1 = 0.25 * x1 / x1.max()
+            # x2 = 0.25 * x2 / x2.max()
+            # self.corr_plot.plot(x1, y1, pen=None, symbol='o')
+            # self.corr_plot.plot(x2 + 1, y2, pen=None, symbol='o')
+            # # self.corr_plot.plot(x, y, pen=None, symbol='o', symbolBrush=(ind_i, 4))
