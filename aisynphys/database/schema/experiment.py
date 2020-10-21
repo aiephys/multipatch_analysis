@@ -201,6 +201,8 @@ Pair = make_table(
         ('n_ex_test_spikes', 'int', 'Number of QC-passed spike-responses recorded for this pair at excitatory holding potential', {'index': True}),
         ('n_in_test_spikes', 'int', 'Number of QC-passed spike-responses recorded for this pair at inhibitory holding potential', {'index': True}),
         ('distance', 'float', 'Distance between somas (in m)'),
+        ('lateral_distance', 'float', 'Distance between somas perpendicular to the pia-wm axis (in m)'),
+        ('vertical_distance', 'float', 'Distance between somas along the pia-wm axis (in m)'),
         ('reciprocal_id', 'pair.id', 'ID of the reciprocal to this cell pair (the pair with pre_cell and post_cell swapped)', {'index': True}),
     ]
 )

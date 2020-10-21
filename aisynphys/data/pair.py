@@ -29,7 +29,7 @@ class Pair(object):
 
     @property
     def distance(self):
-        """Disance between cell positions
+        """Distance between cell positions
         """
         p1, p2 = self.pre_cell.position, self.post_cell.position
         if None in [p1, p2]:

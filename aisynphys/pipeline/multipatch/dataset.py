@@ -2,7 +2,6 @@ import os, glob, re, time, struct, hashlib
 import numpy as np
 from datetime import datetime
 from collections import OrderedDict
-from acq4.util.DataManager import getDirHandle
 from ... import config, lims, qc
 from ...util import timestamp_to_datetime, datetime_to_timestamp
 from ...data import Experiment
@@ -13,6 +12,8 @@ from neuroanalysis.data import PatchClampRecording
 from ...data import Experiment, MultiPatchDataset, MultiPatchProbe, MultiPatchSyncRecAnalyzer
 from neuroanalysis.analyzers.stim_pulse import PatchClampStimPulseAnalyzer
 from neuroanalysis.analyzers.baseline import BaselineDistributor
+from neuroanalysis.util.optional_import import optional_import
+getDirHandle = optional_import('acq4.util.DataManager', 'getDirHandle')
 
 
 class DatasetPipelineModule(MultipatchPipelineModule):
