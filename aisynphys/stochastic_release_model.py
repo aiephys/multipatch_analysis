@@ -216,6 +216,7 @@ class StochasticReleaseModel(object):
         """
         if params is None:
             params = self.params
+        use_expectation = False
         if isinstance(amplitudes, str):
             assert amplitudes in ('expected', 'random'), "amplitudes argument must be ndarray, 'expected', or 'random'"
             use_expectation = amplitudes == 'expected'

@@ -1,6 +1,7 @@
 # coding: utf8
 from __future__ import print_function, division
 import numpy as np
+import scipy.stats
 import pyqtgraph as pg
 import pyqtgraph.multiprocess
 from pyqtgraph.Qt import QtGui, QtCore
@@ -378,56 +379,91 @@ class ModelEventCorrelationPlot(ModelResultView):
     """
     def __init__(self, parent):
         ModelResultView.__init__(self, parent)
-        self.plot = pg.PlotWidget(labels={'left': 'amp 2', 'bottom': 'amp 1'})
-        self.plot.showGrid(True, True)
-        self.plot.setAspectLocked()
-        self.layout.addWidget(self.plot)
+        self.view = pg.GraphicsLayoutWidget()
+        self.layout.addWidget(self.view)
 
-        self.ctrl = QtGui.QWidget()
-        self.hl = QtGui.QHBoxLayout()
-        self.hl.setSpacing(2)
-        self.hl.setContentsMargins(0, 0, 0, 0)
-        self.ctrl.setLayout(self.hl)
-        self.layout.addWidget(self.ctrl)
+        self.plots = [[self.view.addPlot(row=i, col=0, labels={'left': '%d:%d'%(2**i, 2**(i+1))}), self.view.addPlot(row=i, col=1)] for i in range(3)]
+        for row in self.plots:
+            for plot in row:
+                plot.showGrid(True, True)
+                plot.label = pg.TextItem()
+                plot.label.setParentItem(plot.vb)
+        self.plots[0][0].setTitle('data')
+        self.plots[0][1].setTitle('model')
 
-        self.mode_radios = {
-            'all_events': QtGui.QRadioButton('all events'),
-            'first_in_train': QtGui.QRadioButton('first in train'),
-        }
-        self.mode_radios['all_events'].setChecked(True)
-        for name,r in self.mode_radios.items():
-            self.hl.addWidget(r)
-            r.toggled.connect(self.update_display)
+        # self.ctrl = QtGui.QWidget()
+        # self.hl = QtGui.QHBoxLayout()
+        # self.hl.setSpacing(2)
+        # self.hl.setContentsMargins(0, 0, 0, 0)
+        # self.ctrl.setLayout(self.hl)
+        # self.layout.addWidget(self.ctrl)
+
+        # self.mode_radios = {
+        #     'all_events': QtGui.QRadioButton('all events'),
+        #     'first_in_train': QtGui.QRadioButton('first in train'),
+        # }
+        # self.mode_radios['all_events'].setChecked(True)
+        # for name,r in self.mode_radios.items():
+        #     self.hl.addWidget(r)
+        #     r.toggled.connect(self.update_display)
         
     def update_display(self):
         ModelResultView.update_display(self)
-        self.plot.clear()
+        for row in self.plots:
+            for plot in row:
+                plot.clear()
 
-        result = self._parent.result
+        result = self.parent.result
         spikes = result['result']['spike_time']
         amps = result['result']['amplitude']
 
-        if self.mode_radios['all_events'].isChecked():
-            cmap = pg.ColorMap(np.linspace(0, 1, 4), np.array([[255, 255, 255], [255, 255, 0], [255, 0, 0], [0, 0, 0]], dtype='ubyte'))
-            cvals = [((np.log(dt) / np.log(10)) + 2) / 4. for dt in np.diff(spikes)]
-            brushes = [pg.mkBrush(cmap.map(c)) for c in cvals]
-            x = amps[:-1]
-            y = amps[1:]
-        else:
-            brushes = pg.mkBrush('w')
+        # re-simulate one random trial 
+        model = result['model']
+        params = result['params'].copy()
+        params.update(result['optimized_params'])
+        model_result = model.run_model(spikes, amplitudes='random', params=params)
+        model_amps = model_result['result']['amplitude']
 
-            # find all first+second pulse amps that come from the same recording
-            x_mask = result['event_meta']['pulse_number'] == 1
-            y_mask = result['event_meta']['pulse_number'] == 2
-            x_ids = result['event_meta']['sync_rec_ext_id'][x_mask]
-            y_ids = result['event_meta']['sync_rec_ext_id'][y_mask]
-            common_ids = list(set(x_ids) & set(y_ids))
-            id_mask = np.isin(result['event_meta']['sync_rec_ext_id'], common_ids)
+        # this analysis relies on repeated structures in the stimulus, so we need to reconstruct
+        # these from the event metadata
+        recs = []
+        last_rec_id = None
+        last_pulse_n = 0
+        for i in range(len(spikes)):
+            rec_id = result['event_meta']['sync_rec_ext_id'][i]
+            if rec_id != last_rec_id:
+                last_rec_id = rec_id
+                recs.append([])
+                last_pulse_n = 0
+            pulse_n = result['event_meta']['pulse_number'][i]
+            if pulse_n == last_pulse_n + 1 and np.isfinite(amps[i]):
+                recs[-1].append(i)
+                last_pulse_n = pulse_n
 
-            x = amps[x_mask & id_mask]
-            y = amps[y_mask & id_mask]
+        for i in range(3):
+            n = (i + 1) * 2
+            # find all recordings containing all of the pulses we want to analyze
+            event_inds = []
+            for rec in recs:
+                if len(rec) < n:
+                    continue
+                event_inds.append(rec[:n])
 
-        self.plot.plot(x, y, pen=None, symbol='o', symbolBrush=brushes)
+            for j,this_amps in enumerate([amps, model_amps]):
+                selected_amps = this_amps[np.array(event_inds)]
+
+                x = selected_amps[:, :n//2].mean(axis=1)
+                y = selected_amps[:, n//2:].mean(axis=1)
+
+                self.plots[i][j].plot(x, y, pen=None, symbol='o')
+
+                # plot regression
+                slope, intercept, r, p, stderr = scipy.stats.linregress(x, y)
+                assert np.isfinite(p)
+                x = np.array([x.min(), x.max()])
+                y = slope * x + intercept
+                self.plots[i][j].plot(x, y, pen='y')
+                self.plots[i][j].label.setText(f'r={r:0.2f} p={p:0.3f}')
 
 
 class ModelInductionPlot(ModelResultView):
