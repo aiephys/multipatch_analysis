@@ -41,6 +41,8 @@ class StochasticReleaseModel(object):
         - vesicle_recovery_tau (float) : Time constant for vesicle replenishment ("typically in the order of seconds" accoring to Hennig 2013)
         - facilitation_amount (float) : Release probability facilitation per spike (0.0-1.0)
         - facilitation_recovery_tau (float) : Time constant for facilitated release probability to recover toward resting state
+        - desensitization_amount (float) : Amount of postsynaptic receptor desensitization to apply (per release site) following each spike
+        - desensitization_recovery_tau (float) : Time constant for recovery from desensitization
         - measurement_stdev (float) : Extra variance in PSP amplitudes purely as a result of membrane noise / measurement error
     """
     
@@ -108,13 +110,13 @@ class StochasticReleaseModel(object):
             print("   corrected amp 2:", init_amp)
              
         # self.params['mini_amplitude'] = params['mini_amplitude']
-        result = self.optimize(spike_times, amplitudes, optimize={'mini_amplitude': (init_amp, init_amp*0.01, init_amp*100)}, show=show)
+        result = self.optimize(spike_times, amplitudes, optimize={'mini_amplitude': (init_amp, init_amp*0.01, init_amp*100)})
         if show:
             print("   optimized amp:", result['optimized_params']['mini_amplitude'])
         result['optimization_info'] = {'init_amp': init_amp / ratio, 'ratio': ratio, 'corrected_amp': init_amp, 'init_likelihood': init_result['likelihood']}
         return result
     
-    def optimize(self, spike_times, amplitudes, optimize, show=False):
+    def optimize(self, spike_times, amplitudes, optimize):
         """Optimize specific parameters to maximize the model likelihood.
 
         This method updates the attributes for any optimized parameters and returns the
@@ -180,7 +182,7 @@ class StochasticReleaseModel(object):
                     
         return best_result
     
-    def run_model(self, spike_times, amplitudes, params=None, show=False):
+    def run_model(self, spike_times, amplitudes, params=None):
         """Run the stochastic release model with a specific set of spike times.
         
         This can be used two different ways: (1) compute a measure of the likelihood that *times* and *amplitudes*
@@ -216,8 +218,8 @@ class StochasticReleaseModel(object):
             params = self.params
         if isinstance(amplitudes, str):
             assert amplitudes in ('expected', 'random'), "amplitudes argument must be ndarray, 'expected', or 'random'"
+            use_expectation = amplitudes == 'expected'
             amplitudes = np.array([])
-        use_expectation = amplitudes == 'expected'
         
         assert params['n_release_sites'] < 67, "For n_release_sites > 66 we need to use scipy.special.binom instead of the optimized binom_coeff"
 
