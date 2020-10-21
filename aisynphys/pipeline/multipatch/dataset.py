@@ -40,6 +40,8 @@ class DatasetPipelineModule(MultipatchPipelineModule):
             pre_dev_id = pair.pre_cell.electrode.device_id
             post_dev_id = pair.post_cell.electrode.device_id
             pairs_by_device_id[(pre_dev_id, post_dev_id)] = pair
+            pair.n_ex_test_spikes = 0
+            pair.n_in_test_spikes = 0
         
         # load NWB file
         path = os.path.join(config.synphys_data, expt_entry.storage_path)
@@ -212,8 +214,6 @@ class DatasetPipelineModule(MultipatchPipelineModule):
                     pair_entry = pairs_by_device_id.get((pre_dev, post_dev), None)
                     if pair_entry is None:
                         continue  # no data for one or both channels
-                    pair_entry.n_ex_test_spikes = 0
-                    pair_entry.n_in_test_spikes = 0
                     
                     for resp in responses:
                         if resp['ex_qc_pass']:
