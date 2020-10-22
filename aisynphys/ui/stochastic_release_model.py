@@ -135,6 +135,9 @@ class ModelSingleResultWidget(QtGui.QWidget):
     """Plots event amplitudes and distributions for a single stochastic model run.
     """
     def __init__(self):
+        self.result = None
+        self._random_model_result = None
+
         QtGui.QWidget.__init__(self)
         self.layout = QtGui.QGridLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
@@ -168,8 +171,21 @@ class ModelSingleResultWidget(QtGui.QWidget):
 
     def set_result(self, result):
         self.result = result
+        self._random_model_result = None
         for p in self.panels.values():
             p.result_changed()
+
+    def random_model_result(self):
+        """Re-run the model with the same parameters, generating a random sample of event amplitudes.
+
+        The random sample is cached until set_result is called again.
+        """
+        if self._random_model_result is None:
+            self._random_model_result = self.result.model.run_model(
+                self.result.result['spike_time'], 
+                amplitudes='random', 
+                params=self.result.all_params)
+        return self._random_model_result
 
 
 class ModelResultView(object):
@@ -421,9 +437,7 @@ class ModelEventCorrelationPlot(ModelResultView):
         amps = result.result['amplitude']
 
         # re-simulate one random trial 
-        model = result.model
-        params = result.all_params
-        model_result = model.run_model(spikes, amplitudes='random', params=params)
+        model_result = self.parent.random_model_result()
         model_amps = model_result.result['amplitude']
 
         # this analysis relies on repeated structures in the stimulus, so we need to reconstruct
@@ -470,6 +484,10 @@ class ModelInductionPlot(ModelResultView):
         spikes = result.result['spike_time']
         amps = result.result['amplitude']
         meta = result.event_meta
+
+        # re-simulate one random trial 
+        model_result = self.parent.random_model_result()
+        model_amps = model_result.result['amplitude']
         
         # generate a list of all trains sorted by stimulus
         trains = result.events_by_stimulus()
@@ -483,20 +501,27 @@ class ModelInductionPlot(ModelResultView):
             for rec_d, rec_trains in ind_trains.items():
                 for train in rec_trains:
                     for i,ev_ind in enumerate(train):
-                        ind_pulses[i].append(amps[ev_ind])
-                        
-            x = []
-            y = []
+                        ind_pulses[i].append(ev_ind)
+            
+            real_x = []
+            real_y = []
+            model_x = []
+            model_y = []
             for i in range(12):
                 if len(ind_pulses[i]) == 0:
                     continue
-                y.extend(ind_pulses[i])
-                xs = pg.pseudoScatter(np.array(ind_pulses[i]), bidir=True, shuffle=True)
-                xs /= np.abs(xs).max() * 4
-                x.extend(xs + i)
+
+                inds = np.array(ind_pulses[i])
+                for this_amp, x, y, sign in ((amps, real_x, real_y, -1), (model_amps, model_x, model_y, 1)):
+                    amp = this_amp[inds]
+                    y.extend(amp)
+                    xs = pg.pseudoScatter(np.array(amp), bidir=False, shuffle=True)
+                    xs /= np.abs(xs).max() * 4
+                    x.extend(i + xs * sign)
 
             self.ind_plots[ind_i].clear()
-            self.ind_plots[ind_i].plot(x, y, pen=None, symbol='o')
+            self.ind_plots[ind_i].plot(real_x, real_y, pen=None, symbol='o', symbolPen=None, symbolBrush=(0, 128, 255, 200), symbolSize=5)
+            self.ind_plots[ind_i].plot(np.array(model_x)+0.1, model_y, pen=None, symbol='o', symbolPen=None, symbolBrush=(255, 128, 0, 200), symbolSize=5, zValue=-1)
             
             # re-model based on mean amplitudes
             mean_times = np.arange(12) / ind_f
@@ -506,4 +531,4 @@ class ModelInductionPlot(ModelResultView):
             mean_result = model.run_model(mean_times, amplitudes='expected', params=params)
             
             expected_amps = mean_result.result['expected_amplitude']
-            self.ind_plots[ind_i].plot(expected_amps, pen='w', symbol='d', symbolBrush='y')
+            self.ind_plots[ind_i].plot(expected_amps, pen=(255, 255, 255, 50), symbol='d', symbolBrush=(255, 255, 0, 50), symbolPen=None, zValue=-10)
