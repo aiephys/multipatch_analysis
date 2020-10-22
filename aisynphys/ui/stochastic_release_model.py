@@ -347,9 +347,9 @@ class ModelEventPlot(ModelResultView):
         # - expectation value from model distribution (yellow line)
         # - the full model distribution (yellow histogram)
 
-        result = self.parent.result['result']
-        pre_state = self.parent.result['pre_spike_state']
-        model = self.parent.result['model']
+        result = self.parent.result.result
+        pre_state = self.parent.result.pre_spike_state
+        model = self.parent.result.model
         i = pts[0].index()
         state = pre_state[i]
         expected_amp = result[i]['expected_amplitude']
