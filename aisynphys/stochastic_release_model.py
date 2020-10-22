@@ -442,6 +442,81 @@ class StochasticReleaseModelResult:
         p.update(self.optimized_params)
         return p
 
+    def events_by_recording(self, require_contiguous=True):
+        """Return event ids grouped by recording.
+
+        Parameters
+        ----------
+        require_contiguous : bool
+            If True, only return the IDs of events for which a complete train of events is available up to that point.
+            (for example, if we have a 12-pulse train but pule 5 is missing, then only pulses 1-4 will be included in the output)
+
+        Returns
+        -------
+        recs : list
+            Each item in the returned list is a list of event IDs, all of which originated from the same recording.
+        """
+        spikes = self.result['spike_time']
+        amps = self.result['amplitude']
+        recs = []
+        last_rec_id = None
+        last_pulse_n = 0
+        for i in range(len(self.result)):
+            rec_id = self.event_meta['sync_rec_ext_id'][i]
+            if rec_id != last_rec_id:
+                last_rec_id = rec_id
+                if len(recs) == 0 or len(recs[-1]) > 0:
+                    recs.append([])
+                last_pulse_n = 0
+            pulse_n = self.event_meta['pulse_number'][i]
+            if not require_contiguous or (pulse_n == last_pulse_n + 1 and np.isfinite(spikes[i]) and np.isfinite(amps[i])):
+                recs[-1].append(i)
+                last_pulse_n = pulse_n
+        return recs
+
+    def events_by_stimulus(self, require_contiguous=True):
+        """Return a structure giving event IDs grouped by stimulus parameters.
+
+        Structure like::
+
+            {induction_freq: {recovery_delay: [[a1, a2, ..a12], [b1, b2, ..b12], ...], ...}, ...}
+        """
+        recs = self.events_by_recording(require_contiguous)
+        meta = self.event_meta
+        
+        trains = {}
+        for rec in recs:
+            i = rec[0]
+            ind_f = meta['induction_frequency'][i]
+            rec_d = meta['recovery_delay'][i]
+            ind_trains = trains.setdefault(ind_f, {})
+            rec_trains = ind_trains.setdefault(rec_d, [])
+            rec_trains.append(rec)
+
+        return trains
+
+
+        # current_sweep = None
+        # skip_sweep = False
+        # current_train = []
+        # for i in range(len(amps)):
+        #     sweep_id = meta['sync_rec_ext_id'][i]
+        #     ind_f = meta['induction_frequency'][i]
+        #     rec_d = meta['recovery_delay'][i]
+        #     if sweep_id != current_sweep:
+        #         skip_sweep = False
+        #         current_sweep = sweep_id
+        #         current_train = []
+        #         ind_trains = trains.setdefault(ind_f, {})
+        #         rec_trains = ind_trains.setdefault(rec_d, [])
+        #         rec_trains.append(current_train)
+        #     if skip_sweep:
+        #         continue
+        #     if not np.isfinite(amps[i]) or not np.isfinite(spikes[i]):
+        #         skip_sweep = True
+        #         continue
+        #     current_train.append(amps[i])
+
     def __getstate__(self):
         return {k: getattr(self, k) for k in self.pickle_attributes}
 

@@ -428,19 +428,7 @@ class ModelEventCorrelationPlot(ModelResultView):
 
         # this analysis relies on repeated structures in the stimulus, so we need to reconstruct
         # these from the event metadata
-        recs = []
-        last_rec_id = None
-        last_pulse_n = 0
-        for i in range(len(spikes)):
-            rec_id = result.event_meta['sync_rec_ext_id'][i]
-            if rec_id != last_rec_id:
-                last_rec_id = rec_id
-                recs.append([])
-                last_pulse_n = 0
-            pulse_n = result.event_meta['pulse_number'][i]
-            if pulse_n == last_pulse_n + 1 and np.isfinite(amps[i]):
-                recs[-1].append(i)
-                last_pulse_n = pulse_n
+        recs = result.events_by_recording(require_contiguous=True)
 
         for i in range(3):
             n = (i + 1) * 2
@@ -472,7 +460,8 @@ class ModelInductionPlot(ModelResultView):
     def __init__(self, parent):
         ModelResultView.__init__(self, parent)
         self.lw = pg.GraphicsLayoutWidget()
-        self.ind_plots = [self.lw.addPlot(0, 0), self.lw.addPlot(1, 0), self.lw.addPlot(2, 0)]
+        self.induction_freqs = [10, 20, 50, 100]
+        self.ind_plots = [self.lw.addPlot(i, 0, labels={'left': f'{freq:d}Hz'}) for i,freq in enumerate(self.induction_freqs)]
         self.layout.addWidget(self.lw)
         
     def update_display(self):
@@ -482,41 +471,19 @@ class ModelInductionPlot(ModelResultView):
         amps = result.result['amplitude']
         meta = result.event_meta
         
-        # self.corr_plot.clear()
-        
         # generate a list of all trains sorted by stimulus
-        trains = {}  # {ind_f: {rec_d: [[a1, a2, ..a12], [b1, b2, ..b12], ...], ...}, ...}
-        current_sweep = None
-        skip_sweep = False
-        current_train = []
-        for i in range(len(amps)):
-            sweep_id = meta['sync_rec_ext_id'][i]
-            ind_f = meta['induction_frequency'][i]
-            rec_d = meta['recovery_delay'][i]
-            if sweep_id != current_sweep:
-                skip_sweep = False
-                current_sweep = sweep_id
-                current_train = []
-                ind_trains = trains.setdefault(ind_f, {})
-                rec_trains = ind_trains.setdefault(rec_d, [])
-                rec_trains.append(current_train)
-            if skip_sweep:
-                continue
-            if not np.isfinite(amps[i]) or not np.isfinite(spikes[i]):
-                skip_sweep = True
-                continue
-            current_train.append(amps[i])
+        trains = result.events_by_stimulus()
 
         # scatter plots of event amplitudes sorted by pulse number
-        for ind_i, ind_f in enumerate([20, 50, 100]):
+        for ind_i, ind_f in enumerate(self.induction_freqs):
             ind_trains = trains.get(ind_f, {})
             
             # collect all induction events by pulse number
             ind_pulses = [[] for i in range(12)]
             for rec_d, rec_trains in ind_trains.items():
                 for train in rec_trains:
-                    for i,amp in enumerate(train):
-                        ind_pulses[i].append(amp)
+                    for i,ev_ind in enumerate(train):
+                        ind_pulses[i].append(amps[ev_ind])
                         
             x = []
             y = []
@@ -540,27 +507,3 @@ class ModelInductionPlot(ModelResultView):
             
             expected_amps = mean_result.result['expected_amplitude']
             self.ind_plots[ind_i].plot(expected_amps, pen='w', symbol='d', symbolBrush='y')
-
-
-
-            # # normalize events by model prediction
-            # x = []
-            # y = []
-            # for rec_d, rec_trains in ind_trains.items():
-            #     for train in rec_trains:
-            #         train = [t - expected_amps[i] for i,t in enumerate(train)]
-            #         for i in range(1, len(train)):
-            #             x.append(train[i-1])
-            #             y.append(train[i])
-            # x = np.array(x)
-            # y = np.array(y)
-            
-            # y1 = y[x<0]
-            # y2 = y[x>0]
-            # x1 = pg.pseudoScatter(y1, bidir=True)
-            # x2 = pg.pseudoScatter(y2, bidir=True)
-            # x1 = 0.25 * x1 / x1.max()
-            # x2 = 0.25 * x2 / x2.max()
-            # self.corr_plot.plot(x1, y1, pen=None, symbol='o')
-            # self.corr_plot.plot(x2 + 1, y2, pen=None, symbol='o')
-            # # self.corr_plot.plot(x, y, pen=None, symbol='o', symbolBrush=(ind_i, 4))
