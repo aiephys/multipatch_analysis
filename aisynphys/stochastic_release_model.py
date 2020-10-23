@@ -11,7 +11,7 @@ import scipy.optimize
 # lets us quickly disable jit for debugging:
 def _fake_jit(**kwds):
     return lambda fn: fn
-#jit = _fake_jit    
+#jit = _fake_jit
 jit = numba.jit
 
 
@@ -229,16 +229,20 @@ class StochasticReleaseModel(object):
         pre_spike_state = np.full(len(spike_times), np.nan, dtype=self.state_dtype)
         post_spike_state = np.full(len(spike_times), np.nan, dtype=self.state_dtype)
         
-        self._run_model(
-            spike_times=spike_times, 
-            amplitudes=amplitudes, 
-            result=result, 
-            pre_spike_state=pre_spike_state, 
-            post_spike_state=post_spike_state, 
-            missing_event_penalty=self.missing_event_penalty,
-            use_expectation=use_expectation,
-            **params,
-        )
+        try:
+            self._run_model(
+                spike_times=spike_times, 
+                amplitudes=amplitudes, 
+                result=result, 
+                pre_spike_state=pre_spike_state, 
+                post_spike_state=post_spike_state, 
+                missing_event_penalty=self.missing_event_penalty,
+                use_expectation=use_expectation,
+                **params,
+            )
+        except Exception as exc:
+            print("Error with params:", params)
+            raise
         
         # scalar representation of overall likelihood
         likelihood = np.exp(np.nanmean(np.log(result['likelihood'] + 0.1)))
@@ -323,9 +327,12 @@ class StochasticReleaseModel(object):
                 # recover from desensitization
                 s_recovery = np.exp(-dt / desensitization_recovery_tau)
                 sensitization += (1.0 - sensitization) * (1.0 - s_recovery)
+                assert np.isfinite(sensitization)
                 
-                # predict most likely amplitude for this spike (just for show)
                 effective_available_vesicle = max(0, available_vesicle)
+                effective_available_vesicles = max(0, min(n_release_sites, int(np.round(available_vesicle))))
+
+                # predict most likely amplitude for this spike (just for show)
                 expected_amplitude = release_expectation_value(
                     effective_available_vesicle,
                     release_probability,
@@ -340,7 +347,7 @@ class StochasticReleaseModel(object):
                     else:
                         # select a random amplitude from distribution
                         amplitude = release_random_value(
-                            effective_available_vesicle,
+                            effective_available_vesicles,
                             release_probability, 
                             sensitization,
                             mini_amplitude,
@@ -353,8 +360,7 @@ class StochasticReleaseModel(object):
                 pre_sensitization = sensitization
 
                 # measure likelihood of seeing this response amplitude
-                av = max(0, min(n_release_sites, int(np.round(available_vesicle))))
-                likelihood = release_likelihood_scalar(amplitude, av, release_probability, sensitization, mini_amplitude, mini_amplitude_cv, measurement_stdev)
+                likelihood = release_likelihood_scalar(amplitude, effective_available_vesicles, release_probability, sensitization, mini_amplitude, mini_amplitude_cv, measurement_stdev)
                 # prof('likelihood')
                 
                 # release vesicles
@@ -370,7 +376,8 @@ class StochasticReleaseModel(object):
                 # prof('update state')
 
                 # apply spike-induced desensitization of postsynaptic receptors
-                sensitization *= (1.0 - desensitization_amount) ** depleted_vesicle
+                sensitization *= (1.0 - desensitization_amount) ** max(0, depleted_vesicle)
+                assert np.isfinite(sensitization)
 
                 # ignore likelihood for this event if it was too close to an unmeasurable response
                 if t - last_nan_time < missing_event_penalty:

@@ -9,6 +9,10 @@ from aisynphys.stochastic_release_model import StochasticReleaseModel
 from aisynphys.ui.ndslicer import NDSlicer
 
 
+data_color = (0, 128, 255)
+model_color = (255, 128, 0)
+
+
 class ModelDisplayWidget(QtGui.QWidget):
     """UI containing an NDSlicer for visualizing the complete model parameter space, and
     a ModelSingleResultWidget for showing more detailed results from individual points in the parameter space.
@@ -28,8 +32,8 @@ class ModelDisplayWidget(QtGui.QWidget):
         v1['axis 0'] = 'n_release_sites'
         v1['axis 1'] = 'base_release_probability'
         v2 = self.slicer.params.child('2D views').addNew()
-        v2['axis 0'] = 'vesicle_recovery_tau'
-        v2['axis 1'] = 'facilitation_recovery_tau'
+        v2['axis 0'] = 'desensitization_amount'
+        v2['axis 1'] = 'base_release_probability'
         self.slicer.dockarea.moveDock(v2.viewer.dock, 'bottom', v1.viewer.dock)
         v3 = self.slicer.params.child('2D views').addNew()
         v3['axis 0'] = 'vesicle_recovery_tau'
@@ -244,7 +248,7 @@ class ModelEventPlot(ModelResultView):
             'amplitude': self.event_view.addPlot(0, 0, title="event amplitude vs compressed time"),
             'likelihood': self.event_view.addPlot(1, 0, title="model likelihood vs compressed time"),
         }
-        self.state_keys = ['release_probability', 'sensitization']
+        self.state_keys = ['available_vesicle', 'release_probability', 'sensitization']
         for i,state_key in enumerate(self.state_keys):
             self.plots[state_key] = self.event_view.addPlot(2+i, 0, title=state_key + " vs compressed time")
         
@@ -264,6 +268,7 @@ class ModelEventPlot(ModelResultView):
         self.plot_checks = {
             'amplitude': QtGui.QCheckBox('amplitude'),
             'likelihood': QtGui.QCheckBox('likelihood'),
+            'available_vesicle': QtGui.QCheckBox('vesicle pool'),
             'release_probability': QtGui.QCheckBox('release probability'),
             'sensitization': QtGui.QCheckBox('sensitization'),
         }
@@ -459,7 +464,7 @@ class ModelEventCorrelationPlot(ModelResultView):
                 x = selected_amps[:, :n//2].mean(axis=1)
                 y = selected_amps[:, n//2:].mean(axis=1)
 
-                self.plots[i][j].plot(x, y, pen=None, symbol='o')
+                self.plots[i][j].plot(x, y, pen=None, symbol='o', symbolPen=None, symbolBrush=[data_color, model_color][j])
 
                 # plot regression
                 slope, intercept, r, p, stderr = scipy.stats.linregress(x, y)
@@ -520,8 +525,8 @@ class ModelInductionPlot(ModelResultView):
                     x.extend(i + xs * sign)
 
             self.ind_plots[ind_i].clear()
-            self.ind_plots[ind_i].plot(real_x, real_y, pen=None, symbol='o', symbolPen=None, symbolBrush=(0, 128, 255, 200), symbolSize=5)
-            self.ind_plots[ind_i].plot(np.array(model_x)+0.1, model_y, pen=None, symbol='o', symbolPen=None, symbolBrush=(255, 128, 0, 200), symbolSize=5, zValue=-1)
+            self.ind_plots[ind_i].plot(real_x, real_y, pen=None, symbol='o', symbolPen=None, symbolBrush=data_color+(200,), symbolSize=5)
+            self.ind_plots[ind_i].plot(np.array(model_x)+0.1, model_y, pen=None, symbol='o', symbolPen=None, symbolBrush=model_color+(200,), symbolSize=5, zValue=-1)
             
             # re-model based on mean amplitudes
             mean_times = np.arange(12) / ind_f
@@ -531,4 +536,4 @@ class ModelInductionPlot(ModelResultView):
             mean_result = model.run_model(mean_times, amplitudes='expected', params=params)
             
             expected_amps = mean_result.result['expected_amplitude']
-            self.ind_plots[ind_i].plot(expected_amps, pen=(255, 255, 255, 50), symbol='d', symbolBrush=(255, 255, 0, 50), symbolPen=None, zValue=-10)
+            self.ind_plots[ind_i].plot(expected_amps, pen=model_color+(50,), symbol='d', symbolBrush=model_color+(50,), symbolPen=None, zValue=-10)
