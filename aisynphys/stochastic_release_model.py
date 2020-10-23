@@ -261,7 +261,7 @@ class StochasticReleaseModel(object):
             params = self.params.copy()
         
         available_vesicles = int(np.clip(np.round(state['available_vesicle']), 0, params['n_release_sites']))
-        return release_likelihood(amplitudes, available_vesicles, state['release_probability'], params['mini_amplitude'], params['mini_amplitude_cv'], params['measurement_stdev'])
+        return release_likelihood(amplitudes, available_vesicles, state['release_probability'], state['sensitization'], params['mini_amplitude'], params['mini_amplitude_cv'], params['measurement_stdev'])
 
     @staticmethod
     @jit(nopython=True)
@@ -326,11 +326,11 @@ class StochasticReleaseModel(object):
                 
                 # predict most likely amplitude for this spike (just for show)
                 effective_available_vesicle = max(0, available_vesicle)
-                effective_mini_amplitude = mini_amplitude * sensitization
                 expected_amplitude = release_expectation_value(
                     effective_available_vesicle,
-                    release_probability, 
-                    effective_mini_amplitude,
+                    release_probability,
+                    sensitization,
+                    mini_amplitude,
                 )
                 
                 if not have_amps:
@@ -342,7 +342,8 @@ class StochasticReleaseModel(object):
                         amplitude = release_random_value(
                             effective_available_vesicle,
                             release_probability, 
-                            effective_mini_amplitude,
+                            sensitization,
+                            mini_amplitude,
                             mini_amplitude_cv,
                             measurement_stdev
                         )
@@ -353,7 +354,7 @@ class StochasticReleaseModel(object):
 
                 # measure likelihood of seeing this response amplitude
                 av = max(0, min(n_release_sites, int(np.round(available_vesicle))))
-                likelihood = release_likelihood_scalar(amplitude, av, release_probability, mini_amplitude, mini_amplitude_cv, measurement_stdev)
+                likelihood = release_likelihood_scalar(amplitude, av, release_probability, sensitization, mini_amplitude, mini_amplitude_cv, measurement_stdev)
                 # prof('likelihood')
                 
                 # release vesicles
@@ -526,7 +527,7 @@ class StochasticReleaseModelResult:
 
 
 @jit(nopython=True)
-def release_likelihood(amplitudes, available_vesicles, release_probability, mini_amplitude, mini_amplitude_cv, measurement_stdev):
+def release_likelihood(amplitudes, available_vesicles, release_probability, sensitization, mini_amplitude, mini_amplitude_cv, measurement_stdev):
     """Return a measure of the likelihood that a synaptic response will have certain amplitude(s),
     given the state parameters for the synapse.
     
@@ -538,6 +539,8 @@ def release_likelihood(amplitudes, available_vesicles, release_probability, mini
         Number of vesicles available for release
     release_probability : float
         Probability for each available vesicle to be released
+    sensitization : float
+        Sensitization state (0-1); smaller values decrease the effective mini amplitude.
     mini_amplitude : float
         Mean amplitude of response evoked by a single vesicle release
     mini_amplitude_cv : float
@@ -564,23 +567,26 @@ def release_likelihood(amplitudes, available_vesicles, release_probability, mini
     3. The total likelihood is the sum of likelihoods for all possible values of nR.
     """
     return np.array([
-        release_likelihood_scalar(amplitude, available_vesicles, release_probability, mini_amplitude, mini_amplitude_cv, measurement_stdev) 
+        release_likelihood_scalar(amplitude, available_vesicles, release_probability, sensitization, mini_amplitude, mini_amplitude_cv, measurement_stdev) 
         for amplitude in amplitudes])
 
 
 @jit(nopython=True)
-def release_likelihood_scalar(amplitude, available_vesicles, release_probability, mini_amplitude, mini_amplitude_cv, measurement_stdev):
+def release_likelihood_scalar(amplitude, available_vesicles, release_probability, sensitization, mini_amplitude, mini_amplitude_cv, measurement_stdev):
     """Same as release_likelihood, but optimized for a scalar amplitude argument"""
     n_vesicles = np.arange(available_vesicles + 1)
     
     # probability of releasing n_vesicles given available_vesicles and release_probability
     p_n = binom_pmf_range(available_vesicles, release_probability, available_vesicles + 1)
     
+    # apply desensitization
+    effective_mini_amplitude = mini_amplitude * sensitization
+
     # expected amplitude for n_vesicles
-    amp_mean = n_vesicles * mini_amplitude
+    amp_mean = n_vesicles * effective_mini_amplitude
     
     # amplitude stdev increases by sqrt(n) with number of released vesicles
-    amp_stdev = ((mini_amplitude * mini_amplitude_cv)**2 * n_vesicles + measurement_stdev**2) ** 0.5
+    amp_stdev = ((effective_mini_amplitude * mini_amplitude_cv)**2 * n_vesicles + measurement_stdev**2) ** 0.5
     
     # distributions of amplitudes expected for n_vesicles
     amp_prob = p_n * normal_pdf(amp_mean, amp_stdev, amplitude)
@@ -607,22 +613,24 @@ def release_likelihood_scalar(amplitude, available_vesicles, release_probability
 #     return amplitudes * sign, release_likelihood(amplitudes, available_vesicles, release_probability, mini_amplitude, mini_amplitude_cv, measurement_stdev) * da
 
 @jit(nopython=True)
-def release_expectation_value(available_vesicles, release_probability, mini_amplitude):
+def release_expectation_value(available_vesicles, release_probability, sensitization, mini_amplitude):
     """Return the expectation value for the release amplitude distribution defined by the arguments.
     """
-    return binom_mean(available_vesicles, release_probability) * mini_amplitude
+    return binom_mean(available_vesicles, release_probability) * mini_amplitude * sensitization
 
 
 @jit(nopython=True)
 def release_random_value(
     available_vesicle,
     release_probability, 
+    sensitization,
     mini_amplitude,
     mini_amplitude_cv,
     measurement_stdev):
         n_vesicles = np.random.binomial(n=int(available_vesicle), p=release_probability)
-        amp_mean = n_vesicles * mini_amplitude
-        amp_stdev = ((mini_amplitude * mini_amplitude_cv)**2 * n_vesicles + measurement_stdev**2) ** 0.5
+        effective_mini_amp = mini_amplitude * sensitization
+        amp_mean = n_vesicles * effective_mini_amp
+        amp_stdev = ((effective_mini_amp * mini_amplitude_cv)**2 * n_vesicles + measurement_stdev**2) ** 0.5
         return np.random.normal(loc=amp_mean, scale=amp_stdev)
 
 
@@ -670,7 +678,7 @@ def binom_mean(n, p):
 
 def estimate_mini_amplitude(amplitudes, params):
     avg_amplitude = np.nanmean(amplitudes)
-    expected = release_expectation_value(params['n_release_sites'], params['base_release_probability'], 1)
+    expected = release_expectation_value(params['n_release_sites'], params['base_release_probability'], sensitization=1, mini_amplitude=1)
     init_amp = avg_amplitude / expected
     
     # takes care of cases where the first peak in the distribution is larger than any measured events;
@@ -926,7 +934,7 @@ class StochasticModelRunner:
             #'mini_amplitude': np.nanmean(amplitudes) * 1.2**np.arange(-12, 24, 2),
 
             'n_release_sites': np.array([1, 2, 4, 8, 16, 32, 64]),
-            'base_release_probability': np.array([0.00625, 0.0125, 0.025, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0]),
+            'base_release_probability': np.array([0.025, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0]),
             'mini_amplitude_cv': np.array([0.05, 0.1, 0.2, 0.4, 0.8]),
             'measurement_stdev': np.nanstd(bg_amplitudes),
 
@@ -938,12 +946,12 @@ class StochasticModelRunner:
             # 'facilitation_amount': np.array([0, 0.5]),
             # 'facilitation_recovery_tau': np.array([0.1, 0.5]),
 
-            # 'desensitization_amount': np.array([0.0, 0.00625, 0.025, 0.05, 0.1, 0.2, 0.4]),
-            # 'desensitization_recovery_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 1.28]),
+            'desensitization_amount': np.array([0.0, 0.05, 0.1, 0.2, 0.4, 0.8]),
+            'desensitization_recovery_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 1.28]),
             # 'desensitization_amount': np.array([0.0, 0.1]),
             # 'desensitization_recovery_tau': np.array([0.01, 0.1]),
-            'desensitization_amount': 0,
-            'desensitization_recovery_tau': 1,
+            # 'desensitization_amount': 0,
+            # 'desensitization_recovery_tau': 1,
         }
         
         # sanity checking

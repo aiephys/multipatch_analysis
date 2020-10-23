@@ -484,7 +484,6 @@ class TwoDViewer(Viewer, pg.GraphicsLayoutWidget):
         line = self.sender()
         ax = self.selected_axes[line._viewer_axis]
         axes = {ax: self.data_axes[ax].value_at(int(np.round(line.value())))}
-        print("line mve:", axes)
         self.selection_changing.emit(self, axes)
 
     def line_move_finished(self):
