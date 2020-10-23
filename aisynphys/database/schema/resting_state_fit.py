@@ -38,8 +38,8 @@ RestingStateFit = make_table(
     ]
 )
 
-Synapse.resting_state_fit = relationship(RestingStateFit, back_populates="synapse", cascade="delete", single_parent=True, uselist=False)
+Synapse.resting_state_fit = relationship(RestingStateFit, back_populates="synapse", cascade="save-update, delete", single_parent=True, uselist=False)
 RestingStateFit.synapse = relationship(Synapse, back_populates="resting_state_fit", single_parent=True)
 
-PolySynapse.resting_state_fit = relationship(RestingStateFit, back_populates="poly_synapse", cascade="delete", single_parent=True, uselist=False)
+PolySynapse.resting_state_fit = relationship(RestingStateFit, back_populates="poly_synapse", cascade="save-update, delete", single_parent=True, uselist=False)
 RestingStateFit.poly_synapse = relationship(PolySynapse, back_populates="resting_state_fit", single_parent=True)

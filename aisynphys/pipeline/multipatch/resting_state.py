@@ -48,8 +48,8 @@ class RestingStatePipelineModule(MultipatchPipelineModule):
             if pair.has_synapse:
                 synapse = pair.synapse
                 fit_rec = db.RestingStateFit(synapse=synapse)
-            elif pair.has_polysynapse:
-                synapse = pair.poly_synapse
+            elif pair.has_polysynapse and len(pair.poly_synapse) == 1:
+                synapse = pair.poly_synapse[0]
                 fit_rec = db.RestingStateFit(poly_synapse=synapse)
 
             # get resting-state response fits for this synapse            
