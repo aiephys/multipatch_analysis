@@ -39,10 +39,18 @@ class RestingStatePipelineModule(MultipatchPipelineModule):
             if pair.has_synapse is not True and pair.has_polysynapse is not True:
                 continue
 
-            synapses = [pair.synapse] + pair.poly_synapse
-            for synapse in synapses:
-                if synapse is None:
-                    continue
+            # we only calculating resting state if the pair has one identified
+            # synapse, be that mono or polysynaptic
+            if pair.has_synapse and pair.has_polysynapse:
+                continue
+
+            # write out a db record 
+            if pair.has_synapse:
+                synapse = pair.synapse
+                fit_rec = db.RestingStateFit(synapse=synapse)
+            elif pair.has_polysynapse:
+                synapse = pair.poly_synapse
+                fit_rec = db.RestingStateFit(poly_synapse=synapse)
 
             # get resting-state response fits for this synapse            
             result = resting_state_response_fits(synapse, rest_duration=minimum_rest_duration)
@@ -50,11 +58,7 @@ class RestingStatePipelineModule(MultipatchPipelineModule):
             if result is None:
                 continue
             
-            # write out a db record 
-            if synapse.__tablename__ == 'synapse':
-                fit_rec = db.RestingStateFit(synapse=synapse)
-            elif synapse.__tablename__ == 'poly_synapse':
-                fit_rec = db.RestingStateFit(poly_synapse=synapse)
+            
             for mode in ('ic', 'vc'):
                 fit = result[mode]['fit']
                 if fit is None:

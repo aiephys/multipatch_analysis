@@ -95,7 +95,7 @@ class SynapsePipelineModule(MultipatchPipelineModule):
                 all_errors.extend(errors)
 
         session.commit()
-        return errors
+        return all_errors
         
     def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.
