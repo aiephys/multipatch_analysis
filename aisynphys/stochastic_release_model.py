@@ -54,7 +54,7 @@ class StochasticReleaseModel(object):
     ]
     
     state_dtype = [
-        ('available_vesicle', float),
+        ('vesicle_pool', float),
         ('release_probability', float),
         ('sensitization', float),
     ]
@@ -264,7 +264,7 @@ class StochasticReleaseModel(object):
         if params is None:
             params = self.params.copy()
         
-        available_vesicles = int(np.clip(np.round(state['available_vesicle']), 0, params['n_release_sites']))
+        available_vesicles = int(np.clip(np.round(state['vesicle_pool']), 0, params['n_release_sites']))
         return release_likelihood(amplitudes, available_vesicles, state['release_probability'], state['sensitization'], params['mini_amplitude'], params['mini_amplitude_cv'], params['measurement_stdev'])
 
     @staticmethod
@@ -289,13 +289,13 @@ class StochasticReleaseModel(object):
                     ):
 
         # initialize state parameters:
-        # available_vesicles is a float as a means of avoiding the need to model stochastic vesicle docking;
+        # vesicle_pool is a float as a means of avoiding the need to model stochastic vesicle docking;
         # we just assume that recovery is a continuous process. (maybe we should just call this "neurotransmitter"
         # instead)
         
         have_amps = len(amplitudes) > 0
         
-        available_vesicle = n_release_sites
+        vesicle_pool = n_release_sites
         release_probability = base_release_probability
         sensitization = 1.0
         
@@ -317,7 +317,7 @@ class StochasticReleaseModel(object):
 
                 # recover vesicles up to the current timepoint
                 v_recovery = np.exp(-dt / vesicle_recovery_tau)
-                available_vesicle += (n_release_sites - available_vesicle) * (1.0 - v_recovery)
+                vesicle_pool += (n_release_sites - vesicle_pool) * (1.0 - v_recovery)
 
                 # apply recovery from facilitation toward baseline release probability
                 f_recovery = np.exp(-dt / facilitation_recovery_tau)
@@ -329,8 +329,8 @@ class StochasticReleaseModel(object):
                 sensitization += (1.0 - sensitization) * (1.0 - s_recovery)
                 assert np.isfinite(sensitization)
                 
-                effective_available_vesicle = max(0, available_vesicle)
-                effective_available_vesicles = max(0, min(n_release_sites, int(np.round(available_vesicle))))
+                effective_available_vesicle = max(0, vesicle_pool)
+                effective_available_vesicles = max(0, min(n_release_sites, int(np.round(vesicle_pool))))
 
                 # predict most likely amplitude for this spike (just for show)
                 expected_amplitude = release_expectation_value(
@@ -355,7 +355,7 @@ class StochasticReleaseModel(object):
                             measurement_stdev
                         )
 
-                pre_available_vesicle = available_vesicle
+                pre_vesicle_pool = vesicle_pool
                 pre_release_probability = release_probability
                 pre_sensitization = sensitization
 
@@ -364,12 +364,12 @@ class StochasticReleaseModel(object):
                 # prof('likelihood')
                 
                 # release vesicles
-                # note: we allow available_vesicle to become negative because this helps to ensure
+                # note: we allow vesicle_pool to become negative because this helps to ensure
                 # that the overall likelihood will be low for such models
                 depleted_vesicle = amplitude / mini_amplitude
-                available_vesicle -= depleted_vesicle
+                vesicle_pool -= depleted_vesicle
 
-                assert np.isfinite(available_vesicle)
+                assert np.isfinite(vesicle_pool)
                 
                 # apply spike-induced facilitation in release probability
                 release_probability += (1.0 - release_probability) * facilitation_amount
@@ -384,18 +384,17 @@ class StochasticReleaseModel(object):
                     likelihood = np.nan
 
                 # record model state immediately before spike
-                pre_spike_state[i]['available_vesicle'] = pre_available_vesicle
+                pre_spike_state[i]['vesicle_pool'] = pre_vesicle_pool
                 pre_spike_state[i]['release_probability'] = pre_release_probability
                 pre_spike_state[i]['sensitization'] = pre_sensitization
                     
                 # record model state immediately after spike
-                post_spike_state[i]['available_vesicle'] = available_vesicle
+                post_spike_state[i]['vesicle_pool'] = vesicle_pool
                 post_spike_state[i]['release_probability'] = release_probability
                 post_spike_state[i]['sensitization'] = sensitization
                 # prof('record')
             
-            if np.isnan(available_vesicle):
-                raise Exception("NaNs where they shouldn't be")
+            assert np.isfinite(vesicle_pool), "NaNs where they shouldn't be"
             
             # record results
             result[i]['spike_time'] = t
@@ -628,13 +627,13 @@ def release_expectation_value(available_vesicles, release_probability, sensitiza
 
 @jit(nopython=True)
 def release_random_value(
-    available_vesicle,
+    available_vesicles,
     release_probability, 
     sensitization,
     mini_amplitude,
     mini_amplitude_cv,
     measurement_stdev):
-        n_vesicles = np.random.binomial(n=int(available_vesicle), p=release_probability)
+        n_vesicles = np.random.binomial(n=available_vesicles, p=release_probability)
         effective_mini_amp = mini_amplitude * sensitization
         amp_mean = n_vesicles * effective_mini_amp
         amp_stdev = ((effective_mini_amp * mini_amplitude_cv)**2 * n_vesicles + measurement_stdev**2) ** 0.5

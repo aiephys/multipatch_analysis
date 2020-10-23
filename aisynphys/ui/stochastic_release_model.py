@@ -248,7 +248,7 @@ class ModelEventPlot(ModelResultView):
             'amplitude': self.event_view.addPlot(0, 0, title="event amplitude vs compressed time"),
             'likelihood': self.event_view.addPlot(1, 0, title="model likelihood vs compressed time"),
         }
-        self.state_keys = ['available_vesicle', 'release_probability', 'sensitization']
+        self.state_keys = ['vesicle_pool', 'release_probability', 'sensitization']
         for i,state_key in enumerate(self.state_keys):
             self.plots[state_key] = self.event_view.addPlot(2+i, 0, title=state_key + " vs compressed time")
         
@@ -268,7 +268,7 @@ class ModelEventPlot(ModelResultView):
         self.plot_checks = {
             'amplitude': QtGui.QCheckBox('amplitude'),
             'likelihood': QtGui.QCheckBox('likelihood'),
-            'available_vesicle': QtGui.QCheckBox('vesicle pool'),
+            'vesicle_pool': QtGui.QCheckBox('vesicle pool'),
             'release_probability': QtGui.QCheckBox('release probability'),
             'sensitization': QtGui.QCheckBox('sensitization'),
         }
