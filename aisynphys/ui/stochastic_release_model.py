@@ -57,9 +57,10 @@ class ModelDisplayWidget(QtGui.QWidget):
         self.model_runner = model_runner
         self.param_space = model_runner.param_space
         
-        result_img = np.zeros(self.param_space.result.shape)
-        for ind in np.ndindex(result_img.shape):
-            result_img[ind] = self.param_space.result[ind].likelihood
+        # result_img = np.zeros(self.param_space.result.shape)
+        # for ind in np.ndindex(result_img.shape):
+        #     result_img[ind] = self.param_space.result[ind].likelihood
+        result_img = self.param_space.result['likelihood']
         self.slicer.set_data(result_img)
         self.results = result_img
         
@@ -99,8 +100,9 @@ class ModelDisplayWidget(QtGui.QWidget):
 
     def select_result(self, index, update_slicer=True):
         result = self.get_result(index)
-        params = result.params.copy()
-        params.update(self.param_space[index])
+        # params = result.params.copy()
+        # params.update(self.param_space[index])
+        params = self.param_space[index]
         
         # re-run the model to get the complete results
         full_result = self.model_runner.run_model(params, show=True)

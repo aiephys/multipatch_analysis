@@ -714,15 +714,13 @@ class ParameterSpace(object):
             if np.isscalar(val):
                 static_params[param] = params.pop(param)
         self.static_params = static_params
-        
         self.param_order = list(params.keys())
-        shape = tuple([len(params[p]) for p in self.param_order])
-        
-        self.result = np.zeros(shape, dtype=object)
+        self.shape = tuple([len(self.params[p]) for p in self.param_order])
+        self.result = None
         
     def axes(self):
         return OrderedDict([(ax, {'values': self.params[ax]}) for ax in self.param_order])
-        
+
     def run(self, func, workers=None, **kwds):
         """Run *func* in parallel over the entire parameter space, storing
         results into self.result.
@@ -731,8 +729,14 @@ class ParameterSpace(object):
         """
         if workers is None:
             workers = multiprocessing.cpu_count()
-        all_inds = list(np.ndindex(self.result.shape))
-        all_params = [self[inds] for inds in all_inds] 
+        all_inds = list(np.ndindex(self.shape))
+        all_params = [self[inds] for inds in all_inds]
+
+        example_result = func(all_params[0], **kwds)
+        opt_keys = list(example_result.optimized_params.keys())
+        dtype = [(k, 'float32') for k in ['likelihood'] + opt_keys]
+        self.result = np.empty(self.shape, dtype=dtype)
+
         if workers > 1:
             # from pyqtgraph.multiprocess import Parallelize
             # with Parallelize(enumerate(all_inds), results=self.result, progressDialog={'labelText':'synapticulating...', 'nested':True}, workers=workers) as tasker:
@@ -748,13 +752,14 @@ class ParameterSpace(object):
                     if dlg.wasCanceled():
                         pool.terminate()
                         raise Exception("Synapticulation cancelled. No refunds.")
-                    self.result[all_inds[i]] = r
+                    self.result[all_inds[i]] = (r.likelihood,) + tuple([r.optimized_params[k] for k in opt_keys])
         else:
             import pyqtgraph as pg
             with pg.ProgressDialog('synapticulating (serial)...', nested=True, maximum=len(all_inds)) as dlg:
                 for inds in all_inds:
                     params = self[inds]
-                    self.result[inds] = func(params, **kwds)
+                    r = func(params, **kwds)
+                    self.result[inds] = (r.likelihood,) + tuple([r.optimized_params[k] for k in opt_keys])
                     dlg += 1
                     assert not dlg.wasCanceled()
         
@@ -849,7 +854,7 @@ class StochasticModelRunner:
         
         return param_space
 
-    def store_result(self, cache_file):    
+    def store_result(self, cache_file):
         tmp = cache_file + '.tmp'
         pickle.dump(self.param_space, open(tmp, 'wb'))
         os.rename(tmp, cache_file)
@@ -939,7 +944,7 @@ class StochasticModelRunner:
             # If mini_amplitude is commented out here, then it will be optimized automatically by the model:
             #'mini_amplitude': np.nanmean(amplitudes) * 1.2**np.arange(-12, 24, 2),
 
-            'n_release_sites': np.array([1, 2, 4, 8, 16, 32, 64]),
+            'n_release_sites': np.array([1, 2, 4, 8, 16, 32]),
             'base_release_probability': np.array([0.025, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0]),
             'mini_amplitude_cv': np.array([0.05, 0.1, 0.2, 0.4, 0.8]),
             'measurement_stdev': np.nanstd(bg_amplitudes),
