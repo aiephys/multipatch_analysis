@@ -36,6 +36,7 @@ class NDSlicer(QtGui.QWidget):
             {'name': 'index', 'type': 'group', 'children': [{'name': ax, 'type': 'int', 'value': self.axes[ax].selection} for ax in self.axes]},
             {'name': 'max project', 'type': 'group', 'children': [{'name': ax, 'type': 'bool', 'value': False} for ax in self.axes]},
             ColorAxisParam(name='color axis', slicer=self),
+            {'name': 'optimize', 'type': 'group', 'children': [{'name': ax, 'type': 'bool', 'value': False} for ax in self.axes]},
             {'name': '1D views', 'type': 'group'},
             MultiAxisParam(ndim=2, slicer=self),
         ])
@@ -123,15 +124,40 @@ class NDSlicer(QtGui.QWidget):
         axes : dict
             Dictionary of {'axis_name': value} pairs specifying the new selection.
         """
+        # update index parameters
         for ax,val in axes.items():
-            # update index parameters
-            with pg.SignalBlock(self.params.child('index').sigTreeStateChanged, self.index_param_changed):
-                self.params['index', ax] = self.axes[ax].index_at(val)
-            self.axes[ax].selection = val
+            self._set_axis_value(ax, val)
+
+        # auto-optimize other parameters if requested
+        optimize_axes = []
+        for k in self.axes:
+            # only optimize axes if they have been marked for optimizatin _and_ they are not being explicitly set here
+            if k not in axes and self.params['optimize', k]:
+                optimize_axes.append(k)
+        if len(optimize_axes) > 0:
+            # find best index for optimized axes
+            index = self.index()
+            opt_data = self.data
+            for i,k in list(enumerate(self.axes.keys()))[::-1]:
+                if k not in optimize_axes:
+                    # take single index for axes that are not being optimized
+                    opt_data = np.take(opt_data, index[k], axis=i)
+            max_ind = np.unravel_index(opt_data.argmax(), opt_data.shape)
+            for i,k in enumerate(optimize_axes):
+                ax = self.axes[k]
+                val = ax.values[max_ind[i]]
+                self._set_axis_value(k, val)
+
+        # process updates
         for viewer in self.viewers:
             viewer.update_selection()
         if emit:
             self.selection_changed.emit(self)
+
+    def _set_axis_value(self, ax, val):
+        with pg.SignalBlock(self.params.child('index').sigTreeStateChanged, self.index_param_changed):
+            self.params['index', ax] = self.axes[ax].index_at(val)
+        self.axes[ax].selection = val
 
     def set_index(self, index):
         """Set currently selected indices on any axes.
@@ -427,6 +453,9 @@ class TwoDViewer(Viewer, pg.GraphicsLayoutWidget):
         self.image.setPos(-0.5, -0.5)
         
         self.lines = [self.plot.addLine(x=0, movable=True), self.plot.addLine(y=0, movable=True)]
+        self.lines[0]._viewer_axis = 0
+        self.lines[1]._viewer_axis = 1
+        
         Viewer.__init__(self, axes)
         for line in self.lines:
             line.sigDragged.connect(self.line_moved)
@@ -452,11 +481,16 @@ class TwoDViewer(Viewer, pg.GraphicsLayoutWidget):
         Viewer.update_selection(self)
 
     def line_moved(self):
-        axes = {ax: self.data_axes[ax].value_at(int(np.round(self.lines[i].value()))) for i,ax in enumerate(self.selected_axes)}
+        line = self.sender()
+        ax = self.selected_axes[line._viewer_axis]
+        axes = {ax: self.data_axes[ax].value_at(int(np.round(line.value())))}
+        print("line mve:", axes)
         self.selection_changing.emit(self, axes)
 
     def line_move_finished(self):
-        axes = {ax: self.data_axes[ax].value_at(int(np.round(self.lines[i].value()))) for i,ax in enumerate(self.selected_axes)}
+        line = self.sender()
+        ax = self.selected_axes[line._viewer_axis]
+        axes = {ax: self.data_axes[ax].value_at(int(np.round(line.value())))}
         self.selection_changed.emit(self, axes)
 
     def update_display(self):

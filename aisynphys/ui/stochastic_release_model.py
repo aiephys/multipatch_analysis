@@ -18,16 +18,11 @@ class ModelDisplayWidget(QtGui.QWidget):
         self.layout = QtGui.QGridLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(self.layout)
-        self.splitter = QtGui.QSplitter(QtCore.Qt.Vertical)
-        self.layout.addWidget(self.splitter)
         
         self.slicer = NDSlicer(model_runner.param_space.axes())
         self.slicer.selection_changed.connect(self.selection_changed)
-        self.splitter.addWidget(self.slicer)
+        self.layout.addWidget(self.slicer)
         
-        self.result_widget = ModelSingleResultWidget()
-        self.splitter.addWidget(self.result_widget)
-
         # set up a few default 2D slicer views
         v1 = self.slicer.params.child('2D views').addNew()
         v1['axis 0'] = 'n_release_sites'
@@ -43,7 +38,12 @@ class ModelDisplayWidget(QtGui.QWidget):
         v4['axis 0'] = 'facilitation_amount'
         v4['axis 1'] = 'facilitation_recovery_tau'
         self.slicer.dockarea.moveDock(v4.viewer.dock, 'bottom', v3.viewer.dock)
-        
+
+        self.result_widget = ModelSingleResultWidget()
+        self.result_dock = pg.dockarea.Dock('model results')
+        self.result_dock.addWidget(self.result_widget)
+        self.slicer.dockarea.addDock(self.result_dock, 'bottom')
+
         # turn on max projection for all parameters by default
         for ch in self.slicer.params.child('max project'):
             if ch.name() == 'synapse':
