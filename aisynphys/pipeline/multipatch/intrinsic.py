@@ -42,7 +42,7 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
         job_id = job['job_id']
 
         # Load experiment from DB
-        expt = db.experiment_from_timestamp(job_id, session=session)
+        expt = db.experiment_from_ext_id(job_id, session=session)
         nwb = expt.data
         if nwb is None:
             raise Exception('No NWB data for this experiment')
@@ -139,6 +139,7 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
             'rheobase': output['rheobase_i'] * 1e-9, #unscale from pA,
             'fi_slope': output['fi_fit_slope'] * 1e-9, #unscale from pA,
             'input_resistance': output['input_resistance'] * 1e6, #unscale from MOhm,
+            'input_resistance_ss': output['input_resistance_ss'] * 1e6, #unscale from MOhm,
             'sag': output['sag'],
             'adaptation_index': output['adapt_mean'],
             'upstroke_downstroke_ratio': output['upstroke_downstroke_ratio_hero'],

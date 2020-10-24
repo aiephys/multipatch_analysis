@@ -15,6 +15,7 @@ Intrinsic = make_table(
         ('rheobase', 'float', 'Current at rheobase', {'index': True}),
         ('fi_slope', 'float', 'Slope of the current-spiking relationship', {'index': True}),
         ('input_resistance', 'float', 'Input resistance of the cell', {'index': True}),
+        ('input_resistance_ss', 'float', '(True) steady-state input resistance of the cell', {'index': True}),
         ('sag', 'float', 'Hyperpolarizing sag measured from ~ -100mV current injection', {'index': True}),
         ('adaptation_index', 'float', 'Average adaptation index', {'index': True}),
         ('upstroke_downstroke_ratio', 'float', 'The upstroke-downstroke ratio of the first spike', {'index': True}),
