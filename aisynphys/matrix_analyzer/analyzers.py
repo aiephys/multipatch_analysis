@@ -338,9 +338,9 @@ class ConnectivityAnalyzer(Analyzer):
             synapse = pair.synapse
             if synapse is None:
                 continue
-            arfs = pair.avg_response_fits
-            latency = pair.synapse.latency
-            syn_typ = pair.synapse.synapse_type
+            arfs = synapse.avg_response_fits
+            latency = synapse.latency
+            syn_typ = synapse.synapse_type
             self.pair_items[pair.id] = []
             trace_itemA = None
             trace_itemB = None

@@ -203,9 +203,10 @@ class SynphysDatabase(Database):
         query = query.outerjoin(self.Slice, self.Experiment.slice_id==self.Slice.id) ## don't want to drop all pairs if we don't have slice or connection strength entries
         query = query.outerjoin(self.SynapsePrediction)
         query = query.outerjoin(self.Synapse)
+        query = query.outerjoin(self.PolySynapse)
         query = query.outerjoin(self.Dynamics)
         query = query.outerjoin(self.GapJunction)
-        query = query.outerjoin(self.RestingStateFit)
+        query = query.outerjoin(self.RestingStateFit, self.RestingStateFit.synapse_id==self.Synapse.id)
 
         if pre_class is not None:
             query = pre_class.filter_query(query, pre_cell, db=self)

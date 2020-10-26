@@ -36,16 +36,29 @@ class RestingStatePipelineModule(MultipatchPipelineModule):
         expt = db.experiment_from_ext_id(expt_id, session=session)
        
         for pair in expt.pairs.values():
-            if pair.has_synapse is not True:
+            if pair.has_synapse is not True and pair.has_polysynapse is not True:
                 continue
 
-            # get resting-state response fits for this pair            
-            result = resting_state_response_fits(pair, rest_duration=minimum_rest_duration)
+            # we only calculating resting state if the pair has one identified
+            # synapse, be that mono or polysynaptic
+            if pair.has_synapse and pair.has_polysynapse:
+                continue
+
+            # write out a db record 
+            if pair.has_synapse:
+                synapse = pair.synapse
+                fit_rec = db.RestingStateFit(synapse=synapse)
+            elif pair.has_polysynapse and len(pair.poly_synapse) == 1:
+                synapse = pair.poly_synapse[0]
+                fit_rec = db.RestingStateFit(poly_synapse=synapse)
+
+            # get resting-state response fits for this synapse            
+            result = resting_state_response_fits(synapse, rest_duration=minimum_rest_duration)
+            
             if result is None:
                 continue
             
-            # write out a db record 
-            fit_rec = db.RestingStateFit(pair=pair)
+            
             for mode in ('ic', 'vc'):
                 fit = result[mode]['fit']
                 if fit is None:
@@ -62,13 +75,13 @@ class RestingStatePipelineModule(MultipatchPipelineModule):
                 
             session.add(fit_rec)
             
-            # update synapse record IF it also has kinetics
+            # update synapse or polysynapse record IF it also has kinetics
             # (if not, then the synapse failed psp fitting to the all-pulse averages,
             # so we should assume the fit to only resting-state pulses is even worse)
-            if result['ic']['fit'] is not None and pair.synapse.psp_rise_time is not None:
-                pair.synapse.psp_amplitude = result['ic']['fit'].best_values['amp']
-            if result['vc']['fit'] is not None and pair.synapse.psc_rise_time is not None:
-                pair.synapse.psc_amplitude = result['vc']['fit'].best_values['amp']
+            if result['ic']['fit'] is not None and synapse.psp_rise_time is not None:
+                synapse.psp_amplitude = result['ic']['fit'].best_values['amp']
+            if result['vc']['fit'] is not None and synapse.psc_rise_time is not None:
+                synapse.psc_amplitude = result['vc']['fit'].best_values['amp']
         
     def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.
@@ -77,7 +90,8 @@ class RestingStatePipelineModule(MultipatchPipelineModule):
         """
         db = self.database
         q = session.query(db.RestingStateFit)
-        q = q.filter(db.RestingStateFit.pair_id==db.Pair.id)
+        q = q.filter(db.RestingStateFit.synapse_id==db.Synapse.id)
+        q = q.filter(db.RestingStateFit.poly_synapse_id==db.PolySynapse.id)
         q = q.filter(db.Pair.experiment_id==db.Experiment.id)
         q = q.filter(db.Experiment.ext_id.in_(job_ids))
         return q.all()

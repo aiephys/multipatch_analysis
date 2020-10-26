@@ -28,7 +28,7 @@ AvgResponseFit = make_table(
     comment="Fit to average post synaptic response for a given pair. Each pair may have fits for VC and IC recordings, held at -70 and -55 mV.",
     columns=[
         ('synapse_id', 'synapse.id', 'The ID of the entry in the synapse table to which these results apply', {'index': True}),
-        ('polysynapse_id', 'poly_synapse.id', 'The ID of the entry in the poly_synapse table to which these results apply', {'index': True}),
+        ('poly_synapse_id', 'poly_synapse.id', 'The ID of the entry in the poly_synapse table to which these results apply', {'index': True}),
         ('clamp_mode', 'str', 'The clamp mode "ic" or "vc"', {'index': True}),
         ('holding', 'float', 'The holding potential -70 or -55', {'index': True}),
         ('laser_power_command', 'float', 'The pockel cell command value for the 2p laser'),
