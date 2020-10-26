@@ -479,6 +479,8 @@ class StochasticReleaseModelResult:
             if not require_contiguous or (pulse_n == last_pulse_n + 1 and np.isfinite(spikes[i]) and np.isfinite(amps[i])):
                 recs[-1].append(i)
                 last_pulse_n = pulse_n
+        if len(recs[-1]) == 0:
+            recs.pop(-1)
         return recs
 
     def events_by_stimulus(self, require_contiguous=True):

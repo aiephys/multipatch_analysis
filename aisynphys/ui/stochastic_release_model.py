@@ -161,8 +161,8 @@ class ModelSingleResultWidget(QtGui.QWidget):
 
         self.panels = {
             'events': ModelEventPlot(self),
-            'correlation': ModelEventCorrelationPlot(self),
             'induction': ModelInductionPlot(self),
+            'correlation': ModelEventCorrelationPlot(self),
             'optimization': ModelOptimizationPlot(self),
         }
         for name, panel in self.panels.items():
@@ -512,22 +512,30 @@ class ModelInductionPlot(ModelResultView):
             
             real_x = []
             real_y = []
+            real_avg_y = []
             model_x = []
             model_y = []
+            model_avg_y = []
             for i in range(12):
                 if len(ind_pulses[i]) == 0:
+                    real_avg_y = [np.nan] * 12
                     continue
 
                 inds = np.array(ind_pulses[i])
-                for this_amp, x, y, sign in ((amps, real_x, real_y, -1), (model_amps, model_x, model_y, 1)):
+                for this_amp, x, avg_y, y, sign in ((amps, real_x, real_avg_y, real_y, -1), (model_amps, model_x, model_avg_y, model_y, 1)):
                     amp = this_amp[inds]
                     y.extend(amp)
+                    if len(amp) == 0:
+                        avg_y.append(np.nan)
+                    else:
+                        avg_y.append(amp.mean())                    
                     xs = pg.pseudoScatter(np.array(amp), bidir=False, shuffle=True)
                     xs /= np.abs(xs).max() * 4
                     x.extend(i + xs * sign)
 
             self.ind_plots[ind_i].clear()
             self.ind_plots[ind_i].plot(real_x, real_y, pen=None, symbol='o', symbolPen=None, symbolBrush=data_color+(200,), symbolSize=5)
+            self.ind_plots[ind_i].plot(np.arange(12), real_avg_y, pen=data_color+(100,), symbol='d', symbolPen=None, symbolBrush=data_color+(100,), symbolSize=5)
             self.ind_plots[ind_i].plot(np.array(model_x)+0.1, model_y, pen=None, symbol='o', symbolPen=None, symbolBrush=model_color+(200,), symbolSize=5, zValue=-1)
             
             # re-model based on mean amplitudes
@@ -537,5 +545,6 @@ class ModelInductionPlot(ModelResultView):
             params = result.all_params
             mean_result = model.run_model(mean_times, amplitudes='expected', params=params)
             
+            # plot model distribution expectation values
             expected_amps = mean_result.result['expected_amplitude']
-            self.ind_plots[ind_i].plot(expected_amps, pen=model_color+(50,), symbol='d', symbolBrush=model_color+(50,), symbolPen=None, zValue=-10)
+            self.ind_plots[ind_i].plot(expected_amps, pen=model_color+(100,), symbol='d', symbolBrush=model_color+(100,), symbolPen=None, zValue=-10)
