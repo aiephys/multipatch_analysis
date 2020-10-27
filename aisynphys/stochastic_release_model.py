@@ -743,30 +743,30 @@ class ParameterSpace(object):
         self.result = np.empty(self.shape, dtype=dtype)
 
         if workers > 1:
-            # from pyqtgraph.multiprocess import Parallelize
-            # with Parallelize(enumerate(all_inds), results=self.result, progressDialog={'labelText':'synapticulating...', 'nested':True}, workers=workers) as tasker:
-            #     for i, inds in tasker:
-            #         params = self[inds]
-            #         tasker.results[inds] = func(params, **kwds)
             pool = multiprocessing.Pool(workers)
             fn = functools.partial(func, **kwds)
-            import pyqtgraph as pg
-            with pg.ProgressDialog('synapticulating...', maximum=len(all_inds)) as dlg:
+
+            from aisynphys.ui.progressbar import ProgressBar
+            with ProgressBar('synapticulating...', maximum=len(all_inds)) as dlg:
                 for i,r in enumerate(pool.imap(fn, all_params, chunksize=100)):
-                    dlg += 1
-                    if dlg.wasCanceled():
+                    try:
+                        dlg.update(i)
+                    except dlg.CanceledError:
                         pool.terminate()
                         raise Exception("Synapticulation cancelled. No refunds.")
                     self.result[all_inds[i]] = (r.likelihood,) + tuple([r.optimized_params[k] for k in opt_keys])
         else:
-            import pyqtgraph as pg
-            with pg.ProgressDialog('synapticulating (serial)...', nested=True, maximum=len(all_inds)) as dlg:
-                for inds in all_inds:
+            from aisynphys.ui.progressbar import ProgressBar
+            with ProgressBar('synapticulating... (serial)', maximum=len(all_inds)) as dlg:
+                for i,inds in enumerate(all_inds):
                     params = self[inds]
                     r = func(params, **kwds)
                     self.result[inds] = (r.likelihood,) + tuple([r.optimized_params[k] for k in opt_keys])
-                    dlg += 1
-                    assert not dlg.wasCanceled()
+                    try:
+                        dlg.update(i)
+                    except dlg.CanceledError:
+                        pool.terminate()
+                        raise Exception("Synapticulation cancelled. No refunds.")
         
     def __getitem__(self, inds):
         """Return a dict of the parameter values used at a specific index in the parameter space.
