@@ -636,8 +636,9 @@ class PairAnalysis(object):
             warning = 'Latency across modes differs by %s' % pg.siFormat(latency_diff, suffix='s')
             self.warnings.append(warning)
 
-        min_latency = np.min(latency_mode) < 0.4e-3
-        max_latency = np.max(latency_mode) > 3.1e-3
+        min_latency = np.nanmin(latency_mode) < 0.4e-3
+        max_latency = np.nanmax(latency_mode) > 3.1e-3
+        
         if min_latency and self.ctrl_panel.user_params['Gap junction call'] is False:
             self.warnings.append("Short latency; is this a gap junction?") 
 
@@ -661,7 +662,7 @@ class PairAnalysis(object):
             self.warnings.append("Mixed amplitude signs; pick ex/in carefully.")
         elif guess != self.ctrl_panel.user_params['Synapse call'] and not min_latency and not max_latency:
             self.warnings.append("Looks like an %s synapse??" % guess)
-        elif self.ctrl_panel['Polysynaptic call'] != guess and max_latency:
+        elif self.ctrl_panel.user_params['Polysynaptic call'] != guess and max_latency:
             self.warnings.append("Looks like a %s polysynaptic synpase??" % guess)
 
         print_warning = '\n'.join(self.warnings)
