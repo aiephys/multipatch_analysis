@@ -69,6 +69,7 @@ class StochasticReleaseModel(object):
         'facilitation_recovery_tau',
         'desensitization_amount',
         'desensitization_recovery_tau',
+        'global_desensitization',
         'measurement_stdev',
     ]
         
@@ -286,6 +287,7 @@ class StochasticReleaseModel(object):
                     desensitization_amount,
                     desensitization_recovery_tau,
                     measurement_stdev,
+                    global_desensitization=0,
                     ):
 
         # initialize state parameters:
@@ -376,7 +378,8 @@ class StochasticReleaseModel(object):
                 # prof('update state')
 
                 # apply spike-induced desensitization of postsynaptic receptors
-                sensitization *= (1.0 - desensitization_amount) ** max(0, depleted_vesicle)
+                n_sites_to_desensitize = max(0, (depleted_vesicle * (1 - global_desensitization) + n_release_sites * global_desensitization))
+                sensitization *= 1.0 - (desensitization_amount * n_sites_to_desensitize / n_release_sites)
                 assert np.isfinite(sensitization)
 
                 # ignore likelihood for this event if it was too close to an unmeasurable response
@@ -955,16 +958,18 @@ class StochasticModelRunner:
             # 'vesicle_recovery_tau': np.array([0.0001, 0.01]),
 
             'facilitation_amount': np.array([0.0, 0.00625, 0.025, 0.05, 0.1, 0.2, 0.4]),
-            'facilitation_recovery_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 1.28]),
+            'facilitation_recovery_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64]),
             # 'facilitation_amount': np.array([0, 0.5]),
             # 'facilitation_recovery_tau': np.array([0.1, 0.5]),
 
             'desensitization_amount': np.array([0.0, 0.05, 0.1, 0.2, 0.4, 0.8]),
-            'desensitization_recovery_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 1.28]),
+            'desensitization_recovery_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64]),
             # 'desensitization_amount': np.array([0.0, 0.1]),
             # 'desensitization_recovery_tau': np.array([0.01, 0.1]),
             # 'desensitization_amount': 0,
             # 'desensitization_recovery_tau': 1,
+
+            'global_desensitization': np.array([0.0, 1.0]),
         }
         
         # sanity checking
