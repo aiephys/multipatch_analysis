@@ -1,7 +1,6 @@
 import os, sys, argparse
 from aisynphys.database import default_db as db
 from aisynphys.stochastic_release_model import StochasticModelRunner, CombinedModelRunner
-from aisynphys.ui.stochastic_release_model import ModelDisplayWidget
 from aisynphys import config
 
 
@@ -16,7 +15,7 @@ if __name__ == '__main__':
     parser.add_argument('--workers', type=int, default=None, help="The number of parallel processes to use")
     parser.add_argument('--max-events', type=int, default=None, dest='max_events', help="Limit the numper of events to be processed (for testing)")
     parser.add_argument('--no-cache', default=False, action='store_true', dest='no_cache', help="Ignore existing cached files")
-    parser.add_argument('--no-gui', type=bool, default=False, dest='no_gui', help="Disable GUI; just generate cache results")
+    parser.add_argument('--no-gui', default=False, action='store_true', dest='no_gui', help="Disable GUI; just generate cache results")
     parser.add_argument('--cache-path', type=str, default=None, dest='cache_path', help="Path for reading/writing cache files")
     
     args = parser.parse_args()
@@ -52,6 +51,7 @@ if __name__ == '__main__':
     # 4. Visualize parameter space.
 
     if not args.no_gui:
+        from aisynphys.ui.stochastic_release_model import ModelDisplayWidget
         win = ModelDisplayWidget(result)
         win.setWindowTitle(result.title)
         win.show()
