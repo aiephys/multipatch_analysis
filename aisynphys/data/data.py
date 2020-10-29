@@ -313,19 +313,20 @@ class PulseResponseList(object):
         for pr in self.prs:
             yield pr
 
-    def post_tseries(self, align=None, bsub=False, bsub_win=5e-3):
+    def post_tseries(self, align=None, bsub=False, bsub_win=5e-3, handle_failed_spike_time=False):
         """Return a TSeriesList of all postsynaptic recordings.
         """
-        return self._get_tserieslist('post_tseries', align, bsub, bsub_win)
+        return self._get_tserieslist('post_tseries', align, bsub, bsub_win, handle_failed_spike_time)
 
-    def pre_tseries(self, align=None, bsub=False, bsub_win=5e-3):
+    def pre_tseries(self, align=None, bsub=False, bsub_win=5e-3, handle_failed_spike_time=False):
         """Return a TSeriesList of all presynaptic recordings.
         """
-        return self._get_tserieslist('pre_tseries', align, bsub, bsub_win)
+        return self._get_tserieslist('pre_tseries', align, bsub, bsub_win, handle_failed_spike_time)
 
-    def _get_tserieslist(self, ts_name, align, bsub, bsub_win=5e-3):
+    def _get_tserieslist(self, ts_name, align, bsub, bsub_win=5e-3, handle_failed_spike_time=False):
         tsl = []
         for pr in self.prs:
+            
             ts = getattr(pr, ts_name)
             stim_time = pr.stim_pulse.onset_time
 
@@ -340,10 +341,23 @@ class PulseResponseList(object):
             
             if align is not None:
                 if align == 'spike':
+                    # first_spike_time is the max dv/dt of the spike
                     align_t = pr.stim_pulse.first_spike_time
-                    # ignore PRs with no known spike time
                     if align_t is None:
-                        continue
+                        if handle_failed_spike_time is False:
+                            # ignore PRs with no known spike time
+                            continue
+                        elif handle_failed_spike_time is True:
+                            # if you want to include spikes that were detected but do not
+                            # have a max dv/dt time we can try to get two other times in 
+                            # order, the peak time of the spike, if all else fails, the
+                            # stimulus onset time. This should purely be used for visualization
+                            # as these tseries are not aligned with others in the list.
+                            peak_time = pr.stim_pulse.spikes[0].peak_time 
+                            if peak_time is not None:
+                                align_t = peak_time
+                            else:
+                                align_t = stim_time
                 elif align == 'pulse':
                     align_t = stim_time
                 else:

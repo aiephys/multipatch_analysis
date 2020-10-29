@@ -350,8 +350,8 @@ class TSeriesPlot(pg.GraphicsLayoutWidget):
                 if len(prs) == 0:
                     continue
                 prl = PulseResponseList(prs)
-                post_ts = prl.post_tseries(align='spike', bsub=True)
-                
+                post_ts = prl.post_tseries(align='spike', bsub=True, handle_failed_spike_time=True)
+
                 for trace in post_ts:
                     item = self.trace_plots[i].plot(trace.time_values, trace.data, pen=self.qc_color[qc])
                     if qc == 'qc_fail':
@@ -372,9 +372,13 @@ class TSeriesPlot(pg.GraphicsLayoutWidget):
                 if len(prs) == 0:
                     continue
                 prl = PulseResponseList(prs)
-                pre_ts = prl.pre_tseries(align='spike', bsub=True)
+                pre_ts = prl.pre_tseries(align='spike', bsub=True, handle_failed_spike_time=True)
                 for pr, spike in zip(prl, pre_ts):
-                    qc = 'qc_pass' if pr.stim_pulse.n_spikes == 1 else 'qc_fail'
+                    # pr.stim_pulse.n_spikes can == 1 but the spike time (ie max slope) is None, failing
+                    # the postsynaptic responses. Consider using pr.stim_pulse.first_spike_time != None
+                    # and qc failing these spikes as the traces are as well.
+                    qc = 'qc_pass' if pr.stim_pulse.first_spike_time is not None else 'qc_fail'
+                    
                     item = self.spike_plots[i].plot(spike.time_values, spike.data, pen=self.qc_color[qc])
                     if qc == 'qc_fail':
                         item.setZValue(-10)
@@ -566,8 +570,8 @@ class PairAnalysis(object):
             print('No fitable responses, bailing out')
         
         self.vc_plot.plot_responses({holding: self.sorted_responses['vc', holding] for holding in holdings})
-        self.ic_plot.plot_responses({holding: self.sorted_responses['ic', holding] for holding in holdings})
-
+        self.ic_plot.plot_responses({holding: self.sorted_responses['ic', holding] for holding in holdings})    
+      
     def fit_response_update(self):
         latency = self.ctrl_panel.user_params['User Latency']
         self.fit_responses(latency=latency)
