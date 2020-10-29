@@ -743,11 +743,12 @@ class ParameterSpace(object):
         self.result = np.empty(self.shape, dtype=dtype)
 
         if workers > 1:
-            pool = multiprocessing.Pool(workers)
+            ctx = multiprocessing.get_context('spawn')
+            pool = ctx.Pool(workers)
             fn = functools.partial(func, **kwds)
 
             from aisynphys.ui.progressbar import ProgressBar
-            with ProgressBar('synapticulating...', maximum=len(all_inds)) as dlg:
+            with ProgressBar(f'synapticulating ({workers} workers)...', maximum=len(all_inds)) as dlg:
                 for i,r in enumerate(pool.imap(fn, all_params, chunksize=100)):
                     try:
                         dlg.update(i)
