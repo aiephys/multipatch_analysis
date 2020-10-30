@@ -9,7 +9,7 @@ from ... import config
 from .pipeline_module import MultipatchPipelineModule
 from .dataset import DatasetPipelineModule
 from .morphology import MorphologyPipelineModule
-from .avg_response_fit import get_pair_avg_fits
+from aisynphys.avg_response_fit import get_pair_avg_fits
 import aisynphys.data.data_notes_db as notes_db
 
 
