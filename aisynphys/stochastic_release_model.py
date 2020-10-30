@@ -873,12 +873,16 @@ class StochasticModelRunner:
         """Tuple containing (spike_times, amplitudes, baseline_amps)
         """
         if self._synapse_events is None:
-            self._synapse_events = self._load_synapse_events()
+            session = self.db.session()
+            try:
+                self._synapse_events = self._load_synapse_events(session)
+            finally:
+                # For HPC, we have many processes and so can't use connection pooling effectively.
+                # Instead, we need to be careful about closing connections when we're done with them.
+                session.close()
         return self._synapse_events
 
-    def _load_synapse_events(self):
-        session = self.db.session()
-
+    def _load_synapse_events(self, session):
         expt = self.db.experiment_from_ext_id(self.experiment_id, session=session)
         pair = expt.pairs[(self.pre_cell_id, self.post_cell_id)]
 
@@ -946,6 +950,9 @@ class StochasticModelRunner:
     def _generate_parameters(self):
         spike_times, amplitudes, bg_amplitudes, event_meta = self.synapse_events
         
+        measurement_stdev = np.nanstd(bg_amplitudes)
+        assert np.isfinite(measurement_stdev), "Could not measure background amplitude stdev"
+
         search_params = {
             # If mini_amplitude is commented out here, then it will be optimized automatically by the model:
             #'mini_amplitude': np.nanmean(amplitudes) * 1.2**np.arange(-12, 24, 2),
@@ -953,7 +960,7 @@ class StochasticModelRunner:
             'n_release_sites': np.array([1, 2, 4, 8, 16, 32]),
             'base_release_probability': np.array([0.025, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0]),
             'mini_amplitude_cv': np.array([0.05, 0.1, 0.2, 0.4, 0.8]),
-            'measurement_stdev': np.nanstd(bg_amplitudes),
+            'measurement_stdev': measurement_stdev,
 
             'vesicle_recovery_tau': np.array([0.0025, 0.01, 0.04, 0.16, 0.64, 2.56]),
             # 'vesicle_recovery_tau': np.array([0.0001, 0.01]),

@@ -1,10 +1,15 @@
 import os, sys, argparse, threading, time, subprocess
+import sqlalchemy.pool
 from aisynphys.database import default_db as db
 from aisynphys.stochastic_release_model import StochasticModelRunner, CombinedModelRunner
 from aisynphys import config
 
 
 if __name__ == '__main__':
+    # For HPC we start many processes, which makes connection pooling impossible. Instead,
+    # turn off connection pooling and make sure connections are closed when possible.
+    db._engine_opts['postgresql']['ro'] = {'poolclass': sqlalchemy.pool.NullPool}
+
     parser = argparse.ArgumentParser(parents=[config.parser])
     parser.add_argument('experiment_id', type=str, nargs='?')
     parser.add_argument('pre_cell_id', type=str, nargs='?')
