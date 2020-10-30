@@ -211,7 +211,15 @@ class Database(object):
     def __init__(self, ro_host, rw_host, db_name, ormbase):
         self.ormbase = ormbase
         self._mappings = {}
-        
+
+        # default options for creating DB engines
+        self._engine_opts = {
+            'postgresql': {
+                'ro': {'echo': False, 'pool_size': 10, 'max_overflow': 40, 'isolation_level': 'AUTOCOMMIT'},
+                'rw': {'pool_size': 10, 'max_overflow': 40},
+            }
+        }
+
         self.ro_host = ro_host
         self.rw_host = rw_host
         self.db_name = db_name
@@ -341,11 +349,7 @@ class Database(object):
         """
         self._check_engines()
         if self._ro_engine is None:
-            if self.backend == 'postgresql':
-                # use echo=True to log all db queries for debugging
-                opts = {'echo': False, 'pool_size': 10, 'max_overflow': 40, 'isolation_level': 'AUTOCOMMIT'}
-            else:
-                opts = {}        
+            opts = self._engine_opts.get(self.backend, {}).get('ro', {})
             self._ro_engine = create_engine(self.ro_address, **opts)
             self._engine_pid = os.getpid()
         return self._ro_engine
@@ -358,14 +362,11 @@ class Database(object):
         if self._rw_engine is None:
             if self.rw_address is None:
                 return None
-            if self.backend == 'postgresql':
-                opts = {'pool_size': 10, 'max_overflow': 40}
-            else:
-                opts = {}        
+            opts = self._engine_opts.get(self.backend, {}).get('rw', {})
             self._rw_engine = create_engine(self.rw_address, **opts)
             self._engine_pid = os.getpid()
         return self._rw_engine
-    
+
     @property
     def maint_engine(self):
         """The maintenance engine.
