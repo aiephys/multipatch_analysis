@@ -313,17 +313,17 @@ class PulseResponseList(object):
         for pr in self.prs:
             yield pr
 
-    def post_tseries(self, align=None, bsub=False, bsub_win=5e-3, handle_failed_spike_time=False):
+    def post_tseries(self, align=None, bsub=False, bsub_win=5e-3, alignment_failure_mode='ignore'):
         """Return a TSeriesList of all postsynaptic recordings.
         """
-        return self._get_tserieslist('post_tseries', align, bsub, bsub_win, handle_failed_spike_time)
+        return self._get_tserieslist('post_tseries', align, bsub, bsub_win, alignment_failure_mode)
 
-    def pre_tseries(self, align=None, bsub=False, bsub_win=5e-3, handle_failed_spike_time=False):
+    def pre_tseries(self, align=None, bsub=False, bsub_win=5e-3, alignment_failure_mode='ignore'):
         """Return a TSeriesList of all presynaptic recordings.
         """
-        return self._get_tserieslist('pre_tseries', align, bsub, bsub_win, handle_failed_spike_time)
+        return self._get_tserieslist('pre_tseries', align, bsub, bsub_win, alignment_failure_mode)
 
-    def _get_tserieslist(self, ts_name, align, bsub, bsub_win=5e-3, handle_failed_spike_time=False):
+    def _get_tserieslist(self, ts_name, align, bsub, bsub_win=5e-3, alignment_failure_mode='ignore'):
         tsl = []
         for pr in self.prs:
             
@@ -338,30 +338,56 @@ class PulseResponseList(object):
                 else:
                     baseline = float_mode(baseline_data)
                 ts = ts - baseline
-            
+
             if align is not None:
-                if align == 'spike':
-                    # first_spike_time is the max dv/dt of the spike
-                    align_t = pr.stim_pulse.first_spike_time
-                    if align_t is None:
-                        if handle_failed_spike_time is False:
-                            # ignore PRs with no known spike time
-                            continue
-                        elif handle_failed_spike_time is True:
-                            # if you want to include spikes that were detected but do not
-                            # have a max dv/dt time we can try to get two other times in 
-                            # order, the peak time of the spike, if all else fails, the
-                            # stimulus onset time. This should purely be used for visualization
-                            # as these tseries are not aligned with others in the list.
-                            peak_time = pr.stim_pulse.spikes[0].peak_time 
-                            if peak_time is not None:
-                                align_t = peak_time
-                            else:
-                                align_t = stim_time
-                elif align == 'pulse':
-                    align_t = stim_time
-                else:
-                    raise ValueError("align must be None, 'spike', or 'pulse'.")
+                align_times = {
+                    'spike': {'pulse': pr.stim_pulse.first_spike_time,
+                             'average': np.mean([p.stim_pulse.first_spike_time for p in self.prs if p.stim_pulse.first_spike_time is not None])},
+                    'peak': {'pulse': pr.stim_pulse.spikes[0].peak_time if pr.stim_pulse.n_spikes==1 else None,
+                              'average': np.mean([p.stim_pulse.spikes[0].peak_time for p in self.prs if p.stim_pulse.n_spikes==1 and p.stim_pulse.spikes[0].peak_time is not None])},
+                    'stim': {'pulse': stim_time, 
+                              'average': np.mean([p.stim_pulse.onset_time for p in self.prs if p.stim_pulse.onset_time is not None])},
+                }
+                try:
+                    align_t = align_times[align]['pulse']
+                except KeyError:
+                    raise ValueError("align must be None, 'spike', 'peak', or 'pulse'.")
+
+                if align_t is None:
+                    
+                    if alignment_failure_mode == 'ignore':
+                        # ignore PRs with no known timing
+                        continue
+                    elif alignment_failure_mode == 'average':
+                        align_t = align_times[align]['average']
+                        if np.isnan(align_t):
+                            raise Exception("average %s time is None, try another mode" % align)
+                    elif alignment_failure_mode == 'raise':
+                        raise Exception("%s time is not available for pulse %s and can't be aligned" % (align, pr))
+
+                # if align == 'spike':
+                #     # first_spike_time is the max dv/dt of the spike
+                #     align_t = pr.stim_pulse.first_spike_time
+
+                # elif align == 'pulse':
+                #     align_t = stim_time
+                # elif align_t == 'peak':
+                #     # peak of the first spike
+                #     align_t = pr.stim_pulse.spikes[0].peak_time
+                # else:
+                #     raise ValueError("align must be None, 'spike', 'peak', or 'pulse'.")
+                # # if align_t is None, decide how you want to handle that    
+                
+                #     elif alignment_failure_mode =='average':
+                #         # if this pulse doesn't have timing info use the average
+                #         # requested time value
+                #         avg_time = np.nanmean([pr.stim_pulse.first_spike_time])
+                #         peak_time = pr.stim_pulse.spikes[0].peak_time 
+                #         if peak_time is not None:
+                #             align_t = peak_time
+                #         else:
+                #             align_t = stim_time
+                
                 ts = ts.copy(t0=ts.t0 - align_t)
 
             tsl.append(ts)

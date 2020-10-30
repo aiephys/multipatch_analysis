@@ -350,8 +350,16 @@ class TSeriesPlot(pg.GraphicsLayoutWidget):
                 if len(prs) == 0:
                     continue
                 prl = PulseResponseList(prs)
-                post_ts = prl.post_tseries(align='spike', bsub=True, handle_failed_spike_time=True)
-
+                
+                for mode in ['spike', 'peak', 'stim']:
+                    try:
+                        post_ts = prl.post_tseries(align=mode, bsub=True, alignment_failure_mode='average')
+                        break
+                    except Exception:
+                        post_ts = None
+                        continue
+                if post_ts is None:
+                    continue        
                 for trace in post_ts:
                     item = self.trace_plots[i].plot(trace.time_values, trace.data, pen=self.qc_color[qc])
                     if qc == 'qc_fail':
@@ -372,7 +380,15 @@ class TSeriesPlot(pg.GraphicsLayoutWidget):
                 if len(prs) == 0:
                     continue
                 prl = PulseResponseList(prs)
-                pre_ts = prl.pre_tseries(align='spike', bsub=True, handle_failed_spike_time=True)
+                for mode in ['spike', 'peak', 'stim']:
+                    try:
+                        pre_ts = prl.pre_tseries(align=mode, bsub=True, alignment_failure_mode='average')
+                        break
+                    except Exception:
+                        pre_ts = None
+                        continue
+                if pre_ts is None:
+                    continue
                 for pr, spike in zip(prl, pre_ts):
                     # pr.stim_pulse.n_spikes can == 1 but the spike time (ie max slope) is None, failing
                     # the postsynaptic responses. Consider using pr.stim_pulse.first_spike_time != None
