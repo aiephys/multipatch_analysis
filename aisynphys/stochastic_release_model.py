@@ -329,7 +329,7 @@ class StochasticReleaseModel(object):
                 # recover from desensitization
                 s_recovery = np.exp(-dt / desensitization_recovery_tau)
                 sensitization += (1.0 - sensitization) * (1.0 - s_recovery)
-                assert np.isfinite(sensitization)
+                assert np.isfinite(sensitization) and 0 <= sensitization <= 1
                 
                 effective_available_vesicle = max(0, vesicle_pool)
                 effective_available_vesicles = max(0, min(n_release_sites, int(np.round(vesicle_pool))))
@@ -378,9 +378,9 @@ class StochasticReleaseModel(object):
                 # prof('update state')
 
                 # apply spike-induced desensitization of postsynaptic receptors
-                n_sites_to_desensitize = max(0, (depleted_vesicle * (1 - global_desensitization) + n_release_sites * global_desensitization))
+                n_sites_to_desensitize = min(n_release_sites, max(0, (depleted_vesicle * (1 - global_desensitization) + n_release_sites * global_desensitization)))
                 sensitization *= 1.0 - (desensitization_amount * n_sites_to_desensitize / n_release_sites)
-                assert np.isfinite(sensitization)
+                assert np.isfinite(sensitization) and 0 <= sensitization <= 1
 
                 # ignore likelihood for this event if it was too close to an unmeasurable response
                 if t - last_nan_time < missing_event_penalty:
