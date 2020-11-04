@@ -19,11 +19,12 @@ from pyqtgraph.widgets.DataFilterWidget import DataFilterParameter
 from aisynphys.database import default_db as db
 from aisynphys import constants
 from aisynphys.cell_class import CellClass, classify_cells, classify_pairs
-from .analyzers import ConnectivityAnalyzer, StrengthAnalyzer, DynamicsAnalyzer, get_all_output_fields
+from .analyzers import ConnectivityAnalyzer, StrengthAnalyzer, DynamicsAnalyzer, get_all_output_fields, CellAnalyzer
 from .matrix_display import MatrixDisplay, MatrixWidget
 from .scatter_plot_display import ScatterPlotTab
 from .distance_plot_display import DistancePlotTab
 from .histogram_trace_display import HistogramTab
+from .cell_scatter_plot_display import CellScatterTab
 
 
 class SignalHandler(pg.QtCore.QObject):
@@ -60,8 +61,10 @@ class Tabs(pg.QtGui.QTabWidget):
 
         self.hist_tab = HistogramTab()
         self.addTab(self.hist_tab, 'Histogram and TSeries')
-        self.scatter_tab = ScatterPlotTab()
-        self.addTab(self.scatter_tab, 'Scatter Plots')
+        self.pair_scatter_tab = ScatterPlotTab()
+        self.addTab(self.pair_scatter_tab, 'Pair Scatter Plots')
+        self.cell_scatter_tab = CellScatterTab()
+        self.addTab(self.cell_scatter_tab, 'Cell Scatter Plots')
         self.distance_tab = DistancePlotTab()
         self.addTab(self.distance_tab, 'Distance Plots')
 
@@ -228,7 +231,8 @@ class MatrixAnalyzer(object):
         self.main_window.show()
         self.tabs = self.main_window.tabs
         self.hist_tab = self.tabs.hist_tab
-        self.scatter_tab = self.tabs.scatter_tab
+        self.pair_scatter_tab = self.tabs.pair_scatter_tab
+        self.cell_scatter_tab = self.tabs.cell_scatter_tab
         self.distance_tab = self.tabs.distance_tab
         self.distance_plot = self.distance_tab.distance_plot
         self.hist_plot = self.hist_tab.hist
@@ -237,20 +241,20 @@ class MatrixAnalyzer(object):
         self.colors = [(0, 255, 0), (255, 0, 0), (0, 0, 255), (254, 169, 0), (170, 0, 127), (0, 230, 230)]
         
         self.analyzer_mode = analyzer_mode
-        self.analyzers = [ConnectivityAnalyzer(self.analyzer_mode), StrengthAnalyzer(), DynamicsAnalyzer()]
-        self.active_analyzers = self.analyzers #[]
+        self.pair_analyzers = [ConnectivityAnalyzer(self.analyzer_mode), StrengthAnalyzer(), DynamicsAnalyzer()]
+        self.active_analyzers = self.pair_analyzers #[]
         self.preset_file = preset_file
 
         self.field_map = {}
-        for analyzer in self.analyzers:
+        for analyzer in self.pair_analyzers:
             for field in analyzer.output_fields():
                 if field[0] == 'None':
                     continue
                 self.field_map[field[0]] = analyzer
 
-        self.output_fields, self.text_fields = get_all_output_fields(self.analyzers)
-        self.element_scatter = self.scatter_tab.element_scatter
-        self.pair_scatter = self.scatter_tab.pair_scatter
+        self.output_fields, self.text_fields = get_all_output_fields(self.pair_analyzers)
+        self.element_scatter = self.pair_scatter_tab.element_scatter
+        self.pair_scatter = self.pair_scatter_tab.pair_scatter
         self.experiment_filter = ExperimentFilter(self.analyzer_mode)
         self.cell_class_groups = cell_class_groups
         self.cell_class_filter = CellClassFilter(self.cell_class_groups, self.analyzer_mode)
@@ -292,10 +296,19 @@ class MatrixAnalyzer(object):
         self.params.child('Presets', 'Analyzer Presets').sigValueChanged.connect(self.presetChanged)
 
         # connect up analyzers
-        for analyzer in self.analyzers:
+        for analyzer in self.pair_analyzers:
             for visualizer in self.visualizers:
                 analyzer.sigOutputChanged.connect(visualizer.invalidate_output)
             self.cell_class_filter.sigOutputChanged.connect(analyzer.invalidate_output)
+
+
+        # setup cell analzyer and display
+        self.cell_analyzer = CellAnalyzer()
+        cell_fields, _ = get_all_output_fields([self.cell_analyzer])
+        self.cell_scatter = self.cell_scatter_tab.cell_scatter
+        self.cell_scatter.set_fields(cell_fields)
+        self.cell_analyzer.sigOutputChanged.connect(self.cell_scatter.invalidate_output)
+        self.cell_class_filter.sigOutputChanged.connect(self.cell_analyzer.invalidate_output)
 
     def save_preset(self):
         name = self.params['Presets', 'Save as Preset', 'Preset Name']
@@ -489,13 +502,20 @@ class MatrixAnalyzer(object):
             with pg.BusyCursor():
                 # self.analyzers_needed()
                 self.update_results()
-                pre_cell_classes = self.cell_class_filter.get_pre_or_post_classes('presynaptic')
-                post_cell_classes = self.cell_class_filter.get_pre_or_post_classes('postsynaptic')
-                self.matrix_display.update_matrix_display(self.results, self.group_results, self.cell_groups, self.field_map, pre_cell_classes=pre_cell_classes, post_cell_classes=post_cell_classes)
-                self.hist_plot.matrix_histogram(self.results, self.group_results, self.matrix_display.matrix_display_filter.colorMap, self.field_map)
+                self.cell_scatter.set_data(self.cell_results)
                 self.element_scatter.set_data(self.group_results)
                 self.pair_scatter.set_data(self.results)
                 self.dist_plot = self.distance_plot.plot_distance(self.results, color=(128, 128, 128), name='All Connections', suppress_scatter=True)
+                selected_colormaps = self.matrix_display.matrix_display_filter.colorMap.children()
+                if len(selected_colormaps) > 0:
+                    pre_cell_classes = self.cell_class_filter.get_pre_or_post_classes('presynaptic')
+                    post_cell_classes = self.cell_class_filter.get_pre_or_post_classes('postsynaptic')
+                    self.matrix_display.update_matrix_display(self.results, self.group_results, self.cell_groups, self.field_map, pre_cell_classes=pre_cell_classes, post_cell_classes=post_cell_classes)
+                    self.hist_plot.matrix_histogram(self.results, self.group_results, self.matrix_display.matrix_display_filter.colorMap, self.field_map)
+                    self.main_window.h_splitter.setSizes([300, 600, 400])
+                else:
+                    self.main_window.h_splitter.setSizes([300, 200, 800])
+                    self.main_window.tabs.setCurrentIndex(2)
                 if self.main_window.matrix_widget.matrix is not None:
                     self.display_matrix_element_reset()
         finally:
@@ -506,8 +526,9 @@ class MatrixAnalyzer(object):
         # Select pairs 
         self.pairs = self.experiment_filter.get_pair_list(self.session)
 
-        # Group all cells by selected classes
+        # Group all cells by selected classes and analyze
         self.cell_groups, self.cell_classes = self.cell_class_filter.get_cell_groups(self.pairs)
+        self.cell_results = self.cell_analyzer.measure(self.cell_groups)
 
         # Group pairs into (pre_class, post_class) groups
         self.pair_groups = classify_pairs(self.pairs, self.cell_groups)
@@ -518,7 +539,8 @@ class MatrixAnalyzer(object):
             try:
                 group_results = analysis.group_result(self.pair_groups)
             except AttributeError:
-                    pg.QtGui.QMessageBox.information(self.main_window, 'No Results Generated', 'Please check that you have at least one Cell Class selected, if so this filter set produced no results, try something else',
+                    pg.QtGui.QMessageBox.information(self.main_window, 'No Pair Results Generated', 'Please check that you have at least one Cell Class selected, \
+                        if so this filter set produced no results, try something else.\nYou may analyze cell features',
                         pg.QtGui.QMessageBox.Ok)
                     break
             if a == 0:
@@ -529,3 +551,4 @@ class MatrixAnalyzer(object):
                 self.results = merge_results.loc[:, ~merge_results.columns.duplicated(keep='first')]
                 merge_group_results = pd.concat([self.group_results, group_results], axis=1)
                 self.group_results = merge_group_results.loc[:, ~merge_group_results.columns.duplicated(keep='first')]
+
