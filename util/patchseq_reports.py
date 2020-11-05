@@ -10,7 +10,7 @@ from aisynphys.data.slice import Slice
 from collections import OrderedDict
 
 all_paths = glob.glob(os.path.join(config.synphys_data, '*.***'))
-nucleus = {'+': 'nucleus_present', '-': 'nucleus_absent', '': None}
+nucleus = {'+': 'nucleus_present', '-': 'nucleus_absent', '?': 'nucleus_present', '': None}
 organism = {'Mus musculus': 'Mouse', 'Homo Sapiens': 'Human'}
 
 def generate_daily_report(day):

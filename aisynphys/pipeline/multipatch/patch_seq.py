@@ -52,7 +52,7 @@ mapping_cols = {
 col_names = amp_cols.copy()
 col_names.update(mapping_cols)
 
-nucleus_bool = {'+': True, '-': False, '': None}
+# nucleus_bool = {'+': True, '-': False, '': None}
 
 class PatchSeqPipelineModule(MultipatchPipelineModule):
     """Imports transcriptomic data for cells in patchseq experiments
@@ -83,12 +83,13 @@ class PatchSeqPipelineModule(MultipatchPipelineModule):
 
                 for cell_ext_id, cell in expt.cells.items():
                     tube_id = patchseq_tubes.get(cell_ext_id, '').strip()
+                    cell_nucleus = nucleus.get(cell_ext_id, None)
                     if tube_id == '':
                         continue
 
                     results = {
                         'tube_id': tube_id,
-                        'nucleus': nucleus_bool[nucleus.get(cell_ext_id, '')],
+                        'nucleus': cell_nucleus if cell_nucleus != '' else None,
                         'reseal': reseal.get(cell_ext_id, False),
                         'patchseq_hash': None,
                     }
