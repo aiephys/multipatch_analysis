@@ -156,13 +156,13 @@ if __name__ == '__main__':
             {'dendrite_type': 'aspiny', 'target_layer': '6','cortical_layer': ('6', '6a', '6b'), 'display_names': ('L6', 'Non-Pyr\naspiny')},
         ]),
 
-        ('All Cells', [
-            {'target_layer': '2', 'cortical_layer': '2', 'display_names': ('', 'L2')},
-            {'target_layer': '2/3', 'cortical_layer': '2/3', 'display_names': ('', 'L2/3')},
-            {'target_layer': '3', 'cortical_layer': '3', 'display_names': ('', 'L3')},
-            {'target_layer': '4', 'cortical_layer': '4', 'display_names': ('', 'L4')},
-            {'target_layer': '5', 'cortical_layer': '5', 'display_names': ('', 'L5')},
-            {'target_layer': '6', 'cortical_layer': ('6', '6a', '6b'), 'display_names': ('', 'L6')},
+        ('All Cells', [{'display_names': ('', 'All')}
+            # {'target_layer': '2', 'cortical_layer': '2', 'display_names': ('', 'L2')},
+            # {'target_layer': '2/3', 'cortical_layer': '2/3', 'display_names': ('', 'L2/3')},
+            # {'target_layer': '3', 'cortical_layer': '3', 'display_names': ('', 'L3')},
+            # {'target_layer': '4', 'cortical_layer': '4', 'display_names': ('', 'L4')},
+            # {'target_layer': '5', 'cortical_layer': '5', 'display_names': ('', 'L5')},
+            # {'target_layer': '6', 'cortical_layer': ('6', '6a', '6b'), 'display_names': ('', 'L6')},
         ]),
 
         ('Layer 2/3 T-types', [
