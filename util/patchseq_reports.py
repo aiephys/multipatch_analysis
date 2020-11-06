@@ -10,7 +10,7 @@ from aisynphys.data.slice import Slice
 from collections import OrderedDict
 
 all_paths = glob.glob(os.path.join(config.synphys_data, '*.***'))
-nucleus = {'+': 'nucleus_present', '-': 'nucleus_absent', '': None}
+nucleus = {'+': 'nucleus_present', '-': 'nucleus_absent', '?': 'nucleus_present', '': None}
 organism = {'Mus musculus': 'Mouse', 'Homo Sapiens': 'Human'}
 
 def generate_daily_report(day):
@@ -58,6 +58,11 @@ def generate_daily_report(day):
         pip_meta = PipetteMetadata(site)
         headstages = site_info.get('headstages')
         
+        # check that pipette yml file is present
+        if pip_meta.pipettes is None:
+            print('%s\tCheck pipette.yml file' % site_source)
+            continue
+
         # check to make sure there are recorded headstages and patchseq tubes, else move to next site
         if headstages is None:
             print('%s\tNo recorded headstages' % site_source)
@@ -188,6 +193,11 @@ def generate_monthly_report(start_date, end_date):
         day_info = day_dh.info()
         pip_meta = PipetteMetadata(site)
         headstages = site_info.get('headstages')
+
+        # check that pipette yml file is present
+        if pip_meta.pipettes is None:
+            print('%s\tCheck pipette.yml file' % site_source)
+            continue
         
         # if no headstages were recorded or tubes collected, move along
         if headstages is None:

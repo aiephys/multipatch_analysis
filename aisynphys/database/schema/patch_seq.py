@@ -12,7 +12,7 @@ PatchSeq = make_table(
     # These values are provided at the time of the experiment
     ('cell_id', 'cell.id', 'The ID of the cell described by each record', {'index': True, 'unique': True}),
     ('tube_id', 'str', 'Patched Cell Container ID used for RNA analysis', {'index': True}),
-    ('nucleus', 'bool', 'Whether the nucleus was recovered from the cell', {'index': True}),
+    ('nucleus', 'str', 'Whether the nucleus was recovered from the cell, +, -, ?', {'index': True}),
     ('reseal', 'bool', 'Was there a giga-reseal during nucleus extraction', {'index': True}),
     ('patchseq_hash', 'str', 'Hash of patchseq results from amplification and mapping used for updating', {'index': True}),
     # These values are pulled from amplification report
@@ -26,8 +26,8 @@ PatchSeq = make_table(
     ('res_index', 'float', 'Resolution of the last mapped cluster from 0-1 with 1 being the terminal leaf', {'index': True}),
     ('top_leaf', 'str', '', {'index': True}),
     ('top_leaf_score', 'float', 'Confidence of top_leaf mapping (0-1)', {'index': True}),
-    ('broad_class_label', 'str', 'Mapped class designation', {'index': True}),
-    ('subclass_label', 'str', 'Mapped subclass designation', {'index': True}),
+    ('broad_class_label', 'str', 'Presumed class designation; assinged to all cells regardless of mapping depth', {'index': True}),
+    ('subclass_label', 'str', 'Presumed subclass designation; assigned to all cells regardless of mapping depth', {'index': True}),
     ('quality_score', 'float', '', {'index': True}),
     ('norm_marker_sum', 'float', '', {'index': True}),
     ('seurat_cluster', 'str', 'Mapped cluster based on Seurat method', {'index': True}),
@@ -46,6 +46,9 @@ PatchSeq = make_table(
     ('tree_call', 'str', 'Tree mapping', {'index': True}),
     ('genes_detected', 'int', 'Number of genes detected', {'index': True}),
     ('t_type', 'str', 'Transcriptomic type = tree_first_cluster if tree_call in [Core, I1]', {'index': True}),
+    ('last_map', 'str', 'Last branch node that this cell mapped to with probability > 0.7', {'index': True}),
+    ('last_score', 'str', 'Probability of the last_map call', {'index': True}),
+    ('mapped_subclass', 'str', 'Subclass that this cell mapped to', {'index': True}),
 ])
 
 Cell.patch_seq = relationship(PatchSeq, back_populates="cell", cascade="delete", single_parent=True, uselist=False)

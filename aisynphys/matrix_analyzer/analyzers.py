@@ -1044,6 +1044,116 @@ class DynamicsAnalyzer(Analyzer):
         pass
 
 
+class CellAnalyzer(pg.QtCore.QObject):
+
+    sigOutputChanged = pg.QtCore.Signal(object)
+    
+    def __init__(self):
+        pg.QtCore.QObject.__init__(self)
+
+        self.text = {}
+        self.results = None
+
+        self.fields = [
+            ('cell_class_nonsynaptic', {'mode': 'enum', 'values': ['ex', 'in'], 'defaults' : {
+                'colormap': [(255, 0, 0, 255), (0, 0, 255)],
+                }}),
+            ('time_stamp', {'mode': 'range'}),
+            # ('rig_operator', {'mode': 'enum'}),
+        ]
+
+        self.cell_fields = [
+            ('target_layer', {'mode': 'enum', 'values':['2/3', '4', '5', '6'],
+                    'defaults': {'colormap':
+                        [(0, 255, 0, 255), (255, 217, 0, 255), (255, 0, 221, 255), (0, 0, 255, 255)]
+                    }}),
+            ('depth', {'mode': 'range'}),
+            ('cre_type', {'mode': 'enum'}),
+        ]
+
+        self.intrinsic_fields = [
+            ('input_resistance', {'mode': 'range'}),
+            ('upstroke_downstroke_ratio', {'mode': 'range'}),
+            ('fi_slope', {'mode': 'range'}),
+        ]
+
+        self.morpho_fields = [
+            ('dendrite_type', {'mode': 'enum', 'values': ['spiny', 'aspiny', 'sparsely spiny', 'NEI']}),
+            ('axon_origin', {'mode': 'enum'}),
+            ('cortical_layer', {'mode': 'enum', 'values': ['1', '2', '2/3', '4','5', '6a', '6b'],
+                    'defaults': {'colormap':
+                        [(255, 0, 0, 255), (0, 255, 145, 255), (0, 255, 0, 255), (255, 217, 0, 255), (255, 0, 221, 255), 
+                        (0, 170, 255, 255), (0, 255, 255, 255)]
+                    }}),
+            ('apical_trunc_distance', {'mode': 'range'}),
+            ('axon_trunc_distance', {'mode': 'range'}),
+        ]
+
+        self.patchseq_fields = [
+            ('nucleus', {'mode': 'enum'}),
+            ('area_400_10000bp', {'mode': 'range'}),
+            ('picogreen_yield', {'mode': 'range'}),
+            ('tree_call', {'mode': 'enum', 'values': ['I3', 'I2', 'I1', 'Core'],
+                        'defaults': {
+                                'colormap':
+                                [(255, 0, 0, 255), (255, 170, 0, 255), (0, 0, 255, 255), (0, 255, 0, 255)]
+                        },
+                    }),
+            ('t_type', {'mode': 'enum'}),
+        ]
+
+
+    def measure(self, cell_groups):
+        """Given a list of cells and a dict that groups cells together by class,
+        return a structure that describes cell properties such as intrinsic ephys,
+        morphology, transcriptomics.
+        """  
+
+        if self.results is not None:
+            return self.results
+
+
+        results = OrderedDict()
+        for cell_class, class_cells in cell_groups.items(): 
+            for cell in class_cells:
+                results[cell] = {
+                    'target_layer': cell.target_layer,
+                    'depth': cell.depth,
+                    'cre_type': cell.cre_type,
+                    'CellClass': cell_class,
+                    'cell_class_nonsynaptic': cell.cell_class_nonsynaptic,
+                    'time_stamp': cell.experiment.acq_timestamp,
+                    # 'rig_operator': cell.experiment.operator_name,
+                }
+                
+                cell_attributes = {
+                    cell.intrinsic: self.intrinsic_fields,
+                    cell.morphology: self.morpho_fields,
+                    cell.patch_seq: self.patchseq_fields,
+                }             
+
+                for attribute, fields in cell_attributes.items():
+                    cols = [field[0] for field in fields]
+                    if attribute is not None:  
+                        results[cell].update({col: getattr(attribute, col) for col in cols})
+                    else:
+                        results[cell].update({col: None for col in cols})
+
+        self.results = pd.DataFrame.from_dict(results, orient='index')
+        
+        return self.results
+
+    def output_fields(self):
+        fields = [self.cell_fields, self.intrinsic_fields, self.morpho_fields, self.patchseq_fields]
+        for field in fields:
+            self.fields.extend(field)    
+        
+        return self.fields
+
+    def invalidate_output(self):
+        self.results = None
+
+
 def format_trace(trace, baseline_win, x_offset=1e-3):
     baseline = float_mode(trace.time_slice(baseline_win[0],baseline_win[1]).data)
     trace = TSeries(data=(trace.data-baseline), sample_rate=db.default_sample_rate)

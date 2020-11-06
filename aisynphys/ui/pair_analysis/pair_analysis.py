@@ -350,8 +350,16 @@ class TSeriesPlot(pg.GraphicsLayoutWidget):
                 if len(prs) == 0:
                     continue
                 prl = PulseResponseList(prs)
-                post_ts = prl.post_tseries(align='spike', bsub=True)
                 
+                for mode in ['spike', 'peak', 'stim']:
+                    try:
+                        post_ts = prl.post_tseries(align=mode, bsub=True, alignment_failure_mode='average')
+                        break
+                    except Exception:
+                        post_ts = None
+                        continue
+                if post_ts is None:
+                    continue        
                 for trace in post_ts:
                     item = self.trace_plots[i].plot(trace.time_values, trace.data, pen=self.qc_color[qc])
                     if qc == 'qc_fail':
@@ -372,9 +380,21 @@ class TSeriesPlot(pg.GraphicsLayoutWidget):
                 if len(prs) == 0:
                     continue
                 prl = PulseResponseList(prs)
-                pre_ts = prl.pre_tseries(align='spike', bsub=True)
+                for mode in ['spike', 'peak', 'stim']:
+                    try:
+                        pre_ts = prl.pre_tseries(align=mode, bsub=True, alignment_failure_mode='average')
+                        break
+                    except Exception:
+                        pre_ts = None
+                        continue
+                if pre_ts is None:
+                    continue
                 for pr, spike in zip(prl, pre_ts):
-                    qc = 'qc_pass' if pr.stim_pulse.n_spikes == 1 else 'qc_fail'
+                    # pr.stim_pulse.n_spikes can == 1 but the spike time (ie max slope) is None, failing
+                    # the postsynaptic responses. Consider using pr.stim_pulse.first_spike_time != None
+                    # and qc failing these spikes as the traces are as well.
+                    qc = 'qc_pass' if pr.stim_pulse.first_spike_time is not None else 'qc_fail'
+                    
                     item = self.spike_plots[i].plot(spike.time_values, spike.data, pen=self.qc_color[qc])
                     if qc == 'qc_fail':
                         item.setZValue(-10)
@@ -566,8 +586,8 @@ class PairAnalysis(object):
             print('No fitable responses, bailing out')
         
         self.vc_plot.plot_responses({holding: self.sorted_responses['vc', holding] for holding in holdings})
-        self.ic_plot.plot_responses({holding: self.sorted_responses['ic', holding] for holding in holdings})
-
+        self.ic_plot.plot_responses({holding: self.sorted_responses['ic', holding] for holding in holdings})    
+      
     def fit_response_update(self):
         latency = self.ctrl_panel.user_params['User Latency']
         self.fit_responses(latency=latency)
@@ -636,8 +656,9 @@ class PairAnalysis(object):
             warning = 'Latency across modes differs by %s' % pg.siFormat(latency_diff, suffix='s')
             self.warnings.append(warning)
 
-        min_latency = np.min(latency_mode) < 0.4e-3
-        max_latency = np.max(latency_mode) > 3.1e-3
+        min_latency = np.nanmin(latency_mode) < 0.4e-3
+        max_latency = np.nanmax(latency_mode) > 3.1e-3
+        
         if min_latency and self.ctrl_panel.user_params['Gap junction call'] is False:
             self.warnings.append("Short latency; is this a gap junction?") 
 
@@ -661,7 +682,7 @@ class PairAnalysis(object):
             self.warnings.append("Mixed amplitude signs; pick ex/in carefully.")
         elif guess != self.ctrl_panel.user_params['Synapse call'] and not min_latency and not max_latency:
             self.warnings.append("Looks like an %s synapse??" % guess)
-        elif self.ctrl_panel['Polysynaptic call'] != guess and max_latency:
+        elif self.ctrl_panel.user_params['Polysynaptic call'] != guess and max_latency:
             self.warnings.append("Looks like a %s polysynaptic synpase??" % guess)
 
         print_warning = '\n'.join(self.warnings)

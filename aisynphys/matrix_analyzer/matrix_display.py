@@ -93,8 +93,10 @@ class MatrixDisplayFilter(object):
         if self.legend is not None:
             self.view_box.removeItem(self.legend)
         if len(self.colorMap.children()) == 0:
-            pg.QtGui.QMessageBox.information(self.main_window,'', "No Analysis ColorMap is selected, please add one and Update Results", pg.QtGui.QMessageBox.Ok)
-            raise Exception("No color maps are selected.")
+            pg.QtGui.QMessageBox.information(self.main_window,'', "No Analysis ColorMap is selected, please add one and Update Results to view Matrix Data", pg.QtGui.QMessageBox.Ok)
+            text = pg.TextItem(text="No Matrix Selected", color=(255, 255, 255))
+            text.setParent(self.view_box)
+            return
         cmap_item = [cmap for cmap in self.colorMap.children() if cmap['Enabled'] is True][0]
         # log_scale = self.params.child('log_scale').value()
         colors = cmap_item.value().color
