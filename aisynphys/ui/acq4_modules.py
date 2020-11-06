@@ -418,7 +418,7 @@ class PatchSeqMetadata(MetadataField):
                 self.widgets = {
                 'Seal': pg.ComboBox(items=['','GS','LS','NS','TF','NA']),
                 'Reporter': pg.ComboBox(items=['','red', 'green', 'yellow', '-', 'NA']),
-                'Nucleus': pg.ComboBox(items=['','+', '-']),
+                'Nucleus': pg.ComboBox(items=['','+', '-', '?']),
                 'End Seal': pg.QtGui.QCheckBox(''),
                 'Tube ID': pg.QtGui.QLineEdit(),
                 }
