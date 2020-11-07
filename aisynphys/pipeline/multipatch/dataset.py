@@ -71,6 +71,8 @@ class DatasetPipelineModule(MultipatchPipelineModule):
                     sync_rec=srec_entry,
                     electrode=electrode_entry,
                     start_time=rec.start_time,
+                    stim_name=(None if rec.stimulus is None else rec.stimulus.description),
+                    stim_meta=(None if rec.stimulus is None else rec.stimulus.save()),
                 )
                 session.add(rec_entry)
                 rec_entries[rec.device_id] = rec_entry
@@ -83,7 +85,6 @@ class DatasetPipelineModule(MultipatchPipelineModule):
                     recording=rec_entry,
                     clamp_mode=rec.clamp_mode,
                     patch_mode=rec.patch_mode,
-                    stim_name=rec.stimulus.description,
                     baseline_potential=rec.baseline_potential,
                     baseline_current=rec.baseline_current,
                     baseline_rms_noise=rec.baseline_rms_noise,

@@ -111,7 +111,6 @@ class MultiPatchProbe(MultiPatchRecording):
         return ind_freq, rec_delay
 
 
-
 class MultiPatchSyncRecAnalyzer(Analyzer):
     """Used for analyzing two or more synchronous patch clamp recordings where
     spikes are evoked in at least one and synaptic responses are recorded in
