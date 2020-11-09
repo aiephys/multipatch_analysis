@@ -12,6 +12,7 @@ from .resting_state import RestingStatePipelineModule
 from .patch_seq import PatchSeqPipelineModule
 from .gap_junction import GapJunctionPipelineModule
 from .intrinsic import IntrinsicPipelineModule
+from .cortical_location import CortexLocationPipelineModule
 
 
 class MultipatchPipeline(Pipeline):
@@ -31,6 +32,7 @@ class MultipatchPipeline(Pipeline):
         #SynapsePredictionPipelineModule,
         RestingStatePipelineModule,
         DynamicsPipelineModule,
+        CortexLocationPipelineModule
     ]
     
     def __init__(self, database, config):

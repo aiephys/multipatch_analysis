@@ -230,7 +230,7 @@ class ControlPanel(object):
     def __init__(self):
         self.user_latency = Parameter.create(name='User Latency', type='float', suffix='s', siPrefix=True, dec=True, value=default_latency)
         self.synapse = Parameter.create(name='Synapse call', type='list', values={'Excitatory': 'ex', 'Inhibitory': 'in', 'None': None})
-        self.disynaptic = Parameter.create(name='Disynaptic call', type='list', values={'Excitatory': 'ex', 'Inhibitory': 'in', 'Mixed': 'mix', 'None': None})
+        self.polysynaptic = Parameter.create(name='Polysynaptic call', type='list', values={'Excitatory': 'ex', 'Inhibitory': 'in', 'Mixed': 'mix', 'None': None})
         self.gap = Parameter.create(name='Gap junction call', type='bool')
         fit_cat = ['-55 VC', '-70 VC', '-55 IC', '-70 IC']
         fit_param = [
@@ -249,7 +249,7 @@ class ControlPanel(object):
         self.user_params = Parameter.create(name='user_params', type='group', children=[
             self.user_latency,
             self.synapse,
-            self.disynaptic,
+            self.polysynaptic,
             self.gap,
         ])
         self.output_params = Parameter.create(name='output_params', type='group', children=[
@@ -350,8 +350,16 @@ class TSeriesPlot(pg.GraphicsLayoutWidget):
                 if len(prs) == 0:
                     continue
                 prl = PulseResponseList(prs)
-                post_ts = prl.post_tseries(align='spike', bsub=True)
                 
+                for mode in ['spike', 'peak', 'stim']:
+                    try:
+                        post_ts = prl.post_tseries(align=mode, bsub=True, alignment_failure_mode='average')
+                        break
+                    except Exception:
+                        post_ts = None
+                        continue
+                if post_ts is None:
+                    continue        
                 for trace in post_ts:
                     item = self.trace_plots[i].plot(trace.time_values, trace.data, pen=self.qc_color[qc])
                     if qc == 'qc_fail':
@@ -372,9 +380,21 @@ class TSeriesPlot(pg.GraphicsLayoutWidget):
                 if len(prs) == 0:
                     continue
                 prl = PulseResponseList(prs)
-                pre_ts = prl.pre_tseries(align='spike', bsub=True)
+                for mode in ['spike', 'peak', 'stim']:
+                    try:
+                        pre_ts = prl.pre_tseries(align=mode, bsub=True, alignment_failure_mode='average')
+                        break
+                    except Exception:
+                        pre_ts = None
+                        continue
+                if pre_ts is None:
+                    continue
                 for pr, spike in zip(prl, pre_ts):
-                    qc = 'qc_pass' if pr.stim_pulse.n_spikes == 1 else 'qc_fail'
+                    # pr.stim_pulse.n_spikes can == 1 but the spike time (ie max slope) is None, failing
+                    # the postsynaptic responses. Consider using pr.stim_pulse.first_spike_time != None
+                    # and qc failing these spikes as the traces are as well.
+                    qc = 'qc_pass' if pr.stim_pulse.first_spike_time is not None else 'qc_fail'
+                    
                     item = self.spike_plots[i].plot(spike.time_values, spike.data, pen=self.qc_color[qc])
                     if qc == 'qc_fail':
                         item.setZValue(-10)
@@ -566,8 +586,8 @@ class PairAnalysis(object):
             print('No fitable responses, bailing out')
         
         self.vc_plot.plot_responses({holding: self.sorted_responses['vc', holding] for holding in holdings})
-        self.ic_plot.plot_responses({holding: self.sorted_responses['ic', holding] for holding in holdings})
-
+        self.ic_plot.plot_responses({holding: self.sorted_responses['ic', holding] for holding in holdings})    
+      
     def fit_response_update(self):
         latency = self.ctrl_panel.user_params['User Latency']
         self.fit_responses(latency=latency)
@@ -584,7 +604,7 @@ class PairAnalysis(object):
                 for holding in holdings:
                     self.fit_pass = False
                     sign = self.signs[mode][holding].get(self.ctrl_panel.user_params['Synapse call'], 
-                            self.signs[mode][holding].get(self.ctrl_panel.user_params['Disynaptic call'], 0))
+                            self.signs[mode][holding].get(self.ctrl_panel.user_params['Polysynaptic call'], 0))
                     
                     # ofp, x_offset, best_fit = fit_avg_response(self.traces, mode, holding, latency, sign)
                     prs = self.sorted_responses[mode, holding]['qc_pass']
@@ -636,8 +656,9 @@ class PairAnalysis(object):
             warning = 'Latency across modes differs by %s' % pg.siFormat(latency_diff, suffix='s')
             self.warnings.append(warning)
 
-        min_latency = np.min(latency_mode) < 0.4e-3
-        max_latency = np.max(latency_mode) > 3.1e-3
+        min_latency = np.nanmin(latency_mode) < 0.4e-3
+        max_latency = np.nanmax(latency_mode) > 3.1e-3
+        
         if min_latency and self.ctrl_panel.user_params['Gap junction call'] is False:
             self.warnings.append("Short latency; is this a gap junction?") 
 
@@ -661,8 +682,8 @@ class PairAnalysis(object):
             self.warnings.append("Mixed amplitude signs; pick ex/in carefully.")
         elif guess != self.ctrl_panel.user_params['Synapse call'] and not min_latency and not max_latency:
             self.warnings.append("Looks like an %s synapse??" % guess)
-        elif self.ctrl_panel['Disynaptic call'] != guess and max_latency:
-            self.warnings.append("Looks like a %s disynaptic synpase??" % guess)
+        elif self.ctrl_panel.user_params['Polysynaptic call'] != guess and max_latency:
+            self.warnings.append("Looks like a %s polysynaptic synpase??" % guess)
 
         print_warning = '\n'.join(self.warnings)
         self.ctrl_panel.output_params.child('Warnings').setValue(print_warning)
@@ -682,12 +703,12 @@ class PairAnalysis(object):
             'pre_cell_id': pre_cell_id,
             'post_cell_id': post_cell_id,
             'synapse_type': self.ctrl_panel.user_params['Synapse call'],
-            'disynaptic_type': self.ctrl_panel.user_params['Disynaptic call'],
+            'polysynaptic_type': self.ctrl_panel.user_params['Polysynaptic call'],
             'gap_junction': self.ctrl_panel.user_params['Gap junction call'],
             'comments': self.ctrl_panel.output_params['Comments', ''],
         }
 
-        if self.ctrl_panel.user_params['Synapse call'] is not None or self.ctrl_panel.user_params['Disynaptic call'] is not None:
+        if self.ctrl_panel.user_params['Synapse call'] is not None or self.ctrl_panel.user_params['Polysynaptic call'] is not None:
             meta.update({
             'fit_parameters': self.fit_params,
             'fit_pass': fit_pass,
@@ -751,7 +772,7 @@ class PairAnalysis(object):
 
     def load_saved_fit(self, record):
         data = record.notes        
-        pair_params = {'Synapse call': data.get('synapse_type', None), 'Disynaptic call': data.get('disynaptic_type', None), 'Gap junction call': data.get('gap_junction', False)}
+        pair_params = {'Synapse call': data.get('synapse_type', None), 'Polysynaptic call': data.get('polysynaptic_type', None), 'Gap junction call': data.get('gap_junction', False)}
         self.ctrl_panel.update_user_params(**pair_params)
         self.warnings = data.get('fit_warnings', [])
         self.ctrl_panel.output_params.child('Warnings').setValue('\n'.join(self.warnings))

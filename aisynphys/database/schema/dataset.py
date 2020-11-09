@@ -1,6 +1,7 @@
 from collections import OrderedDict
 import numpy as np
 from neuroanalysis.data import TSeries
+from neuroanalysis.stimuli import Stimulus
 from sqlalchemy.orm import relationship
 from . import make_table
 from .experiment import Experiment, Electrode, Pair, Cell
@@ -23,15 +24,35 @@ Experiment.sync_recs = relationship(SyncRec, order_by=SyncRec.id, back_populates
 SyncRec.experiment = relationship(Experiment, back_populates='sync_recs')
 
 
+class RecordingBase:
+    def __repr__(self):
+        sr_id = self.sync_rec.ext_id
+        ex_id = self.sync_rec.experiment.ext_id
+        return "<%s %s:%s.%s %s>" % (self.__class__.__name__, ex_id, sr_id, self.electrode.ext_id, self.stim_name)
+
+    @property
+    def stimulus(self):
+        """An instance of neuroanalysis.stimuli.Stimulus describing the stimulus protocol used during
+        this recording, or None if no stimulus information was recorded. 
+        """
+        stim = self.meta.get('stimulus', None)
+        if stim is None:
+            return None
+        return Stimulus.load(stim)
+
+
 Recording = make_table(
     name='recording',
+    base=RecordingBase,
     comment= "A recording represents a single contiguous sweep recorded from a single electrode.",
     columns=[
         ('sync_rec_id', 'sync_rec.id', 'References the synchronous recording to which this recording belongs.', {'index': True}),
         ('electrode_id', 'electrode.id', 'Identifies the electrode that generated this recording', {'index': True}),
         ('start_time', 'datetime', 'The clock time at the start of this recording'),
         ('sample_rate', 'int', 'Sample rate for this recording'),
-        ('device_name', 'str', 'Name of the device that generated this recording')
+        ('device_name', 'str', 'Name of the device that generated this recording'),
+        ('stim_name', 'str', 'The name of the stimulus protocol used in this recording, if any'),
+        ('stim_meta', 'object', 'A data structure describing the stimulus protocol'),
     ]
 )
 
@@ -49,7 +70,6 @@ PatchClampRecording = make_table(
         ('recording_id', 'recording.id', '', {'index': True, 'unique': True}),
         ('clamp_mode', 'str', 'The mode used by the patch clamp amplifier: "ic" or "vc"', {'index': True}),
         ('patch_mode', 'str', "The state of the membrane patch. E.g. 'whole cell', 'cell attached', 'loose seal', 'bath', 'inside out', 'outside out'"),
-        ('stim_name', 'str', "The name of the stimulus protocol"),
         ('baseline_potential', 'float', 'Median steady-state potential (recorded for IC or commanded for VC) during the recording'),
         ('baseline_current', 'float', 'Median steady-state current (recorded for VC or commanded for IC) during the recording'),
         ('baseline_rms_noise', 'float', 'RMS noise of the steady-state part of the recording'),

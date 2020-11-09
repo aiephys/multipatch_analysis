@@ -42,7 +42,7 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
         job_id = job['job_id']
 
         # Load experiment from DB
-        expt = db.experiment_from_timestamp(job_id, session=session)
+        expt = db.experiment_from_ext_id(job_id, session=session)
         nwb = expt.data
         if nwb is None:
             raise Exception('No NWB data for this experiment')
@@ -52,9 +52,8 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
         for cell in expt.cell_list:
             dev_id = cell.electrode.device_id
             recording_dict = get_intrinsic_recording_dict(expt, dev_id)
-            lp_recs = recording_dict['If_Curve'] + recording_dict['TargetV']
             results = {}
-            lp_results, error = IntrinsicPipelineModule.get_long_square_features(lp_recs, cell_id=cell.ext_id)
+            lp_results, error = IntrinsicPipelineModule.get_long_square_features(recording_dict['LP'], cell_id=cell.ext_id)
             errors += error
             chirp_results, error = IntrinsicPipelineModule.get_chirp_features(recording_dict['Chirp'], cell_id=cell.ext_id)
             errors += error
@@ -78,7 +77,7 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
                 sweep_list.append(sweep)
         
         if len(sweep_list) == 0:
-            errors.append('No sweeps passed qc for cell %s' % cell_id)
+            errors.append('No chirp sweeps passed qc for cell %s' % cell_id)
             return {}, errors
 
         sweep_set = SweepSet(sweep_list) 
@@ -118,7 +117,7 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
                 sweep_list.append(sweep)
         
         if len(sweep_list) == 0:
-            errors.append('No sweeps passed qc for cell %s' % cell_id)
+            errors.append('No long square sweeps passed qc for cell %s' % cell_id)
             return {}, errors
 
         sweep_set = SweepSet(sweep_list)    
@@ -128,16 +127,19 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
         try:
             analysis = lsa.analyze(sweep_set)
         except Exception as exc:
-            errors.append('Error running IPFX analysis for cell %s: %s' % (cell_id, str(exc)))
+            errors.append('Error running long square analysis for cell %s: %s' % (cell_id, str(exc)))
             return {}, errors
         
         analysis_dict = lsa.as_dict(analysis)
         output = get_complete_long_square_features(analysis_dict) 
+        avg_rate = np.mean(analysis['spiking_sweeps'].avg_rate)
         
         results = {
+            'avg_firing_rate': avg_rate,
             'rheobase': output['rheobase_i'] * 1e-9, #unscale from pA,
             'fi_slope': output['fi_fit_slope'] * 1e-9, #unscale from pA,
             'input_resistance': output['input_resistance'] * 1e6, #unscale from MOhm,
+            'input_resistance_ss': output['input_resistance_ss'] * 1e6, #unscale from MOhm,
             'sag': output['sag'],
             'adaptation_index': output['adapt_mean'],
             'upstroke_downstroke_ratio': output['upstroke_downstroke_ratio_hero'],
@@ -149,11 +151,11 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
             'peak_deltav': output['peak_deltav_hero'],
             'fast_trough_deltav': output['fast_trough_deltav_hero'],
 
-            'isi_adapt_ratio': output['isi_adapt_ratio_hero'],
-            'upstroke_adapt_ratio': output['upstroke_adapt_ratio_hero'],
-            'downstroke_adapt_ratio': output['downstroke_adapt_ratio_hero'],
-            'width_adapt_ratio': output['width_adapt_ratio_hero'],
-            'threshold_v_adapt_ratio': output['threshold_v_adapt_ratio_hero'],
+            'isi_adapt_ratio': output['isi_adapt_ratio'],
+            'upstroke_adapt_ratio': output['upstroke_adapt_ratio'],
+            'downstroke_adapt_ratio': output['downstroke_adapt_ratio'],
+            'width_adapt_ratio': output['width_adapt_ratio'],
+            'threshold_v_adapt_ratio': output['threshold_v_adapt_ratio'],
         }
         return results, errors
 
@@ -169,24 +171,28 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
         q = q.filter(db.Experiment.ext_id.in_(job_ids))
         return q.all()
 
+try:
+    class MPSweep(Sweep):
+        """Adapter for neuroanalysis.Recording => ipfx.Sweep
+        """
+        def __init__(self, rec, t0=0):
+            # pulses may have different start times, so we shift time values to make all pulses start at t=0
+            pri = rec['primary'].copy(t0=t0)
+            cmd = rec['command'].copy()
+            t = pri.time_values
+            v = pri.data * 1e3  # convert to mV
+            holding = [i for i in rec.stimulus.items if i.description=='holding current']
+            if len(holding) == 0:
+                # TODO: maybe log this error
+                return None
+            holding = holding[0].amplitude
+            i = (cmd.data - holding) * 1e12   # convert to pA with holding current removed
+            srate = pri.sample_rate
+            sweep_num = rec.parent.key
+            # modes 'ic' and 'vc' should be expanded
+            clamp_mode = "CurrentClamp" if rec.clamp_mode=="ic" else "VoltageClamp" 
 
-class MPSweep(Sweep):
-    """Adapter for neuroanalysis.Recording => ipfx.Sweep
-    """
-    def __init__(self, rec, t0=0):
-        # pulses may have different start times, so we shift time values to make all pulses start at t=0
-        pri = rec['primary'].copy(t0=t0)
-        cmd = rec['command'].copy()
-        t = pri.time_values
-        v = pri.data * 1e3  # convert to mV
-        holding = [i for i in rec.stimulus.items if i.description=='holding current']
-        if len(holding) == 0:
-            # TODO: maybe log this error
-            return None
-        holding = holding[0].amplitude
-        i = (cmd.data - holding) * 1e12   # convert to pA with holding current removed
-        srate = pri.sample_rate
-        sweep_num = rec.parent.key
-        clamp_mode = rec.clamp_mode  # this will be 'ic' or 'vc'; not sure if that's right
+            Sweep.__init__(self, t, v, i, clamp_mode, srate, sweep_number=sweep_num)
+except ImportError:
+    pass
 
-        Sweep.__init__(self, t, v, i, clamp_mode, srate, sweep_number=sweep_num)

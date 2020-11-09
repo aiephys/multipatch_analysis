@@ -113,8 +113,13 @@ class Pipeline(object):
                     if err_lines[0].startswith('Traceback '):
                         err_lines = err_lines[1:]
                     if re.match(r'  File \".*\", line \d+, .*', err_lines[0]) is not None:
-                        tb_lines.append(err_lines[:2])
-                        err_lines = err_lines[2:]
+                        # found a traceback stack line; might be followed by a code line
+                        if err_lines[1].startswith('    '):
+                            tb_lines.append(err_lines[:2])
+                            err_lines = err_lines[2:]
+                        else:
+                            tb_lines.append(err_lines[:1])
+                            err_lines = err_lines[1:]
                     else:
                         break
                 if len(err_lines) == 0:

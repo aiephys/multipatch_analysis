@@ -89,6 +89,8 @@ class CellClass(object):
         return {True: 'ex', False: 'in'}.get(self.is_excitatory, None)
 
     def __contains__(self, cell):
+        if not self.criteria:
+            return True
         morpho = cell.morphology
         patchseq = cell.patch_seq
         objs = [cell, morpho, patchseq]

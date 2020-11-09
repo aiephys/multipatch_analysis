@@ -1,6 +1,6 @@
 from sqlalchemy.orm import relationship
 from . import make_table
-from .experiment import Pair
+from .synapse import Synapse, PolySynapse
 
 __all__ = ['RestingStateFit']
 
@@ -9,8 +9,9 @@ RestingStateFit = make_table(
     name='resting_state_fit',
     comment="""Contains curve fits to averages of "resting state" synaptic responses.""",
     columns=[
-        ('pair_id', 'pair.id', 'The ID of the entry in the pair table to which these results apply', {'index': True}),
-
+        ('synapse_id', 'synapse.id', 'The ID of the entry in the synapse table to which these results apply', {'index': True}),
+        ('poly_synapse_id', 'poly_synapse.id', 'The ID of the entry in the poly_synapse table to which these results apply', {'index': True}),
+        
         # current clamp
         ('ic_amp', 'float', 'fit amplitude of current clamp average first pulses'),
         ('ic_latency', 'float', 'fit time elapsed since the time of presynaptic spike (max dv/dt) of current clamp data'),
@@ -37,5 +38,8 @@ RestingStateFit = make_table(
     ]
 )
 
-Pair.resting_state_fit = relationship(RestingStateFit, back_populates="pair", cascade="delete", single_parent=True, uselist=False)
-RestingStateFit.pair = relationship(Pair, back_populates="resting_state_fit", single_parent=True)
+Synapse.resting_state_fit = relationship(RestingStateFit, back_populates="synapse", cascade="save-update, delete", single_parent=True, uselist=False)
+RestingStateFit.synapse = relationship(Synapse, back_populates="resting_state_fit", single_parent=True)
+
+PolySynapse.resting_state_fit = relationship(RestingStateFit, back_populates="poly_synapse", cascade="save-update, delete", single_parent=True, uselist=False)
+RestingStateFit.poly_synapse = relationship(PolySynapse, back_populates="resting_state_fit", single_parent=True)

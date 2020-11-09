@@ -36,6 +36,8 @@ class MultiPatchSyncRecording(MiesSyncRecording):
         stim = miesrec.meta['notebook']['Stim Wave Name'].lower()
         if any(substr in stim for substr in ['pulsetrain', 'recovery', 'pulstrn']):
             return MultiPatchProbe(miesrec)
+        elif any(substr in stim for substr in ['mixedfs']):
+            return MultiPatchMixedFreqTrain(miesrec)
         else:
             return MultiPatchRecording(miesrec)
 
@@ -111,6 +113,11 @@ class MultiPatchProbe(MultiPatchRecording):
         return ind_freq, rec_delay
 
 
+class MultiPatchMixedFreqTrain(MultiPatchRecording):
+    """A spike train composed from random interspike intevals.
+    """
+    pass
+
 
 class MultiPatchSyncRecAnalyzer(Analyzer):
     """Used for analyzing two or more synchronous patch clamp recordings where
@@ -135,7 +142,6 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
             * spikes: list of presynaptic spikes detected 
             * response: time slice of the postsynaptic recording
             * pre_rec: time slice of the presynaptic recording
-            * baseline
         
         """
         # detect presynaptic spikes
@@ -143,13 +149,6 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         spikes = pulse_stim.evoked_spikes()
         # spikes looks like:
         #   [{'pulse_n', 'pulse_start', 'pulse_end', 'spikes': [...]}, ...]
-
-        if not isinstance(pre_rec, MultiPatchProbe):
-            # this does not look like the correct kind of stimulus; bail out
-            # Ideally we can make this agnostic to the exact stim type in the future,
-            # but for now we rely on the delay period between pulses 8 and 9 to get
-            # a baseline measurement.
-            return []
 
         # Select ranges to extract from postsynaptic recording
         result = []
@@ -189,15 +188,6 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
 
             # Extract presynaptic spike and stimulus command
             pulse['pre_rec'] = pre_rec.time_slice(pulse['rec_start'], pulse['rec_stop'])
-
-            # select baseline region between 8th and 9th pulses
-            if len(spikes) > 8:
-                baseline_dur = 100e-3
-                stop = spikes[8]['pulse_start']
-                start = stop - baseline_dur
-                pulse['baseline'] = post_rec['primary'].time_slice(start, stop)
-                pulse['baseline_start'] = start
-                pulse['baseline_stop'] = stop
 
             # Add minimal QC metrics for excitatory and inhibitory measurements
             pulse_window = [pulse['rec_start'], pulse['rec_stop']]
@@ -313,19 +303,29 @@ class PulseResponseList(object):
         for pr in self.prs:
             yield pr
 
-    def post_tseries(self, align=None, bsub=False, bsub_win=5e-3):
+    def post_tseries(self, align=None, bsub=False, bsub_win=5e-3, alignment_failure_mode='ignore'):
         """Return a TSeriesList of all postsynaptic recordings.
         """
-        return self._get_tserieslist('post_tseries', align, bsub, bsub_win)
+        return self._get_tserieslist('post_tseries', align, bsub, bsub_win, alignment_failure_mode)
 
-    def pre_tseries(self, align=None, bsub=False, bsub_win=5e-3):
+    def pre_tseries(self, align=None, bsub=False, bsub_win=5e-3, alignment_failure_mode='ignore'):
         """Return a TSeriesList of all presynaptic recordings.
         """
-        return self._get_tserieslist('pre_tseries', align, bsub, bsub_win)
+        return self._get_tserieslist('pre_tseries', align, bsub, bsub_win, alignment_failure_mode)
 
-    def _get_tserieslist(self, ts_name, align, bsub, bsub_win=5e-3):
+    def _get_tserieslist(self, ts_name, align, bsub, bsub_win=5e-3, alignment_failure_mode='ignore'):
         tsl = []
-        for pr in self.prs:
+        if align is not None and alignment_failure_mode == 'average':
+            if align == 'spike':
+                average_align_t = np.mean([p.stim_pulse.first_spike_time for p in self.prs if p.stim_pulse.first_spike_time is not None])
+            elif align == 'peak':
+                average_align_t = np.mean([p.stim_pulse.spikes[0].peak_time for p in self.prs if p.stim_pulse.n_spikes==1 and p.stim_pulse.spikes[0].peak_time is not None])
+            elif align == 'stim':
+                average_align_t = np.mean([p.stim_pulse.onset_time for p in self.prs if p.stim_pulse.onset_time is not None])
+            else:
+                raise ValueError("align must be None, 'spike', 'peak', or 'pulse'.")
+        
+        for pr in self.prs:   
             ts = getattr(pr, ts_name)
             stim_time = pr.stim_pulse.onset_time
 
@@ -337,17 +337,30 @@ class PulseResponseList(object):
                 else:
                     baseline = float_mode(baseline_data)
                 ts = ts - baseline
-            
+
             if align is not None:
                 if align == 'spike':
+                # first_spike_time is the max dv/dt of the spike
                     align_t = pr.stim_pulse.first_spike_time
-                    # ignore PRs with no known spike time
-                    if align_t is None:
-                        continue
                 elif align == 'pulse':
                     align_t = stim_time
+                elif align == 'peak':
+                    # peak of the first spike
+                    align_t = pr.stim_pulse.spikes[0].peak_time if pr.stim_pulse.n_spikes==1 else None
                 else:
-                    raise ValueError("align must be None, 'spike', or 'pulse'.")
+                    raise ValueError("align must be None, 'spike', 'peak', or 'pulse'.")
+                
+                if align_t is None:
+                    if alignment_failure_mode == 'ignore':
+                        # ignore PRs with no known timing
+                        continue
+                    elif alignment_failure_mode == 'average':
+                        align_t = average_align_t
+                        if np.isnan(align_t):
+                            raise Exception("average %s time is None, try another mode" % align)
+                    elif alignment_failure_mode == 'raise':
+                        raise Exception("%s time is not available for pulse %s and can't be aligned" % (align, pr))
+                
                 ts = ts.copy(t0=ts.t0 - align_t)
 
             tsl.append(ts)

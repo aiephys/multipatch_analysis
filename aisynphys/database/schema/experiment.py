@@ -195,12 +195,15 @@ Pair = make_table(
         ('experiment_id', 'experiment.id', '', {'index': True}),
         ('pre_cell_id', 'cell.id', 'ID of the presynaptic cell', {'index': True}),
         ('post_cell_id', 'cell.id', 'ID of the postsynaptic cell', {'index': True}),
-        ('has_synapse', 'bool', 'Whether a chemical synapse was manually detected for this cell pair', {'index': True}),
+        ('has_synapse', 'bool', 'Whether a chemical monosynaptic connection was manually detected for this cell pair', {'index': True}),
+        ('has_polysynapse', 'bool', 'Whether a polysynaptic connection was manually detected for this cell pair', {'index': True}),
         ('has_electrical', 'bool', 'Whether an electrical synapse / gap junction was manually detected for this cell pair', {'index': True}),
         ('crosstalk_artifact', 'float', 'Amplitude of crosstalk artifact measured in current clamp'),
         ('n_ex_test_spikes', 'int', 'Number of QC-passed spike-responses recorded for this pair at excitatory holding potential', {'index': True}),
         ('n_in_test_spikes', 'int', 'Number of QC-passed spike-responses recorded for this pair at inhibitory holding potential', {'index': True}),
         ('distance', 'float', 'Distance between somas (in m)'),
+        ('lateral_distance', 'float', 'Distance between somas perpendicular to the pia-wm axis (in m)'),
+        ('vertical_distance', 'float', 'Distance between somas along the pia-wm axis (in m)'),
         ('reciprocal_id', 'pair.id', 'ID of the reciprocal to this cell pair (the pair with pre_cell and post_cell swapped)', {'index': True}),
     ]
 )
