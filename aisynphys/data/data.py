@@ -36,6 +36,8 @@ class MultiPatchSyncRecording(MiesSyncRecording):
         stim = miesrec.meta['notebook']['Stim Wave Name'].lower()
         if any(substr in stim for substr in ['pulsetrain', 'recovery', 'pulstrn']):
             return MultiPatchProbe(miesrec)
+        elif any(substr in stim for substr in ['mixedfs']):
+            return MultiPatchMixedFreqTrain(miesrec)
         else:
             return MultiPatchRecording(miesrec)
 
@@ -109,6 +111,12 @@ class MultiPatchProbe(MultiPatchRecording):
         rec_delay = np.round(np.diff(pulses).max(), 3)
 
         return ind_freq, rec_delay
+
+
+class MultiPatchMixedFreqTrain(MultiPatchRecording):
+    """A spike train composed from random interspike intevals.
+    """
+    pass
 
 
 class MultiPatchSyncRecAnalyzer(Analyzer):

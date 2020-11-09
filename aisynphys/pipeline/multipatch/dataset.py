@@ -9,7 +9,7 @@ from .pipeline_module import MultipatchPipelineModule
 from .experiment import ExperimentPipelineModule
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.data import PatchClampRecording
-from ...data import Experiment, MultiPatchDataset, MultiPatchProbe, MultiPatchSyncRecAnalyzer
+from ...data import Experiment, MultiPatchDataset, MultiPatchProbe, MultiPatchMixedFreqTrain, MultiPatchSyncRecAnalyzer
 from neuroanalysis.analyzers.stim_pulse import PatchClampStimPulseAnalyzer
 from neuroanalysis.analyzers.baseline import BaselineDistributor
 from neuroanalysis.util.optional_import import optional_import
@@ -113,17 +113,19 @@ class DatasetPipelineModule(MultipatchPipelineModule):
                     pcrec_entry.nearest_test_pulse = tp_entry
                     
                 # import information about STP protocol
-                if not isinstance(rec, MultiPatchProbe):
+                if not isinstance(rec, (MultiPatchProbe, MultiPatchMixedFreqTrain)):
                     continue
-                srec_has_mp_probes = True
-                ind_freq, rec_delay = rec.stim_params()
 
-                mprec_entry = db.MultiPatchProbe(
-                    patch_clamp_recording=pcrec_entry,
-                    induction_frequency=ind_freq,
-                    recovery_delay=rec_delay,
-                )
-                session.add(mprec_entry)
+                srec_has_mp_probes = True
+
+                if isinstance(rec, MultiPatchProbe):
+                    ind_freq, rec_delay = rec.stim_params()
+                    mprec_entry = db.MultiPatchProbe(
+                        patch_clamp_recording=pcrec_entry,
+                        induction_frequency=ind_freq,
+                        recovery_delay=rec_delay,
+                    )
+                    session.add(mprec_entry)
             
                 # import presynaptic stim pulses
                 psa = PatchClampStimPulseAnalyzer.get(rec)

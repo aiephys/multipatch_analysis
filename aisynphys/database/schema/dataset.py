@@ -25,10 +25,10 @@ SyncRec.experiment = relationship(Experiment, back_populates='sync_recs')
 
 
 class RecordingBase:
-    def __str__(self):
+    def __repr__(self):
         sr_id = self.sync_rec.ext_id
         ex_id = self.sync_rec.experiment.ext_id
-        return "<%s %s:%s.%s >" % (self.__class__.__name__, ex_id, sr_id, self.ext_id)
+        return "<%s %s:%s.%s %s>" % (self.__class__.__name__, ex_id, sr_id, self.electrode.ext_id, self.stim_name)
 
     @property
     def stimulus(self):
@@ -50,7 +50,7 @@ Recording = make_table(
         ('electrode_id', 'electrode.id', 'Identifies the electrode that generated this recording', {'index': True}),
         ('start_time', 'datetime', 'The clock time at the start of this recording'),
         ('sample_rate', 'int', 'Sample rate for this recording'),
-        ('device_name', 'str', 'Name of the device that generated this recording')
+        ('device_name', 'str', 'Name of the device that generated this recording'),
         ('stim_name', 'str', 'The name of the stimulus protocol used in this recording, if any'),
         ('stim_meta', 'object', 'A data structure describing the stimulus protocol'),
     ]
