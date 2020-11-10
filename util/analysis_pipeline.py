@@ -8,7 +8,7 @@ from aisynphys import config
 
 if __name__ == '__main__':
     logging.basicConfig(format="%(message)s")
-    logging.getLogger().setLevel(logging.INFO)
+    logging.getLogger('aisynphys').setLevel(logging.INFO)
     all_pipelines = all_pipelines()
     
     parser = argparse.ArgumentParser(description="Process analysis pipeline jobs")
@@ -34,7 +34,7 @@ if __name__ == '__main__':
     if args.debug:
         args.local = True
         import pyqtgraph as pg 
-        logging.getLogger().setLevel(logging.DEBUG)
+        logging.getLogger('aisynphys').setLevel(logging.DEBUG)
         pg.dbg()
 
     try:

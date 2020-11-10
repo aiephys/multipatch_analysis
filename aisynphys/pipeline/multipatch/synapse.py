@@ -1,7 +1,7 @@
 # coding: utf8
 from __future__ import print_function, division
 
-import os
+import os, logging
 import numpy as np
 import pyqtgraph as pg
 from collections import OrderedDict
@@ -151,6 +151,7 @@ class SynapsePipelineModule(MultipatchPipelineModule):
 def generate_synapse_record(pair, db, session, notes_rec, syn='mono', max_ind_freq=50):
     """Generate synapse record and associated avg_response_fits.
     'syn' input denotes whether this is a mono- or poly-synaptic event"""
+    logger = logging.getLogger(__name__)
     errors = []
 
     # create a DB record for this synapse
@@ -159,13 +160,13 @@ def generate_synapse_record(pair, db, session, notes_rec, syn='mono', max_ind_fr
             pair_id=pair.id,
             synapse_type=notes_rec.notes['synapse_type'],
         )
-        print("add synapse:", pair, pair.id)
+        logger.info("add synapse: %s %s", pair, pair.id)
     if syn == 'poly':
         syn_entry = db.PolySynapse(
             pair_id=pair.id,
             synapse_type=notes_rec.notes['polysynaptic_type'],
         )
-        print("add polysynapse:", pair, pair.id)
+        logger.info("add polysynapse: %s %s", pair, pair.id)
 
     # fit PSP shape against averaged PSPs/PCSs at -70 and -55 mV
     #   - selected from <= 50Hz trains
