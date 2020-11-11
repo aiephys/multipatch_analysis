@@ -140,7 +140,8 @@ class PipelineModule(object):
             database.dispose_all_engines()
             
             logger.info("Processing %d jobs (parallel)..", len(run_jobs))
-            pool = multiprocessing.Pool(processes=workers, maxtasksperchild=self.maxtasksperchild)
+            ctx = multiprocessing.get_context('spawn')  # Fork kills!
+            pool = ctx.Pool(processes=workers, maxtasksperchild=self.maxtasksperchild)
             try:
                 # would like to just call self._run_job, but we can't pass a method to Pool.map()
                 # instead we wrap this with the run_job_parallel function defined below.
