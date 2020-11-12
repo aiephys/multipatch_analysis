@@ -1,6 +1,6 @@
 from .genotypes import FLUOROPHORES
 
-INHIBITORY_CRE_TYPES = ['sst', 'pvalb', 'vip', 'ndnf', 'chat', 'htr3a', 'nos1', 'chrna2', 'mDlx', '3xcorehI56i']
+INHIBITORY_CRE_TYPES = ['sst', 'pvalb', 'vip', 'ndnf', 'chat', 'htr3a', 'nos1', 'chrna2', 'mDlx', '3xcorehI56i', 'tac1']
 EXCITATORY_CRE_TYPES = ['tlx3', 'sim1', 'fam84b', 'rorb', 'ntsr1', 'rbp4', 'ctgf', 'glt25d2', 'slc17a8', 'cux2', 'nr5a1', 'eHGT_078m', '3xHGT_073m(core)']
 ALL_CRE_TYPES = INHIBITORY_CRE_TYPES + EXCITATORY_CRE_TYPES + ['unknown']
 
