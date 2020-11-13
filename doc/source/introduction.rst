@@ -1,0 +1,9 @@
+Introduction
+============
+
+
+A major goal of the `Allen Institute for Brain Science <https://alleninstitute.org/what-we-do/brain-science/>`_ is to catalog and describe the many cell types found in the brain. The `Synaptic Physiology project <https://portal.brain-map.org/explore/connectivity/synaptic-physiology>`_ advances this goal by examining the synaptic connectivity between neuronal subclasses in human and mouse cortex. We have generated data from thousands of human and mouse synapses using in vitro simultaneous patch clamp recordings. These recordings are used to describe the connection probability, strength, kinetics, and short-term plasticity of synapses in the context of the major cortical cell subclasses. The data from this project are available for public use
+
+The main purposes of this documentation are to (1) describe the structure and contents of the synaptic physiology dataset, and (2) to describe the tools and API used to access and analyze the dataset. We've included tools and information that audiences with different levels of programming expertise. Look to the :ref:`Interactive Tools <interactive_tools>` for graphical interfaces that will help you nagivate and explore the data, but with limited custom analysis. For those who want to dig into the data deeper and are familiar with database queries, see our :ref:`API Reference <api_reference>` on how best to get started.
+
+We hope to engage with the community who are interested in our data and tools. You can interact with us, and the larger Allen Institute community, via the `Allen Brain Map Community Forum <https://community.brain-map.org/>`_. Search for, or tag your post with `synaptic-physiology`. You can also `email us directly <synapticphysiology@alleninstitute.org>`_ to stay up to date on new data and tools as they become available or to ask us a question.
