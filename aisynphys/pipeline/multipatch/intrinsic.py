@@ -5,14 +5,16 @@ For generating a table that describes cell intrinisic properties
 """
 from __future__ import print_function, division
 
-import traceback, sys
+import traceback, sys, logging
 import numpy as np   
 
 from neuroanalysis.util.optional_import import optional_import
 extractors_for_sweeps = optional_import('ipfx.data_set_features', 'extractors_for_sweeps')
 LongSquareAnalysis = optional_import('ipfx.stimulus_protocol_analysis', 'LongSquareAnalysis')
 Sweep, SweepSet = optional_import('ipfx.sweep', ['Sweep', 'SweepSet'])
-extract_chirp_features = optional_import('ipfx.chirp_features', 'extract_chirp_features')
+FeatureError = optional_import('ipfx.error', 'FeatureError')
+extract_chirp_features, extract_chirp_fft = optional_import(
+    'ipfx.chirp_features', ['extract_chirp_features', 'extract_chirp_fft'])
 get_complete_long_square_features = optional_import('ipfx.bin.features_from_output_json', 'get_complete_long_square_features')
 
 from .pipeline_module import MultipatchPipelineModule
@@ -33,7 +35,9 @@ SPIKE_FEATURES = [
 class IntrinsicPipelineModule(MultipatchPipelineModule):
     
     name = 'intrinsic'
-    dependencies = [ExperimentPipelineModule, DatasetPipelineModule]
+    dependencies = [ExperimentPipelineModule, 
+                    DatasetPipelineModule
+                    ]
     table_group = ['intrinsic']
 
     @classmethod
@@ -43,19 +47,23 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
 
         # Load experiment from DB
         expt = db.experiment_from_ext_id(job_id, session=session)
-        nwb = expt.data
-        if nwb is None:
-            raise Exception('No NWB data for this experiment')
+        try:
+            assert expt.data is not None
+            # this should catch corrupt NWBs
+            assert expt.data.contents is not None
+        except Exception:
+            error = 'No NWB data for this experiment'
+            return [error]
 
         n_cells = len(expt.cell_list)
         errors = []
         for cell in expt.cell_list:
             dev_id = cell.electrode.device_id
-            recording_dict = get_intrinsic_recording_dict(expt, dev_id)
-            results = {}
-            lp_results, error = IntrinsicPipelineModule.get_long_square_features(recording_dict['LP'], cell_id=cell.ext_id)
+            recording_dict = get_intrinsic_recording_dict(expt, dev_id, check_qc=True)
+            
+            lp_results, error = IntrinsicPipelineModule.get_long_square_features(recording_dict['LP'], cell_id=cell.id)
             errors += error
-            chirp_results, error = IntrinsicPipelineModule.get_chirp_features(recording_dict['Chirp'], cell_id=cell.ext_id)
+            chirp_results, error = IntrinsicPipelineModule.get_chirp_features(recording_dict['Chirp'], cell_id=cell.id)
             errors += error
             # Write new record to DB
             conn = db.Intrinsic(cell_id=cell.id, **lp_results, **chirp_results)
@@ -82,13 +90,22 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
 
         sweep_set = SweepSet(sweep_list) 
         try:
-            all_chirp_features = extract_chirp_features(sweep_set)
+            # all_chirp_features = extract_chirp_features(sweep_set)
+            all_chirp_features = extract_chirp_fft(sweep_set, min_freq=1, max_freq=15)
             results = {
                 'chirp_peak_freq': all_chirp_features['peak_freq'],
                 'chirp_3db_freq': all_chirp_features['3db_freq'],
                 'chirp_peak_ratio': all_chirp_features['peak_ratio'],
+                'chirp_peak_impedance': all_chirp_features['peak_impedance'],
+                'chirp_sync_freq': all_chirp_features['sync_freq'],
+                'chirp_inductive_phase': all_chirp_features['total_inductive_phase'],
             }
+        except FeatureError as exc:
+            logging.warning(f'Error processing chirps for cell {cell_id}: {str(exc)}')
+            errors.append('Error processing chirps for cell %s: %s' % (cell_id, str(exc)))
+            results = {}
         except Exception as exc:
+            logging.exception(f'Error processing chirps for cell {cell_id}')
             errors.append('Error processing chirps for cell %s: %s' % (cell_id, str(exc)))
             results = {}
         
