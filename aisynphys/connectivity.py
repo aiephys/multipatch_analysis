@@ -127,7 +127,7 @@ def measure_connectivity(pair_groups, alpha=0.05, sigma=None, fit_model=None, di
         ConnectivityModel subclass to fit Cp profile. If combined with
         sigma the fit will be fixed to that sigma. If None, then fit results
         are ommitted from the results
-    dist_measure : str | 'distance'
+    dist_measure : str
         Which distance measure to use when calculating connection probability.
         Must be one of 'distance', 'lateral_distance', 'vertical_distance' columns
         from Pair table in SynPhys database
