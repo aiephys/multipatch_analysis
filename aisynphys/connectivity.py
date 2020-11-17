@@ -338,10 +338,10 @@ class ConnectivityModel:
         n = 6
         p_bins = np.linspace(bounds[0][0], bounds[0][1], n)
         if fixed_max is not None:
-            p_bins = [fixed_max] * n
+            p_bins = [fixed_max]*2
         s_bins = np.linspace(bounds[1][0], bounds[1][1], n)
         if fixed_size is not None:
-            s_bins = [fixed_size] * n
+            s_bins = [fixed_size]*2
         best = None
         # Most minimization methods fail to find the global minimum for this problem.
         # Instead, we systematically search over a large (n x n) range of the parameter space
