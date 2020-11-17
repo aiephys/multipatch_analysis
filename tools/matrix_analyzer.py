@@ -125,18 +125,6 @@ if __name__ == '__main__':
             {'cre_type': ('pvalb', 'sst', 'vip'), 'target_layer': '6', 'display_names': ('L6', 'Inhibitory\npv, sst, vip'), 'cortical_layer': ('6a', '6b')},     
         ]),
 
-        ('Pyramidal / Nonpyramidal by layer', [
-            {'pyramidal': True, 'target_layer': '2', 'display_names': ('L2', 'Pyr')},
-            {'pyramidal': False, 'target_layer': '2', 'display_names':('L2', 'Non-Pyr')},
-            {'pyramidal': True, 'target_layer': '3', 'display_names':('L3', 'Pyr')},
-            {'pyramidal': False, 'target_layer': '3', 'display_names':('L3', 'Non-Pyr')},
-            {'pyramidal': True, 'target_layer': '4', 'display_names':('L4', 'Pyr')},
-            {'pyramidal': False, 'target_layer': '4', 'display_names':('L4', 'Non-Pyr')},
-            {'pyramidal': True, 'target_layer': '5', 'display_names':('L5', 'Pyr')},
-            {'pyramidal': False, 'target_layer': '5', 'display_names':('L5', 'Non-Pyr')},
-            {'pyramidal': True, 'target_layer': '6', 'display_names':('L6', 'Pyr')},
-            {'pyramidal': False, 'target_layer': '6', 'display_names':('L6', 'Non-Pyr')},
-        ]),
 
         ('Pyramidal Cells', [
             {'dendrite_type': 'spiny', 'target_layer': '2', 'cortical_layer': '2', 'display_names': ('L2', 'Pyr\nspiny')},
