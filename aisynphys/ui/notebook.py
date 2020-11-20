@@ -226,25 +226,32 @@ def show_connectivity_matrix(ax, results, pre_cell_classes, post_cell_classes, c
     return im, cbar, labels
 
 
-def get_metric_data(metric, db, pre_classes=None, post_classes=None, pair_query_args=None):
-    pair_query_args = pair_query_args or {}
-
-    metrics = {
+def get_metric_data(metric, db, pre_classes=None, post_classes=None, pair_query_args=None, metrics=None):
+    synapse_metrics = {
         #                               name                         unit   scale alpha  db columns                                    colormap      log     clim           text format
-        'psp_amplitude':               ('PSP Amplitude',             'mV',  1e3,  1,     [db.Synapse.psp_amplitude],                   'bwr',        False,  (-1.5, 1.5),       "%0.2f mV"),
-        'psp_rise_time':               ('PSP Rise Time',             'ms',  1e3,  0.5,   [db.Synapse.psp_rise_time],                   'viridis_r',  True,  (1, 10),        "%0.2f ms"),
-        'psp_decay_tau':               ('PSP Decay Tau',             'ms',  1e3,  0.01,     [db.Synapse.psp_decay_tau],                 'viridis_r',  True,  (1, 200),       "%0.2f ms"),
+        'psp_amplitude':               ('PSP Amplitude',             'mV',  1e3,  1,     [db.Synapse.psp_amplitude],                   'bwr',        False,  (-1.5, 1.5),   "%0.2f mV"),
+        'psp_rise_time':               ('PSP Rise Time',             'ms',  1e3,  0.5,   [db.Synapse.psp_rise_time],                   'viridis_r',  True,   (1, 10),       "%0.2f ms"),
+        'psp_decay_tau':               ('PSP Decay Tau',             'ms',  1e3,  0.01,  [db.Synapse.psp_decay_tau],                   'viridis_r',  True,   (1, 200),      "%0.2f ms"),
         'psc_amplitude':               ('PSC Amplitude',             'mV',  1e3,  1,     [db.Synapse.psc_amplitude],                   'bwr',        False,  (-1, 1),       "%0.2f mV"),
         'psc_rise_time':               ('PSC Rise Time',             'ms',  1e3,  1,     [db.Synapse.psc_rise_time],                   'viridis_r',  False,  (0, 6),        "%0.2f ms"),
         'psc_decay_tau':               ('PSC Decay Tau',             'ms',  1e3,  1,     [db.Synapse.psc_decay_tau],                   'viridis_r',  False,  (0, 20),       "%0.2f ms"),
-        'latency':                     ('Latency',                   'ms',  1e3,  1,     [db.Synapse.latency],                         'viridis_r',  False,  (0.5, 3),       "%0.2f ms"),
+        'latency':                     ('Latency',                   'ms',  1e3,  1,     [db.Synapse.latency],                         'viridis_r',  False,  (0.5, 3),      "%0.2f ms"),
+        'pulse_amp_90th_percentile':   ('PSP Amplitude 90th %%ile',  'mV',  1e3,  1.5,   [db.Dynamics.pulse_amp_90th_percentile],      'bwr',        False,  (-1.5, 1.5),   "%0.2f mV"),
+        'junctional_conductance':      ('Junctional Conductance',    'nS',  1e9,  1,     [db.GapJunction.junctional_conductance],      'virdis',     False,  (0, 10),       "%0.2f nS"),
+        'coupling_coeff_pulse':        ('Coupling Coefficient',      '',    1,    1,     [db.GapJunction.coupling_coeff_pulse],        'virdis',     False,  (0, 1),        "%0.2f"),
         'stp_initial_50hz':            ('Paired pulse STP',          '',    1,    1,     [db.Dynamics.stp_initial_50hz],               'bwr',        False,  (-0.5, 0.5),   "%0.2f"),
-        'stp_induction_50hz':          ('← Facilitating  Depressing →', '',    1,    1,     [db.Dynamics.stp_induction_50hz],             'bwr',        False,  (-0.5, 0.5),   "%0.2f"),
-        'stp_recovery_250ms':          ('← Over-recovered  Not recovered →','',    1,    1,     [db.Dynamics.stp_recovery_250ms],             'bwr',        False,  (-0.2, 0.2),   "%0.2f"),
-        'pulse_amp_90th_percentile':   ('PSP Amplitude 90th %%ile',  'mV',  1e3,  1.5,   [db.Dynamics.pulse_amp_90th_percentile],      'bwr',        False,  (-1.5, 1.5),    "%0.2f mV"),
-        'junctional_conductance':      ('Junctional Conductance',    'nS',  1e9,  1,     [db.GapJunction.junctional_conductance],      'virdis',     False,  (0, 10),        "%0.2f nS"),
-        'coupling_coeff_pulse':        ('Coupling Coefficient',       '',   1,    1,     [db.GapJunction.coupling_coeff_pulse],   'virdis',    False,  (0, 1),         "%0.2f"),
+        'stp_induction_50hz':          ('← Facilitating  Depressing →', '',    1,    1,     [db.Dynamics.stp_induction_50hz],          'bwr',        False,  (-0.5, 0.5),   "%0.2f"),
+        'stp_recovery_250ms':          ('← Over-recovered  Not recovered →','',    1,    1,     [db.Dynamics.stp_recovery_250ms],      'bwr',        False,  (-0.2, 0.2),   "%0.2f"),
+        'stp_recovery_single_250ms':   ('← Over-recovered  Not recovered →','',    1,    1,     [db.Dynamics.stp_recovery_single_250ms],      'bwr', False,  (-0.2, 0.2),   "%0.2f"),
+        'paired_event_correlation_1_2_r': ('Paired event correlation 1:2','',    1,    1,     [db.Dynamics.paired_event_correlation_1_2_r],   'bwr', False,  (-0.2, 0.2),   "%0.2f"),
+        'paired_event_correlation_2_4_r': ('Paired event correlation 2:4','',    1,    1,     [db.Dynamics.paired_event_correlation_2_4_r],   'bwr', False,  (-0.2, 0.2),   "%0.2f"),
+        'paired_event_correlation_4_8_r': ('Paired event correlation 4:8','',    1,    1,     [db.Dynamics.paired_event_correlation_4_8_r],   'bwr', False,  (-0.2, 0.2),   "%0.2f"),
     }
+    if metrics is None:
+        metrics = synapse_metrics
+    
+    pair_query_args = pair_query_args or {}
+
     metric_name, units, scale, alpha, columns, cmap, cmap_log, clim, cell_fmt = metrics[metric]
 
     if pre_classes is None or post_classes is None:
@@ -274,6 +281,8 @@ def pair_class_metric_scatter(metrics, db, pair_classes, pair_query_args, ax):
         list of tuples of CellClass (pre_class, post_class)
     pair_query_args : dict
         arguments to pass to db.pair_query
+    ax : matplotlib.axes
+        The matplotlib axes object on which to draw the swarm plots
 
     Outputs
     --------
