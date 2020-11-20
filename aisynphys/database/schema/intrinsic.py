@@ -29,6 +29,9 @@ Intrinsic = make_table(
         ('chirp_peak_freq', 'float', 'Frequency at which the chirp response peaks', {'index': True}),
         ('chirp_3db_freq', 'float', 'Frequency at which the chirp response amplitude is 3 dB below the peak.', {'index': True}),
         ('chirp_peak_ratio', 'float', 'Ratio of chirp resonance peak amplitude to low-frequency response amplitude', {'index': True}),
+        ('chirp_peak_impedance', 'float', 'Impedance at chirp resonance peak.', {'index': True}),
+        ('chirp_sync_freq', 'float', 'Frequency at which the chirp phase response equals zero.', {'index': True}),
+        ('chirp_inductive_phase', 'float', 'Integrated of chirp phase response where phase > 0 (below sync freq).', {'index': True}),
         
         ('isi_adapt_ratio', 'float', 'Ratio of ISI on 5th to 1st spike', {'index': True}),
         ('upstroke_adapt_ratio', 'float', 'Ratio of upstroke on 5th to 1st spike', {'index': True}),
