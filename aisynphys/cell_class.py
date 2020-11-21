@@ -93,7 +93,8 @@ class CellClass(object):
             return True
         morpho = cell.morphology
         patchseq = cell.patch_seq
-        objs = [cell, morpho, patchseq]
+        intrinsic = cell.intrinsic
+        objs = [cell, morpho, patchseq, intrinsic]
         for k, v in self.criteria.items():
             found_attr = False
             if isinstance(v, dict):
