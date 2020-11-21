@@ -1090,7 +1090,10 @@ class CellAnalyzer(pg.QtCore.QObject):
         ]
 
         self.patchseq_fields = [
-            ('nucleus', {'mode': 'enum'}),
+            ('nucleus', {'mode': 'enum', 'values': ['+', '-', '?'], 'defaults': {
+                'colormap':
+                [(0, 255, 0, 255), (255, 0, 0, 255), (0, 0, 255, 255)]
+                }}),
             ('area_400_10000bp', {'mode': 'range'}),
             ('picogreen_yield', {'mode': 'range'}),
             ('tree_call', {'mode': 'enum', 'values': ['I3', 'I2', 'I1', 'Core'],

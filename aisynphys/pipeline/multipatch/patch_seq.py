@@ -103,32 +103,30 @@ class PatchSeqPipelineModule(MultipatchPipelineModule):
     
                     patchseq_results = amp_result.copy()
                     patchseq_results.update(mapping_result)
-                    if bool(patchseq_results) is False:
-                        continue
+                    
+                    if bool(patchseq_results):
+                        patchseq_hash = hashlib.md5(str(tuple(patchseq_results.values())).encode()).hexdigest()
+                        results['patchseq_hash'] = patchseq_hash
 
-                    patchseq_hash = hashlib.md5(str(tuple(patchseq_results.values())).encode()).hexdigest()
-                    results['patchseq_hash'] = patchseq_hash
+                        for result_name, col_name in col_names.items():
+                            data = patchseq_results.get(result_name)
+                            if data is not None:
+                                if col_name == 'meta':
+                                    data = {'amplification_comments': data}
+                                if col_name == 'genes_detected':
+                                    data = int(data)
+                                results[col_name] = data
 
-                    for result_name, col_name in col_names.items():
-                        data = patchseq_results.get(result_name)
-                        if data is not None:
-                            if col_name == 'meta':
-                                data = {'amplification_comments': data}
-                            if col_name == 'genes_detected':
-                                data = int(data)
-                            results[col_name] = data
+                        tree_call = results.get('tree_call')
+                        if tree_call is not None and tree_call in ['Core', 'I1']:
+                            results['t_type'] = results['tree_first_cluster']
 
-                    tree_call = results.get('tree_call')
-                    if tree_call is not None and tree_call in ['Core', 'I1']:
-                        results['t_type'] = results['tree_first_cluster']
-
-                    mapped_subclass = get_mapped_subclass(cell, results)
-                    results['mapped_subclass'] = mapped_subclass
+                        mapped_subclass = get_mapped_subclass(cell, results)
+                        results['mapped_subclass'] = mapped_subclass
 
                     # Write new record to DB
                     patch_seq = db.PatchSeq(cell_id=cell.id, **results)
-                    session.add(patch_seq)
-
+                    session.add(patch_seq)        
     def job_records(self, job_ids, session):
         """Return a list of records associated with a list of job IDs.
             

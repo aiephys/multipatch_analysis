@@ -109,7 +109,7 @@ def pair_distance(class_pairs, pre_class):
     return connected, distance
 
 
-def measure_connectivity(pair_groups, alpha=0.05, sigma=None, fit_model=None):
+def measure_connectivity(pair_groups, alpha=0.05, sigma=None, fit_model=None, dist_measure='distance'):
     """Given a description of cell pairs grouped together by cell class,
     return a structure that describes connectivity between cell classes.
     
@@ -127,6 +127,10 @@ def measure_connectivity(pair_groups, alpha=0.05, sigma=None, fit_model=None):
         ConnectivityModel subclass to fit Cp profile. If combined with
         sigma the fit will be fixed to that sigma. If None, then fit results
         are ommitted from the results
+    dist_measure : str
+        Which distance measure to use when calculating connection probability.
+        Must be one of 'distance', 'lateral_distance', 'vertical_distance' columns
+        from Pair table in SynPhys database
 
     Returns
     -------
@@ -143,7 +147,7 @@ def measure_connectivity(pair_groups, alpha=0.05, sigma=None, fit_model=None):
         pre_class, post_class = key
         
         probed_pairs = [p for p in class_pairs if pair_was_probed(p, pre_class.output_synapse_type)]
-        connections_found = [p for p in probed_pairs if p.synapse]
+        connections_found = [p for p in probed_pairs if p.has_synapse]
         gaps_found = [p for p in probed_pairs if p.has_electrical]
 
         n_connected = len(connections_found)
@@ -166,7 +170,7 @@ def measure_connectivity(pair_groups, alpha=0.05, sigma=None, fit_model=None):
         }
 
         if sigma is not None or fit_model is not None:
-            distances = np.array([p.distance for p in probed_pairs], dtype=float)
+            distances = np.array([getattr(p, dist_measure) for p in probed_pairs], dtype=float)
             connections = np.array([p.synapse for p in probed_pairs], dtype=bool)
             mask = np.isfinite(distances) & np.isfinite(connections)
             results[(pre_class, post_class)]['probed_distances'] = distances[mask]
@@ -330,12 +334,14 @@ class ConnectivityModel:
         return -model.likelihood(*args)
 
     @classmethod
-    def fit(cls, x, conn, init=(0.1, 150e-6), bounds=((0.001, 1), (10e-6, 1e-3)), fixed_size=None, **kwds):
+    def fit(cls, x, conn, init=(0.1, 150e-6), bounds=((0.001, 1), (10e-6, 1e-3)), fixed_size=None, fixed_max=None, **kwds):
         n = 6
         p_bins = np.linspace(bounds[0][0], bounds[0][1], n)
+        if fixed_max is not None:
+            p_bins = [fixed_max]*2
         s_bins = np.linspace(bounds[1][0], bounds[1][1], n)
         if fixed_size is not None:
-            s_bins = [fixed_size] * n
+            s_bins = [fixed_size]*2
         best = None
         # Most minimization methods fail to find the global minimum for this problem.
         # Instead, we systematically search over a large (n x n) range of the parameter space
