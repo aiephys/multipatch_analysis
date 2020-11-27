@@ -6,6 +6,7 @@ import numpy as np
 import numba
 import scipy.stats as stats
 import scipy.optimize
+import aisynphys.config
 
 
 # lets us quickly disable jit for debugging:
@@ -507,28 +508,6 @@ class StochasticReleaseModelResult:
 
         return trains
 
-
-        # current_sweep = None
-        # skip_sweep = False
-        # current_train = []
-        # for i in range(len(amps)):
-        #     sweep_id = meta['sync_rec_ext_id'][i]
-        #     ind_f = meta['induction_frequency'][i]
-        #     rec_d = meta['recovery_delay'][i]
-        #     if sweep_id != current_sweep:
-        #         skip_sweep = False
-        #         current_sweep = sweep_id
-        #         current_train = []
-        #         ind_trains = trains.setdefault(ind_f, {})
-        #         rec_trains = ind_trains.setdefault(rec_d, [])
-        #         rec_trains.append(current_train)
-        #     if skip_sweep:
-        #         continue
-        #     if not np.isfinite(amps[i]) or not np.isfinite(spikes[i]):
-        #         skip_sweep = True
-        #         continue
-        #     current_train.append(amps[i])
-
     def __getstate__(self):
         return {k: getattr(self, k) for k in self.pickle_attributes}
 
@@ -818,7 +797,7 @@ def event_query(pair, db, session):
 class StochasticModelRunner:
     """Handles loading data for a synapse and executing the model across a parameter space.
     """
-    def __init__(self, db, experiment_id, pre_cell_id, post_cell_id, workers=None):
+    def __init__(self, db, experiment_id, pre_cell_id, post_cell_id, workers=None, load_cache=True, save_cache=False, cache_path=None):
         self.db = db
         self.experiment_id = experiment_id
         self.pre_cell_id = pre_cell_id
@@ -832,15 +811,25 @@ class StochasticModelRunner:
         self._parameters = None
         self._param_space = None
 
+        self._cache_path = cache_path or os.path.join(aisynphys.config.cache_path, 'stochastic_model_results')
+        self._cache_file = os.path.join(self._cache_path, "%s_%s_%s.pkl" % (experiment_id, pre_cell_id, post_cell_id))
+        # whether to save cache file after running
+        self._save_cache = save_cache
+
+        if load_cache and os.path.exists(self._cache_file):
+            self.load_result(self._cache_file)
+
     @property
     def param_space(self):
         """A ParameterSpace instance containing the model output over the entire parameter space.
         """
         if self._param_space is None:
-            self._param_space = self._generate_param_space()
+            self._param_space = self.generate_param_space()
         return self._param_space
 
-    def _generate_param_space(self):
+    def generate_param_space(self):
+        """Run the model across all points in the parameter space.
+        """
         search_params = self.parameters
         
         param_space = ParameterSpace(search_params)
@@ -858,9 +847,16 @@ class StochasticModelRunner:
         print("Run time:", time.time() - start)
         # prof.print_stats(sort='cumulative')
         
+        if self._save_cache:
+            self.store_result(self._cache_file)
+
         return param_space
 
     def store_result(self, cache_file):
+        path = os.path.dirname(cache_file)
+        if not os.path.exists(path):
+            os.makedirs(path)
+
         tmp = cache_file + '.tmp'
         pickle.dump(self.param_space, open(tmp, 'wb'))
         os.rename(tmp, cache_file)
@@ -1000,6 +996,8 @@ class StochasticModelRunner:
             return model.run_model(spike_times, amplitudes, event_meta=event_meta, **kwds)
         else:
             return model.optimize_mini_amplitude(spike_times, amplitudes, event_meta=event_meta, **kwds)
+
+
 
 
 class CombinedModelRunner:
