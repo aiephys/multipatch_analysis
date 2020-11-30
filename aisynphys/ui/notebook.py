@@ -1,5 +1,6 @@
 """Commonly used routines when working with jupyter / matplotlib
 """
+import io
 import numpy as np
 import matplotlib
 import matplotlib.cm
@@ -649,6 +650,7 @@ def data_matrix(data_df, cell_classes, metric=None, scale=1, unit=None, cmap=Non
     data_rgb[:,:,3] = np.clip(data_alpha, 0, max)
     return data_rgb, data_str
 
+
 def plot_stim_sorted_pulse_amp(pair, ax, ind_f=50, color='k'):
     qc_pass_data = stim_sorted_pulse_amp(pair)
 
@@ -671,3 +673,86 @@ def plot_stim_sorted_pulse_amp(pair, ax, ind_f=50, color='k'):
     ax.plot(range(8,12), pulse_means[8:12], color=color, linewidth=2, zorder=100)
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
+
+
+def swarm(groups, width=0.7, spacing=1.0, shared_scale=True):
+    """Helper function for generating swarm plots.
+
+    Given groups of y values to be show in a swarm plot, return appropriate x values.
+
+    Parameters
+    ----------
+    groups : list
+        List of y-value groups; each group is a list of y values that will appear together in a swarm.
+    width : float
+        The fraction of the total x-axis width to fill
+    spacing : float
+        The x-axis distance between adjacent groups
+    shared_scale : bool
+        If True, then the x values in all groups are scaled by the same amount. If False, then each group
+        is scaled independently such that all groups attempt to fill their alloted width.
+    """
+    from pyqtgraph import pseudoScatter
+    x_grps = []
+    for i, y_grp in enumerate(groups):
+        y_grp = np.asarray(y_grp)
+        mask = np.isfinite(y_grp)
+        x = np.empty(y_grp.shape)
+        x[mask] = pseudoScatter(y_grp[mask], method='histogram', bidir=True)
+        x = x * (0.5 * width * spacing / np.abs(x).max()) + spacing * i
+        x[~mask] = np.nan
+        x_grps.append(x)
+
+    return x_grps
+
+
+def fig_to_svg(fig):
+    """Return a BytesIO that contains *fig* rendered to SVG.
+    """
+    buf = io.BytesIO()
+    fig.savefig(buf, format='svg')
+    buf.seek(0)
+    return buf
+
+
+def compose_svg_figure(figure_spec, filename, size, display=False):
+    """Compose a figure from multiple SVG components.
+
+    Parameters
+    ----------
+    figure_spec : dict
+        Structure describing subfigures to compose (see below).
+    filename : str
+        File name to save composed SVG
+    size : tuple
+        Size of final SVG document like ("16cm", "10cm")
+    display : bool
+        If True, display the complete SVG in Jupyter notebook.
+
+    Each item in *figure_spec* is a dict containing::
+
+        {
+            'figure': <matplotlib Figure>,
+            'pos': (x, y),
+            'scale': 1.0,
+            'label': 'A',
+            'label_opts': {'size': 16, 'weight': 'bold'},
+        }
+    """
+    import svgutils.transform as svg
+
+    fig = svg.SVGFigure(*size)
+
+    for item in figure_spec:
+        subfig = svg.from_mpl(item['figure'], savefig_kw={'bbox_inches':'tight', 'pad_inches':0})
+        root = subfig.getroot()
+        root.moveto(item['pos'][0], item['pos'][1], scale=item.get('scale', 1.0))
+        label = svg.TextElement(item['pos'][0], item['pos'][1], item['label'], **item.get('label_opts', {}))
+        fig.append([root, label])
+
+    fig.save(filename)
+
+    if display:
+        from IPython.display import SVG, display
+        display(SVG(filename=filename))
+

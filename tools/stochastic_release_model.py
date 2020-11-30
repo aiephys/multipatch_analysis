@@ -38,7 +38,7 @@ if __name__ == '__main__':
         result = StochasticModelRunner(db, experiment_id, pre_cell_id, post_cell_id,
             workers=args.workers,
             cache_path=args.cache_path,
-            store_cache=not args.no_store_cache,
+            save_cache=not args.no_save_cache,
             load_cache=not args.no_load_cache,
         )
         result.max_events = args.max_events
