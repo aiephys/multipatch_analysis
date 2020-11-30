@@ -13,8 +13,7 @@ extractors_for_sweeps = optional_import('ipfx.data_set_features', 'extractors_fo
 LongSquareAnalysis = optional_import('ipfx.stimulus_protocol_analysis', 'LongSquareAnalysis')
 Sweep, SweepSet = optional_import('ipfx.sweep', ['Sweep', 'SweepSet'])
 FeatureError = optional_import('ipfx.error', 'FeatureError')
-extract_chirp_features, extract_chirp_fft = optional_import(
-    'ipfx.chirp_features', ['extract_chirp_features', 'extract_chirp_fft'])
+extract_chirp_fft = optional_import('ipfx.chirp_features', 'extract_chirp_fft')
 get_complete_long_square_features = optional_import('ipfx.bin.features_from_output_json', 'get_complete_long_square_features')
 
 from .pipeline_module import MultipatchPipelineModule
@@ -90,7 +89,6 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
 
         sweep_set = SweepSet(sweep_list) 
         try:
-            # all_chirp_features = extract_chirp_features(sweep_set)
             all_chirp_features = extract_chirp_fft(sweep_set, min_freq=1, max_freq=15)
             results = {
                 'chirp_peak_freq': all_chirp_features['peak_freq'],
@@ -153,8 +151,8 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
         
         results = {
             'avg_firing_rate': avg_rate,
-            'rheobase': output['rheobase_i'] * 1e-9, #unscale from pA,
-            'fi_slope': output['fi_fit_slope'] * 1e-9, #unscale from pA,
+            'rheobase': output['rheobase_i'] * 1e-12, #unscale from pA,
+            'fi_slope': output['fi_fit_slope'] * 1e-12, #unscale from pA,
             'input_resistance': output['input_resistance'] * 1e6, #unscale from MOhm,
             'input_resistance_ss': output['input_resistance_ss'] * 1e6, #unscale from MOhm,
             'sag': output['sag'],
@@ -163,10 +161,10 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
             'upstroke': output['upstroke_hero'],
             'downstroke': output['downstroke_hero'],
             'width': output['width_hero'],
-            'threshold_v': output['threshold_v_hero'],
+            'threshold_v': output['threshold_v_hero'] * 1e-3, #unscale from mV
 
-            'peak_deltav': output['peak_deltav_hero'],
-            'fast_trough_deltav': output['fast_trough_deltav_hero'],
+            'peak_deltav': output['peak_deltav_hero'] * 1e-3, #unscale from mV
+            'fast_trough_deltav': output['fast_trough_deltav_hero'] * 1e-3, #unscale from mV
 
             'isi_adapt_ratio': output['isi_adapt_ratio'],
             'upstroke_adapt_ratio': output['upstroke_adapt_ratio'],
