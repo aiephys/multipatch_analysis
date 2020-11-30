@@ -66,6 +66,8 @@ def layer_info_from_snap_polygons_output(output, resolution=1):
 
 def get_missing_layer_info(layers, species):
     ref_layer_depths = WELL_KNOWN_REFERENCE_LAYER_DEPTHS[species]
+    # don't want to include wm as a layer!
+    ref_layer_depths.pop('wm')
     all_layers_ordered = sorted(ref_layer_depths.keys())
     complete_layers = sorted((
         layer.replace("Layer", '') for layer, layer_poly in layers.items()
