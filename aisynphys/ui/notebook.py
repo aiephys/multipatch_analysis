@@ -230,10 +230,10 @@ def show_connectivity_matrix(ax, results, pre_cell_classes, post_cell_classes, c
 def get_metric_data(metric, db, pre_classes=None, post_classes=None, pair_query_args=None, metrics=None):
     synapse_metrics = {
         #                               name                         unit   scale alpha  db columns                                    colormap      log     clim           text format
-        'psp_amplitude':               ('PSP Amplitude',             'mV',  1e3,  1,     [db.Synapse.psp_amplitude],                   'bwr',        False,  (-1.5, 1.5),   "%0.2f mV"),
-        'psp_rise_time':               ('PSP Rise Time',             'ms',  1e3,  0.5,   [db.Synapse.psp_rise_time],                   'viridis_r',  True,   (1, 10),       "%0.2f ms"),
-        'psp_decay_tau':               ('PSP Decay Tau',             'ms',  1e3,  0.01,  [db.Synapse.psp_decay_tau],                   'viridis_r',  True,   (1, 200),      "%0.2f ms"),
-        'psc_amplitude':               ('PSC Amplitude',             'mV',  1e3,  1,     [db.Synapse.psc_amplitude],                   'bwr',        False,  (-1, 1),       "%0.2f mV"),
+        'psp_amplitude':               ('PSP Amplitude',             'mV',  1e3,  1,     [db.Synapse.psp_amplitude],                   'bwr',        False,  (-1.5, 1.5),       "%0.2f mV"),
+        'psp_rise_time':               ('PSP Rise Time',             'ms',  1e3,  0.5,   [db.Synapse.psp_rise_time],                   'viridis_r',  True,  (1, 10),        "%0.2f ms"),
+        'psp_decay_tau':               ('PSP Decay Tau',             'ms',  1e3,  0.01,     [db.Synapse.psp_decay_tau],                 'viridis_r',  True,  (1, 200),       "%0.2f ms"),
+        'psc_amplitude':               ('PSC Amplitude',             'pA',  1e12,  0.3,     [db.Synapse.psc_amplitude],                   'bwr',        False,  (-20, 20),       "%0.2g pA"),
         'psc_rise_time':               ('PSC Rise Time',             'ms',  1e3,  1,     [db.Synapse.psc_rise_time],                   'viridis_r',  False,  (0, 6),        "%0.2f ms"),
         'psc_decay_tau':               ('PSC Decay Tau',             'ms',  1e3,  1,     [db.Synapse.psc_decay_tau],                   'viridis_r',  False,  (0, 20),       "%0.2f ms"),
         'latency':                     ('Latency',                   'ms',  1e3,  1,     [db.Synapse.latency],                         'viridis_r',  False,  (0.5, 3),      "%0.2f ms"),
@@ -241,12 +241,15 @@ def get_metric_data(metric, db, pre_classes=None, post_classes=None, pair_query_
         'junctional_conductance':      ('Junctional Conductance',    'nS',  1e9,  1,     [db.GapJunction.junctional_conductance],      'virdis',     False,  (0, 10),       "%0.2f nS"),
         'coupling_coeff_pulse':        ('Coupling Coefficient',      '',    1,    1,     [db.GapJunction.coupling_coeff_pulse],        'virdis',     False,  (0, 1),        "%0.2f"),
         'stp_initial_50hz':            ('Paired pulse STP',          '',    1,    1,     [db.Dynamics.stp_initial_50hz],               'bwr',        False,  (-0.5, 0.5),   "%0.2f"),
-        'stp_induction_50hz':          ('← Facilitating  Depressing →', '',    1,    1,     [db.Dynamics.stp_induction_50hz],          'bwr',        False,  (-0.5, 0.5),   "%0.2f"),
-        'stp_recovery_250ms':          ('← Over-recovered  Not recovered →','',    1,    1,     [db.Dynamics.stp_recovery_250ms],      'bwr',        False,  (-0.2, 0.2),   "%0.2f"),
+        'stp_induction_50hz':          ('← Facilitating  Depressing →', '',    1,    1,     [db.Dynamics.stp_induction_50hz],             'bwr',        False,  (-0.5, 0.5),   "%0.2f"),
+        'stp_recovery_250ms':          ('← Over-recovered  Not recovered →','',    1,    1,     [db.Dynamics.stp_recovery_250ms],             'bwr',        False,  (-0.2, 0.2),   "%0.2f"),
         'stp_recovery_single_250ms':   ('← Over-recovered  Not recovered →','',    1,    1,     [db.Dynamics.stp_recovery_single_250ms],      'bwr', False,  (-0.2, 0.2),   "%0.2f"),
         'paired_event_correlation_1_2_r': ('Paired event correlation 1:2','',    1,    1,     [db.Dynamics.paired_event_correlation_1_2_r],   'bwr', False,  (-0.2, 0.2),   "%0.2f"),
         'paired_event_correlation_2_4_r': ('Paired event correlation 2:4','',    1,    1,     [db.Dynamics.paired_event_correlation_2_4_r],   'bwr', False,  (-0.2, 0.2),   "%0.2f"),
         'paired_event_correlation_4_8_r': ('Paired event correlation 4:8','',    1,    1,     [db.Dynamics.paired_event_correlation_4_8_r],   'bwr', False,  (-0.2, 0.2),   "%0.2f"),
+        'pulse_amp_90th_percentile':   ('PSP Amplitude 90th %ile',  'mV',  1e3,  1.5,   [db.Dynamics.pulse_amp_90th_percentile],      'bwr',        False,  (-1.5, 1.5),    "%0.2f mV"),
+        'junctional_conductance':      ('Junctional Conductance',    'nS',  1e9,  1,     [db.GapJunction.junctional_conductance],      'virdis',     False,  (0, 10),        "%0.2f nS"),
+        'coupling_coeff_pulse':        ('Coupling Coefficient',       '',   1,    1,     [db.GapJunction.coupling_coeff_pulse],   'virdis',    False,  (0, 1),         "%0.2f"),
     }
     if metrics is None:
         metrics = synapse_metrics
@@ -343,14 +346,14 @@ def ei_hist_plot(ax, metric, bin_edges, db, pair_query_args):
 
     ee_pairs = ex_pairs[ex_pairs['post_class']=='ex']
     ei_pairs = ex_pairs[ex_pairs['post_class']=='in']
-    ax[0].hist(ee_pairs[metric]*1e3, bins=bin_edges, color='red', alpha=0.6, label='E->E Synapses')
-    ax[0].hist(ei_pairs[metric]*1e3, bins=bin_edges, color='pink', alpha=0.8, label='E->I Synapses')
+    ax[0].hist(ee_pairs[metric]*scale, bins=bin_edges, color='red', alpha=0.6, label='E->E Synapses')
+    ax[0].hist(ei_pairs[metric]*scale, bins=bin_edges, color='pink', alpha=0.8, label='E->I Synapses')
     ax[0].legend(frameon=False)
 
     ii_pairs = in_pairs[in_pairs['post_class']=='in']
     ie_pairs = in_pairs[in_pairs['post_class']=='ex']
-    ax[1].hist(ii_pairs[metric]*1e3, bins=bin_edges, color='blue', alpha=0.4, label='I->I Synapses')
-    ax[1].hist(ie_pairs[metric]*1e3, bins=bin_edges, color='purple', alpha=0.4, label='I->E Synapses')
+    ax[1].hist(ii_pairs[metric]*scale, bins=bin_edges, color='blue', alpha=0.4, label='I->I Synapses')
+    ax[1].hist(ie_pairs[metric]*scale, bins=bin_edges, color='purple', alpha=0.4, label='I->E Synapses')
     ax[1].legend(frameon=False)
     
     ax[0].spines['right'].set_visible(False)

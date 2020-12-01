@@ -84,11 +84,7 @@ class CortexLocationPipelineModule(DatabasePipelineModule):
             errors.append(f"{missed_cell_count}/{len(soma_centers)} cells failed depth calculation.")
             errors.extend(cell_errors)
 
-        if 'mean' not in results:
-            errors.append("Depth calculation for cell cluster mean failed. No pair distances available.")
-            return errors
-
-        pia_direction = np.stack([res['pia_direction'] for res in results]).mean(axis=0)
+        pia_direction = np.stack([res['pia_direction'] for res in results.values()]).mean(axis=0)
 
         for pair in expt.pair_list:
             pre_id = pair.pre_cell.meta.get('lims_specimen_id')
