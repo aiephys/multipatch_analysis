@@ -24,6 +24,8 @@ class PulseResponsePipelineModule(MultipatchPipelineModule):
 
         expt = db.experiment_from_ext_id(expt_id, session=session)
         
+        n_synapses = len([p for p in expt.pair_list if p.has_synapse])
+
         # select pulse responses for the selected experiment
         # also request pulse response data to speed up access
         rq = db.query(db.PulseResponse, db.PulseResponse.data)
@@ -73,7 +75,7 @@ class PulseResponsePipelineModule(MultipatchPipelineModule):
             # keepalive; this loop can take a long time
             session.query(db.Slice).count()
         
-        print("  %s: added %d fit records" % (expt_id, fits))
+        print("  %s: added %d fit records for %d synapses" % (expt_id, fits, n_synapses))
 
         # "unbiased" response analysis used to predict connectivity
         for pr in prs:
