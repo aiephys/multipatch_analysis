@@ -100,9 +100,7 @@ class ModelDisplayWidget(QtGui.QWidget):
 
     def select_result(self, index, update_slicer=True):
         result = self.get_result(index)
-        # params = result.params.copy()
-        # params.update(self.param_space[index])
-        params = self.param_space[index]
+        params = self.param_space.params_at_index(index)
         
         # re-run the model to get the complete results
         full_result = self.model_runner.run_model(params, show=True)
@@ -240,6 +238,10 @@ class ModelResultView(object):
         
 
 class ModelEventPlot(ModelResultView):
+    """Plot event amplitudes, likelihoods, and model state vs time.
+
+    Clicking on individual points shows a plot of the model predicted amplitude distribution for that event.
+    """
     def __init__(self, parent):
         ModelResultView.__init__(self, parent)
 

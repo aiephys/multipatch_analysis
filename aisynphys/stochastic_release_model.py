@@ -1,11 +1,14 @@
 # coding: utf8
 from __future__ import print_function, division
-import functools, pickle, time, os, multiprocessing, traceback
+import functools, pickle, time, os, multiprocessing, traceback, logging
 from collections import OrderedDict
 import numpy as np
 import numba
 import scipy.stats as stats
 import scipy.optimize
+import aisynphys.config
+
+logger = logging.getLogger(__name__)
 
 
 # lets us quickly disable jit for debugging:
@@ -152,8 +155,6 @@ class StochasticReleaseModel(object):
                 opt_params[k] = np.clip(x[i], *bounds[i])
             res = self.run_model(spike_times, amplitudes, opt_params, event_meta=event_meta)
             results[tuple(x)] = res
-            # print(opt_params)
-            # print(res['likelihood'])
             return -res.likelihood
         
         best = scipy.optimize.minimize(fn, x0=init, 
@@ -452,6 +453,44 @@ class StochasticReleaseModelResult:
         p.update(self.optimized_params)
         return p
 
+    def model_amp_distribution(self, amp_values, index):
+        """Return the model exepcted amplitude probability distribution immediately prior to *index*.
+
+        If the model state is not well defined at *index*, then return None.
+        """
+        state = self.pre_spike_state[index]
+        if not np.all(np.isfinite(tuple(state))):
+            return None
+        return self.model.likelihood(amp_values, state)
+
+    def avg_model_amp_distribution(self, amp_values=None, index=None):
+        """Return the average model exepcted amplitude probability distribution.
+
+        Parameters
+        ----------
+        index : array | None
+            Event indices at which the model distribution should be sampled for averaging.
+            If None, then all events are included in the average.
+        amp_values : array
+            Amplitude values at which the model distribution will be evaluated.
+        """
+        if index is None:
+            index = range(len(self.pre_spike_state))
+
+        dist = None
+        count = 0
+        for i in index:
+            d = self.model_amp_distribution(amp_values, i)
+            if d is None:
+                continue
+            if dist is None:
+                dist = d
+            else:
+                dist += d
+                count += 1
+
+        return dist / count
+
     def events_by_recording(self, require_contiguous=True):
         """Return event ids grouped by recording.
 
@@ -507,28 +546,6 @@ class StochasticReleaseModelResult:
 
         return trains
 
-
-        # current_sweep = None
-        # skip_sweep = False
-        # current_train = []
-        # for i in range(len(amps)):
-        #     sweep_id = meta['sync_rec_ext_id'][i]
-        #     ind_f = meta['induction_frequency'][i]
-        #     rec_d = meta['recovery_delay'][i]
-        #     if sweep_id != current_sweep:
-        #         skip_sweep = False
-        #         current_sweep = sweep_id
-        #         current_train = []
-        #         ind_trains = trains.setdefault(ind_f, {})
-        #         rec_trains = ind_trains.setdefault(rec_d, [])
-        #         rec_trains.append(current_train)
-        #     if skip_sweep:
-        #         continue
-        #     if not np.isfinite(amps[i]) or not np.isfinite(spikes[i]):
-        #         skip_sweep = True
-        #         continue
-        #     current_train.append(amps[i])
-
     def __getstate__(self):
         return {k: getattr(self, k) for k in self.pickle_attributes}
 
@@ -561,7 +578,7 @@ def release_likelihood(amplitudes, available_vesicles, release_probability, sens
         
         
     For each value in *amplitudes*, we calculate the likelihood that a synapse would evoke a response
-    of that amplitude. Likelihood is calculated as follows:
+    of that amplitude. Likelihood is calculated as the probability denstity of a gaussian mixture, as follows:
     
     1. Given the number of vesicles available to be released (nV) and the release probability (pR), determine
        the probability that each possible number of vesicles (nR) will be released using the binomial distribution
@@ -724,6 +741,8 @@ class ParameterSpace(object):
         self.result = None
         
     def axes(self):
+        """Return an ordered dictionary giving the axis (parameter) names and the parameter values along each axis.
+        """
         return OrderedDict([(ax, {'values': self.params[ax]}) for ax in self.param_order])
 
     def run(self, func, workers=None, **kwds):
@@ -769,56 +788,29 @@ class ParameterSpace(object):
                         pool.terminate()
                         raise Exception("Synapticulation cancelled. No refunds.")
         
-    def __getitem__(self, inds):
-        """Return a dict of the parameter values used at a specific index in the parameter space.
+    def params_at_index(self, inds):
+        """Return a dict of the parameter values used at a specific tuple index in the parameter space.
         """
         params = self.static_params.copy()
         for i,param in enumerate(self.param_order):
             params[param] = self.params[param][inds[i]]
         return params
 
-
-def event_query(pair, db, session):
-    q = session.query(
-        db.PulseResponse,
-        db.PulseResponse.ex_qc_pass,
-        db.PulseResponse.in_qc_pass,
-        db.Baseline.ex_qc_pass.label('baseline_ex_qc_pass'),
-        db.Baseline.in_qc_pass.label('baseline_in_qc_pass'),
-        db.PulseResponseFit.fit_amp,
-        db.PulseResponseFit.dec_fit_reconv_amp,
-        db.PulseResponseFit.fit_nrmse,
-        db.PulseResponseFit.baseline_fit_amp,
-        db.PulseResponseFit.baseline_dec_fit_reconv_amp,
-        db.StimPulse.first_spike_time,
-        db.StimPulse.pulse_number,
-        db.StimPulse.onset_time,
-        db.Recording.start_time.label('rec_start_time'),
-        db.PatchClampRecording.baseline_current,
-        db.MultiPatchProbe.induction_frequency,
-        db.MultiPatchProbe.recovery_delay,
-        db.SyncRec.ext_id.label('sync_rec_ext_id'),
-    )
-    q = q.join(db.Baseline, db.PulseResponse.baseline)
-    q = q.join(db.PulseResponseFit)
-    q = q.join(db.StimPulse)
-    q = q.join(db.Recording, db.PulseResponse.recording)
-    q = q.join(db.SyncRec, db.Recording.sync_rec)
-    q = q.join(db.PatchClampRecording)
-    q = q.join(db.MultiPatchProbe)
-
-    q = q.filter(db.PulseResponse.pair_id==pair.id)
-    q = q.filter(db.PatchClampRecording.clamp_mode=='ic')
-    
-    q = q.order_by(db.Recording.start_time).order_by(db.StimPulse.onset_time)
-
-    return q
+    def index_at_params(self, params):
+        """Return a tuple of indices giving the paramete space location of the given parameter values.
+        """
+        axes = self.axes()
+        inds = []
+        for pname in enumerate(self.param_order):
+            i = np.argwhere(axes[pname]==params[pname])[0,0]
+            inds.append(i)
+        return tuple(inds)
 
 
 class StochasticModelRunner:
     """Handles loading data for a synapse and executing the model across a parameter space.
     """
-    def __init__(self, db, experiment_id, pre_cell_id, post_cell_id, workers=None):
+    def __init__(self, db, experiment_id, pre_cell_id, post_cell_id, workers=None, load_cache=True, save_cache=False, cache_path=None):
         self.db = db
         self.experiment_id = experiment_id
         self.pre_cell_id = pre_cell_id
@@ -832,15 +824,47 @@ class StochasticModelRunner:
         self._parameters = None
         self._param_space = None
 
+        self._cache_path = cache_path or os.path.join(aisynphys.config.cache_path, 'stochastic_model_results')
+        self._cache_file = os.path.join(self._cache_path, "%s_%s_%s.pkl" % (experiment_id, pre_cell_id, post_cell_id))
+        # whether to save cache file after running
+        self._save_cache = save_cache
+
+        if load_cache and os.path.exists(self._cache_file):
+            self.load_result(self._cache_file)
+
+    def run_model(self, params, **kwds):
+        """Run the model for *params* and return a StochasticModelResult instance.
+        """
+        model = StochasticReleaseModel(params)
+        spike_times, amplitudes, bg, event_meta = self.synapse_events
+        if 'mini_amplitude' in params:
+            return model.run_model(spike_times, amplitudes, event_meta=event_meta, **kwds)
+        else:
+            return model.optimize_mini_amplitude(spike_times, amplitudes, event_meta=event_meta, **kwds)
+
     @property
     def param_space(self):
         """A ParameterSpace instance containing the model output over the entire parameter space.
         """
         if self._param_space is None:
-            self._param_space = self._generate_param_space()
+            self._param_space = self.generate_param_space()
         return self._param_space
 
-    def _generate_param_space(self):
+    def best_params(self):
+        """Return a dict of parameters from the highest likelihood model run.
+        """
+        likelihood = self.param_space.result['likelihood']
+        best_index = np.unravel_index(likelihood.argmax(), likelihood.shape)
+        return self.param_space.params_at_index(best_index)
+
+    def best_result(self):
+        """Return the StochasticModelResult with the highest likelihood value.
+        """
+        return self.run_model(self.best_params())
+
+    def generate_param_space(self):
+        """Run the model across all points in the parameter space.
+        """
         search_params = self.parameters
         
         param_space = ParameterSpace(search_params)
@@ -855,12 +879,19 @@ class StochasticModelRunner:
         
         param_space.run(self.run_model, workers=self.workers)
         # prof.disable()
-        print("Run time:", time.time() - start)
+        logger.info("Run time: %f", time.time() - start)
         # prof.print_stats(sort='cumulative')
         
+        if self._save_cache:
+            self.store_result(self._cache_file)
+
         return param_space
 
     def store_result(self, cache_file):
+        path = os.path.dirname(cache_file)
+        if not os.path.exists(path):
+            os.makedirs(path)
+
         tmp = cache_file + '.tmp'
         pickle.dump(self.param_space, open(tmp, 'wb'))
         os.rename(tmp, cache_file)
@@ -882,17 +913,19 @@ class StochasticModelRunner:
                 session.close()
         return self._synapse_events
 
-    def _load_synapse_events(self, session):
+    def get_pair(self, session=None):
         expt = self.db.experiment_from_ext_id(self.experiment_id, session=session)
-        pair = expt.pairs[(self.pre_cell_id, self.post_cell_id)]
+        return expt.pairs[(self.pre_cell_id, self.post_cell_id)]
 
+    def _load_synapse_events(self, session):
+        pair = self.get_pair(session)
         syn_type = pair.synapse.synapse_type
-        print("Synapse type:", syn_type)
+        logger.info("Synapse type: %s", syn_type)
 
         # 1. Get a list of all presynaptic spike times and the amplitudes of postsynaptic responses
 
-        events = event_query(pair, self.db, session).dataframe()
-        print("loaded %d events" % len(events))
+        events = self._event_query(pair, self.db, session).dataframe()
+        logger.info("loaded %d events", len(events))
 
         if len(events) == 0:
             raise Exception("No events found for this synapse.")
@@ -906,7 +939,7 @@ class StochasticModelRunner:
         
         # any missing spike times get filled in with the average latency
         missing_spike_mask = np.isnan(spike_times)
-        print("%d events missing spike times" % missing_spike_mask.sum())
+        logger.info("%d events missing spike times", missing_spike_mask.sum())
         avg_spike_latency = np.nanmedian(events['first_spike_time'] - events['onset_time'])
         pulse_times = events['onset_time'] + avg_spike_latency + rec_times
         spike_times[missing_spike_mask] = pulse_times[missing_spike_mask]
@@ -917,10 +950,10 @@ class StochasticModelRunner:
         # filter events by inhibitory or excitatory qc
         qc_field = syn_type + '_qc_pass'
         qc_mask = events[qc_field] == True
-        print("%d events passed qc" % qc_mask.sum())
+        logger.info("%d events passed qc", qc_mask.sum())
         amplitudes[~qc_mask] = np.nan
         amplitudes[missing_spike_mask] = np.nan
-        print("%d good events to be analyzed" % np.isfinite(amplitudes).sum())
+        logger.info("%d good events to be analyzed", np.isfinite(amplitudes).sum())
 
         # get background events for determining measurement noise
         bg_amplitudes = events['baseline_dec_fit_reconv_amp'].to_numpy()
@@ -938,6 +971,43 @@ class StochasticModelRunner:
             amplitudes = amplitudes[:self.max_events]
         
         return spike_times, amplitudes, bg_amplitudes, event_meta
+
+    @staticmethod
+    def _event_query(pair, db, session):
+        q = session.query(
+            db.PulseResponse,
+            db.PulseResponse.ex_qc_pass,
+            db.PulseResponse.in_qc_pass,
+            db.Baseline.ex_qc_pass.label('baseline_ex_qc_pass'),
+            db.Baseline.in_qc_pass.label('baseline_in_qc_pass'),
+            db.PulseResponseFit.fit_amp,
+            db.PulseResponseFit.dec_fit_reconv_amp,
+            db.PulseResponseFit.fit_nrmse,
+            db.PulseResponseFit.baseline_fit_amp,
+            db.PulseResponseFit.baseline_dec_fit_reconv_amp,
+            db.StimPulse.first_spike_time,
+            db.StimPulse.pulse_number,
+            db.StimPulse.onset_time,
+            db.Recording.start_time.label('rec_start_time'),
+            db.PatchClampRecording.baseline_current,
+            db.MultiPatchProbe.induction_frequency,
+            db.MultiPatchProbe.recovery_delay,
+            db.SyncRec.ext_id.label('sync_rec_ext_id'),
+        )
+        q = q.join(db.Baseline, db.PulseResponse.baseline)
+        q = q.join(db.PulseResponseFit)
+        q = q.join(db.StimPulse)
+        q = q.join(db.Recording, db.PulseResponse.recording)
+        q = q.join(db.SyncRec, db.Recording.sync_rec)
+        q = q.join(db.PatchClampRecording)
+        q = q.join(db.MultiPatchProbe)
+
+        q = q.filter(db.PulseResponse.pair_id==pair.id)
+        q = q.filter(db.PatchClampRecording.clamp_mode=='ic')
+
+        q = q.order_by(db.Recording.start_time).order_by(db.StimPulse.onset_time)
+
+        return q
 
     @property
     def parameters(self):
@@ -993,14 +1063,6 @@ class StochasticModelRunner:
 
         return search_params
 
-    def run_model(self, params, **kwds):
-        model = StochasticReleaseModel(params)
-        spike_times, amplitudes, bg, event_meta = self.synapse_events
-        if 'mini_amplitude' in params:
-            return model.run_model(spike_times, amplitudes, event_meta=event_meta, **kwds)
-        else:
-            return model.optimize_mini_amplitude(spike_times, amplitudes, event_meta=event_meta, **kwds)
-
 
 class CombinedModelRunner:
     """Model runner combining the results from multiple StochasticModelRunner instances.
@@ -1025,6 +1087,19 @@ class CombinedModelRunner:
         params = params.copy()
         runner = self.model_runners[params.pop('synapse')]
         return runner.run_model(params)
+
+
+def list_cached_results(cache_path=None):
+    """Return a list of (pair_id, cache_file) for all cached model results.
+    """
+    if cache_path is None:
+        cache_path = os.path.join(aisynphys.config.cache_path, 'stochastic_model_results')
+    files = os.listdir(cache_path)
+    results = []
+    for cf in files:
+        syn_id = tuple(os.path.splitext(cf)[0].split('_'))
+        results.append((syn_id, os.path.join(cache_path, cf)))
+    return results
 
 
 def load_cache_file(cache_file, db):
@@ -1096,3 +1171,5 @@ def load_cached_model_results(cache_files, db, mmap_file=None):
     cache_files = np.array(cache_files)[mask]
     
     return results, cache_files, mr.param_space.axes()
+
+
