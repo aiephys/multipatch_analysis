@@ -159,7 +159,6 @@ if __name__ == '__main__':
             {'target_layer': '2/3', 't_type': 'L2/3 IT VISp Agmat', 'display_names': ('L2/3 IT', 'Agmat')},
             {'target_layer': '2/3', 't_type': 'Pvalb Tpbg', 'display_names': ('Pvalb', 'Tpbg')},
             {'target_layer': '2/3', 't_type': 'Pvalb Reln Itm2a', 'display_names': ('Pvalb', 'Reln Itm2a')},
-            {'target_layer': '2/3', 't_type': 'Pvalb Vipr2', 'display_names': ('Pvalb', 'Vipr2')},
             {'target_layer': '2/3', 't_type': 'Sst Tac1 Htr1d', 'display_names': ('Sst', 'Tac1 Htr1d')},
             {'target_layer': '2/3', 't_type': 'Sst Calb2 Pdlim5', 'display_names': ('Sst', 'Calb2 Pdlim5')},
             {'target_layer': '2/3', 't_type': 'Sst Hpse Cbln4', 'display_names': ('Sst', 'Hpse Cbln4')},
