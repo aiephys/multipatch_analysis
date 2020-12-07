@@ -338,9 +338,9 @@ class ConnectivityAnalyzer(Analyzer):
             synapse = pair.synapse
             if synapse is None:
                 continue
-            arfs = synapse.avg_response_fits
-            latency = synapse.latency
-            syn_typ = synapse.synapse_type
+            arfs = pair.avg_response_fits
+            latency = pair.synapse.latency
+            syn_typ = pair.synapse.synapse_type
             self.pair_items[pair.id] = []
             trace_itemA = None
             trace_itemB = None
@@ -942,8 +942,8 @@ class DynamicsAnalyzer(Analyzer):
                     'Variability - train induced': lcv_train,
                     'Initial variability change': lcv_sec - lcv_rest,
                     'Train-induced variability change': lcv_train - lcv_rest,
-                    'Paired event correlation r': dynamics.paired_event_correlation_r if dynamics is not None else np.nan,
-                    'Paired event correlation p': dynamics.paired_event_correlation_p if dynamics is not None else np.nan,
+                    'Paired event correlation r': dynamics.paired_event_correlation_1_2_r if dynamics is not None else np.nan,
+                    'Paired event correlation p': dynamics.paired_event_correlation_1_2_p if dynamics is not None else np.nan,
                 }
 
         

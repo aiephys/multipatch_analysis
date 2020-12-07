@@ -172,7 +172,7 @@ class CellClassFilter(object):
                     self.cell_classes.extend(ccg[group.name()])
             cell_classes = self.layer_call(self.cell_classes)
             self.cell_classes = [self._make_cell_class(c) for c in cell_classes]
-            self.cell_groups = classify_cells(self.cell_classes, pairs=pairs)
+            self.cell_groups = classify_cells(self.cell_classes, pairs=pairs, missing_attr='ignore')
         return self.cell_groups, self.cell_classes
 
     def _make_cell_class(self, spec):
