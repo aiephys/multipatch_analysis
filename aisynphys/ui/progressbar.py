@@ -80,7 +80,7 @@ class ProgressBar:
             print('\r' + line + spaces, end='')
             sys.stdout.flush()
         else:
-            print(f'  [{value}/{self.maximum}] {status}')
+            print('  [{}/{}] {}'.format(value, self.maximum, status))
             sys.stdout.flush()
 
         if value >= self.maximum and self.mode != 'qt':

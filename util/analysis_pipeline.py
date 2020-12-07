@@ -66,6 +66,9 @@ if __name__ == '__main__':
     modules = [m for m in list(all_modules.values()) if m in modules]
 
     if args.report:
+        print("----------------------------------------------")
+        print("Pipeline: %s   DB: %s" % (args.pipeline, str(db)))
+        print("----------------------------------------------")
         print(pipeline.report(modules, job_ids=args.uids))
     
     if args.rebuild:
