@@ -47,7 +47,9 @@ class ProgressBar:
             sys.stdout.flush()
             self.last_line_len = 0
 
-    def update(self, value, status):
+    def update(self, value, status=''):
+        """Update the progress bar value and optionally an extra status message.
+        """
         now = time.time()
         self.value = value
         self._need_update = True
@@ -78,7 +80,7 @@ class ProgressBar:
             print('\r' + line + spaces, end='')
             sys.stdout.flush()
         else:
-            print('  ' + status)
+            print('  [{}/{}] {}'.format(value, self.maximum, status))
             sys.stdout.flush()
 
         if value >= self.maximum and self.mode != 'qt':

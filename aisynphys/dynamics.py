@@ -104,6 +104,7 @@ def generate_pair_dynamics(pair, db, session):
         pulse_amp_90th_percentile=amp_90p,
         noise_amp_90th_percentile=noise_90p,
         noise_std=noise_std,
+        meta={},
     )
 
     # sort all PRs by recording and stimulus parameters
@@ -111,7 +112,7 @@ def generate_pair_dynamics(pair, db, session):
     sorted_prs = sorted_pulse_responses(passed_pr_recs)
 
     # calculate 50Hz paired pulse and induction metrics for their own column
-    col_metrics = {'stp_initial_50hz': [], 'stp_induction_50hz': [], 'stp_recovery_250ms': []}
+    col_metrics = {'stp_initial_50hz': [], 'stp_induction_50hz': [], 'stp_recovery_250ms': [], 'stp_recovery_single_250ms': []}
     paired_pulse_ratio = []
     # caclulate dynamics for all frequencie and recovery delays
     #   [(clamp_mode, ind_freq, recovery_delay), {'stp_induction':(mean, std, n),
@@ -131,11 +132,12 @@ def generate_pair_dynamics(pair, db, session):
             else:
                 delay = rec_delay
         meta = (clamp_mode, ind_freq, delay)
-        stp_metrics = {'stp_induction': (), 'stp_initial': (), 'stp_recovery': ()}
+        stp_metrics = {'stp_induction': (), 'stp_initial': (), 'stp_recovery': (), 'stp_recovery_single': ()}
         
         collect_initial = []
         collect_induction = []
         collect_recovery = []
+        collect_recovery_single = []
 
         for recording, pulses in recs.items():
             # get all pulse amps
@@ -162,10 +164,17 @@ def generate_pair_dynamics(pair, db, session):
                 collect_recovery.append(recovery)
                 if delay == 250e-3:
                     col_metrics['stp_recovery_250ms'].append(recovery)
+            if delay is not None and all([k in pulses for k in range(1,10)]):
+                r = amps[9] - amps[1]
+                recovery = np.mean(r) / amp_90p
+                collect_recovery_single.append(recovery)
+                if delay == 250e-3:
+                    col_metrics['stp_recovery_single_250ms'].append(recovery)
         
         stp_metrics['stp_initial'] = (np.mean(collect_initial), np.std(collect_initial), len(collect_initial),) if len(collect_initial) > 1 else float('nan') 
         stp_metrics['stp_induction'] = (np.mean(collect_induction), np.std(collect_induction), len(collect_induction),) if len(collect_induction) > 1 else float('nan') 
         stp_metrics['stp_recovery'] = (np.mean(collect_recovery), np.std(collect_recovery), len(collect_recovery),) if len(collect_recovery) > 1 else float('nan')  
+        stp_metrics['stp_recovery_single'] = (np.mean(collect_recovery_single), np.std(collect_recovery_single), len(collect_recovery_single),) if len(collect_recovery_single) > 1 else float('nan')  
         all_metrics.append((meta, stp_metrics))
     
     # set one column to the full set of STP analysis
@@ -228,8 +237,9 @@ def generate_pair_dynamics(pair, db, session):
     dynamics.variability_change_induction_50hz = pulse_var[5,9] - dynamics.variability_resting_state
     
     # Look for evidence of vesicle depletion -- correlations between adjacent events in 50Hz pulses 5-8.
-    ev1_amp = []
-    ev2_amp = []
+    amps_1_2 = ([], [])
+    amps_2_4 = ([], [])
+    amps_4_8 = ([], [])
     pulse_amps = [[] for i in range(9)]
     for key,recs in sorted_prs.items():
         clamp_mode, ind_freq, rec_delay = key
@@ -239,21 +249,35 @@ def generate_pair_dynamics(pair, db, session):
             for i in range(1,9):
                 if i not in pulses:
                     break
-                if i < 6:
-                    continue
-                ev1_amp.append(getattr(pulses[i-1].PulseResponseFit, amp_field))
-                ev2_amp.append(getattr(pulses[i].PulseResponseFit, amp_field))
+                if i == 2:
+                    amps_1_2[0].append(getattr(pulses[i-1].PulseResponseFit, amp_field))
+                    amps_1_2[1].append(getattr(pulses[i].PulseResponseFit, amp_field))
+                if i == 4:
+                    first = np.mean([getattr(pulses[i].PulseResponseFit, amp_field) for i in range(1, 3)])
+                    second = np.mean([getattr(pulses[i].PulseResponseFit, amp_field) for i in range(3, 5)])
+                    amps_2_4[0].append(np.mean(first))
+                    amps_2_4[1].append(np.mean(second))
+                if i == 8:
+                    first = np.mean([getattr(pulses[i].PulseResponseFit, amp_field) for i in range(1, 5)])
+                    second = np.mean([getattr(pulses[i].PulseResponseFit, amp_field) for i in range(5, 9)])
+                    amps_4_8[0].append(np.mean(first))
+                    amps_4_8[1].append(np.mean(second))
+    
+    if len(amps_1_2[0]) > 3:
+        r,p = scipy.stats.pearsonr(amps_1_2[0], amps_1_2[1])
+        dynamics.paired_event_correlation_1_2_r = r
+        dynamics.paired_event_correlation_1_2_p = p
+    if len(amps_2_4[0]) > 3:
+        r,p = scipy.stats.pearsonr(amps_2_4[0], amps_2_4[1])
+        dynamics.paired_event_correlation_2_4_r = r
+        dynamics.paired_event_correlation_2_4_p = p
+    if len(amps_4_8[0]) > 3:
+        r,p = scipy.stats.pearsonr(amps_4_8[0], amps_4_8[1])
+        dynamics.paired_event_correlation_4_8_r = r
+        dynamics.paired_event_correlation_4_8_p = p
 
-    ev1_amp = np.array(ev1_amp)
-    ev2_amp = np.array(ev2_amp)
-    ev1_amp -= np.median(ev1_amp)
-    ev2_amp -= np.median(ev2_amp)
-    
-    if len(ev1_amp) > 1:
-        r,p = scipy.stats.pearsonr(ev1_amp, ev2_amp)
-        dynamics.paired_event_correlation_r = r
-        dynamics.paired_event_correlation_p = p
-    
+
+
     return dynamics
 
 

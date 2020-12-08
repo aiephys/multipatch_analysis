@@ -2,7 +2,6 @@ import os, glob, re, time, struct, hashlib
 import numpy as np
 from datetime import datetime
 from collections import OrderedDict
-from acq4.util.DataManager import getDirHandle
 from ... import config, lims, qc
 from ...util import timestamp_to_datetime, datetime_to_timestamp
 from ...data import Experiment
@@ -10,9 +9,11 @@ from .pipeline_module import MultipatchPipelineModule
 from .experiment import ExperimentPipelineModule
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.data import PatchClampRecording
-from ...data import Experiment, MultiPatchDataset, MultiPatchProbe, MultiPatchSyncRecAnalyzer
+from ...data import Experiment, MultiPatchDataset, MultiPatchProbe, MultiPatchMixedFreqTrain, MultiPatchSyncRecAnalyzer
 from neuroanalysis.analyzers.stim_pulse import PatchClampStimPulseAnalyzer
 from neuroanalysis.analyzers.baseline import BaselineDistributor
+from neuroanalysis.util.optional_import import optional_import
+getDirHandle = optional_import('acq4.util.DataManager', 'getDirHandle')
 
 
 class DatasetPipelineModule(MultipatchPipelineModule):
@@ -70,6 +71,8 @@ class DatasetPipelineModule(MultipatchPipelineModule):
                     sync_rec=srec_entry,
                     electrode=electrode_entry,
                     start_time=rec.start_time,
+                    stim_name=(None if rec.stimulus is None else rec.stimulus.description),
+                    stim_meta=(None if rec.stimulus is None else rec.stimulus.save()),
                 )
                 session.add(rec_entry)
                 rec_entries[rec.device_id] = rec_entry
@@ -82,7 +85,6 @@ class DatasetPipelineModule(MultipatchPipelineModule):
                     recording=rec_entry,
                     clamp_mode=rec.clamp_mode,
                     patch_mode=rec.patch_mode,
-                    stim_name=rec.stimulus.description,
                     baseline_potential=rec.baseline_potential,
                     baseline_current=rec.baseline_current,
                     baseline_rms_noise=rec.baseline_rms_noise,
@@ -111,17 +113,19 @@ class DatasetPipelineModule(MultipatchPipelineModule):
                     pcrec_entry.nearest_test_pulse = tp_entry
                     
                 # import information about STP protocol
-                if not isinstance(rec, MultiPatchProbe):
+                if not isinstance(rec, (MultiPatchProbe, MultiPatchMixedFreqTrain)):
                     continue
-                srec_has_mp_probes = True
-                ind_freq, rec_delay = rec.stim_params()
 
-                mprec_entry = db.MultiPatchProbe(
-                    patch_clamp_recording=pcrec_entry,
-                    induction_frequency=ind_freq,
-                    recovery_delay=rec_delay,
-                )
-                session.add(mprec_entry)
+                srec_has_mp_probes = True
+
+                if isinstance(rec, MultiPatchProbe):
+                    ind_freq, rec_delay = rec.stim_params()
+                    mprec_entry = db.MultiPatchProbe(
+                        patch_clamp_recording=pcrec_entry,
+                        induction_frequency=ind_freq,
+                        recovery_delay=rec_delay,
+                    )
+                    session.add(mprec_entry)
             
                 # import presynaptic stim pulses
                 psa = PatchClampStimPulseAnalyzer.get(rec)

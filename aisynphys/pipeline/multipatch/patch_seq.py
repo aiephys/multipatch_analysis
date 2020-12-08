@@ -9,11 +9,11 @@ import os, datetime, shutil, tempfile, hashlib
 import pandas as pd
 from collections import OrderedDict
 from ...util import timestamp_to_datetime, optional_import
-from acq4.util.DataManager import getHandle
 from ... import config
 from .pipeline_module import MultipatchPipelineModule
 from .experiment import ExperimentPipelineModule
 pyodbc = optional_import('pyodbc')
+getHandle = optional_import('acq4.util.DataManager', 'getHandle')
 
 amp_cols = {
             'Comment': 'meta',
@@ -70,7 +70,7 @@ class PatchSeqPipelineModule(MultipatchPipelineModule):
         job_id = job['job_id']
 
         # Load experiment from DB
-        expt = db.experiment_from_timestamp(job_id, session=session)
+        expt = db.experiment_from_ext_id(job_id, session=session)
         amp_results = get_amp_results()
         mapping_results = get_mapping_results()
         cell_species = get_cell_species(db)

@@ -36,6 +36,8 @@ class MultiPatchSyncRecording(MiesSyncRecording):
         stim = miesrec.meta['notebook']['Stim Wave Name'].lower()
         if any(substr in stim for substr in ['pulsetrain', 'recovery', 'pulstrn']):
             return MultiPatchProbe(miesrec)
+        elif any(substr in stim for substr in ['mixedfs']):
+            return MultiPatchMixedFreqTrain(miesrec)
         else:
             return MultiPatchRecording(miesrec)
 
@@ -65,7 +67,7 @@ class MultiPatchSyncRecording(MiesSyncRecording):
                 starts.insert(0, 0)
             stops = list(np.argwhere(mask[1:] & ~mask[:-1])[:,0])
             if not mask[-1]:
-                starts.append(len(mask))
+                stops.append(len(mask))
             
             baseline_inds = [r for r in zip(starts, stops) if r[1] > r[0]]
             self._baseline_regions = [(pri.time_at(i0), pri.time_at(i1)) for i0, i1 in baseline_inds]
@@ -111,6 +113,11 @@ class MultiPatchProbe(MultiPatchRecording):
         return ind_freq, rec_delay
 
 
+class MultiPatchMixedFreqTrain(MultiPatchRecording):
+    """A spike train composed from random interspike intevals.
+    """
+    pass
+
 
 class MultiPatchSyncRecAnalyzer(Analyzer):
     """Used for analyzing two or more synchronous patch clamp recordings where
@@ -135,7 +142,6 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
             * spikes: list of presynaptic spikes detected 
             * response: time slice of the postsynaptic recording
             * pre_rec: time slice of the presynaptic recording
-            * baseline
         
         """
         # detect presynaptic spikes
@@ -143,13 +149,6 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
         spikes = pulse_stim.evoked_spikes()
         # spikes looks like:
         #   [{'pulse_n', 'pulse_start', 'pulse_end', 'spikes': [...]}, ...]
-
-        if not isinstance(pre_rec, MultiPatchProbe):
-            # this does not look like the correct kind of stimulus; bail out
-            # Ideally we can make this agnostic to the exact stim type in the future,
-            # but for now we rely on the delay period between pulses 8 and 9 to get
-            # a baseline measurement.
-            return []
 
         # Select ranges to extract from postsynaptic recording
         result = []
@@ -189,15 +188,6 @@ class MultiPatchSyncRecAnalyzer(Analyzer):
 
             # Extract presynaptic spike and stimulus command
             pulse['pre_rec'] = pre_rec.time_slice(pulse['rec_start'], pulse['rec_stop'])
-
-            # select baseline region between 8th and 9th pulses
-            if len(spikes) > 8:
-                baseline_dur = 100e-3
-                stop = spikes[8]['pulse_start']
-                start = stop - baseline_dur
-                pulse['baseline'] = post_rec['primary'].time_slice(start, stop)
-                pulse['baseline_start'] = start
-                pulse['baseline_stop'] = stop
 
             # Add minimal QC metrics for excitatory and inhibitory measurements
             pulse_window = [pulse['rec_start'], pulse['rec_stop']]

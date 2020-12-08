@@ -12,8 +12,11 @@ class CellClass(object):
     
     Construct with an arbitrary set of keyword arguments, where each argument specifies
     a criteria for matching cells. Keyword argument names must be a column from the 
-    :class:`Cell <aisynphys.database.schema.Cell>` or :class:`Morphology <aisynphys.database.schema.Morphology>`
-    database tables.
+    :class:`Cell <aisynphys.database.schema.Cell>`, :class:`Morphology <aisynphys.database.schema.Morphology>`,
+    Intrinsic, or CorticalCellLocation database tables.
+    Can also be filtered with an arbitrary list of expressions (unnamed arguments),
+    each of which must be an sqlalchemy BinaryExpression, as used in query.filter(),
+    referring to one of the available tables.
     
     Example::
     
@@ -21,9 +24,13 @@ class CellClass(object):
         inhibitory_class = CellClass(cre_type=('pvalb', 'sst', 'vip'))
         l23_pyr_class = CellClass(pyramidal=True, target_layer='2/3')
         l5_spiny_class = CellClass(dendrite_type='spiny', cortical_layer='5')
+        deep_l3_class = CellClass(
+            db.CorticalCellLocation.fractional_layer_depth < 0.5,
+            cortical_layer='3')
     """
-    def __init__(self, name=None, **criteria):
+    def __init__(self, name=None, *exprs, **criteria):
         self.criteria = criteria
+        self.exprs = exprs
         self._name = name
 
     @property
@@ -89,12 +96,25 @@ class CellClass(object):
         return {True: 'ex', False: 'in'}.get(self.is_excitatory, None)
 
     def __contains__(self, cell):
-        if not self.criteria:
+        if not (self.criteria or self.exprs):
             return True
         morpho = cell.morphology
         patchseq = cell.patch_seq
         intrinsic = cell.intrinsic
-        objs = [cell, morpho, patchseq, intrinsic]
+        location = cell.cortical_location
+        objs = [cell, morpho, patchseq, intrinsic, location]
+        for expr in self.exprs:
+            found_attr = False
+            key = expr.left.name
+            ref_val = expr.right.value
+            for obj in objs:
+                if hasattr(obj, key):
+                    found_attr = True
+                    val = getattr(obj, key)
+                    if val is not None and expr.operator(val, ref_val):
+                        break
+                    else:
+                        return False
         for k, v in self.criteria.items():
             found_attr = False
             if isinstance(v, dict):
@@ -118,8 +138,8 @@ class CellClass(object):
                                 return False
                         break
             if not found_attr:
-                return False
-                # raise Exception('Cannot use "%s" for cell typing; attribute not found on cell or cell.morphology' % k)
+                # return False
+                raise Exception('Cannot use "%s" for cell typing; attribute not found on cell or linked objects' % k)
         return True
 
     def __hash__(self):
@@ -153,8 +173,23 @@ class CellClass(object):
         if db is None:
             db = default_db
         morpho = aliased(db.Morphology)
-        query = query.outerjoin(morpho, morpho.cell_id==cell_table.id)
-        tables = [cell_table, morpho]
+        intrinsic = aliased(db.Intrinsic)
+        location = aliased(db.CorticalCellLocation)
+        query = (query.outerjoin(morpho, morpho.cell_id==cell_table.id)
+                 .outerjoin(intrinsic, intrinsic.cell_id==cell_table.id)
+                 .outerjoin(location, location.cell_id==cell_table.id))
+        tables = [cell_table, morpho, intrinsic, location]
+        for expr in self.exprs:
+            found_attr = False
+            key = expr.left.name
+            ref_val = expr.right.value
+            for table in tables:
+                if hasattr(table, key):
+                    found_attr = True
+                    query = query.filter(expr.operator(getattr(table, key), ref_val))
+                    break
+            if not found_attr:
+                raise Exception('Cannot use "%s" for cell typing; attribute not found in available tables.' % key)
         for k, v in self.criteria.items():
             found_attr = False
             for table in tables:
@@ -166,14 +201,14 @@ class CellClass(object):
                         query = query.filter(getattr(table, k)==v)
                     break
             if not found_attr:
-                raise Exception('Cannot use "%s" for cell typing; attribute not found on cell or cell.morphology' % k)
+                raise Exception('Cannot use "%s" for cell typing; attribute not found in available tables.' % k)
 
         return query                
                 
             
 
 
-def classify_cells(cell_classes, cells=None, pairs=None):
+def classify_cells(cell_classes, cells=None, pairs=None, missing_attr='raise'):
     """Given cell class definitions and a list of cells, return a dict indicating which cells
     are members of each class.
 
@@ -185,6 +220,10 @@ def classify_cells(cell_classes, cells=None, pairs=None):
         List of Cell instances to be classified.
     pairs : list | None
         List of pairs from which cells will be collected. May not be used with *cells*
+    missing_attr : str
+        Determines the behavior when a criteria attribute is missing on a 
+        cell. If 'ignore', then the cell is excluded from the result,. If 'raise',
+        then an exception is raised. Default is 'raise'.
         
     Returns
     -------
@@ -213,8 +252,14 @@ def classify_cells(cell_classes, cells=None, pairs=None):
     cell_groups = OrderedDict([(cell_class, set()) for cell_class in cell_classes])
     for cell in cells:
         for cell_class in cell_classes:
-            if cell in cell_class:
-                cell_groups[cell_class].add(cell)
+            try:
+                if cell in cell_class:
+                    cell_groups[cell_class].add(cell)
+            except Exception:
+                if missing_attr == 'ignore':
+                    continue
+                else:
+                    raise
     return cell_groups
 
 

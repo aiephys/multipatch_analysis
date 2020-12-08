@@ -3,7 +3,7 @@ from . import make_table
 from .experiment import Pair
 
 
-__all__ = ['Synapse', 'AvgResponseFit']
+__all__ = ['Synapse', 'AvgResponseFit', 'PolySynapse']
 
 
 Synapse = make_table(
@@ -27,7 +27,8 @@ AvgResponseFit = make_table(
     name='avg_response_fit',
     comment="Fit to average post synaptic response for a given pair. Each pair may have fits for VC and IC recordings, held at -70 and -55 mV.",
     columns=[
-        ('pair_id', 'pair.id', 'The ID of the entry in the pair table to which these results apply', {'index': True}),
+        ('synapse_id', 'synapse.id', 'The ID of the entry in the synapse table to which these results apply', {'index': True}),
+        ('poly_synapse_id', 'poly_synapse.id', 'The ID of the entry in the poly_synapse table to which these results apply', {'index': True}),
         ('clamp_mode', 'str', 'The clamp mode "ic" or "vc"', {'index': True}),
         ('holding', 'float', 'The holding potential -70 or -55', {'index': True}),
         ('laser_power_command', 'float', 'The pockel cell command value for the 2p laser'),
@@ -49,11 +50,32 @@ AvgResponseFit = make_table(
     ]
 )
 
+PolySynapse = make_table(
+    name='poly_synapse',
+    comment="Chemical properties of polysnaptic events",
+    columns=[
+        ('pair_id', 'pair.id', 'The ID of the entry in the pair table to which these results apply', {'index': True}),
+        ('synapse_type', 'str', '"ex" or "in" indicating whether the synapse is excitatory or inhibitory', {'index': True}),
+        ('latency', 'float', 'Latency in seconds from spike max slope until synaptic response onset.', {'index': True}),
+        ('psp_amplitude', 'float', 'Amplitude of resting-state PSPs in Volts.'),
+        ('psp_rise_time', 'float', 'Rise time in seconds measured from averaged PSPs.'),
+        ('psp_decay_tau', 'float', 'decay time constant in seconds measured from averaged PSPs.'),
+        ('psc_amplitude', 'float', 'Amplitude of resting-state PSCs in Amperes.'),
+        ('psc_rise_time', 'float', 'Rise time in seconds measured from averaged PSCs.'),
+        ('psc_decay_tau', 'float', 'decay time constant in seconds measured from averaged PSCs.'),
+    ]
+)
 
 Pair.synapse = relationship(Synapse, back_populates="pair", cascade="delete", single_parent=True, uselist=False)
 Synapse.pair = relationship(Pair, back_populates="synapse", single_parent=True)
 
-Pair.avg_response_fits = relationship(AvgResponseFit, back_populates="pair", cascade="delete", single_parent=True, uselist=True)
-AvgResponseFit.pair = relationship(Pair, back_populates="avg_response_fits", single_parent=True)
+Pair.poly_synapse = relationship(PolySynapse, back_populates="pair", cascade="delete", single_parent=True, uselist=True)
+PolySynapse.pair = relationship(Pair, back_populates="poly_synapse", single_parent=True)
+
+Synapse.avg_response_fits = relationship(AvgResponseFit, back_populates="synapse", cascade="delete", single_parent=True, uselist=True)
+AvgResponseFit.synapse = relationship(Synapse, back_populates="avg_response_fits", single_parent=True)
+
+PolySynapse.avg_response_fits = relationship(AvgResponseFit, back_populates="poly_synapse", cascade="delete", single_parent=True, uselist=True)
+AvgResponseFit.poly_synapse = relationship(PolySynapse, back_populates="avg_response_fits", single_parent=True)
 
 

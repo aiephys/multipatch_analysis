@@ -942,8 +942,8 @@ class DynamicsAnalyzer(Analyzer):
                     'Variability - train induced': lcv_train,
                     'Initial variability change': lcv_sec - lcv_rest,
                     'Train-induced variability change': lcv_train - lcv_rest,
-                    'Paired event correlation r': dynamics.paired_event_correlation_r if dynamics is not None else np.nan,
-                    'Paired event correlation p': dynamics.paired_event_correlation_p if dynamics is not None else np.nan,
+                    'Paired event correlation r': dynamics.paired_event_correlation_1_2_r if dynamics is not None else np.nan,
+                    'Paired event correlation p': dynamics.paired_event_correlation_1_2_p if dynamics is not None else np.nan,
                 }
 
         

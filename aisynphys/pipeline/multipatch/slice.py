@@ -1,11 +1,12 @@
 import os, glob, re, pickle, time
 from datetime import datetime
 from collections import OrderedDict
-from acq4.util.DataManager import getDirHandle
 from .pipeline_module import MultipatchPipelineModule
 from ... import config, lims, constants
 from ...util import datetime_to_timestamp, timestamp_to_datetime
 from ...data.slice import Slice
+from neuroanalysis.util.optional_import import optional_import
+getDirHandle = optional_import('acq4.util.DataManager', 'getDirHandle')
 
 
 class SlicePipelineModule(MultipatchPipelineModule):

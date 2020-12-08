@@ -7,15 +7,15 @@ from .database import default_db as db
 from .util import datetime_to_timestamp 
 
 
-def resting_state_response_fits(pair, rest_duration):
-    """Return curve fits to average pulse responses from *pair* for pulses that are at "resting state",
+def resting_state_response_fits(synapse, rest_duration):
+    """Return curve fits to average pulse responses from *synapse* for pulses that are at "resting state",
     meaning that each stimulus included in the average is preceded by a certain minimum period
-    with no other presynaptic stimuli.
+    with no other presynaptic stimuli. 
     
     Parameters
     ----------
-    pair : Pair instance
-        The cell pair from which to query for pulse response data
+    synapse : Synapse or PolySynapse instance
+        The synapse from which to query for pulse response data
     rest_duration : float
         Duration (seconds) of the time window that must be quiescent in order to consider
         the synapse at "resting state".
@@ -26,11 +26,12 @@ def resting_state_response_fits(pair, rest_duration):
         Dictionary containing averages and fit results for current clamp and voltage clamp
     """
 
-    latency = pair.synapse.latency
+    latency = synapse.latency
+    
     if latency is None:
         return None
     latency_window = [latency - 100e-6, latency + 100e-6]
-    syn_typ = pair.synapse.synapse_type
+    syn_typ = synapse.synapse_type
         
     fit_signs = {
         ('ex', 'ic'): 1,
@@ -40,16 +41,16 @@ def resting_state_response_fits(pair, rest_duration):
     }
         
     # 1. Select qc-passed "resting state" PRs
-    rest_prs = get_resting_state_responses(pair, rest_duration, response_duration=10e-3)
+    rest_prs = get_resting_state_responses(synapse, rest_duration, response_duration=10e-3)
     
     # 2. Average and fit
     fits = {}
     for mode, pr_list in rest_prs.items():
         sign = fit_signs[syn_typ, mode]
         if mode == 'ic':
-            init_params = {'rise_time': pair.synapse.psp_rise_time, 'decay_tau': pair.synapse.psp_decay_tau}
+            init_params = {'rise_time': synapse.psp_rise_time, 'decay_tau': synapse.psp_decay_tau}
         else:
-            init_params = {'rise_time': pair.synapse.psc_rise_time, 'decay_tau': pair.synapse.psc_decay_tau}
+            init_params = {'rise_time': synapse.psc_rise_time, 'decay_tau': synapse.psc_decay_tau}
         init_params = {k:v for k,v in init_params.items() if v is not None}
 
         if len(pr_list) == 0:
@@ -66,7 +67,7 @@ def resting_state_response_fits(pair, rest_duration):
     return fits
 
 
-def get_resting_state_responses(pair, rest_duration, response_duration):
+def get_resting_state_responses(synapse, rest_duration, response_duration):
     """Return {'ic': PulseResponseList(), 'vc': PulseResponseList()} containing
     all qc-passed, resting-state pulse responses for *pair*.
     
@@ -75,14 +76,14 @@ def get_resting_state_responses(pair, rest_duration, response_duration):
     are no presynaptic spikes. Typical values here might be a few seconds to tens of seconds to 
     allow the synapse to recover to its resting state.
     """
-    syn_typ = pair.synapse.synapse_type
+    syn_typ = synapse.synapse_type
     qc_field = getattr(db.PulseResponse, syn_typ + '_qc_pass')
     
     q = db.query(db.PulseResponse, db.StimPulse, db.Recording, db.PatchClampRecording, db.PulseResponse.data)
     q = q.join(db.StimPulse, db.PulseResponse.stim_pulse)
     q = q.join(db.Recording, db.PulseResponse.recording)
     q = q.join(db.PatchClampRecording, db.PatchClampRecording.recording_id==db.Recording.id)
-    q = q.filter(db.PulseResponse.pair_id==pair.id)
+    q = q.filter(db.PulseResponse.pair_id==synapse.pair_id)
     q = q.filter(db.StimPulse.previous_pulse_dt > response_duration)
     q = q.filter(qc_field==True)
     q = q.order_by(db.Recording.start_time, db.StimPulse.onset_time)

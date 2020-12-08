@@ -1,11 +1,16 @@
 # coding: utf8
 from __future__ import print_function, division
 import numpy as np
+import scipy.stats
 import pyqtgraph as pg
 import pyqtgraph.multiprocess
 from pyqtgraph.Qt import QtGui, QtCore
 from aisynphys.stochastic_release_model import StochasticReleaseModel
 from aisynphys.ui.ndslicer import NDSlicer
+
+
+data_color = (0, 128, 255)
+model_color = (255, 128, 0)
 
 
 class ModelDisplayWidget(QtGui.QWidget):
@@ -17,23 +22,18 @@ class ModelDisplayWidget(QtGui.QWidget):
         self.layout = QtGui.QGridLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(self.layout)
-        self.splitter = QtGui.QSplitter(QtCore.Qt.Vertical)
-        self.layout.addWidget(self.splitter)
         
         self.slicer = NDSlicer(model_runner.param_space.axes())
         self.slicer.selection_changed.connect(self.selection_changed)
-        self.splitter.addWidget(self.slicer)
+        self.layout.addWidget(self.slicer)
         
-        self.result_widget = ModelSingleResultWidget()
-        self.splitter.addWidget(self.result_widget)
-
         # set up a few default 2D slicer views
         v1 = self.slicer.params.child('2D views').addNew()
         v1['axis 0'] = 'n_release_sites'
         v1['axis 1'] = 'base_release_probability'
         v2 = self.slicer.params.child('2D views').addNew()
-        v2['axis 0'] = 'vesicle_recovery_tau'
-        v2['axis 1'] = 'facilitation_recovery_tau'
+        v2['axis 0'] = 'desensitization_amount'
+        v2['axis 1'] = 'base_release_probability'
         self.slicer.dockarea.moveDock(v2.viewer.dock, 'bottom', v1.viewer.dock)
         v3 = self.slicer.params.child('2D views').addNew()
         v3['axis 0'] = 'vesicle_recovery_tau'
@@ -42,7 +42,12 @@ class ModelDisplayWidget(QtGui.QWidget):
         v4['axis 0'] = 'facilitation_amount'
         v4['axis 1'] = 'facilitation_recovery_tau'
         self.slicer.dockarea.moveDock(v4.viewer.dock, 'bottom', v3.viewer.dock)
-        
+
+        self.result_widget = ModelSingleResultWidget()
+        self.result_dock = pg.dockarea.Dock('model results')
+        self.result_dock.addWidget(self.result_widget)
+        self.slicer.dockarea.addDock(self.result_dock, 'bottom')
+
         # turn on max projection for all parameters by default
         for ch in self.slicer.params.child('max project'):
             if ch.name() == 'synapse':
@@ -52,9 +57,10 @@ class ModelDisplayWidget(QtGui.QWidget):
         self.model_runner = model_runner
         self.param_space = model_runner.param_space
         
-        result_img = np.zeros(self.param_space.result.shape)
-        for ind in np.ndindex(result_img.shape):
-            result_img[ind] = self.param_space.result[ind]['likelihood']
+        # result_img = np.zeros(self.param_space.result.shape)
+        # for ind in np.ndindex(result_img.shape):
+        #     result_img[ind] = self.param_space.result[ind].likelihood
+        result_img = self.param_space.result['likelihood']
         self.slicer.set_data(result_img)
         self.results = result_img
         
@@ -94,36 +100,36 @@ class ModelDisplayWidget(QtGui.QWidget):
 
     def select_result(self, index, update_slicer=True):
         result = self.get_result(index)
-        result['params'].update(self.param_space[index])
+        params = self.param_space.params_at_index(index)
         
         # re-run the model to get the complete results
-        full_result = self.model_runner.run_model(result['params'], full_result=True, show=True)
+        full_result = self.model_runner.run_model(params, show=True)
         self.result_widget.set_result(full_result)
         
         print("----- Selected result: -----")
         print("  model parameters:")
-        for k,v in full_result['params'].items():
+        for k,v in full_result.params.items():
             print("    {:30s}: {}".format(k, v))
-        if 'optimized_params' in full_result:
+        if hasattr(full_result, 'optimized_params'):
             print("  optimized parameters:")
-            for k,v in full_result['optimized_params'].items():
+            for k,v in full_result.optimized_params.items():
                 print("    {:30s}: {}".format(k, v))
-        if 'optimization_init' in full_result:
+        if hasattr(full_result, 'optimization_init'):
             print("  initial optimization parameters:")
-            for k,v in full_result['optimization_init'].items():
+            for k,v in full_result.optimization_init.items():
                 print("    {:30s}: {}".format(k, v))
-        if 'optimization_result' in full_result:
-            opt = full_result['optimization_result']
+        if hasattr(full_result, 'optimization_result'):
+            opt = full_result.optimization_result
             print("  optimization results:")
             print("    nfev:", opt.nfev)
             print("    message:", opt.message)
             print("    success:", opt.success)
             print("    status:", opt.status)
-        if 'optimization_info' in full_result:
+        if hasattr(full_result, 'optimization_info'):
             print("  optimization info:")
-            for k,v in full_result['optimization_info'].items():
+            for k,v in full_result.optimization_info.items():
                 print("    {:30s}: {}".format(k, v))
-        print("  likelihood: {}".format(full_result['likelihood']))
+        print("  likelihood: {}".format(full_result.likelihood))
         
         if update_slicer:
             self.slicer.set_index(index)
@@ -133,6 +139,9 @@ class ModelSingleResultWidget(QtGui.QWidget):
     """Plots event amplitudes and distributions for a single stochastic model run.
     """
     def __init__(self):
+        self.result = None
+        self._random_model_result = None
+
         QtGui.QWidget.__init__(self)
         self.layout = QtGui.QGridLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
@@ -150,8 +159,8 @@ class ModelSingleResultWidget(QtGui.QWidget):
 
         self.panels = {
             'events': ModelEventPlot(self),
-            'correlation': ModelEventCorrelationPlot(self),
             'induction': ModelInductionPlot(self),
+            'correlation': ModelEventCorrelationPlot(self),
             'optimization': ModelOptimizationPlot(self),
         }
         for name, panel in self.panels.items():
@@ -166,8 +175,21 @@ class ModelSingleResultWidget(QtGui.QWidget):
 
     def set_result(self, result):
         self.result = result
+        self._random_model_result = None
         for p in self.panels.values():
             p.result_changed()
+
+    def random_model_result(self):
+        """Re-run the model with the same parameters, generating a random sample of event amplitudes.
+
+        The random sample is cached until set_result is called again.
+        """
+        if self._random_model_result is None:
+            self._random_model_result = self.result.model.run_model(
+                self.result.result['spike_time'], 
+                amplitudes='random', 
+                params=self.result.all_params)
+        return self._random_model_result
 
 
 class ModelResultView(object):
@@ -182,6 +204,7 @@ class ModelResultView(object):
         self.layout = QtGui.QGridLayout()
         self.widget.setLayout(self.layout)
         parent.splitter.addWidget(self.widget)
+        self.layout.setSpacing(2)
         self.layout.setContentsMargins(0, 0, 0, 0)
         self._need_update = False
         
@@ -192,6 +215,10 @@ class ModelResultView(object):
         self.widget.setVisible(visible)
         if visible and self._need_update:
             self.update_display()
+
+    @property
+    def parent(self):
+        return self._parent
 
     @property
     def visible(self):
@@ -205,72 +232,111 @@ class ModelResultView(object):
             self.update_display()
         
     def update_display(self):
-        """Extend in subclass to update displayed results (taken from self._parent.result)
+        """Extend in subclass to update displayed results (taken from self.parent.result)
         """
         self._need_update = False    
         
 
 class ModelEventPlot(ModelResultView):
+    """Plot event amplitudes, likelihoods, and model state vs time.
+
+    Clicking on individual points shows a plot of the model predicted amplitude distribution for that event.
+    """
     def __init__(self, parent):
         ModelResultView.__init__(self, parent)
 
         self.event_view = pg.GraphicsLayoutWidget()
         self.layout.addWidget(self.event_view)
+
+        self.plots = {
+            'amplitude': self.event_view.addPlot(0, 0, title="event amplitude vs compressed time"),
+            'likelihood': self.event_view.addPlot(1, 0, title="model likelihood vs compressed time"),
+        }
+        self.state_keys = ['vesicle_pool', 'release_probability', 'sensitization']
+        for i,state_key in enumerate(self.state_keys):
+            self.plots[state_key] = self.event_view.addPlot(2+i, 0, title=state_key + " vs compressed time")
         
-        self.plt1 = self.event_view.addPlot(0, 0, title="model likelihood vs compressed time")
-        
-        self.plt2 = self.event_view.addPlot(1, 0, title="event amplitude vs compressed time")
-        self.plt2.setXLink(self.plt1)
-        
-        self.state_key = 'release_probability'
-        self.plt3 = self.event_view.addPlot(2, 0, title=self.state_key + " vs compressed time")
-        self.plt3.setXLink(self.plt1)
-        
-        self.plt4 = self.event_view.addPlot(0, 1, title="amplitude distributions", rowspan=3)
-        # self.plt4.setYLink(self.plt2)
-        self.plt4.setMaximumWidth(500)
-        self.plt4.selected_items = []
+        self.amp_dist_plot = self.event_view.addPlot(0, 1, title="amplitude distributions", rowspan=10)
+        self.amp_dist_plot.setMaximumWidth(500)
+        self.amp_dist_plot.selected_items = []
 
         self.amp_sample_values = np.linspace(-0.005, 0.005, 800)
 
+        self.ctrl = QtGui.QWidget()
+        self.hl = QtGui.QHBoxLayout()
+        self.hl.setSpacing(2)
+        self.hl.setContentsMargins(0, 0, 0, 0)
+        self.ctrl.setLayout(self.hl)
+        self.layout.addWidget(self.ctrl)
+
+        self.plot_checks = {
+            'amplitude': QtGui.QCheckBox('amplitude'),
+            'likelihood': QtGui.QCheckBox('likelihood'),
+            'vesicle_pool': QtGui.QCheckBox('vesicle pool'),
+            'release_probability': QtGui.QCheckBox('release probability'),
+            'sensitization': QtGui.QCheckBox('sensitization'),
+        }
+        self.plot_checks['amplitude'].setChecked(True)
+        for name,c in self.plot_checks.items():
+            self.hl.addWidget(c)
+            c.toggled.connect(self.update_display)
+
+        for name,plot in self.plots.items():
+            plot.setXLink(self.plots['amplitude'])
+
     def update_display(self):
+        """Called when we need to update displayed results (from self.parent.result)
+        """
         ModelResultView.update_display(self)
 
-        full_result = self._parent.result
-        model = full_result['model']
-        result = full_result['result']
-        pre_state = full_result['pre_spike_state']
-        post_state = full_result['post_spike_state']
+        for k in self.plots:
+            if self.plot_checks[k].isChecked():
+                self.plots[k].setVisible(True)
+                self.plots[k].setMaximumHeight(10000)
+            else:
+                self.plots[k].setVisible(False)
+                self.plots[k].setMaximumHeight(0)
+
+        full_result = self.parent.result
+        model = full_result.model
+        result = full_result.result
+        pre_state = full_result.pre_spike_state
+        post_state = full_result.post_spike_state
         
         # color events by likelihood
         cmap = pg.ColorMap([0, 1.0], [(0, 0, 0), (255, 0, 0)])
         threshold = 10
         err_colors = cmap.map((threshold - result['likelihood']) / threshold)
-        brushes = [pg.mkBrush(c) for c in err_colors]
+        brushes = [pg.mkBrush(c) if np.isfinite(result['likelihood'][i]) else pg.mkBrush(None) for i,c in enumerate(err_colors)]
 
         # log spike intervals to make visualization a little easier
         compressed_spike_times = np.empty(len(result['spike_time']))
         compressed_spike_times[0] = 0.0
         np.cumsum(np.diff(result['spike_time'])**0.25, out=compressed_spike_times[1:])
 
-        self.plt1.clear()
-        self.plt1.plot(compressed_spike_times, result['likelihood'], pen=None, symbol='o', symbolBrush=brushes)
+        if self.plot_checks['likelihood'].isChecked():
+            self.plots['likelihood'].clear()
+            self.plots['likelihood'].plot(compressed_spike_times, result['likelihood'], pen=None, symbol='o', symbolBrush=brushes)
         
-        self.plt2.clear()
-        self.plt2.plot(compressed_spike_times, result['expected_amplitude'], pen=None, symbol='x', symbolPen=0.5, symbolBrush=brushes)
-        amp_sp = self.plt2.plot(compressed_spike_times, result['amplitude'], pen=None, symbol='o', symbolBrush=brushes)
-        amp_sp.scatter.sigClicked.connect(self.amp_sp_clicked)
-        
-        self.plt3.clear()
-        self.plt3.plot(compressed_spike_times, pre_state[self.state_key], pen=None, symbol='t', symbolBrush=brushes)
-        self.plt3.plot(compressed_spike_times, post_state[self.state_key], pen=None, symbol='o', symbolBrush=brushes)
-        self.plt4.clear()
-        
+        if self.plot_checks['amplitude'].isChecked():
+            self.plots['amplitude'].clear()
+            self.plots['amplitude'].plot(compressed_spike_times, result['expected_amplitude'], pen=None, symbol='x', symbolPen=0.5, symbolBrush=brushes)
+            amp_sp = self.plots['amplitude'].plot(compressed_spike_times, result['amplitude'], pen=None, symbol='o', symbolBrush=brushes)
+            amp_sp.scatter.sigClicked.connect(self.amp_sp_clicked)
+
+        for k in self.state_keys:
+            if not self.plot_checks[k].isChecked():
+                continue
+            self.plots[k].clear()
+            self.plots[k].plot(compressed_spike_times, pre_state[k], pen=None, symbol='t', symbolBrush=brushes)
+            self.plots[k].plot(compressed_spike_times, post_state[k], pen=None, symbol='o', symbolBrush=brushes)
+
         # plot full distribution of event amplitudes
+        self.amp_dist_plot.clear()
         bins = np.linspace(np.nanmin(result['amplitude']), np.nanmax(result['amplitude']), 40)
         d_amp = bins[1] - bins[0]
         amp_hist = np.histogram(result['amplitude'], bins=bins)
-        self.plt4.plot(amp_hist[1], amp_hist[0] / (amp_hist[0].sum() * d_amp), stepMode=True, fillLevel=0, brush=0.3)
+        self.amp_dist_plot.plot(amp_hist[1], amp_hist[0] / (amp_hist[0].sum() * d_amp), stepMode=True, fillLevel=0, brush=0.3)
 
         # plot average model event distribution
         amps = self.amp_sample_values
@@ -282,23 +348,30 @@ class ModelEventPlot(ModelResultView):
                 continue
             total_dist += model.likelihood(amps, state)
         total_dist /= total_dist.sum() * d_amp
-        self.plt4.plot(amps, total_dist, fillLevel=0, brush=(255, 0, 0, 50))
+        self.amp_dist_plot.plot(amps, total_dist, fillLevel=0, brush=(255, 0, 0, 50))
     
     def amp_sp_clicked(self, sp, pts):
-        result = self._parent.result['result']
+        # user clicked an event in the scatter plot; show: 
+        # - the amplitude of the selected event (red line)
+        # - expectation value from model distribution (yellow line)
+        # - the full model distribution (yellow histogram)
+
+        result = self.parent.result.result
+        pre_state = self.parent.result.pre_spike_state
+        model = self.parent.result.model
         i = pts[0].index()
-        state = self.pre_state[i]
+        state = pre_state[i]
         expected_amp = result[i]['expected_amplitude']
         measured_amp = result[i]['amplitude']
         amps = self.amp_sample_values
         
-        for item in self.plt4.selected_items:
-            self.plt4.removeItem(item)
-        l = self.model.likelihood(amps, state)
-        p = self.plt4.plot(amps, l / l.sum(), pen=(255, 255, 0, 100))
-        l1 = self.plt4.addLine(x=measured_amp)
-        l2 = self.plt4.addLine(x=expected_amp, pen='r')
-        self.plt4.selected_items = [p, l1, l2]
+        for item in self.amp_dist_plot.selected_items:
+            self.amp_dist_plot.removeItem(item)
+        l = model.likelihood(amps, state)
+        p = self.amp_dist_plot.plot(amps, l, pen=(255, 255, 0, 100))
+        l1 = self.amp_dist_plot.addLine(x=measured_amp, pen='r')
+        l2 = self.amp_dist_plot.addLine(x=expected_amp, pen='y')
+        self.amp_dist_plot.selected_items = [p, l1, l2]
 
 
 class ModelOptimizationPlot(ModelResultView):
@@ -314,136 +387,166 @@ class ModelOptimizationPlot(ModelResultView):
 
         result = self._parent.result
         plt = self.plot
-        x = result['optimization_path']['mini_amplitude']
-        y = result['optimization_path']['likelihood']
+        x = result.optimization_path['mini_amplitude']
+        y = result.optimization_path['likelihood']
         brushes = [pg.mkBrush((i, int(len(x)*1.2))) for i in range(len(x))]
         plt.clear()
         plt.plot(x, y, pen=None, symbol='o', symbolBrush=brushes)
-        plt.addLine(x=result['optimized_params']['mini_amplitude'])
-        plt.addLine(y=result['likelihood'])
+        plt.addLine(x=result.optimized_params['mini_amplitude'])
+        plt.addLine(y=result.likelihood)
 
 
 class ModelEventCorrelationPlot(ModelResultView):
+    """Show correlation in amplitude between adjacent events. 
+
+    The motivation here is that if synaptic release causes vesicle depletion, then the amplitude of
+    two adjacent events in a train should be anti-correlated (a large release on one event causes more vesicle
+    depletion and therefore more depression; the following event should be smaller). 
+    """
     def __init__(self, parent):
         ModelResultView.__init__(self, parent)
-        self.plot = pg.PlotWidget(labels={'left': 'amp 2', 'bottom': 'amp 1'})
-        self.plot.showGrid(True, True)
-        self.layout.addWidget(self.plot)
+        self.view = pg.GraphicsLayoutWidget()
+        self.layout.addWidget(self.view)
+
+        self.plots = [[self.view.addPlot(row=i, col=0, labels={'left': '%d:%d'%(2**i, 2**(i+1))}), self.view.addPlot(row=i, col=1)] for i in range(3)]
+        for row in self.plots:
+            for plot in row:
+                plot.showGrid(True, True)
+                plot.label = pg.TextItem()
+                plot.label.setParentItem(plot.vb)
+            row[1].setXLink(row[0])
+            row[1].setYLink(row[0])
+        self.plots[0][0].setTitle('data')
+        self.plots[0][1].setTitle('model')
+
+        # self.ctrl = QtGui.QWidget()
+        # self.hl = QtGui.QHBoxLayout()
+        # self.hl.setSpacing(2)
+        # self.hl.setContentsMargins(0, 0, 0, 0)
+        # self.ctrl.setLayout(self.hl)
+        # self.layout.addWidget(self.ctrl)
+
+        # self.mode_radios = {
+        #     'all_events': QtGui.QRadioButton('all events'),
+        #     'first_in_train': QtGui.QRadioButton('first in train'),
+        # }
+        # self.mode_radios['all_events'].setChecked(True)
+        # for name,r in self.mode_radios.items():
+        #     self.hl.addWidget(r)
+        #     r.toggled.connect(self.update_display)
         
     def update_display(self):
         ModelResultView.update_display(self)
-        result = self._parent.result
-        spikes = result['result']['spike_time']
-        amps = result['result']['amplitude']
-        
-        cmap = pg.ColorMap(np.linspace(0, 1, 4), np.array([[255, 255, 255], [255, 255, 0], [255, 0, 0], [0, 0, 0]], dtype='ubyte'))
-        cvals = [((np.log(dt) / np.log(10)) + 2) / 4. for dt in np.diff(spikes)]
-        brushes = [pg.mkBrush(cmap.map(c)) for c in cvals]
-        
-        self.plot.clear()
-        self.plot.plot(amps[:-1], amps[1:], pen=None, symbol='o', symbolBrush=brushes)
+        for row in self.plots:
+            for plot in row:
+                plot.clear()
+
+        result = self.parent.result
+        spikes = result.result['spike_time']
+        amps = result.result['amplitude']
+
+        # re-simulate one random trial 
+        model_result = self.parent.random_model_result()
+        model_amps = model_result.result['amplitude']
+
+        # this analysis relies on repeated structures in the stimulus, so we need to reconstruct
+        # these from the event metadata
+        recs = result.events_by_recording(require_contiguous=True)
+
+        for i in range(3):
+            n = (i + 1) * 2
+            # find all recordings containing all of the pulses we want to analyze
+            event_inds = []
+            for rec in recs:
+                if len(rec) < n:
+                    continue
+                event_inds.append(rec[:n])
+
+            for j,this_amps in enumerate([amps, model_amps]):
+                selected_amps = this_amps[np.array(event_inds)]
+
+                x = selected_amps[:, :n//2].mean(axis=1)
+                y = selected_amps[:, n//2:].mean(axis=1)
+
+                self.plots[i][j].plot(x, y, pen=None, symbol='o', symbolPen=None, symbolBrush=[data_color, model_color][j])
+
+                # plot regression
+                slope, intercept, r, p, stderr = scipy.stats.linregress(x, y)
+                assert np.isfinite(p)
+                x = np.array([x.min(), x.max()])
+                y = slope * x + intercept
+                self.plots[i][j].plot(x, y, pen='y')
+                self.plots[i][j].label.setText(f'r={r:0.2f} p={p:0.3f}')
 
 
 class ModelInductionPlot(ModelResultView):
     def __init__(self, parent):
         ModelResultView.__init__(self, parent)
         self.lw = pg.GraphicsLayoutWidget()
-        self.ind_plots = [self.lw.addPlot(0, 0), self.lw.addPlot(1, 0), self.lw.addPlot(2, 0)]
-        self.rec_plot = self.lw.addPlot(0, 1)
-        self.corr_plot = self.lw.addPlot(1, 1, rowspan=2)
-        # self.corr_plot.setAspectLocked()
-        self.corr_plot.showGrid(True, True)
+        self.induction_freqs = [10, 20, 50, 100]
+        self.ind_plots = [self.lw.addPlot(i, 0, labels={'left': f'{freq:d}Hz'}) for i,freq in enumerate(self.induction_freqs)]
         self.layout.addWidget(self.lw)
         
     def update_display(self):
         ModelResultView.update_display(self)
         result = self._parent.result
-        spikes = result['result']['spike_time']
-        amps = result['result']['amplitude']
-        meta = result['event_meta']
-        
-        self.corr_plot.clear()
+        spikes = result.result['spike_time']
+        amps = result.result['amplitude']
+        meta = result.event_meta
+
+        # re-simulate one random trial 
+        model_result = self.parent.random_model_result()
+        model_amps = model_result.result['amplitude']
         
         # generate a list of all trains sorted by stimulus
-        trains = {}  # {ind_f: {rec_d: [[a1, a2, ..a12], [b1, b2, ..b12], ...], ...}, ...}
-        current_sweep = None
-        skip_sweep = False
-        current_train = []
-        for i in range(len(amps)):
-            sweep_id = meta['sync_rec_ext_id'][i]
-            ind_f = meta['induction_frequency'][i]
-            rec_d = meta['recovery_delay'][i]
-            if sweep_id != current_sweep:
-                skip_sweep = False
-                current_sweep = sweep_id
-                current_train = []
-                ind_trains = trains.setdefault(ind_f, {})
-                rec_trains = ind_trains.setdefault(rec_d, [])
-                rec_trains.append(current_train)
-            if skip_sweep:
-                continue
-            if not np.isfinite(amps[i]) or not np.isfinite(spikes[i]):
-                skip_sweep = True
-                continue
-            current_train.append(amps[i])
+        trains = result.events_by_stimulus()
 
         # scatter plots of event amplitudes sorted by pulse number
-        for ind_i, ind_f in enumerate([20, 50, 100]):
+        for ind_i, ind_f in enumerate(self.induction_freqs):
             ind_trains = trains.get(ind_f, {})
             
             # collect all induction events by pulse number
             ind_pulses = [[] for i in range(12)]
             for rec_d, rec_trains in ind_trains.items():
                 for train in rec_trains:
-                    for i,amp in enumerate(train):
-                        ind_pulses[i].append(amp)
-                        
-            x = []
-            y = []
+                    for i,ev_ind in enumerate(train):
+                        ind_pulses[i].append(ev_ind)
+            
+            real_x = []
+            real_y = []
+            real_avg_y = []
+            model_x = []
+            model_y = []
+            model_avg_y = []
             for i in range(12):
                 if len(ind_pulses[i]) == 0:
+                    real_avg_y = [np.nan] * 12
                     continue
-                y.extend(ind_pulses[i])
-                xs = pg.pseudoScatter(np.array(ind_pulses[i]), bidir=True, shuffle=True)
-                xs /= np.abs(xs).max() * 4
-                x.extend(xs + i)
+
+                inds = np.array(ind_pulses[i])
+                for this_amp, x, avg_y, y, sign in ((amps, real_x, real_avg_y, real_y, -1), (model_amps, model_x, model_avg_y, model_y, 1)):
+                    amp = this_amp[inds]
+                    y.extend(amp)
+                    if len(amp) == 0:
+                        avg_y.append(np.nan)
+                    else:
+                        avg_y.append(amp.mean())                    
+                    xs = pg.pseudoScatter(np.array(amp), bidir=False, shuffle=True)
+                    xs /= np.abs(xs).max() * 4
+                    x.extend(i + xs * sign)
 
             self.ind_plots[ind_i].clear()
-            self.ind_plots[ind_i].plot(x, y, pen=None, symbol='o')
+            self.ind_plots[ind_i].plot(real_x, real_y, pen=None, symbol='o', symbolPen=None, symbolBrush=data_color+(200,), symbolSize=5)
+            self.ind_plots[ind_i].plot(np.arange(12), real_avg_y, pen=data_color+(100,), symbol='d', symbolPen=None, symbolBrush=data_color+(100,), symbolSize=5)
+            self.ind_plots[ind_i].plot(np.array(model_x)+0.1, model_y, pen=None, symbol='o', symbolPen=None, symbolBrush=model_color+(200,), symbolSize=5, zValue=-1)
             
             # re-model based on mean amplitudes
             mean_times = np.arange(12) / ind_f
             mean_times[8:] += 0.25
-            model = result['model']
-            params = result['params'].copy()
-            params.update(result['optimized_params'])
-            mean_result = model.measure_likelihood(mean_times, amplitudes=None, params=params)
+            model = result.model
+            params = result.all_params
+            mean_result = model.run_model(mean_times, amplitudes='expected', params=params)
             
-            expected_amps = mean_result['result']['expected_amplitude']
-            self.ind_plots[ind_i].plot(expected_amps, pen='w', symbol='d', symbolBrush='y')
-        
-            # normalize events by model prediction
-            x = []
-            y = []
-            for rec_d, rec_trains in ind_trains.items():
-                for train in rec_trains:
-                    train = [t - expected_amps[i] for i,t in enumerate(train)]
-                    for i in range(1, len(train)):
-                        x.append(train[i-1])
-                        y.append(train[i])
-            x = np.array(x)
-            y = np.array(y)
-            
-            y1 = y[x<0]
-            y2 = y[x>0]
-            x1 = pg.pseudoScatter(y1, bidir=True)
-            x2 = pg.pseudoScatter(y2, bidir=True)
-            x1 = 0.25 * x1 / x1.max()
-            x2 = 0.25 * x2 / x2.max()
-            self.corr_plot.plot(x1, y1, pen=None, symbol='o')
-            self.corr_plot.plot(x2 + 1, y2, pen=None, symbol='o')
-            # self.corr_plot.plot(x, y, pen=None, symbol='o', symbolBrush=(ind_i, 4))
-            
-        # scatter plot of event pairs normalized by model expectation
-        
-        
+            # plot model distribution expectation values
+            expected_amps = mean_result.result['expected_amplitude']
+            self.ind_plots[ind_i].plot(expected_amps, pen=model_color+(100,), symbol='d', symbolBrush=model_color+(100,), symbolPen=None, zValue=-10)
