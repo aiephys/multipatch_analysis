@@ -338,9 +338,9 @@ class ConnectivityAnalyzer(Analyzer):
             synapse = pair.synapse
             if synapse is None:
                 continue
-            arfs = pair.avg_response_fits
-            latency = pair.synapse.latency
-            syn_typ = pair.synapse.synapse_type
+            arfs = synapse.avg_response_fits
+            latency = synapse.latency
+            syn_typ = synapse.synapse_type
             self.pair_items[pair.id] = []
             trace_itemA = None
             trace_itemB = None
@@ -357,6 +357,7 @@ class ConnectivityAnalyzer(Analyzer):
             #         trace_itemA.sigClicked.connect(self.trace_plot_clicked)
             #         self.pair_items[pair.id].append(trace_itemA)
             #         tracesA.append(traceA)
+            
             if arfs is not None:
                 for arf in arfs:
                     if arf.holding in syn_typ_holding[syn_typ] and arf.manual_qc_pass is True and latency is not None:
@@ -653,7 +654,7 @@ class StrengthAnalyzer(Analyzer):
             if np.isnan(value):
                 continue
             syn_typ = pair.synapse.synapse_type
-            rsf = pair.resting_state_fit
+            rsf = pair.synapse.resting_state_fit
             if rsf is not None:
                 nrmse = rsf.vc_nrmse if field_name.startswith('PSC') else rsf.ic_nrmse
                 # if nrmse is None or nrmse > 0.8:
@@ -1103,6 +1104,10 @@ class CellAnalyzer(pg.QtCore.QObject):
                         },
                     }),
             ('t_type', {'mode': 'enum'}),
+            ('norm_marker_sum', {'mode': 'range'}),
+            ('last_map', {'mode': 'enum'}),
+            ('mapped_subclass', {'mode': 'enum'}),
+            ('cluster_label', {'mode': 'enum'}),
         ]
 
 
