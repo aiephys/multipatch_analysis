@@ -46,8 +46,8 @@ PatchSeq = make_table(
     ('tree_call', 'str', 'Tree mapping', {'index': True}),
     ('genes_detected', 'int', 'Number of genes detected', {'index': True}),
     ('t_type', 'str', 'Transcriptomic type = tree_first_cluster if tree_call in [Core, I1]', {'index': True}),
-    ('last_map', 'str', 'Last branch node that this cell mapped to with probability > 0.7', {'index': True}),
-    ('last_score', 'str', 'Probability of the last_map call', {'index': True}),
+    ('last_map', 'str', 'mapping from the last batch run', {'index': True}),
+    ('last_score', 'str', 'mapping score from the last batch run', {'index': True}),
     ('mapped_subclass', 'str', 'Subclass that this cell mapped to', {'index': True}),
 ])
 
