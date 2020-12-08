@@ -148,7 +148,7 @@ class CellClassFilter(object):
         self.cell_class_groups = cell_class_groups
         combo_def = {'name': 'pre/post', 'type':'list', 'value':'both', 'values':['both', 'presynaptic', 'postsynaptic']}
         cell_group_list = [{'name': group, 'type': 'bool', 'children':[combo_def], 'expanded':False} for group in self.cell_class_groups.keys()]
-        layer = [{'name': 'Define layer by:', 'type': 'list', 'values': ['target layer', 'annotated layer'], 'value': 'target layer'}]
+        layer = [{'name': 'Define layer by:', 'type': 'list', 'values': ['target layer', 'annotated layer'], 'value': 'annotated layer'}]
         # if analyzer_mode == 'internal':
         children = layer + cell_group_list
         # else:
@@ -172,7 +172,7 @@ class CellClassFilter(object):
                     self.cell_classes.extend(ccg[group.name()])
             cell_classes = self.layer_call(self.cell_classes)
             self.cell_classes = [self._make_cell_class(c) for c in cell_classes]
-            self.cell_groups = classify_cells(self.cell_classes, pairs=pairs)
+            self.cell_groups = classify_cells(self.cell_classes, pairs=pairs, missing_attr='ignore')
         return self.cell_groups, self.cell_classes
 
     def _make_cell_class(self, spec):

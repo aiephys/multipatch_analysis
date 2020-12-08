@@ -208,7 +208,7 @@ class CellClass(object):
             
 
 
-def classify_cells(cell_classes, cells=None, pairs=None):
+def classify_cells(cell_classes, cells=None, pairs=None, missing_attr='raise'):
     """Given cell class definitions and a list of cells, return a dict indicating which cells
     are members of each class.
 
@@ -220,6 +220,10 @@ def classify_cells(cell_classes, cells=None, pairs=None):
         List of Cell instances to be classified.
     pairs : list | None
         List of pairs from which cells will be collected. May not be used with *cells*
+    missing_attr : str
+        Determines the behavior when a criteria attribute is missing on a 
+        cell. If 'ignore', then the cell is excluded from the result,. If 'raise',
+        then an exception is raised. Default is 'raise'.
         
     Returns
     -------
@@ -248,8 +252,14 @@ def classify_cells(cell_classes, cells=None, pairs=None):
     cell_groups = OrderedDict([(cell_class, set()) for cell_class in cell_classes])
     for cell in cells:
         for cell_class in cell_classes:
-            if cell in cell_class:
-                cell_groups[cell_class].add(cell)
+            try:
+                if cell in cell_class:
+                    cell_groups[cell_class].add(cell)
+            except Exception:
+                if missing_attr == 'ignore':
+                    continue
+                else:
+                    raise
     return cell_groups
 
 
