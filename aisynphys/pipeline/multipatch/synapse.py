@@ -154,6 +154,7 @@ def generate_synapse_record(pair, db, session, notes_rec, syn='mono', max_ind_fr
     logger = logging.getLogger(__name__)
     errors = []
 
+    assert syn in ('mono', 'poly'), "Synapse type must be one of 'mono' or 'poly'"
     # create a DB record for this synapse
     if syn == 'mono':
         syn_entry = db.Synapse(
@@ -167,6 +168,7 @@ def generate_synapse_record(pair, db, session, notes_rec, syn='mono', max_ind_fr
             synapse_type=notes_rec.notes['polysynaptic_type'],
         )
         logger.info("add polysynapse: %s %s", pair, pair.id)
+    
 
     # fit PSP shape against averaged PSPs/PCSs at -70 and -55 mV
     #   - selected from <= 50Hz trains
@@ -215,9 +217,10 @@ def generate_synapse_record(pair, db, session, notes_rec, syn='mono', max_ind_fr
             meta={'expected_fit_params': fit['expected_fit_params'], 'expected_fit_pass': fit['expected_fit_pass']},
         )
         if syn == 'mono':
-            rec.synapse_id = syn_entry.id
-        elif syn == 'poly':
-            rec.poly_synapse_id = syn_entry.id
+            rec.synapse = syn_entry
+        if syn == 'poly':
+            rec.poly_synapse = syn_entry
+        
         reasons = fit['fit_qc_pass_reasons']
         if len(reasons) > 0:
             rec.meta = {'fit_qc_pass_reasons': reasons}
@@ -233,7 +236,7 @@ def generate_synapse_record(pair, db, session, notes_rec, syn='mono', max_ind_fr
                 rec.meta['fit_decay_tau_20hz'] = fit_decay['fit_result'].best_values['decay_tau']
 
         session.add(rec)
-        
+    
     # compute weighted average of latency values
     lvals = np.array([lv[0] for lv in latency_vals])
     nvals = np.array([lv[1] for lv in latency_vals])
@@ -260,6 +263,5 @@ def generate_synapse_record(pair, db, session, notes_rec, syn='mono', max_ind_fr
                 avg = (vals * nvals).sum() / nvals.sum()
             setattr(syn_entry, pfx+param, avg)
         
-        session.add(syn_entry)
-
+    session.add(syn_entry)
     return errors
