@@ -15,7 +15,7 @@ def delay(hour=2):
     """Sleep until *hour*"""
     now = datetime.now()
     tomorrow = now + timedelta(days=1)
-    next_run = datetime(tomorrow.year, tomorrow.month, tomorrow.day, 3, 0)
+    next_run = datetime(tomorrow.year, tomorrow.month, tomorrow.day, 0, 1)
     delay = (next_run - now).total_seconds()
 
     print("Sleeping %d seconds until %s.." % (delay, next_run))
