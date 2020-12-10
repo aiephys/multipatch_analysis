@@ -73,9 +73,9 @@ Pair.poly_synapse = relationship(PolySynapse, back_populates="pair", cascade="de
 PolySynapse.pair = relationship(Pair, back_populates="poly_synapse", single_parent=True)
 
 Synapse.avg_response_fits = relationship(AvgResponseFit, back_populates="synapse", cascade="delete", single_parent=True, uselist=True)
-AvgResponseFit.synapse = relationship(Synapse, back_populates="avg_response_fits", single_parent=True)
+AvgResponseFit.synapse = relationship(Synapse, back_populates="avg_response_fits", single_parent=False)
 
 PolySynapse.avg_response_fits = relationship(AvgResponseFit, back_populates="poly_synapse", cascade="delete", single_parent=True, uselist=True)
-AvgResponseFit.poly_synapse = relationship(PolySynapse, back_populates="avg_response_fits", single_parent=True)
+AvgResponseFit.poly_synapse = relationship(PolySynapse, back_populates="avg_response_fits", single_parent=False)
 
 
