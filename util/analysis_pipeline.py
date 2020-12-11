@@ -88,18 +88,10 @@ if __name__ == '__main__':
             print("  Phooey.")
             args.bake = False
 
-    if args.rebuild:
-        pipeline.drop(modules)
+    if args.rebuild or args.drop:
+        # this call takes care of logging also
+        pipeline.drop(drop(modules=modules, job_ids=args.uids))
         print("  done.")
-
-    if args.drop:
-        for module in modules:
-            if args.uids is None:
-                print("Dropping and reinitializing module %s" % module.name)
-                module.drop_all(reinitialize=True)
-            else:
-                print("Dropping %d jobs in module %s" % (len(args.uids), module.name))
-                module.drop_jobs(job_ids=args.uids)
  
     if args.update or args.rebuild or args.retry:
         report = []
