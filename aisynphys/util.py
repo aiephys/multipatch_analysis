@@ -19,12 +19,20 @@ stderr_log_handler.setLevel(logging.INFO)
 logger.addHandler(stderr_log_handler)
 
 def toposort(deps, nodes=None, seen=None, stack=None, depth=0):
-    """Topological sort. Arguments are:
-      deps    dictionary describing dependencies where a:[b,c] means "a depends on b and c"
-      nodes   optional, specifies list of starting nodes (these should be the nodes 
-              which are not depended on by any other nodes). Other candidate starting
-              nodes will be ignored.
-              
+    """Topological sort
+    
+    (credit: pyqtgraph) 
+    
+    Parameters
+    ----------
+    deps : dict
+        Dictionary describing dependencies where a:[b,c] means "a depends on b and c".
+    nodes : list | None
+        Optional; specifies list of starting nodes (these should be the nodes 
+        which are not depended on by any other nodes). Other candidate starting
+        nodes will be ignored.
+  
+
     Example::
 
         # Sort the following graph:
