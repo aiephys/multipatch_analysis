@@ -1,6 +1,6 @@
 import re
 from collections import OrderedDict
-from pyqtgraph import toposort
+from ..util import toposort
 from .pipeline_module import PipelineModule, DatabasePipelineModule
 
 

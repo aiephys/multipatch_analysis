@@ -16,6 +16,7 @@ if __name__ == '__main__':
     parser.add_argument('modules', type=str, nargs='*', help="The name of the analysis module(s) to run")
     parser.add_argument('--update', action='store_true', default=False, help="Process any jobs that are ready to be updated")
     parser.add_argument('--retry', action='store_true', default=False, help="During update, retry processing jobs that previously failed (implies --update)")
+    parser.add_argument('--force-update', action='store_true', default=False, help="During update, reprocess all available jobs regardless of status (allowed only with --limit or --uids)")
     parser.add_argument('--report', action='store_true', default=False, help="Print a report of pipeline status and errors", )
     parser.add_argument('--rebuild', action='store_true', default=False, help="Remove and rebuild tables for selected modules")
     parser.add_argument('--workers', type=int, default=None, help="Set the number of concurrent processes during update")
@@ -87,24 +88,21 @@ if __name__ == '__main__':
             print("  Phooey.")
             args.bake = False
 
-    if args.rebuild:
-        pipeline.drop(modules)
+    if args.rebuild or args.drop:
+        # this call takes care of logging also
+        pipeline.drop(drop(modules=modules, job_ids=args.uids))
         print("  done.")
-
-    if args.drop:
-        for module in modules:
-            if args.uids is None:
-                print("Dropping and reinitializing module %s" % module.name)
-                module.drop_all(reinitialize=True)
-            else:
-                print("Dropping %d jobs in module %s" % (len(args.uids), module.name))
-                module.drop_jobs(job_ids=args.uids)
  
-    if args.update or args.rebuild or args.retry:
+    if args.update or args.rebuild or args.retry or args.force_update:
+        if args.force_update and (args.limit is None) and (args.uids is None):
+            print("Force-update permitted only with --uids or --limit options. Try rebuilding instead?")
+            sys.exit(-1)
         report = []
         for module in modules:
             print("=============================================")
-            result = module.update(job_ids=args.uids, retry_errors=args.retry, limit=args.limit, parallel=not args.local, workers=args.workers, debug=args.debug)
+            result = module.update(job_ids=args.uids, retry_errors=args.retry, limit=args.limit, 
+                                   parallel=not args.local, workers=args.workers, debug=args.debug,
+                                   force=args.force_update)
             report.append((module, result))
             
         if args.vacuum:

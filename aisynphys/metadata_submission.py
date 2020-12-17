@@ -289,9 +289,10 @@ class ExperimentMetadataSubmission(object):
                 yy, mm, dd, plate_n, well = m.groups()[:5]
                 plate_date = datetime(2000+int(yy), int(mm), int(dd))
                 # find the most recent Monday
-                expected_plate_date = [site_date - timedelta(days=site_date.weekday())]
+                last_monday  = site_date - timedelta(days=site_date.weekday())
+                expected_plate_date = [last_monday]
                 # at times of reduced staffing the plate schedule can change, add other acceptable plate dates here
-                expected_plate_date.append(site_date + timedelta(days=7+site_date.weekday())) # "next Monday"
+                expected_plate_date.append(last_monday + timedelta(days=7)) # "next Monday"
                 if abs((expected_plate_date[0] - plate_date).total_seconds()) > 7*24*3600:
                     # error if more than a week out of sync
                     errors.append("Histology well date is %s%s%s; expected %s: %s" % (yy, mm, dd, expected_plate_date.strftime('%y%m%d'), lims_edit_href))
