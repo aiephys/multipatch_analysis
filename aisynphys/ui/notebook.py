@@ -195,7 +195,7 @@ def show_connectivity_matrix(ax, results, pre_cell_classes, post_cell_classes, c
 
             cprob[i,j] = cp
             cprob_str[i,j] = "" if result['n_probed'] == 0 else "%d/%d" % (found, result['n_probed'])
-            cprob_alpha[i,j] = 1.0 - 2.0 * (cp_upper_ci - cp_lower_ci)
+            cprob_alpha[i,j] = 1.0 - 2.0 * max(cp_upper_ci - cp, cp - cp_lower_ci)
 
     # map connection probability to RGB colors
     mapper = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap)
@@ -372,6 +372,8 @@ def ei_hist_plot(ax, metric, bin_edges, db, pair_query_args):
 
 
 def cell_class_matrix(pre_classes, post_classes, metric, class_labels, ax, db, pair_query_args=None):
+    if class_labels is None:
+        class_labels = {key: key for key in pre_classes.keys()}
     pairs_has_metric, metric_name, units, scale, alpha, cmap, cmap_log, clim, cell_fmt = get_metric_data(metric, db, pre_classes, post_classes, pair_query_args=pair_query_args)
     metric_data = pairs_has_metric.groupby(['pre_class', 'post_class']).aggregate(lambda x: np.mean(x))
     error = pairs_has_metric.groupby(['pre_class', 'post_class']).aggregate(lambda x: np.std(x))
