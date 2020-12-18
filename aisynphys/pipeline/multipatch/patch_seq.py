@@ -70,7 +70,7 @@ class PatchSeqPipelineModule(MultipatchPipelineModule):
         job_id = job['job_id']
 
         # Load experiment from DB
-        expt = db.experiment_from_timestamp(job_id, session=session)
+        expt = db.experiment_from_ext_id(job_id, session=session)
         amp_results = get_amp_results()
         mapping_results = get_mapping_results()
         cell_species = get_cell_species(db)

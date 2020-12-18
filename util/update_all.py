@@ -15,7 +15,7 @@ def delay(hour=2):
     """Sleep until *hour*"""
     now = datetime.now()
     tomorrow = now + timedelta(days=1)
-    next_run = datetime(tomorrow.year, tomorrow.month, tomorrow.day, 3, 0)
+    next_run = datetime(tomorrow.year, tomorrow.month, tomorrow.day, 0, 1)
     delay = (next_run - now).total_seconds()
 
     print("Sleeping %d seconds until %s.." % (delay, next_run))
@@ -25,11 +25,13 @@ def delay(hour=2):
 if __name__ == '__main__':
     date = datetime.today().strftime("%Y-%m-%d")
     stages = OrderedDict([
+        ('pre_update_report',   ('daily',  'python util/analysis_pipeline.py multipatch all --report', 'pre-update pipeline report')),
         ('backup_notes',        ('daily',  'pg_dump -d data_notes -h 10.128.36.109 -U postgres  > data_notes_backups/data_notes_%s.pgsql'%date, 'backup data notes DB')),
         ('sync',                ('daily',  'python util/sync_rigs_to_server.py', 'sync raw data to server')),
         ('patchseq_report',     ('daily',  'python util/patchseq_reports.py --daily', 'patchseq report')),
         ('pipeline',            ('daily',  'python util/analysis_pipeline.py multipatch all --update --retry', 'run analysis pipeline')),
         ('vacuum',              ('daily',  'python util/database.py --vacuum', 'vacuum database')),
+        ('post_update_report',  ('daily',  'python util/analysis_pipeline.py multipatch all --report', 'post-update pipeline report')),
         ('bake_sqlite',         ('daily',  'python util/bake_sqlite.py small medium', 'bake sqlite')),
         ('bake_sqlite_full',    ('weekly', 'python util/bake_sqlite.py full', 'bake sqlite full')),
     ])
@@ -74,6 +76,9 @@ if __name__ == '__main__':
 
             os.system(full_cmd)
         
+        time_str = time.strftime('%Y-%m-%d %H:%M')
+        open(logfile, 'a').write("Scheduled update finished at %s\n" % time_str)
+
         delay()
 
 

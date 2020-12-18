@@ -60,7 +60,8 @@ class PipelineModule(object):
             deps.extend(dep.downstream_modules())
         return [mod for mod in self.pipeline.modules if mod in deps]
     
-    def update(self, job_ids=None, retry_errors=False, limit=None, parallel=False, workers=None, debug=False):
+    def update(self, job_ids=None, retry_errors=False, limit=None, parallel=False, 
+               workers=None, debug=False, force=False):
         """Update analysis results for this module.
         
         Parameters
@@ -80,11 +81,26 @@ class PipelineModule(object):
             Used mainly for debugging to allow traceback inspection.
             If True, then exceptions are raised and will end any further processing.
             If False, then errors are logged and ignored.
+        force: bool
+            Update all available jobs, regardless of status.
         """
         logger = logging.getLogger(__name__)
         logger.info("Updating pipeline stage: %s", self.name)
         n_retry = 0
-        if job_ids is None:
+        if force:
+            if job_ids is not None:
+                run_job_ids = job_ids
+                run_jobs_meta = {}  # no extra metadata provided for these jobs
+                # don't deal with orphaned records here
+                drop_job_ids = []
+            else:
+                logger.info("Searching for jobs to update..")
+                run_jobs_meta = self.ready_jobs()
+                run_job_ids = list(run_jobs_meta.keys())
+                # maybe want to drop orphaned records here?
+                drop_job_ids = []
+                
+        else:
             logger.info("Searching for jobs to update..")
             drop_job_ids, run_jobs_meta, error_jobs = self.updatable_jobs()
             
@@ -94,17 +110,18 @@ class PipelineModule(object):
 
             run_job_ids = list(run_jobs_meta.keys())
             
+            if job_ids is not None:
+                run_job_ids = set(run_job_ids).intersection(job_ids)
+                drop_job_ids = set(drop_job_ids).intersection(job_ids)
+                
             if limit is not None:
                 # pick a random subset to import; this is just meant to ensure we get a variety
                 # of data when testing the import system.
                 rng = np.random.RandomState(0)
                 rng.shuffle(run_job_ids)
                 run_job_ids = run_job_ids[:limit]
-                drop_job_ids = [jid for jid in drop_job_ids if jid in run_jobs_meta]
-        else:
-            run_job_ids = job_ids
-            run_jobs_meta = {}  # no extra metadata provided for these jobs
-            drop_job_ids = job_ids
+                # don't deal with orphaned records here
+                drop_job_ids = []
             
         logger.info("Found %d job(s) to update.", len(run_job_ids))
 

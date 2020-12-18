@@ -758,4 +758,3 @@ def compose_svg_figure(figure_spec, filename, size, display=False):
     if display:
         from IPython.display import SVG, display
         display(SVG(filename=filename))
-
