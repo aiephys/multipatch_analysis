@@ -172,15 +172,22 @@ def measure_connectivity(pair_groups, alpha=0.05, sigma=None, fit_model=None, di
         if sigma is not None or fit_model is not None:
             distances = np.array([getattr(p, dist_measure) for p in probed_pairs], dtype=float)
             connections = np.array([p.synapse for p in probed_pairs], dtype=bool)
+            gaps = np.array([p.has_electrical for p in probed_pairs], dtype=bool)
             mask = np.isfinite(distances) & np.isfinite(connections)
             results[(pre_class, post_class)]['probed_distances'] = distances[mask]
             results[(pre_class, post_class)]['connected_distances'] = connections[mask]
+            mask2 = np.isfinite(distances) & np.isfinite(gaps)
+            results[(pre_class, post_class)]['gap_distances'] = gaps[mask2]
         if sigma is not None:
             adj_conn_prob, adj_lower_ci, adj_upper_ci = distance_adjusted_connectivity(distances[mask], connections[mask], sigma=sigma, alpha=alpha)
             results[(pre_class, post_class)]['adjusted_connectivity'] = (adj_conn_prob, adj_lower_ci, adj_upper_ci)
+            adj_gap_junc, adj_lower_gj_ci, adj_upper_gj_ci = distance_adjusted_connectivity(distances[mask], gaps[mask2], sigma=sigma, alpha=alpha)
+            results[(pre_class, post_class)]['adjusted_gap_junction'] = (adj_gap_junc, adj_lower_gj_ci, adj_upper_gj_ci)
         if fit_model is not None:
             fit = fit_model.fit(distances[mask], connections[mask], method='L-BFGS-B', fixed_size=sigma)
             results[(pre_class, post_class)]['connectivity_fit'] = fit
+            gap_fit = fit_model.fit(distances[mask], gaps[mask2], method='L-BFGS-B', fixed_size=sigma)
+            results[(pre_class, post_class)]['gap_fit'] = fit
     
     return results
 
