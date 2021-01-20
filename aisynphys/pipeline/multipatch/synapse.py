@@ -212,7 +212,7 @@ def generate_synapse_record(pair, db, session, notes_rec, syn='mono', max_ind_fr
             manual_qc_pass=fit['fit_qc_pass'],
             avg_data=fit['average'].data,
             avg_data_start_time=fit['average'].t0,
-            n_averaged_responses=len(fit['responses']),
+            n_averaged_responses=len(fit['responses']['qc_pass']),
             avg_baseline_noise=fit['avg_baseline_noise'],
             meta={'expected_fit_params': fit['expected_fit_params'], 'expected_fit_pass': fit['expected_fit_pass']},
         )
