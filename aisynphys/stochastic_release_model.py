@@ -267,7 +267,8 @@ class StochasticReleaseModel(object):
             params = self.params.copy()
         
         available_vesicles = int(np.clip(np.round(state['vesicle_pool']), 0, params['n_release_sites']))
-        return release_likelihood(amplitudes, available_vesicles, state['release_probability'], state['sensitization'], params['mini_amplitude'], params['mini_amplitude_cv'], params['measurement_stdev'])
+        mini_amplitude = state['sensitization'] * params['mini_amplitude']
+        return release_likelihood(amplitudes, available_vesicles, state['release_probability'], mini_amplitude, params['mini_amplitude_cv'], params['measurement_stdev'])
 
     @staticmethod
     @jit(nopython=True)
@@ -363,7 +364,7 @@ class StochasticReleaseModel(object):
                 pre_sensitization = sensitization
 
                 # measure likelihood of seeing this response amplitude
-                likelihood = release_likelihood_scalar(amplitude, effective_available_vesicles, release_probability, sensitization, mini_amplitude, mini_amplitude_cv, measurement_stdev)
+                likelihood = release_likelihood_scalar(amplitude, effective_available_vesicles, release_probability, sensitization * mini_amplitude, mini_amplitude_cv, measurement_stdev)
                 # prof('likelihood')
                 
                 # release vesicles
@@ -555,7 +556,7 @@ class StochasticReleaseModelResult:
 
 
 @jit(nopython=True)
-def release_likelihood(amplitudes, available_vesicles, release_probability, sensitization, mini_amplitude, mini_amplitude_cv, measurement_stdev):
+def release_likelihood(amplitudes, available_vesicles, release_probability, mini_amplitude, mini_amplitude_cv, measurement_stdev):
     """Return a measure of the likelihood that a synaptic response will have certain amplitude(s),
     given the state parameters for the synapse.
     
@@ -567,8 +568,6 @@ def release_likelihood(amplitudes, available_vesicles, release_probability, sens
         Number of vesicles available for release
     release_probability : float
         Probability for each available vesicle to be released
-    sensitization : float
-        Sensitization state (0-1); smaller values decrease the effective mini amplitude.
     mini_amplitude : float
         Mean amplitude of response evoked by a single vesicle release
     mini_amplitude_cv : float
@@ -595,26 +594,23 @@ def release_likelihood(amplitudes, available_vesicles, release_probability, sens
     3. The total likelihood is the sum of likelihoods for all possible values of nR.
     """
     return np.array([
-        release_likelihood_scalar(amplitude, available_vesicles, release_probability, sensitization, mini_amplitude, mini_amplitude_cv, measurement_stdev) 
+        release_likelihood_scalar(amplitude, available_vesicles, release_probability, mini_amplitude, mini_amplitude_cv, measurement_stdev)
         for amplitude in amplitudes])
 
 
 @jit(nopython=True)
-def release_likelihood_scalar(amplitude, available_vesicles, release_probability, sensitization, mini_amplitude, mini_amplitude_cv, measurement_stdev):
+def release_likelihood_scalar(amplitude, available_vesicles, release_probability, mini_amplitude, mini_amplitude_cv, measurement_stdev):
     """Same as release_likelihood, but optimized for a scalar amplitude argument"""
     n_vesicles = np.arange(available_vesicles + 1)
     
     # probability of releasing n_vesicles given available_vesicles and release_probability
-    p_n = binom_pmf_range(available_vesicles, release_probability, available_vesicles + 1)
+    p_n = binom_pmf(available_vesicles, release_probability, n_vesicles)
     
-    # apply desensitization
-    effective_mini_amplitude = mini_amplitude * sensitization
-
     # expected amplitude for n_vesicles
-    amp_mean = n_vesicles * effective_mini_amplitude
+    amp_mean = n_vesicles * mini_amplitude
     
     # amplitude stdev increases by sqrt(n) with number of released vesicles
-    amp_stdev = ((effective_mini_amplitude * mini_amplitude_cv)**2 * n_vesicles + measurement_stdev**2) ** 0.5
+    amp_stdev = ((mini_amplitude * mini_amplitude_cv)**2 * n_vesicles + measurement_stdev**2) ** 0.5
     
     # distributions of amplitudes expected for n_vesicles
     amp_prob = p_n * normal_pdf(amp_mean, amp_stdev, amplitude)
@@ -672,14 +668,24 @@ def normal_pdf(mu, sigma, x):
 
 #@functools.lru_cache(maxsize=2**14)
 @jit(nopython=True)
-def binom_pmf_range(n, p, k):
+def binom_pmf(n, p, k):
     """Probability mass function of binomial distribution
     
-    Same as scipy.stats.binom(n, p).pmf(arange(k)), but much faster.
+    Same as scipy.stats.binom(n, p).pmf(k), but much faster. Given *n* independent experiments,
+    each with probability *p* of succeeding, return the probability of seeing *k* successful
+    events (for each value given in the array *k*).
+
+    Parameters
+    ----------
+    n : int
+        Number of independent experiments
+    p : float
+        Probability of success per experiment
+    k : array of int
+        Numbers of successful exeriments for which to return the probability mass function
     """
-    k = np.arange(k)
     bc = np.array([binom_coeff(n,k1) for k1 in k])
-    return bc * p**k * (1-p)**(n-k)
+    return bc * (p**k * (1-p)**(n-k))
 
 
 _binom_coeff_cache = np.fromfunction(scipy.special.binom, (67, 67)).astype(int)
