@@ -981,7 +981,8 @@ class DynamicsAnalyzer(Analyzer):
             for pair in no_qc_data:
                 print ("\t\t %s" % (pair))
 
-    def plot_element_data(self, pre_class, post_class, element, field_name, color='g', trace_plt=None):
+    def plot_element_data(self, pre_class, post_class, element, field_name, color='g', trace_plt=None, pair_actions=None):
+        self.pair_actions = pair_actions
         trace_plt = None
         val = element[field_name].mean()
         line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
