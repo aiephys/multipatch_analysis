@@ -144,13 +144,11 @@ class CellBase(object):
             if name != 'synaptic':
                 tm_classes.add(cell_cls)
             
-        tm_classes = set(filter(None, tm_classes))
         if len(tm_classes) == 0:
             tm_class = None
         else:
             tm_class = 'mixed' if len(tm_classes) > 1 else list(tm_classes)[0]
         
-        tms_classes = set(filter(None, tms_classes))
         if len(tms_classes) == 0:
             tms_classes = None
         else:
