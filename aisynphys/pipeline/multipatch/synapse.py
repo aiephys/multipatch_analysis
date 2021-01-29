@@ -74,7 +74,7 @@ class SynapsePipelineModule(MultipatchPipelineModule):
                         syn_class = cell_classes[0]
                     else:
                         # mismatched synaptic sign
-                        syn_class = None
+                        syn_class = 'mixed'
                         
                     # previously generated nonsynaptic cell class -- based only on transgenic markers and morphology
                     cell_class_ns = cell.cell_class_nonsynaptic
