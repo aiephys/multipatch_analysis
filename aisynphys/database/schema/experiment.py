@@ -150,7 +150,7 @@ class CellBase(object):
             tm_class = 'mixed' if len(tm_classes) > 1 else list(tm_classes)[0]
         
         if len(tms_classes) == 0:
-            tms_classes = None
+            tms_class = None
         else:
             tms_class = 'mixed' if len(tms_classes) > 1 else list(tms_classes)[0]
 
