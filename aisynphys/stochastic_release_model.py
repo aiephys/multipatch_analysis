@@ -760,7 +760,7 @@ class ParameterSpace(object):
         if workers is None:
             workers = multiprocessing.cpu_count()
         all_inds = list(np.ndindex(self.shape))
-        all_params = [self[inds] for inds in all_inds]
+        all_params = [self.params_at_index(inds) for inds in all_inds]
 
         example_result = func(all_params[0], **kwds)
         opt_keys = list(example_result.optimized_params.keys())
@@ -854,6 +854,8 @@ class StochasticModelRunner:
         """
         if self._param_space is None:
             self._param_space = self.generate_param_space()
+            if self._save_cache:
+                self.store_result(self._cache_file)
         return self._param_space
 
     def best_params(self):
@@ -876,7 +878,7 @@ class StochasticModelRunner:
         param_space = ParameterSpace(search_params)
 
         # run once to jit-precompile before measuring preformance
-        self.run_model(param_space[(0,) * len(search_params)])
+        self.run_model(param_space.params_at_index((0,) * len(search_params)))
 
         start = time.time()
         import cProfile
@@ -888,9 +890,6 @@ class StochasticModelRunner:
         logger.info("Run time: %f", time.time() - start)
         # prof.print_stats(sort='cumulative')
         
-        if self._save_cache:
-            self.store_result(self._cache_file)
-
         return param_space
 
     def store_result(self, cache_file):
@@ -907,7 +906,7 @@ class StochasticModelRunner:
         
     @property
     def synapse_events(self):
-        """Tuple containing (spike_times, amplitudes, baseline_amps)
+        """Tuple containing (spike_times, amplitudes, baseline_amps, extra_info)
         """
         if self._synapse_events is None:
             session = self.db.session()
@@ -1041,15 +1040,15 @@ class StochasticModelRunner:
             'vesicle_recovery_tau': np.array([0.0025, 0.01, 0.04, 0.16, 0.64, 2.56]),
             # 'vesicle_recovery_tau': np.array([0.0001, 0.01]),
 
-            'facilitation_amount': np.array([0.0, 0.00625, 0.025, 0.05, 0.1, 0.2, 0.4]),
-            'facilitation_recovery_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64]),
-            # 'facilitation_amount': np.array([0, 0.5]),
-            # 'facilitation_recovery_tau': np.array([0.1, 0.5]),
+            # 'facilitation_amount': np.array([0.0, 0.00625, 0.025, 0.05, 0.1, 0.2, 0.4]),
+            # 'facilitation_recovery_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64]),
+            'facilitation_amount': np.array([0, 0.5]),
+            'facilitation_recovery_tau': np.array([0.1, 0.5]),
 
-            'desensitization_amount': np.array([0.0, 0.05, 0.1, 0.2, 0.4, 0.8]),
-            'desensitization_recovery_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64]),
-            # 'desensitization_amount': np.array([0.0, 0.1]),
-            # 'desensitization_recovery_tau': np.array([0.01, 0.1]),
+            # 'desensitization_amount': np.array([0.0, 0.05, 0.1, 0.2, 0.4, 0.8]),
+            # 'desensitization_recovery_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64]),
+            'desensitization_amount': np.array([0.0, 0.1]),
+            'desensitization_recovery_tau': np.array([0.01, 0.1]),
             # 'desensitization_amount': 0,
             # 'desensitization_recovery_tau': 1,
 
