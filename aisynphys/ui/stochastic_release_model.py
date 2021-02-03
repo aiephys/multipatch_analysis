@@ -32,15 +32,15 @@ class ModelDisplayWidget(QtGui.QWidget):
         v1['axis 0'] = 'n_release_sites'
         v1['axis 1'] = 'base_release_probability'
         v2 = self.slicer.params.child('2D views').addNew()
-        v2['axis 0'] = 'desensitization_amount'
+        v2['axis 0'] = 'depression_amount'
         v2['axis 1'] = 'base_release_probability'
         self.slicer.dockarea.moveDock(v2.viewer.dock, 'bottom', v1.viewer.dock)
         v3 = self.slicer.params.child('2D views').addNew()
-        v3['axis 0'] = 'vesicle_recovery_tau'
+        v3['axis 0'] = 'depression_tau'
         v3['axis 1'] = 'base_release_probability'
         v4 = self.slicer.params.child('2D views').addNew()
         v4['axis 0'] = 'facilitation_amount'
-        v4['axis 1'] = 'facilitation_recovery_tau'
+        v4['axis 1'] = 'base_release_probability'
         self.slicer.dockarea.moveDock(v4.viewer.dock, 'bottom', v3.viewer.dock)
 
         self.result_widget = ModelSingleResultWidget()
@@ -252,7 +252,7 @@ class ModelEventPlot(ModelResultView):
             'amplitude': self.event_view.addPlot(0, 0, title="event amplitude vs compressed time"),
             'likelihood': self.event_view.addPlot(1, 0, title="model likelihood vs compressed time"),
         }
-        self.state_keys = ['vesicle_pool', 'release_probability', 'sensitization']
+        self.state_keys = ['vesicle_pool', 'release_probability', 'depression', 'facilitation']
         for i,state_key in enumerate(self.state_keys):
             self.plots[state_key] = self.event_view.addPlot(2+i, 0, title=state_key + " vs compressed time")
         
@@ -274,7 +274,8 @@ class ModelEventPlot(ModelResultView):
             'likelihood': QtGui.QCheckBox('likelihood'),
             'vesicle_pool': QtGui.QCheckBox('vesicle pool'),
             'release_probability': QtGui.QCheckBox('release probability'),
-            'sensitization': QtGui.QCheckBox('sensitization'),
+            'depression': QtGui.QCheckBox('depression'),
+            'facilitation': QtGui.QCheckBox('facilitation'),
         }
         self.plot_checks['amplitude'].setChecked(True)
         for name,c in self.plot_checks.items():
