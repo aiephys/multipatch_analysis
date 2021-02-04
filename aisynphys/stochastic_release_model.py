@@ -1037,18 +1037,23 @@ class StochasticModelRunner:
             # If mini_amplitude is commented out here, then it will be optimized automatically by the model:
             #'mini_amplitude': np.nanmean(amplitudes) * 1.2**np.arange(-12, 24, 2),
 
-            'n_release_sites': np.array([1, 2, 4, 8, 16, 32]),
+            'n_release_sites': np.array([1, 2, 3, 4, 6, 8, 12, 16, 24, 32]),
+            # 'n_release_sites': np.array([1, 2, 4, 8, 16, 32]),
             'base_release_probability': np.array([0.025, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0]),
             'mini_amplitude_cv': np.array([0.05, 0.1, 0.2, 0.4, 0.8]),
             'measurement_stdev': measurement_stdev,
 
-            'depression_amount': np.array([-1, 0.0, 0.00625, 0.025, 0.05, 0.1, 0.2, 0.4, 0.8]),
-            'depression_tau': np.array([0.0025, 0.01, 0.04, 0.16, 0.64, 2.56]),
+            'depression_amount': np.array([-1, 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]),
+            'depression_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 1.28, 2.56]),
+            # 'depression_amount': np.array([-1, 0.0, 0.1, 0.3, 0.6, 1.0]),
+            # 'depression_tau': np.array([0.01, 0.04, 0.16, 0.64, 2.56]),
             # 'depression_amount': np.array([-1, 0, 0.5]),
             # 'depression_tau': np.array([0.0001, 0.01]),
 
-            'facilitation_amount': np.array([0.0, 0.00625, 0.025, 0.05, 0.1, 0.2, 0.4]),
-            'facilitation_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64]),
+            'facilitation_amount': np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]),
+            'facilitation_tau': np.array([0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 1.28, 2.56]),
+            # 'facilitation_amount': np.array([0.0, 0.1, 0.3, 0.6, 1.0]),
+            # 'facilitation_tau': np.array([0.01, 0.04, 0.16, 0.64, 2.56]),
             # 'facilitation_amount': np.array([0, 0.5]),
             # 'facilitation_tau': np.array([0.1, 0.5]),
 
