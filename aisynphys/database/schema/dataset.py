@@ -35,10 +35,9 @@ class RecordingBase:
         """An instance of neuroanalysis.stimuli.Stimulus describing the stimulus protocol used during
         this recording, or None if no stimulus information was recorded. 
         """
-        stim = self.meta.get('stimulus', None)
-        if stim is None:
+        if self.stim_meta is None:
             return None
-        return Stimulus.load(stim)
+        return Stimulus.load(self.stim_meta)
 
 
 Recording = make_table(
