@@ -1009,13 +1009,13 @@ class StochasticModelRunner:
             db.SyncRec.ext_id.label('sync_rec_ext_id'),
         )
         q = q.join(db.Baseline, db.PulseResponse.baseline)
-        q = q.join(db.PulseResponseFit)#, isouter=True)
+        q = q.join(db.PulseResponseFit, isouter=True)
         q = q.join(db.StimPulse)
         q = q.join(pre_rec, pre_rec.id==db.StimPulse.recording_id)
         q = q.join(db.Recording, db.PulseResponse.recording)
         q = q.join(db.SyncRec, db.Recording.sync_rec)
         q = q.join(db.PatchClampRecording)
-        q = q.join(db.MultiPatchProbe)#, isouter=True)
+        q = q.join(db.MultiPatchProbe, isouter=True)
 
         q = q.filter(db.PulseResponse.pair_id==pair.id)
         q = q.filter(db.PatchClampRecording.clamp_mode=='ic')
