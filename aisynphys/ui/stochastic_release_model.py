@@ -262,6 +262,8 @@ class ModelEventPlot(ModelResultView):
 
         self.amp_sample_values = np.linspace(-0.005, 0.005, 800)
 
+        self.stim_regions = []
+
         self.ctrl = QtGui.QWidget()
         self.hl = QtGui.QHBoxLayout()
         self.hl.setSpacing(2)
@@ -324,6 +326,24 @@ class ModelEventPlot(ModelResultView):
             self.plots['amplitude'].plot(compressed_spike_times, result['expected_amplitude'], pen=None, symbol='x', symbolPen=0.5, symbolBrush=brushes)
             amp_sp = self.plots['amplitude'].plot(compressed_spike_times, result['amplitude'], pen=None, symbol='o', symbolBrush=brushes)
             amp_sp.scatter.sigClicked.connect(self.amp_sp_clicked)
+
+            # show regions for each type of stimulus
+            last_stim_name = None
+            rgns = []
+            for i, stim_name in enumerate(full_result.event_meta['stim_name']):
+                ev_time = compressed_spike_times[i]
+                if stim_name != last_stim_name:
+                    rgns.append([stim_name, ev_time, ev_time])
+                    last_stim_name = stim_name
+                else:
+                    rgns[-1][1] = ev_time
+            for stim_name, start_time, stop_time in rgns:
+                rgn = pg.LinearRegionItem(values=[start_time, stop_time], orientation='vertical', brush=(len(self.stim_regions), 10), pen=None, movable=False)
+                rgn.lines[0].label = pg.InfLineLabel(rgn.lines[1], stim_name, movable=False, rotateAxis=(1, 0), position=0, anchors=[(0, 0), (0, 0)])
+                rgn.setZValue(-10)
+                rgn.setOpacity(0.3)
+                self.plots['amplitude'].addItem(rgn)
+                self.stim_regions.append(rgn)
 
         for k in self.state_keys:
             if not self.plot_checks[k].isChecked():

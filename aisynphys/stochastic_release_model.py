@@ -6,6 +6,7 @@ import numpy as np
 import numba
 import scipy.stats as stats
 import scipy.optimize
+import sqlalchemy.orm
 import aisynphys.config
 
 logger = logging.getLogger(__name__)
@@ -945,7 +946,7 @@ class StochasticModelRunner:
         
         # some metadata to follow the events around--not needed for the model, but useful for 
         # analysis later on.
-        event_meta = events[['sync_rec_ext_id', 'pulse_number', 'induction_frequency', 'recovery_delay']]
+        event_meta = events[['sync_rec_ext_id', 'pulse_number', 'induction_frequency', 'recovery_delay', 'stim_name']]
         
         # any missing spike times get filled in with the average latency
         missing_spike_mask = np.isnan(spike_times)
@@ -955,7 +956,7 @@ class StochasticModelRunner:
         spike_times[missing_spike_mask] = pulse_times[missing_spike_mask]
 
         # get individual event amplitudes
-        amplitudes = events['dec_fit_reconv_amp'].to_numpy()
+        amplitudes = events['dec_fit_reconv_amp'].to_numpy().astype(float)
         
         # filter events by inhibitory or excitatory qc
         qc_field = syn_type + '_qc_pass'
@@ -964,7 +965,7 @@ class StochasticModelRunner:
         amplitudes[~qc_mask] = np.nan
         amplitudes[missing_spike_mask] = np.nan
         logger.info("%d good events to be analyzed", np.isfinite(amplitudes).sum())
-
+        
         # get background events for determining measurement noise
         bg_amplitudes = events['baseline_dec_fit_reconv_amp'].to_numpy()
         # filter by qc
@@ -984,6 +985,8 @@ class StochasticModelRunner:
 
     @staticmethod
     def _event_query(pair, db, session):
+        pre_rec = sqlalchemy.orm.aliased(db.Recording, name='pre_rec')
+
         q = session.query(
             db.PulseResponse,
             db.PulseResponse.ex_qc_pass,
@@ -998,6 +1001,7 @@ class StochasticModelRunner:
             db.StimPulse.first_spike_time,
             db.StimPulse.pulse_number,
             db.StimPulse.onset_time,
+            pre_rec.stim_name,
             db.Recording.start_time.label('rec_start_time'),
             db.PatchClampRecording.baseline_current,
             db.MultiPatchProbe.induction_frequency,
@@ -1005,12 +1009,13 @@ class StochasticModelRunner:
             db.SyncRec.ext_id.label('sync_rec_ext_id'),
         )
         q = q.join(db.Baseline, db.PulseResponse.baseline)
-        q = q.join(db.PulseResponseFit)
+        q = q.join(db.PulseResponseFit)#, isouter=True)
         q = q.join(db.StimPulse)
+        q = q.join(pre_rec, pre_rec.id==db.StimPulse.recording_id)
         q = q.join(db.Recording, db.PulseResponse.recording)
         q = q.join(db.SyncRec, db.Recording.sync_rec)
         q = q.join(db.PatchClampRecording)
-        q = q.join(db.MultiPatchProbe)
+        q = q.join(db.MultiPatchProbe)#, isouter=True)
 
         q = q.filter(db.PulseResponse.pair_id==pair.id)
         q = q.filter(db.PatchClampRecording.clamp_mode=='ic')
