@@ -3,11 +3,16 @@ from neuron_morphology.lims_apical_queries import get_data
 from neuron_morphology.transforms.pia_wm_streamlines.calculate_pia_wm_streamlines import get_depth_gradient_field
 from neuron_morphology.snap_polygons.__main__ import run_snap_polygons, Parser
 from neuron_morphology.snap_polygons.types import ensure_path, ensure_linestring, ensure_polygon
+from neuron_morphology.features.layer.reference_layer_depths import DEFAULT_HUMAN_MTG_REFERENCE_LAYER_DEPTHS, DEFAULT_MOUSE_REFERENCE_LAYER_DEPTHS
 import neuron_morphology.layered_point_depths.__main__ as ld 
 from shapely.geometry import Polygon, Point, LineString, LinearRing
 import logging
 logger = logging.getLogger(__name__)
 
+WELL_KNOWN_REFERENCE_LAYER_DEPTHS = {
+    "human": DEFAULT_HUMAN_MTG_REFERENCE_LAYER_DEPTHS,
+    "mouse": DEFAULT_MOUSE_REFERENCE_LAYER_DEPTHS,
+}
 class LayerDepthError(Exception):
     pass
 
@@ -42,6 +47,8 @@ def get_cell_soma_data(cell_specimen_ids):
 
 def layer_info_from_snap_polygons_output(output, resolution=1):
     layers = {}
+    pia_path = None
+    wm_path = None
     for polygon in output["polygons"]:
         layers[polygon['name']] = {'bounds': Polygon(resolution*np.array(polygon['path']))}
     for surface in output["surfaces"]:
@@ -57,7 +64,30 @@ def layer_info_from_snap_polygons_output(output, resolution=1):
             layers[layer][f"{side}_surface"] = path
     return layers, pia_path, wm_path
 
-def get_layer_depths(point, layer_polys, pia_path, wm_path, depth_interp, dx_interp, dy_interp, step_size=1.0, max_iter=1000):
+def get_missing_layer_info(layers, species):
+    ref_layer_depths = WELL_KNOWN_REFERENCE_LAYER_DEPTHS[species]
+    # don't want to include wm as a layer!
+    ref_layer_depths.pop('wm')
+    all_layers_ordered = sorted(ref_layer_depths.keys())
+    complete_layers = sorted((
+        layer.replace("Layer", '') for layer, layer_poly in layers.items()
+        if 'pia_surface' in layer_poly and 'wm_surface' in layer_poly
+    ))
+    first = complete_layers[0]
+    last = complete_layers[-1]
+    top_path = layers[f"Layer{first}"]['pia_surface']
+    top_path = list(top_path.coords)
+    bottom_path = layers[f"Layer{last}"]['wm_surface']
+    bottom_path = list(bottom_path.coords)
+    missing_above = all_layers_ordered[:all_layers_ordered.index(first)]
+    missing_below = all_layers_ordered[all_layers_ordered.index(last)+1:]
+    pia_extra_dist = sum(ref_layer_depths[layer].thickness for layer in missing_above)
+    wm_extra_dist = sum(ref_layer_depths[layer].thickness for layer in missing_below)
+    return top_path, bottom_path, pia_extra_dist, wm_extra_dist
+
+def get_layer_depths(point, layer_polys, pia_path, wm_path, depth_interp, dx_interp, dy_interp, 
+                     step_size=1.0, max_iter=1000,
+                     pia_extra_dist=0, wm_extra_dist=0):
     pia_path = ensure_linestring(pia_path)
     wm_path = ensure_linestring(wm_path)
     in_layer = [
@@ -72,6 +102,9 @@ def get_layer_depths(point, layer_polys, pia_path, wm_path, depth_interp, dx_int
     else:
         raise LayerDepthError(f"Overlapping layers: {in_layer}")
     layer_poly = layer_polys[start_layer]
+    
+    if not ('pia_surface' in layer_poly and 'wm_surface' in layer_poly):
+        raise LayerDepthError("Can't run streamlines for layer with missing edges.")
 
     _, pia_side_dist = ld.step_from_node(
         point, depth_interp, dx_interp, dy_interp, layer_poly['pia_surface'], step_size, max_iter
@@ -85,6 +118,8 @@ def get_layer_depths(point, layer_polys, pia_path, wm_path, depth_interp, dx_int
     _, wm_distance = ld.step_from_node(
             point, depth_interp, dx_interp, dy_interp, wm_path, -step_size, max_iter
     )
+    pia_distance += pia_extra_dist
+    wm_distance += wm_extra_dist
     # if layer in ['Layer2', 'Layer3']:
     # add normalized L2-3 depth for human cells
     
@@ -107,8 +142,10 @@ def get_layer_depths(point, layer_polys, pia_path, wm_path, depth_interp, dx_int
         }
     return out
 
-def get_depths_slice(focal_plane_image_series_id, soma_centers, resolution=1, step_size=1.0, max_iter=1000):
-    # soma_centers, resolution = get_cell_soma_data(cell_id_list)
+def get_depths_slice(focal_plane_image_series_id, soma_centers, species,
+                     resolution=1, step_size=1.0, max_iter=1000):
+
+    # if resolution is not set, can run in pixel coordinates but some default scales may be off
     soma_centers = {cell: resolution*np.array(position) for cell, position in soma_centers.items()}
 
     parser = Parser(args=[], input_data=dict(
@@ -117,10 +154,12 @@ def get_depths_slice(focal_plane_image_series_id, soma_centers, resolution=1, st
     output = run_snap_polygons(**parser.args)
 
     layers, pia_path, wm_path = layer_info_from_snap_polygons_output(output, resolution)
+    # check for pia/wm? or just infer
+    top_path, bottom_path, pia_extra_dist, wm_extra_dist = get_missing_layer_info(layers, species)
 
     depth_field, gradient_field = get_depth_gradient_field(
-            pia_path,
-            wm_path,
+            top_path,
+            bottom_path,
     )
 
     # nearest will get closest non-nan value on grid
@@ -138,18 +177,15 @@ def get_depths_slice(focal_plane_image_series_id, soma_centers, resolution=1, st
     errors = []
     for name, point in soma_centers.items():
         try:
-            outputs[name] = get_layer_depths(point, layers, pia_path, wm_path, depth_interp, dx_interp, dy_interp,
-                                            step_size, max_iter)
+            outputs[name] = get_layer_depths(
+                point, layers, top_path, bottom_path, depth_interp, dx_interp, dy_interp,
+                step_size=step_size, max_iter=max_iter,
+                pia_extra_dist=pia_extra_dist, wm_extra_dist=wm_extra_dist
+                )
         except (LayerDepthError, ValueError) as exc:
             error = f"Failure getting depth info for cell {name}: {exc}"
             logger.error(error)
             errors.append(error)
-
-    if len(outputs)>0:
-        # add the mean location of successful cells only
-        mean_soma_loc = np.stack([soma_centers[cell] for cell in outputs]).mean(axis=0)
-        outputs['mean'] = get_layer_depths(mean_soma_loc, layers, pia_path, wm_path, depth_interp, dx_interp, dy_interp,
-                                                step_size, max_iter)
             
     return outputs, errors
 

@@ -145,7 +145,7 @@ class SynphysDatabase(Database):
 
     def pair_query(self, pre_class=None, post_class=None, synapse=None, synapse_type=None, electrical=None, 
                    project_name=None, acsf=None, age=None, species=None, distance=None, internal=None, 
-                   preload=(), session=None):
+                   preload=(), session=None, filter_exprs=None):
         """Generate a query for selecting pairs from the database.
 
         Parameters
@@ -178,6 +178,9 @@ class SynphysDatabase(Database):
             This can speed up performance in cases where these would otherwise be 
             individually queried later on. Options are "cell" (includes cell, morphology, and patch_seq),
             "synapse" (includes synapse, resting_statem dynamics, and synapse_prediction).
+        filter_exprs : list | None
+            List of sqlalchemy expressions, each of which will restrict the query
+            via a call to query.filter(expr)
         """
         session = session or self.default_session
         pre_cell = aliased(self.Cell, name='pre_cell')
@@ -255,7 +258,11 @@ class SynphysDatabase(Database):
                 query = query.filter(self.Experiment.internal==internal)
             else:
                 query = query.filter(self.Experiment.internal.in_(internal))
-        
+
+        if filter_exprs is not None:
+            for expr in filter_exprs:
+                query = query.filter(expr)
+                
         if 'cell' in preload:
             query = query.add_entity(pre_cell)
             query = query.add_entity(post_cell)

@@ -1,4 +1,4 @@
-import os, sys, argparse, threading, time, subprocess
+import os, sys, argparse, threading, time, subprocess, logging
 import sqlalchemy.pool
 from aisynphys.database import default_db as db
 from aisynphys.stochastic_release_model import StochasticModelRunner, CombinedModelRunner
@@ -6,6 +6,9 @@ from aisynphys import config
 
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO)
+
+
     # For HPC we start many processes, which makes connection pooling impossible. Instead,
     # turn off connection pooling and make sure connections are closed when possible.
     db._engine_opts['postgresql']['ro'] = {'poolclass': sqlalchemy.pool.NullPool}
@@ -19,8 +22,9 @@ if __name__ == '__main__':
     parser.add_argument('post_cell_id2', type=str, nargs='?')
     parser.add_argument('--workers', type=int, default=None, help="The number of parallel processes to use")
     parser.add_argument('--max-events', type=int, default=None, dest='max_events', help="Limit the numper of events to be processed (for testing)")
-    parser.add_argument('--no-cache', default=False, action='store_true', dest='no_cache', help="Ignore existing cached files")
     parser.add_argument('--no-gui', default=False, action='store_true', dest='no_gui', help="Disable GUI; just generate cache results")
+    parser.add_argument('--no-load-cache', default=False, action='store_true', dest='no_load_cache', help="Ignore existing cached files")
+    parser.add_argument('--no-save-cache', default=False, action='store_true', dest='no_save_cache', help="Do not save results in cache file")
     parser.add_argument('--cache-path', type=str, default=None, dest='cache_path', help="Path for reading/writing cache files")
     
     args = parser.parse_args()
@@ -34,17 +38,14 @@ if __name__ == '__main__':
     def load_experiment(experiment_id, pre_cell_id, post_cell_id):
         print("Loading stochastic model for %s %s %s" % (experiment_id, pre_cell_id, post_cell_id))
 
-        result = StochasticModelRunner(db, experiment_id, pre_cell_id, post_cell_id, workers=args.workers)
+        result = StochasticModelRunner(db, experiment_id, pre_cell_id, post_cell_id,
+            workers=args.workers,
+            cache_path=args.cache_path,
+            save_cache=not args.no_save_cache,
+            load_cache=not args.no_load_cache,
+        )
         result.max_events = args.max_events
-        cache_path = args.cache_path or os.path.join(config.cache_path, 'stochastic_model_results')
-        if not os.path.exists(cache_path):
-            os.makedirs(cache_path)
-        cache_file = os.path.join(cache_path, "%s_%s_%s.pkl" % (experiment_id, pre_cell_id, post_cell_id))
-        if not args.no_cache and os.path.exists(cache_file):
-            result.load_result(cache_file)
-        else:
-            print("cache miss:", cache_file)
-            result.store_result(cache_file)
+
         return result
 
     # load 1 or 2 experiments:        

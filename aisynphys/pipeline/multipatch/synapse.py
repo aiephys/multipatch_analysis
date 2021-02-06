@@ -68,28 +68,31 @@ class SynapsePipelineModule(MultipatchPipelineModule):
                     synaptic_cell_class.setdefault(pair.pre_cell, []).append(pre_cell_class)
             
                 # update cell_class if this is a monosynaptic response:
-                for cell, cell_classes in synaptic_cell_class.items():
-                    if len(set(cell_classes)) == 1:
-                        # all synaptic projections agree on sign
-                        syn_class = cell_classes[0]
-                    else:
-                        # mismatched synaptic sign
-                        syn_class = None
-                        
-                    # previously generated nonsynaptic cell class -- based only on transgenic markers and morphology
-                    cell_class_ns = cell.cell_class_nonsynaptic
+                # for cell, cell_classes in synaptic_cell_class.items():
+                cell = pair.pre_cell
+                cell_classes = synaptic_cell_class[cell]
+                if len(set(cell_classes)) == 1:
+                    # all synaptic projections agree on sign
+                    syn_class = cell_classes[0]
+                else:
+                    # mismatched synaptic sign
+                    syn_class = 'mixed'
                     
-                    if cell_class_ns is None or syn_class == cell_class_ns:
-                        # if cell class was not called previously, or if the synaptic class
-                        # matches the previous nonsynaptic class
-                        cell.cell_class = syn_class
-                    elif syn_class is None:
-                        cell.cell_class = cell_class_ns
-                    cell_meta = cell.meta.copy()
-                    cell_meta['synaptic_cell_class'] = syn_class
-                    cell.meta = cell_meta
-                    cell.cell_class, cell.cell_class_nonsynaptic = cell._infer_cell_classes()
-
+                # previously generated nonsynaptic cell class -- based only on transgenic markers and morphology
+                # cell_class_ns = cell.cell_class_nonsynaptic
+                
+                # if cell_class_ns is None or syn_class == cell_class_ns:
+                #     # if cell class was not called previously, or if the synaptic class
+                #     # matches the previous nonsynaptic class
+                #     cell.cell_class = syn_class
+                # elif syn_class is None:
+                #     cell.cell_class = cell_class_ns
+                cell_meta = cell.meta.copy()
+                cell_meta['synaptic_cell_class'] = syn_class
+                cell.meta = cell_meta
+                cell.cell_class, _ = cell._infer_cell_classes()
+                    # if pair.id==85255 and cell.id==15320:
+                    #     sadf    
             if pair.has_polysynapse:
                 errors = generate_synapse_record(pair, db, session, notes_rec, syn='poly', max_ind_freq=50)
                 all_errors.extend(errors)
@@ -154,6 +157,7 @@ def generate_synapse_record(pair, db, session, notes_rec, syn='mono', max_ind_fr
     logger = logging.getLogger(__name__)
     errors = []
 
+    assert syn in ('mono', 'poly'), "Synapse type must be one of 'mono' or 'poly'"
     # create a DB record for this synapse
     if syn == 'mono':
         syn_entry = db.Synapse(
@@ -167,6 +171,7 @@ def generate_synapse_record(pair, db, session, notes_rec, syn='mono', max_ind_fr
             synapse_type=notes_rec.notes['polysynaptic_type'],
         )
         logger.info("add polysynapse: %s %s", pair, pair.id)
+    
 
     # fit PSP shape against averaged PSPs/PCSs at -70 and -55 mV
     #   - selected from <= 50Hz trains
@@ -210,14 +215,15 @@ def generate_synapse_record(pair, db, session, notes_rec, syn='mono', max_ind_fr
             manual_qc_pass=fit['fit_qc_pass'],
             avg_data=fit['average'].data,
             avg_data_start_time=fit['average'].t0,
-            n_averaged_responses=len(fit['responses']),
+            n_averaged_responses=len(fit['responses']['qc_pass']),
             avg_baseline_noise=fit['avg_baseline_noise'],
             meta={'expected_fit_params': fit['expected_fit_params'], 'expected_fit_pass': fit['expected_fit_pass']},
         )
         if syn == 'mono':
-            rec.synapse_id = syn_entry.id
-        elif syn == 'poly':
-            rec.poly_synapse_id = syn_entry.id
+            rec.synapse = syn_entry
+        if syn == 'poly':
+            rec.poly_synapse = syn_entry
+        
         reasons = fit['fit_qc_pass_reasons']
         if len(reasons) > 0:
             rec.meta = {'fit_qc_pass_reasons': reasons}
@@ -233,7 +239,7 @@ def generate_synapse_record(pair, db, session, notes_rec, syn='mono', max_ind_fr
                 rec.meta['fit_decay_tau_20hz'] = fit_decay['fit_result'].best_values['decay_tau']
 
         session.add(rec)
-        
+    
     # compute weighted average of latency values
     lvals = np.array([lv[0] for lv in latency_vals])
     nvals = np.array([lv[1] for lv in latency_vals])
@@ -260,6 +266,5 @@ def generate_synapse_record(pair, db, session, notes_rec, syn='mono', max_ind_fr
                 avg = (vals * nvals).sum() / nvals.sum()
             setattr(syn_entry, pfx+param, avg)
         
-        session.add(syn_entry)
-
+    session.add(syn_entry)
     return errors

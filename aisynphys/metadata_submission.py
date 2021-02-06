@@ -275,7 +275,11 @@ class ExperimentMetadataSubmission(object):
         else:
             if site_date > datetime(2017, 4, 30):
                # 12-well plates
-               m = re.match(r'multi_(\d{2})(\d{2})(\d{2})_(2[1-9])_([A-C]0[1-4])', hist_well)
+                if site_date > datetime(2020, 12, 6):
+                    # added M or H identifier to plate for mouse and human
+                    m = re.match(r'multi_(\d{2})(\d{2})(\d{2})_(2[1-9])_([A-C]0[1-4])_(M|H)', hist_well)
+                else:
+                    m = re.match(r'multi_(\d{2})(\d{2})(\d{2})_(2[1-9])_([A-C]0[1-4])', hist_well)
             else:
                # older experiments used 24-well plates
                m = re.match(r'multi_(\d{2})(\d{2})(\d{2})_(2[1-9])_([A-D]0[1-6])', hist_well)            
@@ -285,13 +289,17 @@ class ExperimentMetadataSubmission(object):
                 yy, mm, dd, plate_n, well = m.groups()[:5]
                 plate_date = datetime(2000+int(yy), int(mm), int(dd))
                 # find the most recent Monday
-                expected_plate_date = site_date - timedelta(days=site_date.weekday())
-                if abs((expected_plate_date - plate_date).total_seconds()) > 7*24*3600:
+                last_monday  = site_date - timedelta(days=site_date.weekday())
+                expected_plate_date = [last_monday]
+                # at times of reduced staffing the plate schedule can change, add other acceptable plate dates here
+                expected_plate_date.append(last_monday + timedelta(days=7)) # "next Monday"
+                if abs((expected_plate_date[0] - plate_date).total_seconds()) > 7*24*3600:
                     # error if more than a week out of sync
                     errors.append("Histology well date is %s%s%s; expected %s: %s" % (yy, mm, dd, expected_plate_date.strftime('%y%m%d'), lims_edit_href))
-                if expected_plate_date.date() != plate_date.date():
+                expected_plate_dates = [epd.date() for epd in expected_plate_date]
+                if plate_date.date() not in expected_plate_dates:
                     # warning if the date is not exactly as expected
-                    warnings.append("Histology well date is %s%s%s; expected %s: %s" % (yy, mm, dd, expected_plate_date.strftime('%y%m%d'), lims_edit_href))
+                    warnings.append("Histology well date is %s%s%s; expected %s: %s" % (yy, mm, dd, ', '.join([epd.strftime('%y%m%d') for epd in expected_plate_date]), lims_edit_href))
                     
                 if int(plate_n) > 24:
                     warnings.append("Histology plate number %s is probably too high. %s" % (plate_n, lims_edit_href))

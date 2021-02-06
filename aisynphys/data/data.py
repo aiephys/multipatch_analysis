@@ -67,7 +67,7 @@ class MultiPatchSyncRecording(MiesSyncRecording):
                 starts.insert(0, 0)
             stops = list(np.argwhere(mask[1:] & ~mask[:-1])[:,0])
             if not mask[-1]:
-                starts.append(len(mask))
+                stops.append(len(mask))
             
             baseline_inds = [r for r in zip(starts, stops) if r[1] > r[0]]
             self._baseline_regions = [(pri.time_at(i0), pri.time_at(i1)) for i0, i1 in baseline_inds]

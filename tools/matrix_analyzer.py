@@ -125,18 +125,6 @@ if __name__ == '__main__':
             {'cre_type': ('pvalb', 'sst', 'vip'), 'target_layer': '6', 'display_names': ('L6', 'Inhibitory\npv, sst, vip'), 'cortical_layer': ('6a', '6b')},     
         ]),
 
-        ('Pyramidal / Nonpyramidal by layer', [
-            {'pyramidal': True, 'target_layer': '2', 'display_names': ('L2', 'Pyr')},
-            {'pyramidal': False, 'target_layer': '2', 'display_names':('L2', 'Non-Pyr')},
-            {'pyramidal': True, 'target_layer': '3', 'display_names':('L3', 'Pyr')},
-            {'pyramidal': False, 'target_layer': '3', 'display_names':('L3', 'Non-Pyr')},
-            {'pyramidal': True, 'target_layer': '4', 'display_names':('L4', 'Pyr')},
-            {'pyramidal': False, 'target_layer': '4', 'display_names':('L4', 'Non-Pyr')},
-            {'pyramidal': True, 'target_layer': '5', 'display_names':('L5', 'Pyr')},
-            {'pyramidal': False, 'target_layer': '5', 'display_names':('L5', 'Non-Pyr')},
-            {'pyramidal': True, 'target_layer': '6', 'display_names':('L6', 'Pyr')},
-            {'pyramidal': False, 'target_layer': '6', 'display_names':('L6', 'Non-Pyr')},
-        ]),
 
         ('Pyramidal Cells', [
             {'dendrite_type': 'spiny', 'target_layer': '2', 'cortical_layer': '2', 'display_names': ('L2', 'Pyr\nspiny')},
@@ -171,7 +159,6 @@ if __name__ == '__main__':
             {'target_layer': '2/3', 't_type': 'L2/3 IT VISp Agmat', 'display_names': ('L2/3 IT', 'Agmat')},
             {'target_layer': '2/3', 't_type': 'Pvalb Tpbg', 'display_names': ('Pvalb', 'Tpbg')},
             {'target_layer': '2/3', 't_type': 'Pvalb Reln Itm2a', 'display_names': ('Pvalb', 'Reln Itm2a')},
-            {'target_layer': '2/3', 't_type': 'Pvalb Vipr2', 'display_names': ('Pvalb', 'Vipr2')},
             {'target_layer': '2/3', 't_type': 'Sst Tac1 Htr1d', 'display_names': ('Sst', 'Tac1 Htr1d')},
             {'target_layer': '2/3', 't_type': 'Sst Calb2 Pdlim5', 'display_names': ('Sst', 'Calb2 Pdlim5')},
             {'target_layer': '2/3', 't_type': 'Sst Hpse Cbln4', 'display_names': ('Sst', 'Hpse Cbln4')},
