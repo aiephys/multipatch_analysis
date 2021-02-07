@@ -1047,19 +1047,19 @@ class StochasticModelRunner:
 
             'n_release_sites': np.array([1, 2, 3, 4, 6, 8, 12, 16, 24, 32]),
             # 'n_release_sites': np.array([1, 2, 4, 8, 16, 32]),
-            'base_release_probability': logspace(0.01, 1.0, 20),
+            'base_release_probability': logspace(0.01, 1.0, 18),
             'mini_amplitude_cv': logspace(0.1, 1.0, 6),
             'measurement_stdev': measurement_stdev,
 
-            'depression_amount': np.array([-1, 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]),
-            'depression_tau': logspace(0.01, 2.56, 9),
+            'depression_amount': np.array([-1] + list(np.linspace(0.0, 1.0, 9))),
+            'depression_tau': logspace(0.01, 2.56, 8),
             # 'depression_amount': np.array([-1, 0.0, 0.1, 0.3, 0.6, 1.0]),
             # 'depression_tau': np.array([0.01, 0.04, 0.16, 0.64, 2.56]),
             # 'depression_amount': np.array([-1, 0, 0.5]),
             # 'depression_tau': np.array([0.0001, 0.01]),
 
-            'facilitation_amount': np.linspace(0.0, 1.0, 11),
-            'facilitation_tau': logspace(0.01, 2.56, 9),
+            'facilitation_amount': np.linspace(0.0, 1.0, 9),
+            'facilitation_tau': logspace(0.01, 2.56, 8),
             # 'facilitation_amount': np.array([0.0, 0.1, 0.3, 0.6, 1.0]),
             # 'facilitation_tau': np.array([0.01, 0.04, 0.16, 0.64, 2.56]),
             # 'facilitation_amount': np.array([0, 0.5]),
@@ -1077,6 +1077,9 @@ class StochasticModelRunner:
         print("Parameter space:")
         for k, v in search_params.items():
             print("   ", k, v)
+
+        size = np.product([(len(v) if not np.isscalar(v) else 1) for v in search_params.values()])
+        print("Total size: %d  (%0.2f MB)" % (size, size*8*1e-6))
 
         return search_params
 

@@ -44,6 +44,7 @@ if __name__ == '__main__':
             save_cache=not args.no_save_cache,
             load_cache=not args.no_load_cache,
         )
+        result.param_space  # force model run
         result.max_events = args.max_events
 
         return result

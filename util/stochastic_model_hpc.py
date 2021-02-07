@@ -56,7 +56,7 @@ qsub_template = """#!/bin/bash
 #PBS -o {log_path}/{job_id}.out
 #PBS -j oe
 source {conda_path}/bin/activate {conda_env}
-python {aisynphys_path}/tools/stochastic_release_model.py --cache-path={cache_path} --no-gui --workers=$PBS_NP {expt_id} {pre_cell_id} {post_cell_id} > {log_path}/{job_id}.log 2>&1
+python {aisynphys_path}/../tools/stochastic_release_model.py --cache-path={cache_path} --no-gui --workers=$PBS_NP {expt_id} {pre_cell_id} {post_cell_id} > {log_path}/{job_id}.log 2>&1
 """
 
 # we are going to distribute a variety of different limit options in order to assist the HCP scheduler
