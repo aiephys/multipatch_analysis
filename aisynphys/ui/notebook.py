@@ -13,7 +13,7 @@ from aisynphys.cell_class import CellClass
 from neuroanalysis.data import TSeries
 from neuroanalysis.baseline import float_mode
 from aisynphys.avg_response_fit import response_query, sort_responses
-from aisynphys.connectivity import connectivity_profile
+from aisynphys.connectivity import connectivity_profile, distance_adjusted_connectivity
 from aisynphys.data import PulseResponseList
 from aisynphys.dynamics import stim_sorted_pulse_amp
 
@@ -764,3 +764,4 @@ def compose_svg_figure(figure_spec, filename, size, display=False):
     if display:
         from IPython.display import SVG, display
         display(SVG(filename=filename))
+

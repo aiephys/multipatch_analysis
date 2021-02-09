@@ -182,6 +182,7 @@ def measure_connectivity(pair_groups, alpha=0.05, sigma=None, fit_model=None, di
             results[(pre_class, post_class)]['probed_distances'] = distances[mask]
             results[(pre_class, post_class)]['connected_distances'] = connections[mask]
             mask2 = np.isfinite(gap_distances) & np.isfinite(gaps)
+            results[(pre_class, post_class)]['gap_probed_distances'] = gap_distances[mask2]
             results[(pre_class, post_class)]['gap_distances'] = gaps[mask2]
         if sigma is not None:
             adj_conn_prob, adj_lower_ci, adj_upper_ci = distance_adjusted_connectivity(distances[mask], connections[mask], sigma=sigma, alpha=alpha)
