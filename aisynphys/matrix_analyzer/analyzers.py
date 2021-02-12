@@ -17,7 +17,7 @@ from aisynphys.database import default_db as db
 from neuroanalysis.data import TSeries, TSeriesList
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.filter import bessel_filter
-from aisynphys.connectivity import pair_was_probed, connection_probability_ci
+from aisynphys.connectivity import pair_was_probed, connection_probability_ci, pair_probed_gj
 
 
 thermal_colormap = pg.ColorMap(
@@ -276,11 +276,12 @@ class ConnectivityAnalyzer(Analyzer):
             for pair in class_pairs:
                 no_data = False
                 probed = pair_was_probed(pair, pre_class.output_synapse_type)
-                if probed is False:
+                gj_probed = pair_probed_gj(pair)
+                if probed is False or gj_probed is False:
                     no_data = True
 
                 connected = pair.has_synapse if probed is True else False
-                gap = pair.has_electrical if probed is True else False
+                gap = pair.has_electrical if gj_probed is True else False
                 distance = pair.distance if probed is True else float('nan')
                 
 
@@ -293,7 +294,7 @@ class ConnectivityAnalyzer(Analyzer):
                 'Gap Junction': gap,
                 'Distance': distance,
                 'Connection Probability': [int(connected) if connected is not None else 0, int(probed) if probed is not None else 0],
-                'Gap Junction Probability': [int(gap) if gap is not None else 0, int(probed) if probed is not None else 0],
+                'Gap Junction Probability': [int(gap) if gap is not None else 0, int(gj_probed) if gj_probed is not None else 0],
                 'matrix_completeness': [int(connected) if connected is not None else 0, int(probed) if probed is not None else 0],
                 
                 }
@@ -981,7 +982,8 @@ class DynamicsAnalyzer(Analyzer):
             for pair in no_qc_data:
                 print ("\t\t %s" % (pair))
 
-    def plot_element_data(self, pre_class, post_class, element, field_name, color='g', trace_plt=None):
+    def plot_element_data(self, pre_class, post_class, element, field_name, color='g', trace_plt=None, pair_actions=None):
+        self.pair_actions = pair_actions
         trace_plt = None
         val = element[field_name].mean()
         line = pg.InfiniteLine(val, pen={'color': color, 'width': 2}, movable=False)
