@@ -29,7 +29,7 @@ class MultipatchPipeline(Pipeline):
         SynapsePipelineModule,
         GapJunctionPipelineModule,
         PulseResponsePipelineModule,
-        #SynapsePredictionPipelineModule,
+        SynapsePredictionPipelineModule,
         RestingStatePipelineModule,
         DynamicsPipelineModule,
         CortexLocationPipelineModule
