@@ -125,7 +125,7 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
         sweep_set = SweepSet(sweep_list)
         spx, spfx = extractors_for_sweeps(sweep_set, start=0, end=min_pulse_dur)
         lsa = LongSquareAnalysis(spx, spfx, subthresh_min_amp=-200,
-                                #  require_subthreshold=False, require_suprathreshold=False
+                                 require_subthreshold=False, require_suprathreshold=False
                                  )
         
         try:
@@ -140,36 +140,36 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
         output = get_complete_long_square_features(analysis_dict) 
         
         results = {
-            'rheobase': output['rheobase_i'] * 1e-12, #unscale from pA,
-            'fi_slope': output['fi_fit_slope'] * 1e-12, #unscale from pA,
-            'input_resistance': output['input_resistance'] * 1e6, #unscale from MOhm,
-            'input_resistance_ss': output['input_resistance_ss'] * 1e6, #unscale from MOhm,
-            'sag': output['sag'],
-            'sag_peak_t': output['sag_peak_t'],
-            'sag_depol': output['sag_depol'],
-            'sag_peak_t_depol': output['sag_peak_t_depol'],
+            'rheobase': output.get('rheobase_i', np.nan) * 1e-12, #unscale from pA,
+            'fi_slope': output.get('fi_fit_slope', np.nan) * 1e-12, #unscale from pA,
+            'input_resistance': output.get('input_resistance', np.nan) * 1e6, #unscale from MOhm,
+            'input_resistance_ss': output.get('input_resistance_ss', np.nan) * 1e6, #unscale from MOhm,
+            'sag': output.get('sag', np.nan),
+            'sag_peak_t': output.get('sag_peak_t', np.nan),
+            'sag_depol': output.get('sag_depol', np.nan),
+            'sag_peak_t_depol': output.get('sag_peak_t_depol', np.nan),
             
-            'ap_upstroke_downstroke_ratio': output['upstroke_downstroke_ratio_hero'],
-            'ap_upstroke': output['upstroke_hero'] * 1e-3, #unscale from mV
-            'ap_downstroke': output['downstroke_hero'] * 1e-3, #unscale from mV
-            'ap_width': output['width_hero'],
-            'ap_threshold_v': output['threshold_v_hero'] * 1e-3, #unscale from mV
-            'ap_peak_deltav': output['peak_deltav_hero'] * 1e-3, #unscale from mV
-            'ap_fast_trough_deltav': output['fast_trough_deltav_hero'] * 1e-3, #unscale from mV
+            'ap_upstroke_downstroke_ratio': output.get('upstroke_downstroke_ratio_hero', np.nan),
+            'ap_upstroke': output.get('upstroke_hero', np.nan) * 1e-3, #unscale from mV
+            'ap_downstroke': output.get('downstroke_hero', np.nan) * 1e-3, #unscale from mV
+            'ap_width': output.get('width_hero', np.nan),
+            'ap_threshold_v': output.get('threshold_v_hero', np.nan) * 1e-3, #unscale from mV
+            'ap_peak_deltav': output.get('peak_deltav_hero', np.nan) * 1e-3, #unscale from mV
+            'ap_fast_trough_deltav': output.get('fast_trough_deltav_hero', np.nan) * 1e-3, #unscale from mV
 
-            'firing_rate_rheo': output['avg_rate_rheo'],
-            'latency_rheo': output['latency_rheo'],
-            'firing_rate_40pa': output['avg_rate_hero'],
-            'latency_40pa': output['latency_hero'],
+            'firing_rate_rheo': output.get('avg_rate_rheo', np.nan),
+            'latency_rheo': output.get('latency_rheo', np.nan),
+            'firing_rate_40pa': output.get('avg_rate_hero', np.nan),
+            'latency_40pa': output.get('latency_hero', np.nan),
             
-            'adaptation_index': output['adapt_mean'],
-            'isi_cv': output['isi_cv_mean'],
+            'adaptation_index': output.get('adapt_mean', np.nan),
+            'isi_cv': output.get('isi_cv_mean', np.nan),
 
-            'isi_adapt_ratio': output['isi_adapt_ratio'],
-            'upstroke_adapt_ratio': output['upstroke_adapt_ratio'],
-            'downstroke_adapt_ratio': output['downstroke_adapt_ratio'],
-            'width_adapt_ratio': output['width_adapt_ratio'],
-            'threshold_v_adapt_ratio': output['threshold_v_adapt_ratio'],
+            'isi_adapt_ratio': output.get('isi_adapt_ratio', np.nan),
+            'upstroke_adapt_ratio': output.get('upstroke_adapt_ratio', np.nan),
+            'downstroke_adapt_ratio': output.get('downstroke_adapt_ratio', np.nan),
+            'width_adapt_ratio': output.get('width_adapt_ratio', np.nan),
+            'threshold_v_adapt_ratio': output.get('threshold_v_adapt_ratio', np.nan),
         }
         return results, errors
 
