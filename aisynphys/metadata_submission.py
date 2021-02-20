@@ -257,8 +257,13 @@ class ExperimentMetadataSubmission(object):
                 errors.append('Specimen has wrong ephys roi plan '
                     '(expected "Synaptic Physiology ROI Plan"). Edit:' + lims_edit_href)
             elif len(roi_plans) > 1:
-                errors.append('Specimen has multiple ephys roi plans '
-                    '(expected 1). Edit:' + lims_edit_href)
+                roi_plan_names = [roi['name'] for roi in roi_plans]
+                if accepted_roi_plans in roi_plan_names:
+                    warnings.append('Specimen has multiple roi plans but Synaptic Physiology ROI plan is one of them '
+                        'this is safe to submit')
+                else:
+                    errors.append('Specimen has multiple ephys roi plans and Synaptic Physiology ROI plan is not '
+                    'one of them. Edit:' + lims_edit_href)
 
             # Check LIMS specimen has flipped field set
             if self.spec_info['flipped'] not in (True, False):
