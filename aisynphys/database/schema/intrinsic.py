@@ -16,6 +16,7 @@ Intrinsic = make_table(
         ('input_resistance', 'float', 'Input resistance of the cell (from response peaks, capturing properties of channels at baseline)', {'index': True}),
         ('input_resistance_ss', 'float', '(True) steady-state input resistance of the cell', {'index': True}),
         ('sag', 'float', 'Hyperpolarizing sag ratio (peak/steady-state), measured from ~ -100mV current injection', {'index': True}),
+        ('tau', 'float', 'Membrane time constant', {'index': True}),
         ('sag_peak_t', 'float', 'Time of peak hyperpolarizing sag.', {'index': True}),
         ('sag_depol', 'float', 'Depolarizing sag ratio (peak/steady-state), measured from the largest subthreshold depolarizing input', {'index': True}),
         ('sag_peak_t_depol', 'float', 'Time of peak depolarizing sag.', {'index': True}),

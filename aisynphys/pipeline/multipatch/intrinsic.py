@@ -144,6 +144,7 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
             'fi_slope': output.get('fi_fit_slope', np.nan) * 1e-12, #unscale from pA,
             'input_resistance': output.get('input_resistance', np.nan) * 1e6, #unscale from MOhm,
             'input_resistance_ss': output.get('input_resistance_ss', np.nan) * 1e6, #unscale from MOhm,
+            'tau': output.get('tau', np.nan),
             'sag': output.get('sag', np.nan),
             'sag_peak_t': output.get('sag_peak_t', np.nan),
             'sag_depol': output.get('sag_depol', np.nan),
