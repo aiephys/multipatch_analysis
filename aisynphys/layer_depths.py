@@ -65,7 +65,7 @@ def layer_info_from_snap_polygons_output(output, resolution=1):
     return layers, pia_path, wm_path
 
 def get_missing_layer_info(layers, species):
-    ref_layer_depths = WELL_KNOWN_REFERENCE_LAYER_DEPTHS[species]
+    ref_layer_depths = WELL_KNOWN_REFERENCE_LAYER_DEPTHS[species].copy()
     # don't want to include wm as a layer!
     ref_layer_depths.pop('wm')
     all_layers_ordered = sorted(ref_layer_depths.keys())
@@ -73,6 +73,8 @@ def get_missing_layer_info(layers, species):
         layer.replace("Layer", '') for layer, layer_poly in layers.items()
         if 'pia_surface' in layer_poly and 'wm_surface' in layer_poly
     ))
+    if not complete_layers:
+        raise LayerDepthError("No layer boundaries found.")
     first = complete_layers[0]
     last = complete_layers[-1]
     top_path = layers[f"Layer{first}"]['pia_surface']
@@ -103,8 +105,19 @@ def get_layer_depths(point, layer_polys, pia_path, wm_path, depth_interp, dx_int
         raise LayerDepthError(f"Overlapping layers: {in_layer}")
     layer_poly = layer_polys[start_layer]
     
+    pia_direction = np.array([dx_interp(point), dy_interp(point)])
+    pia_direction /= np.linalg.norm(pia_direction)
+    
     if not ('pia_surface' in layer_poly and 'wm_surface' in layer_poly):
-        raise LayerDepthError("Can't run streamlines for layer with missing edges.")
+        # top or bottom layer without pia/wm surfaces drawn, can't get depths
+        # guess pia_direction from nearest valid point (interp does automatically)
+        # TODO: could maybe get rough depths by following paths to opposite surface
+        out = {
+            'position':point,
+            'layer':start_layer,
+            'pia_direction':pia_direction,
+            }
+        return out
 
     _, pia_side_dist = ld.step_from_node(
         point, depth_interp, dx_interp, dy_interp, layer_poly['pia_surface'], step_size, max_iter
@@ -120,11 +133,6 @@ def get_layer_depths(point, layer_polys, pia_path, wm_path, depth_interp, dx_int
     )
     pia_distance += pia_extra_dist
     wm_distance += wm_extra_dist
-    # if layer in ['Layer2', 'Layer3']:
-    # add normalized L2-3 depth for human cells
-    
-    pia_direction = np.array([dx_interp(point), dy_interp(point)])
-    pia_direction /= np.linalg.norm(pia_direction)
 
     layer_thickness = wm_side_dist + pia_side_dist
     cortex_thickness = pia_distance + wm_distance
@@ -163,7 +171,8 @@ def get_depths_slice(focal_plane_image_series_id, soma_centers, species,
     )
 
     # nearest will get closest non-nan value on grid
-    # needed since some points on boundary are outside
+    # needed since some boundary points are outside once gridded
+    # (interpolating directly from mesh (vs grid) is too slow)
     interp_params = dict(method="nearest")
 
     depth_interp = ld.setup_interpolator(

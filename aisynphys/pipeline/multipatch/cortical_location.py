@@ -69,12 +69,13 @@ class CortexLocationPipelineModule(DatabasePipelineModule):
             else:
                 cell_results = results[specimen_id]
                 loc_entry = db.CorticalCellLocation(
-                    layer=cell_results["layer"],
-                    distance_to_pia=cell_results["absolute_depth"]*1e-6,
-                    distance_to_wm=cell_results["wm_distance"]*1e-6,
-                    fractional_depth=cell_results["normalized_depth"],
-                    layer_depth=cell_results["layer_depth"]*1e-6,
-                    fractional_layer_depth=cell_results["normalized_layer_depth"],
+                    layer=cell_results["layer"].replace("Layer",''),
+                    distance_to_pia=cell_results.get("absolute_depth", np.nan)*1e-6,
+                    distance_to_wm=cell_results.get("wm_distance", np.nan)*1e-6,
+                    fractional_depth=cell_results.get("normalized_depth", np.nan),
+                    layer_depth=cell_results.get("layer_depth", np.nan)*1e-6,
+                    layer_thickness=cell_results.get("layer_thickness", np.nan)*1e-6,
+                    fractional_layer_depth=cell_results.get("normalized_layer_depth", np.nan),
                     position=list(cell_results["position"]*1e-6),
                     cell=cell,
                 )
@@ -84,12 +85,12 @@ class CortexLocationPipelineModule(DatabasePipelineModule):
             errors.append(f"{missed_cell_count}/{len(soma_centers)} cells failed depth calculation.")
             errors.extend(cell_errors)
 
-        pia_direction = np.stack([res['pia_direction'] for res in results.values()]).mean(axis=0)
-
         for pair in expt.pair_list:
             pre_id = pair.pre_cell.meta.get('lims_specimen_id')
             post_id = pair.post_cell.meta.get('lims_specimen_id')
             if pre_id in results and post_id in results:
+                pia_direction = (results[pre_id]['pia_direction'] + 
+                                 results[post_id]['pia_direction'])/2
                 d12_lat, d12_vert = get_pair_distances(pair, pia_direction)
                 pair.lateral_distance = d12_lat
                 pair.vertical_distance = d12_vert
