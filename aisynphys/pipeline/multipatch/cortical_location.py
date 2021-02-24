@@ -58,13 +58,15 @@ class CortexLocationPipelineModule(DatabasePipelineModule):
         missed_cell_count = 0
         for cell in expt.cell_list:
             specimen_id = cell.meta.get('lims_specimen_id')
+            meta = {'lims_layer': cell.morphology.cortical_layer}
             if specimen_id not in soma_centers:
                 continue
             if specimen_id not in results:
                 missed_cell_count += 1
                 loc_entry = db.CorticalCellLocation(
                     cell=cell,
-                    position=soma_centers[specimen_id]
+                    position=soma_centers[specimen_id],
+                    meta=meta,
                 )
             else:
                 cell_results = results[specimen_id]
@@ -78,6 +80,7 @@ class CortexLocationPipelineModule(DatabasePipelineModule):
                     fractional_layer_depth=cell_results.get("normalized_layer_depth", np.nan),
                     position=list(cell_results["position"]*1e-6),
                     cell=cell,
+                    meta=meta,
                 )
             session.add(loc_entry)
         
