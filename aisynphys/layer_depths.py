@@ -1,11 +1,12 @@
 import numpy as np
 from neuron_morphology.lims_apical_queries import get_data
-from neuron_morphology.transforms.pia_wm_streamlines.calculate_pia_wm_streamlines import get_depth_gradient_field
+from neuron_morphology.transforms.pia_wm_streamlines.calculate_pia_wm_streamlines import generate_laplace_field
 from neuron_morphology.snap_polygons.__main__ import run_snap_polygons, Parser
 from neuron_morphology.snap_polygons.types import ensure_path, ensure_linestring, ensure_polygon
 from neuron_morphology.features.layer.reference_layer_depths import DEFAULT_HUMAN_MTG_REFERENCE_LAYER_DEPTHS, DEFAULT_MOUSE_REFERENCE_LAYER_DEPTHS
 import neuron_morphology.layered_point_depths.__main__ as ld 
 from shapely.geometry import Polygon, Point, LineString, LinearRing
+from scipy.interpolate import CloughTocher2DInterpolator
 import logging
 logger = logging.getLogger(__name__)
 
@@ -165,22 +166,14 @@ def get_depths_slice(focal_plane_image_series_id, soma_centers, species,
     # check for pia/wm? or just infer
     top_path, bottom_path, pia_extra_dist, wm_extra_dist = get_missing_layer_info(layers, species)
 
-    depth_field, gradient_field = get_depth_gradient_field(
+    (_, _, _, mesh_coords, mesh_values, mesh_gradients) = generate_laplace_field(
             top_path,
             bottom_path,
-    )
-
-    # nearest will get closest non-nan value on grid
-    # needed since some boundary points are outside once gridded
-    # (interpolating directly from mesh (vs grid) is too slow)
-    interp_params = dict(method="nearest")
-
-    depth_interp = ld.setup_interpolator(
-        depth_field, None, **interp_params)
-    dx_interp = ld.setup_interpolator(
-        gradient_field, "dx", **interp_params)
-    dy_interp = ld.setup_interpolator(
-        gradient_field, "dy", **interp_params)
+            )
+    interp = CloughTocher2DInterpolator
+    depth_interp = interp(mesh_coords, mesh_values)
+    dx_interp = interp(mesh_coords, mesh_gradients[:,0])
+    dy_interp = interp(mesh_coords, mesh_gradients[:,1])
 
     outputs = {}
     errors = []
