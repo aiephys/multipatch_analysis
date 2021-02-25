@@ -162,10 +162,12 @@ def get_depths_slice(focal_plane_image_series_id, soma_centers, species,
     parser = Parser(args=[], input_data=dict(
         focal_plane_image_series_id=focal_plane_image_series_id))
     parser.args.pop('log_level')
+    # fully ignore pia/wm, rarely present and often incomplete if present
+    parser.args['pia_surface'] = None
+    parser.args['wm_surface'] = None
     output = run_snap_polygons(**parser.args)
 
-    layers, pia_path, wm_path = layer_info_from_snap_polygons_output(output, resolution)
-    # check for pia/wm? or just infer
+    layers, _, _ = layer_info_from_snap_polygons_output(output, resolution)
     top_path, bottom_path, pia_extra_dist, wm_extra_dist = get_missing_layer_info(layers, species)
 
     (_, _, _, mesh_coords, mesh_values, mesh_gradients) = generate_laplace_field(
