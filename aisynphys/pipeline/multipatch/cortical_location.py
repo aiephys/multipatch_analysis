@@ -83,20 +83,23 @@ class CortexLocationPipelineModule(DatabasePipelineModule):
                     meta=meta,
                 )
             session.add(loc_entry)
-        
+
         if missed_cell_count > 0:
             errors.append(f"{missed_cell_count}/{len(soma_centers)} cells failed depth calculation.")
             errors.extend(cell_errors)
-
+            
         for pair in expt.pair_list:
             pre_id = pair.pre_cell.meta.get('lims_specimen_id')
             post_id = pair.post_cell.meta.get('lims_specimen_id')
-            if pre_id in results and post_id in results:
-                pia_direction = (results[pre_id]['pia_direction'] + 
-                                 results[post_id]['pia_direction'])/2
-                d12_lat, d12_vert = get_pair_distances(pair, pia_direction)
-                pair.lateral_distance = d12_lat
-                pair.vertical_distance = d12_vert
+            if pre_id in soma_centers and post_id in soma_centers:
+                nan_dir = np.nan*np.ones((2,1))
+                pre_dir = results[pre_id]['pia_direction'] if pre_id in results else nan_dir
+                post_dir = results[post_id]['pia_direction'] if post_id in results else nan_dir
+                pia_direction = np.nanmean(np.stack([pre_dir, post_dir]), axis=0)
+                if all(pia_direction):
+                    d12_lat, d12_vert = get_pair_distances(pair, pia_direction)
+                    pair.lateral_distance = d12_lat
+                    pair.vertical_distance = d12_vert
                 
         return errors
 

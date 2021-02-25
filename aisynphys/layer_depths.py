@@ -6,7 +6,7 @@ from neuron_morphology.snap_polygons.types import ensure_path, ensure_linestring
 from neuron_morphology.features.layer.reference_layer_depths import DEFAULT_HUMAN_MTG_REFERENCE_LAYER_DEPTHS, DEFAULT_MOUSE_REFERENCE_LAYER_DEPTHS
 import neuron_morphology.layered_point_depths.__main__ as ld 
 from shapely.geometry import Polygon, Point, LineString, LinearRing
-from scipy.interpolate import CloughTocher2DInterpolator
+from scipy.interpolate import CloughTocher2DInterpolator, LinearNDInterpolator
 import logging
 logger = logging.getLogger(__name__)
 
@@ -119,19 +119,21 @@ def get_layer_depths(point, layer_polys, pia_path, wm_path, depth_interp, dx_int
             'pia_direction':pia_direction,
             }
         return out
-
-    _, pia_side_dist = ld.step_from_node(
-        point, depth_interp, dx_interp, dy_interp, layer_poly['pia_surface'], step_size, max_iter
-    )
-    _, wm_side_dist = ld.step_from_node(
-            point, depth_interp, dx_interp, dy_interp, layer_poly['wm_surface'], -step_size, max_iter
-    )
-    _, pia_distance = ld.step_from_node(
-            point, depth_interp, dx_interp, dy_interp, pia_path, step_size, max_iter
-    )
-    _, wm_distance = ld.step_from_node(
-            point, depth_interp, dx_interp, dy_interp, wm_path, -step_size, max_iter
-    )
+    def dist_to_boundary(boundary_path, direction):
+        try:
+            _, dist = ld.step_from_node(
+                point, depth_interp, dx_interp, dy_interp, 
+                boundary_path, direction*step_size, max_iter, adaptive_scale=1
+            )
+        except ValueError as e:
+            logging.warning(e)
+            dist = np.nan
+        return dist
+    
+    pia_side_dist = dist_to_boundary(layer_poly['pia_surface'], 1)
+    wm_side_dist = dist_to_boundary(layer_poly['wm_surface'], -1)
+    pia_distance = dist_to_boundary(pia_path, 1)
+    wm_distance = dist_to_boundary(wm_path, -1)
     pia_distance += pia_extra_dist
     wm_distance += wm_extra_dist
 
@@ -152,7 +154,7 @@ def get_layer_depths(point, layer_polys, pia_path, wm_path, depth_interp, dx_int
     return out
 
 def get_depths_slice(focal_plane_image_series_id, soma_centers, species,
-                     resolution=1, step_size=1.0, max_iter=1000):
+                     resolution=1, step_size=2.0, max_iter=1000):
 
     # if resolution is not set, can run in pixel coordinates but some default scales may be off
     soma_centers = {cell: resolution*np.array(position) for cell, position in soma_centers.items()}
@@ -184,7 +186,7 @@ def get_depths_slice(focal_plane_image_series_id, soma_centers, species,
                 step_size=step_size, max_iter=max_iter,
                 pia_extra_dist=pia_extra_dist, wm_extra_dist=wm_extra_dist
                 )
-        except (LayerDepthError, ValueError) as exc:
+        except (LayerDepthError,) as exc:
             error = f"Failure getting depth info for cell {name}: {exc}"
             logger.error(error)
             errors.append(error)
