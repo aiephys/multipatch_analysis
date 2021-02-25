@@ -70,11 +70,11 @@ class ExperimentBrowser(pg.TreeWidget):
                     gap = {True:"gap", False:"-", None:"?"}[pair.has_electrical]
                     pre_type = pair.pre_cell.cre_type
                     if pre_type == 'unknown':
-                        dendrite_type = pair.pre_cell.morphology.dendrite_type
+                        dendrite_type = pair.pre_cell.morphology.dendrite_type if pair.pre_cell.morphology is not None else None
                         pre_type = dendrite_type if dendrite_type in ['spiny', 'aspiny', 'sparsely spiny'] else pre_type
                     post_type = pair.post_cell.cre_type
                     if post_type == 'unknown':
-                        dendrite_type = pair.post_cell.morphology.dendrite_type
+                        dendrite_type = pair.post_cell.morphology.dendrite_type if pair.pre_cell.morphology is not None else None
                         post_type = dendrite_type if dendrite_type in ['spiny', 'aspiny', 'sparsely spiny'] else post_type
                     types = 'L%s %s => L%s %s' % (pair.pre_cell.target_layer or "?", pre_type, pair.post_cell.target_layer or "?", post_type)
                     pair_item = pg.TreeWidgetItem([cells, conn+' ; '+gap, types])
