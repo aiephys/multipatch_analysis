@@ -159,7 +159,7 @@ def measure_connectivity(pair_groups, alpha=0.05, sigma=None, fit_model=None, di
         conf_interval_cp = connection_probability_ci(n_connected, n_probed, alpha=alpha)
         conn_prob = float('nan') if n_probed == 0 else n_connected / n_probed
         conf_interval_gap = connection_probability_ci(n_gaps, n_gaps_probed, alpha=alpha)
-        gap_prob = float('nan') if n_probed == 0 else n_gaps / n_gaps_probed
+        gap_prob = float('nan') if n_gaps_probed == 0 else n_gaps / n_gaps_probed
 
         results[(pre_class, post_class)] = {
             'n_probed': n_probed,
@@ -190,10 +190,30 @@ def measure_connectivity(pair_groups, alpha=0.05, sigma=None, fit_model=None, di
             adj_gap_junc, adj_lower_gj_ci, adj_upper_gj_ci = distance_adjusted_connectivity(gap_distances[mask2], gaps[mask2], sigma=sigma, alpha=alpha)
             results[(pre_class, post_class)]['adjusted_gap_junction'] = (adj_gap_junc, adj_lower_gj_ci, adj_upper_gj_ci)
         if fit_model is not None:
-            fit = fit_model.fit(distances[mask], connections[mask], method='L-BFGS-B', fixed_size=sigma)
-            results[(pre_class, post_class)]['connectivity_fit'] = fit
-            gap_fit = fit_model.fit(gap_distances[mask2], gaps[mask2], method='L-BFGS-B', fixed_size=sigma)
-            results[(pre_class, post_class)]['gap_fit'] = fit
+            # Here it performs corrected p_max fit if there are relevant variables.
+            if hasattr(fit_model, 'correction_variables'): # correction model.
+                fit_model.size = sigma # override it
+                variables = [distances[mask]]
+                for variable in fit_model.correction_variables:
+                    var_extract = np.array([getattr(p, variable) for p in probed_pairs])
+                    variables.append(var_extract[mask])
+                if len(class_pairs) == 0: # empty list
+                    excinh = 0 # doesn't matter which, so give exc.
+                elif class_pairs[0].pre_cell.cell_class_nonsynaptic == 'ex':
+                    excinh = 0
+                else:
+                    excinh = 1
+
+                fit = fit_model.fit(fit_model, variables, connections[mask], excinh=excinh)
+                if mask.sum() == 0: # no probing
+                    fit.x = np.nan # needed not to report the initial value
+                results[(pre_class, post_class)]['connectivity_correction_fit'] = fit
+                # for gap junctions, this analysis won't be relevant, so I won't assign gap_fit for now.
+            else:
+                fit = fit_model.fit(distances[mask], connections[mask], method='L-BFGS-B', fixed_size=sigma)
+                results[(pre_class, post_class)]['connectivity_fit'] = fit
+                gap_fit = fit_model.fit(gap_distances[mask2], gaps[mask2], method='L-BFGS-B', fixed_size=sigma)
+                results[(pre_class, post_class)]['gap_fit'] = gap_fit
     
     return results
 
