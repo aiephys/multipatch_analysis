@@ -1,5 +1,5 @@
 from __future__ import print_function
-import argparse, sys, os, logging
+import argparse, sys, os, logging, traceback
 import six
 from aisynphys.pipeline import all_pipelines
 from aisynphys.database import default_db as db
@@ -100,26 +100,38 @@ if __name__ == '__main__':
         report = []
         for module in modules:
             print("=============================================")
-            result = module.update(job_ids=args.uids, retry_errors=args.retry, limit=args.limit, 
-                                   parallel=not args.local, workers=args.workers, debug=args.debug,
-                                   force=args.force_update)
-            report.append((module, result))
+            try:
+                result = module.update(job_ids=args.uids, retry_errors=args.retry, limit=args.limit, 
+                                    parallel=not args.local, workers=args.workers, debug=args.debug,
+                                    force=args.force_update)
+                report.append((module, result))
+            except Exception as exc:
+                report.append((module, {'exc_info': sys.exc_info()}))
+                sys.excepthook(*sys.exc_info())
+                print(f">>> Skipping module {module.name}  (error above)")
             
-        if args.vacuum:
-            print("Starting vacuum..")
-            db.vacuum()
-            print("   ..finished vacuum.")
-
         print("\n================== Error Report ===========================")
         for module, result in report:
-            print("------ %s : %d errors -------" % (module.name, result['n_errors']))
-            for job, err in result['errors'].items():
-                print("    %s : %s" % (job, err))
+            if 'exc_info' in result:
+                print("------ %s : FAILED -------" % (module.name))
+                traceback.print_exception(*result['exc_info'])
+            else:
+                print("------ %s : %d errors -------" % (module.name, result['n_errors']))
+                for job, err in result['errors'].items():
+                    print("    %s : %s" % (job, err))
         
             
         print("\n================== Update Report ===========================")
         for module, result in report:
-            print("{name:20s}  dropped: {n_dropped:6d}  updated: {n_updated:6d} ({n_retry:6d} retry)  errors: {n_errors:6d}".format(name=module.name, **result))
+            if 'exc_info' in result:
+                print("%s : FAILED  (%s)" % (module.name, str(result['exc_info'][1])))
+            else:
+                print("{name:20s}  dropped: {n_dropped:6d}  updated: {n_updated:6d} ({n_retry:6d} retry)  errors: {n_errors:6d}".format(name=module.name, **result))
+
+        if args.vacuum:
+            print("Starting vacuum..")
+            db.vacuum()
+            print("   ..finished vacuum.")
 
     if args.bake:
         print("\n================== Bake Sqlite ===========================")
