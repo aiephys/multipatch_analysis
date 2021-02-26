@@ -8,6 +8,8 @@ from aisynphys import lims
 import numpy as np
 from neuroanalysis.util.optional_import import optional_import
 get_depths_slice = optional_import('aisynphys.layer_depths', 'get_depths_slice')
+import logging
+logger = logging.getLogger(__name__)
 
 
 class CortexLocationPipelineModule(DatabasePipelineModule):
@@ -39,9 +41,11 @@ class CortexLocationPipelineModule(DatabasePipelineModule):
         try:
             lims_cell_cluster_id = expt.meta.get('lims_cell_cluster_id')
             lims_cell_info = lims.cluster_cells(lims_cell_cluster_id)
-            soma_centers = {cell['id']: (cell['x_coord'], cell['y_coord']) for cell in lims_cell_info}
+            lims_ids = [cell.meta.get('lims_specimen_id') for cell in expt.cell_list]
+            soma_centers = {cell['id']: (cell['x_coord'], cell['y_coord']) 
+                            for cell in lims_cell_info}
             soma_centers = {cell: coords for cell, coords in soma_centers.items() 
-                            if all(coords)}
+                            if all(coords) and cell in lims_ids}
             assert len(soma_centers) > 0
         except (AssertionError, ValueError):
             errors.append("No cell coordinates found for cell cluster.")
@@ -55,14 +59,14 @@ class CortexLocationPipelineModule(DatabasePipelineModule):
             errors.extend(cell_errors)
             return errors
 
-        missed_cell_count = 0
+        missed_cells = []
         for cell in expt.cell_list:
             specimen_id = cell.meta.get('lims_specimen_id')
             meta = {'lims_layer': cell.morphology.cortical_layer}
             if specimen_id not in soma_centers:
                 continue
             if specimen_id not in results:
-                missed_cell_count += 1
+                missed_cells.append(cell.ext_id)
                 loc_entry = db.CorticalCellLocation(
                     cell=cell,
                     position=soma_centers[specimen_id],
@@ -84,8 +88,10 @@ class CortexLocationPipelineModule(DatabasePipelineModule):
                 )
             session.add(loc_entry)
 
-        if missed_cell_count > 0:
-            errors.append(f"{missed_cell_count}/{len(soma_centers)} cells failed depth calculation.")
+        if len(missed_cells) > 0:
+            msg = f"Cells {missed_cells} (of {len(soma_centers)}) cells failed depth calculation."
+            logger.error(msg)
+            errors.append(msg)
             errors.extend(cell_errors)
             
         for pair in expt.pair_list:

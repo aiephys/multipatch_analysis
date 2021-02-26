@@ -126,7 +126,7 @@ def get_layer_depths(point, layer_polys, pia_path, wm_path, depth_interp, dx_int
                 boundary_path, direction*step_size, max_iter, adaptive_scale=1
             )
         except ValueError as e:
-            logging.warning(e)
+            logger.warning(e)
             dist = np.nan
         return dist
     
