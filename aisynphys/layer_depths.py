@@ -165,6 +165,10 @@ def get_depths_slice(focal_plane_image_series_id, soma_centers, species,
     # fully ignore pia/wm, rarely present and often incomplete if present
     parser.args['pia_surface'] = None
     parser.args['wm_surface'] = None
+    
+    layer_names = [layer['name'] for layer in parser.args['layer_polygons']]
+    if len(layer_names) != len(set(layer_names)):
+        raise ValueError("Duplicate layer names.")
     output = run_snap_polygons(**parser.args)
 
     layers, _, _ = layer_info_from_snap_polygons_output(output, resolution)
