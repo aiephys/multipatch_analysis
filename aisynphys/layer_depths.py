@@ -91,8 +91,6 @@ def get_missing_layer_info(layers, species):
 def get_layer_depths(point, layer_polys, pia_path, wm_path, depth_interp, dx_interp, dy_interp, 
                      step_size=1.0, max_iter=1000,
                      pia_extra_dist=0, wm_extra_dist=0):
-    pia_path = ensure_linestring(pia_path)
-    wm_path = ensure_linestring(wm_path)
     in_layer = [
         layer for layer in layer_polys if
         layer_polys[layer]['bounds'].intersects(Point(*point)) # checks for common boundary or interior
@@ -103,7 +101,12 @@ def get_layer_depths(point, layer_polys, pia_path, wm_path, depth_interp, dx_int
     elif len(in_layer) == 1:
         start_layer = in_layer[0]
     else:
-        raise LayerDepthError(f"Overlapping layers: {in_layer}")
+        # overlap means point is likely on a boundary
+        # choose upper layer, avoiding L1
+        for layer in sorted(in_layer):
+            if not layer=="Layer1":
+                start_layer = layer
+        logging.warning(f"Overlapping layers: {in_layer}. Choosing {start_layer}")
     layer_poly = layer_polys[start_layer]
     
     pia_direction = np.array([dx_interp(point), dy_interp(point)])
@@ -130,6 +133,8 @@ def get_layer_depths(point, layer_polys, pia_path, wm_path, depth_interp, dx_int
             dist = np.nan
         return dist
     
+    pia_path = ensure_linestring(pia_path)
+    wm_path = ensure_linestring(wm_path)
     pia_side_dist = dist_to_boundary(layer_poly['pia_surface'], 1)
     wm_side_dist = dist_to_boundary(layer_poly['wm_surface'], -1)
     pia_distance = dist_to_boundary(pia_path, 1)
@@ -156,6 +161,7 @@ def get_layer_depths(point, layer_polys, pia_path, wm_path, depth_interp, dx_int
 def get_depths_slice(focal_plane_image_series_id, soma_centers, species,
                      resolution=1, step_size=2.0, max_iter=1000):
 
+    errors = []
     # if resolution is not set, can run in pixel coordinates but some default scales may be off
     soma_centers = {cell: resolution*np.array(position) for cell, position in soma_centers.items()}
 
@@ -165,6 +171,7 @@ def get_depths_slice(focal_plane_image_series_id, soma_centers, species,
     # fully ignore pia/wm, rarely present and often incomplete if present
     parser.args['pia_surface'] = None
     parser.args['wm_surface'] = None
+    parser.args['multipolygon_error_threshold'] = 10
     
     layer_names = [layer['name'] for layer in parser.args['layer_polygons']]
     if len(layer_names) != len(set(layer_names)):
@@ -172,19 +179,24 @@ def get_depths_slice(focal_plane_image_series_id, soma_centers, species,
     output = run_snap_polygons(**parser.args)
 
     layers, _, _ = layer_info_from_snap_polygons_output(output, resolution)
-    top_path, bottom_path, pia_extra_dist, wm_extra_dist = get_missing_layer_info(layers, species)
+    try:
+        top_path, bottom_path, pia_extra_dist, wm_extra_dist = get_missing_layer_info(layers, species)
 
-    (_, _, _, mesh_coords, mesh_values, mesh_gradients) = generate_laplace_field(
-            top_path,
-            bottom_path,
-            )
-    interp = CloughTocher2DInterpolator
-    depth_interp = interp(mesh_coords, mesh_values)
-    dx_interp = interp(mesh_coords, mesh_gradients[:,0])
-    dy_interp = interp(mesh_coords, mesh_gradients[:,1])
+        (_, _, _, mesh_coords, mesh_values, mesh_gradients) = generate_laplace_field(
+                top_path,
+                bottom_path,
+                )
+        interp = CloughTocher2DInterpolator
+        depth_interp = interp(mesh_coords, mesh_values)
+        dx_interp = interp(mesh_coords, mesh_gradients[:,0])
+        dy_interp = interp(mesh_coords, mesh_gradients[:,1])
+    except LayerDepthError as exc:
+        top_path = bottom_path = pia_extra_dist = wm_extra_dist = None
+        depth_interp = dx_interp = dy_interp = lambda x: np.nan
+        logger.error(exc)
+        errors.append(exc)
 
     outputs = {}
-    errors = []
     for name, point in soma_centers.items():
         try:
             outputs[name] = get_layer_depths(

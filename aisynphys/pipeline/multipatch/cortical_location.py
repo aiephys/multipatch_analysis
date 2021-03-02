@@ -102,7 +102,7 @@ class CortexLocationPipelineModule(DatabasePipelineModule):
                 pre_dir = results[pre_id]['pia_direction'] if pre_id in results else nan_dir
                 post_dir = results[post_id]['pia_direction'] if post_id in results else nan_dir
                 pia_direction = np.nanmean(np.stack([pre_dir, post_dir]), axis=0)
-                if all(pia_direction):
+                if all(pia_direction == pia_direction): # no nans
                     d12_lat, d12_vert = get_pair_distances(pair, pia_direction)
                     pair.lateral_distance = d12_lat
                     pair.vertical_distance = d12_vert
