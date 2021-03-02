@@ -4,6 +4,9 @@ from collections import OrderedDict
 import numpy as np
 from statsmodels.stats.proportion import proportion_confint
 import scipy.optimize
+from scipy.special import erf
+from .util import optional_import
+iminuit = optional_import('iminuit')
 
 
 def connectivity_profile(connected, distance, bin_edges):
@@ -551,6 +554,73 @@ class GaussianModel(ConnectivityModel):
 
     def connection_probability(self, x):
         return self.pmax * np.exp(-x**2 / (2 * self.size**2))
+
+class CorrectionModel(ConnectivityModel):
+    """ Connectivity model with corrections for potential biases
+    Gaussian is used for distance-adjustment.
+
+    Parameters
+    ----------
+    pmax : float
+        Maximum connection probability (at 0 intersomatic distance)
+    size : float
+        Gaussian sigma for distance-adjustment
+    correction_variables : list of strings
+        Names of correction variables.
+        These names should be defined in each Pair in pair_groups when measure_connectivity is called.
+    correction_functions : list of functions
+        Functions used to correct estimating connection probability.
+        The following formats need to be valid to execute properly.
+        correction_functions[i](correction_parameters[excinh][i], pair[correction_variables[i]])
+        where is a Pair instance in pair_group (1st argument of measure_connectivity)
+    correction_parameters : list of list of [array or [list of float]]
+        Parameters used aside with correction_variables. Fixed during the fit.
+        The first index is 0 (pre-synaptic excitatory) or 1 (pre-synaptic inhibitory)
+        
+    Note: correction_variables, correction_parameters, and correction_functions should have the same lengths.
+    """
+    def __init__(self, pmax, size, correction_variables, correction_functions, correction_parameters):
+        self.pmax = pmax
+        self.size = size
+        self.correction_variables = correction_variables # list of strings (names of correction variables)
+        self.correction_functions = correction_functions # list of functions
+        self.correction_parameters = correction_parameters # list of list of parameters for correction functions
+
+    def dist_gaussian(self, p_sigma, v_dist):
+        return (np.exp(-1.0 * v_dist ** 2 / (2.0 * p_sigma ** 2)))
+
+    def connection_probability(self, x):
+        # x is expected to be [distance, correction_var1, correction_var2,...].
+        # the final probability is modeled as a product of multiple corrections.
+        distancepart = self.dist_gaussian(self.size, x[0])
+        correction = 1.0
+        for i in range(1, len(x)):
+            corrval = self.correction_functions[i-1](self.correction_parameters[self.excinh][i-1], x[i])
+            correction *= np.nan_to_num(corrval, nan=1.0)
+        return np.clip(self.pmax * distancepart * correction, 0.0, 1.0)
+
+    @classmethod
+    def nll(cls, pmax, inst, x, conn):
+        inst.pmax = pmax # override existing value
+        return -inst.likelihood(x, conn)
+
+    @classmethod
+    def fit(cls, inst, x, conn, init=(0.1), bounds=((0.0, 3.0)), excinh=None, **kwds):
+        inst.excinh = excinh # setting the cell class...
+        fit = iminuit.minimize(
+                        cls.nll,
+                        x0=init, 
+                        args=(inst, x, conn),
+                        bounds=bounds,
+                        **kwds,
+                    )
+        cp = np.nan if len(conn) == 0 else fit.x
+        # estimating 95% confidence interval by extrapolating sigmas
+        cp_lower_ci = fit.x - 1.96 * fit.minuit.errors['x0']
+        cp_upper_ci = fit.x + 1.96 * fit.minuit.errors['x0']
+        fit.cp_ci = (cp, cp_lower_ci, cp_upper_ci)
+        return fit
+
 
 
 class FixedSizeModelMixin:
