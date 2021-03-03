@@ -622,6 +622,108 @@ class CorrectionModel(ConnectivityModel):
         return fit
 
 
+class ErfModel(ConnectivityModel):
+    """Model connection probability correction as error function
+
+    Parameters
+    ----------
+    pmax : float
+        Maximum connection probability (at 0 intersomatic distance)
+    size : float
+        Sigma of the integrand Gaussian of the error function
+    midpoint : float
+        Mu (center) of the integrand Gaussian of the error function
+
+    Note: You can give a constraint when this model is fit.
+    Pass a constrant argument (2-element tuple with (sigma_multiplier, stop_point)) to fit function.
+    The actual constraint equation is the following format.
+        midpoints + constraint[0] * size < constraint[1]
+    To make quartile saturation at quartile of the data point of detection power, use the following parameters.
+    constraint = (0.6745, 4.5655)
+    See Connectivity Corrections Fit.ipynb for more details.
+    """
+    def __init__(self, pmax, size, midpoint):
+        self.pmax = pmax
+        self.size = size
+        self.midpoint = midpoint
+    
+    def connection_probability(self, x):
+        return self.pmax / 2.0 * (1.0 + erf((x - self.midpoint) / (np.sqrt(2) * self.size)))
+
+    @staticmethod
+    def correction_func(params, x):
+        return 0.5 * (1.0 + erf((x - params[2]) / (np.sqrt(2) * params[1])))
+
+    @classmethod
+    def fit(cls, x, conn, init, bounds, constraint=None, fixed_size=False, fixed_max=False):
+        # constraint should be a 2-element tuple with (sigma_multiplier, stop_point)
+        if constraint == None:
+            fit = iminuit.minimize(
+                cls.err_fn,
+                x0=init,
+                args=(x, conn),
+                bounds=bounds,
+            )
+        else:
+            # midpoints + constraint[0] * size < constraint[1]
+            # to make it quartile of the detection power, use the following parameters
+            # constraint[0] == 0.6745 (specify quartile point using sigma)
+            # constraint[1] == 4.5655 observed value in the data (may change if the data change)
+            con_array = np.array([[0, constraint[0], 1]]) # 1 x 3 matrix
+            constraints = scipy.optimize.LinearConstraint(con_array, lb=-np.inf, ub=constraint[1])
+            fit = scipy.optimize.minimize(
+                cls.err_fn,
+                x0=init,
+                args=(x, conn),
+                bounds=bounds,
+                constraints=constraints
+            )
+        ret = cls(*fit.x)
+        ret.fit_result = fit
+        return ret
+
+
+class BinaryModel(ConnectivityModel):
+    """Model connection probability correction as binary function
+
+    Parameters
+    ----------
+    pmax : float
+        Maximum connection probability (at 0 intersomatic distance)
+    size : float
+        Threshold for applying adjustment. If variable < size, adjustment is applied.
+    adjustment : float
+        Ratio between adjusted and non-adjusted probability.
+        Resulting probability after adjustment is pmax * adjustment
+    """
+    def __init__(self, pmax, size, adjustment):
+        self.pmax = pmax
+        self.size = size
+        self.adjustment = adjustment
+    
+    def connection_probability(self, x):
+        val = np.ones_like(x)
+        val[x < self.size] *= self.adjustment
+        return self.pmax * val
+
+    @staticmethod
+    def correction_func(params, x):
+        val = np.ones_like(x)
+        val[x < params[1]] *= params[2]
+        return val
+
+    @classmethod
+    def fit(cls, x, conn, init, bounds, fixed_size=False, fixed_max=False):
+        fit = iminuit.minimize(
+            cls.err_fn,
+            x0=init,
+            args=(x, conn),
+            bounds=bounds,
+        )
+        ret = cls(*fit.x)
+        ret.fit_result = fit
+        return ret
+
 
 class FixedSizeModelMixin:
     @classmethod
