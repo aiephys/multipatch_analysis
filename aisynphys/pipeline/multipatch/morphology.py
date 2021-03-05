@@ -41,7 +41,6 @@ class MorphologyPipelineModule(MultipatchPipelineModule):
         # Load experiment from DB
         expt = db.experiment_from_timestamp(job_id, session=session)
         morpho_results = morpho_db()
-        lims_layers = get_lims_layers() 
         
         path = os.path.join(config.synphys_data, expt.storage_path)
         pip_meta = PipetteMetadata(path)
@@ -51,7 +50,6 @@ class MorphologyPipelineModule(MultipatchPipelineModule):
             user_morpho = pip_meta.pipettes[cell.ext_id].get('morphology')
             cell_specimen_id = cell.meta.get('lims_specimen_id')
             cell_morpho = morpho_results.get(cell_specimen_id)
-            cortical_layer = lims_layers.get(cell_specimen_id, None)
 
             if user_morpho in (None, ''):
                 pyramidal = None
@@ -63,10 +61,9 @@ class MorphologyPipelineModule(MultipatchPipelineModule):
 
             results = {
                 'pyramidal': pyramidal,
-                'cortical_layer': cortical_layer,
             }
             
-            morpho_db_hash = hash_record([cell_morpho, cortical_layer])
+            morpho_db_hash = hash_record([cell_morpho])
             results['meta'] = {'morpho_db_hash': morpho_db_hash}
             
             if cell_morpho is not None:  
@@ -134,7 +131,6 @@ class MorphologyPipelineModule(MultipatchPipelineModule):
         except ImportError as exc:
             print("Skipping morphology: %s" % str(exc))
             return ready
-        lims_layers = get_lims_layers()
             
         for expt_id, (expt_mtime, success) in expts.items():
             if success is not True:
@@ -154,8 +150,7 @@ class MorphologyPipelineModule(MultipatchPipelineModule):
                     break
                 cell_specimen_id = cell.meta.get('lims_specimen_id')
                 morpho_rec = morpho_results.get(cell_specimen_id, None)
-                cortical_layer = lims_layers.get(cell_specimen_id, None)
-                morpho_db_hash = hash_record([morpho_rec, cortical_layer])
+                morpho_db_hash = hash_record([morpho_rec])
                 prev_hash = None if cell.morphology.meta is None else cell.morphology.meta['morpho_db_hash']
                 if morpho_db_hash != prev_hash:
                     needs_update = True
@@ -193,12 +188,3 @@ def morpho_db():
             morpho_cache = {int(k):v for k,v in json.load(open(config.morpho_json_file)).items()}
     
     return morpho_cache
-
-lims_cache = None
-def get_lims_layers():
-    global lims_cache
-    if lims_cache is None:
-        lims_q = lims.all_cell_layers()
-        lims_cache = {spec_id:layer.lstrip('Layer') for layer, spec_id in lims_q if layer is not None}
-
-    return lims_cache
