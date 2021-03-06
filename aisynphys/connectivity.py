@@ -579,12 +579,13 @@ class CorrectionModel(ConnectivityModel):
         
     Note: correction_variables, correction_parameters, and correction_functions should have the same lengths.
     """
-    def __init__(self, pmax, size, correction_variables, correction_functions, correction_parameters):
+    def __init__(self, pmax, size, correction_variables, correction_functions, correction_parameters, do_minos=True):
         self.pmax = pmax
         self.size = size
         self.correction_variables = correction_variables # list of strings (names of correction variables)
         self.correction_functions = correction_functions # list of functions
         self.correction_parameters = correction_parameters # list of list of parameters for correction functions
+        self.do_minos = do_minos
 
     def dist_gaussian(self, p_sigma, v_dist):
         return (np.exp(-1.0 * v_dist ** 2 / (2.0 * p_sigma ** 2)))
@@ -615,10 +616,22 @@ class CorrectionModel(ConnectivityModel):
                         **kwds,
                     )
         cp = np.nan if len(conn) == 0 else fit.x
-        # estimating 95% confidence interval by extrapolating sigmas
-        cp_lower_ci = fit.x - 1.96 * fit.minuit.errors['x0']
-        cp_upper_ci = fit.x + 1.96 * fit.minuit.errors['x0']
-        fit.cp_ci = (cp, cp_lower_ci, cp_upper_ci)
+
+        if inst.do_minos and not np.isnan(cp): # if cp is nan, it fails, so avoid it.
+            # if conn is 0% or 100% it fails, so fall back to hessian
+            if conn.sum() == 0 or conn.sum() == len(conn):
+                cp_lower_ci = cp - 1.96 * fit.minuit.errors['x0']
+                cp_upper_ci = cp + 1.96 * fit.minuit.errors['x0']
+            else:
+                #print(cp)
+                fit.minuit.minos() # perform MINOS analysis
+                cp_lower_ci = cp + 1.96 * fit.minuit.merrors['x0'].lower # merrors is defined with a sign, so +.
+                cp_upper_ci = cp + 1.96 * fit.minuit.merrors['x0'].upper
+        else:
+            # estimating 95% confidence interval by extrapolating sigmas
+            cp_lower_ci = cp - 1.96 * fit.minuit.errors['x0']
+            cp_upper_ci = cp + 1.96 * fit.minuit.errors['x0']
+        fit.cp_ci = (cp, np.maximum(cp_lower_ci, 0), cp_upper_ci) # minimum is to avoid negative probability
         return fit
 
 
