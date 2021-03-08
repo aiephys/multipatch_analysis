@@ -21,6 +21,7 @@ class CortexLocationPipelineModule(DatabasePipelineModule):
     
     @classmethod
     def create_db_entries(cls, job, session):
+        lims_layers = get_lims_layers() 
         db = job['database']
         expt_id = job['job_id']
         errors = []
@@ -62,7 +63,8 @@ class CortexLocationPipelineModule(DatabasePipelineModule):
         missed_cells = []
         for cell in expt.cell_list:
             specimen_id = cell.meta.get('lims_specimen_id')
-            meta = {'lims_layer': cell.morphology.cortical_layer}
+            lims_layer = lims_layers.get(specimen_id, None)
+            meta = {'lims_layer': lims_layer}
             if specimen_id not in soma_centers:
                 continue
             if specimen_id not in results:
@@ -75,7 +77,7 @@ class CortexLocationPipelineModule(DatabasePipelineModule):
             else:
                 cell_results = results[specimen_id]
                 loc_entry = db.CorticalCellLocation(
-                    layer=cell_results["layer"].replace("Layer",''),
+                    cortical_layer=cell_results["layer"].replace("Layer",''),
                     distance_to_pia=cell_results.get("absolute_depth", np.nan)*1e-6,
                     distance_to_wm=cell_results.get("wm_distance", np.nan)*1e-6,
                     fractional_depth=cell_results.get("normalized_depth", np.nan),
@@ -128,3 +130,12 @@ def get_pair_distances(pair, pia_direction):
     d12_vert = np.abs(np.dot(d12, pia_direction))[0]
     d12_lat = np.sqrt(np.sum(d12**2) - d12_vert**2)
     return d12_lat, d12_vert
+
+lims_cache = None
+def get_lims_layers():
+    global lims_cache
+    if lims_cache is None:
+        lims_q = lims.all_cell_layers()
+        lims_cache = {spec_id:layer.lstrip('Layer') for layer, spec_id in lims_q if layer is not None}
+
+    return lims_cache

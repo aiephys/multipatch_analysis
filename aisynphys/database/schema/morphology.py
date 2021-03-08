@@ -10,7 +10,6 @@ Morphology = make_table(name='morphology', comment="Describes morphological prop
     ('pyramidal', 'bool', 'Indicates whether the experimenter labeled the cell as pyramidal. '
         'This call is based on the presence of a prominent apical dendrite seen in the fluorescent dye fill during experiment. '
         'The `dendrite_type` column is recommended as a more reliable indicator of excitatory morphology.', {'index': True}),
-    ('cortical_layer', 'str', 'Cortical layer of cell defined by layer drawing annotation based on DAPI staining', {'index': True}),
     ('qual_morpho_type', 'str', 'Qualitative desctription of cell morphology', {'index': True}),
     ('dendrite_type', 'str', 'Dendrite type of cell (spiny, aspiny, sparsely spiny) determined from biocytin staining. '
         'Generally spiny cells are taken to be excitatory; aspiny or sparsely spiny cells are inhibitory.', {'index': True}),
