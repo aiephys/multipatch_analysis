@@ -8,6 +8,8 @@ from aisynphys import lims
 import numpy as np
 from neuroanalysis.util.optional_import import optional_import
 get_depths_slice = optional_import('aisynphys.layer_depths', 'get_depths_slice')
+import logging
+logger = logging.getLogger(__name__)
 
 
 class CortexLocationPipelineModule(DatabasePipelineModule):
@@ -19,6 +21,7 @@ class CortexLocationPipelineModule(DatabasePipelineModule):
     
     @classmethod
     def create_db_entries(cls, job, session):
+        lims_layers = get_lims_layers() 
         db = job['database']
         expt_id = job['job_id']
         errors = []
@@ -39,9 +42,11 @@ class CortexLocationPipelineModule(DatabasePipelineModule):
         try:
             lims_cell_cluster_id = expt.meta.get('lims_cell_cluster_id')
             lims_cell_info = lims.cluster_cells(lims_cell_cluster_id)
-            soma_centers = {cell['id']: (cell['x_coord'], cell['y_coord']) for cell in lims_cell_info}
+            lims_ids = [cell.meta.get('lims_specimen_id') for cell in expt.cell_list]
+            soma_centers = {cell['id']: (cell['x_coord'], cell['y_coord']) 
+                            for cell in lims_cell_info}
             soma_centers = {cell: coords for cell, coords in soma_centers.items() 
-                            if all(coords)}
+                            if all(coords) and cell in lims_ids}
             assert len(soma_centers) > 0
         except (AssertionError, ValueError):
             errors.append("No cell coordinates found for cell cluster.")
@@ -55,44 +60,54 @@ class CortexLocationPipelineModule(DatabasePipelineModule):
             errors.extend(cell_errors)
             return errors
 
-        missed_cell_count = 0
+        missed_cells = []
         for cell in expt.cell_list:
             specimen_id = cell.meta.get('lims_specimen_id')
+            lims_layer = lims_layers.get(specimen_id, None)
+            meta = {'lims_layer': lims_layer}
             if specimen_id not in soma_centers:
                 continue
             if specimen_id not in results:
-                missed_cell_count += 1
+                missed_cells.append(cell.ext_id)
                 loc_entry = db.CorticalCellLocation(
                     cell=cell,
-                    position=soma_centers[specimen_id]
+                    position=soma_centers[specimen_id],
+                    meta=meta,
                 )
             else:
                 cell_results = results[specimen_id]
                 loc_entry = db.CorticalCellLocation(
-                    layer=cell_results["layer"],
-                    distance_to_pia=cell_results["absolute_depth"]*1e-6,
-                    distance_to_wm=cell_results["wm_distance"]*1e-6,
-                    fractional_depth=cell_results["normalized_depth"],
-                    layer_depth=cell_results["layer_depth"]*1e-6,
-                    fractional_layer_depth=cell_results["normalized_layer_depth"],
+                    cortical_layer=cell_results["layer"].replace("Layer",''),
+                    distance_to_pia=cell_results.get("absolute_depth", np.nan)*1e-6,
+                    distance_to_wm=cell_results.get("wm_distance", np.nan)*1e-6,
+                    fractional_depth=cell_results.get("normalized_depth", np.nan),
+                    layer_depth=cell_results.get("layer_depth", np.nan)*1e-6,
+                    layer_thickness=cell_results.get("layer_thickness", np.nan)*1e-6,
+                    fractional_layer_depth=cell_results.get("normalized_layer_depth", np.nan),
                     position=list(cell_results["position"]*1e-6),
                     cell=cell,
+                    meta=meta,
                 )
             session.add(loc_entry)
-        
-        if missed_cell_count > 0:
-            errors.append(f"{missed_cell_count}/{len(soma_centers)} cells failed depth calculation.")
+
+        if len(missed_cells) > 0:
+            msg = f"Cells {missed_cells} (of {len(soma_centers)}) cells failed depth calculation."
+            logger.error(msg)
+            errors.append(msg)
             errors.extend(cell_errors)
-
-        pia_direction = np.stack([res['pia_direction'] for res in results.values()]).mean(axis=0)
-
+            
         for pair in expt.pair_list:
             pre_id = pair.pre_cell.meta.get('lims_specimen_id')
             post_id = pair.post_cell.meta.get('lims_specimen_id')
-            if pre_id in results and post_id in results:
-                d12_lat, d12_vert = get_pair_distances(pair, pia_direction)
-                pair.lateral_distance = d12_lat
-                pair.vertical_distance = d12_vert
+            if pre_id in soma_centers and post_id in soma_centers:
+                nan_dir = np.nan*np.ones((2,1))
+                pre_dir = results[pre_id]['pia_direction'] if pre_id in results else nan_dir
+                post_dir = results[post_id]['pia_direction'] if post_id in results else nan_dir
+                pia_direction = np.nanmean(np.stack([pre_dir, post_dir]), axis=0)
+                if all(pia_direction == pia_direction): # no nans
+                    d12_lat, d12_vert = get_pair_distances(pair, pia_direction)
+                    pair.lateral_distance = d12_lat
+                    pair.vertical_distance = d12_vert
                 
         return errors
 
@@ -115,3 +130,12 @@ def get_pair_distances(pair, pia_direction):
     d12_vert = np.abs(np.dot(d12, pia_direction))[0]
     d12_lat = np.sqrt(np.sum(d12**2) - d12_vert**2)
     return d12_lat, d12_vert
+
+lims_cache = None
+def get_lims_layers():
+    global lims_cache
+    if lims_cache is None:
+        lims_q = lims.all_cell_layers()
+        lims_cache = {spec_id:layer.lstrip('Layer') for layer, spec_id in lims_q if layer is not None}
+
+    return lims_cache
