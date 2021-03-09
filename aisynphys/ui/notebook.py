@@ -273,7 +273,7 @@ def get_metric_data(metric, db, pre_classes=None, post_classes=None, pair_query_
     pairs_has_metric = pairs[~pairs[metric].isnull()]
     return pairs_has_metric, metric_name, units, scale, alpha, cmap, cmap_log, clim, cell_fmt
 
-def pair_class_metric_scatter(metrics, db, pair_classes, pair_query_args, ax, palette='muted'):
+def pair_class_metric_scatter(metrics, db, pair_classes, pair_query_args, ax, palette='muted', estimator=np.mean):
     """To create scatter plots from get_metric_data for specific pair_classes. In this case pair_classes is a list of
     tuples of specific pre->post class pairs instead of all combos from a list of pre-classes
     and post-classes
@@ -304,7 +304,7 @@ def pair_class_metric_scatter(metrics, db, pair_classes, pair_query_args, ax, pa
         pairs_has_metric = pairs_has_metric[pairs_has_metric['pair_class'].isin(pair_classes)]
         pairs_has_metric[metric] *= scale
         plot = sns.swarmplot(x='pair_class', y=metric, data=pairs_has_metric, ax=ax[i], size=6, palette=palette, edgecolor='black', alpha=0.8, order=pair_classes)
-        sns.barplot(x='pair_class', y=metric, data=pairs_has_metric, ax=ax[i], ci=None, facecolor=(1, 1, 1, 0), edgecolor='black', order=pair_classes)
+        sns.barplot(x='pair_class', y=metric, data=pairs_has_metric, ax=ax[i], ci=None, facecolor=(1, 1, 1, 0), edgecolor='black', order=pair_classes, estimator=estimator)
         
         if i == len(metrics) - 1:
             ax[i].set_xlabel('pre→post class', size=12)
