@@ -286,6 +286,9 @@ def stim_sorted_pulse_amp(pair):
 
     q = db.query(
         db.PulseResponseFit.fit_amp,
+        db.PulseResponseFit.dec_fit_reconv_amp,
+        db.PulseResponseFit.baseline_dec_fit_reconv_amp,
+
         getattr(db.PulseResponse, qc_field).label('qc_pass'),
         db.StimPulse.pulse_number,
         db.MultiPatchProbe.induction_frequency,
