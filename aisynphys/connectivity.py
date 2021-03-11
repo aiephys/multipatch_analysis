@@ -6,6 +6,7 @@ from statsmodels.stats.proportion import proportion_confint
 import scipy.optimize
 from scipy.special import erf
 from .util import optional_import
+from aisynphys.database import default_db as db
 iminuit = optional_import('iminuit')
 
 
@@ -112,7 +113,7 @@ def pair_distance(class_pairs, pre_class):
     return connected, distance
 
 
-def measure_connectivity(pair_groups, alpha=0.05, sigma=None, fit_model=None, dist_measure='distance'):
+def measure_connectivity(pair_groups, alpha=0.05, sigma=None, fit_model=None, correction_model=None, dist_measure='distance'):
     """Given a description of cell pairs grouped together by cell class,
     return a structure that describes connectivity between cell classes.
     
@@ -127,9 +128,12 @@ def measure_connectivity(pair_groups, alpha=0.05, sigma=None, fit_model=None, di
         ``distance_adjysted_connectivity()``). If None, then adjusted
         values are omitted from the result.
     fit_model : ConnectivityModel | None
-        ConnectivityModel subclass to fit Cp profile. If combined with
+        ConnectivityModel subclass to fit Cp vs distance profile. If combined with
         sigma the fit will be fixed to that sigma. If None, then fit results
         are ommitted from the results
+    correction_model: ConnectivityModel | None
+        ConnectivityModel subclass used to correct fit_model based on other metrics 
+        which are set within ConnectivityModel.variables
     dist_measure : str
         Which distance measure to use when calculating connection probability.
         Must be one of 'distance', 'lateral_distance', 'vertical_distance' columns
@@ -187,18 +191,22 @@ def measure_connectivity(pair_groups, alpha=0.05, sigma=None, fit_model=None, di
             mask2 = np.isfinite(gap_distances) & np.isfinite(gaps)
             results[(pre_class, post_class)]['gap_probed_distances'] = gap_distances[mask2]
             results[(pre_class, post_class)]['gap_distances'] = gaps[mask2]
+            fit = fit_model.fit(distances[mask], connections[mask], method='L-BFGS-B', fixed_size=sigma)
+            results[(pre_class, post_class)]['connectivity_fit'] = fit
+            gap_fit = fit_model.fit(gap_distances[mask2], gaps[mask2], method='L-BFGS-B', fixed_size=sigma)
+            results[(pre_class, post_class)]['gap_fit'] = gap_fit
         if sigma is not None:
             adj_conn_prob, adj_lower_ci, adj_upper_ci = distance_adjusted_connectivity(distances[mask], connections[mask], sigma=sigma, alpha=alpha)
             results[(pre_class, post_class)]['adjusted_connectivity'] = (adj_conn_prob, adj_lower_ci, adj_upper_ci)
             adj_gap_junc, adj_lower_gj_ci, adj_upper_gj_ci = distance_adjusted_connectivity(gap_distances[mask2], gaps[mask2], sigma=sigma, alpha=alpha)
             results[(pre_class, post_class)]['adjusted_gap_junction'] = (adj_gap_junc, adj_lower_gj_ci, adj_upper_gj_ci)
-        if fit_model is not None:
+        if correction_model is not None:
             # Here it performs corrected p_max fit if there are relevant variables.
-            if hasattr(fit_model, 'correction_variables'): # correction model.
-                fit_model.size = sigma # override it
+            if hasattr(correction_model, 'correction_variables'): # correction model.
+                correction_model.size = sigma # override it
                 variables = [distances[mask]]
-                for variable in fit_model.correction_variables:
-                    var_extract = np.array([getattr(p, variable) for p in probed_pairs])
+                for variable in correction_model.correction_variables:
+                    var_extract = np.array([getattr(p, variable) for p in probed_pairs], dtype=float)
                     variables.append(var_extract[mask])
                 if len(class_pairs) == 0: # empty list
                     excinh = 0 # doesn't matter which, so give exc.
@@ -207,16 +215,11 @@ def measure_connectivity(pair_groups, alpha=0.05, sigma=None, fit_model=None, di
                 else:
                     excinh = 1
 
-                fit = fit_model.fit(fit_model, variables, connections[mask], excinh=excinh)
+                corr_fit = correction_model.fit(correction_model, variables, connections[mask], excinh=excinh)
                 if mask.sum() == 0: # no probing
-                    fit.x = np.nan # needed not to report the initial value
-                results[(pre_class, post_class)]['connectivity_correction_fit'] = fit
-                # for gap junctions, this analysis won't be relevant, so I won't assign gap_fit for now.
-            else:
-                fit = fit_model.fit(distances[mask], connections[mask], method='L-BFGS-B', fixed_size=sigma)
-                results[(pre_class, post_class)]['connectivity_fit'] = fit
-                gap_fit = fit_model.fit(gap_distances[mask2], gaps[mask2], method='L-BFGS-B', fixed_size=sigma)
-                results[(pre_class, post_class)]['gap_fit'] = gap_fit
+                    corr_fit.x = np.nan # needed not to report the initial value
+                results[(pre_class, post_class)]['connectivity_correction_fit'] = corr_fit
+                # for gap junctions, this analysis won't be relevant, so I won't assign gap_fit for now.              
     
     return results
 
@@ -826,3 +829,83 @@ def recip_connectivity_profile(probes_1, probes_2, bin_edges):
     norm_cp_r = cp_r / (cp_1 * cp_2)
 
     return norm_cp_r, recip_conn, recip_dist
+
+
+class CorrectionMetricFunctions:
+    def pre_axon_length(pair):
+        cell_morph = pair.pre_cell.morphology
+        if cell_morph is None:
+            return np.nan
+        if cell_morph.axon_trunc_distance is not None:
+            return cell_morph.axon_trunc_distance
+        elif cell_morph.axon_truncation == 'intact':
+            return 200e-6
+
+    def avg_pair_depth(pair):
+        if pair.pre_cell.depth is None or pair.post_cell.depth is None:
+            return np.nan
+        avg_depth = np.mean([pair.pre_cell.depth, pair.post_cell.depth])
+        if avg_depth < 0 or avg_depth > 300e-6:
+            return np.nan
+        return avg_depth
+
+    def n_test_spikes(pair):
+        syn_type = pair.pre_cell.cell_class_nonsynaptic
+        if syn_type not in ['ex', 'in']:
+            return np.nan
+
+        p = db.query(db.Pair).filter(db.Pair.id==pair.id).all()[0]
+        return(getattr(p, 'n_%s_test_spikes' % syn_type))
+
+
+    def baseline_rms_noise(pair):
+        post_cell = pair.post_cell
+        q = db.query(db.PatchClampRecording)
+        q = q.join(db.Recording).join(db.Electrode).join(db.Cell)
+        q = q.filter(db.Cell.id==post_cell.id).filter(db.PatchClampRecording.clamp_mode=='ic')
+        pcrs = q.all()
+        pcr_noise = [pcr.baseline_rms_noise for pcr in pcrs if pcr.qc_pass]
+        if len(pcr_noise) > 1:
+            return np.mean(pcr_noise)
+        else:
+            return np.nan
+
+    def detection_power(pair):
+        n_spikes = CorrectionMetricFunctions.n_test_spikes(pair)
+        baseline_noise = CorrectionMetricFunctions.baseline_rms_noise(pair)
+        if n_spikes != np.nan and baseline_noise != np.nan:
+            dp = np.log10(np.sqrt(n_spikes) / baseline_noise)
+            if np.isfinite(dp):
+                return dp
+            else:
+                return np.nan
+        else:
+            return np.nan
+
+def ei_correct_connectivity(ei_classes, correction_metrics, pairs):
+    # correction_metrics is a dictionary where the key is the name of the metric which corresponds to either a column in the 
+    # SynPhys DB or is a callable function and the values are a dictionary identifying the fit model and any associated parameters
+    
+    correction_fits = {}
+    for class_name, cell_class in ei_classes.items():
+
+        class_pairs = [p for p in pairs if p.pre_cell.cell_class_nonsynaptic==cell_class.name]
+
+        probed_pairs = [p for p in class_pairs if pair_was_probed(p, cell_class.output_synapse_type)]
+        connections = np.array([p.has_synapse for p in probed_pairs], dtype=bool)
+
+        correction_fits[class_name] = []
+        for metric, opts in correction_metrics.items():
+            pair_metric = np.array([getattr(p, metric) for p in probed_pairs], dtype=float)    
+            mask = np.isfinite(pair_metric) & np.isfinite(connections)
+            model = opts['model']
+            model_opts = {k:v for k, v in opts.items() if k != 'model'}
+
+            metric_fit = model.fit(pair_metric[mask], connections[mask], **model_opts)
+            correction_fits[class_name].append(metric_fit)
+    
+    correction_parameters = [[fit.fit_result.x for fit in fits] for fits in correction_fits.values()]
+    correction_functions = [metric['model'].correction_func for metric in correction_metrics.values()]
+    corr_model = CorrectionModel(0.1, 100e-6, correction_metrics.keys(), correction_functions, correction_parameters)
+    
+    return corr_model
