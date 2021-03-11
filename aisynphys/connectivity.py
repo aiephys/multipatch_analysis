@@ -599,7 +599,9 @@ class CorrectionModel(ConnectivityModel):
         distancepart = self.dist_gaussian(self.size, x[0])
         correction = 1.0
         for i in range(1, len(x)):
-            corrval = self.correction_functions[i-1](self.correction_parameters[self.excinh][i-1], x[i])
+            # replace None with nan to make the following code to work
+            v = [np.nan if el is None else el for el in x[i]]
+            corrval = self.correction_functions[i-1](self.correction_parameters[self.excinh][i-1], v)
             correction *= np.nan_to_num(corrval, nan=1.0)
         return np.clip(self.pmax * distancepart * correction, 0.0, 1.0)
 
@@ -627,9 +629,16 @@ class CorrectionModel(ConnectivityModel):
                 cp_upper_ci = cp + 1.96 * fit.minuit.errors['x0']
             else:
                 #print(cp)
-                fit.minuit.minos() # perform MINOS analysis
-                cp_lower_ci = cp + 1.96 * fit.minuit.merrors['x0'].lower # merrors is defined with a sign, so +.
-                cp_upper_ci = cp + 1.96 * fit.minuit.merrors['x0'].upper
+                fit.minuit.minos(cl=0.95) # perform MINOS analysis with 95% confidence level (returns 95% CI)
+                # check validity of the CI and assign the values.
+                if fit.minuit.merrors['x0'].lower_valid:
+                    cp_lower_ci = cp + fit.minuit.merrors['x0'].lower # merrors is defined with a sign, so +.
+                else:
+                    cp_lower_ci = np.nan
+                if fit.minuit.merrors['x0'].upper_valid:
+                    cp_upper_ci = cp + fit.minuit.merrors['x0'].upper
+                else:
+                    cp_upper_ci = np.nan
         else:
             # estimating 95% confidence interval by extrapolating sigmas
             cp_lower_ci = cp - 1.96 * fit.minuit.errors['x0']
