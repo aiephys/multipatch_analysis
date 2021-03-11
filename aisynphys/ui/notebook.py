@@ -258,8 +258,8 @@ def get_metric_data(metric, db, pre_classes=None, post_classes=None, pair_query_
         'psc_decay_tau':               ('PSC Decay Tau',             'ms',  1e3,  1,     [db.Synapse.psc_decay_tau],                   'viridis_r',  False,  (0, 20),       "%0.1f\nms"),
         'latency':                     ('Latency',                   'ms',  1e3,  1,     [db.Synapse.latency],                         'viridis_r',  False,  (0.5, 3),      "%0.2f\nms"),
         'pulse_amp_90th_percentile':   ('PSP Amplitude 90th %%ile',  'mV',  1e3,  1.5,   [db.Dynamics.pulse_amp_90th_percentile],      'bwr',        False,  (-1.5, 1.5),   "%0.2f\nmV"),
-        'junctional_conductance':      ('Junctional Conductance',    'nS',  1e9,  1,     [db.GapJunction.junctional_conductance],      'virdis',     False,  (0, 10),       "%0.2f nS"),
-        'coupling_coeff_pulse':        ('Coupling Coefficient',      '',    1,    1,     [db.GapJunction.coupling_coeff_pulse],        'virdis',     False,  (0, 1),        "%0.2f"),
+        'junctional_conductance':      ('Junctional Conductance',    'nS',  1e9,  1,     [db.GapJunction.junctional_conductance],      'viridis',     False,  (0, 10),       "%0.2f nS"),
+        'coupling_coeff_pulse':        ('Coupling Coefficient',      '',    1,    1,     [db.GapJunction.coupling_coeff_pulse],        'viridis',     False,  (0, 1),        "%0.2f"),
         'stp_initial_50hz':            ('Paired pulse STP',          '',    1,    1,     [db.Dynamics.stp_initial_50hz],               'bwr',        False,  (-0.5, 0.5),   "%0.2f"),
         'stp_induction_50hz':          ('← Facilitating  Depressing →', '',    1,    1,     [db.Dynamics.stp_induction_50hz],             'bwr',        False,  (-0.5, 0.5),   "%0.2f"),
         'stp_recovery_250ms':          ('← Over-recovered  Not recovered →','',    1,    1,     [db.Dynamics.stp_recovery_250ms],             'bwr',        False,  (-0.2, 0.2),   "%0.2f"),
@@ -267,9 +267,11 @@ def get_metric_data(metric, db, pre_classes=None, post_classes=None, pair_query_
         'paired_event_correlation_1_2_r': ('Paired event correlation 1:2','',    1,    1,     [db.Dynamics.paired_event_correlation_1_2_r],   'bwr', False,  (-0.2, 0.2),   "%0.2f"),
         'paired_event_correlation_2_4_r': ('Paired event correlation 2:4','',    1,    1,     [db.Dynamics.paired_event_correlation_2_4_r],   'bwr', False,  (-0.2, 0.2),   "%0.2f"),
         'paired_event_correlation_4_8_r': ('Paired event correlation 4:8','',    1,    1,     [db.Dynamics.paired_event_correlation_4_8_r],   'bwr', False,  (-0.2, 0.2),   "%0.2f"),
-        'junctional_conductance':      ('Junctional Conductance',    'nS',  1e9,  1,     [db.GapJunction.junctional_conductance],      'virdis',     False,  (0, 10),        "%0.2f nS"),
-        'coupling_coeff_pulse':        ('Coupling Coefficient',       '',   1,    1,     [db.GapJunction.coupling_coeff_pulse],   'virdis',    False,  (0, 1),         "%0.2f"),
-    }
+        'junctional_conductance':      ('Junctional Conductance',    'nS',  1e9,  1,     [db.GapJunction.junctional_conductance],      'viridis',     False,  (0, 10),        "%0.2f nS"),
+        'coupling_coeff_pulse':        ('Coupling Coefficient',       '',   1,    1,     [db.GapJunction.coupling_coeff_pulse],        'viridis',    False,  (0, 1),          "%0.2f"),
+        'variability_resting_state':   ('log(Resting state variance)', '',   1,  1,  [db.Dynamics.variability_resting_state],       'viridis',   False, (-1, 1),     "%0.2f"),
+        'variability_stp_induced_state_50hz': ('log(STP induced variance)', '', 1,    1,      [db.Dynamics.variability_stp_induced_state_50hz], 'viridis', False, (-1, 1),        "%0.2f"),
+    } 
     if metrics is None:
         metrics = synapse_metrics
     
