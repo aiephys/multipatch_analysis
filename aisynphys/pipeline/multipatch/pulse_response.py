@@ -2,6 +2,7 @@
 from __future__ import print_function, division
 
 import os, random
+from sqlalchemy.orm import contains_eager, undefer
 import pyqtgraph as pg
 from ... import config
 from .pipeline_module import MultipatchPipelineModule
@@ -27,10 +28,9 @@ class PulseResponsePipelineModule(MultipatchPipelineModule):
         n_synapses = len([p for p in expt.pair_list if p.has_synapse])
 
         # select pulse responses for the selected experiment
-        # also request pulse response data to speed up access
-        rq = db.query(db.PulseResponse, db.PulseResponse.data)
-        rq = rq.join(db.Recording).join(db.SyncRec).join(db.Experiment)
-        rq = rq.filter(db.Experiment.ext_id==expt_id)
+        # also request nested data to speed up access
+        rq = pulse_response_query(expt_id, db, session)
+
         prs = [rec.PulseResponse for rec in rq.all()]
         print("%s: got %d pulse responses" % (expt_id, len(prs)))
         
@@ -77,7 +77,7 @@ class PulseResponsePipelineModule(MultipatchPipelineModule):
         
         print("  %s: added %d fit records for %d synapses" % (expt_id, fits, n_synapses))
 
-        # "unbiased" response analysis used to predict connectivity
+        # "unbiased" response analysis used by synapse_prediction pipeline to predict connectivity
         for pr in prs:
             bl = pr.baseline
             if bl is None:
@@ -123,3 +123,37 @@ class PulseResponsePipelineModule(MultipatchPipelineModule):
         
         return fits + prs
 
+
+def pulse_response_query(expt_id, db, session):
+    """Create a query that loads pulse responses for expt_id, also preloading
+    extra data needed for the analyses above.
+    """
+
+    rq = session.query(db.PulseResponse, db.Pair, db.Recording, db.SyncRec, db.Experiment, db.Synapse, db.PatchClampRecording, db.StimPulse, db.Baseline)
+    rq = (rq
+        .join(db.Recording, db.PulseResponse.recording)
+        .join(db.Baseline, db.PulseResponse.baseline)
+        .join(db.PatchClampRecording, db.recording.patch_clamp_recording)
+        .join(db.StimPulse, db.PulseResponse.stim_pulse)
+        .join(db.SyncRec, db.Recording.sync_rec)
+        .join(db.Experiment, db.SyncRec.experiment)
+        .join(db.Pair, db.PulseResponse.pair)
+        .join(db.Synapse, db.Pair.synapse)
+    )
+
+    rq = rq.filter(db.Experiment.ext_id==expt_id)
+
+    rq = rq.options(
+        undefer(db.PulseResponse.data),
+        undefer(db.Baseline.data),
+        contains_eager(db.PulseResponse.recording),
+        contains_eager(db.PulseResponse.baseline),
+        contains_eager(db.Recording.patch_clamp_recording),
+        contains_eager(db.PulseResponse.stim_pulse),
+        contains_eager(db.Recording.sync_rec),
+        contains_eager(db.SyncRec.experiment),
+        contains_eager(db.PulseResponse.pair),
+        contains_eager(db.Pair.synapse),
+    )
+
+    return rq
