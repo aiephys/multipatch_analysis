@@ -187,7 +187,7 @@ def show_connectivity_matrix(ax, results, pre_cell_classes, post_cell_classes, c
             elif ctype == 'electrical':
                 found = result['n_gaps']
                 if distance_adjusted:
-                    raise Exception('Distance adjustment for gap junctions not yet available')
+                    cp, cp_lower_ci, cp_upper_ci = result['adjusted_gap_junction']
                 else:
                     cp, cp_lower_ci, cp_upper_ci = result['gap_probability']
             else:
@@ -230,14 +230,14 @@ def show_connectivity_matrix(ax, results, pre_cell_classes, post_cell_classes, c
 def get_metric_data(metric, db, pre_classes=None, post_classes=None, pair_query_args=None, metrics=None):
     synapse_metrics = {
         #                               name                         unit   scale alpha  db columns                                    colormap      log     clim           text format
-        'psp_amplitude':               ('PSP Amplitude',             'mV',  1e3,  1,     [db.Synapse.psp_amplitude],                   'bwr',        False,  (-1.5, 1.5),       "%0.2f mV"),
-        'psp_rise_time':               ('PSP Rise Time',             'ms',  1e3,  0.5,   [db.Synapse.psp_rise_time],                   'viridis_r',  True,  (1, 10),        "%0.2f ms"),
-        'psp_decay_tau':               ('PSP Decay Tau',             'ms',  1e3,  0.01,     [db.Synapse.psp_decay_tau],                 'viridis_r',  True,  (1, 200),       "%0.2f ms"),
+        'psp_amplitude':               ('PSP Amplitude',             'mV',  1e3,  1,     [db.Synapse.psp_amplitude],                   'bwr',        False,  (-1.5, 1.5),   "%0.2f\nmV"),
+        'psp_rise_time':               ('PSP Rise Time',             'ms',  1e3,  0.5,   [db.Synapse.psp_rise_time],                   'viridis_r',  True,  (1, 10),        "%0.2f\nms"),
+        'psp_decay_tau':               ('PSP Decay Tau',             'ms',  1e3,  0.01,     [db.Synapse.psp_decay_tau],                 'viridis_r',  True,  (1, 200),       "%0.1f\nms"),
         'psc_amplitude':               ('PSC Amplitude',             'pA',  1e12,  0.3,     [db.Synapse.psc_amplitude],                   'bwr',        False,  (-20, 20),       "%0.2g pA"),
         'psc_rise_time':               ('PSC Rise Time',             'ms',  1e3,  1,     [db.Synapse.psc_rise_time],                   'viridis_r',  False,  (0, 6),        "%0.2f ms"),
-        'psc_decay_tau':               ('PSC Decay Tau',             'ms',  1e3,  1,     [db.Synapse.psc_decay_tau],                   'viridis_r',  False,  (0, 20),       "%0.2f ms"),
-        'latency':                     ('Latency',                   'ms',  1e3,  1,     [db.Synapse.latency],                         'viridis_r',  False,  (0.5, 3),      "%0.2f ms"),
-        'pulse_amp_90th_percentile':   ('PSP Amplitude 90th %%ile',  'mV',  1e3,  1.5,   [db.Dynamics.pulse_amp_90th_percentile],      'bwr',        False,  (-1.5, 1.5),   "%0.2f mV"),
+        'psc_decay_tau':               ('PSC Decay Tau',             'ms',  1e3,  1,     [db.Synapse.psc_decay_tau],                   'viridis_r',  False,  (0, 20),       "%0.1f\nms"),
+        'latency':                     ('Latency',                   'ms',  1e3,  1,     [db.Synapse.latency],                         'viridis_r',  False,  (0.5, 3),      "%0.2f\nms"),
+        'pulse_amp_90th_percentile':   ('PSP Amplitude 90th %%ile',  'mV',  1e3,  1.5,   [db.Dynamics.pulse_amp_90th_percentile],      'bwr',        False,  (-1.5, 1.5),   "%0.2f\nmV"),
         'junctional_conductance':      ('Junctional Conductance',    'nS',  1e9,  1,     [db.GapJunction.junctional_conductance],      'virdis',     False,  (0, 10),       "%0.2f nS"),
         'coupling_coeff_pulse':        ('Coupling Coefficient',      '',    1,    1,     [db.GapJunction.coupling_coeff_pulse],        'virdis',     False,  (0, 1),        "%0.2f"),
         'stp_initial_50hz':            ('Paired pulse STP',          '',    1,    1,     [db.Dynamics.stp_initial_50hz],               'bwr',        False,  (-0.5, 0.5),   "%0.2f"),
@@ -247,7 +247,6 @@ def get_metric_data(metric, db, pre_classes=None, post_classes=None, pair_query_
         'paired_event_correlation_1_2_r': ('Paired event correlation 1:2','',    1,    1,     [db.Dynamics.paired_event_correlation_1_2_r],   'bwr', False,  (-0.2, 0.2),   "%0.2f"),
         'paired_event_correlation_2_4_r': ('Paired event correlation 2:4','',    1,    1,     [db.Dynamics.paired_event_correlation_2_4_r],   'bwr', False,  (-0.2, 0.2),   "%0.2f"),
         'paired_event_correlation_4_8_r': ('Paired event correlation 4:8','',    1,    1,     [db.Dynamics.paired_event_correlation_4_8_r],   'bwr', False,  (-0.2, 0.2),   "%0.2f"),
-        'pulse_amp_90th_percentile':   ('PSP Amplitude 90th %ile',  'mV',  1e3,  1.5,   [db.Dynamics.pulse_amp_90th_percentile],      'bwr',        False,  (-1.5, 1.5),    "%0.2f mV"),
         'junctional_conductance':      ('Junctional Conductance',    'nS',  1e9,  1,     [db.GapJunction.junctional_conductance],      'virdis',     False,  (0, 10),        "%0.2f nS"),
         'coupling_coeff_pulse':        ('Coupling Coefficient',       '',   1,    1,     [db.GapJunction.coupling_coeff_pulse],   'virdis',    False,  (0, 1),         "%0.2f"),
     }
@@ -271,7 +270,7 @@ def get_metric_data(metric, db, pre_classes=None, post_classes=None, pair_query_
     pairs_has_metric = pairs[~pairs[metric].isnull()]
     return pairs_has_metric, metric_name, units, scale, alpha, cmap, cmap_log, clim, cell_fmt
 
-def pair_class_metric_scatter(metrics, db, pair_classes, pair_query_args, ax):
+def pair_class_metric_scatter(metrics, db, pair_classes, pair_query_args, ax, palette='muted'):
     """To create scatter plots from get_metric_data for specific pair_classes. In this case pair_classes is a list of
     tuples of specific pre->post class pairs instead of all combos from a list of pre-classes
     and post-classes
@@ -287,6 +286,7 @@ def pair_class_metric_scatter(metrics, db, pair_classes, pair_query_args, ax):
         arguments to pass to db.pair_query
     ax : matplotlib.axes
         The matplotlib axes object on which to draw the swarm plots
+    palette : color palette to use for plots
 
     Outputs
     --------
@@ -300,8 +300,8 @@ def pair_class_metric_scatter(metrics, db, pair_classes, pair_query_args, ax):
         pairs_has_metric['pair_class'] = pairs_has_metric['pre_class'] + '→' + pairs_has_metric['post_class']
         pairs_has_metric = pairs_has_metric[pairs_has_metric['pair_class'].isin(pair_classes)]
         pairs_has_metric[metric] *= scale
-        plot = sns.swarmplot(x='pair_class', y=metric, data=pairs_has_metric, ax=ax[i], size=6, palette='muted', edgecolor='black', alpha=0.8)
-        sns.barplot(x='pair_class', y=metric, data=pairs_has_metric, ax=ax[i], ci=None, facecolor=(1, 1, 1, 0), edgecolor='black')
+        plot = sns.swarmplot(x='pair_class', y=metric, data=pairs_has_metric, ax=ax[i], size=6, palette=palette, edgecolor='black', alpha=0.8, order=pair_classes)
+        sns.barplot(x='pair_class', y=metric, data=pairs_has_metric, ax=ax[i], ci=None, facecolor=(1, 1, 1, 0), edgecolor='black', order=pair_classes)
         
         if i == len(metrics) - 1:
             ax[i].set_xlabel('pre→post class', size=12)
@@ -323,7 +323,6 @@ def pair_class_metric_scatter(metrics, db, pair_classes, pair_query_args, ax):
         else:
             ax[i].xaxis.set_ticks_position('bottom')
 
-
 def metric_stats(metric, db, pre_classes, post_classes, pair_query_args):
     pairs_has_metric, _, units, scale, _, _, _, _, _ = get_metric_data(metric, db, pre_classes=pre_classes, post_classes=post_classes, pair_query_args=pair_query_args)
     pairs_has_metric[metric] = pairs_has_metric[metric].apply(pd.to_numeric)*scale
@@ -332,7 +331,7 @@ def metric_stats(metric, db, pre_classes, post_classes, pair_query_args):
 
 
 def ei_hist_plot(ax, metric, bin_edges, db, pair_query_args):
-    ei_classes = {'ex': CellClass(cell_class_nonsynaptic='ex'), 'in': CellClass(cell_class_nonsynaptic='in')}
+    ei_classes = {'ex': CellClass(cell_class='ex'), 'in': CellClass(cell_class='in')}
     
     pairs_has_metric, metric_name, units, scale, _, _, _, _, _ = get_metric_data(metric, db, ei_classes, ei_classes, pair_query_args=pair_query_args)
     ex_pairs = pairs_has_metric[pairs_has_metric['pre_class']=='ex']
@@ -370,6 +369,7 @@ def ei_hist_plot(ax, metric, bin_edges, db, pair_query_args):
     print('Excitatory: p = %0.3e' % excitatory[1])
     print('Inhibitory: p = %0.3e' % inhibitory[1])
 
+    return ex_pairs, in_pairs
 
 def cell_class_matrix(pre_classes, post_classes, metric, class_labels, ax, db, pair_query_args=None):
     if class_labels is None:
@@ -417,9 +417,10 @@ def cell_class_matrix(pre_classes, post_classes, metric, class_labels, ax, db, p
                     cmap=cmap,
                     norm=norm,
                     cbarlabel=metric_name,
-                    cbar_kw={'shrink':0.5})
+                    cbar_kw={'shrink':0.5, 'pad':0.02},
+                    )
 
-    text = annotate_heatmap(im, data_str, data=data)
+    text = annotate_heatmap(im, data_str, data=data, fontsize=8)
 
     return pairs_has_metric
 
