@@ -4,7 +4,7 @@ from aisynphys.database import default_db as db
 
 expt = db.experiment_from_ext_id(sys.argv[1])
 
-def print_attrs(obj, attrs, indent=0):
+def print_attrs(obj, attrs, indent=0, prefix=""):
     maxlen = max([len(a) for a in attrs])
     for attr in attrs:
         if isinstance(attr, tuple):
@@ -12,7 +12,7 @@ def print_attrs(obj, attrs, indent=0):
         else:
             fmt = str(maxlen) + "s"
             fn = str
-        print(" "*indent + ("{attr:" + fmt + "}  :  {val:s}").format(attr=attr, val=fn(getattr(obj, attr))))
+        print(" "*indent + ("{prefix}{attr:" + fmt + "}  :  {val:s}").format(attr=attr, val=fn(getattr(obj, attr)), prefix=prefix))
 
 
 def print_heading(txt, level=0):
@@ -68,8 +68,10 @@ for cell in expt.cell_list:
         "cre_type",
         "depth",
         "target_layer",
+        "meta",
     ], indent=4)
 
+    print_attrs(cell.cortical_location, ['cortical_layer'], indent=4, prefix="cortical_location.")
 
 print_heading(f"Pairs")
 
