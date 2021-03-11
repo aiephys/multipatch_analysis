@@ -90,7 +90,7 @@ if __name__ == '__main__':
 
     if args.rebuild or args.drop:
         # this call takes care of logging also
-        pipeline.drop(drop(modules=modules, job_ids=args.uids))
+        pipeline.drop(modules=modules, job_ids=args.uids)
         print("  done.")
  
     if args.update or args.rebuild or args.retry or args.force_update:

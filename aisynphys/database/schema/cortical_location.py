@@ -12,11 +12,12 @@ CorticalCellLocation = make_table(
     columns=[
         ('cell_id', 'cell.id', 'ID of the cell these locations apply to.', {'index':True}),
         ('cortical_site_id', 'cortical_site.id', 'ID of the site location measurements fit within.', {'index':True}),
-        ('layer', 'str', 'Name of the layer the cell is in.'),
+        ('cortical_layer', 'str', 'Cortical layer of cell defined by layer drawings (after trimming, not identical to that in LIMS)', {'index': True}),
         ('distance_to_pia', 'float', 'The distance from the cell to the pial surface in m.'),
         ('distance_to_wm', 'float', 'The distance from the cell to the white matter in m.'),
         ('fractional_depth', 'float', 'The cortical depth of the cell where pia is 0 and wm is 1.'),
         ('layer_depth', 'float', 'Absolute depth within the layer in m.'),
+        ('layer_thickness', 'float', 'Local thickness of layer in m.'),
         ('fractional_layer_depth', 'float', 'Fractional depth within the cells layer.'),
         ('position', 'object', '2D array, position of cell in slice image coordinates (in m)'),
         ])

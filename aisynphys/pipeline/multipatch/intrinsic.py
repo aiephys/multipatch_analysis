@@ -22,15 +22,6 @@ from .dataset import DatasetPipelineModule
 from ...nwb_recordings import get_intrinsic_recording_dict, get_pulse_times
 
 
-SPIKE_FEATURES = [
-    'upstroke_downstroke_ratio',
-    'upstroke',
-    'downstroke',
-    'width',
-    'peak_v',
-    'threshold_v',
-    'fast_trough_v',
-]
 class IntrinsicPipelineModule(MultipatchPipelineModule):
     
     name = 'intrinsic'
@@ -94,16 +85,12 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
                 'chirp_peak_freq': all_chirp_features['peak_freq'],
                 'chirp_3db_freq': all_chirp_features['3db_freq'],
                 'chirp_peak_ratio': all_chirp_features['peak_ratio'],
-                'chirp_peak_impedance': all_chirp_features['peak_impedance'],
+                'chirp_peak_impedance': all_chirp_features['peak_impedance'] * 1e9, #unscale from mV/pA,
                 'chirp_sync_freq': all_chirp_features['sync_freq'],
                 'chirp_inductive_phase': all_chirp_features['total_inductive_phase'],
             }
         except FeatureError as exc:
             logging.warning(f'Error processing chirps for cell {cell_id}: {str(exc)}')
-            errors.append('Error processing chirps for cell %s: %s' % (cell_id, str(exc)))
-            results = {}
-        except Exception as exc:
-            logging.exception(f'Error processing chirps for cell {cell_id}')
             errors.append('Error processing chirps for cell %s: %s' % (cell_id, str(exc)))
             results = {}
         
@@ -135,42 +122,55 @@ class IntrinsicPipelineModule(MultipatchPipelineModule):
             errors.append('No long square sweeps passed qc for cell %s' % cell_id)
             return {}, errors
 
-        sweep_set = SweepSet(sweep_list)    
+        sweep_set = SweepSet(sweep_list)
         spx, spfx = extractors_for_sweeps(sweep_set, start=0, end=min_pulse_dur)
-        lsa = LongSquareAnalysis(spx, spfx, subthresh_min_amp=-200)
+        lsa = LongSquareAnalysis(spx, spfx, subthresh_min_amp=-200,
+                                 require_subthreshold=False, require_suprathreshold=False
+                                 )
         
         try:
             analysis = lsa.analyze(sweep_set)
-        except Exception as exc:
-            errors.append('Error running long square analysis for cell %s: %s' % (cell_id, str(exc)))
+        except FeatureError as exc:
+            err = f'Error running long square analysis for cell {cell_id}: {str(exc)}'
+            logging.warning(err)
+            errors.append(err)
             return {}, errors
         
         analysis_dict = lsa.as_dict(analysis)
         output = get_complete_long_square_features(analysis_dict) 
-        avg_rate = np.mean(analysis['spiking_sweeps'].avg_rate)
         
         results = {
-            'avg_firing_rate': avg_rate,
-            'rheobase': output['rheobase_i'] * 1e-12, #unscale from pA,
-            'fi_slope': output['fi_fit_slope'] * 1e-12, #unscale from pA,
-            'input_resistance': output['input_resistance'] * 1e6, #unscale from MOhm,
-            'input_resistance_ss': output['input_resistance_ss'] * 1e6, #unscale from MOhm,
-            'sag': output['sag'],
-            'adaptation_index': output['adapt_mean'],
-            'upstroke_downstroke_ratio': output['upstroke_downstroke_ratio_hero'],
-            'upstroke': output['upstroke_hero'],
-            'downstroke': output['downstroke_hero'],
-            'width': output['width_hero'],
-            'threshold_v': output['threshold_v_hero'] * 1e-3, #unscale from mV
+            'rheobase': output.get('rheobase_i', np.nan) * 1e-12, #unscale from pA,
+            'fi_slope': output.get('fi_fit_slope', np.nan) * 1e-12, #unscale from pA,
+            'input_resistance': output.get('input_resistance', np.nan) * 1e6, #unscale from MOhm,
+            'input_resistance_ss': output.get('input_resistance_ss', np.nan) * 1e6, #unscale from MOhm,
+            'tau': output.get('tau', np.nan),
+            'sag': output.get('sag', np.nan),
+            'sag_peak_t': output.get('sag_peak_t', np.nan),
+            'sag_depol': output.get('sag_depol', np.nan),
+            'sag_peak_t_depol': output.get('sag_peak_t_depol', np.nan),
+            
+            'ap_upstroke_downstroke_ratio': output.get('upstroke_downstroke_ratio_hero', np.nan),
+            'ap_upstroke': output.get('upstroke_hero', np.nan) * 1e-3, #unscale from mV
+            'ap_downstroke': output.get('downstroke_hero', np.nan) * 1e-3, #unscale from mV
+            'ap_width': output.get('width_hero', np.nan),
+            'ap_threshold_v': output.get('threshold_v_hero', np.nan) * 1e-3, #unscale from mV
+            'ap_peak_deltav': output.get('peak_deltav_hero', np.nan) * 1e-3, #unscale from mV
+            'ap_fast_trough_deltav': output.get('fast_trough_deltav_hero', np.nan) * 1e-3, #unscale from mV
 
-            'peak_deltav': output['peak_deltav_hero'] * 1e-3, #unscale from mV
-            'fast_trough_deltav': output['fast_trough_deltav_hero'] * 1e-3, #unscale from mV
+            'firing_rate_rheo': output.get('avg_rate_rheo', np.nan),
+            'latency_rheo': output.get('latency_rheo', np.nan),
+            'firing_rate_40pa': output.get('avg_rate_hero', np.nan),
+            'latency_40pa': output.get('latency_hero', np.nan),
+            
+            'adaptation_index': output.get('adapt_mean', np.nan),
+            'isi_cv': output.get('isi_cv_mean', np.nan),
 
-            'isi_adapt_ratio': output['isi_adapt_ratio'],
-            'upstroke_adapt_ratio': output['upstroke_adapt_ratio'],
-            'downstroke_adapt_ratio': output['downstroke_adapt_ratio'],
-            'width_adapt_ratio': output['width_adapt_ratio'],
-            'threshold_v_adapt_ratio': output['threshold_v_adapt_ratio'],
+            'isi_adapt_ratio': output.get('isi_adapt_ratio', np.nan),
+            'upstroke_adapt_ratio': output.get('upstroke_adapt_ratio', np.nan),
+            'downstroke_adapt_ratio': output.get('downstroke_adapt_ratio', np.nan),
+            'width_adapt_ratio': output.get('width_adapt_ratio', np.nan),
+            'threshold_v_adapt_ratio': output.get('threshold_v_adapt_ratio', np.nan),
         }
         return results, errors
 
@@ -205,7 +205,7 @@ try:
             srate = pri.sample_rate
             sweep_num = rec.parent.key
             # modes 'ic' and 'vc' should be expanded
-            clamp_mode = "CurrentClamp" if rec.clamp_mode=="ic" else "VoltageClamp" 
+            clamp_mode = "CurrentClamp" if rec.clamp_mode=="ic" else "VoltageClamp"
 
             Sweep.__init__(self, t, v, i, clamp_mode, srate, sweep_number=sweep_num)
 except ImportError:

@@ -144,8 +144,15 @@ class CellBase(object):
             if name != 'synaptic':
                 tm_classes.add(cell_cls)
             
-        tm_class = None if len(tm_classes) != 1 else list(tm_classes)[0]
-        tms_class = None if len(tms_classes) != 1 else list(tms_classes)[0]
+        if len(tm_classes) == 0:
+            tm_class = None
+        else:
+            tm_class = 'mixed' if len(tm_classes) > 1 else list(tm_classes)[0]
+        
+        if len(tms_classes) == 0:
+            tms_class = None
+        else:
+            tms_class = 'mixed' if len(tms_classes) > 1 else list(tms_classes)[0]
 
         return tms_class, tm_class
 
@@ -162,9 +169,9 @@ Cell = make_table(
         ('target_layer', 'str', 'The intended cortical layer for this cell (used as a placeholder until the actual layer call is made)', {'index': True}),
         ('position', 'object', '3D location of this cell in the arbitrary coordinate system of the experiment'),
         ('depth', 'float', 'Depth of the cell (in m) from the cut surface of the slice.'),
-        ('cell_class', 'str', 'Cell class "ex" or "in" determined by synaptic current, cre type, or morphology. '
+        ('cell_class', 'str', 'Cell class "ex", "in", or "mixed" determined by synaptic current, cre type, or morphology. '
          'This property makes use of synaptic currents to define cell class; it should _not_ be used when measuring connection probability.', {'index': True}),
-        ('cell_class_nonsynaptic', 'str', 'Cell class "ex" or "in" determined by cre type or morphology. '
+        ('cell_class_nonsynaptic', 'str', 'Cell class "ex", "in", or "mixed" determined by cre type or morphology. '
          'Unlike `cell_class`, this property excludes synaptic currents as a determinant so that it can be used in measurements of connectivity.', {'index': True}),
         # ('patch_start', 'float', 'Time at which this cell was first patched'),
         # ('patch_stop', 'float', 'Time at which the electrode was detached from the cell'),

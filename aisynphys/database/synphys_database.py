@@ -176,8 +176,9 @@ class SynphysDatabase(Database):
         preload : list
             List of strings specifying resources to preload along with the queried pairs. 
             This can speed up performance in cases where these would otherwise be 
-            individually queried later on. Options are "cell" (includes cell, morphology, and patch_seq),
-            "synapse" (includes synapse, resting_statem dynamics, and synapse_prediction).
+            individually queried later on. Options are:
+            - "cell" (includes cell, morphology, cortical_location, and patch_seq)
+            - "synapse" (includes synapse, resting_statem dynamics, and synapse_prediction)
         filter_exprs : list | None
             List of sqlalchemy expressions, each of which will restrict the query
             via a call to query.filter(expr)
@@ -191,25 +192,31 @@ class SynphysDatabase(Database):
         post_patch_seq = aliased(self.PatchSeq, name='post_patch_seq')
         pre_intrinsic = aliased(self.Intrinsic, name='pre_intrinsic')
         post_intrinsic = aliased(self.Intrinsic, name='post_intrinsic')
+        pre_location = aliased(self.CorticalCellLocation, name='pre_location')
+        post_location = aliased(self.CorticalCellLocation, name='post_location')
         query = session.query(
             self.Pair,
         )
-        query = query.join(pre_cell, pre_cell.id==self.Pair.pre_cell_id)
-        query = query.join(post_cell, post_cell.id==self.Pair.post_cell_id)
-        query = query.outerjoin(pre_morphology, pre_morphology.cell_id==pre_cell.id)
-        query = query.outerjoin(post_morphology, post_morphology.cell_id==post_cell.id)
-        query = query.outerjoin(pre_patch_seq, pre_patch_seq.cell_id==pre_cell.id)
-        query = query.outerjoin(post_patch_seq, post_patch_seq.cell_id==post_cell.id)
-        query = query.outerjoin(pre_intrinsic, pre_intrinsic.cell_id==pre_cell.id)
-        query = query.outerjoin(post_intrinsic, post_intrinsic.cell_id==post_cell.id)
-        query = query.join(self.Experiment, self.Pair.experiment_id==self.Experiment.id)
-        query = query.outerjoin(self.Slice, self.Experiment.slice_id==self.Slice.id) ## don't want to drop all pairs if we don't have slice or connection strength entries
-        query = query.outerjoin(self.SynapsePrediction)
-        query = query.outerjoin(self.Synapse)
-        query = query.outerjoin(self.PolySynapse)
-        query = query.outerjoin(self.Dynamics)
-        query = query.outerjoin(self.GapJunction)
-        query = query.outerjoin(self.RestingStateFit, self.RestingStateFit.synapse_id==self.Synapse.id)
+        query = (query
+            .join(pre_cell, pre_cell.id==self.Pair.pre_cell_id)
+            .join(post_cell, post_cell.id==self.Pair.post_cell_id)
+            .outerjoin(pre_morphology, pre_morphology.cell_id==pre_cell.id)
+            .outerjoin(post_morphology, post_morphology.cell_id==post_cell.id)
+            .outerjoin(pre_patch_seq, pre_patch_seq.cell_id==pre_cell.id)
+            .outerjoin(post_patch_seq, post_patch_seq.cell_id==post_cell.id)
+            .outerjoin(pre_intrinsic, pre_intrinsic.cell_id==pre_cell.id)
+            .outerjoin(post_intrinsic, post_intrinsic.cell_id==post_cell.id)
+            .outerjoin(pre_location, pre_location.cell_id==pre_cell.id)
+            .outerjoin(post_location, post_location.cell_id==post_cell.id)
+            .join(self.Experiment, self.Pair.experiment_id==self.Experiment.id)
+            .outerjoin(self.Slice, self.Experiment.slice_id==self.Slice.id) ## don't want to drop all pairs if we don't have slice or connection strength entries
+            .outerjoin(self.SynapsePrediction)
+            .outerjoin(self.Synapse)
+            .outerjoin(self.PolySynapse)
+            .outerjoin(self.Dynamics)
+            .outerjoin(self.GapJunction)
+            .outerjoin(self.RestingStateFit, self.RestingStateFit.synapse_id==self.Synapse.id)
+        )
 
         if pre_class is not None:
             query = pre_class.filter_query(query, pre_cell, db=self)
@@ -264,14 +271,18 @@ class SynphysDatabase(Database):
                 query = query.filter(expr)
                 
         if 'cell' in preload:
-            query = query.add_entity(pre_cell)
-            query = query.add_entity(post_cell)
-            query = query.add_entity(pre_morphology)
-            query = query.add_entity(post_morphology)
-            query = query.add_entity(pre_patch_seq)
-            query = query.add_entity(post_patch_seq)
-            query = query.add_entity(pre_intrinsic)
-            query = query.add_entity(post_intrinsic)
+            query = (query
+                .add_entity(pre_cell)
+                .add_entity(post_cell)
+                .add_entity(pre_morphology)
+                .add_entity(post_morphology)
+                .add_entity(pre_patch_seq)
+                .add_entity(post_patch_seq)
+                .add_entity(pre_intrinsic)
+                .add_entity(post_intrinsic)
+                .add_entity(pre_location)
+                .add_entity(post_location)
+            )
             query = query.options(
                 contains_eager(self.Pair.pre_cell, alias=pre_cell), 
                 contains_eager(self.Pair.post_cell, alias=post_cell), 
@@ -281,6 +292,8 @@ class SynphysDatabase(Database):
                 contains_eager(post_cell.patch_seq, alias=post_patch_seq), 
                 contains_eager(pre_cell.intrinsic, alias=pre_intrinsic),
                 contains_eager(post_cell.intrinsic, alias=post_intrinsic),
+                contains_eager(pre_cell.location, alias=pre_location),
+                contains_eager(post_cell.location, alias=post_location),
             )
 
         if 'synapse' in preload:
@@ -297,6 +310,10 @@ class SynphysDatabase(Database):
         query.post_cell = post_cell
         query.pre_morphology = pre_morphology
         query.post_morphology = post_morphology
+        query.pre_location = pre_location
+        query.post_location = post_location
+        query.pre_intrinsic = pre_intrinsic
+        query.post_intrinsic = post_intrinsic
         query.pre_patch_seq = pre_patch_seq
         query.post_patch_seq = post_patch_seq
 

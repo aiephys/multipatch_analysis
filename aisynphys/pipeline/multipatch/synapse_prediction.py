@@ -12,7 +12,11 @@ from ...synapse_prediction import get_amps, analyze_pair_connectivity
 
 
 class SynapsePredictionPipelineModule(MultipatchPipelineModule):
-    """Analyze synaptic connection strength for all pairs per experiment
+    """Analyze possible evoked responses between a cell pair.
+
+    This analysis is used to automatically detect synaptic connections, and thus is designed to be 
+    "unbiased" in that it treats all pairs equally, regardless of any human-provided
+    annotations about the presence of a synapse or properties of the synaptic responses.
     """
     name = 'synapse_prediction'
     dependencies = [ExperimentPipelineModule, DatasetPipelineModule, PulseResponsePipelineModule]
