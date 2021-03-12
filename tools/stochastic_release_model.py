@@ -1,4 +1,4 @@
-import os, sys, argparse, threading, time, subprocess
+import os, sys, argparse, threading, time, subprocess, logging
 import sqlalchemy.pool
 from aisynphys.database import default_db as db
 from aisynphys.stochastic_release_model import StochasticModelRunner, CombinedModelRunner
@@ -6,6 +6,9 @@ from aisynphys import config
 
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO)
+
+
     # For HPC we start many processes, which makes connection pooling impossible. Instead,
     # turn off connection pooling and make sure connections are closed when possible.
     db._engine_opts['postgresql']['ro'] = {'poolclass': sqlalchemy.pool.NullPool}
@@ -41,6 +44,7 @@ if __name__ == '__main__':
             save_cache=not args.no_save_cache,
             load_cache=not args.no_load_cache,
         )
+        result.param_space  # force model run
         result.max_events = args.max_events
 
         return result
