@@ -292,8 +292,8 @@ class SynphysDatabase(Database):
                 contains_eager(post_cell.patch_seq, alias=post_patch_seq), 
                 contains_eager(pre_cell.intrinsic, alias=pre_intrinsic),
                 contains_eager(post_cell.intrinsic, alias=post_intrinsic),
-                contains_eager(pre_cell.location, alias=pre_location),
-                contains_eager(post_cell.location, alias=post_location),
+                contains_eager(pre_cell.cortical_location, alias=pre_location),
+                contains_eager(post_cell.cortical_location, alias=post_location),
             )
 
         if 'synapse' in preload:
