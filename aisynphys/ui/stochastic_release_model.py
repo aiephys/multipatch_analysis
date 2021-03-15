@@ -32,15 +32,15 @@ class ModelDisplayWidget(QtGui.QWidget):
         v1['axis 0'] = 'n_release_sites'
         v1['axis 1'] = 'base_release_probability'
         v2 = self.slicer.params.child('2D views').addNew()
-        v2['axis 0'] = 'desensitization_amount'
+        v2['axis 0'] = 'depression_amount'
         v2['axis 1'] = 'base_release_probability'
         self.slicer.dockarea.moveDock(v2.viewer.dock, 'bottom', v1.viewer.dock)
         v3 = self.slicer.params.child('2D views').addNew()
-        v3['axis 0'] = 'vesicle_recovery_tau'
+        v3['axis 0'] = 'depression_tau'
         v3['axis 1'] = 'base_release_probability'
         v4 = self.slicer.params.child('2D views').addNew()
         v4['axis 0'] = 'facilitation_amount'
-        v4['axis 1'] = 'facilitation_recovery_tau'
+        v4['axis 1'] = 'base_release_probability'
         self.slicer.dockarea.moveDock(v4.viewer.dock, 'bottom', v3.viewer.dock)
 
         self.result_widget = ModelSingleResultWidget()
@@ -252,7 +252,7 @@ class ModelEventPlot(ModelResultView):
             'amplitude': self.event_view.addPlot(0, 0, title="event amplitude vs compressed time"),
             'likelihood': self.event_view.addPlot(1, 0, title="model likelihood vs compressed time"),
         }
-        self.state_keys = ['vesicle_pool', 'release_probability', 'sensitization']
+        self.state_keys = ['vesicle_pool', 'release_probability', 'depression', 'facilitation']
         for i,state_key in enumerate(self.state_keys):
             self.plots[state_key] = self.event_view.addPlot(2+i, 0, title=state_key + " vs compressed time")
         
@@ -261,6 +261,8 @@ class ModelEventPlot(ModelResultView):
         self.amp_dist_plot.selected_items = []
 
         self.amp_sample_values = np.linspace(-0.005, 0.005, 800)
+
+        self.stim_regions = []
 
         self.ctrl = QtGui.QWidget()
         self.hl = QtGui.QHBoxLayout()
@@ -274,7 +276,8 @@ class ModelEventPlot(ModelResultView):
             'likelihood': QtGui.QCheckBox('likelihood'),
             'vesicle_pool': QtGui.QCheckBox('vesicle pool'),
             'release_probability': QtGui.QCheckBox('release probability'),
-            'sensitization': QtGui.QCheckBox('sensitization'),
+            'depression': QtGui.QCheckBox('depression'),
+            'facilitation': QtGui.QCheckBox('facilitation'),
         }
         self.plot_checks['amplitude'].setChecked(True)
         for name,c in self.plot_checks.items():
@@ -323,6 +326,24 @@ class ModelEventPlot(ModelResultView):
             self.plots['amplitude'].plot(compressed_spike_times, result['expected_amplitude'], pen=None, symbol='x', symbolPen=0.5, symbolBrush=brushes)
             amp_sp = self.plots['amplitude'].plot(compressed_spike_times, result['amplitude'], pen=None, symbol='o', symbolBrush=brushes)
             amp_sp.scatter.sigClicked.connect(self.amp_sp_clicked)
+
+            # show regions for each type of stimulus
+            last_stim_name = None
+            rgns = []
+            for i, stim_name in enumerate(full_result.event_meta['stim_name']):
+                ev_time = compressed_spike_times[i]
+                if stim_name != last_stim_name:
+                    rgns.append([stim_name, ev_time, ev_time])
+                    last_stim_name = stim_name
+                else:
+                    rgns[-1][1] = ev_time
+            for stim_name, start_time, stop_time in rgns:
+                rgn = pg.LinearRegionItem(values=[start_time, stop_time], orientation='vertical', brush=(len(self.stim_regions), 10), pen=None, movable=False)
+                rgn.lines[0].label = pg.InfLineLabel(rgn.lines[1], stim_name, movable=False, rotateAxis=(1, 0), position=0, anchors=[(0, 0), (0, 0)])
+                rgn.setZValue(-10)
+                rgn.setOpacity(0.3)
+                self.plots['amplitude'].addItem(rgn)
+                self.stim_regions.append(rgn)
 
         for k in self.state_keys:
             if not self.plot_checks[k].isChecked():
