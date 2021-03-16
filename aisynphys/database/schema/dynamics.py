@@ -11,6 +11,8 @@ Dynamics = make_table(
     comment="Describes short term dynamics of synaptic connections.",
     columns=[
         ('pair_id', 'pair.id', 'The ID of the cell pair described by each record', {'index': True, 'unique': True}),
+        ('qc_pass', 'bool', 'Indicates whether dynamics records pass quality control', {'index': True}),
+        ('n_source_events', 'int', 'Number of qc-passed pulse response amplitudes from which dynamics metrics were generated', {'index': True}),
         ('paired_pulse_ratio_50hz', 'float', 'The mean ratio of 2nd / 1st pulse amplitudes for 50Hz pulse trains.', {'index': True}),
         ('stp_initial_50hz', 'float', 'The mean relative change from 1st to 2nd pulse for 50Hz pulse trains', {'index': True}),
         ('stp_initial_50hz_n', 'float', 'Number of samples represented in stp_initial_50Hz', {'index': True}),

@@ -76,10 +76,21 @@ def generate_pair_dynamics(pair, db, session):
     """
     logger = logging.getLogger(__name__)
     logger.info('generate dynamics for %s', pair)
-    syn_type = pair.synapse.synapse_type
-    
+
+    # dec_fit_reconv_amp generally has much lower noise than fit_amp:
     amp_field = 'dec_fit_reconv_amp'
     baseline_amp_field = 'baseline_' + amp_field
+    
+    # QC criteria
+    min_amps_length = 10
+
+    # start new DB record
+    dynamics = db.Dynamics(
+        pair_id=pair.id,
+        meta={},
+    )
+
+    syn_type = pair.synapse.synapse_type
     
     # load all IC pulse response amplitudes to determine the maximum that will be used for normalization
     pr_query = pulse_response_query(pair, qc_pass=False, clamp_mode='ic', session=session)
@@ -89,23 +100,23 @@ def generate_pair_dynamics(pair, db, session):
     passed_pr_recs = [pr_rec for pr_rec in pr_recs if getattr(pr_rec.PulseResponse, qc_field) and getattr(pr_rec.PulseResponseFit, amp_field) is not None]
     
     percentile = 90 if syn_type == 'ex' else 10
-    # dec_fit_reconv_amp generally has much lower noise than fit_amp:
     amps = [getattr(rec.PulseResponseFit, amp_field) for rec in passed_pr_recs]
     amp_90p = scipy.stats.scoreatpercentile(amps, percentile)
+
+    # fail QC if there are not enough events (but continue anyway)
+    qc_pass = len(amps) >= min_amps_length
+    dynamics.qc_pass = qc_pass
+    dynamics.n_source_events = len(amps)
 
     # load all baseline amplitudes to determine the noise level
     noise_amps = np.array([getattr(rec.PulseResponseFit, baseline_amp_field) for rec in passed_pr_recs if getattr(rec.PulseResponseFit, baseline_amp_field) is not None])
     noise_std = noise_amps.std()
     noise_90p = scipy.stats.scoreatpercentile(noise_amps, percentile)
 
-    # start new DB record
-    dynamics = db.Dynamics(
-        pair_id=pair.id,
-        pulse_amp_90th_percentile=amp_90p,
-        noise_amp_90th_percentile=noise_90p,
-        noise_std=noise_std,
-        meta={},
-    )
+    # fill in new fields
+    dynamics.pulse_amp_90th_percentile = amp_90p
+    dynamics.noise_amp_90th_percentile = noise_90p
+    dynamics.noise_std = noise_std
 
     # sort all PRs by recording and stimulus parameters
     #   [(clamp_mode, ind_freq, recovery_delay)][recording][pulse_number]
