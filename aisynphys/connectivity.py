@@ -263,11 +263,17 @@ def pair_was_probed(pair, synapse_type):
     Parameters
     ----------
     synapse_type : str
-        Must be either 'ex' or 'in'
+        Must be either 'ex', 'in', or None. If None, then the pair is considered probed
+        if it passes criteria for _both_ 'ex' and 'in'.
     """
-    assert synapse_type in ('ex', 'in'), "synapse_type must be 'ex' or 'in'"
-    qc_field = 'n_%s_test_spikes' % synapse_type
-    return getattr(pair, qc_field) > 10
+    test_spike_limit = 10
+
+    assert synapse_type in ('ex', 'in', None), "synapse_type must be 'ex', 'in', or None"
+    if synapse_type is None:
+        return (pair.n_ex_test_spikes > test_spike_limit) and (pair.n_in_test_spikes > test_spike_limit)
+    else:
+        qc_field = 'n_%s_test_spikes' % synapse_type
+        return getattr(pair, qc_field) > test_spike_limit
 
 def pair_probed_gj(pair):
     """Return boolean indicateing whether a cell pair was "probed" for a gap junction.

@@ -28,6 +28,7 @@ class CellClass(object):
             db.CorticalCellLocation.fractional_layer_depth < 0.5,
             cortical_layer='3')
     """
+
     def __init__(self, name=None, *exprs, **criteria):
         self.criteria = criteria
         self.exprs = exprs
@@ -77,21 +78,59 @@ class CellClass(object):
 
     @property
     def is_excitatory(self):
-        """True if this is an excitatory cell class, as determined either by
-        cre type or morphology.
+        """True if this class includes only excitatory cells; False if this class includes only inhibitory cells;
+        None if the class may include a mixture of excitatory and inhibitory cells.
+
+        Relevant criteria used here are:
+        * cell.cre_type
+        * morphology.dendrite_type
+        * cell.cell_class
+        * cell.cell_class_nonsynaptic
+
         """
+        is_ex = []
+
         cre = self.criteria.get('cre_type')
-        if isinstance(cre, tuple):
-            cre_is_exc = all([c in constants.EXCITATORY_CRE_TYPES for c in cre])
-        else:
-            cre_is_exc = cre in constants.EXCITATORY_CRE_TYPES
-        pyr = self.criteria.get('pyramidal')
+        if not isinstance(cre, tuple):
+            cre = (cre,)
+        cre_is_exc = all([c in constants.EXCITATORY_CRE_TYPES for c in cre])
+        cre_is_inh = all([c in constants.INHIBITORY_CRE_TYPES for c in cre])
+        if cre_is_exc:
+            is_ex.append(True)
+        elif cre_is_inh:
+            is_ex.append(False)
+
         dendrite = self.criteria.get('dendrite_type')
-        return cre_is_exc or pyr is True or dendrite == 'spiny'
+        if dendrite == 'spiny':
+            is_ex.append(True)
+        elif dendrite in ['aspiny', 'sparsely spiny']:
+            is_ex.append(False)
+        elif dendrite is not None:
+            return None
+
+        for cell_class in [self.criteria.get('cell_class'), self.criteria.get('cell_class_nonsynaptic')]:
+            if cell_class == 'ex':
+                is_ex.append(True)
+            elif cell_class == 'in':
+                is_ex.append(False)
+            elif cell_class == 'mixed':
+                return None
+            elif cell_class is not None:
+                raise ValueError("cell class criteria must be 'ex', 'in', or 'mixed'")
+
+        if len(is_ex) == 0:
+            return None
+
+        if all(is_ex):
+            return True
+        elif not any(is_ex):
+            return False
+        else:
+            return None
 
     @property
     def output_synapse_type(self):
-        """Expected type of synapses "ex" or "in" to be output from this cell type.
+        """Expected type of synapses "ex", "in", or None to be output from this cell type.
         """
         return {True: 'ex', False: 'in'}.get(self.is_excitatory, None)
 
