@@ -2,9 +2,30 @@
 from __future__ import print_function, division
 
 from sqlalchemy.orm import aliased
+import sqlalchemy.sql.elements
 from collections import OrderedDict
 from .database import default_db
+from .database.schema import schema_description
 from . import constants
+
+
+# tables containing data used to classify cells, mapped to the cell attributes
+# used to access the table
+_cell_data_tables = [
+    ('cell', None), 
+    ('morphology', 'morphology'),
+    ('patch_seq', 'patch_seq'), 
+    ('intrinsic', 'intrinsic'),
+    ('cortical_cell_location', 'cortical_location'),
+]
+
+# names of attributes available for classification, mapped back to their source tables
+_db_schema = schema_description()
+_criteria_attributes = {}
+for table_name,table_attr in _cell_data_tables:
+    cols = _db_schema[table_name]['columns']
+    for k in cols.keys():
+        _criteria_attributes[k] = (table_name, table_attr)
 
 
 class CellClass(object):
@@ -22,14 +43,23 @@ class CellClass(object):
     
         pv_class = CellClass(cre_type='pvalb')
         inhibitory_class = CellClass(cre_type=('pvalb', 'sst', 'vip'))
-        l23_pyr_class = CellClass(pyramidal=True, target_layer='2/3')
+        l23_pyr_class = CellClass(cortical_layer='2/3')
         l5_spiny_class = CellClass(dendrite_type='spiny', cortical_layer='5')
         deep_l3_class = CellClass(
             db.CorticalCellLocation.fractional_layer_depth < 0.5,
             cortical_layer='3')
     """
 
-    def __init__(self, name=None, *exprs, **criteria):
+    def __init__(self, *exprs, name=None, **criteria):        
+        # sanity check inputs
+        global _criteria_attributes
+        assert name is None or isinstance(name, str), f"name must be a string or None (got {repr(name)})"
+        for k,v in criteria.items():
+            assert k in _criteria_attributes, f"Key '{k}' is not a valid cell class criterion."
+        for ex in exprs:
+            assert isinstance(ex, sqlalchemy.sql.elements.BinaryExpression), f"non-keyword arguments must be sqlalchemy binary expressions (got {repr(ex)})"
+            assert ex.left.name in _criteria_attributes, f"Key '{ex.left.name}' is not a valid cell class criterion."
+
         self.criteria = criteria
         self.exprs = exprs
         self._name = name
@@ -91,7 +121,7 @@ class CellClass(object):
         is_ex = []
 
         cre = self.criteria.get('cre_type')
-        if not isinstance(cre, tuple):
+        if not isinstance(cre, (tuple, list)):
             cre = (cre,)
         cre_is_exc = all([c in constants.EXCITATORY_CRE_TYPES for c in cre])
         cre_is_inh = all([c in constants.INHIBITORY_CRE_TYPES for c in cre])
@@ -135,51 +165,52 @@ class CellClass(object):
         return {True: 'ex', False: 'in'}.get(self.is_excitatory, None)
 
     def __contains__(self, cell):
-        if not (self.criteria or self.exprs):
+        if len(self.criteria) == 0 and len(self.exprs) == 0:
             return True
-        morpho = cell.morphology
-        patchseq = cell.patch_seq
-        intrinsic = cell.intrinsic
-        location = cell.cortical_location
-        objs = [cell, morpho, patchseq, intrinsic, location]
+
+        # check expressions
         for expr in self.exprs:
-            found_attr = False
+            # get variable name and value from expression
             key = expr.left.name
             ref_val = expr.right.value
-            for obj in objs:
-                if hasattr(obj, key):
-                    found_attr = True
-                    val = getattr(obj, key)
-                    if val is not None and expr.operator(val, ref_val):
-                        break
-                    else:
-                        return False
+
+            # check requested value
+            val = self._get_cell_subattr(cell, key)
+            if val is not None and expr.operator(val, ref_val):
+                continue
+            else:
+                return False
+
+        # check keyword arg criteria
         for k, v in self.criteria.items():
-            found_attr = False
             if isinstance(v, dict):
                 or_attr = []
                 for k2, v2 in v.items():
-                    for obj in objs:
-                        if hasattr(obj, k2):
-                            found_attr = True
-                            or_attr.append(getattr(obj, k2) == v2)
+                    v1 = self._get_cell_subattr(cell, k2)
+                    or_attr.append(v1 == v2)
                 if not any(or_attr):
                     return False
+            elif isinstance(v, (tuple, list)):
+                if self._get_cell_subattr(cell, k) not in v:
+                    return False
             else:
-                for obj in objs:
-                    if hasattr(obj, k):
-                        found_attr = True
-                        if isinstance(v, tuple):
-                            if getattr(obj, k) not in v:
-                                return False
-                        else:
-                            if getattr(obj, k) != v:
-                                return False
-                        break
-            if not found_attr:
-                # return False
-                raise Exception('Cannot use "%s" for cell typing; attribute not found on cell or linked objects' % k)
+                if self._get_cell_subattr(cell, k) != v:
+                    return False
+
         return True
+
+    @staticmethod
+    def _get_cell_subattr(cell, attr):
+        """Get attribute from cell or one of its linked tables (morphology, intrinsic, etc..)
+        """
+        global _criteria_attributes
+        if attr not in _criteria_attributes:
+            raise Exception(f'Cannot use "{attr}" for cell typing; attribute not found on cell or linked objects')
+        sub_obj_name = _criteria_attributes[attr][1]
+        obj = cell if sub_obj_name is None else getattr(cell, sub_obj_name, None)
+        if obj is None:
+            return None
+        return getattr(obj, attr)
 
     def __hash__(self):
         return hash(self.name)
@@ -234,7 +265,7 @@ class CellClass(object):
             for table in tables:
                 if hasattr(table, k):
                     found_attr = True
-                    if isinstance(v, tuple):
+                    if isinstance(v, (tuple, list)):
                         query = query.filter(getattr(table, k).in_(v))
                     else:
                         query = query.filter(getattr(table, k)==v)
@@ -327,3 +358,31 @@ def classify_pairs(pairs, cell_groups):
             results[(pre_class, post_class)] = class_pairs
     
     return results
+
+
+_criteria_attribute_cache = {}
+def _get_criteria_attributes(db):
+    """Return a dict mapping attribute:(table_attribute, db_table) for all cell-related attributes
+    that can be used for classification criteria.
+    """
+    global _criteria_attribute_cache
+
+    if db not in _criteria_attribute_cache:
+        # tables containing extra per-cell data that can be used as classification criteria
+        criteria_tables = [
+            (None, db.Cell), 
+            ('morphology', db.Morphology), 
+            ('patch_seq', db.PatchSeq), 
+            ('intrinsic', db.Intrinsic), 
+            ('cortical_location', db.CorticalCellLocation),
+        ]
+
+        # names of attributes available for classification, mapped back to their source tables
+        criteria_attributes = {}
+        for name,table in criteria_tables:
+            for k in table.__table__.columns.keys():
+                criteria_attributes[k] = name,table
+
+        _criteria_attribute_cache[db] = criteria_attributes
+
+    return _criteria_attribute_cache[db]

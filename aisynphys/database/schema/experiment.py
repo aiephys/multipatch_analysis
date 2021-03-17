@@ -122,9 +122,13 @@ Electrode.experiment = relationship(Experiment, back_populates="electrodes")
 
 class CellBase(object):
     def __repr__(self):
-        uid = getattr(self.experiment, 'ext_id', None)
-        if uid is None or uid == '':
-            uid = str('%0.3f'%self.experiment.acq_timestamp if self.experiment.acq_timestamp is not None else None)
+        expt = self.experiment
+        if expt is None:
+            uid = "<no experiment>"
+        else:
+            uid = getattr(self.experiment, 'ext_id', None)
+            if uid is None or uid == '':
+                uid = str('%0.3f'%self.experiment.acq_timestamp if self.experiment.acq_timestamp is not None else None)
         return "<%s %s %s>" % (self.__class__.__name__, uid, self.ext_id)
 
     def _infer_cell_classes(self):

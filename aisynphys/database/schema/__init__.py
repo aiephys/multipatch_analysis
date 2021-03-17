@@ -11,6 +11,25 @@ sample_rate_str = '%dkHz' % (default_sample_rate // 1000)
 
 ORMBase = declarative_base()
 
+
+def schema_description():
+    """Return a structure describing tables and columns in the schema.
+    """
+    schema = {}
+
+    for table in ORMBase.metadata.sorted_tables:
+        cols = {}
+        for colname,col in table.columns.items():
+            try:
+                pytype = col.type.python_type
+            except Exception:
+                pytype = None
+            cols[colname] = {'type': str(col.type), 'pytype': pytype, 'comment': col.comment}
+        schema[table.name] = {'columns': cols, 'comment': table.comment}
+
+    return schema
+
+
 def make_table(*args, **kwds):
     kwds['ormbase'] = ORMBase
     return orig_make_table(*args, **kwds)
