@@ -143,7 +143,6 @@ def generate_pair_dynamics(pair, db, session):
             else:
                 delay = rec_delay
         meta = (clamp_mode, ind_freq, delay)
-        stp_metrics = {'stp_induction': (), 'stp_initial': (), 'stp_recovery': (), 'stp_recovery_single': ()}
         
         collect_initial = []
         collect_induction = []
@@ -165,27 +164,29 @@ def generate_pair_dynamics(pair, db, session):
                     if amps[1] != 0:
                         paired_pulse_ratio.append(amps[2] / amps[1])
             if all([k in pulses for k in [1,6,7,8]]):
-                induction = (np.mean([amps[6], amps[7], amps[8]]) - amps[1]) / amp_90p
+                induction = (np.median([amps[6], amps[7], amps[8]]) - amps[1]) / amp_90p
                 collect_induction.append(induction)
                 if ind_freq == 50:
                     col_metrics['stp_induction_50hz'].append(induction)
             if delay is not None and all([k in pulses for k in range(1,13)]):
                 r = [amps[i+8] - amps[i] for i in range(1,5)]
-                recovery = np.mean(r) / amp_90p
+                recovery = np.median(r) / amp_90p
                 collect_recovery.append(recovery)
                 if delay == 250e-3:
                     col_metrics['stp_recovery_250ms'].append(recovery)
             if delay is not None and all([k in pulses for k in range(1,10)]):
                 r = amps[9] - amps[1]
-                recovery = np.mean(r) / amp_90p
+                recovery = np.median(r) / amp_90p
                 collect_recovery_single.append(recovery)
                 if delay == 250e-3:
                     col_metrics['stp_recovery_single_250ms'].append(recovery)
         
-        stp_metrics['stp_initial'] = (np.mean(collect_initial), np.std(collect_initial), len(collect_initial),) if len(collect_initial) > 1 else float('nan') 
-        stp_metrics['stp_induction'] = (np.mean(collect_induction), np.std(collect_induction), len(collect_induction),) if len(collect_induction) > 1 else float('nan') 
-        stp_metrics['stp_recovery'] = (np.mean(collect_recovery), np.std(collect_recovery), len(collect_recovery),) if len(collect_recovery) > 1 else float('nan')  
-        stp_metrics['stp_recovery_single'] = (np.mean(collect_recovery_single), np.std(collect_recovery_single), len(collect_recovery_single),) if len(collect_recovery_single) > 1 else float('nan')  
+        stp_metrics = {
+            'stp_initial': (np.median(collect_initial), np.std(collect_initial), len(collect_initial),) if len(collect_initial) > 1 else float('nan'),
+            'stp_induction': (np.median(collect_induction), np.std(collect_induction), len(collect_induction),) if len(collect_induction) > 1 else float('nan'),
+            'stp_recovery': (np.median(collect_recovery), np.std(collect_recovery), len(collect_recovery),) if len(collect_recovery) > 1 else float('nan'),
+            'stp_recovery_single': (np.median(collect_recovery_single), np.std(collect_recovery_single), len(collect_recovery_single),) if len(collect_recovery_single) > 1 else float('nan'),
+        }
         all_metrics.append((meta, stp_metrics))
     
     # set one column to the full set of STP analysis
@@ -193,11 +194,11 @@ def generate_pair_dynamics(pair, db, session):
     
     # PPR is a bit out of place here, but we're including it since it's a popular metric used
     # in the literature.
-    dynamics.paired_pulse_ratio_50hz = scipy.stats.gmean(paired_pulse_ratio)
+    dynamics.paired_pulse_ratio_50hz = np.median(paired_pulse_ratio)
     
     # set individual columns for 50hz and 250ms
     for k,v in col_metrics.items():
-        setattr(dynamics, k, np.mean(v))
+        setattr(dynamics, k, np.median(v))
         setattr(dynamics, k+'_n', len(v))
         setattr(dynamics, k+'_std', np.std(v))
         
