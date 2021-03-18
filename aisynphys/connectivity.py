@@ -157,7 +157,7 @@ def measure_connectivity(pair_groups, alpha=0.05, sigma=None, fit_model=None, co
         connections_found = [p for p in probed_pairs if p.has_synapse]
         
         gaps_probed = [p for p in class_pairs if pair_probed_gj(p)]
-        gaps_found = [p for p in probed_pairs if p.has_electrical]
+        gaps_found = [p for p in gaps_probed if p.has_electrical]
 
         n_connected = len(connections_found)
         n_probed = len(probed_pairs)

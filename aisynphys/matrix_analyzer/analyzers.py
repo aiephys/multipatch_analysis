@@ -1076,18 +1076,13 @@ class CellAnalyzer(pg.QtCore.QObject):
 
         self.intrinsic_fields = [
             ('input_resistance', {'mode': 'range'}),
-            ('upstroke_downstroke_ratio', {'mode': 'range'}),
+            ('ap_upstroke_downstroke_ratio', {'mode': 'range'}),
             ('fi_slope', {'mode': 'range'}),
         ]
 
         self.morpho_fields = [
             ('dendrite_type', {'mode': 'enum', 'values': ['spiny', 'aspiny', 'sparsely spiny', 'NEI']}),
             ('axon_origin', {'mode': 'enum'}),
-            ('cortical_layer', {'mode': 'enum', 'values': ['1', '2', '2/3', '4','5', '6a', '6b'],
-                    'defaults': {'colormap':
-                        [(255, 0, 0, 255), (0, 255, 145, 255), (0, 255, 0, 255), (255, 217, 0, 255), (255, 0, 221, 255), 
-                        (0, 170, 255, 255), (0, 255, 255, 255)]
-                    }}),
             ('apical_trunc_distance', {'mode': 'range'}),
             ('axon_trunc_distance', {'mode': 'range'}),
         ]
@@ -1110,6 +1105,14 @@ class CellAnalyzer(pg.QtCore.QObject):
             ('last_map', {'mode': 'enum'}),
             ('mapped_subclass', {'mode': 'enum'}),
             ('cluster_label', {'mode': 'enum'}),
+        ]
+
+        self.cell_location_fields = [
+            ('cortical_layer', {'mode': 'enum', 'values': ['1', '2', '2/3', '4','5', '6a', '6b'],
+                    'defaults': {'colormap':
+                        [(255, 0, 0, 255), (0, 255, 145, 255), (0, 255, 0, 255), (255, 217, 0, 255), (255, 0, 221, 255), 
+                        (0, 170, 255, 255), (0, 255, 255, 255)]
+                    }}),
         ]
 
 
@@ -1140,11 +1143,12 @@ class CellAnalyzer(pg.QtCore.QObject):
                     cell.intrinsic: self.intrinsic_fields,
                     cell.morphology: self.morpho_fields,
                     cell.patch_seq: self.patchseq_fields,
+                    cell.cortical_location: self.cell_location_fields,
                 }             
 
                 for attribute, fields in cell_attributes.items():
                     cols = [field[0] for field in fields]
-                    if attribute is not None:  
+                    if attribute is not None: 
                         results[cell].update({col: getattr(attribute, col) for col in cols})
                     else:
                         results[cell].update({col: None for col in cols})
