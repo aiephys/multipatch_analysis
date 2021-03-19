@@ -1077,7 +1077,14 @@ class CellAnalyzer(pg.QtCore.QObject):
         self.intrinsic_fields = [
             ('input_resistance', {'mode': 'range'}),
             ('ap_upstroke_downstroke_ratio', {'mode': 'range'}),
+            ('rheobase', {'mode': 'range'}),
             ('fi_slope', {'mode': 'range'}),
+            ('sag', {'mode': 'range'}),
+            ('tau', {'mode': 'range'}),
+            ('ap_width', {'mode': 'range'}),
+            ('fi_slope', {'mode': 'range'}),
+            ('adaptation_index', {'mode': 'range'}),
+            ('chirp_peak_ratio', {'mode': 'range'}),
         ]
 
         self.morpho_fields = [
@@ -1113,6 +1120,9 @@ class CellAnalyzer(pg.QtCore.QObject):
                         [(255, 0, 0, 255), (0, 255, 145, 255), (0, 255, 0, 255), (255, 217, 0, 255), (255, 0, 221, 255), 
                         (0, 170, 255, 255), (0, 255, 255, 255)]
                     }}),
+            ('fractional_depth', {'mode': 'range'}),
+            ('distance_to_pia', {'mode': 'range'}),
+            ('distance_to_wm', {'mode': 'range'}),
         ]
 
 
@@ -1158,7 +1168,7 @@ class CellAnalyzer(pg.QtCore.QObject):
         return self.results
 
     def output_fields(self):
-        fields = [self.cell_fields, self.intrinsic_fields, self.morpho_fields, self.patchseq_fields]
+        fields = [self.cell_fields, self.intrinsic_fields, self.morpho_fields, self.cell_location_fields, self.patchseq_fields]
         for field in fields:
             self.fields.extend(field)    
         
