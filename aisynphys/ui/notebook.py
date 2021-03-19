@@ -290,9 +290,10 @@ def get_metric_data(metric, db, pre_classes=None, post_classes=None, pair_query_
     )
 
     pairs_has_metric = pairs[~pairs[metric].isnull()]
+    pairs_has_metric = pairs_has_metric.drop_duplicates()
     return pairs_has_metric, metric_name, units, scale, alpha, cmap, cmap_log, clim, cell_fmt
 
-def pair_class_metric_scatter(metrics, db, pair_classes, pair_query_args, ax, palette='muted', estimator=np.mean):
+def pair_class_metric_scatter(metrics, db, pair_classes, pair_query_args, ax, palette='muted', estimator=np.mean, plot_args={}):
     """To create scatter plots from get_metric_data for specific pair_classes. In this case pair_classes is a list of
     tuples of specific pre->post class pairs instead of all combos from a list of pre-classes
     and post-classes
@@ -308,7 +309,8 @@ def pair_class_metric_scatter(metrics, db, pair_classes, pair_query_args, ax, pa
         arguments to pass to db.pair_query
     ax : matplotlib.axes
         The matplotlib axes object on which to draw the swarm plots
-    palette : color palette to use for plots
+    palette : seaborn color palette to use for plots or list of colors that has the same length as pair_classes
+    **plot_args: other arguments passed to matplotlib.plt.plot
 
     Outputs
     --------
@@ -322,8 +324,16 @@ def pair_class_metric_scatter(metrics, db, pair_classes, pair_query_args, ax, pa
         pairs_has_metric['pair_class'] = pairs_has_metric['pre_class'] + '→' + pairs_has_metric['post_class']
         pairs_has_metric = pairs_has_metric[pairs_has_metric['pair_class'].isin(pair_classes)]
         pairs_has_metric[metric] *= scale
-        plot = sns.swarmplot(x='pair_class', y=metric, data=pairs_has_metric, ax=ax[i], size=6, palette=palette, edgecolor='black', alpha=0.8, order=pair_classes)
-        sns.barplot(x='pair_class', y=metric, data=pairs_has_metric, ax=ax[i], ci=None, facecolor=(1, 1, 1, 0), edgecolor='black', order=pair_classes, estimator=estimator)
+        groups = pairs_has_metric.groupby('pair_class')
+        y_vals = [groups.get_group(pair_class)[metric].to_list() for pair_class in pair_classes]
+        if isinstance(palette, str):
+            colors = sns.color_palette(palette, n_colors=len(pair_classes))
+        else:
+            colors = palette
+        c2 = [[c]*len(y_vals[i]) for i, c in enumerate(colors)]
+        x_vals = swarm(y_vals)
+        ax[i].scatter(np.concatenate(x_vals), np.concatenate(y_vals), color=np.concatenate(c2), **plot_args)
+        plot = sns.barplot(x='pair_class', y=metric, data=pairs_has_metric, ax=ax[i], ci=None, facecolor=(1, 1, 1, 0), edgecolor='black', order=pair_classes, estimator=estimator)
         
         if i == len(metrics) - 1:
             ax[i].set_xlabel('pre→post class', size=12)
@@ -344,6 +354,7 @@ def pair_class_metric_scatter(metrics, db, pair_classes, pair_query_args, ax, pa
             ax[i].tick_params(axis='x', bottom=False, top=False)
         else:
             ax[i].xaxis.set_ticks_position('bottom')
+
 
 def metric_stats(metric, db, pre_classes, post_classes, pair_query_args):
     pairs_has_metric, _, units, scale, _, _, _, _, _ = get_metric_data(metric, db, pre_classes=pre_classes, post_classes=post_classes, pair_query_args=pair_query_args)
