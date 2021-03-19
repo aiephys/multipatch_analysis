@@ -29,7 +29,7 @@ class DynamicsPipelineModule(MultipatchPipelineModule):
         logger.debug("Processing job %s", job_id)
 
         # Load experiment from DB
-        expt = db.experiment_from_timestamp(job_id, session=session)
+        expt = db.experiment_from_ext_id(job_id, session=session)
         for pair in expt.pairs.values():
             if pair.has_synapse is not True:
                 continue

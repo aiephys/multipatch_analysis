@@ -148,6 +148,7 @@ def generate_pair_dynamics(pair, db, session):
         collect_induction = []
         collect_recovery = []
         collect_recovery_single = []
+        collect_pulse_amps = [[]] * 12
 
         for recording, pulses in recs.items():
             # get all pulse amps
@@ -180,12 +181,22 @@ def generate_pair_dynamics(pair, db, session):
                 collect_recovery_single.append(recovery)
                 if delay == 250e-3:
                     col_metrics['stp_recovery_single_250ms'].append(recovery)
+
+            # collect individual pulse amplitudes
+            for i in range(1, 13):
+                if i not in pulses:
+                    break
+                collect_pulse_amps[i-1].append(amps[i])
         
         stp_metrics = {
-            'stp_initial': (np.median(collect_initial), np.std(collect_initial), len(collect_initial),) if len(collect_initial) > 1 else float('nan'),
-            'stp_induction': (np.median(collect_induction), np.std(collect_induction), len(collect_induction),) if len(collect_induction) > 1 else float('nan'),
-            'stp_recovery': (np.median(collect_recovery), np.std(collect_recovery), len(collect_recovery),) if len(collect_recovery) > 1 else float('nan'),
-            'stp_recovery_single': (np.median(collect_recovery_single), np.std(collect_recovery_single), len(collect_recovery_single),) if len(collect_recovery_single) > 1 else float('nan'),
+            'stp_initial': (np.median(collect_initial), np.std(collect_initial), len(collect_initial),) if len(collect_initial) > 1 else (float('nan'),)*3,
+            'stp_induction': (np.median(collect_induction), np.std(collect_induction), len(collect_induction),) if len(collect_induction) > 1 else (float('nan'),)*3,
+            'stp_recovery': (np.median(collect_recovery), np.std(collect_recovery), len(collect_recovery),) if len(collect_recovery) > 1 else (float('nan'),)*3,
+            'stp_recovery_single': (np.median(collect_recovery_single), np.std(collect_recovery_single), len(collect_recovery_single),) if len(collect_recovery_single) > 1 else (float('nan'),)*3,
+            'pulse_amplitudes': [
+                (np.median(pulses), np.std(pulses), len(pulses),) if len(pulses) > 1 else float('nan')
+                for i,pulses in enumerate(collect_pulse_amps)
+            ]
         }
         all_metrics.append((meta, stp_metrics))
     
@@ -218,7 +229,7 @@ def generate_pair_dynamics(pair, db, session):
         return dynamics
         
     def variability(x):
-        return np.log((np.std(x)**2 - noise_std**2)**0.5 / abs(np.mean(x)))
+        return np.log((np.std(x)**2 - noise_std**2)**0.5 / abs(np.median(x)))
 
     dynamics.variability_resting_state = variability(resting_amps)
 
@@ -265,15 +276,15 @@ def generate_pair_dynamics(pair, db, session):
                     amps_1_2[0].append(getattr(pulses[i-1].PulseResponseFit, amp_field))
                     amps_1_2[1].append(getattr(pulses[i].PulseResponseFit, amp_field))
                 if i == 4:
-                    first = np.mean([getattr(pulses[i].PulseResponseFit, amp_field) for i in range(1, 3)])
-                    second = np.mean([getattr(pulses[i].PulseResponseFit, amp_field) for i in range(3, 5)])
-                    amps_2_4[0].append(np.mean(first))
-                    amps_2_4[1].append(np.mean(second))
+                    first = np.median([getattr(pulses[i].PulseResponseFit, amp_field) for i in range(1, 3)])
+                    second = np.median([getattr(pulses[i].PulseResponseFit, amp_field) for i in range(3, 5)])
+                    amps_2_4[0].append(np.median(first))
+                    amps_2_4[1].append(np.median(second))
                 if i == 8:
-                    first = np.mean([getattr(pulses[i].PulseResponseFit, amp_field) for i in range(1, 5)])
-                    second = np.mean([getattr(pulses[i].PulseResponseFit, amp_field) for i in range(5, 9)])
-                    amps_4_8[0].append(np.mean(first))
-                    amps_4_8[1].append(np.mean(second))
+                    first = np.median([getattr(pulses[i].PulseResponseFit, amp_field) for i in range(1, 5)])
+                    second = np.median([getattr(pulses[i].PulseResponseFit, amp_field) for i in range(5, 9)])
+                    amps_4_8[0].append(np.median(first))
+                    amps_4_8[1].append(np.median(second))
     
     if len(amps_1_2[0]) > 3:
         r,p = scipy.stats.pearsonr(amps_1_2[0], amps_1_2[1])
@@ -347,7 +358,7 @@ def stp_all_stim_to_df(pairs, stp_df=None, pair_data=None):
     stp_df: Pandas dataframe with stp data from all stimuli. Each row is a single induction frequency and
             recovery delay data point
     """
-    metric = ['_mean', '_std', '_n']
+    metric = ['_median', '_std', '_n']
     stp_df = pd.Dataframe() if stp_df is None else stp_df
     for pair in pairs:
         if pair.dynamics is None:
