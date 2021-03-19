@@ -404,11 +404,11 @@ def ei_hist_plot(ax, metric, bin_edges, db, pair_query_args):
 
     return ex_pairs, in_pairs
 
-def cell_class_matrix(pre_classes, post_classes, metric, class_labels, ax, db, pair_query_args=None):
+def cell_class_matrix(pre_classes, post_classes, metric, class_labels, ax, db, pair_query_args=None, estimator=np.mean):
     if class_labels is None:
         class_labels = {key: key for key in pre_classes.keys()}
     pairs_has_metric, metric_name, units, scale, alpha, cmap, cmap_log, clim, cell_fmt = get_metric_data(metric, db, pre_classes, post_classes, pair_query_args=pair_query_args)
-    metric_data = pairs_has_metric.groupby(['pre_class', 'post_class']).aggregate(lambda x: np.mean(x))
+    metric_data = pairs_has_metric.groupby(['pre_class', 'post_class']).aggregate(lambda x: estimator(x))
     error = pairs_has_metric.groupby(['pre_class', 'post_class']).aggregate(lambda x: np.std(x))
     count = pairs_has_metric.groupby(['pre_class', 'post_class']).count()
 
