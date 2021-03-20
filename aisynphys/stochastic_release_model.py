@@ -967,7 +967,7 @@ class StochasticModelRunner:
         logger.info("%d good events to be analyzed", np.isfinite(amplitudes).sum())
         
         # get background events for determining measurement noise
-        bg_amplitudes = events['baseline_dec_fit_reconv_amp'].to_numpy()
+        bg_amplitudes = events['baseline_dec_fit_reconv_amp'].to_numpy().astype(float)
         # filter by qc
         bg_qc_mask = events['baseline_'+qc_field] == True
         bg_amplitudes[~qc_mask] = np.nan
