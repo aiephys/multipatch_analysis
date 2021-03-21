@@ -17,7 +17,7 @@ from aisynphys.avg_response_fit import get_pair_avg_fits, response_query, sort_r
 from aisynphys.database import default_db as db
 import aisynphys.data.data_notes_db as notes_db
 from aisynphys.data import PulseResponseList
-from aisynphys.fitting import fit_avg_pulse_response
+from aisynphys.avg_response_fit import fit_avg_pulse_response
 
 
 default_latency = 1e-3

@@ -1,7 +1,7 @@
 # coding: utf8
 from __future__ import print_function, division
 
-from .fitting import fit_avg_pulse_response
+from .avg_response_fit import fit_avg_pulse_response
 from .data import PulseResponseList
 from .database import default_db as db
 from .util import datetime_to_timestamp 

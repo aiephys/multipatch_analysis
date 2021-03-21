@@ -3,7 +3,7 @@ explore how fits are different from test data.  Often fitts are just off by
 significant figures.  However, make sure all data is viewed as some fits can 
 can change when others do not
 '''
-from aisynphys.fitting import fit_psp
+from neuroanalysis.fitting import fit_psp
 import os
 import numpy as np
 from pprint import pprint

@@ -12,7 +12,7 @@ import scipy.stats
 from sqlalchemy.orm import aliased
 from neuroanalysis.data import TSeries, TSeriesList
 from neuroanalysis.baseline import float_mode
-from .fitting import fit_psp
+from .avg_response_fit import fit_psp
 from .database import default_db as db
 
 

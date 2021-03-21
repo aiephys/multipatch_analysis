@@ -27,7 +27,7 @@ from scipy import stats
 
 from aisynphys.constants import INHIBITORY_CRE_TYPES, EXCITATORY_CRE_TYPES
 from manuscript_figures import get_response, get_amplitude, response_filter, train_amp, write_cache
-from aisynphys.fitting import fit_psp
+from neuroanalysis.fitting import fit_psp
 from manuscript_figures import arg_to_date, load_cache, summary_plot_pulse, get_expts
 
 
