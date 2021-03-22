@@ -1,8 +1,19 @@
-import sys
+import sys, argparse
+from aisynphys import config
 from aisynphys.database import default_db as db
 
+parser = argparse.ArgumentParser(parents=[config.parser])
+parser.add_argument('experiment_id', type=str)
+parser.add_argument('pre_cell_id', type=str, nargs='?')
+parser.add_argument('post_cell_id', type=str, nargs='?')
 
-expt = db.experiment_from_ext_id(sys.argv[1])
+args = parser.parse_args()
+
+cell_ids = [cid for cid in (args.pre_cell_id, args.post_cell_id) if cid is not None]
+
+expt = db.experiment_from_ext_id(args.experiment_id)
+pipeline_jobs = {job.module_name:job for job in db.query(db.Pipeline).filter(db.Pipeline.job_id==args.experiment_id).all()}
+
 
 def print_attrs(obj, attrs, indent=0, prefix=""):
     maxlen = max([len(a) for a in attrs])
@@ -60,6 +71,8 @@ print_attrs(expt.slice, [
 print_heading(f"Cells")
 
 for cell in expt.cell_list:
+    if len(cell_ids) > 0 and cell.ext_id not in cell_ids:
+        continue
     print_heading(f"Cell {cell.ext_id}", level=1)
 
     print_attrs(cell, [
@@ -71,12 +84,19 @@ for cell in expt.cell_list:
         "meta",
     ], indent=4)
 
-    print_attrs(cell.cortical_location, ['cortical_layer'], indent=4, prefix="cortical_location.")
+    if cell.cortical_location is None:
+        print("    cortical_location: None")
+    else:
+        print_attrs(cell.cortical_location, ['cortical_layer'], indent=4, prefix="cortical_location.")
 
 print_heading(f"Pairs")
 
 pair_ids = sorted(list(expt.pairs.keys()))
 for pair_id in pair_ids:
+    if len(cell_ids) == 1 and (cell_ids[0] not in pair_id):
+        continue
+    if len(cell_ids) == 2 and tuple(cell_ids) != pair_id:
+        continue
     pair = expt.pairs[pair_id]
     print_heading(f"Pair {expt.ext_id} {pair_id[0]} {pair_id[1]}", level=1)
 
@@ -106,5 +126,12 @@ for pair_id in pair_ids:
             "psp_decay_tau",
             "meta",
         ], indent=8)
+
+        errs = [x for x in pipeline_jobs['synapse'].error.split('\n') if f'{pair_id[0]} {pair_id[1]}' in x]
+        print("        pipeline errors:")
+        for err in errs:
+            print(" "*10 + err)
+
+
 
 
