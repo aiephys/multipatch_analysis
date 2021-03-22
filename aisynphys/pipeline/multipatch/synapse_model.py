@@ -11,7 +11,7 @@ import numpy as np
 from ...dynamics import generate_pair_dynamics
 from .pipeline_module import MultipatchPipelineModule
 from .experiment import ExperimentPipelineModule
-from ...stochastic_release_model import list_cached_results, StochasticModelRunner
+from ...stochastic_release_model import list_cached_results, load_cache_file
 from ...util import datetime_to_timestamp, timestamp_to_datetime
 
 
@@ -34,10 +34,14 @@ class SynapseModelPipelineModule(MultipatchPipelineModule):
         # Load experiment from DB
         expt = db.experiment_from_ext_id(expt_id, session=session)
         pair = expt.pairs[pre_id, post_id]
-        
+
+        model_runner = load_cache_file(job['meta']['source'], db)
+        (spikes, amps, baseline, extra) = model_runner.synapse_events
+        n_events = int((np.isfinite(amps) & np.isfinite(spikes)).sum())
+
         entry = db.SynapseModel(
             pair_id=pair.id,
-            n_source_events=0,
+            n_source_events=n_events,
             meta={
                 'pair_ext_id': job_id,
             }
@@ -64,6 +68,7 @@ class SynapseModelPipelineModule(MultipatchPipelineModule):
 
         # find all cached model results and check mtime
         results = cached_results()
+        logger.info(f"Found {len(results)} model cache files")
 
         # when did each experiment pipeline job finish? (when pair entries were created)
         db = self.database
@@ -72,10 +77,10 @@ class SynapseModelPipelineModule(MultipatchPipelineModule):
 
         # get pair IDs of all known synapses
         q = db.pair_query(synapse=True)
-        q = (q
-            .add_column(db.Experiment.ext_id).label('expt_ext_id')
-            .add_column(q.pre_cell.ext_id).label('pre_ext_id')
-            .add_column(q.post_cell.ext_id).label('post_ext_id')
+        q = q.add_columns(
+            db.Experiment.ext_id.label('expt_ext_id'),
+            q.pre_cell.ext_id.label('pre_ext_id'),
+            q.post_cell.ext_id.label('post_ext_id'),
         )
         synapses = q.all()
         pair_ids = set([" ".join([syn.expt_ext_id, syn.pre_ext_id, syn.post_ext_id]) for syn in synapses])
@@ -88,9 +93,9 @@ class SynapseModelPipelineModule(MultipatchPipelineModule):
 
             # take the latter of cache file mtime and the pipeline run time for the pair
             expt_id, _, _ = pair_id.split(' ')
-            mtime = max(mtime, pair_job_timestamps[expt_id])
+            dep_time = max(timestamp_to_datetime(mtime), pair_job_timestamps[expt_id] ) 
 
-            ready[pair_id] = {'dep_time': timestamp_to_datetime(mtime), 'meta': {'source': cache_file}}
+            ready[pair_id] = {'dep_time': dep_time, 'meta': {'source': cache_file}}
         return ready
 
 

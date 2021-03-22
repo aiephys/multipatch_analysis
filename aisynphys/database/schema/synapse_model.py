@@ -58,4 +58,4 @@ SynapseModel = make_table(
 )
 
 Pair.synapse_model = relationship(SynapseModel, back_populates="pair", cascade="delete", single_parent=True, uselist=False)
-SynapseModel.paor = relationship(Pair, back_populates="synapse_model", single_parent=True)
+SynapseModel.pair = relationship(Pair, back_populates="synapse_model", single_parent=True)
