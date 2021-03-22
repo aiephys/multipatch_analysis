@@ -40,7 +40,7 @@ Dynamics = make_table(
         ('paired_event_correlation_2_4_p', 'float', 'Pearson correlation p-value related to paired_event_correlation_1_2_r.', {}),
         ('paired_event_correlation_4_8_r', 'float', 'Pearson correlation coefficient for amplitudes of 1st:2nd pulses in 50Hz trains.', {}),
         ('paired_event_correlation_4_8_p', 'float', 'Pearson correlation p-value related to paired_event_correlation_1_2_r.', {}),
-        ('stp_all_stimuli', 'object', 'list of initial, induction, and recovery measurements for all stimuli presented'),
+        ('stp_all_stimuli', 'object', 'list of initial, induction, and recovery measurements for all stimuli presented', {'deferred': True}),
     ]
 )
 

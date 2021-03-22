@@ -13,14 +13,19 @@ SynapseModel = make_table(
         ('pair_id', 'pair.id', 'The ID of the cell pair described by each record', {'index': True, 'unique': True}),
         ('n_source_events', 'int', 'Number of qc-passed pulse response amplitudes used to fit the model', {'index': True}),
 
-        ('max_likelihood', 'object', 'Contains maximum likelihood parameter values'),
-        ('marginal_distributions', 'object', 'Contains marginal distributions for all model parameters'),
-        ('confidence_intervals', 'object', 'Contains confidence intervals for all model parameters'),
-        ('ml_quanta_per_spike', 'float', 'maximum likelihood value of n_release_sites * base_release_probability'),
-        ('ml_sites_pr_ratio', 'float', 'maximum likelihood ratio of n_release_sites : base_release_probability'),
-        
+        ('parameter_space', 'object', 'Describes the parameter space searched thby the model', {'deferred': True}),
+        ('max_likelihood', 'object', 'Contains maximum likelihood parameter values', {'deferred': True}),
+        ('marginal_distributions', 'object', 'Contains marginal distributions for all model parameters', {'deferred': True}),
+        ('confidence_intervals', 'object', 'Contains confidence intervals for all model parameters', {'deferred': True}),
 
-        # STP metrics generated from model simulation with max likelihood parameters
+        # Summary metrics generated from model output
+        ('ml_quanta_per_spike', 'float', 'maximum likelihood value of n_release_sites * base_release_probability'),
+        ('ml_quanta_per_spike_ci', 'object', 'confidence interval for ml_quanta_per_spike'),
+        ('ml_sites_pr_ratio', 'float', 'maximum likelihood ratio of n_release_sites : base_release_probability'),
+        ('ml_sites_pr_ratio_ci', 'object', 'confidence interval for ml_sites_pr_ratio'),
+        
+        # STP metrics (same as in dynamics table) generated from model simulation with max likelihood parameters
+        # (but with no simulated recording noise)
         ('paired_pulse_ratio_50hz', 'float', 'The median ratio of 2nd / 1st pulse amplitudes for 50Hz pulse trains.', {'index': True}),
         ('stp_initial_50hz', 'float', 'The median relative change from 1st to 2nd pulse for 50Hz pulse trains', {'index': True}),
         ('stp_initial_50hz_n', 'float', 'Number of samples represented in stp_initial_50Hz', {'index': True}),
@@ -48,7 +53,7 @@ SynapseModel = make_table(
         ('paired_event_correlation_2_4_p', 'float', 'Pearson correlation p-value related to paired_event_correlation_1_2_r.', {}),
         ('paired_event_correlation_4_8_r', 'float', 'Pearson correlation coefficient for amplitudes of 1st:2nd pulses in 50Hz trains.', {}),
         ('paired_event_correlation_4_8_p', 'float', 'Pearson correlation p-value related to paired_event_correlation_1_2_r.', {}),
-        ('stp_all_stimuli', 'object', 'list of initial, induction, and recovery measurements for all stimuli presented'),
+        ('stp_all_stimuli', 'object', 'list of initial, induction, and recovery measurements for all stimuli presented', {'deferred': True}),
     ]
 )
 
