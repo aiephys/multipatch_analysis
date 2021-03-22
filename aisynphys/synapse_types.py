@@ -205,10 +205,6 @@ def run_umap_pipeline(data, mapper, features):
     # only keep synapses with all feature fields
     mask = data[features].isna().any(axis=1)
 
-    # filter out weakest synapses
-    #mask = mask | (syn_data['psp_log_snr'] < 1)
-    mask = mask | (abs(data['pulse_amp_90th_percentile']) < 200e-6)
-
     clean_syn_data = data.loc[~mask].copy()
 
     print("Dropped to %d synapses" % len(clean_syn_data))
@@ -225,7 +221,7 @@ def run_umap_pipeline(data, mapper, features):
     return clean_syn_data.join(embedding)
 
 
-def show_umap(data, ax, title=None, legend_title=None, **kwds):
+def show_umap(data, ax, title=None, legend_title=None, picking=True, **kwds):
     """Default styling and convenience features for generating umap scatter plots.
     """
     x, y = 'umap-0', 'umap-1'
@@ -234,7 +230,9 @@ def show_umap(data, ax, title=None, legend_title=None, **kwds):
         x=x, y=y,
         linewidth=0,
         s=70,
-        ax=ax, legend=False,
+        ax=ax,
+        legend=False,
+        picker=True,
     )
     opts.update(kwds)
     
@@ -258,6 +256,16 @@ def show_umap(data, ax, title=None, legend_title=None, **kwds):
         ax.set_title(title)
     if legend_title is not None:
         sp.legend().set_title(legend_title)
+
+    if picking:
+        text = ax.text(0, 1, "", va="top", ha="left", transform=ax.transAxes)
+
+        def onpick(event):
+            t = '\n'.join([" ".join(data.index[i]) for i in event.ind])
+            text.set_text(t)
+            print(t)
+
+        cid = ax.figure.canvas.mpl_connect('pick_event', onpick)
 
     return sp
 
