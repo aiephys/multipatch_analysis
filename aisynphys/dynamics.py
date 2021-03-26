@@ -123,7 +123,17 @@ def generate_pair_dynamics(pair, db, session):
     sorted_prs = sorted_pulse_responses(passed_pr_recs)
 
     # calculate 50Hz paired pulse and induction metrics for their own column
-    col_metrics = {'stp_initial_50hz': [], 'stp_induction_50hz': [], 'stp_recovery_250ms': [], 'stp_recovery_single_250ms': []}
+    col_metrics = {
+        'stp_initial_50hz': [], 
+        'stp_induction_50hz': [], 
+        'stp_recovery_250ms': [], 
+        'stp_recovery_single_250ms': [], 
+        'pulse_amp_stp_initial_50hz': [],
+        'pulse_amp_stp_induction_50hz': [],
+        'pulse_amp_stp_recovery_50hz': [],
+        'pulse_amp_stp_recovery_single_50hz': [],
+    }
+
     paired_pulse_ratio = []
     # caclulate dynamics for all frequencie and recovery delays
     #   [(clamp_mode, ind_freq, recovery_delay), {'stp_induction':(mean, std, n),
