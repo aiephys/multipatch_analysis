@@ -65,6 +65,7 @@ def connectivity_profile(connected, distance, bin_edges):
 
     return bin_edges, prop, lower, upper
 
+
 def measure_distance(pair_groups, window):
     """Given a description of cell pairs grouped together by cell class,
     return a structure that describes connectivity as a function of distance between cell classes.
@@ -93,6 +94,7 @@ def measure_distance(pair_groups, window):
         }
 
     return results
+
 
 def pair_distance(class_pairs, pre_class):
     """Given a list of cell pairs return an array of connectivity and distance for each pair.
@@ -275,6 +277,7 @@ def pair_was_probed(pair, synapse_type):
         qc_field = 'n_%s_test_spikes' % synapse_type
         return getattr(pair, qc_field) > test_spike_limit
 
+
 def pair_probed_gj(pair):
     """Return boolean indicateing whether a cell pair was "probed" for a gap junction.
 
@@ -287,6 +290,7 @@ def pair_probed_gj(pair):
     pre_stims = set([rec.stim_name for rec in pre_electrode.recordings])
     post_stims = set([rec.stim_name for rec in post_electrode.recordings])
     return any('TargetV' in s for s in pre_stims) and any('TargetV' in s for s in post_stims)
+
 
 def distance_adjusted_connectivity(x_probed, connected, sigma, alpha=0.05):
     """Return connectivity and binomial confidence interval corrected for the distances
@@ -563,6 +567,7 @@ class GaussianModel(ConnectivityModel):
 
     def connection_probability(self, x):
         return self.pmax * np.exp(-x**2 / (2 * self.size**2))
+
 
 class CorrectionModel(ConnectivityModel):
     """ Connectivity model with corrections for potential biases
@@ -867,7 +872,6 @@ class CorrectionMetricFunctions:
         p = db.query(db.Pair).filter(db.Pair.id==pair.id).all()[0]
         return(getattr(p, 'n_%s_test_spikes' % syn_type))
 
-
     def baseline_rms_noise(pair):
         post_cell = pair.post_cell
         q = db.query(db.PatchClampRecording)
@@ -891,6 +895,7 @@ class CorrectionMetricFunctions:
                 return np.nan
         else:
             return np.nan
+
 
 def ei_correct_connectivity(ei_classes, correction_metrics, pairs):
     # correction_metrics is a dictionary where the key is the name of the metric which corresponds to either a column in the 
