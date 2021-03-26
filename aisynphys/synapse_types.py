@@ -63,6 +63,7 @@ default_data_fields = [
     'paired_event_correlation_2_4_p',
     'paired_event_correlation_4_8_r',
     'paired_event_correlation_4_8_p',
+    'n_model_source_events',
 ]
 
 
@@ -77,6 +78,7 @@ def synapse_query(db=default_db):
     pre_cell = q.pre_cell
     post_cell = q.post_cell
     q = (q
+        .join(db.SynapseModel)
         .add_entity(db.Synapse)
         .add_entity(db.Dynamics)
         .add_column(pre_cell.cre_type.label('pre_cre_type'))
@@ -89,6 +91,7 @@ def synapse_query(db=default_db):
         .add_column(post_cell.ext_id.label('post_ext_id'))
         .add_column(q.pre_location.cortical_layer.label('pre_layer'))
         .add_column(q.post_location.cortical_layer.label('post_layer'))
+        .add_column(db.SynapseModel.n_source_events.label('n_model_source_events'))
     )
     return q
 
