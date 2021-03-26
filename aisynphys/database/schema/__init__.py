@@ -49,6 +49,7 @@ from .resting_state_fit import *
 from .gap_junction import *
 from .cortical_location import *
 from .patch_seq import *
+from .synapse_model import *
 
 # Create all docstrings now that relationships have been declared
 for cls in ORMBase.__subclasses__():

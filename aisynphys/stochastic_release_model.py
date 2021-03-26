@@ -1,6 +1,6 @@
 # coding: utf8
 from __future__ import print_function, division
-import functools, pickle, time, os, multiprocessing, traceback, logging
+import functools, pickle, time, os, multiprocessing, traceback, logging, re
 from collections import OrderedDict
 import numpy as np
 import numba
@@ -1117,6 +1117,8 @@ def list_cached_results(cache_path=None):
     files = os.listdir(cache_path)
     results = []
     for cf in files:
+        if re.match(r'[0-9]{10}\.[0-9]{3}_[0-9]_[0-9].pkl$', cf) is None:
+            continue
         syn_id = tuple(os.path.splitext(cf)[0].split('_'))
         results.append((syn_id, os.path.join(cache_path, cf)))
     return results
