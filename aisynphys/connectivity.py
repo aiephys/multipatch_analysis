@@ -366,7 +366,7 @@ class ConnectivityModel:
         """
         p = self.connection_probability(x)
         rng = np.random.RandomState(seed)
-        return rng.random(size=len(x)) < p
+        return rng.random(size=len(p)) < p
 
     def likelihood(self, x, conn):
         """Log-likelihood for maximum likelihood estimation
@@ -628,28 +628,23 @@ class CorrectionModel(ConnectivityModel):
                     )
         cp = np.nan if len(conn) == 0 else fit.x
 
-        if inst.do_minos and not np.isnan(cp): # if cp is nan, it fails, so avoid it.
-            # if conn is 0% or 100% it fails, so fall back to hessian
-            if conn.sum() == 0 or conn.sum() == len(conn):
-                cp_lower_ci = cp - 1.96 * fit.minuit.errors['x0']
-                cp_upper_ci = cp + 1.96 * fit.minuit.errors['x0']
-            else:
-                #print(cp)
-                fit.minuit.minos(cl=0.95) # perform MINOS analysis with 95% confidence level (returns 95% CI)
-                # check validity of the CI and assign the values.
-                if fit.minuit.merrors['x0'].lower_valid:
-                    cp_lower_ci = cp + fit.minuit.merrors['x0'].lower # merrors is defined with a sign, so +.
-                else:
-                    cp_lower_ci = np.nan
-                if fit.minuit.merrors['x0'].upper_valid:
-                    cp_upper_ci = cp + fit.minuit.merrors['x0'].upper
-                else:
-                    cp_upper_ci = np.nan
-        else:
-            # estimating 95% confidence interval by extrapolating sigmas
-            cp_lower_ci = cp - 1.96 * fit.minuit.errors['x0']
-            cp_upper_ci = cp + 1.96 * fit.minuit.errors['x0']
-        fit.cp_ci = (cp, np.maximum(cp_lower_ci, 0), cp_upper_ci) # minimum is to avoid negative probability
+        # to calculate CI, get the adjustment values from the instance.
+        inst.pmax = 1.0
+        mean_adjustment = inst.connection_probability(x).mean()
+
+        n_conn = conn.sum()
+        n_test = len(conn)
+        est_pmax = (n_conn / n_test) / mean_adjustment
+    
+        # and for the CI, we can just use a standard binomial confidence interval scaled by the same factor
+        lower, upper = connection_probability_ci(n_conn, n_test)
+
+        # correct the offset of the estimated p_max and apply adjustment from distance and other measures.
+        lower = (lower - est_pmax + cp) / mean_adjustment
+        upper = (upper - est_pmax + cp) / mean_adjustment
+        # print(f'{n_conn}/{n_test},  {float(cp):.3f} - {float(lower):.3f} + {float(upper):.3f}, mean_adj: {float(mean_adjustment):.5f}')
+
+        fit.cp_ci = (cp, lower, upper)
         return fit
 
 
