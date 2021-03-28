@@ -65,6 +65,7 @@ def connectivity_profile(connected, distance, bin_edges):
 
     return bin_edges, prop, lower, upper
 
+
 def measure_distance(pair_groups, window):
     """Given a description of cell pairs grouped together by cell class,
     return a structure that describes connectivity as a function of distance between cell classes.
@@ -93,6 +94,7 @@ def measure_distance(pair_groups, window):
         }
 
     return results
+
 
 def pair_distance(class_pairs, pre_class):
     """Given a list of cell pairs return an array of connectivity and distance for each pair.
@@ -275,6 +277,7 @@ def pair_was_probed(pair, synapse_type):
         qc_field = 'n_%s_test_spikes' % synapse_type
         return getattr(pair, qc_field) > test_spike_limit
 
+
 def pair_probed_gj(pair):
     """Return boolean indicateing whether a cell pair was "probed" for a gap junction.
 
@@ -287,6 +290,7 @@ def pair_probed_gj(pair):
     pre_stims = set([rec.stim_name for rec in pre_electrode.recordings])
     post_stims = set([rec.stim_name for rec in post_electrode.recordings])
     return any('TargetV' in s for s in pre_stims) and any('TargetV' in s for s in post_stims)
+
 
 def distance_adjusted_connectivity(x_probed, connected, sigma, alpha=0.05):
     """Return connectivity and binomial confidence interval corrected for the distances
@@ -366,7 +370,7 @@ class ConnectivityModel:
         """
         p = self.connection_probability(x)
         rng = np.random.RandomState(seed)
-        return rng.random(size=len(x)) < p
+        return rng.random(size=len(p)) < p
 
     def likelihood(self, x, conn):
         """Log-likelihood for maximum likelihood estimation
@@ -564,6 +568,7 @@ class GaussianModel(ConnectivityModel):
     def connection_probability(self, x):
         return self.pmax * np.exp(-x**2 / (2 * self.size**2))
 
+
 class CorrectionModel(ConnectivityModel):
     """ Connectivity model with corrections for potential biases
     Gaussian is used for distance-adjustment.
@@ -628,28 +633,23 @@ class CorrectionModel(ConnectivityModel):
                     )
         cp = np.nan if len(conn) == 0 else fit.x
 
-        if inst.do_minos and not np.isnan(cp): # if cp is nan, it fails, so avoid it.
-            # if conn is 0% or 100% it fails, so fall back to hessian
-            if conn.sum() == 0 or conn.sum() == len(conn):
-                cp_lower_ci = cp - 1.96 * fit.minuit.errors['x0']
-                cp_upper_ci = cp + 1.96 * fit.minuit.errors['x0']
-            else:
-                #print(cp)
-                fit.minuit.minos(cl=0.95) # perform MINOS analysis with 95% confidence level (returns 95% CI)
-                # check validity of the CI and assign the values.
-                if fit.minuit.merrors['x0'].lower_valid:
-                    cp_lower_ci = cp + fit.minuit.merrors['x0'].lower # merrors is defined with a sign, so +.
-                else:
-                    cp_lower_ci = np.nan
-                if fit.minuit.merrors['x0'].upper_valid:
-                    cp_upper_ci = cp + fit.minuit.merrors['x0'].upper
-                else:
-                    cp_upper_ci = np.nan
-        else:
-            # estimating 95% confidence interval by extrapolating sigmas
-            cp_lower_ci = cp - 1.96 * fit.minuit.errors['x0']
-            cp_upper_ci = cp + 1.96 * fit.minuit.errors['x0']
-        fit.cp_ci = (cp, np.maximum(cp_lower_ci, 0), cp_upper_ci) # minimum is to avoid negative probability
+        # to calculate CI, get the adjustment values from the instance.
+        inst.pmax = 1.0
+        mean_adjustment = inst.connection_probability(x).mean()
+
+        n_conn = conn.sum()
+        n_test = len(conn)
+        est_pmax = (n_conn / n_test) / mean_adjustment
+    
+        # and for the CI, we can just use a standard binomial confidence interval scaled by the same factor
+        lower, upper = connection_probability_ci(n_conn, n_test)
+
+        # correct the offset of the estimated p_max and apply adjustment from distance and other measures.
+        lower = (lower - est_pmax + cp) / mean_adjustment
+        upper = (upper - est_pmax + cp) / mean_adjustment
+        # print(f'{n_conn}/{n_test},  {float(cp):.3f} - {float(lower):.3f} + {float(upper):.3f}, mean_adj: {float(mean_adjustment):.5f}')
+
+        fit.cp_ci = (cp, lower, upper)
         return fit
 
 
@@ -872,7 +872,6 @@ class CorrectionMetricFunctions:
         p = db.query(db.Pair).filter(db.Pair.id==pair.id).all()[0]
         return(getattr(p, 'n_%s_test_spikes' % syn_type))
 
-
     def baseline_rms_noise(pair):
         post_cell = pair.post_cell
         q = db.query(db.PatchClampRecording)
@@ -896,6 +895,7 @@ class CorrectionMetricFunctions:
                 return np.nan
         else:
             return np.nan
+
 
 def ei_correct_connectivity(ei_classes, correction_metrics, pairs):
     # correction_metrics is a dictionary where the key is the name of the metric which corresponds to either a column in the 

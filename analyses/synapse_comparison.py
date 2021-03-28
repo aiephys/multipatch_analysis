@@ -19,8 +19,7 @@ import re
 
 from aisynphys.synaptic_dynamics import DynamicsAnalyzer
 from aisynphys.experiment_list import cached_experiments
-from neuroanalysis.baseline import float_mode
-from neuroanalysis.data import TSeries, TSeriesList
+from neuroanalysis.data import TSeriesList
 from neuroanalysis.filter import bessel_filter
 from neuroanalysis.event_detection import exp_deconvolve
 from scipy import stats

@@ -215,6 +215,8 @@ def show_connectivity_matrix(ax, results, pre_cell_classes, post_cell_classes, c
                     cprob_str[i,j] += "\n %.3f" %(cp)
             elif ctype == 'electrical':
                 cprob_str[i,j] = "" if result['n_gaps_probed'] == 0 else "%d/%d" % (found, result['n_gaps_probed'])
+            cp_upper_ci = min(1, cp_upper_ci)
+            cp_lower_ci = max(0, cp_lower_ci)
             cprob_alpha[i,j] = 1.0 - 2.0 * max(cp_upper_ci - cp, cp - cp_lower_ci)
 
     # map connection probability to RGB colors
@@ -359,7 +361,7 @@ def pair_class_metric_scatter(metrics, db, pair_classes, pair_query_args, ax, pa
 def metric_stats(metric, db, pre_classes, post_classes, pair_query_args):
     pairs_has_metric, _, units, scale, _, _, _, _, _ = get_metric_data(metric, db, pre_classes=pre_classes, post_classes=post_classes, pair_query_args=pair_query_args)
     pairs_has_metric[metric] = pairs_has_metric[metric].apply(pd.to_numeric)*scale
-    summary = pairs_has_metric.groupby(['pre_class', 'post_class']).describe(percentiles=[0.5])
+    summary = pairs_has_metric.groupby(['pre_class', 'post_class']).describe(percentiles=[0.25, 0.5, 0.75])
     return summary[metric], units
 
 
