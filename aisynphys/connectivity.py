@@ -644,10 +644,8 @@ class CorrectionModel(ConnectivityModel):
         # and for the CI, we can just use a standard binomial confidence interval scaled by the same factor
         lower, upper = connection_probability_ci(n_conn, n_test)
 
-        # correct the offset of the estimated p_max and apply adjustment from distance and other measures.
-        lower = (lower - est_pmax + cp) / mean_adjustment
-        upper = (upper - est_pmax + cp) / mean_adjustment
-        # print(f'{n_conn}/{n_test},  {float(cp):.3f} - {float(lower):.3f} + {float(upper):.3f}, mean_adj: {float(mean_adjustment):.5f}')
+        lower = lower / mean_adjustment - est_pmax + cp
+        upper = upper / mean_adjustment - est_pmax + cp
 
         fit.cp_ci = (cp, lower, upper)
         return fit
