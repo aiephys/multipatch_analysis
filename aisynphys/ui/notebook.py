@@ -217,7 +217,7 @@ def show_connectivity_matrix(ax, results, pre_cell_classes, post_cell_classes, c
                 cprob_str[i,j] = "" if result['n_gaps_probed'] == 0 else "%d/%d" % (found, result['n_gaps_probed'])
             cp_upper_ci = min(1, cp_upper_ci)
             cp_lower_ci = max(0, cp_lower_ci)
-            cprob_alpha[i,j] = 1.0 - 2.0 * max(cp_upper_ci - cp, cp - cp_lower_ci)
+            cprob_alpha[i,j] = 1.0 - 1.0 * max(cp_upper_ci - cp, cp - cp_lower_ci)
 
     # map connection probability to RGB colors
     mapper = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap)
@@ -269,8 +269,6 @@ def get_metric_data(metric, db, pre_classes=None, post_classes=None, pair_query_
         'paired_event_correlation_1_2_r':     ('Paired event correlation 1:2',      '',    1,    1,     [db.Dynamics.paired_event_correlation_1_2_r],     None,        'bwr',         False,  (-0.2, 0.2),   "%0.2f"),
         'paired_event_correlation_2_4_r':     ('Paired event correlation 2:4',      '',    1,    1,     [db.Dynamics.paired_event_correlation_2_4_r],     None,        'bwr',         False,  (-0.2, 0.2),   "%0.2f"),
         'paired_event_correlation_4_8_r':     ('Paired event correlation 4:8',      '',    1,    1,     [db.Dynamics.paired_event_correlation_4_8_r],     None,        'bwr',         False,  (-0.2, 0.2),   "%0.2f"),
-        'junctional_conductance':             ('Junctional Conductance',            'nS',  1e9,  1,     [db.GapJunction.junctional_conductance],          None,        'viridis',     False,  (0, 10),       "%0.2f nS"),
-        'coupling_coeff_pulse':               ('Coupling Coefficient',              '',    1,    1,     [db.GapJunction.coupling_coeff_pulse],            None,        'viridis',     False,  (0, 1),        "%0.2f"),
         'variability_resting_state':          ('log(Resting state variance)',       '',    1,    1,     [db.Dynamics.variability_resting_state],          None,        'viridis',     False,  (-1, 1),       "%0.2f"),
         'variability_stp_induced_state_50hz': ('log(STP induced variance)',         '',    1,    1,     [db.Dynamics.variability_stp_induced_state_50hz], None,        'viridis',     False,  (-1, 1),       "%0.2f"),
     } 
@@ -279,7 +277,7 @@ def get_metric_data(metric, db, pre_classes=None, post_classes=None, pair_query_
     
     pair_query_args = pair_query_args or {}
 
-    metric_name, units, scale, alpha, columns, cmap, cmap_log, clim, cell_fmt = metrics[metric]
+    metric_name, units, scale, alpha, columns, map_fn, cmap, cmap_log, clim, cell_fmt = metrics[metric]
 
     if pre_classes is None or post_classes is None:
         return None, metric_name, units, scale, alpha, cmap, cmap_log, clim, cell_fmt
