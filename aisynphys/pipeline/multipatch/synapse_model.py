@@ -27,27 +27,13 @@ class SynapseModelPipelineModule(MultipatchPipelineModule):
         logger = logging.getLogger(__name__)
         db = job['database']
         job_id = job['job_id']
+        cache_file = job['meta']['source']
         logger.debug("Processing job %s", job_id)
 
-        expt_id, pre_id, post_id = job_id.split(' ')
+        entry = make_model_result_entry(job_id, db, session, cache_file)
 
-        # Load experiment from DB
-        expt = db.experiment_from_ext_id(expt_id, session=session)
-        pair = expt.pairs[pre_id, post_id]
-
-        model_runner = load_cache_file(job['meta']['source'], db)
-        (spikes, amps, baseline, extra) = model_runner.synapse_events
-        n_events = int((np.isfinite(amps) & np.isfinite(spikes)).sum())
-
-        entry = db.SynapseModel(
-            pair_id=pair.id,
-            n_source_events=n_events,
-            meta={
-                'pair_ext_id': job_id,
-            }
-        )
         session.add(entry)
-        logger.debug("Finished synapse_model for pair %s", pair)
+        logger.debug(f"Finished synapse_model for pair {job_id}")
         session.commit()
                     
     def job_records(self, job_ids, session):
@@ -114,3 +100,24 @@ def cached_results():
         _all_results[pair_id] = (cache_file, mtime)
     
     return _all_results
+
+
+def make_model_result_entry(pair_id, db, session, model_cache_file):
+    expt_id, pre_id, post_id = pair_id.split(' ')
+
+    # Load experiment from DB
+    expt = db.experiment_from_ext_id(expt_id, session=session)
+    pair = expt.pairs[pre_id, post_id]
+
+    # load cached model result
+    model_runner = load_cache_file(model_cache_file, db)
+    (spikes, amps, baseline, extra) = model_runner.synapse_events
+    n_events = int((np.isfinite(amps) & np.isfinite(spikes)).sum())
+
+    entry = db.SynapseModel(
+        pair_id=pair.id,
+        n_source_events=n_events,
+        meta={
+            'pair_ext_id': pair_id,
+        }
+    )
