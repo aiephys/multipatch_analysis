@@ -27,27 +27,13 @@ class SynapseModelPipelineModule(MultipatchPipelineModule):
         logger = logging.getLogger(__name__)
         db = job['database']
         job_id = job['job_id']
+        cache_file = job['meta']['source']
         logger.debug("Processing job %s", job_id)
 
-        expt_id, pre_id, post_id = job_id.split(' ')
+        entry = make_model_result_entry(job_id, db, session, cache_file)
 
-        # Load experiment from DB
-        expt = db.experiment_from_ext_id(expt_id, session=session)
-        pair = expt.pairs[pre_id, post_id]
-
-        model_runner = load_cache_file(job['meta']['source'], db)
-        (spikes, amps, baseline, extra) = model_runner.synapse_events
-        n_events = int((np.isfinite(amps) & np.isfinite(spikes)).sum())
-
-        entry = db.SynapseModel(
-            pair_id=pair.id,
-            n_source_events=n_events,
-            meta={
-                'pair_ext_id': job_id,
-            }
-        )
         session.add(entry)
-        logger.debug("Finished synapse_model for pair %s", pair)
+        logger.debug(f"Finished synapse_model for pair {job_id}")
         session.commit()
                     
     def job_records(self, job_ids, session):
@@ -114,3 +100,93 @@ def cached_results():
         _all_results[pair_id] = (cache_file, mtime)
     
     return _all_results
+
+
+def make_model_result_entry(pair_id, db, session, model_cache_file):
+    expt_id, pre_id, post_id = pair_id.split(' ')
+
+    # Load experiment from DB
+    expt = db.experiment_from_ext_id(expt_id, session=session)
+    pair = expt.pairs[pre_id, post_id]
+
+    # load cached model result
+    model_runner = load_cache_file(model_cache_file, db)
+    (spikes, amps, baseline, extra) = model_runner.synapse_events
+    n_events = int((np.isfinite(amps) & np.isfinite(spikes)).sum())
+
+    entry = db.SynapseModel(
+        pair_id=pair.id,
+        n_source_events=n_events,
+        meta={
+            'pair_ext_id': pair_id,
+        }
+    )
+
+
+    # get likelihood and amplitude values across the parameter space,
+    param_space = model_runner.param_space
+    entry.parameter_space = [(k, list(v)) for k,v in param_space.axes().items()]
+
+    max_likelihood, ml_index, ml_params = get_max_likelihood(param_space)
+    entry.max_likelihood = max_likelihood
+    for k,v in ml_params.items():
+        setattr(entry, 'ml_'+k, v)
+
+    strength, quanta_per_spike, sites_pr_ratio = get_model_metrics(ml_index, model_runner)
+    entry.ml_strength = strength
+    entry.ml_quanta_per_spike = quanta_per_spike
+    entry.ml_sites_pr_ratio = sites_pr_ratio
+
+    entry.ml_release_dependence_ratio = get_release_dependence_ratio(param_space)
+
+    return entry
+
+
+def get_release_dependence_ratio(param_space):
+    """Return the ratio of max likelihoods for the release-dependent and
+    release-independent portions of the parameter space
+    """
+    # which result axis is depression_amount?
+    dep_axis = list(param_space.axes().keys()).index('depression_amount')
+
+    # separate the release-dependent results from release-independent
+    rel_dep_slice = [slice(None)] * param_space.result.ndim
+    rel_indep_slice = [slice(None)] * param_space.result.ndim
+    rel_dep_slice[dep_axis] = slice(0, 1)
+    rel_indep_slice[dep_axis] = slice(1, None)
+
+    rel_dep_result = param_space.result[tuple(rel_dep_slice)]
+    rel_indep_result = param_space.result[tuple(rel_indep_slice)]
+
+    rel_dep_ml = rel_dep_result['likelihood'].max()
+    rel_indep_ml = rel_indep_result['likelihood'].max()
+
+    return rel_dep_ml / rel_indep_ml
+
+
+def get_max_likelihood(param_space):
+    """Return maximum likelihood, parameter space index, and a dictionary of ML parameter values
+    """
+    res = param_space.result
+    max_likelihood = res['likelihood'].max()
+    max_index = list(np.unravel_index(np.argmax(res['likelihood']), res['likelihood'].shape))
+    max_params = get_params_from_index(param_space, max_index)
+
+    return max_likelihood, max_index, max_params
+
+
+def get_params_from_index(param_space, index):
+    params = {'mini_amplitude': param_space.result['mini_amplitude'][tuple(index)]}
+    params.update(param_space.params_at_index(index))
+    return params
+
+
+def get_model_metrics(ml_index, model_runner):
+    """Return metrics derived from model parameters
+    """
+    params = get_params_from_index(model_runner.param_space, ml_index)
+    quanta_per_spike = params['base_release_probability'] * params['n_release_sites']
+    strength = quanta_per_spike * params['mini_amplitude'] 
+    sites_pr_ratio = params['n_release_sites'] / params['base_release_probability']
+
+    return strength, quanta_per_spike, sites_pr_ratio
