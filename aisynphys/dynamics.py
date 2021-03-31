@@ -128,10 +128,11 @@ def generate_pair_dynamics(pair, db, session):
         'stp_induction_50hz': [], 
         'stp_recovery_250ms': [], 
         'stp_recovery_single_250ms': [], 
+        'pulse_amp_first_50hz': [],
         'pulse_amp_stp_initial_50hz': [],
         'pulse_amp_stp_induction_50hz': [],
-        'pulse_amp_stp_recovery_50hz': [],
-        'pulse_amp_stp_recovery_single_50hz': [],
+        'pulse_amp_stp_recovery_250ms': [],
+        'pulse_amp_stp_recovery_single_250ms': [],
     }
 
     paired_pulse_ratio = []
@@ -165,6 +166,9 @@ def generate_pair_dynamics(pair, db, session):
             amps = {k:getattr(r.PulseResponseFit, amp_field) for k,r in pulses.items()}
 
             # calculate metrics if the proper conditions are met
+            if 1 in pulses:
+                if ind_freq == 50:
+                    col_metrics['pulse_amp_first_50hz'].append(amps[1])
             if 1 in pulses and 2 in pulses:
                 initial = (amps[2] - amps[1]) / amp_90p
                 collect_initial.append(initial)
@@ -225,6 +229,7 @@ def generate_pair_dynamics(pair, db, session):
     
     # set individual columns for 50hz and 250ms
     for k,v in col_metrics.items():
+        assert hasattr(dynamics, k) and hasattr(dynamics, k+'_n') and hasattr(dynamics, k+'_std')
         setattr(dynamics, k, np.median(v))
         setattr(dynamics, k+'_n', len(v))
         setattr(dynamics, k+'_std', np.std(v))
