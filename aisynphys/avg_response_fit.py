@@ -254,6 +254,9 @@ def fit_avg_pulse_response(pulse_response_list, latency_window, sign, init_param
     tsl = PulseResponseList(pulse_response_list).post_tseries(align='spike', bsub=True)
     prof('make tseries list')
     
+    if len(tsl) == 0:
+        return None, None
+    
     # average all together
     average = tsl.mean()
     prof('average')

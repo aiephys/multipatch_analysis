@@ -45,57 +45,61 @@ class SynapsePipelineModule(MultipatchPipelineModule):
         synaptic_cell_class = {}
 
         for pair in expt.pair_list:
-            # look up synapse type from notes db
-            notes_rec = notes_db.get_pair_notes_record(pair.experiment.ext_id, pair.pre_cell.ext_id, pair.post_cell.ext_id)
-            if notes_rec is None:
-                continue
-            
-            # update upstream pair record
-            mono_synapse = notes_rec.notes['synapse_type'] in ('ex', 'in')
-            pair.has_synapse = mono_synapse
-            poly_synapse = notes_rec.notes.get('polysynaptic_type') in ('ex', 'in', 'mix')
-            pair.has_polysynapse = poly_synapse
-            pair.has_electrical = notes_rec.notes['gap_junction']
-
-            
-            if pair.has_synapse:
-                errors = generate_synapse_record(pair, db, session, notes_rec, syn='mono', max_ind_freq=50)
+            try:
+                # look up synapse type from notes db
+                notes_rec = notes_db.get_pair_notes_record(pair.experiment.ext_id, pair.pre_cell.ext_id, pair.post_cell.ext_id)
+                if notes_rec is None:
+                    continue
                 
-                all_errors.extend(errors)
+                # update upstream pair record
+                mono_synapse = notes_rec.notes['synapse_type'] in ('ex', 'in')
+                pair.has_synapse = mono_synapse
+                poly_synapse = notes_rec.notes.get('polysynaptic_type') in ('ex', 'in', 'mix')
+                pair.has_polysynapse = poly_synapse
+                pair.has_electrical = notes_rec.notes['gap_junction']
 
-                pre_cell_class = notes_rec.notes['synapse_type']
-                if pre_cell_class is not None:
-                    synaptic_cell_class.setdefault(pair.pre_cell, []).append(pre_cell_class)
-            
-                # update cell_class if this is a monosynaptic response:
-                # for cell, cell_classes in synaptic_cell_class.items():
-                cell = pair.pre_cell
-                cell_classes = synaptic_cell_class[cell]
-                if len(set(cell_classes)) == 1:
-                    # all synaptic projections agree on sign
-                    syn_class = cell_classes[0]
-                else:
-                    # mismatched synaptic sign
-                    syn_class = 'mixed'
+                
+                if pair.has_synapse:
+                    errors = generate_synapse_record(pair, db, session, notes_rec, syn='mono', max_ind_freq=50)
                     
-                # previously generated nonsynaptic cell class -- based only on transgenic markers and morphology
-                # cell_class_ns = cell.cell_class_nonsynaptic
+                    all_errors.extend(errors)
+
+                    pre_cell_class = notes_rec.notes['synapse_type']
+                    if pre_cell_class is not None:
+                        synaptic_cell_class.setdefault(pair.pre_cell, []).append(pre_cell_class)
                 
-                # if cell_class_ns is None or syn_class == cell_class_ns:
-                #     # if cell class was not called previously, or if the synaptic class
-                #     # matches the previous nonsynaptic class
-                #     cell.cell_class = syn_class
-                # elif syn_class is None:
-                #     cell.cell_class = cell_class_ns
-                cell_meta = cell.meta.copy()
-                cell_meta['synaptic_cell_class'] = syn_class
-                cell.meta = cell_meta
-                cell.cell_class, _ = cell._infer_cell_classes()
-                    # if pair.id==85255 and cell.id==15320:
-                    #     sadf    
-            if pair.has_polysynapse:
-                errors = generate_synapse_record(pair, db, session, notes_rec, syn='poly', max_ind_freq=50)
-                all_errors.extend(errors)
+                    # update cell_class if this is a monosynaptic response:
+                    # for cell, cell_classes in synaptic_cell_class.items():
+                    cell = pair.pre_cell
+                    cell_classes = synaptic_cell_class[cell]
+                    if len(set(cell_classes)) == 1:
+                        # all synaptic projections agree on sign
+                        syn_class = cell_classes[0]
+                    else:
+                        # mismatched synaptic sign
+                        syn_class = 'mixed'
+                        
+                    # previously generated nonsynaptic cell class -- based only on transgenic markers and morphology
+                    # cell_class_ns = cell.cell_class_nonsynaptic
+                    
+                    # if cell_class_ns is None or syn_class == cell_class_ns:
+                    #     # if cell class was not called previously, or if the synaptic class
+                    #     # matches the previous nonsynaptic class
+                    #     cell.cell_class = syn_class
+                    # elif syn_class is None:
+                    #     cell.cell_class = cell_class_ns
+                    cell_meta = cell.meta.copy()
+                    cell_meta['synaptic_cell_class'] = syn_class
+                    cell.meta = cell_meta
+                    cell.cell_class, _ = cell._infer_cell_classes()
+                        # if pair.id==85255 and cell.id==15320:
+                        #     sadf    
+                if pair.has_polysynapse:
+                    errors = generate_synapse_record(pair, db, session, notes_rec, syn='poly', max_ind_freq=50)
+                    all_errors.extend(errors)
+            except Exception:
+                print(f"Error processing pair: {pair}")
+                raise
 
         session.commit()
         return all_errors
