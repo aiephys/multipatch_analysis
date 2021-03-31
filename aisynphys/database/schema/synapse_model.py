@@ -16,8 +16,17 @@ SynapseModel = make_table(
         ('parameter_space', 'object', 'Describes the parameter space searched thby the model', {'deferred': True}),
         ('marginal_distributions', 'object', 'Contains marginal distributions for all model parameters', {'deferred': True}),
         ('confidence_intervals', 'object', 'Contains confidence intervals for all model parameters', {'deferred': True}),
-        ('max_likelihood', 'float', 'The maximum model likelihood value', {'deferred': True}),
-        ('ml_parameters', 'object', 'Contains a dictionary of maximum-likelihood parameter values', {'deferred': True}),
+        
+        ('max_likelihood', 'float', 'The maximum model likelihood value'),
+        ('ml_n_release_sites', 'float', 'Maximum likelihood value for n_release_sites'),
+        ('ml_base_release_probability', 'float', 'Maximum likelihood value for base_release_probability'),
+        ('ml_mini_amplitude', 'float', 'Maximum likelihood value for mini_amplitude'),
+        ('ml_mini_amplitude_cv', 'float', 'Maximum likelihood value for mini_amplitude_cv'),
+        ('ml_depression_amount', 'float', 'Maximum likelihood value for depression_amount'),
+        ('ml_depression_tau', 'float', 'Maximum likelihood value for depression_tau'),
+        ('ml_facilitation_amount', 'float', 'Maximum likelihood value for facilitation_amount'),
+        ('ml_facilitation_tau', 'float', 'Maximum likelihood value for facilitation_tau'),
+        ('ml_measurement_stdev', 'float', 'Maximum likelihood value for measurement_stdev'),
 
         # Summary metrics generated from maximum likelihood parameters
         ('ml_strength', 'float', 'maximum likelihood value of n_release_sites * base_release_probability * mini_amplitude'),
