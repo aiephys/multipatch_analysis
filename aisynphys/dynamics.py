@@ -123,7 +123,18 @@ def generate_pair_dynamics(pair, db, session):
     sorted_prs = sorted_pulse_responses(passed_pr_recs)
 
     # calculate 50Hz paired pulse and induction metrics for their own column
-    col_metrics = {'stp_initial_50hz': [], 'stp_induction_50hz': [], 'stp_recovery_250ms': [], 'stp_recovery_single_250ms': []}
+    col_metrics = {
+        'stp_initial_50hz': [], 
+        'stp_induction_50hz': [], 
+        'stp_recovery_250ms': [], 
+        'stp_recovery_single_250ms': [], 
+        'pulse_amp_first_50hz': [],
+        'pulse_amp_stp_initial_50hz': [],
+        'pulse_amp_stp_induction_50hz': [],
+        'pulse_amp_stp_recovery_250ms': [],
+        'pulse_amp_stp_recovery_single_250ms': [],
+    }
+
     paired_pulse_ratio = []
     # caclulate dynamics for all frequencie and recovery delays
     #   [(clamp_mode, ind_freq, recovery_delay), {'stp_induction':(mean, std, n),
@@ -155,6 +166,9 @@ def generate_pair_dynamics(pair, db, session):
             amps = {k:getattr(r.PulseResponseFit, amp_field) for k,r in pulses.items()}
 
             # calculate metrics if the proper conditions are met
+            if 1 in pulses:
+                if ind_freq == 50:
+                    col_metrics['pulse_amp_first_50hz'].append(amps[1])
             if 1 in pulses and 2 in pulses:
                 initial = (amps[2] - amps[1]) / amp_90p
                 collect_initial.append(initial)
@@ -162,25 +176,31 @@ def generate_pair_dynamics(pair, db, session):
                 # multiple recovery delays
                 if ind_freq == 50:
                     col_metrics['stp_initial_50hz'].append(initial)
+                    col_metrics['pulse_amp_stp_initial_50hz'].append(amps[2])
                     if amps[1] != 0:
                         paired_pulse_ratio.append(amps[2] / amps[1])
             if all([k in pulses for k in [1,6,7,8]]):
-                induction = (np.median([amps[6], amps[7], amps[8]]) - amps[1]) / amp_90p
+                induction_amp = np.median([amps[6], amps[7], amps[8]])
+                induction = (induction_amp - amps[1]) / amp_90p
                 collect_induction.append(induction)
                 if ind_freq == 50:
                     col_metrics['stp_induction_50hz'].append(induction)
+                    col_metrics['pulse_amp_stp_induction_50hz'].append(induction_amp)
             if delay is not None and all([k in pulses for k in range(1,13)]):
+                recovery_amp = np.median([amps[i] for i in range(9,13)])
                 r = [amps[i+8] - amps[i] for i in range(1,5)]
                 recovery = np.median(r) / amp_90p
                 collect_recovery.append(recovery)
                 if delay == 250e-3:
                     col_metrics['stp_recovery_250ms'].append(recovery)
+                    col_metrics['pulse_amp_stp_recovery_250ms'].append(recovery_amp)
             if delay is not None and all([k in pulses for k in range(1,10)]):
                 r = amps[9] - amps[1]
                 recovery = np.median(r) / amp_90p
                 collect_recovery_single.append(recovery)
                 if delay == 250e-3:
                     col_metrics['stp_recovery_single_250ms'].append(recovery)
+                    col_metrics['pulse_amp_stp_recovery_single_250ms'].append(amps[9])
 
             # collect individual pulse amplitudes
             for i in range(1, 13):
@@ -209,6 +229,7 @@ def generate_pair_dynamics(pair, db, session):
     
     # set individual columns for 50hz and 250ms
     for k,v in col_metrics.items():
+        assert hasattr(dynamics, k) and hasattr(dynamics, k+'_n') and hasattr(dynamics, k+'_std')
         setattr(dynamics, k, np.median(v))
         setattr(dynamics, k+'_n', len(v))
         setattr(dynamics, k+'_std', np.std(v))
