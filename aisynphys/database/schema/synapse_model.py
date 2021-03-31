@@ -14,15 +14,19 @@ SynapseModel = make_table(
         ('n_source_events', 'int', 'Number of qc-passed pulse response amplitudes used to fit the model', {'index': True}),
 
         ('parameter_space', 'object', 'Describes the parameter space searched thby the model', {'deferred': True}),
-        ('max_likelihood', 'object', 'Contains maximum likelihood parameter values', {'deferred': True}),
         ('marginal_distributions', 'object', 'Contains marginal distributions for all model parameters', {'deferred': True}),
         ('confidence_intervals', 'object', 'Contains confidence intervals for all model parameters', {'deferred': True}),
+        ('max_likelihood', 'float', 'The maximum model likelihood value', {'deferred': True}),
+        ('ml_parameters', 'object', 'Contains a dictionary of maximum-likelihood parameter values', {'deferred': True}),
 
-        # Summary metrics generated from model output
+        # Summary metrics generated from maximum likelihood parameters
+        ('ml_strength', 'float', 'maximum likelihood value of n_release_sites * base_release_probability * mini_amplitude'),
+        ('ml_strength_ci', 'object', 'confidence interval for ml_strength'),
         ('ml_quanta_per_spike', 'float', 'maximum likelihood value of n_release_sites * base_release_probability'),
         ('ml_quanta_per_spike_ci', 'object', 'confidence interval for ml_quanta_per_spike'),
         ('ml_sites_pr_ratio', 'float', 'maximum likelihood ratio of n_release_sites : base_release_probability'),
         ('ml_sites_pr_ratio_ci', 'object', 'confidence interval for ml_sites_pr_ratio'),
+        ('ml_release_dependence_ratio', 'float', 'ratio of maximum likelihood in release-dependent vs release-independent portions of the parameter space'),
         
         # STP metrics (same as in dynamics table) generated from model simulation with max likelihood parameters
         # (but with no simulated recording noise)
