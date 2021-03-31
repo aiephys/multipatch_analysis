@@ -568,7 +568,7 @@ class PairAnalysis(object):
             self.pulse_responses = [q.PulseResponse for q in q.all()]
             print('got %d pulse responses' % len(self.pulse_responses))
                 
-            if pair.has_synapse is True:
+            if pair.has_synapse is True and pair.synapse is not None:
                 synapse_type = pair.synapse.synapse_type
             else:
                 synapse_type = None

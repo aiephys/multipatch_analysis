@@ -84,7 +84,7 @@ def get_resting_state_responses(synapse, rest_duration, response_duration):
     q = q.join(db.Recording, db.PulseResponse.recording)
     q = q.join(db.PatchClampRecording, db.PatchClampRecording.recording_id==db.Recording.id)
     q = q.filter(db.PulseResponse.pair_id==synapse.pair_id)
-    q = q.filter(db.StimPulse.previous_pulse_dt > response_duration)
+    q = q.filter(db.StimPulse.previous_pulse_dt > rest_duration)
     q = q.filter(qc_field==True)
     q = q.order_by(db.Recording.start_time, db.StimPulse.onset_time)
     recs = q.all()
