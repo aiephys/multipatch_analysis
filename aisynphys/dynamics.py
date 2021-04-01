@@ -71,7 +71,7 @@ def pulse_response_query(pair, qc_pass=False, clamp_mode=None, data=False, spike
     return q
 
 
-def generate_pair_dynamics(pair, db, session):
+def generate_pair_dynamics(pair, db, session, pr_recs=None):
     """Generate a Dynamics table entry for the given pair.
     """
     logger = logging.getLogger(__name__)
@@ -93,8 +93,10 @@ def generate_pair_dynamics(pair, db, session):
     syn_type = pair.synapse.synapse_type
     
     # load all IC pulse response amplitudes to determine the maximum that will be used for normalization
-    pr_query = pulse_response_query(pair, qc_pass=False, clamp_mode='ic', session=session)
-    pr_recs = pr_query.all()
+    if pr_recs is None:
+        pr_query = pulse_response_query(pair, qc_pass=False, clamp_mode='ic', session=session)
+        pr_recs = pr_query.all()
+    
     # cull out all PRs that didn't get a fit or failed qc
     qc_field = syn_type + '_qc_pass'
     passed_pr_recs = [pr_rec for pr_rec in pr_recs if getattr(pr_rec.PulseResponse, qc_field) and getattr(pr_rec.PulseResponseFit, amp_field) is not None]

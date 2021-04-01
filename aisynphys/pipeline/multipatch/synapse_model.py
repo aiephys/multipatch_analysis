@@ -11,8 +11,9 @@ import numpy as np
 from ...dynamics import generate_pair_dynamics
 from .pipeline_module import MultipatchPipelineModule
 from .experiment import ExperimentPipelineModule
-from ...stochastic_release_model import list_cached_results, load_cache_file
+from ...stochastic_release_model import list_cached_results, load_cache_file, StochasticReleaseModel
 from ...util import datetime_to_timestamp, timestamp_to_datetime
+from .dynamics import generate_pair_dynamics
 
 
 class SynapseModelPipelineModule(MultipatchPipelineModule):
@@ -27,7 +28,11 @@ class SynapseModelPipelineModule(MultipatchPipelineModule):
         logger = logging.getLogger(__name__)
         db = job['database']
         job_id = job['job_id']
-        cache_file = job['meta']['source']
+        if job['meta'] is not None and 'source' in job['meta']:
+            cache_file = job['meta']['source']
+        else:
+            cache_file = cached_results()[job_id][0]
+        
         logger.debug("Processing job %s", job_id)
 
         entry = make_model_result_entry(job_id, db, session, cache_file)
@@ -139,6 +144,13 @@ def make_model_result_entry(pair_id, db, session, model_cache_file):
 
     entry.ml_release_dependence_ratio = get_release_dependence_ratio(param_space)
 
+    # Simulate an experiment and pass the data through the dynamics pipeline to generate similar results
+    dynamics = get_model_dynamics(ml_index, model_runner, pair, db)
+    # transfer results over to the new entry
+    for name in dir(dynamics):
+        if hasattr(entry, 'ml_'+name):
+            setattr(entry, 'ml_'+name, getattr(dynamics, name))
+
     return entry
 
 
@@ -181,12 +193,103 @@ def get_params_from_index(param_space, index):
     return params
 
 
-def get_model_metrics(ml_index, model_runner):
+def get_model_metrics(index, model_runner):
     """Return metrics derived from model parameters
     """
-    params = get_params_from_index(model_runner.param_space, ml_index)
+    params = get_params_from_index(model_runner.param_space, index)
     quanta_per_spike = params['base_release_probability'] * params['n_release_sites']
     strength = quanta_per_spike * params['mini_amplitude'] 
     sites_pr_ratio = params['n_release_sites'] / params['base_release_probability']
 
     return strength, quanta_per_spike, sites_pr_ratio
+
+
+def get_model_dynamics(index, model_runner, pair, db):
+    """Return dynamics metrics generated from simulated events.
+    """
+    session = db.session()
+    model_pair = db.Pair(
+        has_synapse=True,
+    )
+    model_pair.synapse = db.Synapse(
+        synapse_type=pair.synapse.synapse_type,
+    )
+    model_pair.pre_cell = db.Cell(
+        ext_id=pair.pre_cell.ext_id,
+    )
+    model_pair.post_cell = db.Cell(
+        ext_id=pair.post_cell.ext_id,
+    )
+    model_pair.experiment = db.Experiment(
+        ext_id='MOCK_'+pair.experiment.ext_id,
+    )
+
+    # spike timing for a 12-pulse train
+    ind_freq = 50
+    rec_delay = 250e-3
+    templ = np.arange(12) / 50
+    templ[8:] += rec_delay - 1/ind_freq
+
+    # repeat 500x
+    n_rep = 500
+    iti = 15
+    n_pulses = len(templ)
+    spike_times = np.empty(n_pulses * n_rep)
+    for i in range(n_rep):
+        spike_times[i*n_pulses:(i+1)*n_pulses] = templ + i * iti
+
+    pulse_n = (np.arange(n_pulses * n_rep) % n_pulses)  + 1
+
+    # run simulation
+    params = get_params_from_index(model_runner.param_space, index)
+    model = StochasticReleaseModel(params)
+    result = model.run_model(spike_times, amplitudes='random')
+    amps = result.result['amplitude']
+
+    class PrRec:
+        """Mock result from aisynphys.dynamics.pulse_response_query
+        fields: db.PulseResponse, db.PulseResponseFit, db.StimPulse, db.Recording, db.PatchClampRecording, db.MultiPatchProbe, db.Synapse
+        """
+        def __init__(self, **kwds):
+            for k,v in kwds.items():
+                setattr(self, k, v)
+
+    recordings = []
+    for i in range(n_rep):
+        rec = db.Recording(stim_name="mock_mp_probe")
+        rec.electrode = db.Electrode(ext_id=1)
+        rec.sync_rec = db.SyncRec(ext_id=i)
+        rec.sync_rec.experiment = model_pair.experiment
+        rec.patch_clamp_recording = db.PatchClampRecording(clamp_mode='ic')
+        rec.patch_clamp_recording.multi_patch_probe = db.MultiPatchProbe(induction_frequency=ind_freq, recovery_delay=rec_delay)
+        recordings.append(rec)
+
+    pr_recs = []
+    for i in range(len(spike_times)):
+        pr = db.PulseResponse(
+            ex_qc_pass=True,
+            in_qc_pass=True,
+        )
+        pr.pulse_response_fit = db.PulseResponseFit(
+            dec_fit_reconv_amp=amps[i],
+            baseline_dec_fit_reconv_amp=0,
+        )
+        pr.stim_pulse = db.StimPulse(
+            pulse_number=pulse_n[i],
+            previous_pulse_dt=np.inf if i==0 else spike_times[i]-spike_times[i-1],
+        )
+        pr.recording = recordings[i//n_pulses]
+
+        pr_recs.append(PrRec(
+            PulseResponse=pr,
+            PulseResponseFit=pr.pulse_response_fit, 
+            StimPulse=pr.stim_pulse,
+            Recording=pr.recording,
+            PatchClampRecording=pr.recording.patch_clamp_recording,
+            MultiPatchProbe=pr.recording.patch_clamp_recording.multi_patch_probe,
+            Synapse=model_pair.synapse
+        ))
+
+
+    dynamics = generate_pair_dynamics(model_pair, db, session, pr_recs)
+    return dynamics

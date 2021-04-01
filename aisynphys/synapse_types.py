@@ -63,9 +63,52 @@ default_data_fields = [
     'paired_event_correlation_2_4_p',
     'paired_event_correlation_4_8_r',
     'paired_event_correlation_4_8_p',
-    'n_model_source_events',
-]
 
+    'n_model_source_events',
+    'max_likelihood',
+    'ml_n_release_sites',
+    'ml_base_release_probability',
+    'ml_mini_amplitude',
+    'ml_mini_amplitude_cv',
+    'ml_depression_amount',
+    'ml_depression_tau',
+    'ml_facilitation_amount',
+    'ml_facilitation_tau',
+    'ml_measurement_stdev',
+    'ml_strength',
+    'ml_quanta_per_spike',
+    'ml_sites_pr_ratio',
+    'ml_release_dependence_ratio',
+
+    'ml_paired_pulse_ratio_50hz',
+    'ml_stp_initial_50hz',
+    'ml_stp_initial_50hz_n',
+    'ml_stp_initial_50hz_std',
+    'ml_stp_induction_50hz',
+    'ml_stp_induction_50hz_n',
+    'ml_stp_induction_50hz_std',
+    'ml_stp_recovery_250ms',
+    'ml_stp_recovery_250ms_n',
+    'ml_stp_recovery_250ms_std',
+    'ml_stp_recovery_single_250ms',
+    'ml_stp_recovery_single_250ms_n',
+    'ml_stp_recovery_single_250ms_std',
+    'ml_pulse_amp_90th_percentile',
+    'ml_noise_amp_90th_percentile',
+    'ml_noise_std',
+    'ml_variability_resting_state',
+    'ml_variability_second_pulse_50hz',
+    'ml_variability_stp_induced_state_50hz',
+    'ml_variability_change_initial_50hz',
+    'ml_variability_change_induction_50hz',
+    'ml_paired_event_correlation_1_2_r',
+    'ml_paired_event_correlation_1_2_p',
+    'ml_paired_event_correlation_2_4_r',
+    'ml_paired_event_correlation_2_4_p',
+    'ml_paired_event_correlation_4_8_r',
+    'ml_paired_event_correlation_4_8_p',
+
+]
 
 
 def synapse_query(db=default_db):
@@ -92,6 +135,7 @@ def synapse_query(db=default_db):
         .add_column(q.pre_location.cortical_layer.label('pre_layer'))
         .add_column(q.post_location.cortical_layer.label('post_layer'))
         .add_column(db.SynapseModel.n_source_events.label('n_model_source_events'))
+        .add_entity(db.SynapseModel)
     )
     return q
 
